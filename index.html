@@ -163,14 +163,7 @@
     border: 1px solid rgba(16,185,129,0.2);
   }
 
-  /* Hero content */
-  .hero-content {
-    position: relative;
-    z-index: 10;
-    max-width: 52%;
-  }
-
-  .hero-badge {
+ .hero-badge {
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -253,15 +246,6 @@
   .hero-title .word-1:hover {
     animation: glitch 0.4s linear infinite;
     cursor: default;
-  }
-
-  @keyframes glitch {
-    0%   { text-shadow: none; }
-    20%  { text-shadow: 3px 0 #00ff9d, -3px 0 #0d6e43; clip-path: inset(10% 0 80% 0); }
-    40%  { text-shadow: -3px 0 #00ff9d, 3px 0 #0d6e43; clip-path: inset(50% 0 30% 0); }
-    60%  { text-shadow: 2px 0 #00ff9d, -2px 0 #0d6e43; clip-path: inset(80% 0 5% 0); }
-    80%  { text-shadow: none; clip-path: none; }
-    100% { text-shadow: none; clip-path: none; }
   }
 
   /* Typewriter cursor on FUTURES */
