@@ -1,0 +1,619 @@
+{
+  "leads": [
+    {
+      "id": "lead_1782058979881_6069",
+      "name": "saampark technology",
+      "contact": "5646789076",
+      "phone": "",
+      "owner": "Jane Smith",
+      "createdAt": "2026-06-21T16:22:59.881Z",
+      "deadline": "",
+      "status": "New",
+      "label": "Call this week",
+      "type": "organization",
+      "email": "",
+      "managers": "test",
+      "source": "Google",
+      "address": "Medinipur",
+      "city": "Medinipur",
+      "state": "",
+      "zip": "",
+      "amount": 0,
+      "tasksList": [
+        {
+          "id": "forc699",
+          "title": "call this week and get positive response. he told call me next week",
+          "done": false
+        }
+      ],
+      "remindersList": [
+        {
+          "id": "6exvedg",
+          "content": "test",
+          "time": "2026-06-22T21:55"
+        }
+      ],
+      "estimatesList": [
+        {
+          "id": "ljg9txq",
+          "estimateNumber": "EST-2026-001",
+          "status": "Draft",
+          "date": "2026-06-21",
+          "validUntil": "2026-07-31",
+          "items": [
+            {
+              "id": "5f5rx9c",
+              "item": "software develpment",
+              "description": "software develpment for admin",
+              "quantity": "1",
+              "rate": 28000,
+              "total": 28000
+            }
+          ],
+          "discount": 10,
+          "tax": 10
+        }
+      ],
+      "contractsList": [
+        {
+          "id": "frtih2o",
+          "contractNumber": "CON-2026-001",
+          "status": "Draft",
+          "date": "2026-06-21",
+          "validUntil": "2026-07-21",
+          "items": [
+            {
+              "id": "79uicaz",
+              "item": "web development",
+              "description": "web development",
+              "quantity": "1",
+              "rate": 25000,
+              "total": 25000
+            }
+          ],
+          "discount": 20,
+          "tax": 10
+        }
+      ],
+      "eventsList": [
+        {
+          "id": "7ktbhh9",
+          "title": "sales call",
+          "date": "2026-06-24",
+          "startTime": "10:00",
+          "endTime": "11:00"
+        }
+      ]
+    },
+    {
+      "id": "lead_1782042254199_3594",
+      "name": "edge",
+      "contact": "77832",
+      "phone": "",
+      "owner": "John Doe",
+      "createdAt": "2026-06-21T11:44:14.199Z",
+      "status": "Discussion",
+      "label": "50% Probability",
+      "type": "organization",
+      "email": "",
+      "managers": "rahul",
+      "source": "Google",
+      "address": "test",
+      "city": "",
+      "state": "",
+      "zip": "",
+      "amount": 0,
+      "deadline": "2026-06-20"
+    },
+    {
+      "id": "lead_1782042118787_2853",
+      "name": "Tushar Basak",
+      "contact": "Tushar Basak",
+      "phone": "",
+      "owner": "uyg",
+      "createdAt": "2026-06-21T11:41:58.788Z",
+      "status": "New",
+      "label": "90% Probability",
+      "type": "person",
+      "email": "",
+      "managers": "Rahul",
+      "source": "Referral",
+      "address": "test",
+      "city": "test",
+      "state": "",
+      "zip": "",
+      "amount": 0
+    },
+    {
+      "id": "lead_1782041719150_9935",
+      "name": "test3",
+      "contact": "test3",
+      "phone": "",
+      "owner": "Jane Smith",
+      "createdAt": "2026-06-21T11:35:19.150Z",
+      "status": "Qualified",
+      "label": "satisfy",
+      "type": "organization",
+      "email": "",
+      "managers": "test3",
+      "source": "Google",
+      "address": "test3",
+      "city": "",
+      "state": "",
+      "zip": "",
+      "amount": 0
+    },
+    {
+      "id": "lead_1782041310855_1599",
+      "name": "Test2",
+      "contact": "Test2",
+      "phone": "",
+      "owner": "John Doe",
+      "createdAt": "2026-06-21T11:28:30.856Z",
+      "status": "Won",
+      "label": "50% complete",
+      "type": "organization",
+      "email": "",
+      "managers": "Test2",
+      "source": "Google",
+      "address": "Test2",
+      "city": "Test2",
+      "state": "Test2",
+      "zip": "",
+      "amount": 0
+    },
+    {
+      "id": "lead_1781903574599_7873",
+      "name": "test1",
+      "contact": "test1",
+      "phone": "test1",
+      "owner": "John Doe",
+      "createdAt": "2026-06-19T21:12:54.600Z",
+      "status": "Negotiation",
+      "label": "test1",
+      "type": "organization",
+      "email": "test1",
+      "managers": "test1",
+      "source": "Google",
+      "address": "test1",
+      "city": "test1",
+      "state": "test1",
+      "zip": "test1",
+      "amount": 666,
+      "estimatesList": [
+        {
+          "id": "z87w6z8",
+          "estimateNumber": "EST-2026-001",
+          "status": "Draft",
+          "date": "2026-06-20",
+          "validUntil": "2026-07-19",
+          "items": [
+            {
+              "id": "fqewzts",
+              "item": "ssss",
+              "description": "",
+              "quantity": "1",
+              "rate": 44232,
+              "total": 44232
+            },
+            {
+              "id": "dru0tbn",
+              "item": "sssaaafa",
+              "description": "",
+              "quantity": "1",
+              "rate": 36632,
+              "total": 36632
+            }
+          ],
+          "discount": 10,
+          "tax": 10
+        }
+      ],
+      "tasksList": [],
+      "eventsList": [
+        {
+          "id": "krn9l03",
+          "title": "tesr",
+          "date": "2026-06-26"
+        },
+        {
+          "id": "zfij7be",
+          "title": "event",
+          "date": "2026-06-27T12:00"
+        },
+        {
+          "id": "2ef2x51",
+          "title": "titleof the task",
+          "date": "2026-06-19",
+          "startTime": "10:00",
+          "endTime": "11:00"
+        },
+        {
+          "id": "lk8lcul",
+          "title": "test11",
+          "date": "2026-06-19",
+          "startTime": "10:00",
+          "endTime": "11:00"
+        }
+      ],
+      "contactsList": [
+        {
+          "id": "zsommzr",
+          "name": "sam",
+          "designation": "director",
+          "email": "ram@gmail.com",
+          "phone": "67327242"
+        }
+      ],
+      "remindersList": [
+        {
+          "id": "2f0qe0t",
+          "content": "fsafa",
+          "time": "2026-06-25T07:35"
+        }
+      ]
+    }
+  ],
+  "dashboards": [],
+  "tasks": [
+    {
+      "id": 3642,
+      "title": "Add company logo and contact details",
+      "status": "To do",
+      "assignedTo": "John Doe",
+      "deadline": "2026-05-03",
+      "relatedTo": "Business Card and Stationery Design",
+      "points": "1 Point",
+      "description": "Add company logo and contact details to stationery designs.",
+      "avatar": "https://i.pravatar.cc/60?img=1",
+      "timeLogged": 55,
+      "comments": [
+        {
+          "id": "tjvzx45",
+          "content": "Test comment 2",
+          "author": "John Doe",
+          "createdAt": "2026-06-21T12:13:58.510Z",
+          "avatar": "https://i.pravatar.cc/60?img=1"
+        },
+        {
+          "id": "njhvhqw",
+          "content": "working on it",
+          "author": "John Doe",
+          "createdAt": "2026-06-21T12:07:44.104Z",
+          "avatar": "https://i.pravatar.cc/60?img=1"
+        }
+      ],
+      "checklist": [
+        {
+          "id": "yqgmlhf",
+          "text": "Test Checklist Item",
+          "done": true
+        },
+        {
+          "id": "ft1wssi",
+          "text": "test3",
+          "done": true
+        }
+      ],
+      "subTasks": [
+        {
+          "id": "rch49eh",
+          "title": "Test Subtask Item",
+          "done": false
+        }
+      ]
+    },
+    {
+      "id": 3623,
+      "title": "Use VR for training and simulations",
+      "status": "In progress",
+      "assignedTo": "John Doe",
+      "deadline": "2026-06-23",
+      "relatedTo": "Virtual Reality Experience Design",
+      "priority": "High",
+      "labels": "Design",
+      "points": "2 Points",
+      "description": "Incorporate VR simulations for safe employee onboarding.",
+      "avatar": "https://i.pravatar.cc/60?img=7"
+    },
+    {
+      "id": 3617,
+      "title": "Optimize VR performance and frame rate",
+      "status": "Review",
+      "assignedTo": "John Doe",
+      "deadline": "2026-06-23",
+      "relatedTo": "Virtual Reality Experience Design",
+      "points": "3 Points",
+      "description": "Target a stable 90 FPS on VR headsets.",
+      "avatar": "https://i.pravatar.cc/60?img=3"
+    },
+    {
+      "id": 3615,
+      "title": "Develop VR navigation and interactions",
+      "status": "Done",
+      "assignedTo": "John Doe",
+      "deadline": "2026-06-23",
+      "relatedTo": "Virtual Reality Experience Design",
+      "labels": "Feedback",
+      "points": "1 Point",
+      "description": "Build user-friendly teleportation controls.",
+      "avatar": "https://i.pravatar.cc/60?img=4"
+    },
+    {
+      "id": 3578,
+      "title": "Create data dashboards and reports",
+      "status": "In progress",
+      "assignedTo": "John Doe",
+      "deadline": "2026-06-23",
+      "relatedTo": "Data Analysis and Insights",
+      "labels": "Enhancement",
+      "points": "1 Point",
+      "description": "Develop dashboards to aggregate weekly sales reports.",
+      "avatar": "https://i.pravatar.cc/60?img=11"
+    },
+    {
+      "id": 3576,
+      "title": "Perform data visualization and charts",
+      "status": "Done",
+      "assignedTo": "John Doe",
+      "deadline": "2026-06-02",
+      "relatedTo": "Data Analysis and Insights",
+      "points": "1 Point",
+      "description": "Generate charts representing product engagement metrics.",
+      "avatar": "https://i.pravatar.cc/60?img=12"
+    },
+    {
+      "id": 3571,
+      "title": "Implement product barcodes and labels",
+      "status": "To do",
+      "assignedTo": "John Doe",
+      "deadline": "2026-05-10",
+      "relatedTo": "Product Packaging Design",
+      "points": "1 Point",
+      "description": "Integrate standard EAN-13 barcodes onto labels.",
+      "avatar": "https://i.pravatar.cc/60?img=8"
+    }
+  ],
+  "tickets": [
+    {
+      "id": 13,
+      "title": "My Test Ticket",
+      "client": "Blaze Rohan",
+      "requestedBy": "Blaze Rohan",
+      "ticketType": "Bug Reports",
+      "labels": "Important",
+      "assignedTo": "Richard Gray",
+      "lastActivity": "2026-06-26T18:32:45.277Z",
+      "status": "Closed",
+      "description": "This is a bug report created by verification subagent.",
+      "files": [],
+      "comments": [
+        {
+          "id": "comm_1782498765210_882",
+          "content": "google for me",
+          "author": "John Doe",
+          "createdAt": "2026-06-26T18:32:45.210Z",
+          "avatar": "https://i.pravatar.cc/60?img=33",
+          "type": "message"
+        },
+        {
+          "id": "comm_1782498753888_617",
+          "content": "test3",
+          "author": "John Doe",
+          "createdAt": "2026-06-26T18:32:33.888Z",
+          "avatar": "https://i.pravatar.cc/60?img=33",
+          "type": "message"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "test3",
+      "client": "Leif Hoeger",
+      "requestedBy": "Hermiston-Wilkinson",
+      "ticketType": "Sales Inquiry",
+      "labels": "working",
+      "assignedTo": "Sara Ann",
+      "lastActivity": "2026-06-26T17:10:59.247Z",
+      "status": "New",
+      "description": "Test 3",
+      "files": []
+    },
+    {
+      "id": 5,
+      "title": "How to upgrade the software?",
+      "client": "Randy Daniel",
+      "requestedBy": "Randy Daniel",
+      "ticketType": "General Support",
+      "labels": "",
+      "assignedTo": "John Doe",
+      "lastActivity": "2026-06-26T17:34:43.743Z",
+      "status": "Open",
+      "description": "I need help upgrading to the latest version of the application. Please provide the steps.",
+      "files": [],
+      "comments": [
+        {
+          "id": "comm_1782495239492_616",
+          "content": "This is a normal message verification.",
+          "author": "John Doe",
+          "createdAt": "2026-06-26T17:33:59.492Z",
+          "avatar": "https://i.pravatar.cc/60?img=33",
+          "type": "message"
+        },
+        {
+          "id": "comm_1782495208846_627",
+          "content": "This is a verification note.",
+          "author": "John Doe",
+          "createdAt": "2026-06-26T17:33:28.846Z",
+          "avatar": "https://i.pravatar.cc/60?img=33",
+          "type": "note"
+        },
+        {
+          "id": "c1",
+          "content": "Lorem ipsum dolorem perspiciatis tempore ut. Est ut sint voluptas molestias rerum sit minus. Quibusdam voluptas sint nobis eum placeat beatae sed. Dolores sed quia nesciunt tempora optio odit consequatur. Dolor magni optio rerum vel preferendis debitis quis. Iusto fugiat aut harum asperiores nostrum. Eum autem est est cumque ut.",
+          "author": "John Doe",
+          "createdAt": "2026-06-26T20:08:00.000Z",
+          "avatar": "https://i.pravatar.cc/60?img=33",
+          "type": "message"
+        },
+        {
+          "id": "c2",
+          "content": "Accusantium voluptate ratione quia recusandae. Quo nulla illo aperiam sed voluptatem est. In fuga qui et voluptatem. Voluptatibus quae eius omnis nemo ut nesciunt molestiae dolor.",
+          "author": "Randy Daniel",
+          "createdAt": "2026-06-26T19:52:45.000Z",
+          "avatar": "https://i.pravatar.cc/60?img=9",
+          "type": "message"
+        },
+        {
+          "id": "c3",
+          "content": "Sunt laboriosam eum tenetur. Tempora deserunt sunt adipisci in dolorem  consectetur consequatur. Expedita earum et delectus non laudantium pariatur doloribus. Autem nemo esse et enim tenetur fuga. Distinctio nesciunt porro eligendi dolores delectus totam. Aut eaque veritatis dolorum saepe neque consequatur vitae. Voluptatem molestiae dolorem dolore maiores consequuntur.",
+          "author": "John Doe",
+          "createdAt": "2026-06-26T19:40:33.000Z",
+          "avatar": "https://i.pravatar.cc/60?img=33",
+          "type": "message"
+        }
+      ],
+      "tasksList": [
+        {
+          "id": "k3cxw6j",
+          "title": "Check local database",
+          "done": false
+        }
+      ],
+      "remindersList": []
+    },
+    {
+      "id": 2,
+      "title": "How to see my projects?",
+      "client": "Blaze Rohan",
+      "requestedBy": "Blaze Rohan",
+      "ticketType": "General Support",
+      "labels": "",
+      "assignedTo": "Sara Ann",
+      "lastActivity": "2026-06-26T16:42:00.000Z",
+      "status": "Closed",
+      "description": "Where is the projects tab located in the customer portal?",
+      "files": []
+    },
+    {
+      "id": 4,
+      "title": "What are your available pricing plans?",
+      "client": "Kolby Moore",
+      "requestedBy": "Kolby Moore",
+      "ticketType": "Sales Inquiry",
+      "labels": "Important",
+      "assignedTo": "Michael Wood",
+      "lastActivity": "2026-06-26T14:31:00.000Z",
+      "status": "Closed",
+      "description": "Interested in enterprise licenses. Please share pricing sheets.",
+      "files": []
+    },
+    {
+      "id": 1,
+      "title": "How much will it cost to get a website?",
+      "client": "Leif Hoeger",
+      "requestedBy": "Leif Hoeger",
+      "ticketType": "Sales Inquiry",
+      "labels": "",
+      "assignedTo": "Richard Gray",
+      "lastActivity": "2026-06-26T03:44:00.000Z",
+      "status": "Closed",
+      "description": "Would love to get an estimate for a 5-page business site.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "title": "Can I get some discount?",
+      "client": "Abshire-Swaniawski",
+      "requestedBy": "Abshire-Swaniawski",
+      "ticketType": "Sales Inquiry",
+      "labels": "",
+      "assignedTo": "Mark Thomas",
+      "lastActivity": "2026-06-26T00:36:00.000Z",
+      "status": "Closed",
+      "description": "Looking for volume discounts on yearly subscription models.",
+      "files": []
+    },
+    {
+      "id": 6,
+      "title": "Can not open the design file.",
+      "client": "Demo Client",
+      "requestedBy": "Demo Client",
+      "ticketType": "Bug Reports",
+      "labels": "",
+      "assignedTo": "John Doe",
+      "lastActivity": "2026-06-25T15:03:00.000Z",
+      "status": "Open",
+      "description": "Getting format error when opening design files on my dashboard.",
+      "files": []
+    },
+    {
+      "id": 8,
+      "title": "I can not add a new task.",
+      "client": "DuBuque Ltd",
+      "requestedBy": "DuBuque Ltd",
+      "ticketType": "Bug Reports",
+      "labels": "",
+      "assignedTo": "Richard Gray",
+      "lastActivity": "2026-06-25T13:19:00.000Z",
+      "status": "New",
+      "description": "Add task button clicks are unresponsive on task board view.",
+      "files": []
+    },
+    {
+      "id": 7,
+      "title": "Where can I find the user manual?",
+      "client": "Hermiston-Wilkinson",
+      "requestedBy": "Hermiston-Wilkinson",
+      "ticketType": "General Support",
+      "labels": "",
+      "assignedTo": "Michael Wood",
+      "lastActivity": "2026-06-25T05:18:00.000Z",
+      "status": "Open",
+      "description": "Could you link me the reference documentation or onboarding manual?",
+      "files": []
+    },
+    {
+      "id": 11,
+      "title": "Are there any ongoing sales or offers?",
+      "client": "Sammy Steuber",
+      "requestedBy": "Sammy Steuber",
+      "ticketType": "Sales Inquiry",
+      "labels": "",
+      "assignedTo": "Michael Wood",
+      "lastActivity": "2026-06-24T15:38:00.000Z",
+      "status": "Open",
+      "description": "Please let me know if there are promotions available for summer renewals.",
+      "files": []
+    },
+    {
+      "id": 10,
+      "title": "Do you offer any special promotions?",
+      "client": "DuBuque Ltd",
+      "requestedBy": "DuBuque Ltd",
+      "ticketType": "Sales Inquiry",
+      "labels": "",
+      "assignedTo": "John Doe",
+      "lastActivity": "2026-06-24T11:39:00.000Z",
+      "status": "Open",
+      "description": "Checking for any group packages or reseller plans.",
+      "files": []
+    }
+  ],
+  "ticketTemplates": [
+    {
+      "id": 1,
+      "title": "Support policy",
+      "description": "Please check our support policy here.",
+      "ticketType": "-",
+      "private": false
+    },
+    {
+      "id": 2,
+      "title": "How to pay invoice",
+      "description": "Please check it to learn more about how to pay your invoices.",
+      "ticketType": "-",
+      "private": false
+    }
+  ]
+}

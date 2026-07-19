@@ -1,0 +1,83 @@
+[
+  {
+    "id": 3642,
+    "title": "Add company logo and contact details",
+    "status": "To do",
+    "assignedTo": "John Doe",
+    "deadline": "2026-05-03",
+    "relatedTo": "Business Card and Stationery Design",
+    "points": "1 Point",
+    "description": "Add company logo and contact details to stationery designs.",
+    "avatar": "https://i.pravatar.cc/60?img=1"
+  },
+  {
+    "id": 3623,
+    "title": "Use VR for training and simulations",
+    "status": "In progress",
+    "assignedTo": "John Doe",
+    "deadline": "2026-06-23",
+    "relatedTo": "Virtual Reality Experience Design",
+    "priority": "High",
+    "labels": "Design",
+    "points": "2 Points",
+    "description": "Incorporate VR simulations for safe employee onboarding.",
+    "avatar": "https://i.pravatar.cc/60?img=7"
+  },
+  {
+    "id": 3617,
+    "title": "Optimize VR performance and frame rate",
+    "status": "Review",
+    "assignedTo": "John Doe",
+    "deadline": "2026-06-23",
+    "relatedTo": "Virtual Reality Experience Design",
+    "points": "3 Points",
+    "description": "Target a stable 90 FPS on VR headsets.",
+    "avatar": "https://i.pravatar.cc/60?img=3"
+  },
+  {
+    "id": 3615,
+    "title": "Develop VR navigation and interactions",
+    "status": "In progress",
+    "assignedTo": "John Doe",
+    "deadline": "2026-06-23",
+    "relatedTo": "Virtual Reality Experience Design",
+    "labels": "Feedback",
+    "points": "1 Point",
+    "description": "Build user-friendly teleportation controls.",
+    "avatar": "https://i.pravatar.cc/60?img=4"
+  },
+  {
+    "id": 3578,
+    "title": "Create data dashboards and reports",
+    "status": "Review",
+    "assignedTo": "John Doe",
+    "deadline": "2026-06-23",
+    "relatedTo": "Data Analysis and Insights",
+    "labels": "Enhancement",
+    "points": "1 Point",
+    "description": "Develop dashboards to aggregate weekly sales reports.",
+    "avatar": "https://i.pravatar.cc/60?img=11"
+  },
+  {
+    "id": 3576,
+    "title": "Perform data visualization and charts",
+    "status": "Review",
+    "assignedTo": "John Doe",
+    "deadline": "2026-06-02",
+    "relatedTo": "Data Analysis and Insights",
+    "points": "1 Point",
+    "description": "Generate charts representing product engagement metrics.",
+    "avatar": "https://i.pravatar.cc/60?img=12"
+  },
+  {
+    "id": 3571,
+    "title": "Implement product barcodes and labels",
+    "status": "To do",
+    "assignedTo": "John Doe",
+    "deadline": "2026-05-10",
+    "relatedTo": "Product Packaging Design",
+    "points": "1 Point",
+    "description": "Integrate standard EAN-13 barcodes onto labels.",
+    "avatar": "https://i.pravatar.cc/60?img=8"
+  }
+]
