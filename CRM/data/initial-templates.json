@@ -1,0 +1,16 @@
+[
+  {
+    "id": 1,
+    "title": "Support policy",
+    "description": "Please check our support policy here.",
+    "ticketType": "-",
+    "private": false
+  },
+  {
+    "id": 2,
+    "title": "How to pay invoice",
+    "description": "Please check it to learn more about how to pay your invoices.",
+    "ticketType": "-",
+    "private": false
+  }
+]

@@ -1,0 +1,113 @@
+@import "tailwindcss";
+
+:root {
+  --sidebar-width: 188px;
+  --topbar-height: 52px;
+
+  --bg-app: #f6f8fb;
+  --bg-card: #ffffff;
+  --bg-sidebar: #1f2a3a;
+  --bg-sidebar-top: #172231;
+
+  --text-main: #3d4c5d;
+  --text-muted: #7e8c9d;
+  --text-soft: #a2adba;
+
+  --border: #e7edf3;
+  --border-strong: #dbe4ee;
+
+  --brand: #3f8cff;
+  --success: #20b683;
+  --warning: #f0ad2e;
+  --danger: #ef5777;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-inter), sans-serif;
+  background: var(--bg-app);
+  color: var(--text-main);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #415468;
+}
+
+.table-head {
+  font-size: 12px;
+  font-weight: 600;
+  color: #7a8998;
+}
+
+.table-cell {
+  font-size: 14px;
+  color: #556575;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 9px 14px;
+  font-size: 15px;
+  color: #b8c3d1;
+  text-decoration: none;
+}
+
+.sidebar-link:hover {
+  color: #e4ebf4;
+}
+
+.sidebar-link.active {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  border-radius: 4px;
+}
+
+@media (max-width: 960px) {
+  :root {
+    --sidebar-width: 0px;
+  }
+}
+
+/* ==========calender========= */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease;
+}

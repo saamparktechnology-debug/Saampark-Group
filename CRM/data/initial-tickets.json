@@ -1,0 +1,160 @@
+[
+  {
+    "id": 5,
+    "title": "How to upgrade the software?",
+    "client": "Randy Daniel",
+    "requestedBy": "Randy Daniel",
+    "ticketType": "General Support",
+    "labels": "",
+    "assignedTo": "John Doe",
+    "lastActivity": "2026-06-26T19:34:00.000Z",
+    "status": "Open",
+    "description": "I need help upgrading to the latest version of the application. Please provide the steps.",
+    "files": [],
+    "comments": [
+      {
+        "id": "c1",
+        "content": "Lorem ipsum dolorem perspiciatis tempore ut. Est ut sint voluptas molestias rerum sit minus. Quibusdam voluptas sint nobis eum placeat beatae sed. Dolores sed quia nesciunt tempora optio odit consequatur. Dolor magni optio rerum vel preferendis debitis quis. Iusto fugiat aut harum asperiores nostrum. Eum autem est est cumque ut.",
+        "author": "John Doe",
+        "createdAt": "2026-06-26T20:08:00.000Z",
+        "avatar": "https://i.pravatar.cc/60?img=33",
+        "type": "message"
+      },
+      {
+        "id": "c2",
+        "content": "Accusantium voluptate ratione quia recusandae. Quo nulla illo aperiam sed voluptatem est. In fuga qui et voluptatem. Voluptatibus quae eius omnis nemo ut nesciunt molestiae dolor.",
+        "author": "Randy Daniel",
+        "createdAt": "2026-06-26T19:52:45.000Z",
+        "avatar": "https://i.pravatar.cc/60?img=9",
+        "type": "message"
+      },
+      {
+        "id": "c3",
+        "content": "Sunt laboriosam eum tenetur. Tempora deserunt sunt adipisci in dolorem  consectetur consequatur. Expedita earum et delectus non laudantium pariatur doloribus. Autem nemo esse et enim tenetur fuga. Distinctio nesciunt porro eligendi dolores delectus totam. Aut eaque veritatis dolorum saepe neque consequatur vitae. Voluptatem molestiae dolorem dolore maiores consequuntur.",
+        "author": "John Doe",
+        "createdAt": "2026-06-26T19:40:33.000Z",
+        "avatar": "https://i.pravatar.cc/60?img=33",
+        "type": "message"
+      }
+    ],
+    "tasksList": [],
+    "remindersList": []
+  },
+  {
+    "id": 2,
+    "title": "How to see my projects?",
+    "client": "Blaze Rohan",
+    "requestedBy": "Blaze Rohan",
+    "ticketType": "General Support",
+    "labels": "",
+    "assignedTo": "Sara Ann",
+    "lastActivity": "2026-06-26T16:42:00.000Z",
+    "status": "Closed",
+    "description": "Where is the projects tab located in the customer portal?",
+    "files": []
+  },
+  {
+    "id": 4,
+    "title": "What are your available pricing plans?",
+    "client": "Kolby Moore",
+    "requestedBy": "Kolby Moore",
+    "ticketType": "Sales Inquiry",
+    "labels": "Important",
+    "assignedTo": "Michael Wood",
+    "lastActivity": "2026-06-26T14:31:00.000Z",
+    "status": "Closed",
+    "description": "Interested in enterprise licenses. Please share pricing sheets.",
+    "files": []
+  },
+  {
+    "id": 1,
+    "title": "How much will it cost to get a website?",
+    "client": "Leif Hoeger",
+    "requestedBy": "Leif Hoeger",
+    "ticketType": "Sales Inquiry",
+    "labels": "",
+    "assignedTo": "Richard Gray",
+    "lastActivity": "2026-06-26T03:44:00.000Z",
+    "status": "Closed",
+    "description": "Would love to get an estimate for a 5-page business site.",
+    "files": []
+  },
+  {
+    "id": 3,
+    "title": "Can I get some discount?",
+    "client": "Abshire-Swaniawski",
+    "requestedBy": "Abshire-Swaniawski",
+    "ticketType": "Sales Inquiry",
+    "labels": "",
+    "assignedTo": "Mark Thomas",
+    "lastActivity": "2026-06-26T00:36:00.000Z",
+    "status": "Closed",
+    "description": "Looking for volume discounts on yearly subscription models.",
+    "files": []
+  },
+  {
+    "id": 6,
+    "title": "Can not open the design file.",
+    "client": "Demo Client",
+    "requestedBy": "Demo Client",
+    "ticketType": "Bug Reports",
+    "labels": "",
+    "assignedTo": "John Doe",
+    "lastActivity": "2026-06-25T15:03:00.000Z",
+    "status": "Open",
+    "description": "Getting format error when opening design files on my dashboard.",
+    "files": []
+  },
+  {
+    "id": 8,
+    "title": "I can not add a new task.",
+    "client": "DuBuque Ltd",
+    "requestedBy": "DuBuque Ltd",
+    "ticketType": "Bug Reports",
+    "labels": "",
+    "assignedTo": "Richard Gray",
+    "lastActivity": "2026-06-25T13:19:00.000Z",
+    "status": "New",
+    "description": "Add task button clicks are unresponsive on task board view.",
+    "files": []
+  },
+  {
+    "id": 7,
+    "title": "Where can I find the user manual?",
+    "client": "Hermiston-Wilkinson",
+    "requestedBy": "Hermiston-Wilkinson",
+    "ticketType": "General Support",
+    "labels": "",
+    "assignedTo": "Michael Wood",
+    "lastActivity": "2026-06-25T05:18:00.000Z",
+    "status": "Open",
+    "description": "Could you link me the reference documentation or onboarding manual?",
+    "files": []
+  },
+  {
+    "id": 11,
+    "title": "Are there any ongoing sales or offers?",
+    "client": "Sammy Steuber",
+    "requestedBy": "Sammy Steuber",
+    "ticketType": "Sales Inquiry",
+    "labels": "",
+    "assignedTo": "Michael Wood",
+    "lastActivity": "2026-06-24T15:38:00.000Z",
+    "status": "Open",
+    "description": "Please let me know if there are promotions available for summer renewals.",
+    "files": []
+  },
+  {
+    "id": 10,
+    "title": "Do you offer any special promotions?",
+    "client": "DuBuque Ltd",
+    "requestedBy": "DuBuque Ltd",
+    "ticketType": "Sales Inquiry",
+    "labels": "",
+    "assignedTo": "John Doe",
+    "lastActivity": "2026-06-24T11:39:00.000Z",
+    "status": "Open",
+    "description": "Checking for any group packages or reseller plans.",
+    "files": []
+  }
+]

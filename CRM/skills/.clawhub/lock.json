@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "skills": {
+    "cli-developer": {
+      "version": "0.1.0",
+      "installedAt": 1770754166375
+    },
+    "clawdbot-filesystem": {
+      "version": "1.0.2",
+      "installedAt": 1770754213294
+    }
+  }
+}
