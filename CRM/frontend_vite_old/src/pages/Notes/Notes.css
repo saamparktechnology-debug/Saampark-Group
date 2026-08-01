@@ -1,0 +1,8 @@
+.notes-page { display: flex; flex-direction: column; gap: 24px; animation: fadeIn 0.2s; }
+.notes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }
+.note-card { padding: 20px; border-radius: 4px; box-shadow: var(--shadow-sm); min-height: 200px; display: flex; flex-direction: column; }
+.note-card h4 { margin: 0 0 10px 0; font-size: 1rem; color: #1F2937; }
+.note-card p { flex: 1; font-size: 0.9rem; color: #374151; margin: 0; line-height: 1.5; font-family: 'Comic Sans MS', cursive, sans-serif; }
+.note-meta { font-size: 0.75rem; color: #6B7280; margin-top: 16px; }
+.bg-yellow { background-color: #FEF3C7; border: 1px solid #FDE68A; }
+.bg-blue { background-color: #DBEAFE; border: 1px solid #BFDBFE; }

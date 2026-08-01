@@ -1,0 +1,10 @@
+.projects-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  animation: fadeIn var(--transition-normal);
+}
+
+.bg-success { background-color: #10B981 !important; }
+.text-white { color: white !important; }
+.d-block { display: block; }

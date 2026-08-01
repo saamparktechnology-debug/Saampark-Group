@@ -1,0 +1,13 @@
+.leads-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  animation: fadeIn var(--transition-normal);
+  height: calc(100vh - 120px);
+}
+
+.text-sm { font-size: 0.85rem; }
+.text-secondary { color: var(--text-secondary); }
+.text-success { color: var(--color-success); }
+.font-medium { font-weight: 500; }
+.mt-2 { margin-top: 8px; }
