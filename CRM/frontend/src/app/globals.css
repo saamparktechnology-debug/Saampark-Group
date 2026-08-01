@@ -1,0 +1,269 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* ========================================================
+     LIGHT THEME (Apple / Linear / Stripe inspired)
+     ======================================================== */
+  --background: #FAFAFA;
+  --foreground: #111827;
+  
+  --surface: #FFFFFF;
+  --surface-hover: #F3F4F6;
+  --surface-pressed: #E5E7EB;
+  
+  --primary: #0F172A;
+  --primary-foreground: #FFFFFF;
+  --primary-hover: #1E293B;
+  
+  --secondary: #F1F5F9;
+  --secondary-foreground: #0F172A;
+  
+  --muted: #F8FAFC;
+  --muted-foreground: #64748B;
+  
+  --border: #E2E8F0;
+  --border-focus: #94A3B8;
+  
+  --ring: rgba(15, 23, 42, 0.2);
+  
+  /* Semantics */
+  --success: #10B981;
+  --success-foreground: #FFFFFF;
+  --danger: #EF4444;
+  --danger-foreground: #FFFFFF;
+  --warning: #F59E0B;
+  --warning-foreground: #FFFFFF;
+  --info: #3B82F6;
+  --info-foreground: #FFFFFF;
+  
+  /* Radius System (8px Grid) */
+  --radius-sm: 0.25rem; /* 4px */
+  --radius-md: 0.5rem;  /* 8px */
+  --radius-lg: 1rem;    /* 16px */
+  --radius-xl: 1.5rem;  /* 24px */
+  
+  /* Shadows (Stripe/Linear style) */
+  --shadow-soft: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.02);
+  --shadow-float: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+  --shadow-glow: 0 0 0 1px rgba(0, 0, 0, 0.05), 0 2px 15px rgba(0, 0, 0, 0.03);
+}
+
+.dark {
+  /* ========================================================
+     DARK THEME (Arc / Midnight / Glass inspired)
+     ======================================================== */
+  --background: #09090B;
+  --foreground: #FAFAFA;
+  
+  --surface: #111113;
+  --surface-hover: #1F1F22;
+  --surface-pressed: #27272A;
+  
+  --primary: #FAFAFA;
+  --primary-foreground: #09090B;
+  --primary-hover: #E4E4E7;
+  
+  --secondary: #18181B;
+  --secondary-foreground: #FAFAFA;
+  
+  --muted: #18181B;
+  --muted-foreground: #A1A1AA;
+  
+  --border: #27272A;
+  --border-focus: #52525B;
+  
+  --ring: rgba(250, 250, 250, 0.2);
+  
+  /* Semantics */
+  --success: #10B981;
+  --success-foreground: #000000;
+  --danger: #EF4444;
+  --danger-foreground: #000000;
+  --warning: #F59E0B;
+  --warning-foreground: #000000;
+  --info: #3B82F6;
+  --info-foreground: #000000;
+
+  /* Dark Shadows */
+  --shadow-soft: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --shadow-float: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+  --shadow-glow: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 0 20px rgba(255, 255, 255, 0.05);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-pressed: var(--surface-pressed);
+  
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  
+  --color-border: var(--border);
+  --color-border-focus: var(--border-focus);
+  --color-ring: var(--ring);
+  
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+
+  --shadow-soft: var(--shadow-soft);
+  --shadow-float: var(--shadow-float);
+  --shadow-glow: var(--shadow-glow);
+  
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), sans-serif;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Glassmorphism Utilities */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.dark .glass-panel {
+  background: rgba(17, 17, 19, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+}
+
+/* ========================================================
+   FULLCALENDAR ELITE OVERRIDES
+   ======================================================== */
+.fc {
+  --fc-border-color: var(--border);
+  --fc-daygrid-event-dot-width: 8px;
+  --fc-today-bg-color: rgba(var(--primary-rgb, 15, 23, 42), 0.05);
+  --fc-neutral-bg-color: var(--surface);
+  --fc-page-bg-color: var(--background);
+}
+.dark .fc {
+  --fc-today-bg-color: rgba(250, 250, 250, 0.05);
+}
+
+.fc-theme-standard th, 
+.fc-theme-standard td, 
+.fc-theme-standard .fc-scrollgrid {
+  border-color: var(--border) !important;
+}
+
+/* Soften the grid borders */
+.fc .fc-scrollgrid {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border-width: 1px !important;
+}
+
+.fc .fc-col-header-cell {
+  padding: 12px 0;
+  background: var(--surface-hover);
+  font-weight: 500;
+  color: var(--muted-foreground);
+  border-bottom: 1px solid var(--border) !important;
+}
+
+/* Events */
+.fc-event {
+  border-radius: 4px !important;
+  border: none !important;
+  padding: 2px 6px !important;
+  font-size: 0.75rem !important;
+  font-weight: 500 !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.fc-event:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  z-index: 5 !important;
+}
+
+/* Specific Event Category Colors (Used as generic classes) */
+.event-meeting { background-color: rgba(59, 130, 246, 0.15) !important; color: #3B82F6 !important; border-left: 3px solid #3B82F6 !important; }
+.event-holiday { background-color: rgba(16, 185, 129, 0.15) !important; color: #10B981 !important; border-left: 3px solid #10B981 !important; }
+.event-deadline { background-color: rgba(239, 68, 68, 0.15) !important; color: #EF4444 !important; border-left: 3px solid #EF4444 !important; }
+.event-training { background-color: rgba(139, 92, 246, 0.15) !important; color: #8B5CF6 !important; border-left: 3px solid #8B5CF6 !important; }
+.event-default { background-color: rgba(100, 116, 139, 0.15) !important; color: #64748B !important; border-left: 3px solid #64748B !important; }
+
+/* Day numbers */
+.fc .fc-daygrid-day-number {
+  padding: 8px !important;
+  font-weight: 500;
+  color: var(--foreground);
+}
+
+.fc .fc-day-today .fc-daygrid-day-number {
+  color: var(--primary);
+  background: var(--primary-foreground);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 4px;
+}
+
+.dark .fc .fc-day-today .fc-daygrid-day-number {
+  color: var(--primary-foreground);
+  background: var(--primary);
+}
+
+/* Hide default toolbar since we'll build a custom one */
+.fc .fc-toolbar {
+  display: none !important;
+}
