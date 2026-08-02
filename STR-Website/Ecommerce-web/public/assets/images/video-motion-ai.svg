@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 380" width="600" height="380">
+  <defs>
+    <linearGradient id="bg_video-motion-ai" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#041F1D" />
+      <stop offset="100%" stop-color="#09403B" />
+    </linearGradient>
+    <linearGradient id="accent_video-motion-ai" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00B4A6" />
+      <stop offset="100%" stop-color="#0F766E" />
+    </linearGradient>
+  </defs>
+
+  <!-- Card Background -->
+  <rect width="600" height="380" fill="url(#bg_video-motion-ai)" />
+
+  <!-- Background Grid Pattern -->
+  <g opacity="0.05" stroke="#FFFFFF" stroke-width="1">
+    <line x1="0" y1="60" x2="600" y2="60" />
+    <line x1="0" y1="140" x2="600" y2="140" />
+    <line x1="0" y1="220" x2="600" y2="220" />
+    <line x1="0" y1="300" x2="600" y2="300" />
+    <line x1="150" y1="0" x2="150" y2="380" />
+    <line x1="300" y1="0" x2="300" y2="380" />
+    <line x1="450" y1="0" x2="450" y2="380" />
+  </g>
+
+  <!-- Graphic Mockup Element -->
+  
+      <!-- 4K Video Player UI -->
+      <rect x="90" y="75" width="420" height="210" rx="14" fill="#0D0714" stroke="#00B4A6" stroke-width="1.5" />
+      <circle cx="300" cy="165" r="32" fill="#00B4A6" />
+      <polygon points="292,150 316,165 292,180" fill="#FFFFFF" />
+      <rect x="110" y="250" width="380" height="6" rx="3" fill="#3B1559" />
+      <rect x="110" y="250" width="240" height="6" rx="3" fill="#00B4A6" />
+      <circle cx="350" cy="253" r="6" fill="#FFFFFF" />
+    
+
+  <!-- Bottom Info Overlay Bar -->
+  <rect x="0" y="300" width="600" height="80" fill="rgba(13, 27, 42, 0.95)" />
+  <line x1="0" y1="300" x2="600" y2="300" stroke="#00B4A6" stroke-opacity="0.4" stroke-width="1.5" />
+
+  <!-- Badge Capsule -->
+  <rect x="24" y="318" width="130" height="24" rx="12" fill="#00B4A6" fill-opacity="0.2" stroke="#00B4A6" stroke-opacity="0.5" />
+  <text x="89" y="334" font-family="sans-serif" font-size="10" font-weight="bold" fill="#00B4A6" text-anchor="middle" letter-spacing="0.5">₹799 ONE-TIME</text>
+
+  <!-- Title & Subtitle in Footer -->
+  <text x="170" y="330" font-family="sans-serif" font-size="16" font-weight="bold" fill="#FFFFFF">Motion AI Video</text>
+  <text x="170" y="352" font-family="sans-serif" font-size="12" font-weight="500" fill="#94A3B8">AI Voiceover & Motion FX Graphics</text>
+</svg>

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 380" width="600" height="380">
+  <defs>
+    <linearGradient id="bg_gbp-advanced" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#031E17" />
+      <stop offset="100%" stop-color="#083D2F" />
+    </linearGradient>
+    <linearGradient id="accent_gbp-advanced" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#059669" />
+      <stop offset="100%" stop-color="#064E3B" />
+    </linearGradient>
+  </defs>
+
+  <!-- Card Background -->
+  <rect width="600" height="380" fill="url(#bg_gbp-advanced)" />
+
+  <!-- Background Grid Pattern -->
+  <g opacity="0.05" stroke="#FFFFFF" stroke-width="1">
+    <line x1="0" y1="60" x2="600" y2="60" />
+    <line x1="0" y1="140" x2="600" y2="140" />
+    <line x1="0" y1="220" x2="600" y2="220" />
+    <line x1="0" y1="300" x2="600" y2="300" />
+    <line x1="150" y1="0" x2="150" y2="380" />
+    <line x1="300" y1="0" x2="300" y2="380" />
+    <line x1="450" y1="0" x2="450" y2="380" />
+  </g>
+
+  <!-- Graphic Mockup Element -->
+  
+      <!-- Google Search & Maps Card -->
+      <rect x="80" y="75" width="440" height="210" rx="14" fill="#0A1628" stroke="#059669" stroke-width="1.5" />
+      <rect x="100" y="95" width="400" height="34" rx="17" fill="#162A45" stroke="#059669" stroke-opacity="0.5" />
+      <circle cx="120" cy="112" r="6" fill="#059669" />
+      <text x="135" y="116" font-family="sans-serif" font-size="11" fill="#94A3B8">Saampark Certified Local Business Search...</text>
+      <!-- Search Ad Result #1 -->
+      <rect x="100" y="145" width="32" height="16" rx="4" fill="#F5A623" />
+      <text x="106" y="157" font-family="sans-serif" font-size="9" font-weight="bold" fill="#000">Ad</text>
+      <rect x="140" y="147" width="220" height="12" rx="3" fill="#059669" />
+      <rect x="100" y="170" width="360" height="14" rx="3" fill="#FFFFFF" />
+      <rect x="100" y="192" width="280" height="10" rx="2" fill="#64748B" opacity="0.7" />
+      <rect x="100" y="215" width="380" height="50" rx="8" fill="#162A45" />
+    
+
+  <!-- Bottom Info Overlay Bar -->
+  <rect x="0" y="300" width="600" height="80" fill="rgba(13, 27, 42, 0.95)" />
+  <line x1="0" y1="300" x2="600" y2="300" stroke="#059669" stroke-opacity="0.4" stroke-width="1.5" />
+
+  <!-- Badge Capsule -->
+  <rect x="24" y="318" width="130" height="24" rx="12" fill="#059669" fill-opacity="0.2" stroke="#059669" stroke-opacity="0.5" />
+  <text x="89" y="334" font-family="sans-serif" font-size="10" font-weight="bold" fill="#059669" text-anchor="middle" letter-spacing="0.5">FULL AUDIT</text>
+
+  <!-- Title & Subtitle in Footer -->
+  <text x="170" y="330" font-family="sans-serif" font-size="16" font-weight="bold" fill="#FFFFFF">GBP Advanced Domination</text>
+  <text x="170" y="352" font-family="sans-serif" font-size="12" font-weight="500" fill="#94A3B8">Competitor Analysis & Citations Audit</text>
+</svg>

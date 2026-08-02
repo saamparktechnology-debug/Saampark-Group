@@ -573,7 +573,7 @@ export default function Dashboard() {
                      <span className={`px-1.5 py-0.5 text-[10px] rounded text-white mr-2 ${item.action === 'Updated' ? 'bg-yellow-500' : 'bg-blue-500'}`}>{item.action}</span>
                      {item.target}
                    </p>
-                   {item.status && (
+                   {'status' in item && item.status && (
                      <ul className="list-disc ml-5 text-xs text-muted-foreground mt-2 space-y-1">
                        <li>Status: <span className="line-through">{item.status}</span> <span className="text-emerald-500">{item.done}</span></li>
                      </ul>

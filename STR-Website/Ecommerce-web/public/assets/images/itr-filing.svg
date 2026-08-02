@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 380" width="600" height="380">
+  <defs>
+    <linearGradient id="bg_itr-filing" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#052115" />
+      <stop offset="100%" stop-color="#0B472D" />
+    </linearGradient>
+    <linearGradient id="accent_itr-filing" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#10B981" />
+      <stop offset="100%" stop-color="#047857" />
+    </linearGradient>
+  </defs>
+
+  <!-- Card Background -->
+  <rect width="600" height="380" fill="url(#bg_itr-filing)" />
+
+  <!-- Background Grid Pattern -->
+  <g opacity="0.05" stroke="#FFFFFF" stroke-width="1">
+    <line x1="0" y1="60" x2="600" y2="60" />
+    <line x1="0" y1="140" x2="600" y2="140" />
+    <line x1="0" y1="220" x2="600" y2="220" />
+    <line x1="0" y1="300" x2="600" y2="300" />
+    <line x1="150" y1="0" x2="150" y2="380" />
+    <line x1="300" y1="0" x2="300" y2="380" />
+    <line x1="450" y1="0" x2="450" y2="380" />
+  </g>
+
+  <!-- Graphic Mockup Element -->
+  
+      <!-- Official Legal Certificate & Stamp -->
+      <rect x="130" y="65" width="340" height="230" rx="10" fill="#0F172A" stroke="#10B981" stroke-width="2" />
+      <rect x="150" y="85" width="300" height="18" rx="4" fill="#10B981" />
+      <rect x="150" y="115" width="260" height="10" rx="2" fill="#64748B" />
+      <rect x="150" y="133" width="200" height="10" rx="2" fill="#64748B" />
+      <circle cx="390" cy="220" r="30" fill="#10B981" opacity="0.3" stroke="#10B981" stroke-width="2" />
+      <polygon points="390,200 396,214 410,214 398,222 403,236 390,226 377,236 382,222 370,214 384,214" fill="#10B981" />
+      <rect x="150" y="170" width="180" height="10" rx="2" fill="#64748B" opacity="0.6" />
+      <rect x="150" y="188" width="140" height="10" rx="2" fill="#64748B" opacity="0.6" />
+      <rect x="150" y="235" width="120" height="26" rx="6" fill="#10B981" />
+    
+
+  <!-- Bottom Info Overlay Bar -->
+  <rect x="0" y="300" width="600" height="80" fill="rgba(13, 27, 42, 0.95)" />
+  <line x1="0" y1="300" x2="600" y2="300" stroke="#10B981" stroke-opacity="0.4" stroke-width="1.5" />
+
+  <!-- Badge Capsule -->
+  <rect x="24" y="318" width="130" height="24" rx="12" fill="#10B981" fill-opacity="0.2" stroke="#10B981" stroke-opacity="0.5" />
+  <text x="89" y="334" font-family="sans-serif" font-size="10" font-weight="bold" fill="#10B981" text-anchor="middle" letter-spacing="0.5">EXPERT CA</text>
+
+  <!-- Title & Subtitle in Footer -->
+  <text x="170" y="330" font-family="sans-serif" font-size="16" font-weight="bold" fill="#FFFFFF">ITR Income Tax Return</text>
+  <text x="170" y="352" font-family="sans-serif" font-size="12" font-weight="500" fill="#94A3B8">CA Guided Tax Planning & Filing</text>
+</svg>

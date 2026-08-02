@@ -37,7 +37,7 @@ export function CalendarRightPanel() {
                 className="p-3 rounded-lg bg-surface hover:bg-surface-hover border border-border cursor-pointer transition-colors shadow-sm relative overflow-hidden"
               >
                 {/* Category color accent */}
-                <div className={`absolute left-0 top-0 bottom-0 w-1 ${event.className.replace('event-', 'bg-').replace('meeting', 'blue-500').replace('holiday', 'emerald-500').replace('deadline', 'red-500').replace('training', 'purple-500')}`} style={{ backgroundColor: 'currentColor' }} />
+                <div className={`absolute left-0 top-0 bottom-0 w-1 ${(event.className || '').replace('event-', 'bg-').replace('meeting', 'blue-500').replace('holiday', 'emerald-500').replace('deadline', 'red-500').replace('training', 'purple-500')}`} style={{ backgroundColor: 'currentColor' }} />
                 
                 <h4 className="text-sm font-medium text-foreground truncate pl-2">{event.title}</h4>
                 <p className="text-xs text-muted-foreground mt-1 pl-2">

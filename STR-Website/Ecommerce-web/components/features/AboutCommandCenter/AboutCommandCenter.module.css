@@ -1,0 +1,207 @@
+.wrapper {
+  background: var(--color-bg-page);
+  padding-bottom: var(--size-20);
+}
+
+/* ── Hero ────────────────────────────────── */
+.hero {
+  position: relative;
+  padding: var(--size-20) 0 var(--size-24) 0;
+  overflow: hidden;
+  background: var(--primitive-navy-900);
+}
+
+.heroBg {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 0%, rgba(0,180,166,0.15) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.heroInner {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: clamp(40px, 6vw, 72px);
+  font-weight: 800;
+  color: white;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin: var(--size-4) 0 var(--size-6);
+}
+
+.subtitle {
+  font-size: clamp(16px, 2vw, 20px);
+  color: rgba(255,255,255,0.7);
+  line-height: 1.6;
+  max-width: 800px;
+}
+
+/* ── Sections ────────────────────────────── */
+.section {
+  padding-block: var(--size-20);
+}
+
+/* ── Divisions ───────────────────────────── */
+.divisionsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--size-8);
+  margin-top: var(--size-12);
+}
+
+@media (max-width: 768px) {
+  .divisionsGrid { grid-template-columns: 1fr; }
+}
+
+.divisionCard {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-2xl);
+  padding: var(--size-8);
+  box-shadow: var(--shadow-xl);
+  position: relative;
+  overflow: hidden;
+}
+
+.divisionCard::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+}
+
+.divisionCard.str::before { background: linear-gradient(90deg, #00B4A6, #1E90FF); }
+.divisionCard.scs::before { background: linear-gradient(90deg, #4CAF50, #F5A623); }
+
+.divHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4);
+  margin-bottom: var(--size-6);
+}
+
+.divLogo {
+  border-radius: 12px;
+  object-fit: cover;
+  box-shadow: var(--shadow-sm);
+}
+
+.scsLogoBox {
+  width: 48px;
+  height: 48px;
+  background: var(--primitive-navy-900);
+  color: white;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.divTitleWrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.divTitle {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.divSub {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.divDesc {
+  font-size: 15px;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+  margin-bottom: var(--size-8);
+}
+
+.divList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-3);
+}
+
+.divList li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.str .divList svg { color: var(--primitive-teal-500); }
+.scs .divList svg { color: #4CAF50; }
+
+/* ── Values ──────────────────────────────── */
+.valuesSection {
+  background: var(--primitive-navy-900);
+  margin-top: var(--size-12);
+}
+
+.valuesGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--size-6);
+}
+
+@media (max-width: 1024px) { .valuesGrid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 600px)  { .valuesGrid { grid-template-columns: 1fr; } }
+
+.valueCard {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--radius-xl);
+  padding: var(--size-8) var(--size-6);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: transform var(--duration-fast);
+}
+
+.valueCard:hover {
+  transform: translateY(-4px);
+  background: rgba(255,255,255,0.08);
+}
+
+.valueIcon {
+  color: var(--primitive-teal-400);
+  margin-bottom: var(--size-4);
+}
+
+.valueTitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: white;
+  margin-bottom: var(--size-3);
+}
+
+.valueText {
+  font-size: 14px;
+  color: rgba(255,255,255,0.6);
+  line-height: 1.5;
+}

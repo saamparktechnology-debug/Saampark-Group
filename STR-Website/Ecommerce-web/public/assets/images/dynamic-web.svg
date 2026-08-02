@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 380" width="600" height="380">
+  <defs>
+    <linearGradient id="bg_dynamic-web" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1A0C00" />
+      <stop offset="100%" stop-color="#3D1E03" />
+    </linearGradient>
+    <linearGradient id="accent_dynamic-web" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#F4511E" />
+      <stop offset="100%" stop-color="#F5A623" />
+    </linearGradient>
+  </defs>
+
+  <!-- Card Background -->
+  <rect width="600" height="380" fill="url(#bg_dynamic-web)" />
+
+  <!-- Background Grid Pattern -->
+  <g opacity="0.05" stroke="#FFFFFF" stroke-width="1">
+    <line x1="0" y1="60" x2="600" y2="60" />
+    <line x1="0" y1="140" x2="600" y2="140" />
+    <line x1="0" y1="220" x2="600" y2="220" />
+    <line x1="0" y1="300" x2="600" y2="300" />
+    <line x1="150" y1="0" x2="150" y2="380" />
+    <line x1="300" y1="0" x2="300" y2="380" />
+    <line x1="450" y1="0" x2="450" y2="380" />
+  </g>
+
+  <!-- Graphic Mockup Element -->
+  
+      <!-- Browser Frame -->
+      <rect x="80" y="80" width="440" height="210" rx="10" fill="#090F1D" stroke="#F4511E" stroke-opacity="0.5" stroke-width="1.5" />
+      <rect x="80" y="80" width="440" height="30" rx="10" fill="#162032" />
+      <circle cx="100" cy="95" r="4" fill="#EF4444" />
+      <circle cx="114" cy="95" r="4" fill="#F5A623" />
+      <circle cx="128" cy="95" r="4" fill="#10B981" />
+      <rect x="150" y="87" width="220" height="16" rx="8" fill="#0D1B2A" />
+      <text x="160" y="99" font-family="sans-serif" font-size="9" fill="#94A3B8">https://www.saampark.com</text>
+      <!-- Hero Mockup inside browser -->
+      <rect x="100" y="125" width="220" height="16" rx="4" fill="#F4511E" />
+      <rect x="100" y="150" width="160" height="10" rx="3" fill="#64748B" opacity="0.6" />
+      <rect x="100" y="168" width="120" height="10" rx="3" fill="#64748B" opacity="0.4" />
+      <rect x="100" y="195" width="90" height="26" rx="6" fill="#F4511E" />
+      <rect x="340" y="125" width="160" height="135" rx="8" fill="#1E293B" stroke="#F4511E" stroke-dasharray="4" stroke-opacity="0.4" />
+      <circle cx="420" cy="180" r="30" fill="#F4511E" opacity="0.3" />
+    
+
+  <!-- Bottom Info Overlay Bar -->
+  <rect x="0" y="300" width="600" height="80" fill="rgba(13, 27, 42, 0.95)" />
+  <line x1="0" y1="300" x2="600" y2="300" stroke="#F4511E" stroke-opacity="0.4" stroke-width="1.5" />
+
+  <!-- Badge Capsule -->
+  <rect x="24" y="318" width="130" height="24" rx="12" fill="#F4511E" fill-opacity="0.2" stroke="#F4511E" stroke-opacity="0.5" />
+  <text x="89" y="334" font-family="sans-serif" font-size="10" font-weight="bold" fill="#F4511E" text-anchor="middle" letter-spacing="0.5">MOST POPULAR</text>
+
+  <!-- Title & Subtitle in Footer -->
+  <text x="170" y="330" font-family="sans-serif" font-size="16" font-weight="bold" fill="#FFFFFF">Dynamic Website</text>
+  <text x="170" y="352" font-family="sans-serif" font-size="12" font-weight="500" fill="#94A3B8">CMS Admin Panel + MySQL Database</text>
+</svg>

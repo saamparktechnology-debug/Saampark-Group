@@ -1,0 +1,213 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--color-bg-overlay);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--size-4);
+  animation: fadeIn var(--duration-fast) var(--ease-decelerate);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.modal {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-2xl);
+  width: 100%;
+  max-width: 440px;
+  padding: var(--size-8);
+  box-shadow: var(--shadow-2xl);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4);
+  animation: modalZoom 350ms var(--ease-spring);
+}
+
+@keyframes modalZoom {
+  from { opacity: 0; transform: scale(0.92) translateY(12px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.closeBtn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition: color var(--duration-fast);
+}
+
+.closeBtn:hover {
+  color: var(--color-text-primary);
+}
+
+/* Tabs */
+.tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--color-bg-sunken);
+  padding: 4px;
+  border-radius: var(--radius-xl);
+}
+
+.tabBtn {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  padding: 10px;
+  border-radius: var(--radius-lg);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+
+.tabBtn:hover {
+  color: var(--color-text-primary);
+}
+
+.activeTab {
+  background: var(--color-bg-surface);
+  color: var(--color-brand);
+  box-shadow: var(--shadow-xs);
+}
+
+/* Form Details */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4);
+  margin-top: 10px;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  line-height: 1.2;
+}
+
+.subtitle {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+  margin-top: -8px;
+}
+
+/* Input Fields */
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: var(--size-2);
+}
+
+.inputWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: var(--color-bg-sunken);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-xl);
+  padding-inline: var(--size-4);
+  height: 48px;
+  transition: all var(--duration-fast);
+}
+
+.inputWrap:focus-within {
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 3px rgba(0, 180, 166, 0.1);
+  background: var(--color-bg-surface);
+}
+
+.fieldIcon {
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+  margin-right: 12px;
+}
+
+.input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 13px;
+  color: var(--color-text-primary);
+  height: 100%;
+}
+
+.input::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+/* Forgot Password */
+.forgotRow {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.forgotBtn {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-tertiary);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.forgotBtn:hover {
+  color: var(--color-brand);
+}
+
+/* Submit */
+.submitBtn {
+  width: 100%;
+  justify-content: center;
+  height: 48px !important;
+  border-radius: var(--radius-xl) !important;
+  gap: 8px;
+  margin-top: var(--size-4);
+}
+
+/* Success Screen */
+.successScreen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--size-12) 0;
+  text-align: center;
+  animation: fadeIn 300ms;
+}
+
+.successIcon {
+  color: #10B981;
+  margin-bottom: var(--size-4);
+  animation: scalePop 400ms var(--ease-spring);
+}
+
+@keyframes scalePop {
+  from { transform: scale(0.6); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+
+.successScreen h3 {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  margin-bottom: var(--size-1);
+}
+
+.successScreen p {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}

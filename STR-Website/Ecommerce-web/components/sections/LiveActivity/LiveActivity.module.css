@@ -1,0 +1,95 @@
+.section {
+  padding-block: var(--size-12);
+  background: var(--color-bg-surface);
+  border-top: 1px solid var(--color-border-default);
+  border-bottom: 1px solid var(--color-border-default);
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--size-3);
+  margin-bottom: var(--size-6);
+}
+
+.indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #EF4444;
+  background: rgba(239,68,68,0.10);
+  border: 1px solid rgba(239,68,68,0.20);
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  background: #EF4444;
+  border-radius: 50%;
+  animation: blink 1.2s ease-in-out infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+.label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.ribbonWrap {
+  position: relative;
+  overflow: hidden;
+}
+
+.fadeLeft, .fadeRight {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 80px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.fadeLeft  { left: 0;  background: linear-gradient(to right, var(--color-bg-surface), transparent); }
+.fadeRight { right: 0; background: linear-gradient(to left, var(--color-bg-surface), transparent); }
+
+.track {
+  display: flex;
+  gap: var(--size-6);
+  width: max-content;
+  animation: scroll 28s linear infinite;
+}
+
+.track:hover { animation-play-state: paused; }
+
+@keyframes scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2);
+  padding: 8px 16px;
+  background: var(--color-bg-sunken);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.emoji { font-size: 16px; }
+.text  { font-size: 13px; }
