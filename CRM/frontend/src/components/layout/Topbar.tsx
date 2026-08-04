@@ -88,25 +88,19 @@ export function Topbar() {
         {user.role !== 'Client' && (
           <>
             <Link href="/feature/dashboard" onClick={stop}>
-              <Button variant="secondary" className="w-full justify-start" leftIcon={<Monitor size={16} />}>Dashboard</Button>
-            </Link>
-            <Link href="/feature/events" onClick={stop}>
-              <Button variant="secondary" className="w-full justify-start" leftIcon={<Calendar size={16} />}>Events</Button>
+              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary" title="Dashboard">
+                <Monitor size={20} />
+              </Button>
             </Link>
             <Link href="/feature/clients" onClick={stop}>
-              <Button variant="secondary" className="w-full justify-start" leftIcon={<Briefcase size={16} />}>Clients</Button>
-            </Link>
-            <Link href="/feature/subscriptions" onClick={stop}>
-              <Button variant="secondary" className="w-full justify-start" leftIcon={<CreditCard size={16} />}>Subscriptions</Button>
+              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary" title="Clients">
+                <Briefcase size={20} />
+              </Button>
             </Link>
             <Link href="/feature/projects" onClick={stop}>
-              <Button variant="secondary" className="w-full justify-start" leftIcon={<Command size={16} />}>Projects</Button>
-            </Link>
-            <Link href="/feature/tasks" onClick={stop}>
-              <Button variant="secondary" className="w-full justify-start" leftIcon={<CheckCircle size={16} />}>Tasks</Button>
-            </Link>
-            <Link href="/feature/leads" onClick={stop}>
-              <Button variant="secondary" className="w-full justify-start" leftIcon={<Briefcase size={16} />}>Leads</Button>
+              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary" title="Projects">
+                <LayoutGrid size={20} />
+              </Button>
             </Link>
           </>
         )}
