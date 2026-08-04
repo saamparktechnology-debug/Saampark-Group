@@ -249,7 +249,7 @@ export const strServices: Service[] = [
     priceType: 'on-request',
     deliveryDays: null,
     isPopular: true,
-    isFeatured: true, badge: '🔥 30% OFF LAUNCH',
+    isFeatured: true,
     badge: '⚡ Best Value',
     color: '#54C5F8',
     slug: 'hybrid-app',
