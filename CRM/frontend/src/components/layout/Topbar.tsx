@@ -3,9 +3,9 @@
 import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
-  Menu, CheckSquare, LayoutGrid, Briefcase, Monitor,
+  Menu, CheckSquare, LayoutGrid, Briefcase, Monitor, Calendar, Command, CheckCircle,
   Search, Plus, Clock, Bell, Mail,
-  Settings, LogOut, User, Sun, Moon, X, Building2
+  Settings, LogOut, User, Sun, Moon, X, Building2, CreditCard
 } from "lucide-react"
 import { useTheme } from "next-themes"
 import Link from "next/link"
@@ -86,25 +86,29 @@ export function Topbar() {
 
         {/* These are NAVIGATION shortcuts — each linked to correct route */}
         {user.role !== 'Client' && (
-          <Link href="/dashboard" onClick={stop}>
-            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary hidden sm:flex" title="Dashboard">
-              <Monitor size={20} />
-            </Button>
-          </Link>
-        )}
-
-        <Link href="/projects" onClick={stop}>
-          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary hidden md:flex" title="Projects">
-            <Briefcase size={20} />
-          </Button>
-        </Link>
-
-        {['Super Admin', 'Admin', 'Manager'].includes(user.role) && (
-          <Link href="/clients" onClick={stop}>
-            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary hidden lg:flex" title="Clients">
-              <LayoutGrid size={20} />
-            </Button>
-          </Link>
+          <>
+            <Link href="/feature/dashboard" onClick={stop}>
+              <Button variant="secondary" className="w-full justify-start" leftIcon={<Monitor size={16} />}>Dashboard</Button>
+            </Link>
+            <Link href="/feature/events" onClick={stop}>
+              <Button variant="secondary" className="w-full justify-start" leftIcon={<Calendar size={16} />}>Events</Button>
+            </Link>
+            <Link href="/feature/clients" onClick={stop}>
+              <Button variant="secondary" className="w-full justify-start" leftIcon={<Briefcase size={16} />}>Clients</Button>
+            </Link>
+            <Link href="/feature/subscriptions" onClick={stop}>
+              <Button variant="secondary" className="w-full justify-start" leftIcon={<CreditCard size={16} />}>Subscriptions</Button>
+            </Link>
+            <Link href="/feature/projects" onClick={stop}>
+              <Button variant="secondary" className="w-full justify-start" leftIcon={<Command size={16} />}>Projects</Button>
+            </Link>
+            <Link href="/feature/tasks" onClick={stop}>
+              <Button variant="secondary" className="w-full justify-start" leftIcon={<CheckCircle size={16} />}>Tasks</Button>
+            </Link>
+            <Link href="/feature/leads" onClick={stop}>
+              <Button variant="secondary" className="w-full justify-start" leftIcon={<Briefcase size={16} />}>Leads</Button>
+            </Link>
+          </>
         )}
 
         {/* Display Current Company Badge for Super Admin/Admin */}

@@ -22,7 +22,16 @@ import {
   HelpCircle,
   Folder,
   Clock,
-  Settings
+  Settings,
+  LayoutDashboard,
+  KanbanSquare,
+  CheckSquare,
+  Target,
+  FileText,
+  Calculator,
+  HeadphonesIcon,
+  MessageSquare,
+  CreditCard
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -30,24 +39,21 @@ import { useUIStore } from "@/store/useUIStore"
 import { useAuthStore, Role } from "@/store/useAuthStore"
 
 const ALL_NAV_ITEMS = [
-  { name: "Dashboard", href: "/dashboard", icon: Monitor, roles: ["Super Admin", "Admin", "Manager", "Employee"] },
-  { name: "Events", href: "/events", icon: Calendar, roles: ["Super Admin", "Admin", "Manager", "Employee"] },
-  { name: "Clients", href: "/clients", icon: Briefcase, roles: ["Super Admin", "Admin", "Manager"] },
-  { name: "Projects", href: "/projects", icon: Command, roles: ["Super Admin", "Admin", "Manager", "Client"] },
-  { name: "Tasks", href: "/tasks", icon: CheckCircle, roles: ["Super Admin", "Admin", "Manager", "Employee"] },
-  { name: "Leads", href: "/leads", icon: Layers, roles: ["Super Admin", "Admin", "Manager"] },
-  { name: "Sales", href: "/sales", icon: ArrowRightLeft, roles: ["Super Admin", "Admin", "Manager"] },
-  { name: "Estimates", href: "/estimates", icon: ShoppingCart, roles: ["Super Admin", "Admin", "Manager", "Client"] },
-  { name: "Proposals", href: "/proposals", icon: File, roles: ["Super Admin", "Admin", "Manager", "Client"] },
-  { name: "Notes", href: "/notes", icon: Coffee, roles: ["Super Admin", "Admin", "Manager"] },
-  { name: "Messages", href: "/messages", icon: Book, roles: ["Super Admin", "Admin", "Manager", "Employee", "Client"] },
-  { name: "Team", href: "/team", icon: MessageCircle, roles: ["Super Admin", "Admin", "Manager"] },
-  { name: "Tickets", href: "/tickets", icon: Users, roles: ["Super Admin", "Admin", "Manager", "Client"] },
-  { name: "Knowledge Base", href: "/knowledge-base", icon: LifeBuoy, roles: ["Super Admin", "Admin", "Manager", "Employee", "Client"] },
-  { name: "Files", href: "/files", icon: HelpCircle, roles: ["Super Admin", "Admin", "Manager", "Employee", "Client"] },
-  { name: "Expenses", href: "/expenses", icon: Folder, roles: ["Super Admin", "Admin", "Manager"] },
-  { name: "Reports", href: "/reports", icon: Clock, roles: ["Super Admin", "Admin", "Manager"] },
-  { name: "Settings", href: "/settings", icon: Settings, roles: ["Super Admin", "Admin"] },
+  { name: "Dashboard", href: "/feature/dashboard", icon: LayoutDashboard, roles: ["Super Admin", "Admin", "Manager", "Employee"] },
+  { name: "Clients", href: "/feature/clients", icon: Briefcase, roles: ["Super Admin", "Admin", "Manager"] },
+  { name: "Subscriptions", href: "/feature/subscriptions", icon: CreditCard, roles: ["Super Admin", "Admin", "Manager"] },
+  { name: "Projects", href: "/feature/projects", icon: KanbanSquare, roles: ["Super Admin", "Admin", "Manager", "Employee"] },
+  { name: "Tasks", href: "/feature/tasks", icon: CheckSquare, roles: ["Super Admin", "Admin", "Manager", "Employee"] },
+  { name: "Leads", href: "/feature/leads", icon: Target, roles: ["Super Admin", "Admin", "Manager"] },
+  { name: "Proposals", href: "/feature/proposals", icon: FileText, roles: ["Super Admin", "Admin"] },
+  { name: "Estimates & Expenses", href: "/feature/expenses", icon: Calculator, roles: ["Super Admin", "Admin", "Manager"] },
+  { name: "Tickets", href: "/feature/tickets", icon: HeadphonesIcon, roles: ["Super Admin", "Admin", "Manager", "Employee"] },
+  { name: "Messages", href: "/feature/messages", icon: MessageSquare, roles: ["Super Admin", "Admin", "Manager", "Employee"] },
+  { name: "Events", href: "/feature/events", icon: Calendar, roles: ["Super Admin", "Admin", "Manager", "Employee"] },
+  { name: "Team", href: "/feature/team", icon: MessageCircle, roles: ["Super Admin", "Admin", "Manager"] },
+  { name: "Knowledge Base", href: "/feature/knowledge-base", icon: LifeBuoy, roles: ["Super Admin", "Admin", "Manager", "Employee", "Client"] },
+  { name: "Files", href: "/feature/files", icon: HelpCircle, roles: ["Super Admin", "Admin", "Manager", "Employee", "Client"] },
+  { name: "Settings", href: "/feature/settings", icon: Settings, roles: ["Super Admin", "Admin"] },
 ]
 
 export function Sidebar() {
