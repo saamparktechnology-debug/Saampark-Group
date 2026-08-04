@@ -4,57 +4,110 @@ import React, { useState, useMemo, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Heart, ShoppingBag, Check, Eye } from 'lucide-react';
+import { Bookmark, ShoppingBag, Check, Eye } from 'lucide-react';
 import { allServices, type Service } from '@/lib/data/services';
 import { useCommerceStore } from '@/lib/store/cartStore';
 import { useUIStore } from '@/lib/store/uiStore';
 import { PromoCarousel } from '../PromoCarousel/PromoCarousel';
+import { CategoryCoverflow } from '../CategoryCoverflow/CategoryCoverflow';
 import { SkeletonLoader } from '@/components/ui/SkeletonLoader/SkeletonLoader';
 import { ProductQuickViewModal } from './ProductQuickViewModal';
 import styles from './MarketplaceHome.module.css';
 
 const SECTION_GROUPS = [
+  // ── Technology (STR) ──
   {
-    id: 'web',
-    title: '🌐 Web Engineering Services',
-    description: 'ISO 9001:2015 certified responsive static, dynamic, and full e-commerce websites engineered by Saampark Technology & Research (STR) Division.',
-    categories: ['website'],
+    id: 'web-development',
+    title: '🌐 Web Development',
+    description: 'Static, dynamic, and full e-commerce websites engineered for high performance.',
+    sector: 'web-development',
   },
   {
-    id: 'app',
-    title: '📱 Mobile Application Development',
-    description: 'Custom iOS, Android, and cross-platform hybrid applications built using Flutter, Kotlin, Swift and published to Google Play & Apple App Stores.',
-    categories: ['app'],
+    id: 'web-design',
+    title: '🎨 Web & UI/UX Design',
+    description: 'High-converting landing pages and complete SaaS application interfaces.',
+    sector: 'web-design',
   },
   {
-    id: 'software',
-    title: '⚙️ Enterprise Software & CRM Solutions',
-    description: 'Comprehensive ERP portals, billing engines, CRM clients, and custom database management softwares to automate company operations.',
-    categories: ['software'],
+    id: 'app-development',
+    title: '📱 Mobile App Development',
+    description: 'Native Android and cross-platform hybrid applications for iOS & Android.',
+    sector: 'app-development',
   },
   {
-    id: 'specialized',
-    title: '🚀 Industry-Specialized Web Systems',
-    description: 'Tailored school portals, hospital records management, hotel reservation booking, restaurant ordering, and real-estate listings.',
-    categories: ['specialized-website'],
+    id: 'ai-integration',
+    title: '🤖 AI & Automation Integration',
+    description: 'Intelligent GPT chatbots and custom automated workflows to scale operations.',
+    sector: 'ai-integration',
   },
   {
-    id: 'ads',
-    title: '📢 Digital Ads Campaigns & Local SEO',
-    description: 'Managed Meta (Facebook, Instagram) and Google Search keywords advertising to generate immediate high-converting local customer leads.',
-    categories: ['social-media', 'meta-ads', 'google-ads', 'google-business'],
+    id: 'software-erp',
+    title: '⚙️ Enterprise Software & CRM',
+    description: 'Comprehensive ERP portals and CRM systems to manage business at scale.',
+    sector: 'software-erp',
+  },
+  // ── Marketing (SCS) ──
+  {
+    id: 'digital-marketing',
+    title: '📢 Digital & Social Marketing',
+    description: 'Professional social media management and content marketing strategies.',
+    sector: 'digital-marketing',
   },
   {
-    id: 'video',
-    title: '🤖 Video Production & AI Animation',
-    description: 'Premium slideshow ads, animated cartoon explainer videos, social reels, and fully automated voiceover AI marketing videos.',
-    categories: ['video-ai'],
+    id: 'ads-management',
+    title: '🎯 Ads Management (Meta & Google)',
+    description: 'High-converting paid advertising campaigns across Facebook, Instagram, and Google.',
+    sector: 'ads-management',
   },
   {
-    id: 'legal',
-    title: '💼 Company Registrations & Compliance',
-    description: 'Hassle-free Private Limited company incorporation, GST registration, MSME Udyam filings, and professional tax compliance support.',
-    categories: ['business-legal'],
+    id: 'video-animation',
+    title: '🎬 Video & Animation Studio',
+    description: 'Fully AI-generated marketing videos and engaging 2D cartoon explainers.',
+    sector: 'video-animation',
+  },
+  {
+    id: 'seo-local',
+    title: '📍 SEO & Local Business Profiles',
+    description: 'Advanced technical SEO and Google Business Profile domination.',
+    sector: 'seo-local',
+  },
+  // ── Research ──
+  {
+    id: 'market-research',
+    title: '🔬 Market & Consumer Research',
+    description: 'In-depth competitor analysis, market sizing, and consumer sentiment surveys.',
+    sector: 'market-research',
+  },
+  {
+    id: 'financial-research',
+    title: '📈 Financial & Stock Research',
+    description: 'Equity market trends, stock fundamentals, and quantitative algorithmic strategies.',
+    sector: 'financial-research',
+  },
+  {
+    id: 'ux-research',
+    title: '👁️ UX & Usability Research',
+    description: 'Heuristic audits and user journey mapping for digital products.',
+    sector: 'ux-research',
+  },
+  // ── Consultancy ──
+  {
+    id: 'business-legal',
+    title: '⚖️ Business & Legal Setup',
+    description: 'Hassle-free Private Limited company incorporation, GST, and MSME registrations.',
+    sector: 'business-legal',
+  },
+  {
+    id: 'financial-tax',
+    title: '💰 Financial & Tax Consulting',
+    description: 'Corporate tax optimization, financial auditing, and VC pitch preparation.',
+    sector: 'financial-tax',
+  },
+  {
+    id: 'hr-operations',
+    title: '👥 HR & Operations Consulting',
+    description: 'Scalable HR policies, payroll structuring, and employee compliance protocols.',
+    sector: 'hr-operations',
   },
 ];
 
@@ -179,13 +232,19 @@ function MarketplaceContent() {
             alt={svc.name} 
             className={styles.thumbnail}
           />
+
+          {svc.badge && (
+            <div className={styles.offerBadge}>
+              {svc.badge}
+            </div>
+          )}
           
           <button 
             className={`${styles.wishBtn} ${isWishlisted ? styles.wishlisted : ''}`}
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleWishlist(svc.id); }}
             aria-label="Wishlist"
           >
-            <Heart size={16} fill={isWishlisted ? 'currentColor' : 'none'} />
+            <Bookmark size={16} fill={isWishlisted ? 'currentColor' : 'none'} />
           </button>
 
           <button 
@@ -253,33 +312,23 @@ function MarketplaceContent() {
       <div className={`container ${styles.layout}`}>
         <main className={styles.main}>
           <PromoCarousel />
+          <CategoryCoverflow />
 
           <div className={styles.resultsHeader}>
-            <p className={styles.resultsCount}>Showing <strong>{filteredServices.length}</strong> ISO certified services</p>
+            <p className={styles.resultsCount}>Showing <strong>{filteredServices.length}</strong> services</p>
 
-            {/* Lengthy rounded-corner sliding toggle button */}
-            <div className={styles.slidingToggleContainer}>
-              <button 
-                className={`${styles.toggleSegment} ${entityFilter === 'all' ? styles.segmentActiveAll : ''}`}
-                onClick={() => setEntityFilter('all')}
+            {/* Entity Filter Dropdown */}
+            <div className={styles.filterDropdownContainer}>
+              <select 
+                className={styles.filterDropdown}
+                value={entityFilter}
+                onChange={(e) => setEntityFilter(e.target.value as any)}
               >
-                <span className={styles.desktopText}>All Group Services</span>
-                <span className={styles.mobileText}>All Services</span>
-              </button>
-              <button 
-                className={`${styles.toggleSegment} ${entityFilter === 'str' ? styles.segmentActiveStr : ''}`}
-                onClick={() => setEntityFilter('str')}
-              >
-                <span className={styles.desktopText}>🌐 Saampark Technology</span>
-                <span className={styles.mobileText}>🌐 Tech (STR)</span>
-              </button>
-              <button 
-                className={`${styles.toggleSegment} ${entityFilter === 'scs' ? styles.segmentActiveScs : ''}`}
-                onClick={() => setEntityFilter('scs')}
-              >
-                <span className={styles.desktopText}>📢 Saampark Digital Marketing</span>
-                <span className={styles.mobileText}>📢 Marketing (SCS)</span>
-              </button>
+                <option value="all">All Group Services</option>
+                <option value="str">🌐 Saampark Technology</option>
+                <option value="research">🔬 Saampark Research</option>
+                <option value="consultancy">💼 Saampark Consultancy</option>
+              </select>
             </div>
           </div>
 
@@ -292,11 +341,11 @@ function MarketplaceContent() {
           ) : (
             <div className={styles.sectionsContainer}>
               {SECTION_GROUPS.map(group => {
-                const groupServices = filteredServices.filter(svc => group.categories.includes(svc.category));
+                const groupServices = filteredServices.filter(svc => svc.sector === group.sector);
                 if (groupServices.length === 0) return null;
 
                 return (
-                  <section key={group.id} className={styles.catalogSection}>
+                  <section key={group.id} id={group.id} className={styles.catalogSection}>
                     <div className={styles.sectionHeadingWrap}>
                       <h2 className={styles.sectionHeading}>{group.title}</h2>
                       <p className={styles.sectionHeadingDesc}>{group.description}</p>

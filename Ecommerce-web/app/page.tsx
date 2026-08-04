@@ -13,9 +13,7 @@ export default function HomePage() {
   return (
     <div style={{ paddingTop: 'calc(var(--nav-height) + 28px)' }}>
       <PromoRibbon />
-      <div style={{ paddingTop: 'var(--size-2)' }}>
-        <MarketplaceHome />
-      </div>
+      <MarketplaceHome />
     </div>
   );
 }

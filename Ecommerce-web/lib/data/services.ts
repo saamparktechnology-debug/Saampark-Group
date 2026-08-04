@@ -5,7 +5,23 @@
 //                  /docs/08-business-intelligence.md
 // ============================================================
 
-export type Entity = 'str' | 'scs';
+export type Entity = 'str' | 'scs' | 'research' | 'consultancy';
+export type Sector = 
+  | 'web-development' 
+  | 'web-design' 
+  | 'app-development' 
+  | 'ai-integration' 
+  | 'software-erp'
+  | 'digital-marketing'
+  | 'ads-management'
+  | 'video-animation'
+  | 'seo-local'
+  | 'market-research'
+  | 'financial-research'
+  | 'ux-research'
+  | 'business-legal'
+  | 'financial-tax'
+  | 'hr-operations';
 export type PriceType = 'one-time' | 'monthly' | 'weekly' | 'on-request';
 export type ServiceCategory =
   | 'website'
@@ -23,6 +39,7 @@ export interface Service {
   id: string;
   entity: Entity;
   category: ServiceCategory;
+  sector: Sector;
   name: string;
   shortName: string;
   description: string;
@@ -50,7 +67,7 @@ export const strServices: Service[] = [
   {
     id: 'str-web-onepage',
     entity: 'str',
-    category: 'website',
+    category: 'website', sector: 'web-development',
     name: 'One Page Website',
     shortName: 'One Page',
     description: 'Perfect for personal brands, portfolios, and small businesses. Everything on a single, beautiful scrolling page.',
@@ -73,12 +90,12 @@ export const strServices: Service[] = [
     color: '#00B4A6',
     slug: 'one-page-website',
     href: '/technology/web-development/one-page-website',
-    icon: 'Globe',
+    icon: 'Globe', image: '/assets/images/services/str_web_onepage.png',
   },
   {
     id: 'str-web-static',
     entity: 'str',
-    category: 'website',
+    category: 'website', sector: 'web-development',
     name: 'Static Website',
     shortName: 'Static',
     description: 'A professional multi-page website to establish your online presence with a company profile.',
@@ -99,12 +116,12 @@ export const strServices: Service[] = [
     color: '#1E90FF',
     slug: 'static-website',
     href: '/technology/web-development/static-website',
-    icon: 'Layout',
+    icon: 'Layout', image: '/assets/images/services/str_web_dynamic.png',
   },
   {
     id: 'str-web-dynamic',
     entity: 'str',
-    category: 'website',
+    category: 'website', sector: 'web-development',
     name: 'Dynamic Website',
     shortName: 'Dynamic',
     description: 'Full-featured website with admin panel, database, and complete management system.',
@@ -129,12 +146,12 @@ export const strServices: Service[] = [
     color: '#F4511E',
     slug: 'dynamic-website',
     href: '/technology/web-development/dynamic-website',
-    icon: 'Zap',
+    icon: 'Zap', image: '/assets/images/services/str_web_dynamic.png',
   },
   {
     id: 'str-web-ecommerce',
     entity: 'str',
-    category: 'website',
+    category: 'website', sector: 'web-development',
     name: 'E-Commerce Website',
     shortName: 'E-Commerce',
     description: 'Complete online store with payment gateway, inventory, and order management.',
@@ -159,14 +176,14 @@ export const strServices: Service[] = [
     color: '#4CAF50',
     slug: 'ecommerce-website',
     href: '/technology/web-development/ecommerce-website',
-    icon: 'ShoppingCart',
+    icon: 'ShoppingCart', image: '/assets/images/services/str_web_ecommerce.png',
   },
 
   // ── App Development ──────────────────────
   {
     id: 'str-app-android',
     entity: 'str',
-    category: 'app',
+    category: 'app', sector: 'app-development',
     name: 'Android App Development',
     shortName: 'Android App',
     description: 'Native Android application built with Kotlin for your business needs.',
@@ -186,12 +203,12 @@ export const strServices: Service[] = [
     color: '#3DDC84',
     slug: 'android-app',
     href: '/technology/app-development/android',
-    icon: 'Smartphone',
+    icon: 'Smartphone', image: '/assets/images/services/str_app_android.png',
   },
   {
     id: 'str-app-ios',
     entity: 'str',
-    category: 'app',
+    category: 'app', sector: 'app-development',
     name: 'iOS App Development',
     shortName: 'iOS App',
     description: 'Native iOS application built with Swift for iPhone and iPad users.',
@@ -216,7 +233,7 @@ export const strServices: Service[] = [
   {
     id: 'str-app-hybrid',
     entity: 'str',
-    category: 'app',
+    category: 'app', sector: 'app-development',
     name: 'Hybrid Mobile App',
     shortName: 'Hybrid App',
     description: 'Cross-platform app (Flutter) for Android & iOS from a single, cost-effective codebase.',
@@ -232,18 +249,18 @@ export const strServices: Service[] = [
     priceType: 'on-request',
     deliveryDays: null,
     isPopular: true,
-    isFeatured: true,
+    isFeatured: true, badge: '🔥 30% OFF LAUNCH',
     badge: '⚡ Best Value',
     color: '#54C5F8',
     slug: 'hybrid-app',
     href: '/technology/app-development/hybrid',
-    icon: 'Layers',
+    icon: 'Layers', image: '/assets/images/services/str_app_android.png',
   },
 
   // ── Specialized Websites ──────────────────
   {
     id: 'str-spec-hotel',
-    entity: 'str', category: 'specialized-website',
+    entity: 'str', category: 'specialized-website', sector: 'software-erp',
     name: 'Hotel Management Website', shortName: 'Hotel',
     description: 'Complete hotel and hospitality management system with booking.',
     features: ['Room Management', 'Online Booking', 'Guest Portal', 'Invoice', 'Housekeeping'],
@@ -253,7 +270,7 @@ export const strServices: Service[] = [
   },
   {
     id: 'str-spec-hospital',
-    entity: 'str', category: 'specialized-website',
+    entity: 'str', category: 'specialized-website', sector: 'software-erp',
     name: 'Hospital Management System', shortName: 'Hospital',
     description: 'Comprehensive healthcare management for hospitals and clinics.',
     features: ['Patient Records', 'Doctor Schedule', 'Appointment Booking', 'Billing', 'Lab Reports'],
@@ -263,7 +280,7 @@ export const strServices: Service[] = [
   },
   {
     id: 'str-spec-school',
-    entity: 'str', category: 'specialized-website',
+    entity: 'str', category: 'specialized-website', sector: 'software-erp',
     name: 'School Management System', shortName: 'School',
     description: 'End-to-end school management with student portal, fees, attendance.',
     features: ['Student Portal', 'Fee Management', 'Attendance', 'Timetable', 'Result Management'],
@@ -273,7 +290,7 @@ export const strServices: Service[] = [
   },
   {
     id: 'str-spec-elearning',
-    entity: 'str', category: 'specialized-website',
+    entity: 'str', category: 'specialized-website', sector: 'software-erp',
     name: 'E-Learning Platform', shortName: 'E-Learning',
     description: 'Online education platform with courses, quizzes, and certificates.',
     features: ['Course Management', 'Video Streaming', 'Quiz System', 'Certificate', 'Payment'],
@@ -283,7 +300,7 @@ export const strServices: Service[] = [
   },
   {
     id: 'str-spec-realestate',
-    entity: 'str', category: 'specialized-website',
+    entity: 'str', category: 'specialized-website', sector: 'software-erp',
     name: 'Real Estate Website', shortName: 'Real Estate',
     description: 'Property listing portal with search, filters, and agent management.',
     features: ['Property Listings', 'Advanced Search', 'Agent Portal', 'Inquiry Management', 'Virtual Tours'],
@@ -293,7 +310,7 @@ export const strServices: Service[] = [
   },
   {
     id: 'str-spec-restaurant',
-    entity: 'str', category: 'specialized-website',
+    entity: 'str', category: 'specialized-website', sector: 'software-erp',
     name: 'Restaurant & Food Ordering', shortName: 'Restaurant',
     description: 'Online food ordering system with menu, cart, and delivery management.',
     features: ['Online Menu', 'Order Management', 'Table Booking', 'Delivery Tracking', 'Payment Gateway'],
@@ -303,7 +320,7 @@ export const strServices: Service[] = [
   },
   {
     id: 'str-spec-erp',
-    entity: 'str', category: 'software',
+    entity: 'str', category: 'software', sector: 'software-erp',
     name: 'ERP Software', shortName: 'ERP',
     description: 'Enterprise Resource Planning for complete business operations management.',
     features: ['Finance', 'HR & Payroll', 'Inventory', 'Sales & CRM', 'Reporting', 'Multi-Branch'],
@@ -314,7 +331,7 @@ export const strServices: Service[] = [
   },
   {
     id: 'str-spec-crm',
-    entity: 'str', category: 'software',
+    entity: 'str', category: 'software', sector: 'software-erp',
     name: 'CRM Software', shortName: 'CRM',
     description: 'Customer Relationship Management system to grow and retain your client base.',
     features: ['Lead Management', 'Client Tracking', 'Follow-up Reminders', 'Sales Pipeline', 'Analytics'],
@@ -333,7 +350,7 @@ export const scsServices: Service[] = [
   {
     id: 'scs-social-standard',
     entity: 'scs',
-    category: 'social-media',
+    category: 'social-media', sector: 'digital-marketing',
     name: 'Social Media Page Control',
     shortName: 'Social Media',
     description: 'Professional management of your social media presence across Facebook, Instagram and WhatsApp.',
@@ -354,14 +371,14 @@ export const scsServices: Service[] = [
     color: '#1877F2',
     slug: 'social-media-management',
     href: '/consultancy/digital-marketing/social-media',
-    icon: 'Share2',
+    icon: 'Share2', image: '/assets/images/services/scs_social_standard.png',
   },
 
   // ── Meta Ads ──────────────────────────────
   {
     id: 'scs-meta-weekly',
     entity: 'scs',
-    category: 'meta-ads',
+    category: 'meta-ads', sector: 'ads-management',
     name: 'Meta Ads — Weekly',
     shortName: 'Meta Weekly',
     description: 'Short-burst Facebook & Instagram advertising campaign with Wish Day poster.',
@@ -385,7 +402,7 @@ export const scsServices: Service[] = [
   {
     id: 'scs-meta-monthly',
     entity: 'scs',
-    category: 'meta-ads',
+    category: 'meta-ads', sector: 'ads-management',
     name: 'Meta Ads — Monthly',
     shortName: 'Meta Monthly',
     description: 'Full-month managed Meta advertising with Wish Day poster and optimization.',
@@ -401,16 +418,16 @@ export const scsServices: Service[] = [
     priceType: 'monthly',
     deliveryDays: null,
     isPopular: true,
-    isFeatured: true,
+    isFeatured: true, badge: '⚡ SPECIAL DEAL',
     color: '#0866FF',
     slug: 'meta-ads-monthly',
     href: '/consultancy/ads-management/meta-ads',
-    icon: 'Megaphone',
+    icon: 'Megaphone', image: '/assets/images/services/scs_meta_monthly.png',
   },
   {
     id: 'scs-meta-premium',
     entity: 'scs',
-    category: 'meta-ads',
+    category: 'meta-ads', sector: 'ads-management',
     name: 'Meta Ads — Premium',
     shortName: 'Meta Premium',
     description: 'The ultimate Meta advertising package with AI videos, reels, and 1M impressions.',
@@ -439,7 +456,7 @@ export const scsServices: Service[] = [
   {
     id: 'scs-google-weekly',
     entity: 'scs',
-    category: 'google-ads',
+    category: 'google-ads', sector: 'ads-management',
     name: 'Google Ads — Weekly',
     shortName: 'Google Weekly',
     description: 'Quick Google Search campaign to capture immediate, high-intent leads.',
@@ -462,7 +479,7 @@ export const scsServices: Service[] = [
   {
     id: 'scs-google-monthly',
     entity: 'scs',
-    category: 'google-ads',
+    category: 'google-ads', sector: 'ads-management',
     name: 'Google Ads — Monthly',
     shortName: 'Google Monthly',
     description: 'Full-month managed Google advertising with Search, Display, and conversion tracking.',
@@ -481,12 +498,12 @@ export const scsServices: Service[] = [
     color: '#4285F4',
     slug: 'google-ads-monthly',
     href: '/consultancy/ads-management/google-ads',
-    icon: 'Search',
+    icon: 'Search', image: 'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=800&q=80',
   },
   {
     id: 'scs-google-premium',
     entity: 'scs',
-    category: 'google-ads',
+    category: 'google-ads', sector: 'ads-management',
     name: 'Google Ads — Premium',
     shortName: 'Google Premium',
     description: 'Maximum Google impact — AI videos, content, and 1M Google Ad impressions.',
@@ -514,7 +531,7 @@ export const scsServices: Service[] = [
   {
     id: 'scs-gbp-basic',
     entity: 'scs',
-    category: 'google-business',
+    category: 'google-business', sector: 'seo-local',
     name: 'GBP — Basic Management',
     shortName: 'GBP Basic',
     description: 'Setup and basic management of your Google Business Profile for local visibility.',
@@ -537,7 +554,7 @@ export const scsServices: Service[] = [
   {
     id: 'scs-gbp-regular',
     entity: 'scs',
-    category: 'google-business',
+    category: 'google-business', sector: 'seo-local',
     name: 'GBP — Regular & SEO',
     shortName: 'GBP Regular',
     description: 'Active management plus local SEO optimization for higher Google Maps rankings.',
@@ -563,7 +580,7 @@ export const scsServices: Service[] = [
   {
     id: 'scs-gbp-advanced',
     entity: 'scs',
-    category: 'google-business',
+    category: 'google-business', sector: 'seo-local',
     name: 'GBP — Advanced Local SEO',
     shortName: 'GBP Advanced',
     description: 'Full GBP domination — advanced local SEO, reputation management, and brand authority.',
@@ -579,7 +596,7 @@ export const scsServices: Service[] = [
     priceType: 'monthly',
     deliveryDays: null,
     isPopular: false,
-    isFeatured: false,
+    isFeatured: false, badge: '⭐ LIMITED TIME',
     color: '#34A853',
     slug: 'gbp-advanced',
     href: '/consultancy/digital-marketing/google-business-profile',
@@ -590,7 +607,7 @@ export const scsServices: Service[] = [
   {
     id: 'scs-video-simple',
     entity: 'scs',
-    category: 'video-ai',
+    category: 'video-ai', sector: 'video-animation',
     name: 'Simple Video',
     shortName: 'Simple Video',
     description: 'Clean, professional video for business announcements and social media posts.',
@@ -608,7 +625,7 @@ export const scsServices: Service[] = [
   {
     id: 'scs-video-poster',
     entity: 'scs',
-    category: 'video-ai',
+    category: 'video-ai', sector: 'video-animation',
     name: 'Poster Video',
     shortName: 'Poster Video',
     description: 'Animated business poster video — perfect for WhatsApp status and stories.',
@@ -626,7 +643,7 @@ export const scsServices: Service[] = [
   {
     id: 'scs-video-cartoon',
     entity: 'scs',
-    category: 'video-ai',
+    category: 'video-ai', sector: 'video-animation',
     name: 'Cartoon Video',
     shortName: 'Cartoon Video',
     description: 'Engaging animated cartoon explainer video for your products and services.',
@@ -644,7 +661,7 @@ export const scsServices: Service[] = [
   {
     id: 'scs-video-motion-ai',
     entity: 'scs',
-    category: 'video-ai',
+    category: 'video-ai', sector: 'ai-integration',
     name: 'Motion AI Video',
     shortName: 'Motion AI',
     description: 'AI-enhanced motion graphics video with premium visual quality.',
@@ -662,7 +679,7 @@ export const scsServices: Service[] = [
   {
     id: 'scs-video-full-ai',
     entity: 'scs',
-    category: 'video-ai',
+    category: 'video-ai', sector: 'ai-integration',
     name: 'Full AI Video',
     shortName: 'Full AI Video',
     description: 'Completely AI-generated video with voice, script, visuals, and professional editing.',
@@ -681,7 +698,7 @@ export const scsServices: Service[] = [
   {
     id: 'scs-video-4k',
     entity: 'scs',
-    category: 'video-ai',
+    category: 'video-ai', sector: 'video-animation',
     name: '4K High Quality AI Video',
     shortName: '4K AI Video',
     description: 'Premium 4K AI production — the highest quality AI video for maximum impact.',
@@ -702,7 +719,7 @@ export const scsServices: Service[] = [
   {
     id: 'scs-legal-pvtltd',
     entity: 'scs',
-    category: 'business-legal',
+    category: 'business-legal', sector: 'business-legal',
     name: 'Pvt. Ltd. Company Registration',
     shortName: 'Pvt. Ltd.',
     description: '100% legal Pvt. Ltd. company registration with expert guidance and support.',
@@ -721,7 +738,7 @@ export const scsServices: Service[] = [
   {
     id: 'scs-legal-gst',
     entity: 'scs',
-    category: 'business-legal',
+    category: 'business-legal', sector: 'financial-tax',
     name: 'GST Registration',
     shortName: 'GST',
     description: 'Hassle-free GST registration for your business — fast, legal, expert-handled.',
@@ -739,7 +756,7 @@ export const scsServices: Service[] = [
   {
     id: 'scs-legal-msme',
     entity: 'scs',
-    category: 'business-legal',
+    category: 'business-legal', sector: 'business-legal',
     name: 'MSME (Udyam) Registration',
     shortName: 'MSME',
     description: 'MSME Udyam registration to access government schemes and benefits.',
@@ -757,7 +774,7 @@ export const scsServices: Service[] = [
   {
     id: 'scs-legal-itr',
     entity: 'scs',
-    category: 'business-legal',
+    category: 'business-legal', sector: 'financial-tax',
     name: 'Income Tax Returns',
     shortName: 'ITR Filing',
     description: 'Professional ITR filing for individuals and businesses — on time, every time.',

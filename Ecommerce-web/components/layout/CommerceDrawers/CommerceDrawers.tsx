@@ -2,7 +2,7 @@
 
 import React, { useEffect } from 'react';
 import Link from 'next/link';
-import { X, Trash2, ShoppingBag, Heart, ArrowRight, MessageCircle } from 'lucide-react';
+import { X, Trash2, ShoppingBag, Bookmark, ArrowRight, MessageCircle } from 'lucide-react';
 import { useCommerceStore } from '@/lib/store/cartStore';
 import { useUIStore } from '@/lib/store/uiStore';
 import { allServices, getServiceById } from '@/lib/data/services';
@@ -114,14 +114,14 @@ export function CommerceDrawers() {
       {/* ── Wishlist Drawer ── */}
       <div className={`${styles.drawer} ${wishlistOpen ? styles.open : ''}`}>
         <div className={styles.header}>
-          <h3><Heart size={18} /> Wishlist ({wishlistIds.length})</h3>
+          <h3><Bookmark size={18} /> Saved Items ({wishlistIds.length})</h3>
           <button className="btn btn-icon btn-ghost" onClick={closeWishlist}><X size={20} /></button>
         </div>
         
         <div className={styles.body}>
           {wishlistServices.length === 0 ? (
             <div className={styles.empty}>
-              <Heart size={40} className={styles.emptyIcon} />
+              <Bookmark size={40} className={styles.emptyIcon} />
               <p>Your wishlist is empty.</p>
             </div>
           ) : (

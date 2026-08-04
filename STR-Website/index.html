@@ -2725,6 +2725,199 @@
       padding: 0.8rem 0.5rem !important;
     }
   }
+
+  /* ========= FLOATING CHATBOT ========= */
+  .chatbot-wrapper {
+    position: fixed;
+    bottom: 35px;
+    right: 35px;
+    width: 65px;
+    height: 65px;
+    z-index: 9999;
+    cursor: pointer;
+    animation: floatBot 3.5s ease-in-out infinite;
+  }
+
+  .chatbot-pulse {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--green-light);
+    border-radius: 50%;
+    z-index: 1;
+    animation: pulseBot 2.5s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+  }
+
+  .chatbot-float {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, var(--green-mid), var(--green-light));
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    box-shadow: 0 10px 25px rgba(10, 74, 46, 0.3);
+    z-index: 2;
+    transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.3s ease;
+  }
+
+  .chatbot-wrapper:hover .chatbot-float {
+    transform: scale(1.12);
+    box-shadow: 0 15px 35px rgba(16, 185, 129, 0.4);
+  }
+
+  @keyframes floatBot {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-12px); }
+  }
+
+  @keyframes pulseBot {
+    0% { transform: scale(0.9); opacity: 0.8; }
+    100% { transform: scale(1.8); opacity: 0; }
+  }
+
+  /* ========= CHATBOT WINDOW ========= */
+  .chatbot-window {
+    position: fixed;
+    bottom: 110px;
+    right: 35px;
+    width: 340px;
+    height: 450px;
+    background: #ffffff;
+    border-radius: 20px;
+    box-shadow: 0 15px 40px rgba(10, 74, 46, 0.2);
+    display: flex;
+    flex-direction: column;
+    z-index: 9998;
+    overflow: hidden;
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+    pointer-events: none;
+    transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+  }
+
+  .chatbot-window.active {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+  }
+
+  .chatbot-header {
+    background: linear-gradient(135deg, var(--green-mid), var(--green-light));
+    color: white;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-weight: 700;
+    font-family: 'Syne', sans-serif;
+  }
+
+  .chatbot-title {
+    display: flex;
+    align-items: center;
+  }
+
+  .chatbot-close {
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 1.8rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: transform 0.2s;
+  }
+
+  .chatbot-close:hover {
+    transform: scale(1.1);
+  }
+
+  .chatbot-messages {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    background: var(--green-bg);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .chat-message {
+    max-width: 80%;
+    padding: 12px 16px;
+    border-radius: 16px;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    animation: chatPop 0.3s ease-out;
+  }
+
+  .chat-message.bot {
+    background: white;
+    color: var(--text-dark);
+    align-self: flex-start;
+    border-bottom-left-radius: 4px;
+    box-shadow: 0 4px 10px rgba(10, 74, 46, 0.05);
+    border: 1px solid rgba(16, 185, 129, 0.1);
+  }
+
+  .chat-message.user {
+    background: var(--green-light);
+    color: white;
+    align-self: flex-end;
+    border-bottom-right-radius: 4px;
+    box-shadow: 0 4px 10px rgba(16, 185, 129, 0.2);
+  }
+
+  @keyframes chatPop {
+    0% { opacity: 0; transform: translateY(10px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+
+  .chatbot-input-area {
+    padding: 14px 20px;
+    background: white;
+    border-top: 1px solid rgba(16, 185, 129, 0.15);
+    display: flex;
+    gap: 10px;
+  }
+
+  .chatbot-input-area input {
+    flex: 1;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: 50px;
+    padding: 10px 16px;
+    font-family: 'Syne', sans-serif;
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.3s;
+  }
+
+  .chatbot-input-area input:focus {
+    border-color: var(--green-mid);
+  }
+
+  .chatbot-input-area button {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: var(--green-mid);
+    color: white;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.3s;
+  }
+
+  .chatbot-input-area button:hover {
+    background: var(--green-dark);
+  }
 </style>
 </head>
 <body>
@@ -5468,5 +5661,111 @@
     requestAnimationFrame(stepSectorAutoScroll);
   })();
 </script>
+
+<!-- Chatbot Window -->
+<div class="chatbot-window" id="chatbotWindow">
+  <div class="chatbot-header">
+    <div class="chatbot-title">
+      <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right: 6px;"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"></path><path d="M9 13v.01"></path><path d="M15 13v.01"></path><path d="M9 17h6"></path></svg>
+      Prism AI Assistant
+    </div>
+    <button class="chatbot-close" id="chatbotClose">&times;</button>
+  </div>
+  <div class="chatbot-messages" id="chatbotMessages">
+    <div class="chat-message bot">
+      Hi! I'm Prism AI. How can I help you transform your digital presence today?
+    </div>
+  </div>
+  <div class="chatbot-input-area">
+    <input type="text" id="chatbotInput" placeholder="Type your message..." />
+    <button id="chatbotSend">
+      <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"></path></svg>
+    </button>
+  </div>
+</div>
+
+<!-- Floating Chatbot Wrapper -->
+<div class="chatbot-wrapper" id="chatbotToggle">
+  <div class="chatbot-pulse"></div>
+  <div class="chatbot-float">
+    <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"></path>
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9 13v.01"></path>
+      <path stroke-linecap="round" stroke-linejoin="round" d="M15 13v.01"></path>
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9 17h6"></path>
+    </svg>
+  </div>
+</div>
+
+<script>
+  // Chatbot Logic
+  document.addEventListener('DOMContentLoaded', () => {
+    const chatbotToggle = document.getElementById('chatbotToggle');
+    const chatbotWindow = document.getElementById('chatbotWindow');
+    const chatbotClose = document.getElementById('chatbotClose');
+    const chatbotInput = document.getElementById('chatbotInput');
+    const chatbotSend = document.getElementById('chatbotSend');
+    const chatbotMessages = document.getElementById('chatbotMessages');
+
+    chatbotToggle.addEventListener('click', () => {
+      chatbotWindow.classList.toggle('active');
+    });
+
+    chatbotClose.addEventListener('click', () => {
+      chatbotWindow.classList.remove('active');
+    });
+
+    function addMessage(text, sender, isHtml = false) {
+      const msg = document.createElement('div');
+      msg.classList.add('chat-message', sender);
+      if (isHtml) {
+        msg.innerHTML = text;
+      } else {
+        msg.textContent = text;
+      }
+      chatbotMessages.appendChild(msg);
+      chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
+    }
+
+    function handleSend() {
+      const text = chatbotInput.value.trim();
+      if (!text) return;
+      
+      addMessage(text, 'user');
+      chatbotInput.value = '';
+
+      const lowerText = text.toLowerCase();
+      let responseHtml = "";
+
+      if (lowerText.includes('hi') || lowerText.includes('hello') || lowerText.includes('hey')) {
+        responseHtml = "Hello! 👋 How can I help you today? You can ask me about our <b>services</b>, <b>pricing</b>, or how to <b>contact</b> us.";
+      } else if (lowerText.includes('service') || lowerText.includes('what do you do') || lowerText.includes('offer')) {
+        responseHtml = "We engineer immersive 3D experiences, futuristic web platforms, enterprise mobile apps, and AI-driven systems. Check out our <a href='#services' style='color: var(--green-mid); font-weight: bold; text-decoration: underline;'>Services Section</a> to learn more!";
+      } else if (lowerText.includes('price') || lowerText.includes('cost') || lowerText.includes('quote') || lowerText.includes('charge')) {
+        responseHtml = "Our pricing varies based on the scope of the project. To get a precise quote, please reach out via our <a href='#contact' style='color: var(--green-mid); font-weight: bold; text-decoration: underline;'>Contact Form</a> or chat with us on <a href='https://wa.me/919091518567' target='_blank' style='color: var(--green-mid); font-weight: bold; text-decoration: underline;'>WhatsApp</a>.";
+      } else if (lowerText.includes('contact') || lowerText.includes('whatsapp') || lowerText.includes('phone') || lowerText.includes('call') || lowerText.includes('reach')) {
+        responseHtml = "You can contact us anytime! Drop us a message on <a href='https://wa.me/919091518567' target='_blank' style='color: var(--green-mid); font-weight: bold; text-decoration: underline;'>WhatsApp (+91-9091518567)</a> or use the <a href='#contact' style='color: var(--green-mid); font-weight: bold; text-decoration: underline;'>Contact Form</a> below.";
+      } else {
+        const fallbackResponses = [
+          "Thanks for reaching out! For detailed technical inquiries, please fill out the <a href='#contact' style='color: var(--green-mid); font-weight: bold; text-decoration: underline;'>Contact Form</a> and our engineers will respond.",
+          "I'm Prism AI, a virtual assistant. For customized digital solutions, please schedule a call with our experts via the <a href='#contact' style='color: var(--green-mid); font-weight: bold; text-decoration: underline;'>Contact Section</a>.",
+          "That sounds interesting! Please drop us a message on <a href='https://wa.me/919091518567' target='_blank' style='color: var(--green-mid); font-weight: bold; text-decoration: underline;'>WhatsApp</a> to discuss it directly with our team."
+        ];
+        responseHtml = fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
+      }
+
+      // Simulated AI typing delay
+      setTimeout(() => {
+        addMessage(responseHtml, 'bot', true);
+      }, 600 + Math.random() * 800);
+    }
+
+    chatbotSend.addEventListener('click', handleSend);
+    chatbotInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') handleSend();
+    });
+  });
+</script>
+
 </body>
 </html>

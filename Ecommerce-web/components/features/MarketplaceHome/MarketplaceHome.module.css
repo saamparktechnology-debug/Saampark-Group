@@ -10,7 +10,7 @@
   display: block;
   position: relative;
   z-index: 10;
-  padding-top: var(--size-6);
+  padding-top: var(--size-4);
   padding-inline: 24px;
   width: 100%;
 }
@@ -24,80 +24,62 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: var(--color-bg-surface);
-  padding: var(--size-4) var(--size-6);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-sm);
-  border: 1px solid var(--color-border-default);
-  margin-bottom: var(--size-6);
+  padding: var(--size-4) var(--size-2);
+  margin-bottom: var(--size-8);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
 }
 
-/* ── Lengthy Rounded-Corner Sliding Button Toggle Switch ── */
-.slidingToggleContainer {
+/* ── Filter Dropdown ── */
+.filterDropdownContainer {
+  position: relative;
   display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: var(--color-bg-sunken);
-  border: 1.5px solid var(--color-border-default);
-  padding: 4px;
-  border-radius: var(--radius-full);
-  box-shadow: var(--shadow-xs);
-  transition: all var(--duration-fast);
 }
 
-.toggleSegment {
+.filterDropdown {
+  appearance: none;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.05), inset 0 2px 5px rgba(255, 255, 255, 1);
+  padding: 12px 45px 12px 24px;
+  border-radius: var(--radius-full);
   font-family: var(--font-body);
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--color-text-secondary);
-  background: transparent;
-  border: none;
-  padding: 8px 18px;
-  border-radius: var(--radius-full);
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 250ms cubic-bezier(0.4, 0, 0.2, 1);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.toggleSegment:hover {
+  font-size: 15px;
+  font-weight: 600;
   color: var(--color-text-primary);
+  cursor: pointer;
+  outline: none;
+  transition: all var(--duration-normal);
 }
 
-/* Active Segment 1: All Group Services */
-.segmentActiveAll {
-  background: var(--primitive-navy-900) !important;
-  color: #FFFFFF !important;
-  box-shadow: var(--shadow-sm);
+.filterDropdown:hover, .filterDropdown:focus {
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 8px 25px rgba(59, 130, 246, 0.1), inset 0 2px 5px rgba(255, 255, 255, 1);
+  border-color: rgba(255, 255, 255, 1);
 }
 
-[data-theme="dark"] .segmentActiveAll {
-  background: var(--color-brand) !important;
-  color: var(--color-brand-on-brand) !important;
+[data-theme="dark"] .filterDropdown {
+  background: rgba(13, 27, 42, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.05);
+  color: var(--color-text-secondary);
 }
 
-/* Active Segment 2: Saampark Technology (Electric Blue) */
-.segmentActiveStr {
-  background: linear-gradient(135deg, #00B4A6 0%, #1E90FF 100%) !important;
-  color: #FFFFFF !important;
-  box-shadow: 0 4px 14px rgba(0, 180, 166, 0.4) !important;
+[data-theme="dark"] .filterDropdown:hover, [data-theme="dark"] .filterDropdown:focus {
+  background: rgba(13, 27, 42, 0.6);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
-/* Active Segment 3: Saampark Digital Marketing (Emerald Green) */
-.segmentActiveScs {
-  background: linear-gradient(135deg, #10B981 0%, #059669 100%) !important;
-  color: #FFFFFF !important;
-  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4) !important;
-}
-
-.desktopText {
-  display: inline;
-}
-
-.mobileText {
-  display: none;
+.filterDropdownContainer::after {
+  content: '▼';
+  font-size: 10px;
+  color: var(--color-text-secondary);
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
 }
 
 @media (max-width: 768px) {
@@ -109,39 +91,13 @@
     width: 100%;
     overflow: hidden;
   }
-
-  .desktopText {
-    display: none;
-  }
-
-  .mobileText {
-    display: inline;
-  }
-
-  .slidingToggleContainer {
+  
+  .filterDropdownContainer {
     width: 100%;
-    max-width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 4px;
-    padding: 4px;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
   }
-
-  .slidingToggleContainer::-webkit-scrollbar {
-    display: none;
-  }
-
-  .toggleSegment {
-    flex: 1 0 auto;
-    justify-content: center;
-    padding: 8px 10px;
-    font-size: 11px;
-    white-space: nowrap;
-    text-align: center;
+  
+  .filterDropdown {
+    width: 100%;
   }
 }
 
@@ -149,7 +105,7 @@
 .grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: var(--size-6);
+  gap: 32px;
 }
 
 @media (max-width: 1200px) { .grid { grid-template-columns: repeat(3, 1fr); } }
@@ -159,19 +115,18 @@
 /* ── Card ── */
 .card {
   background: var(--color-bg-surface);
-  border: 1px solid var(--color-border-default);
+  border: none;
   border-radius: var(--radius-2xl);
   display: flex;
   flex-direction: column;
-  transition: all var(--duration-normal) var(--ease-standard);
+  transition: all 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
   overflow: hidden;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 15px 35px rgba(59, 130, 246, 0.05);
 }
 
 .card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-lg);
-  border-color: var(--color-brand);
+  transform: translateY(-8px);
+  box-shadow: 0 35px 70px rgba(30, 144, 255, 0.15);
 }
 
 /* ── Image ── */
@@ -198,21 +153,23 @@
 
 .wishBtn {
   position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 32px;
-  height: 32px;
+  top: 16px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.9);
-  color: var(--primitive-gray-500);
-  border: none;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: var(--primitive-gray-600);
+  border: 1px solid rgba(255, 255, 255, 0.8);
   cursor: pointer;
-  transition: all var(--duration-fast);
+  transition: all 0.3s ease;
   z-index: 10;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
 }
 
 [data-theme="dark"] .wishBtn {
@@ -228,24 +185,24 @@
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -40%);
-  background: rgba(13, 27, 42, 0.85);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  padding: 6px 14px;
+  transform: translate(-50%, -30%);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: var(--color-text-primary);
+  border: 1px solid rgba(255, 255, 255, 1);
+  padding: 8px 18px;
   border-radius: var(--radius-full);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   opacity: 0;
-  transition: all var(--duration-fast) var(--ease-standard);
+  transition: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
   z-index: 10;
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
 }
 
 .card:hover .quickViewBtn {
@@ -275,11 +232,27 @@
 .badgeStr { background: #00B4A6; }
 .badgeScs { background: #4CAF50; }
 
+.offerBadge {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  background: linear-gradient(135deg, #FF3366 0%, #FF9933 100%);
+  color: white;
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(255, 51, 102, 0.4);
+}
+
 .cardBody {
-  padding: 16px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   flex: 1;
 }
 

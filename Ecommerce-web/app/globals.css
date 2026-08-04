@@ -107,12 +107,12 @@
    ───────────────────────────────────────── */
 :root,
 [data-theme="light"] {
-  --color-bg-page:         var(--primitive-cream);
-  --color-bg-surface:      var(--primitive-white);
-  --color-bg-surface-alt:  var(--primitive-gray-50);
-  --color-bg-elevated:     var(--primitive-white);
-  --color-bg-sunken:       var(--primitive-gray-100);
-  --color-bg-overlay:      rgba(0, 0, 0, 0.50);
+  --color-bg-page:         #F6FAFF; /* Creamy white with a light blue tone */
+  --color-bg-surface:      #FFFFFF;
+  --color-bg-surface-alt:  #EDF4FC;
+  --color-bg-elevated:     #FFFFFF;
+  --color-bg-sunken:       #E6F0FA;
+  --color-bg-overlay:      rgba(0, 30, 60, 0.40);
 
   --color-text-primary:    var(--primitive-gray-900);
   --color-text-secondary:  var(--primitive-gray-600);
@@ -136,8 +136,8 @@
   --color-error:           #EF4444; --color-error-subtle:    #FEF2F2;
   --color-info:            #3B82F6; --color-info-subtle:     #EFF6FF;
 
-  --shadow-card:  var(--shadow-sm);
-  --shadow-hover: var(--shadow-lg);
+  --shadow-card:  0 15px 35px rgba(59, 130, 246, 0.08); /* 3D soft blueish shadow */
+  --shadow-hover: 0 25px 50px rgba(59, 130, 246, 0.18); /* Pronounced 3D hover */
 
   /* Nav */
   --nav-bg:        rgba(248, 247, 244, 0.85);

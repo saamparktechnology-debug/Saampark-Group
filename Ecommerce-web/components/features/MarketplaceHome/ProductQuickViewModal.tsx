@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { X, Check, Heart, ShoppingBag, MessageCircle, Maximize2, Shield, Clock, Star, ExternalLink } from 'lucide-react';
+import { X, Check, Bookmark, ShoppingBag, MessageCircle, Maximize2, Shield, Clock, Star, ExternalLink } from 'lucide-react';
 import { type Service } from '@/lib/data/services';
 import { useCommerceStore } from '@/lib/store/cartStore';
 import { useUIStore } from '@/lib/store/uiStore';
@@ -199,7 +199,7 @@ export function ProductQuickViewModal({ service, onClose }: Props) {
                 className={`btn btn-icon btn-ghost ${isWishlisted ? styles.wishActive : ''}`} 
                 onClick={() => toggleWishlist(service.id)}
               >
-                <Heart size={18} fill={isWishlisted ? 'currentColor' : 'none'} />
+                <Bookmark size={18} fill={isWishlisted ? 'currentColor' : 'none'} />
               </button>
             </div>
 

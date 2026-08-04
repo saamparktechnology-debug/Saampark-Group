@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { 
-  Check, X, ArrowLeft, Heart, ShoppingBag, Shield, Clock, 
+  Check, X, ArrowLeft, Bookmark, ShoppingBag, Shield, Clock, 
   MessageCircle, Star, Maximize2, Sparkles, Layers, FileText, 
   HelpCircle, ChevronDown, ChevronRight, Award, Zap, CheckCircle, Code, Database, Smartphone
 } from 'lucide-react';
@@ -258,7 +258,7 @@ export function ServiceDetail({ service }: Props) {
                   onClick={() => toggleWishlist(service.id)}
                   title="Add to Wishlist"
                 >
-                  <Heart size={20} fill={isWishlisted ? 'currentColor' : 'none'} />
+                  <Bookmark size={20} fill={isWishlisted ? 'currentColor' : 'none'} />
                 </button>
               </div>
 

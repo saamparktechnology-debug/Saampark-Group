@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowRight, Heart, Eye, MessageCircle, ShoppingBag, Star, Check } from 'lucide-react';
+import { ArrowRight, Bookmark, Eye, MessageCircle, ShoppingBag, Star, Check } from 'lucide-react';
 import { featuredServices, type Service } from '@/lib/data/services';
 import { useCommerceStore } from '@/lib/store/cartStore';
 import { useUIStore } from '@/lib/store/uiStore';
@@ -65,7 +65,7 @@ function ServiceCard({ svc }: { svc: Service }) {
           onClick={() => toggleWishlist(svc.id)}
           aria-label="Wishlist"
         >
-          <Heart size={16} fill={isWishlisted ? 'currentColor' : 'none'} />
+          <Bookmark size={16} fill={isWishlisted ? 'currentColor' : 'none'} />
         </button>
         
         {/* Entity Badge */}

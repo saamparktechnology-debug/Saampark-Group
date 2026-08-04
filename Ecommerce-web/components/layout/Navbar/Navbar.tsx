@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Globe, Smartphone, Layers, Database, ShoppingCart,
   Share2, Megaphone, Search, MapPin, Video, Briefcase,
-  Sun, Moon, ShoppingBag, Heart, User, Sparkles, MessageCircle
+  Sun, Moon, ShoppingBag, Bookmark, User, Sparkles, MessageCircle
 } from 'lucide-react';
 import { CONTACT } from '@/lib/data/services';
 import { useCommerceStore } from '@/lib/store/cartStore';
@@ -191,7 +191,7 @@ function NavbarContent() {
                   {/* Dropdown Header */}
                   <div className={styles.dropdownHeader}>
                     <div className={styles.avatarBox}>
-                      <User size={20} className={styles.avatarIcon} />
+                      <Bookmark size={20} className={styles.avatarIcon} />
                     </div>
                     <div style={{ flex: 1 }}>
                       <div className={styles.userTitle}>{user ? user.name : 'Guest Session'}</div>
