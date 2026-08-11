@@ -546,7 +546,9 @@ function MarketplaceContent() {
                         <div>
                           <h4 className={styles.explorerHeading}>SERVICE EXPLORER</h4>
                           <p className={styles.explorerSubheading}>
-                            Browse {totalServicesCount} live services across 3 groups
+                            {groupFilter === 'all'
+                              ? `Browse ${totalServicesCount} live services across 3 groups`
+                              : `Browse ${liveGroupCount} live services in ${getGroupLabel(groupFilter)}`}
                           </p>
                         </div>
                       </div>
@@ -582,8 +584,17 @@ function MarketplaceContent() {
                     </div>
 
                     {/* Explorer Columns Grid */}
-                    <div className={styles.explorerGrid}>
-                      {SERVICE_GROUPS.map(group => {
+                    <div
+                      className={styles.explorerGrid}
+                      style={{
+                        gridTemplateColumns:
+                          groupFilter !== 'all' ? 'repeat(auto-fit, minmax(220px, 1fr))' : undefined,
+                      }}
+                    >
+                      {(groupFilter === 'all'
+                        ? SERVICE_GROUPS
+                        : SERVICE_GROUPS.filter(g => g.id === groupFilter)
+                      ).map(group => {
                         const categoriesInGroup = SERVICE_CATEGORIES.filter(c => c.group === group.id);
                         const matchGroupSearch =
                           !explorerSearch ||
@@ -613,7 +624,15 @@ function MarketplaceContent() {
                               </div>
                             </div>
 
-                            <div className={styles.categoryList}>
+                            <div
+                              className={styles.categoryList}
+                              style={{
+                                display: groupFilter !== 'all' ? 'grid' : 'flex',
+                                gridTemplateColumns:
+                                  groupFilter !== 'all' ? 'repeat(2, 1fr)' : undefined,
+                                gap: '8px',
+                              }}
+                            >
                               {categoriesInGroup.map(cat => {
                                 const catCount = categoryCounts[cat.id] || 0;
                                 const isCatActive = categoryFilter === cat.id;
