@@ -35,8 +35,102 @@ export type ServiceCategory =
   | 'video-ai'
   | 'business-legal';
 
+// ─────────────────────────────────────────
+// AUTHORITATIVE HIERARCHY DEFINITIONS
+// ─────────────────────────────────────────
+export type ServiceGroup = 'technology' | 'research' | 'consultancy';
+
+export type PrimaryCategory =
+  // Technology
+  | 'web-services'
+  | 'application-services'
+  | 'software-services'
+  | 'ai-services'
+  // Research
+  | 'online-related-services'
+  | 'trading-related-services'
+  | 'management-related-services'
+  | 'stock-market'
+  // Consultancy
+  | 'graphic-design'
+  | 'ai-video'
+  | 'digital-marketing'
+  | 'loan'
+  | 'insurance'
+  | 'education'
+  | 'legal';
+
+export interface GroupMetadata {
+  id: ServiceGroup;
+  name: string;
+  shortName: string;
+  description: string;
+  icon: string;
+  color: string;
+}
+
+export interface CategoryMetadata {
+  id: PrimaryCategory;
+  group: ServiceGroup;
+  name: string;
+  capacity: string;
+  icon: string;
+}
+
+export const SERVICE_GROUPS: GroupMetadata[] = [
+  {
+    id: 'technology',
+    name: 'Saampark Technology',
+    shortName: 'Technology',
+    description: 'Web development, mobile apps, custom software systems, and AI automation',
+    icon: 'Globe',
+    color: '#00B4A6',
+  },
+  {
+    id: 'research',
+    name: 'Saampark Research',
+    shortName: 'Research',
+    description: 'Online related services, trading, management research, and stock market analysis',
+    icon: 'LineChart',
+    color: '#8B5CF6',
+  },
+  {
+    id: 'consultancy',
+    name: 'Saampark Consultancy',
+    shortName: 'Consultancy',
+    description: 'Graphic design, AI video, digital marketing, loans, insurance, education, and legal',
+    icon: 'Briefcase',
+    color: '#4CAF50',
+  },
+];
+
+export const SERVICE_CATEGORIES: CategoryMetadata[] = [
+  // ── Technology ──
+  { id: 'web-services', group: 'technology', name: 'Web Services', capacity: '10+', icon: 'Globe' },
+  { id: 'application-services', group: 'technology', name: 'Application Services', capacity: '10+', icon: 'Smartphone' },
+  { id: 'software-services', group: 'technology', name: 'Software Services', capacity: '10+', icon: 'Cpu' },
+  { id: 'ai-services', group: 'technology', name: 'AI Services', capacity: '5+', icon: 'Bot' },
+
+  // ── Research ──
+  { id: 'online-related-services', group: 'research', name: 'Online Related Services', capacity: '10+', icon: 'Search' },
+  { id: 'trading-related-services', group: 'research', name: 'Trading Related Services', capacity: '10+', icon: 'TrendingUp' },
+  { id: 'management-related-services', group: 'research', name: 'Management Related Services', capacity: '10+', icon: 'PieChart' },
+  { id: 'stock-market', group: 'research', name: 'Stock Market', capacity: 'Expandable', icon: 'BarChart3' },
+
+  // ── Consultancy ──
+  { id: 'graphic-design', group: 'consultancy', name: 'Graphic Design', capacity: 'Expandable', icon: 'Palette' },
+  { id: 'ai-video', group: 'consultancy', name: 'AI Video', capacity: 'Expandable', icon: 'Video' },
+  { id: 'digital-marketing', group: 'consultancy', name: 'Digital Marketing', capacity: 'Expandable', icon: 'Megaphone' },
+  { id: 'loan', group: 'consultancy', name: 'Loan', capacity: 'Expandable', icon: 'Coins' },
+  { id: 'insurance', group: 'consultancy', name: 'Insurance', capacity: 'Expandable', icon: 'ShieldCheck' },
+  { id: 'education', group: 'consultancy', name: 'Education', capacity: 'Expandable', icon: 'GraduationCap' },
+  { id: 'legal', group: 'consultancy', name: 'Legal', capacity: 'Expandable', icon: 'Scale' },
+];
+
 export interface Service {
   id: string;
+  group: ServiceGroup;
+  primaryCategory: PrimaryCategory;
   entity: Entity;
   category: ServiceCategory;
   sector: Sector;
@@ -59,13 +153,14 @@ export interface Service {
 }
 
 // ─────────────────────────────────────────
-// STR — SAAMPARK TECHNOLOGY & RESEARCH
+// STR — SAAMPARK TECHNOLOGY SERVICES
 // ─────────────────────────────────────────
 
 export const strServices: Service[] = [
-  // ── Website Development ──────────────────
+  // ── Web Services (4) ──────────────────
   {
     id: 'str-web-onepage',
+    group: 'technology', primaryCategory: 'web-services',
     entity: 'str',
     category: 'website', sector: 'web-development',
     name: 'One Page Website',
@@ -94,6 +189,7 @@ export const strServices: Service[] = [
   },
   {
     id: 'str-web-static',
+    group: 'technology', primaryCategory: 'web-services',
     entity: 'str',
     category: 'website', sector: 'web-development',
     name: 'Static Website',
@@ -120,6 +216,7 @@ export const strServices: Service[] = [
   },
   {
     id: 'str-web-dynamic',
+    group: 'technology', primaryCategory: 'web-services',
     entity: 'str',
     category: 'website', sector: 'web-development',
     name: 'Dynamic Website',
@@ -150,6 +247,7 @@ export const strServices: Service[] = [
   },
   {
     id: 'str-web-ecommerce',
+    group: 'technology', primaryCategory: 'web-services',
     entity: 'str',
     category: 'website', sector: 'web-development',
     name: 'E-Commerce Website',
@@ -179,9 +277,10 @@ export const strServices: Service[] = [
     icon: 'ShoppingCart', image: '/assets/images/services/str_web_ecommerce.png',
   },
 
-  // ── App Development ──────────────────────
+  // ── Application Services (3) ──────────────────────
   {
     id: 'str-app-android',
+    group: 'technology', primaryCategory: 'application-services',
     entity: 'str',
     category: 'app', sector: 'app-development',
     name: 'Android App Development',
@@ -207,6 +306,7 @@ export const strServices: Service[] = [
   },
   {
     id: 'str-app-ios',
+    group: 'technology', primaryCategory: 'application-services',
     entity: 'str',
     category: 'app', sector: 'app-development',
     name: 'iOS App Development',
@@ -232,6 +332,7 @@ export const strServices: Service[] = [
   },
   {
     id: 'str-app-hybrid',
+    group: 'technology', primaryCategory: 'application-services',
     entity: 'str',
     category: 'app', sector: 'app-development',
     name: 'Hybrid Mobile App',
@@ -257,9 +358,10 @@ export const strServices: Service[] = [
     icon: 'Layers', image: '/assets/images/services/str_app_android.png',
   },
 
-  // ── Specialized Websites ──────────────────
+  // ── Software Services (8) ──────────────────
   {
     id: 'str-spec-hotel',
+    group: 'technology', primaryCategory: 'software-services',
     entity: 'str', category: 'specialized-website', sector: 'software-erp',
     name: 'Hotel Management Website', shortName: 'Hotel',
     description: 'Complete hotel and hospitality management system with booking.',
@@ -270,6 +372,7 @@ export const strServices: Service[] = [
   },
   {
     id: 'str-spec-hospital',
+    group: 'technology', primaryCategory: 'software-services',
     entity: 'str', category: 'specialized-website', sector: 'software-erp',
     name: 'Hospital Management System', shortName: 'Hospital',
     description: 'Comprehensive healthcare management for hospitals and clinics.',
@@ -280,6 +383,7 @@ export const strServices: Service[] = [
   },
   {
     id: 'str-spec-school',
+    group: 'technology', primaryCategory: 'software-services',
     entity: 'str', category: 'specialized-website', sector: 'software-erp',
     name: 'School Management System', shortName: 'School',
     description: 'End-to-end school management with student portal, fees, attendance.',
@@ -290,6 +394,7 @@ export const strServices: Service[] = [
   },
   {
     id: 'str-spec-elearning',
+    group: 'technology', primaryCategory: 'software-services',
     entity: 'str', category: 'specialized-website', sector: 'software-erp',
     name: 'E-Learning Platform', shortName: 'E-Learning',
     description: 'Online education platform with courses, quizzes, and certificates.',
@@ -300,6 +405,7 @@ export const strServices: Service[] = [
   },
   {
     id: 'str-spec-realestate',
+    group: 'technology', primaryCategory: 'software-services',
     entity: 'str', category: 'specialized-website', sector: 'software-erp',
     name: 'Real Estate Website', shortName: 'Real Estate',
     description: 'Property listing portal with search, filters, and agent management.',
@@ -310,6 +416,7 @@ export const strServices: Service[] = [
   },
   {
     id: 'str-spec-restaurant',
+    group: 'technology', primaryCategory: 'software-services',
     entity: 'str', category: 'specialized-website', sector: 'software-erp',
     name: 'Restaurant & Food Ordering', shortName: 'Restaurant',
     description: 'Online food ordering system with menu, cart, and delivery management.',
@@ -320,6 +427,7 @@ export const strServices: Service[] = [
   },
   {
     id: 'str-spec-erp',
+    group: 'technology', primaryCategory: 'software-services',
     entity: 'str', category: 'software', sector: 'software-erp',
     name: 'ERP Software', shortName: 'ERP',
     description: 'Enterprise Resource Planning for complete business operations management.',
@@ -331,6 +439,7 @@ export const strServices: Service[] = [
   },
   {
     id: 'str-spec-crm',
+    group: 'technology', primaryCategory: 'software-services',
     entity: 'str', category: 'software', sector: 'software-erp',
     name: 'CRM Software', shortName: 'CRM',
     description: 'Customer Relationship Management system to grow and retain your client base.',
@@ -342,13 +451,14 @@ export const strServices: Service[] = [
 ];
 
 // ─────────────────────────────────────────
-// SCS — SAAMPARK CONSULTANCY SERVICE
+// SCS — SAAMPARK CONSULTANCY & RESEARCH SERVICES
 // ─────────────────────────────────────────
 
 export const scsServices: Service[] = [
-  // ── Social Media ──────────────────────────
+  // ── Digital Marketing (7) ──────────────────────────
   {
     id: 'scs-social-standard',
+    group: 'consultancy', primaryCategory: 'digital-marketing',
     entity: 'scs',
     category: 'social-media', sector: 'digital-marketing',
     name: 'Social Media Page Control',
@@ -373,10 +483,9 @@ export const scsServices: Service[] = [
     href: '/consultancy/digital-marketing/social-media',
     icon: 'Share2', image: '/assets/images/services/scs_social_standard.png',
   },
-
-  // ── Meta Ads ──────────────────────────────
   {
     id: 'scs-meta-weekly',
+    group: 'consultancy', primaryCategory: 'digital-marketing',
     entity: 'scs',
     category: 'meta-ads', sector: 'ads-management',
     name: 'Meta Ads — Weekly',
@@ -401,6 +510,7 @@ export const scsServices: Service[] = [
   },
   {
     id: 'scs-meta-monthly',
+    group: 'consultancy', primaryCategory: 'digital-marketing',
     entity: 'scs',
     category: 'meta-ads', sector: 'ads-management',
     name: 'Meta Ads — Monthly',
@@ -426,6 +536,7 @@ export const scsServices: Service[] = [
   },
   {
     id: 'scs-meta-premium',
+    group: 'consultancy', primaryCategory: 'digital-marketing',
     entity: 'scs',
     category: 'meta-ads', sector: 'ads-management',
     name: 'Meta Ads — Premium',
@@ -451,10 +562,9 @@ export const scsServices: Service[] = [
     href: '/consultancy/ads-management/meta-ads',
     icon: 'Megaphone',
   },
-
-  // ── Google Ads ────────────────────────────
   {
     id: 'scs-google-weekly',
+    group: 'consultancy', primaryCategory: 'digital-marketing',
     entity: 'scs',
     category: 'google-ads', sector: 'ads-management',
     name: 'Google Ads — Weekly',
@@ -478,6 +588,7 @@ export const scsServices: Service[] = [
   },
   {
     id: 'scs-google-monthly',
+    group: 'consultancy', primaryCategory: 'digital-marketing',
     entity: 'scs',
     category: 'google-ads', sector: 'ads-management',
     name: 'Google Ads — Monthly',
@@ -502,6 +613,7 @@ export const scsServices: Service[] = [
   },
   {
     id: 'scs-google-premium',
+    group: 'consultancy', primaryCategory: 'digital-marketing',
     entity: 'scs',
     category: 'google-ads', sector: 'ads-management',
     name: 'Google Ads — Premium',
@@ -527,9 +639,10 @@ export const scsServices: Service[] = [
     icon: 'Search',
   },
 
-  // ── Google Business Profile ───────────────
+  // ── Online Related Services (3 under Saampark Research) ───────────────
   {
     id: 'scs-gbp-basic',
+    group: 'research', primaryCategory: 'online-related-services',
     entity: 'scs',
     category: 'google-business', sector: 'seo-local',
     name: 'GBP — Basic Management',
@@ -553,6 +666,7 @@ export const scsServices: Service[] = [
   },
   {
     id: 'scs-gbp-regular',
+    group: 'research', primaryCategory: 'online-related-services',
     entity: 'scs',
     category: 'google-business', sector: 'seo-local',
     name: 'GBP — Regular & SEO',
@@ -579,6 +693,7 @@ export const scsServices: Service[] = [
   },
   {
     id: 'scs-gbp-advanced',
+    group: 'research', primaryCategory: 'online-related-services',
     entity: 'scs',
     category: 'google-business', sector: 'seo-local',
     name: 'GBP — Advanced Local SEO',
@@ -603,9 +718,10 @@ export const scsServices: Service[] = [
     icon: 'MapPin',
   },
 
-  // ── Video & AI ────────────────────────────
+  // ── AI Video (6 under Saampark Consultancy) ────────────────────────────
   {
     id: 'scs-video-simple',
+    group: 'consultancy', primaryCategory: 'ai-video',
     entity: 'scs',
     category: 'video-ai', sector: 'video-animation',
     name: 'Simple Video',
@@ -624,6 +740,7 @@ export const scsServices: Service[] = [
   },
   {
     id: 'scs-video-poster',
+    group: 'consultancy', primaryCategory: 'ai-video',
     entity: 'scs',
     category: 'video-ai', sector: 'video-animation',
     name: 'Poster Video',
@@ -642,6 +759,7 @@ export const scsServices: Service[] = [
   },
   {
     id: 'scs-video-cartoon',
+    group: 'consultancy', primaryCategory: 'ai-video',
     entity: 'scs',
     category: 'video-ai', sector: 'video-animation',
     name: 'Cartoon Video',
@@ -660,6 +778,7 @@ export const scsServices: Service[] = [
   },
   {
     id: 'scs-video-motion-ai',
+    group: 'consultancy', primaryCategory: 'ai-video',
     entity: 'scs',
     category: 'video-ai', sector: 'ai-integration',
     name: 'Motion AI Video',
@@ -678,6 +797,7 @@ export const scsServices: Service[] = [
   },
   {
     id: 'scs-video-full-ai',
+    group: 'consultancy', primaryCategory: 'ai-video',
     entity: 'scs',
     category: 'video-ai', sector: 'ai-integration',
     name: 'Full AI Video',
@@ -697,6 +817,7 @@ export const scsServices: Service[] = [
   },
   {
     id: 'scs-video-4k',
+    group: 'consultancy', primaryCategory: 'ai-video',
     entity: 'scs',
     category: 'video-ai', sector: 'video-animation',
     name: '4K High Quality AI Video',
@@ -715,9 +836,10 @@ export const scsServices: Service[] = [
     icon: 'Sparkles',
   },
 
-  // ── Business & Legal ──────────────────────
+  // ── Legal (4 under Saampark Consultancy) ──────────────────────
   {
     id: 'scs-legal-pvtltd',
+    group: 'consultancy', primaryCategory: 'legal',
     entity: 'scs',
     category: 'business-legal', sector: 'business-legal',
     name: 'Pvt. Ltd. Company Registration',
@@ -737,6 +859,7 @@ export const scsServices: Service[] = [
   },
   {
     id: 'scs-legal-gst',
+    group: 'consultancy', primaryCategory: 'legal',
     entity: 'scs',
     category: 'business-legal', sector: 'financial-tax',
     name: 'GST Registration',
@@ -755,6 +878,7 @@ export const scsServices: Service[] = [
   },
   {
     id: 'scs-legal-msme',
+    group: 'consultancy', primaryCategory: 'legal',
     entity: 'scs',
     category: 'business-legal', sector: 'business-legal',
     name: 'MSME (Udyam) Registration',
@@ -773,6 +897,7 @@ export const scsServices: Service[] = [
   },
   {
     id: 'scs-legal-itr',
+    group: 'consultancy', primaryCategory: 'legal',
     entity: 'scs',
     category: 'business-legal', sector: 'financial-tax',
     name: 'Income Tax Returns',
@@ -850,9 +975,27 @@ export function getServiceById(id: string) {
   return allServices.find(s => s.id === id);
 }
 
+// Dynamic Hierarchy Query Helpers
+export function getGroupServices(group: ServiceGroup | 'all', services: Service[] = allServices): Service[] {
+  if (group === 'all') return services;
+  return services.filter(s => s.group === group);
+}
+
+export function getPrimaryCategoryServices(cat: PrimaryCategory | 'all', services: Service[] = allServices): Service[] {
+  if (cat === 'all') return services;
+  return services.filter(s => s.primaryCategory === cat);
+}
+
+export function getGroupCount(group: ServiceGroup | 'all', services: Service[] = allServices): number {
+  return getGroupServices(group, services).length;
+}
+
+export function getPrimaryCategoryCount(cat: PrimaryCategory | 'all', services: Service[] = allServices): number {
+  return getPrimaryCategoryServices(cat, services).length;
+}
+
 // ─────────────────────────────────────────
 // COMPANY CONTACT INFO (Official)
-// Source: Brochure images
 // ─────────────────────────────────────────
 export const CONTACT = {
   group: {
