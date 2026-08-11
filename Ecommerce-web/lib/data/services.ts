@@ -452,6 +452,54 @@ export const strServices: Service[] = [
     isPopular: false, isFeatured: false,
     color: '#00B4A6', slug: 'crm-software', href: '/technology/software/crm', icon: 'Users',
   },
+
+  // ── Maintenance Services (2) ──────────────────
+  {
+    id: 'str-maint-website',
+    group: 'technology', primaryCategory: 'maintenance-services',
+    entity: 'str', category: 'website', sector: 'web-development',
+    name: 'Website Maintenance & AMC', shortName: 'Web AMC',
+    description: 'Complete annual website maintenance, daily backups, speed optimization, and security monitoring.',
+    features: ['Regular Backups', 'Security Patching', 'Uptime Monitoring', 'Content Updates', 'Bug Fixing', 'Speed Optimization'],
+    startingPrice: 999, priceType: 'monthly', deliveryDays: null,
+    isPopular: true, isFeatured: true, badge: '🛠️ AMC Managed',
+    color: '#00B4A6', slug: 'website-maintenance', href: '/technology/web-development/one-page-website', icon: 'Wrench',
+  },
+  {
+    id: 'str-maint-app',
+    group: 'technology', primaryCategory: 'maintenance-services',
+    entity: 'str', category: 'app', sector: 'app-development',
+    name: 'Mobile App Support & AMC', shortName: 'App AMC',
+    description: 'Ongoing Android and iOS mobile application support, API maintenance, and OS compatibility updates.',
+    features: ['API Maintenance', 'OS Compatibility Updates', 'Crash Reporting & Fixes', 'Store Compliance', 'Performance Monitoring'],
+    startingPrice: 2499, priceType: 'monthly', deliveryDays: null,
+    isPopular: false, isFeatured: false,
+    color: '#3DDC84', slug: 'app-maintenance', href: '/technology/app-development/android', icon: 'Wrench',
+  },
+
+  // ── Hosting & Server Services (2) ──────────────────
+  {
+    id: 'str-host-cloud',
+    group: 'technology', primaryCategory: 'hosting-services',
+    entity: 'str', category: 'website', sector: 'web-development',
+    name: 'High Performance NVMe Cloud Hosting', shortName: 'Cloud Host',
+    description: 'Lightning-fast LiteSpeed NVMe SSD cloud web hosting with free SSL, CDN, and automatic daily backups.',
+    features: ['NVMe SSD Storage', 'Free SSL Certificate', 'Global CDN Integration', '99.9% Uptime Guarantee', 'Unmetered Bandwidth', 'cPanel / Control Panel'],
+    startingPrice: 1499, priceType: 'monthly', deliveryDays: 1,
+    isPopular: true, isFeatured: true, badge: '🚀 99.9% Uptime',
+    color: '#1E90FF', slug: 'cloud-hosting', href: '/technology/web-development/static-website', icon: 'Server',
+  },
+  {
+    id: 'str-host-domain',
+    group: 'technology', primaryCategory: 'hosting-services',
+    entity: 'str', category: 'website', sector: 'web-development',
+    name: 'Domain Registration & Managed DNS', shortName: 'Domain & DNS',
+    description: 'Secure domain name registration (.com, .in, .co.in, .org) with DNSSEC protection and free privacy lock.',
+    features: ['.com / .in / .org Extensions', 'Managed DNS Records', 'DNSSEC Protection', 'Domain Theft Protection', 'Auto-Renewal Support'],
+    startingPrice: 799, priceType: 'one-time', deliveryDays: 1,
+    isPopular: false, isFeatured: false,
+    color: '#F4511E', slug: 'domain-registration', href: '/technology/web-development/static-website', icon: 'Globe',
+  },
 ];
 
 // ─────────────────────────────────────────
@@ -939,6 +987,10 @@ const SERVICE_IMAGE_MAP: Record<string, string> = {
   'str-spec-restaurant': '/assets/images/restaurant-system.jpg',
   'str-spec-erp':        '/assets/images/erp-software.jpg',
   'str-spec-crm':        '/assets/images/crm-software.jpg',
+  'str-maint-website':   '/assets/images/static-web.jpg',
+  'str-maint-app':       '/assets/images/android-app.jpg',
+  'str-host-cloud':      '/assets/images/erp-software.jpg',
+  'str-host-domain':     '/assets/images/one-page-web.jpg',
   'scs-social-standard': '/assets/images/social-media.jpg',
   'scs-meta-weekly':     '/assets/images/meta-ads-weekly.jpg',
   'scs-meta-monthly':    '/assets/images/meta-ads-monthly.jpg',

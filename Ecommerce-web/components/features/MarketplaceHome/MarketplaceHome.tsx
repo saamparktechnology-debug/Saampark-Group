@@ -34,6 +34,8 @@ import {
   GraduationCap,
   Scale,
   SlidersHorizontal,
+  Wrench,
+  Server,
 } from 'lucide-react';
 import {
   allServices,
@@ -70,6 +72,8 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   ShieldCheck: <ShieldCheck size={16} />,
   GraduationCap: <GraduationCap size={16} />,
   Scale: <Scale size={16} />,
+  Wrench: <Wrench size={16} />,
+  Server: <Server size={16} />,
 };
 
 function ServiceThumbnail({ src, alt, className }: { src: string; alt: string; className: string }) {
