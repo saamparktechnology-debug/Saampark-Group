@@ -46,6 +46,8 @@ export type PrimaryCategory =
   | 'application-services'
   | 'software-services'
   | 'ai-services'
+  | 'maintenance-services'
+  | 'hosting-services'
   // Research
   | 'online-related-services'
   | 'trading-related-services'
@@ -82,7 +84,7 @@ export const SERVICE_GROUPS: GroupMetadata[] = [
     id: 'technology',
     name: 'Saampark Technology',
     shortName: 'Technology',
-    description: 'Web development, mobile apps, custom software systems, and AI automation',
+    description: 'Web development, mobile apps, custom software systems, AI automation, maintenance, and hosting',
     icon: 'Globe',
     color: '#00B4A6',
   },
@@ -110,6 +112,8 @@ export const SERVICE_CATEGORIES: CategoryMetadata[] = [
   { id: 'application-services', group: 'technology', name: 'Application Services', capacity: '10+', icon: 'Smartphone' },
   { id: 'software-services', group: 'technology', name: 'Software Services', capacity: '10+', icon: 'Cpu' },
   { id: 'ai-services', group: 'technology', name: 'AI Services', capacity: '5+', icon: 'Bot' },
+  { id: 'maintenance-services', group: 'technology', name: 'Maintenance Services', capacity: '10+', icon: 'Wrench' },
+  { id: 'hosting-services', group: 'technology', name: 'Hosting & Server Services', capacity: '10+', icon: 'Server' },
 
   // ── Research ──
   { id: 'online-related-services', group: 'research', name: 'Online Related Services', capacity: '10+', icon: 'Search' },
