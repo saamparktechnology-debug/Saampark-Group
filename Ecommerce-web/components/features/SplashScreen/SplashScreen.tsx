@@ -147,7 +147,7 @@ export function SplashScreen({ onComplete }: Props) {
           <div className={styles.logoContainer}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/assets/logos/logo-main.png"
+              src="/assets/logos/logo-main-v2.png"
               alt="Saampark Group"
               className={styles.logoImage}
             />

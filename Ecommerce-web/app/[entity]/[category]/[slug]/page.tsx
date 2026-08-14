@@ -46,7 +46,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       type: 'article',
       images: [
         {
-          url: '/assets/logos/logo-main.png',
+          url: '/assets/logos/logo-main-v2.png',
           alt: service.name,
         },
       ],

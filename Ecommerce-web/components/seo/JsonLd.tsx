@@ -20,8 +20,8 @@ export function JsonLd() {
     name: 'Saampark Group',
     legalName: 'Saampark Technology & Research Private Limited',
     url: 'https://www.saampark.com',
-    logo: 'https://www.saampark.com/assets/logos/logo-main.png',
-    image: 'https://www.saampark.com/assets/logos/logo-main.png',
+    logo: 'https://www.saampark.com/assets/logos/logo-main-v2.png',
+    image: 'https://www.saampark.com/assets/logos/logo-main-v2.png',
     description:
       'ISO 9001:2015 certified technology and consultancy group delivering website development, Android & iOS app development, custom ERP, Meta Ads, Google Ads, AI videos, and business legal registration.',
     address: {
@@ -57,7 +57,7 @@ export function JsonLd() {
     '@context': 'https://schema.org',
     '@type': 'ProfessionalService',
     name: 'Saampark Group — Web Development, App Development & Marketing Agency',
-    image: 'https://www.saampark.com/assets/logos/logo-main.png',
+    image: 'https://www.saampark.com/assets/logos/logo-main-v2.png',
     '@id': 'https://www.saampark.com/#organization',
     url: 'https://www.saampark.com',
     telephone: '+91-7602058323',

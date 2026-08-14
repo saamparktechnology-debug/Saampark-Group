@@ -15,13 +15,13 @@ export function Footer() {
             <div className={styles.brandCol}>
               <Link href="/" className={styles.brandLogo}>
                 <Image
-                  src="/assets/logos/logo-main.png"
+                  src="/assets/logos/logo-main-v2.png"
                   alt="Saampark Group"
                   width={48}
                   height={48}
                   className={styles.logoImg}
                 />
-                <span>SAAMPARK GROUP</span>
+                <span>POWERED BY SAAMPARK GROUP</span>
               </Link>
               <p className={styles.brandDesc}>
                 ISO 9001:2015 certified technology and consultancy group delivering
@@ -136,7 +136,7 @@ export function Footer() {
           <div className={styles.bottomInner}>
             <p>© {new Date().getFullYear()} Saampark Group. All rights reserved.</p>
             <p>
-              Saampark Technology &amp; Research Pvt. Ltd. &nbsp;·&nbsp; Saampark Consultancy Service
+              Powered by Saampark Technology &amp; Research Pvt. Ltd. &nbsp;·&nbsp; Saampark Consultancy Service
             </p>
             <p style={{ color: 'rgba(255,255,255,0.30)' }}>
               {CONTACT.str.iso}

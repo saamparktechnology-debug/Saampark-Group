@@ -48,11 +48,11 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: '/assets/logos/logo-main.png', type: 'image/png' },
+      { url: '/assets/logos/logo-main-v2.png', type: 'image/png' },
       { url: '/favicon.ico' },
     ],
-    shortcut: '/assets/logos/logo-main.png',
-    apple: '/assets/logos/logo-main.png',
+    shortcut: '/assets/logos/logo-main-v2.png',
+    apple: '/assets/logos/logo-main-v2.png',
   },
   openGraph: {
     title: 'Saampark Group | Premier Web Development, App Development & Marketing',
@@ -64,7 +64,7 @@ export const metadata: Metadata = {
     siteName: 'Saampark Group',
     images: [
       {
-        url: '/assets/logos/logo-main.png',
+        url: '/assets/logos/logo-main-v2.png',
         width: 1200,
         height: 1200,
         alt: 'Saampark Group Official Logo',
@@ -75,7 +75,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Saampark Group | Official Site — Web, App & Digital Marketing',
     description: 'ISO certified premium technology and consultancy services in India starting at ₹499.',
-    images: ['/assets/logos/logo-main.png'],
+    images: ['/assets/logos/logo-main-v2.png'],
   },
   robots: {
     index: true,
@@ -96,8 +96,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" data-theme="light" suppressHydrationWarning>
       <head>
         <link rel="icon" href="/favicon.ico" sizes="any" />
-        <link rel="icon" href="/assets/logos/logo-main.png" type="image/png" sizes="any" />
-        <link rel="apple-touch-icon" href="/assets/logos/logo-main.png" />
+        <link rel="icon" href="/assets/logos/logo-main-v2.png" type="image/png" sizes="any" />
+        <link rel="apple-touch-icon" href="/assets/logos/logo-main-v2.png" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
