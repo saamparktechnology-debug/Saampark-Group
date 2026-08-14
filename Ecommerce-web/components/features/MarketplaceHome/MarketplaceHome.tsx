@@ -405,7 +405,7 @@ function MarketplaceContent() {
             <span className={styles.catalogBadge}>
               <Sparkles size={13} /> SERVICES MARKETPLACE
             </span>
-            <h2 className={styles.catalogTitle}>Explore Our Services</h2>
+            <h1 className={styles.catalogTitle}>Explore Premium Web, App Development &amp; Marketing Services</h1>
             <p className={styles.catalogSubtitle}>
               Find the right ISO 9001:2015 certified solution for your business growth
             </p>
