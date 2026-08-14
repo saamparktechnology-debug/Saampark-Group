@@ -18,11 +18,38 @@ import { KPICard } from "./components/KPICard"
 import { DonutChart } from "./components/DonutChart"
 import { BarChartMockup } from "./components/BarChartMockup"
 import { DATA } from "./services/dashboardService"
+import { ReportService, LeadService, CustomerService, TaskService, TicketService } from "@/services/apiServices"
 
 export default function DashboardMain() {
   const { activeCompanyId, user } = useAuthStore()
   const { isClockedIn, clockIn, clockOut, secondsElapsed, tick } = useTimerStore()
   
+  // Live API State
+  const [liveStats, setLiveStats] = React.useState<any>(null)
+  const [openTasksCount, setOpenTasksCount] = React.useState<number | string>(0)
+  const [leadsCount, setLeadsCount] = React.useState<number>(0)
+  const [customersCount, setCustomersCount] = React.useState<number>(0)
+
+  React.useEffect(() => {
+    ReportService.getDashboardOverview()
+      .then((res) => {
+        if (res) setLiveStats(res)
+      })
+      .catch((err) => console.warn("Live report overview ping:", err))
+
+    TaskService.getTasks().then((tasks) => {
+      if (Array.isArray(tasks)) setOpenTasksCount(tasks.length)
+    }).catch(() => {})
+
+    LeadService.getLeads().then((leads) => {
+      if (Array.isArray(leads)) setLeadsCount(leads.length)
+    }).catch(() => {})
+
+    CustomerService.getCustomers().then((custs) => {
+      if (Array.isArray(custs)) setCustomersCount(custs.length)
+    }).catch(() => {})
+  }, [activeCompanyId])
+
   // Timer tick interval
   React.useEffect(() => {
     let interval: NodeJS.Timeout
@@ -95,7 +122,7 @@ export default function DashboardMain() {
             </div>
           }
         />
-        <KPICard icon={Grid} colorClass="bg-blue-400" value={d.kpi.openTasks} label="My open tasks" />
+        <KPICard icon={Grid} colorClass="bg-blue-400" value={openTasksCount} label="My open tasks" />
         <KPICard icon={Calendar} colorClass="bg-indigo-500" value={d.kpi.events} label="Events today" />
         <KPICard icon={PieChart} colorClass="bg-pink-500" value={d.kpi.due} label="Due" />
       </div>

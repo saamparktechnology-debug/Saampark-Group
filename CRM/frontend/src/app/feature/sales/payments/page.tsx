@@ -19,13 +19,13 @@ type Payment = {
 }
 
 const MOCK_PAYMENTS: Payment[] = [
-  { id: "P-1", invoiceId: "INV #14", paymentDate: "14-08-2026", paymentMethod: "PayPal Payments Standard", note: "Facere magni tempore rem.", amount: "$100.00" },
-  { id: "P-2", invoiceId: "INV #15", paymentDate: "08-08-2026", paymentMethod: "PayPal Payments Standard", note: "Eveniet sit rerum qui.", amount: "$90.00" },
-  { id: "P-3", invoiceId: "INV #22", paymentDate: "06-08-2026", paymentMethod: "Paytm", note: "Ratione dolores id qui nostrum quia vero.", amount: "$360.00" },
-  { id: "P-4", invoiceId: "INV #23", paymentDate: "09-08-2026", paymentMethod: "PayPal Payments Standard", note: "Nostrum voluptate rem aut.", amount: "$90.00" },
-  { id: "P-5", invoiceId: "INV #4", paymentDate: "08-08-2026", paymentMethod: "Stripe", note: "Ipsam quis officiis commodi aliquid nemo explicabo.", amount: "$4,000.00" },
-  { id: "P-6", invoiceId: "INV #6", paymentDate: "14-08-2026", paymentMethod: "Paytm", note: "Maiores dolor minus suscipit repellat voluptates ducimus.", amount: "$77.00" },
-  { id: "P-7", invoiceId: "INV #7", paymentDate: "14-08-2026", paymentMethod: "Stripe", note: "Velit ullam id quia consequatur sequi rerum.", amount: "$400.00" },
+  { id: "P-1", invoiceId: "INV #14", paymentDate: "14-08-2026", paymentMethod: "UPI / Net Banking", note: "Facere magni tempore rem.", amount: "₹10,000" },
+  { id: "P-2", invoiceId: "INV #15", paymentDate: "08-08-2026", paymentMethod: "UPI / Net Banking", note: "Eveniet sit rerum qui.", amount: "₹9,000" },
+  { id: "P-3", invoiceId: "INV #22", paymentDate: "06-08-2026", paymentMethod: "Paytm", note: "Ratione dolores id qui nostrum quia vero.", amount: "₹36,000" },
+  { id: "P-4", invoiceId: "INV #23", paymentDate: "09-08-2026", paymentMethod: "UPI / Net Banking", note: "Nostrum voluptate rem aut.", amount: "₹9,000" },
+  { id: "P-5", invoiceId: "INV #4", paymentDate: "08-08-2026", paymentMethod: "Razorpay", note: "Ipsam quis officiis commodi aliquid nemo explicabo.", amount: "₹4,00,000" },
+  { id: "P-6", invoiceId: "INV #6", paymentDate: "14-08-2026", paymentMethod: "Paytm", note: "Maiores dolor minus suscipit repellat voluptates ducimus.", amount: "₹7,700" },
+  { id: "P-7", invoiceId: "INV #7", paymentDate: "14-08-2026", paymentMethod: "Razorpay", note: "Velit ullam id quia consequatur sequi rerum.", amount: "₹40,000" },
 ]
 
 export const columns: ColumnDef<Payment>[] = [
@@ -93,7 +93,7 @@ export default function PaymentsPage() {
             {/* Summary Footer */}
             <div className="border-t border-border mt-4 pt-4 flex justify-end gap-16 pr-[20%] text-sm">
               <div className="text-right font-semibold">Total</div>
-              <div className="text-right font-semibold">$5,117.00</div>
+              <div className="text-right font-semibold">₹5,11,700</div>
             </div>
           </>
         ) : (

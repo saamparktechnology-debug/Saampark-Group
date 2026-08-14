@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/Button"
 import { Tabs } from "@/components/ui/Tabs"
 import { RowActions } from "@/components/ui/RowActions"
 import { useUIStore } from "@/store/useUIStore"
+import { UserService } from "@/services/apiServices"
 
 type TeamMember = {
   id: string
@@ -20,14 +21,6 @@ type TeamMember = {
   phone: string
   status: "Online" | "Offline"
 }
-
-const MOCK_MEMBERS: TeamMember[] = [
-  { id: "1", name: "John Doe", avatarUrl: "https://i.pravatar.cc/150?u=1", jobTitle: "Admin", email: "admin@demo.com", phone: "+12345678971", status: "Online" },
-  { id: "2", name: "Mark Thomas", avatarUrl: "https://i.pravatar.cc/150?u=2", jobTitle: "Web Developer", email: "mark@demo.com", phone: "+12345678975", status: "Offline" },
-  { id: "3", name: "Michael Wood", avatarUrl: "https://i.pravatar.cc/150?u=3", jobTitle: "Project Manager", email: "michael@demo.com", phone: "+12345678972", status: "Online" },
-  { id: "4", name: "Richard Gray", avatarUrl: "https://i.pravatar.cc/150?u=4", jobTitle: "Web Developer", email: "richard@demo.com", phone: "+12345678974", status: "Online" },
-  { id: "5", name: "Sara Ann", avatarUrl: "https://i.pravatar.cc/150?u=5", jobTitle: "Web Designer", email: "sara@demo.com", phone: "+12345678973", status: "Offline" },
-]
 
 export const columns: ColumnDef<TeamMember>[] = [
   {
@@ -56,27 +49,53 @@ export const columns: ColumnDef<TeamMember>[] = [
 export default function TeamMembersPage() {
   const [activeTab, setActiveTab] = React.useState("active")
   const { openModal } = useUIStore()
+  const [members, setMembers] = React.useState<TeamMember[]>([])
+  const [isLoading, setIsLoading] = React.useState(true)
+
+  React.useEffect(() => {
+    setIsLoading(true)
+    UserService.getTeamMembers()
+      .then((res) => {
+        if (Array.isArray(res)) {
+          const live: TeamMember[] = res.map((u: any, idx: number) => ({
+            id: String(u.id || u._id || idx),
+            name: u.full_name || u.name || u.email || 'Team Member',
+            avatarUrl: u.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${u.email || idx}`,
+            jobTitle: u.role_name || u.role || 'Member',
+            email: u.email || '-',
+            phone: u.phone || '-',
+            status: u.status === 'active' ? 'Online' : 'Offline',
+          }))
+          setMembers(live)
+        }
+      })
+      .catch((err) => console.error("Error loading team members API:", err))
+      .finally(() => setIsLoading(false))
+  }, [])
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Team members</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Team Members</h1>
+          <p className="text-muted-foreground mt-1">Live team members loaded directly from backend API.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" leftIcon={<Download size={14} />}>Import team members</Button>
-          <Button variant="secondary" size="sm" leftIcon={<Mail size={14} />} onClick={() => openModal("isSendInvitationOpen")}>Send invitation</Button>
-          <Button variant="primary" size="sm" leftIcon={<Plus size={14} />} onClick={() => openModal("isAddMemberModalOpen")}>Add member</Button>
+          <Button variant="secondary" leftIcon={<Download size={16} />}>Export</Button>
+          <Button variant="primary" leftIcon={<Plus size={16} />} onClick={() => openModal("isAddMemberModalOpen")}>Add Member</Button>
         </div>
       </div>
 
       <div className="bg-surface border border-border shadow-soft rounded-xl p-6">
         <Tabs
-          tabs={[{ id: "active", label: "Active members" }, { id: "inactive", label: "Inactive members" }]}
+          tabs={[
+            { id: "active", label: "Active Members" },
+            { id: "all", label: "All Members" },
+          ]}
           activeTab={activeTab}
           onChange={setActiveTab}
         />
-        <DataTable columns={columns} data={MOCK_MEMBERS} searchKey="name" />
+        <DataTable columns={columns} data={members} searchKey="name" />
       </div>
     </motion.div>
   )

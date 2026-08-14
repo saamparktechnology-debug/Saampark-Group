@@ -16,11 +16,46 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const currentPath = `/${resolvedParams.entity}/${resolvedParams.category}/${resolvedParams.slug}`;
   const service = allServices.find(s => s.href === currentPath);
   
-  if (!service) return { title: 'Service Not Found' };
+  if (!service) return { title: 'Service Not Found | Saampark Group' };
+
+  const fullUrl = `https://www.saampark.com${currentPath}`;
+  const keywords = [
+    service.name,
+    'Saampark Group',
+    'Saampark Technology',
+    'Saampark Consultancy',
+    `${service.name} India`,
+    `${service.name} West Bengal`,
+    'web development',
+    'mobile app development',
+    'digital marketing',
+  ];
   
   return {
-    title: service.name,
+    title: `${service.name} | Saampark Group Services`,
     description: service.description,
+    keywords,
+    alternates: {
+      canonical: fullUrl,
+    },
+    openGraph: {
+      title: `${service.name} — ISO Certified Saampark Group`,
+      description: service.description,
+      url: fullUrl,
+      siteName: 'Saampark Group',
+      type: 'article',
+      images: [
+        {
+          url: '/assets/logos/logo-main.png',
+          alt: service.name,
+        },
+      ],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `${service.name} | Saampark Group`,
+      description: service.description,
+    },
   };
 }
 

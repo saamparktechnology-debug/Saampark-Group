@@ -20,9 +20,32 @@ export default function LeadsMain() {
 
   const [leads, setLeads] = React.useState<Lead[]>([])
 
-  React.useEffect(() => {
-    getLeads(activeCompanyId || "tech").then(setLeads)
+  const loadLeads = React.useCallback(async () => {
+    const live = await getLeads(activeCompanyId || "tech")
+    setLeads(live)
   }, [activeCompanyId])
+
+  React.useEffect(() => {
+    loadLeads()
+    const handleCreated = (e: any) => {
+      if (e.detail) {
+        const item = e.detail
+        const newLeadItem: Lead = {
+          id: `L-${Date.now()}`,
+          name: item.company_name || item.first_name || 'New Lead',
+          primaryContact: `${item.first_name || ''} ${item.last_name || ''}`.trim() || 'Contact',
+          phone: item.phone || '+91 98000 00000',
+          owner: 'Sales Rep',
+          value: '₹50,000',
+          createdAt: new Date().toLocaleDateString('en-GB'),
+          status: 'New',
+        }
+        setLeads((prev) => [newLeadItem, ...prev])
+      }
+    }
+    window.addEventListener("lead_created", handleCreated)
+    return () => window.removeEventListener("lead_created", handleCreated)
+  }, [loadLeads])
 
   const handleDelete = (id: string) => {
     setLeads((prev) => prev.filter((l) => l.id !== id))
@@ -43,14 +66,23 @@ export default function LeadsMain() {
           <Button variant="primary" size="sm" leftIcon={<Plus size={14} />} onClick={() => openModal("isAddLeadModalOpen")}>Add lead</Button>
         </div>
       </div>
-      
+
       <div className="bg-surface border border-border shadow-soft rounded-xl p-6">
-        <Tabs tabs={[{ id: "list", label: "List" }, { id: "kanban", label: "Kanban" }]} activeTab={activeTab} onChange={setActiveTab} />
-        
+        <div className="mb-4">
+          <Tabs
+            tabs={[
+              { id: "list", label: "List View" },
+              { id: "kanban", label: "Kanban Board" },
+            ]}
+            activeTab={activeTab}
+            onChange={setActiveTab}
+          />
+        </div>
+
         {activeTab === "list" ? (
           <LeadList leads={leads} onDelete={handleDelete} />
         ) : (
-          <LeadKanban leads={leads} onDelete={handleDelete} />
+          <LeadKanban leads={leads} />
         )}
       </div>
     </motion.div>

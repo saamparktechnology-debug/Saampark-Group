@@ -4,8 +4,22 @@ import { CONTACT } from '@/lib/data/services';
 import { ContactSection } from '@/components/features/ContactSection/ContactSection';
 
 export const metadata: Metadata = {
-  title: 'Contact Us | Free Consultation',
-  description: 'Get in touch with Saampark Group for website development, app development, and digital marketing inquiries.',
+  title: 'Contact Saampark Group — Free Tech & Marketing Consultation',
+  description: 'Book a free consultation with Saampark Group (STR & SCS) experts for website development, app development, Meta Ads & legal registration inquiries in India.',
+  keywords: [
+    'Contact Saampark Group',
+    'Saampark contact number',
+    'Saampark Technology email',
+    'Saampark Consultancy contact',
+    'web development quotation India',
+  ],
+  alternates: { canonical: 'https://www.saampark.com/contact' },
+  openGraph: {
+    title: 'Contact Saampark Group | Free Technical & Business Consultation',
+    description: 'Get in touch with Saampark Group for instant project estimations and expert consultation.',
+    url: 'https://www.saampark.com/contact',
+    siteName: 'Saampark Group',
+  },
 };
 
 export default function ContactPage() {

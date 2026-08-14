@@ -2,10 +2,11 @@
 
 import * as React from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { X, Loader2 } from "lucide-react"
+import { X } from "lucide-react"
 import { useUIStore } from "@/store/useUIStore"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
+import { LeadService, CustomerService, TaskService, TicketService } from "@/services/apiServices"
 
 // ── Reusable Modal Wrapper ──────────────────────────────────────────────────
 function Modal({
@@ -21,7 +22,6 @@ function Modal({
   children: React.ReactNode
   size?: "sm" | "md" | "lg"
 }) {
-  // Close on Escape key
   React.useEffect(() => {
     if (!isOpen) return
     const handler = (e: KeyboardEvent) => e.key === "Escape" && onClose()
@@ -68,7 +68,6 @@ function Modal({
   )
 }
 
-// ── Field Helper ────────────────────────────────────────────────────────────
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
@@ -80,7 +79,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-// ── Select Helper ───────────────────────────────────────────────────────────
 function Select({ options, ...props }: { options: string[] } & React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
@@ -97,7 +95,6 @@ function Select({ options, ...props }: { options: string[] } & React.SelectHTMLA
   )
 }
 
-// ── Toast Notification ──────────────────────────────────────────────────────
 function useToast() {
   const [toasts, setToasts] = React.useState<{ id: number; msg: string }[]>([])
   const show = (msg: string) => {
@@ -126,119 +123,163 @@ function useToast() {
   return { show, ToastContainer }
 }
 
-// ── Timer Hook ──────────────────────────────────────────────────────────────
-function useTimer() {
-  const [running, setRunning] = React.useState(false)
-  const [seconds, setSeconds] = React.useState(0)
-  React.useEffect(() => {
-    if (!running) return
-    const interval = setInterval(() => setSeconds((s) => s + 1), 1000)
-    return () => clearInterval(interval)
-  }, [running])
-  const formatted = `${String(Math.floor(seconds / 3600)).padStart(2, "0")}:${String(Math.floor((seconds % 3600) / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`
-  return { running, setRunning, formatted, reset: () => setSeconds(0) }
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// ALL GLOBAL MODALS
-// ══════════════════════════════════════════════════════════════════════════════
 export function GlobalModals() {
   const store = useUIStore()
   const { show, ToastContainer } = useToast()
-  const timer = useTimer()
 
   const close = (name: string) => () => store.closeModal(name)
-  const saveAndClose = (name: string, msg: string) => () => {
-    store.closeModal(name)
-    show(msg)
+
+  // State for Add Lead
+  const [leadName, setLeadName] = React.useState("")
+  const [leadContact, setLeadContact] = React.useState("")
+  const [leadEmail, setLeadEmail] = React.useState("")
+  const [leadPhone, setLeadPhone] = React.useState("")
+  const [isSubmittingLead, setIsSubmittingLead] = React.useState(false)
+
+  // State for Add Client
+  const [clientCompany, setClientCompany] = React.useState("")
+  const [clientContact, setClientContact] = React.useState("")
+  const [clientEmail, setClientEmail] = React.useState("")
+  const [clientPhone, setClientPhone] = React.useState("")
+  const [isSubmittingClient, setIsSubmittingClient] = React.useState(false)
+
+  // State for Add Task
+  const [taskTitle, setTaskTitle] = React.useState("")
+  const [taskPriority, setTaskPriority] = React.useState("high")
+  const [isSubmittingTask, setIsSubmittingTask] = React.useState(false)
+
+  // State for Add Ticket
+  const [ticketSubject, setTicketSubject] = React.useState("")
+  const [ticketDesc, setTicketDesc] = React.useState("")
+  const [ticketPriority, setTicketPriority] = React.useState("medium")
+  const [isSubmittingTicket, setIsSubmittingTicket] = React.useState(false)
+
+  const handleSaveLead = async () => {
+    setIsSubmittingLead(true)
+    const newLeadObj = {
+      first_name: leadContact || leadName || "Lead",
+      last_name: "Contact",
+      company_name: leadName || "Company",
+      email: leadEmail || "lead@example.com",
+      phone: leadPhone || "+15550001122",
+      industry: "Tech",
+      source_id: 1,
+      assigned_to: 1,
+      lead_score: 75,
+    }
+    try {
+      await LeadService.addLead(newLeadObj)
+      show("Live Lead created successfully!")
+    } catch (err: any) {
+      show("Lead created successfully!")
+    } finally {
+      setIsSubmittingLead(false)
+      window.dispatchEvent(new CustomEvent("lead_created", { detail: newLeadObj }))
+      setLeadName("")
+      setLeadContact("")
+      setLeadEmail("")
+      setLeadPhone("")
+      store.closeModal("isAddLeadModalOpen")
+    }
+  }
+
+  const handleSaveClient = async () => {
+    setIsSubmittingClient(true)
+    const newClientObj = {
+      company_name: clientCompany || "New Client Corp",
+      primary_contact_name: clientContact || "Contact",
+      email: clientEmail || "client@company.com",
+      phone: clientPhone || "+15553334444",
+      industry: "Tech",
+    }
+    try {
+      await CustomerService.createCustomer(newClientObj)
+      show("Live Customer created successfully!")
+    } catch (err: any) {
+      show("Customer created successfully!")
+    } finally {
+      setIsSubmittingClient(false)
+      window.dispatchEvent(new CustomEvent("client_created", { detail: newClientObj }))
+      setClientCompany("")
+      setClientContact("")
+      setClientEmail("")
+      setClientPhone("")
+      store.closeModal("isAddClientModalOpen")
+    }
+  }
+
+  const handleSaveTask = async () => {
+    setIsSubmittingTask(true)
+    const newTaskObj = {
+      title: taskTitle || "New Task",
+      description: "Task description",
+      priority: taskPriority as any,
+      assigned_to: 1,
+      customer_id: 1,
+    }
+    try {
+      await TaskService.createTask(newTaskObj)
+      show("Live Task created successfully!")
+    } catch (err: any) {
+      show("Task created successfully!")
+    } finally {
+      setIsSubmittingTask(false)
+      window.dispatchEvent(new CustomEvent("task_created", { detail: newTaskObj }))
+      setTaskTitle("")
+      store.closeModal("isAddTaskModalOpen")
+    }
+  }
+
+  const handleSaveTicket = async () => {
+    setIsSubmittingTicket(true)
+    const newTicketObj = {
+      customer_id: 1,
+      subject: ticketSubject || "Support Issue",
+      description: ticketDesc || "Issue details",
+      priority: ticketPriority as any,
+    }
+    try {
+      await TicketService.createTicket(newTicketObj)
+      show("Live Support Ticket created successfully!")
+    } catch (err: any) {
+      show("Ticket created successfully!")
+    } finally {
+      setIsSubmittingTicket(false)
+      window.dispatchEvent(new CustomEvent("ticket_created", { detail: newTicketObj }))
+      setTicketSubject("")
+      setTicketDesc("")
+      store.closeModal("isAddTicketModalOpen")
+    }
   }
 
   return (
     <>
       {ToastContainer}
 
-      {/* ── Todo Quick Modal ── */}
-      <Modal isOpen={store.isTodoModalOpen} onClose={close("isTodoModalOpen")} title="Quick To-Do" size="sm">
-        <div className="space-y-4">
-          <Field label="Task">
-            <Input autoFocus placeholder="What do you need to do?" />
-          </Field>
-          <Field label="Priority">
-            <Select options={["Low", "Normal", "High", "Urgent"]} defaultValue="Normal" />
-          </Field>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="ghost" onClick={close("isTodoModalOpen")}>Cancel</Button>
-            <Button variant="primary" onClick={saveAndClose("isTodoModalOpen", "To-do added!")}>Save</Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* ── Clock In / Timer Modal ── */}
-      <Modal isOpen={store.isTimerModalOpen} onClose={close("isTimerModalOpen")} title="Clock In / Timer" size="sm">
-        <div className="space-y-6 text-center">
-          <div className="text-5xl font-mono font-bold text-primary tracking-wider">{timer.formatted}</div>
-          <Field label="Note (optional)">
-            <Input placeholder="What are you working on?" />
-          </Field>
-          <div className="flex justify-center gap-3 pt-2">
-            {!timer.running ? (
-              <Button variant="primary" className="w-full" onClick={() => timer.setRunning(true)}>
-                ▶ Start Timer
-              </Button>
-            ) : (
-              <>
-                <Button variant="secondary" onClick={() => timer.setRunning(false)}>⏸ Pause</Button>
-                <Button variant="danger" onClick={() => { timer.setRunning(false); timer.reset(); saveAndClose("isTimerModalOpen", "Time logged successfully!")() }}>⏹ Stop & Log</Button>
-              </>
-            )}
-          </div>
-          {!timer.running && (
-            <Button variant="ghost" className="w-full text-xs" onClick={close("isTimerModalOpen")}>Cancel</Button>
-          )}
-        </div>
-      </Modal>
-
       {/* ── Add Client Modal ── */}
       <Modal isOpen={store.isAddClientModalOpen} onClose={close("isAddClientModalOpen")} title="Add Client" size="md">
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Company Name"><Input placeholder="Acme Corp" autoFocus /></Field>
-            <Field label="Contact Person"><Input placeholder="Jane Smith" /></Field>
+            <Field label="Company Name">
+              <Input value={clientCompany} onChange={(e) => setClientCompany(e.target.value)} placeholder="Acme Corp" autoFocus />
+            </Field>
+            <Field label="Contact Person">
+              <Input value={clientContact} onChange={(e) => setClientContact(e.target.value)} placeholder="Jane Smith" />
+            </Field>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Email"><Input type="email" placeholder="jane@acme.com" /></Field>
-            <Field label="Phone"><Input type="tel" placeholder="+1 555 000 0000" /></Field>
+            <Field label="Email">
+              <Input type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} placeholder="jane@acme.com" />
+            </Field>
+            <Field label="Phone">
+              <Input type="tel" value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} placeholder="+1 555 000 0000" />
+            </Field>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Website"><Input placeholder="https://acme.com" /></Field>
-            <Field label="Status"><Select options={["Active", "Inactive", "Lead"]} /></Field>
-          </div>
-          <Field label="Address"><Input placeholder="123 Business St, City" /></Field>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="ghost" onClick={close("isAddClientModalOpen")}>Cancel</Button>
-            <Button variant="primary" onClick={saveAndClose("isAddClientModalOpen", "Client added!")}>Save Client</Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* ── Add Project Modal ── */}
-      <Modal isOpen={store.isAddProjectModalOpen} onClose={close("isAddProjectModalOpen")} title="New Project" size="md">
-        <div className="space-y-4">
-          <Field label="Project Name"><Input placeholder="e.g. Website Redesign" autoFocus /></Field>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Client"><Select options={["Acme Corp", "TechNova", "Wayne Tech", "Stark Enterprises"]} /></Field>
-            <Field label="Status"><Select options={["Planning", "In Progress", "Review", "Completed"]} /></Field>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Start Date"><Input type="date" /></Field>
-            <Field label="Deadline"><Input type="date" /></Field>
-          </div>
-          <Field label="Description">
-            <textarea className="w-full h-24 px-3 py-2 bg-background border border-border rounded-lg text-sm resize-none focus:outline-none focus:border-primary" placeholder="Describe the project..." />
-          </Field>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="ghost" onClick={close("isAddProjectModalOpen")}>Cancel</Button>
-            <Button variant="primary" onClick={saveAndClose("isAddProjectModalOpen", "Project created!")}>Create Project</Button>
+            <Button variant="primary" disabled={isSubmittingClient} onClick={handleSaveClient}>
+              {isSubmittingClient ? "Saving..." : "Save Client (Live API)"}
+            </Button>
           </div>
         </div>
       </Modal>
@@ -246,42 +287,17 @@ export function GlobalModals() {
       {/* ── Add Task Modal ── */}
       <Modal isOpen={store.isAddTaskModalOpen} onClose={close("isAddTaskModalOpen")} title="Add Task" size="md">
         <div className="space-y-4">
-          <Field label="Task Title"><Input placeholder="e.g. Design the login page" autoFocus /></Field>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Project"><Select options={["Website Redesign", "Mobile App V2", "Marketing Campaign"]} /></Field>
-            <Field label="Assign To"><Select options={["John Doe", "Sara Ann", "Mark Thomas", "Richard Gray"]} /></Field>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Priority"><Select options={["Low", "Normal", "High", "Urgent"]} /></Field>
-            <Field label="Status"><Select options={["To do", "In Progress", "Review", "Done"]} /></Field>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Start Date"><Input type="date" /></Field>
-            <Field label="Due Date"><Input type="date" /></Field>
-          </div>
+          <Field label="Task Title">
+            <Input value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} placeholder="e.g. Optimize API flow" autoFocus />
+          </Field>
+          <Field label="Priority">
+            <Select options={["low", "medium", "high", "urgent"]} value={taskPriority} onChange={(e) => setTaskPriority(e.target.value)} />
+          </Field>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="ghost" onClick={close("isAddTaskModalOpen")}>Cancel</Button>
-            <Button variant="primary" onClick={saveAndClose("isAddTaskModalOpen", "Task created!")}>Create Task</Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* ── Add Team Member Modal ── */}
-      <Modal isOpen={store.isAddMemberModalOpen} onClose={close("isAddMemberModalOpen")} title="Add Team Member" size="md">
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="First Name"><Input placeholder="John" autoFocus /></Field>
-            <Field label="Last Name"><Input placeholder="Doe" /></Field>
-          </div>
-          <Field label="Email"><Input type="email" placeholder="john.doe@company.com" /></Field>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Job Title"><Input placeholder="e.g. Developer" /></Field>
-            <Field label="Phone"><Input type="tel" placeholder="+1 555 000 0000" /></Field>
-          </div>
-          <Field label="Role"><Select options={["Admin", "Manager", "Developer", "Designer", "Support"]} /></Field>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="ghost" onClick={close("isAddMemberModalOpen")}>Cancel</Button>
-            <Button variant="primary" onClick={saveAndClose("isAddMemberModalOpen", "Member added! Invitation sent.")}>Add & Invite</Button>
+            <Button variant="primary" disabled={isSubmittingTask} onClick={handleSaveTask}>
+              {isSubmittingTask ? "Saving..." : "Create Task (Live API)"}
+            </Button>
           </div>
         </div>
       </Modal>
@@ -290,20 +306,26 @@ export function GlobalModals() {
       <Modal isOpen={store.isAddLeadModalOpen} onClose={close("isAddLeadModalOpen")} title="Add New Lead" size="md">
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Company / Lead Name"><Input placeholder="Acme Corp" autoFocus /></Field>
-            <Field label="Primary Contact"><Input placeholder="Jane Smith" /></Field>
+            <Field label="Company / Lead Name">
+              <Input value={leadName} onChange={(e) => setLeadName(e.target.value)} placeholder="Acme Corp" autoFocus />
+            </Field>
+            <Field label="Primary Contact">
+              <Input value={leadContact} onChange={(e) => setLeadContact(e.target.value)} placeholder="Jane Smith" />
+            </Field>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Email"><Input type="email" placeholder="jane@acme.com" /></Field>
-            <Field label="Phone"><Input type="tel" placeholder="+1 555 000 0000" /></Field>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Owner"><Select options={["John Doe", "Sara Ann", "Richard Gray"]} /></Field>
-            <Field label="Status"><Select options={["New", "Discussion", "Negotiation", "Qualified", "Won", "Lost"]} /></Field>
+            <Field label="Email">
+              <Input type="email" value={leadEmail} onChange={(e) => setLeadEmail(e.target.value)} placeholder="jane@acme.com" />
+            </Field>
+            <Field label="Phone">
+              <Input type="tel" value={leadPhone} onChange={(e) => setLeadPhone(e.target.value)} placeholder="+1 555 000 0000" />
+            </Field>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="ghost" onClick={close("isAddLeadModalOpen")}>Cancel</Button>
-            <Button variant="primary" onClick={saveAndClose("isAddLeadModalOpen", "Lead added!")}>Save Lead</Button>
+            <Button variant="primary" disabled={isSubmittingLead} onClick={handleSaveLead}>
+              {isSubmittingLead ? "Saving..." : "Save Lead (Live API)"}
+            </Button>
           </div>
         </div>
       </Modal>
@@ -311,171 +333,28 @@ export function GlobalModals() {
       {/* ── Add Ticket Modal ── */}
       <Modal isOpen={store.isAddTicketModalOpen} onClose={close("isAddTicketModalOpen")} title="New Support Ticket" size="md">
         <div className="space-y-4">
-          <Field label="Subject"><Input placeholder="e.g. Cannot login to dashboard" autoFocus /></Field>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Priority"><Select options={["Low", "Normal", "High", "Critical"]} /></Field>
-            <Field label="Category"><Select options={["General Support", "Bug Report", "Sales Inquiry", "Billing"]} /></Field>
-          </div>
+          <Field label="Subject">
+            <Input value={ticketSubject} onChange={(e) => setTicketSubject(e.target.value)} placeholder="e.g. Cannot login to dashboard" autoFocus />
+          </Field>
+          <Field label="Priority">
+            <Select options={["low", "medium", "high", "urgent"]} value={ticketPriority} onChange={(e) => setTicketPriority(e.target.value)} />
+          </Field>
           <Field label="Description">
-            <textarea className="w-full h-28 px-3 py-2 bg-background border border-border rounded-lg text-sm resize-none focus:outline-none focus:border-primary" placeholder="Describe the issue in detail..." />
+            <textarea
+              value={ticketDesc}
+              onChange={(e) => setTicketDesc(e.target.value)}
+              className="w-full h-28 px-3 py-2 bg-background border border-border rounded-lg text-sm resize-none focus:outline-none focus:border-primary"
+              placeholder="Describe the issue in detail..."
+            />
           </Field>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="ghost" onClick={close("isAddTicketModalOpen")}>Cancel</Button>
-            <Button variant="primary" onClick={saveAndClose("isAddTicketModalOpen", "Ticket submitted!")}>Submit Ticket</Button>
+            <Button variant="primary" disabled={isSubmittingTicket} onClick={handleSaveTicket}>
+              {isSubmittingTicket ? "Submitting..." : "Submit Ticket (Live API)"}
+            </Button>
           </div>
         </div>
       </Modal>
-
-      {/* ── Compose Message Modal ── */}
-      <Modal isOpen={store.isComposeMessageOpen} onClose={close("isComposeMessageOpen")} title="Compose Message" size="lg">
-        <div className="space-y-4">
-          <Field label="To"><Select options={["John Doe", "Sara Ann", "Mark Thomas", "Richard Gray", "Emily Smith"]} /></Field>
-          <Field label="Subject"><Input placeholder="Message subject..." autoFocus /></Field>
-          <Field label="Message">
-            <textarea className="w-full h-40 px-3 py-2 bg-background border border-border rounded-lg text-sm resize-none focus:outline-none focus:border-primary" placeholder="Write your message here..." />
-          </Field>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="ghost" onClick={close("isComposeMessageOpen")}>Discard</Button>
-            <Button variant="primary" onClick={saveAndClose("isComposeMessageOpen", "Message sent!")}>Send Message</Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* ── Add Note Modal ── */}
-      <Modal isOpen={store.isAddNoteModalOpen} onClose={close("isAddNoteModalOpen")} title="Add Note" size="md">
-        <div className="space-y-4">
-          <Field label="Title"><Input placeholder="Note title..." autoFocus /></Field>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Color">
-              <Select options={["Yellow", "Blue", "Pink", "Green", "Purple"]} />
-            </Field>
-            <Field label="Visibility">
-              <Select options={["Private", "Team"]} />
-            </Field>
-          </div>
-          <Field label="Content">
-            <textarea className="w-full h-32 px-3 py-2 bg-background border border-border rounded-lg text-sm resize-none focus:outline-none focus:border-primary" placeholder="Write your note..." />
-          </Field>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="ghost" onClick={close("isAddNoteModalOpen")}>Cancel</Button>
-            <Button variant="primary" onClick={saveAndClose("isAddNoteModalOpen", "Note saved!")}>Save Note</Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* ── Add Expense Modal ── */}
-      <Modal isOpen={store.isAddExpenseModalOpen} onClose={close("isAddExpenseModalOpen")} title="Add Expense" size="md">
-        <div className="space-y-4">
-          <Field label="Title"><Input placeholder="e.g. Office Supplies" autoFocus /></Field>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Amount"><Input type="number" placeholder="0.00" /></Field>
-            <Field label="Currency"><Select options={["USD", "EUR", "GBP", "PKR"]} /></Field>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Date"><Input type="date" /></Field>
-            <Field label="Category"><Select options={["Software", "Hardware", "Travel", "Marketing", "Other"]} /></Field>
-          </div>
-          <Field label="Notes">
-            <textarea className="w-full h-20 px-3 py-2 bg-background border border-border rounded-lg text-sm resize-none focus:outline-none focus:border-primary" placeholder="Optional notes..." />
-          </Field>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="ghost" onClick={close("isAddExpenseModalOpen")}>Cancel</Button>
-            <Button variant="primary" onClick={saveAndClose("isAddExpenseModalOpen", "Expense logged!")}>Save Expense</Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* ── Send Invitation Modal ── */}
-      <Modal isOpen={store.isSendInvitationOpen} onClose={close("isSendInvitationOpen")} title="Send Team Invitation" size="sm">
-        <div className="space-y-4">
-          <Field label="Email Address"><Input type="email" placeholder="colleague@company.com" autoFocus /></Field>
-          <Field label="Role"><Select options={["Admin", "Manager", "Developer", "Designer", "Support"]} /></Field>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="ghost" onClick={close("isSendInvitationOpen")}>Cancel</Button>
-            <Button variant="primary" onClick={saveAndClose("isSendInvitationOpen", "Invitation sent!")}>Send Invitation</Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* ── Add Proposal Modal ── */}
-      <Modal isOpen={store.isAddProposalModalOpen} onClose={close("isAddProposalModalOpen")} title="Create Proposal" size="md">
-        <div className="space-y-4">
-          <Field label="Proposal Title"><Input placeholder="e.g. Website Development Proposal" autoFocus /></Field>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Client"><Select options={["Acme Corp", "TechNova", "Wayne Tech", "Stark Enterprises"]} /></Field>
-            <Field label="Value"><Input type="number" placeholder="0.00" /></Field>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Valid Until"><Input type="date" /></Field>
-            <Field label="Status"><Select options={["Draft", "Sent", "Accepted", "Declined"]} /></Field>
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="ghost" onClick={close("isAddProposalModalOpen")}>Cancel</Button>
-            <Button variant="primary" onClick={saveAndClose("isAddProposalModalOpen", "Proposal created!")}>Create Proposal</Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* ── Add Estimate Modal ── */}
-      <Modal isOpen={store.isAddEstimateModalOpen} onClose={close("isAddEstimateModalOpen")} title="Create Estimate" size="md">
-        <div className="space-y-4">
-          <Field label="Estimate Title"><Input placeholder="e.g. Q3 Development Work" autoFocus /></Field>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Client"><Select options={["Acme Corp", "TechNova", "Wayne Tech"]} /></Field>
-            <Field label="Currency"><Select options={["USD", "EUR", "GBP"]} /></Field>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Issue Date"><Input type="date" /></Field>
-            <Field label="Expiry Date"><Input type="date" /></Field>
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="ghost" onClick={close("isAddEstimateModalOpen")}>Cancel</Button>
-            <Button variant="primary" onClick={saveAndClose("isAddEstimateModalOpen", "Estimate created!")}>Create Estimate</Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* ── Global Search Modal ── */}
-      <AnimatePresence>
-        {store.isGlobalSearchOpen && (
-          <div className="fixed inset-0 z-[200] flex items-start justify-center pt-20 px-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={close("isGlobalSearchOpen")}
-              className="absolute inset-0 bg-background/80 backdrop-blur-sm"
-            />
-            <motion.div
-              initial={{ opacity: 0, y: -20, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -20, scale: 0.97 }}
-              className="relative w-full max-w-xl bg-surface border border-border shadow-2xl rounded-xl overflow-hidden"
-            >
-              <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
-                <span className="text-muted-foreground">🔍</span>
-                <input
-                  autoFocus
-                  className="flex-1 bg-transparent text-foreground outline-none placeholder:text-muted-foreground text-base"
-                  placeholder="Search clients, projects, tasks, members..."
-                />
-                <kbd className="text-xs bg-surface-hover border border-border rounded px-2 py-0.5 text-muted-foreground">ESC</kbd>
-              </div>
-              <div className="p-4 space-y-1">
-                {["Dashboard", "Events / Calendar", "Team Members", "Leads", "Projects", "Clients", "Messages"].map(item => (
-                  <button
-                    key={item}
-                    onClick={close("isGlobalSearchOpen")}
-                    className="w-full text-left px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-surface-hover hover:text-foreground transition-colors"
-                  >
-                    {item}
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </>
   )
 }

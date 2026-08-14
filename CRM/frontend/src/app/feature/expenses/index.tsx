@@ -21,11 +21,11 @@ type Expense = {
 }
 
 const MOCK_EXPENSES: Expense[] = [
-  { id: "EXP-001", title: "Adobe Creative Suite", amount: "$54.99/mo", category: "Software", date: "2026-07-01", member: "John Doe", status: "Approved" },
-  { id: "EXP-002", title: "AWS Server Costs", amount: "$312.00", category: "Hardware", date: "2026-07-15", member: "Mark Thomas", status: "Approved" },
-  { id: "EXP-003", title: "Google Ads Campaign", amount: "$1,200.00", category: "Marketing", date: "2026-07-20", member: "Sara Ann", status: "Pending" },
-  { id: "EXP-004", title: "Conference Travel", amount: "$890.00", category: "Travel", date: "2026-07-22", member: "Richard Gray", status: "Pending" },
-  { id: "EXP-005", title: "Office Supplies", amount: "$45.00", category: "Other", date: "2026-07-28", member: "Michael Wood", status: "Rejected" },
+  { id: "EXP-001", title: "Adobe Creative Suite", amount: "₹4,500/mo", category: "Software", date: "2026-07-01", member: "John Doe", status: "Approved" },
+  { id: "EXP-002", title: "AWS Server Costs", amount: "₹25,000", category: "Hardware", date: "2026-07-15", member: "Mark Thomas", status: "Approved" },
+  { id: "EXP-003", title: "Google Ads Campaign", amount: "₹95,000", category: "Marketing", date: "2026-07-20", member: "Sara Ann", status: "Pending" },
+  { id: "EXP-004", title: "Conference Travel", amount: "₹65,000", category: "Travel", date: "2026-07-22", member: "Richard Gray", status: "Pending" },
+  { id: "EXP-005", title: "Office Supplies", amount: "₹3,500", category: "Other", date: "2026-07-28", member: "Michael Wood", status: "Rejected" },
 ]
 
 const statusColors: Record<string, string> = {
@@ -64,7 +64,7 @@ export default function ExpensesMain() {
   const [activeTab, setActiveTab] = React.useState("all")
   const { openModal } = useUIStore()
 
-  const total = "$2,501.99"
+  const total = "₹1,88,500"
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
@@ -83,8 +83,8 @@ export default function ExpensesMain() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
           { label: "Total Expenses", value: total, color: "text-foreground" },
-          { label: "Pending Approval", value: "$2,090.00", color: "text-warning" },
-          { label: "Approved This Month", value: "$366.99", color: "text-success" },
+          { label: "Pending Approval", value: "₹1,60,000", color: "text-warning" },
+          { label: "Approved This Month", value: "₹29,500", color: "text-success" },
         ].map((card) => (
           <div key={card.label} className="bg-surface border border-border rounded-xl p-5 shadow-soft">
             <p className="text-sm text-muted-foreground">{card.label}</p>

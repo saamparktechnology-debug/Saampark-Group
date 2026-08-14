@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/Button"
 import { Tabs } from "@/components/ui/Tabs"
 import { RowActions } from "@/components/ui/RowActions"
 import { useUIStore } from "@/store/useUIStore"
+import { TaskService } from "@/services/apiServices"
 
 type Task = {
   id: string
@@ -20,15 +21,6 @@ type Task = {
   status: "To do" | "In Progress" | "Review" | "Done"
   dueDate: string
 }
-
-const MOCK_TASKS: Task[] = [
-  { id: "#1243", title: "Optimize app navigation and flow", project: "Mobile App V2", assignee: "John Doe", priority: "High", status: "To do", dueDate: "20-07-2026" },
-  { id: "#1244", title: "Conduct SEO audit and analysis", project: "Marketing Campaign", assignee: "Sara Ann", priority: "Normal", status: "Review", dueDate: "20-07-2026" },
-  { id: "#1245", title: "Implement product zoom and gallery", project: "Website Redesign", assignee: "Mark Thomas", priority: "Urgent", status: "In Progress", dueDate: "25-07-2026" },
-  { id: "#1246", title: "Write API documentation", project: "Website Redesign", assignee: "Richard Gray", priority: "Low", status: "Done", dueDate: "18-07-2026" },
-  { id: "#1247", title: "Design checkout flow wireframes", project: "Mobile App V2", assignee: "Sara Ann", priority: "High", status: "To do", dueDate: "30-07-2026" },
-  { id: "#1248", title: "Setup CI/CD pipeline", project: "CRM Integration", assignee: "Mark Thomas", priority: "Urgent", status: "In Progress", dueDate: "05-08-2026" },
-]
 
 const statusColors: Record<string, string> = {
   "To do": "bg-amber-500/10 text-amber-600 border-amber-500/20",
@@ -61,16 +53,16 @@ export const columns: ColumnDef<Task>[] = [
     accessorKey: "priority",
     header: "Priority",
     cell: ({ row }) => {
-      const p = row.getValue("priority") as string
-      return <span className={`px-2 py-0.5 rounded text-xs font-medium border ${priorityColors[p]}`}>{p}</span>
+      const p = (row.getValue("priority") || "Normal") as string
+      return <span className={`px-2 py-0.5 rounded text-xs font-medium border ${priorityColors[p] || priorityColors.Normal}`}>{p}</span>
     },
   },
   {
     accessorKey: "status",
     header: "Status",
     cell: ({ row }) => {
-      const s = row.getValue("status") as string
-      return <span className={`px-2 py-0.5 rounded text-xs font-medium border ${statusColors[s]}`}>{s}</span>
+      const s = (row.getValue("status") || "To do") as string
+      return <span className={`px-2 py-0.5 rounded text-xs font-medium border ${statusColors[s] || statusColors["To do"]}`}>{s}</span>
     },
   },
   { accessorKey: "dueDate", header: "Due Date", cell: ({ row }) => <span className="text-muted-foreground text-sm">{row.getValue("dueDate")}</span> },
@@ -82,28 +74,70 @@ export const columns: ColumnDef<Task>[] = [
 ]
 
 export default function TasksMain() {
-  const [activeTab, setActiveTab] = React.useState("my")
+  const [activeTab, setActiveTab] = React.useState("all")
   const { openModal } = useUIStore()
+  const [tasks, setTasks] = React.useState<Task[]>([])
+  const [isLoading, setIsLoading] = React.useState(true)
 
-  const filtered = activeTab === "my"
-    ? MOCK_TASKS.filter(t => t.assignee === "John Doe")
-    : activeTab === "done"
-    ? MOCK_TASKS.filter(t => t.status === "Done")
-    : MOCK_TASKS
+  const loadTasks = React.useCallback(() => {
+    setIsLoading(true)
+    TaskService.getTasks()
+      .then((res) => {
+        if (Array.isArray(res)) {
+          const live: Task[] = res.map((t: any) => ({
+            id: `#${t.id || t._id}`,
+            title: t.title || 'Task',
+            project: t.customer_id ? `Customer #${t.customer_id}` : 'General',
+            assignee: t.assigned_to ? `User #${t.assigned_to}` : 'Assignee',
+            priority: t.priority ? (t.priority.charAt(0).toUpperCase() + t.priority.slice(1)) as any : 'Normal',
+            status: t.status === 'completed' ? 'Done' : 'To do',
+            dueDate: t.due_date ? new Date(t.due_date).toLocaleDateString('en-GB') : '-',
+          }))
+          setTasks(live)
+        }
+      })
+      .catch((err) => console.error("Error loading tasks API:", err))
+      .finally(() => setIsLoading(false))
+  }, [])
+
+  React.useEffect(() => {
+    loadTasks()
+    const handleCreated = (e: any) => {
+      if (e.detail) {
+        const item = e.detail
+        const newTaskItem: Task = {
+          id: `#${Date.now().toString().slice(-4)}`,
+          title: item.title || 'New Task',
+          project: 'General',
+          assignee: 'John Doe',
+          priority: item.priority ? (item.priority.charAt(0).toUpperCase() + item.priority.slice(1)) as any : 'High',
+          status: 'To do',
+          dueDate: new Date().toLocaleDateString('en-GB'),
+        }
+        setTasks((prev) => [newTaskItem, ...prev])
+      }
+    }
+    window.addEventListener("task_created", handleCreated)
+    return () => window.removeEventListener("task_created", handleCreated)
+  }, [loadTasks])
+
+  const filtered = activeTab === "done"
+    ? tasks.filter(t => t.status === "Done")
+    : tasks
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Tasks</h1>
-          <p className="text-muted-foreground mt-1">Track, assign, and manage all tasks across projects.</p>
+          <p className="text-muted-foreground mt-1">Live API tasks loaded directly from server backend.</p>
         </div>
         <Button variant="primary" leftIcon={<Plus size={16} />} onClick={() => openModal("isAddTaskModalOpen")}>Add Task</Button>
       </div>
       <div className="bg-surface border border-border shadow-soft rounded-xl p-6">
         <div className="flex items-center justify-between mb-4">
           <Tabs
-            tabs={[{ id: "my", label: "My Tasks" }, { id: "all", label: "All Tasks" }, { id: "done", label: "Done" }]}
+            tabs={[{ id: "all", label: "All Tasks" }, { id: "done", label: "Done" }]}
             activeTab={activeTab}
             onChange={setActiveTab}
           />
@@ -117,5 +151,3 @@ export default function TasksMain() {
     </motion.div>
   )
 }
-
-

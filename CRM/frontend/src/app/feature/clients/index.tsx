@@ -17,9 +17,32 @@ export default function ClientsMain() {
 
   const [clients, setClients] = React.useState<Client[]>([])
 
-  React.useEffect(() => {
-    getClients(activeCompanyId || "tech").then(setClients)
+  const loadClients = React.useCallback(async () => {
+    const live = await getClients(activeCompanyId || "tech")
+    setClients(live)
   }, [activeCompanyId])
+
+  React.useEffect(() => {
+    loadClients()
+
+    const handleCreated = (e: any) => {
+      if (e.detail) {
+        const item = e.detail
+        const newClientItem: Client = {
+          id: String(Date.now()),
+          name: item.company_name || item.primary_contact_name || 'New Client',
+          email: item.email || 'client@example.com',
+          status: 'Active',
+          projects: 0,
+          amount: '₹0',
+        }
+        setClients((prev) => [newClientItem, ...prev])
+      }
+    }
+
+    window.addEventListener("client_created", handleCreated)
+    return () => window.removeEventListener("client_created", handleCreated)
+  }, [loadClients])
 
   const handleDelete = (id: string) => {
     setClients((prev) => prev.filter((c) => c.id !== id))

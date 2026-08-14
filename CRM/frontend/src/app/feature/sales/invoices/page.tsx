@@ -22,13 +22,13 @@ type Invoice = {
 }
 
 const MOCK_INVOICES: Invoice[] = [
-  { id: "INV #28", client: "Demo Client", project: "Product Photography and Cataloging", billDate: "01-08-2026", dueDate: "-", totalInvoiced: "$300.00", paymentReceived: "$0.00", due: "$0.00", status: "Draft" },
-  { id: "INV #27", client: "Fritsch, Okuneva and Armstrong", project: "Social Media Marketing Campaign", billDate: "27-07-2026", dueDate: "10-08-2026", totalInvoiced: "$120.00", paymentReceived: "$0.00", due: "$120.00", status: "Draft" },
-  { id: "INV #24", client: "Edd Leffler", project: "Event Planning and Management", billDate: "01-08-2026", dueDate: "14-08-2026", totalInvoiced: "$135.00", paymentReceived: "$67.50", due: "$67.50", status: "Partially paid" },
-  { id: "INV #23", client: "Adrain Ondricka", project: "Podcast Production and Editing", billDate: "26-07-2026", dueDate: "09-08-2026", totalInvoiced: "$90.00", paymentReceived: "$90.00", due: "$0.00", status: "Fully paid" },
-  { id: "INV #22", client: "Abshire-Swaniawski", project: "SEO Optimization Strategy", billDate: "23-07-2026", dueDate: "06-08-2026", totalInvoiced: "$360.00", paymentReceived: "$360.00", due: "$0.00", status: "Fully paid" },
-  { id: "INV #21", client: "Demo Client", project: "Product Photography and Cataloging", billDate: "25-07-2026", dueDate: "06-08-2026", totalInvoiced: "$500.00", paymentReceived: "$500.00", due: "$0.00", status: "Credited" },
-  { id: "INV #19", client: "Janice Quigley", project: "E-commerce Website Design", billDate: "24-07-2026", dueDate: "05-08-2026", totalInvoiced: "$90.00", paymentReceived: "$0.00", due: "$90.00", status: "Not paid" },
+  { id: "INV #28", client: "Acme Corp", project: "Product Photography and Cataloging", billDate: "01-08-2026", dueDate: "-", totalInvoiced: "₹30,000", paymentReceived: "₹0", due: "₹0", status: "Draft" },
+  { id: "INV #27", client: "Stark Enterprises", project: "Social Media Marketing Campaign", billDate: "27-07-2026", dueDate: "10-08-2026", totalInvoiced: "₹12,000", paymentReceived: "₹0", due: "₹12,000", status: "Draft" },
+  { id: "INV #24", client: "Wayne Tech", project: "Event Planning and Management", billDate: "01-08-2026", dueDate: "14-08-2026", totalInvoiced: "₹13,500", paymentReceived: "₹6,750", due: "₹6,750", status: "Partially paid" },
+  { id: "INV #23", client: "TechNova Solutions", project: "Podcast Production and Editing", billDate: "26-07-2026", dueDate: "09-08-2026", totalInvoiced: "₹9,000", paymentReceived: "₹9,000", due: "₹0", status: "Fully paid" },
+  { id: "INV #22", client: "Global Industries", project: "SEO Optimization Strategy", billDate: "23-07-2026", dueDate: "06-08-2026", totalInvoiced: "₹36,000", paymentReceived: "₹36,000", due: "₹0", status: "Fully paid" },
+  { id: "INV #21", client: "Acme Corp", project: "Product Photography and Cataloging", billDate: "25-07-2026", dueDate: "06-08-2026", totalInvoiced: "₹50,000", paymentReceived: "₹50,000", due: "₹0", status: "Credited" },
+  { id: "INV #19", client: "Patel & Associates", project: "E-commerce Website Design", billDate: "24-07-2026", dueDate: "05-08-2026", totalInvoiced: "₹9,000", paymentReceived: "₹0", due: "₹9,000", status: "Not paid" },
 ]
 
 export const columns: ColumnDef<Invoice>[] = [
@@ -147,16 +147,16 @@ export default function InvoicesPage() {
             <p className="font-semibold text-muted-foreground">Total of all pages</p>
           </div>
           <div className="text-right">
-            <p className="font-semibold mb-2">$2,885.00</p>
-            <p className="font-semibold text-muted-foreground">$12,282.00</p>
+            <p className="font-semibold mb-2">₹2,88,500</p>
+            <p className="font-semibold text-muted-foreground">₹12,28,200</p>
           </div>
           <div className="text-right">
-            <p className="font-semibold mb-2">$707.50</p>
-            <p className="font-semibold text-muted-foreground">$5,394.50</p>
+            <p className="font-semibold mb-2">₹70,750</p>
+            <p className="font-semibold text-muted-foreground">₹5,39,450</p>
           </div>
           <div className="text-right">
-            <p className="font-semibold mb-2">$1,377.50</p>
-            <p className="font-semibold text-muted-foreground">$6,087.50</p>
+            <p className="font-semibold mb-2">₹1,37,750</p>
+            <p className="font-semibold text-muted-foreground">₹6,08,750</p>
           </div>
         </div>
       </div>

@@ -7,9 +7,25 @@ import { TechStackShowcase }  from '@/components/sections/TechStackShowcase/Tech
 import { CTASection }         from '@/components/sections/CTASection/CTASection';
 
 export const metadata: Metadata = {
-  title: 'About Us | Technology & Consultancy Group',
+  title: 'About Saampark Group — ISO 9001:2015 Technology & Consultancy Group',
   description:
-    'ISO 9001:2015 certified Saampark Group is an enterprise collective empowering businesses through STR (Technology & Research) and SCS (Consultancy Services).',
+    'Learn about ISO 9001:2015 certified Saampark Group. Operating through STR (Saampark Technology & Research) and SCS (Saampark Consultancy Service) in West Bengal, India.',
+  keywords: [
+    'About Saampark Group',
+    'Saampark Technology & Research',
+    'Saampark Consultancy Service',
+    'STR',
+    'SCS',
+    'ISO 9001:2015 certified tech company',
+    'web development West Bengal',
+  ],
+  alternates: { canonical: 'https://www.saampark.com/about' },
+  openGraph: {
+    title: 'About Saampark Group | Technology & Consultancy Collective',
+    description: 'ISO 9001:2015 certified technology & consultancy group powering businesses across India.',
+    url: 'https://www.saampark.com/about',
+    siteName: 'Saampark Group',
+  },
 };
 
 export default function AboutPage() {

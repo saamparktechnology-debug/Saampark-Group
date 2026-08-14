@@ -21,7 +21,7 @@ const MOCK_ITEMS: Item[] = [
   { id: "I-1", title: "Website Design", description: "Custom website templates for your brand.", category: "Design", unitType: "Hour", rate: 20 },
   { id: "I-2", title: "SEO", description: "SEO for your websites", category: "Services", unitType: "Hour", rate: 10 },
   { id: "I-3", title: "Logo Design", description: "Logo design for your brand.", category: "Design", unitType: "PC", rate: 100 },
-  { id: "I-4", title: "Domain .com", description: "Get a dot com domain only @ $11", category: "Services", unitType: "PC", rate: 11 },
+  { id: "I-4", title: "Domain .com", description: "Get a dot com domain", category: "Services", unitType: "PC", rate: 900 },
   { id: "I-5", title: "Custom app development", description: "App for your business", category: "Development", unitType: "PC", rate: 1000 },
   { id: "I-6", title: "Content writing", description: "We write content for different types of websites, apps, etc.", category: "Services", unitType: "Hour", rate: 15 },
   { id: "I-7", title: "bas", description: "zz", category: "Design", unitType: "z", rate: 0 },
@@ -64,7 +64,7 @@ export const columns: ColumnDef<Item>[] = [
   {
     accessorKey: "rate",
     header: "Rate",
-    cell: ({ row }) => <div className="font-medium text-right pr-4">{row.getValue("rate")}</div>,
+    cell: ({ row }) => <div className="font-medium text-right pr-4">₹{row.getValue("rate")}</div>,
   },
   {
     id: "actions",
