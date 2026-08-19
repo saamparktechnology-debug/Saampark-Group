@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { X, Check, Calendar, Clock, Wrench, FileText, User as UserIcon } from "lucide-react"
+import { X, Check, Calendar, Clock, Wrench, FileText, User as UserIcon, Trash2 } from "lucide-react"
 import { Lead, LeadStatus, LeadType } from "../types"
 import { updateLead } from "../services/leadService"
 
@@ -487,26 +487,45 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated }: EditLead
         </div>
 
         {/* Footer Buttons */}
-        <div className="flex items-center justify-end gap-2 px-6 py-4 bg-zinc-50/50 dark:bg-zinc-800/40 border-t border-zinc-100 dark:border-zinc-800">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex items-center gap-1 px-4 py-2 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700/50 transition-colors"
-          >
-            <X size={14} />
-            <span>Close</span>
-          </button>
-          
-          <button
-            type="button"
-            disabled={isSubmitting}
-            onClick={handleSave}
-            className="flex items-center gap-1 px-5 py-2 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-semibold"
-          >
-            <Check size={14} />
-            <span>Save Changes</span>
-          </button>
+        <div className="flex items-center justify-between gap-2 px-6 py-4 bg-zinc-50/50 dark:bg-zinc-800/40 border-t border-zinc-100 dark:border-zinc-800">
+          {onDeleteLead && lead && (
+            <button
+              type="button"
+              onClick={() => {
+                if (confirm(`Are you sure you want to delete lead "${lead.name}"?`)) {
+                  onDeleteLead(lead.id)
+                  onClose()
+                }
+              }}
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-900/50 transition-colors shadow-2xs"
+            >
+              <Trash2 size={14} />
+              <span>Delete Lead</span>
+            </button>
+          )}
+
+          <div className="flex items-center gap-2 ml-auto">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex items-center gap-1 px-4 py-2 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700/50 transition-colors"
+            >
+              <X size={14} />
+              <span>Close</span>
+            </button>
+            
+            <button
+              type="button"
+              disabled={isSubmitting}
+              onClick={handleSave}
+              className="flex items-center gap-1 px-5 py-2 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-semibold"
+            >
+              <Check size={14} />
+              <span>Save Changes</span>
+            </button>
+          </div>
         </div>
+
 
       </div>
     </div>

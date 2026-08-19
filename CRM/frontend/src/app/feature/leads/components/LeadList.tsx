@@ -11,6 +11,7 @@ import {
   ArrowDown,
   Layout,
   Pencil,
+  Trash2,
   X,
   Phone,
   User as UserIcon,
@@ -62,11 +63,11 @@ export function LeadList({
   const { user } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
   
-  const canAddLead = canPerformAction(user, "Leads", "add")
-  const canEditLead = canPerformAction(user, "Leads", "edit")
-  const canDeleteLead = canPerformAction(user, "Leads", "delete")
-
   const isSuperAdminOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
+  const canAddLead = isSuperAdminOrAdmin || canPerformAction(user, "Leads", "add")
+  const canEditLead = isSuperAdminOrAdmin || canPerformAction(user, "Leads", "edit")
+  const canDeleteLead = isSuperAdminOrAdmin || canPerformAction(user, "Leads", "delete")
+
 
   const [activeFilter, setActiveFilter] = React.useState("My leads")
   const [searchQuery, setSearchQuery] = React.useState("")
@@ -571,12 +572,13 @@ export function LeadList({
                                     onDeleteLead(l.id)
                                   }
                                 }}
-                                className="p-1 text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 rounded transition-colors"
+                                className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-md transition-colors"
                                 title="Delete lead"
                               >
-                                <X size={14} />
+                                <Trash2 size={14} />
                               </button>
                             )}
+
                           </>
                         )}
                       </div>

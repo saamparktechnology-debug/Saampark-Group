@@ -17,6 +17,7 @@ import { DonutChart } from "./components/DonutChart"
 import { BarChartMockup } from "./components/BarChartMockup"
 import { DATA } from "./services/dashboardService"
 import { getStoredUserAccounts } from "../users/services/userService"
+import { taskService } from "../tasks/services/taskService"
 
 import { normalizeRole } from "@/store/usePermissionStore"
 
@@ -32,6 +33,7 @@ export default function DashboardMain() {
   const [todos, setTodos] = React.useState<{ id: number; text: string; done: boolean }[]>([])
   const [newTodo, setNewTodo] = React.useState("")
   const [noteText, setNoteText] = React.useState("")
+  const [activeTasksCount, setActiveTasksCount] = React.useState<number>(0)
 
   React.useEffect(() => {
     if (typeof window !== "undefined") {
@@ -41,8 +43,20 @@ export default function DashboardMain() {
         setSelectedUserEmail(accounts[0].email)
       }
 
+      // Load active tasks count dynamically
+      const loadTaskCount = async () => {
+        const tasks = await taskService.getTasks()
+        const active = tasks.filter((t) => t.status !== "Done")
+        setActiveTasksCount(active.length)
+      }
+      loadTaskCount()
+
+      const handleTaskStorage = () => loadTaskCount()
+      window.addEventListener("storage", handleTaskStorage)
+
       // Load saved todos and sticky note from localStorage
       const userKey = user?.email ? user.email.toLowerCase().trim() : "default"
+
       const savedTodos = localStorage.getItem(`saampark_todos_${userKey}`)
       if (savedTodos) {
         try { setTodos(JSON.parse(savedTodos)) } catch {}
@@ -389,7 +403,7 @@ export default function DashboardMain() {
             </div>
           }
         />
-        <KPICard icon={Grid} colorClass="bg-blue-400" value="64 Active" label="My open tasks" />
+        <KPICard icon={Grid} colorClass="bg-blue-400" value={`${activeTasksCount} Active`} label="My open tasks" />
         <KPICard icon={Calendar} colorClass="bg-indigo-500" value={d.kpi.events} label="Events today" />
         <KPICard icon={PieChart} colorClass="bg-pink-500" value={d.kpi.due} label="Due" />
       </div>

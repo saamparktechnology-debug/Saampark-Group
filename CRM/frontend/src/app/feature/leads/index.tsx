@@ -50,7 +50,9 @@ export default function LeadsMain() {
   const handleDeleteLead = async (id: string) => {
     const { user } = useAuthStore.getState()
     const { canPerformAction } = usePermissionStore.getState()
-    if (!canPerformAction(user, "Leads", "delete")) {
+    const isSuperAdminOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
+    
+    if (!isSuperAdminOrAdmin && !canPerformAction(user, "Leads", "delete")) {
       alert("Action forbidden: You do not have permission to delete leads.")
       return
     }
@@ -143,7 +145,9 @@ export default function LeadsMain() {
           setEditingLead(null)
         }}
         onLeadUpdated={handleLeadUpdated}
+        onDeleteLead={handleDeleteLead}
       />
+
 
       <ManageLabelsModal
         isOpen={isManageLabelsModalOpen}

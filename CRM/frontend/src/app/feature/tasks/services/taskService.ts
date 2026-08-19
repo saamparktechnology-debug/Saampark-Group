@@ -425,31 +425,57 @@ export const initialTasks: Task[] = [
   },
 ]
 
-let taskStore: Task[] = [...initialTasks]
+const TASKS_STORAGE_KEY = "saampark_tasks_store"
+
+function getPersistedTasks(): Task[] {
+  if (typeof window === "undefined") return [...initialTasks]
+  try {
+    const raw = localStorage.getItem(TASKS_STORAGE_KEY)
+    if (!raw) return [...initialTasks]
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : [...initialTasks]
+  } catch {
+    return [...initialTasks]
+  }
+}
+
+function savePersistedTasks(tasks: Task[]): void {
+  if (typeof window === "undefined") return
+  try {
+    localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks))
+  } catch {}
+}
 
 export const taskService = {
   getTasks: async (): Promise<Task[]> => {
-    return [...taskStore]
+    return getPersistedTasks()
   },
 
   addTask: async (taskData: Omit<Task, "id">): Promise<Task> => {
-    const nextId = (3650 + taskStore.length).toString()
+    const currentTasks = getPersistedTasks()
+    const nextId = (3650 + currentTasks.length + Math.floor(Math.random() * 100)).toString()
     const newTask: Task = {
       ...taskData,
       id: nextId,
     }
-    taskStore.unshift(newTask)
+    const updated = [newTask, ...currentTasks]
+    savePersistedTasks(updated)
     return newTask
   },
 
   updateTask: async (id: string, updates: Partial<Task>): Promise<Task> => {
-    const idx = taskStore.findIndex((t) => t.id === id)
+    const currentTasks = getPersistedTasks()
+    const idx = currentTasks.findIndex((t) => t.id === id)
     if (idx === -1) throw new Error("Task not found")
-    taskStore[idx] = { ...taskStore[idx], ...updates }
-    return { ...taskStore[idx] }
+    currentTasks[idx] = { ...currentTasks[idx], ...updates }
+    savePersistedTasks(currentTasks)
+    return { ...currentTasks[idx] }
   },
 
   deleteTask: async (id: string): Promise<void> => {
-    taskStore = taskStore.filter((t) => t.id !== id)
+    const currentTasks = getPersistedTasks()
+    const filtered = currentTasks.filter((t) => t.id !== id)
+    savePersistedTasks(filtered)
   },
 }
+
