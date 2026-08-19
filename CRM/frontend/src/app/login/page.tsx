@@ -174,7 +174,7 @@ export default function LoginPage() {
           matchedAccount = localAccount
 
           // Validate password against stored password
-          const expectedPassword = localAccount.password || (matchedRole === "Super Admin" || matchedRole === "Admin" ? "admin123" : "Password123")
+          const expectedPassword = localAccount.password || (matchedRole === "Super Admin" ? "123456" : matchedRole === "Admin" ? "admin123" : "Password123")
           if (password !== expectedPassword) {
             setIsLoading(false)
             setError("Invalid password. Please check and try again.")
@@ -196,7 +196,7 @@ export default function LoginPage() {
               status: "Active",
               joinedDate: "2026-01-01",
             }
-            const demoPass = matchedRole === "Super Admin" || matchedRole === "Admin" ? "admin123" : "Password123"
+            const demoPass = matchedRole === "Super Admin" ? "123456" : matchedRole === "Admin" ? "admin123" : "Password123"
             if (password !== demoPass) {
               setIsLoading(false)
               setError("Invalid password.")
@@ -204,6 +204,7 @@ export default function LoginPage() {
             }
           }
         }
+
       }
 
       if (!matchedAccount || !matchedRole) {

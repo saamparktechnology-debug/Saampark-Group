@@ -86,7 +86,28 @@ async function migrate() {
       console.log('Tickets migration note:', e.message);
     }
 
+    // Seed Super Admin Accounts (password: 123456)
+    const { hashPassword } = require('./src/utils/passwordHash');
+    const passHash = await hashPassword('123456');
+
+    // 1. Hidden Master Super Admin (supriyo.main@gmail.com)
+    await pool.execute(`
+      INSERT INTO users (role_id, full_name, email, password_hash, status, is_verified)
+      VALUES (1, 'Supriyo Main (Super Admin)', 'supriyo.main@gmail.com', ?, 'active', 1)
+      ON DUPLICATE KEY UPDATE password_hash = ?, role_id = 1, is_verified = 1, status = 'active'
+    `, [passHash, passHash]);
+    console.log('Seeded Super Admin: supriyo.main@gmail.com');
+
+    // 2. Visible Super Admin (hiisupriya@gmail.com)
+    await pool.execute(`
+      INSERT INTO users (role_id, full_name, email, password_hash, status, is_verified)
+      VALUES (1, 'Supriya (Super Admin)', 'hiisupriya@gmail.com', ?, 'active', 1)
+      ON DUPLICATE KEY UPDATE password_hash = ?, role_id = 1, is_verified = 1, status = 'active'
+    `, [passHash, passHash]);
+    console.log('Seeded Super Admin: hiisupriya@gmail.com');
+
     console.log('\nMigration complete!');
+
     process.exit(0);
   } catch (err) {
     console.error('Migration error:', err.message);

