@@ -21,6 +21,7 @@ import { LeadFiltersDropdown } from "./LeadFiltersDropdown"
 import { LabelItem } from "./ManageLabelsModal"
 import { LabelSelectorPopover } from "./LabelSelectorPopover"
 import { useAuthStore } from "@/store/useAuthStore"
+import { usePermissionStore } from "@/store/usePermissionStore"
 
 interface LeadListProps {
   leads: Lead[]
@@ -59,6 +60,12 @@ export function LeadList({
   onLeadUpdated,
 }: LeadListProps) {
   const { user } = useAuthStore()
+  const { canPerformAction } = usePermissionStore()
+  
+  const canAddLead = canPerformAction(user, "Leads", "add")
+  const canEditLead = canPerformAction(user, "Leads", "edit")
+  const canDeleteLead = canPerformAction(user, "Leads", "delete")
+
   const isSuperAdminOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
 
   const [activeFilter, setActiveFilter] = React.useState("My leads")
@@ -179,14 +186,16 @@ export function LeadList({
             <span>Import leads</span>
           </button>
 
-          <button
-            type="button"
-            onClick={onOpenAddModal}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700/50 transition-colors shadow-2xs"
-          >
-            <Plus size={14} className="text-zinc-500" />
-            <span>Add lead</span>
-          </button>
+          {canAddLead && (
+            <button
+              type="button"
+              onClick={onOpenAddModal}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700/50 transition-colors shadow-2xs"
+            >
+              <Plus size={14} className="text-zinc-500" />
+              <span>Add lead</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -543,27 +552,31 @@ export function LeadList({
                               <Layout size={14} />
                             </button>
 
-                            <button
-                              type="button"
-                              onClick={() => onOpenEditModal(l)}
-                              className="p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded transition-colors"
-                              title="Edit lead"
-                            >
-                              <Pencil size={14} />
-                            </button>
+                            {canEditLead && (
+                              <button
+                                type="button"
+                                onClick={() => onOpenEditModal(l)}
+                                className="p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded transition-colors"
+                                title="Edit lead"
+                              >
+                                <Pencil size={14} />
+                              </button>
+                            )}
 
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (confirm(`Are you sure you want to delete lead "${l.name}"?`)) {
-                                  onDeleteLead(l.id)
-                                }
-                              }}
-                              className="p-1 text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 rounded transition-colors"
-                              title="Delete lead"
-                            >
-                              <X size={14} />
-                            </button>
+                            {canDeleteLead && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (confirm(`Are you sure you want to delete lead "${l.name}"?`)) {
+                                    onDeleteLead(l.id)
+                                  }
+                                }}
+                                className="p-1 text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 rounded transition-colors"
+                                title="Delete lead"
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
                           </>
                         )}
                       </div>

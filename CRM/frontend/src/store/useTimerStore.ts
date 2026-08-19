@@ -18,9 +18,10 @@ export const useTimerStore = create<TimerState>()(
       secondsElapsed: 0,
       
       clockIn: () => {
+        const now = Date.now()
         set({
           isClockedIn: true,
-          clockInTime: Date.now(),
+          clockInTime: now,
           secondsElapsed: 0
         })
       },
@@ -33,13 +34,15 @@ export const useTimerStore = create<TimerState>()(
       },
       
       tick: () => {
-        if (get().isClockedIn) {
-          set((state) => ({ secondsElapsed: state.secondsElapsed + 1 }))
+        const { isClockedIn, clockInTime } = get()
+        if (isClockedIn && clockInTime) {
+          const elapsed = Math.floor((Date.now() - clockInTime) / 1000)
+          set({ secondsElapsed: Math.max(0, elapsed) })
         }
       }
     }),
     {
-      name: "timer-store",
+      name: "saampark-timer-store",
     }
   )
 )

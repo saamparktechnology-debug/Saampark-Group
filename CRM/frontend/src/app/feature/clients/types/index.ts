@@ -21,7 +21,11 @@ export interface ClientItem {
   type?: "Organization" | "Person";
   email?: string;
   website?: string;
+  status?: string;
 }
+
+export type Client = ClientItem;
+
 
 export interface ContactItem {
   id: string;

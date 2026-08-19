@@ -9,6 +9,8 @@ import { LeadKanban } from "./components/LeadKanban"
 import { AddLeadModal } from "./components/AddLeadModal"
 import { EditLeadModal } from "./components/EditLeadModal"
 import { ManageLabelsModal, LabelItem } from "./components/ManageLabelsModal"
+import { useAuthStore } from "@/store/useAuthStore"
+import { usePermissionStore } from "@/store/usePermissionStore"
 
 export const INITIAL_LABELS: LabelItem[] = [
   { id: "lbl_1", name: "50% Probability", color: "#eab308" },
@@ -46,6 +48,13 @@ export default function LeadsMain() {
   }
 
   const handleDeleteLead = async (id: string) => {
+    const { user } = useAuthStore.getState()
+    const { canPerformAction } = usePermissionStore.getState()
+    if (!canPerformAction(user, "Leads", "delete")) {
+      alert("Action forbidden: You do not have permission to delete leads.")
+      return
+    }
+
     await deleteLead(id)
     setLeads((prev) => prev.filter((l) => l.id !== id))
   }

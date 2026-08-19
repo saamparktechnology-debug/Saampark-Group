@@ -1,4 +1,4 @@
-export type UserRole = "Super Admin" | "Admin" | "Clients" | "Teams" | "User";
+export type UserRole = "Super Admin" | "Admin" | "Clients" | "Teams";
 
 export type UserStatus = "Active" | "Inactive" | "Pending";
 
@@ -13,7 +13,11 @@ export interface UserItem {
   avatarUrl?: string;
   department?: string;
   phone?: string;
+  password?: string;
   lastLogin?: string;
   joinedDate: string;
   allowedModules?: string[];
 }
+
+export type User = UserItem;
+

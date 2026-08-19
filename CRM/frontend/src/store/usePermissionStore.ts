@@ -50,13 +50,13 @@ export const DEFAULT_VIEW_ONLY_ACTIONS: ModuleActionFlags = {
 
 // Role normalization helper to prevent singular/plural or API mismatch
 export function normalizeRole(role: string): Role {
-  if (!role) return 'User'
+  if (!role) return 'Teams'
   const lower = role.toLowerCase().trim()
   if (lower.includes('super')) return 'Super Admin'
   if (lower.includes('admin')) return 'Admin'
   if (lower.includes('client')) return 'Clients'
-  if (lower.includes('team')) return 'Teams'
-  return 'User'
+  if (lower.includes('team') || lower.includes('user') || lower.includes('employee') || lower.includes('manager')) return 'Teams'
+  return 'Teams'
 }
 
 export const DEFAULT_ROLE_PERMISSIONS: Record<Role, ModuleName[]> = {
@@ -66,11 +66,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, ModuleName[]> = {
     'Dashboard', 'Events', 'Clients', 'Projects', 'Tasks',
     'Leads', 'Subscriptions', 'Sales', 'Estimates', 'Notes',
     'Messages', 'Team', 'Tickets', 'Knowledge base', 'Files',
-    'Expenses', 'Reports'
-  ],
-  'User': [
-    'Dashboard', 'Events', 'Projects', 'Tasks', 'Notes',
-    'Messages', 'Tickets', 'Knowledge base', 'Files'
+    'Expenses', 'Reports', 'Settings'
   ],
   'Clients': [
     'Dashboard', 'Knowledge base', 'Files', 'Tickets', 'Projects', 'Sales'
@@ -145,7 +141,10 @@ export const usePermissionStore = create<PermissionState>()(
         set((state) => ({
           userActionPermissions: {
             ...state.userActionPermissions,
-            [userId]: matrix,
+            [userId]: {
+              ...(state.userActionPermissions[userId] || {}),
+              ...matrix,
+            },
           },
         }))
       },
@@ -169,15 +168,20 @@ export const usePermissionStore = create<PermissionState>()(
 
         const state = get()
         const userIdStr = String(user.id)
-        const userMatrix = state.userActionPermissions[userIdStr]
+        const emailStr = (user.email || '').toLowerCase().trim()
 
-        if (userMatrix && userMatrix[moduleName]) {
+        const userMatrix =
+          state.userActionPermissions[userIdStr] ||
+          (emailStr ? state.userActionPermissions[emailStr] : undefined)
+
+        if (userMatrix && userMatrix[moduleName] !== undefined) {
           const flags = userMatrix[moduleName]
-          return flags.view || flags.add || flags.edit || flags.delete
+          return !!(flags.view || flags.add || flags.edit || flags.delete)
         }
 
-        if (state.userPermissions[userIdStr]) {
-          return state.userPermissions[userIdStr].includes(moduleName as ModuleName)
+        const userMods = state.userPermissions[userIdStr] || (emailStr ? state.userPermissions[emailStr] : undefined)
+        if (userMods && userMods.length > 0) {
+          return userMods.includes(moduleName as ModuleName)
         }
 
         const roleMods = state.rolePermissions[normRole] || DEFAULT_ROLE_PERMISSIONS[normRole] || []
@@ -192,12 +196,28 @@ export const usePermissionStore = create<PermissionState>()(
 
         const state = get()
         const userIdStr = String(user.id)
-        if (state.userPermissions[userIdStr]) {
-          return state.userPermissions[userIdStr]
+        const emailStr = (user.email || '').toLowerCase().trim()
+
+        const userMatrix =
+          state.userActionPermissions[userIdStr] ||
+          (emailStr ? state.userActionPermissions[emailStr] : undefined)
+
+        const userMods = state.userPermissions[userIdStr] || (emailStr ? state.userPermissions[emailStr] : undefined)
+        if (userMods && userMods.length > 0) {
+          return userMods
         }
 
-        const allowed = state.rolePermissions[normRole] || DEFAULT_ROLE_PERMISSIONS[normRole] || ['Dashboard']
-        return allowed.includes('Dashboard') ? allowed : ['Dashboard', ...allowed]
+        const roleMods = state.rolePermissions[normRole] || DEFAULT_ROLE_PERMISSIONS[normRole] || ['Dashboard']
+
+        const activeMods = ALL_MODULE_NAMES.filter((m) => {
+          if (userMatrix && userMatrix[m] !== undefined) {
+            const flags = userMatrix[m]
+            return flags ? (flags.view || flags.add || flags.edit || flags.delete) : false
+          }
+          return roleMods.includes(m as ModuleName)
+        })
+
+        return activeMods.includes('Dashboard') ? activeMods : ['Dashboard', ...activeMods]
       },
 
       getUserModuleActions: (user: User | null, moduleName: string): ModuleActionFlags => {
@@ -208,7 +228,11 @@ export const usePermissionStore = create<PermissionState>()(
 
         const state = get()
         const userIdStr = String(user.id)
-        const userMatrix = state.userActionPermissions[userIdStr]
+        const emailStr = (user.email || '').toLowerCase().trim()
+
+        const userMatrix =
+          state.userActionPermissions[userIdStr] ||
+          (emailStr ? state.userActionPermissions[emailStr] : undefined)
 
         if (userMatrix && userMatrix[moduleName]) {
           return userMatrix[moduleName]

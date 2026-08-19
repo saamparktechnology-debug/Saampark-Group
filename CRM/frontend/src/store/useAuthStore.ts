@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware'
 import { AuthService } from '@/services/apiServices'
 import { setAuthToken } from '@/lib/api'
 
-export type Role = 'Super Admin' | 'Admin' | 'Clients' | 'Teams' | 'User'
+export type Role = 'Super Admin' | 'Admin' | 'Clients' | 'Teams'
 export type CompanyId = 'tech' | 'digital' | 'all'
 
 export interface User {
@@ -35,27 +35,19 @@ export const DEMO_USERS: Record<Role, User> = {
   },
   'Teams': {
     id: 'u3',
-    name: 'Sneha Gupta (Team Lead)',
+    name: 'Sneha Gupta (Team Member)',
     email: 'team@saampark.in',
     role: 'Teams',
     companyId: 'tech',
     avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=Teams',
   },
-  'User': {
-    id: 'u4',
-    name: 'John Doe (User)',
-    email: 'john@example.com',
-    role: 'User',
-    companyId: 'tech',
-    avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=User',
-  },
   'Clients': {
     id: 'u5',
-    name: 'Acme Corp (Client Portal)',
-    email: 'client@acmecorp.com',
+    name: 'Acme Corp (Client)',
+    email: 'client@acme.com',
     role: 'Clients',
     companyId: 'tech',
-    avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=Clients',
+    avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=Client',
   },
 }
 
@@ -92,7 +84,7 @@ export const useAuthStore = create<AuthState>()(
           ? {
               id: customUser.id || `u_${Date.now()}`,
               name: customUser.name || 'User Account',
-              email: customUser.email || 'user@saampark.in',
+              email: (customUser.email || 'user@saampark.in').toLowerCase().trim(),
               role: (customUser.role as Role) || (role as Role) || 'User',
               companyId: (customUser.companyId as CompanyId) || 'tech',
               avatar: customUser.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${customUser.email || role}`,
@@ -106,6 +98,15 @@ export const useAuthStore = create<AuthState>()(
               companyId: 'tech',
               avatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${role}`,
             }
+
+        // Block login if user email was deleted
+        if (typeof window !== 'undefined') {
+          const rawDeleted = localStorage.getItem("saampark_deleted_user_emails")
+          const deletedEmails: string[] = rawDeleted ? JSON.parse(rawDeleted) : []
+          if (deletedEmails.includes(user.email.toLowerCase().trim())) {
+            throw new Error("Account does not exist. Please create one.")
+          }
+        }
 
         const activeCompanyId = user.role === 'Super Admin' ? 'tech' : (user.companyId || 'tech')
         
@@ -132,8 +133,17 @@ export const useAuthStore = create<AuthState>()(
       },
 
       loginWithCredentials: async (email: string, password: string) => {
+        const normEmail = email.toLowerCase().trim()
+        if (typeof window !== 'undefined') {
+          const rawDeleted = localStorage.getItem("saampark_deleted_user_emails")
+          const deletedEmails: string[] = rawDeleted ? JSON.parse(rawDeleted) : []
+          if (deletedEmails.includes(normEmail)) {
+            throw new Error("Account does not exist. Please create one.")
+          }
+        }
+
         try {
-          const res = await AuthService.login({ email, password })
+          const res = await AuthService.login({ email: normEmail, password })
           if (res && res.token) {
             const role = (res.user?.role as Role) || 'Employee'
             const userObj: User = {
@@ -169,6 +179,11 @@ export const useAuthStore = create<AuthState>()(
             })
             return true
           }
+          
+          if (res && (res.status === 'error' || res.message)) {
+            throw new Error(res.message || "Account does not exist. Please create one.")
+          }
+
           return false
         } catch (err) {
           console.error('Login error:', err)

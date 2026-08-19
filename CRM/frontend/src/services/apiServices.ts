@@ -75,6 +75,10 @@ export interface TicketPayload {
 export const AuthService = {
   login: async (payload: LoginPayload) => api.post('/auth/login', payload),
   register: async (payload: RegisterPayload) => api.post('/auth/register', payload),
+  verifyEmail: async (payload: { email: string; otp: string }) => api.post('/auth/verify-email', payload),
+  sendForgotPasswordOTP: async (payload: { email: string }) => api.post('/auth/forgot-password', payload),
+  verifyResetOTP: async (payload: { email: string; otp: string }) => api.post('/auth/verify-reset-otp', payload),
+  resetPassword: async (payload: { email: string; newPassword: string; resetToken: string }) => api.post('/auth/reset-password', payload),
   getMe: async () => api.get('/auth/me'),
   logout: () => {
     if (typeof window !== 'undefined') {
@@ -90,7 +94,25 @@ export const UserService = {
   },
   getUserById: async (id: string | number) => api.get(`/users/${id}`),
   updateUser: async (id: string | number, data: any) => api.put(`/users/${id}`, data),
+  toggleStatus: async (id: string | number) => api.patch(`/users/${id}/status`),
+  deleteUser: async (id: string | number) => api.delete(`/users/${id}`),
 }
+
+export const CompanyService = {
+  getAll: async () => {
+    const res = await api.get('/companies')
+    return unpackArray(res, 'companies')
+  },
+  getById: async (id: string) => api.get(`/companies/${id}`),
+  getMembers: async (id: string) => {
+    const res = await api.get(`/companies/${id}/members`)
+    return unpackArray(res, 'members')
+  },
+  create: async (payload: { name: string; currency?: string; industry?: string; address?: string }) => api.post('/companies', payload),
+  update: async (id: string, data: any) => api.put(`/companies/${id}`, data),
+  delete: async (id: string) => api.delete(`/companies/${id}`),
+}
+
 
 export const LeadService = {
   getLeads: async () => {

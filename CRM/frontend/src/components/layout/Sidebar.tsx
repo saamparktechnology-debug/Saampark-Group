@@ -59,13 +59,13 @@ export function Sidebar() {
   const pathname = usePathname()
   const { isSidebarCollapsed } = useUIStore()
   const { user } = useAuthStore()
-  const { isModuleAllowed } = usePermissionStore()
+  const { isModuleAllowed, userActionPermissions, userPermissions } = usePermissionStore()
 
   // Dynamically filter navigation items based on user role & permissions configured by Super Admin / Admin
   const allowedNavItems = React.useMemo(() => {
     if (!user) return []
     return ALL_NAV_ITEMS.filter((item) => isModuleAllowed(user, item.name))
-  }, [user, isModuleAllowed])
+  }, [user, isModuleAllowed, userActionPermissions, userPermissions])
 
   return (
     <motion.aside 

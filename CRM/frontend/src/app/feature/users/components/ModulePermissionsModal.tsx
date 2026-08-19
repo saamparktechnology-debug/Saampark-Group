@@ -21,10 +21,10 @@ export function ModulePermissionsModal({ isOpen, onClose }: ModulePermissionsMod
   // Admin can manage Teams, User, Clients
   const manageableRoles: Role[] = React.useMemo(() => {
     if (user?.role === "Super Admin") {
-      return ["Admin", "Teams", "User", "Clients"]
+      return ["Admin", "Teams", "Clients"]
     }
     if (user?.role === "Admin") {
-      return ["Teams", "User", "Clients"]
+      return ["Teams", "Clients"]
     }
     return []
   }, [user])

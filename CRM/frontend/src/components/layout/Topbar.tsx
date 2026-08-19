@@ -73,7 +73,7 @@ export function Topbar() {
           <Menu size={20} />
         </Button>
 
-        {user.role !== 'Client' && (
+        {user.role !== 'Clients' && (
           <Button
             variant="ghost" size="icon"
             onClick={(e) => { stop(e); openModal("isTodoModalOpen") }}
@@ -85,7 +85,7 @@ export function Topbar() {
         )}
 
         {/* These are NAVIGATION shortcuts — each linked to correct route */}
-        {user.role !== 'Client' && (
+        {user.role !== 'Clients' && (
           <>
             <Link href="/feature/dashboard" onClick={stop}>
               <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary" title="Dashboard">
@@ -118,7 +118,7 @@ export function Topbar() {
       <div className="flex items-center gap-1" onClick={stop}>
 
         {/* Search */}
-        {user.role !== 'Client' && (
+        {user.role !== 'Clients' && (
           <Button
             variant="ghost" size="icon"
             onClick={() => openModal("isGlobalSearchOpen")}
@@ -130,7 +130,7 @@ export function Topbar() {
         )}
 
         {/* Quick Add dropdown */}
-        {['Super Admin', 'Admin', 'Manager'].includes(user.role) && (
+        {['Super Admin', 'Admin', 'Teams'].includes(user.role) && (
           <div className="relative">
             <Button
               variant="ghost" size="icon"
@@ -166,7 +166,7 @@ export function Topbar() {
         )}
 
         {/* Clock-In Timer */}
-        {user.role !== 'Client' && (
+        {user.role !== 'Clients' && (
           <Button
             variant="ghost" size="icon"
             onClick={() => openModal("isTimerModalOpen")}
@@ -260,7 +260,7 @@ export function Topbar() {
                 </div>
 
                 <div className="py-1 shrink-0">
-                  <Link href="/settings">
+                  <Link href="/feature/settings">
                     <button onClick={() => setShowProfileMenu(false)} className="w-full text-left px-4 py-2 text-sm text-muted-foreground hover:bg-surface-hover hover:text-foreground flex items-center gap-2.5 transition-colors">
                       <User size={14} /> My Profile
                     </button>
@@ -273,7 +273,7 @@ export function Topbar() {
                     {theme === "dark" ? "Light Mode" : "Dark Mode"}
                   </button>
                   {['Super Admin', 'Admin'].includes(user.role) && (
-                    <Link href="/settings">
+                    <Link href="/feature/settings">
                       <button onClick={() => setShowProfileMenu(false)} className="w-full text-left px-4 py-2 text-sm text-muted-foreground hover:bg-surface-hover hover:text-foreground flex items-center gap-2.5 transition-colors">
                         <Settings size={14} /> Settings
                       </button>

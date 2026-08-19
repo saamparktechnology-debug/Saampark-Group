@@ -4,6 +4,9 @@ import * as React from "react"
 import { Search, ChevronDown, FileSpreadsheet, Printer, LayoutGrid, SlidersHorizontal, Edit3, X, Eye, ChevronLeft, ChevronRight, User } from "lucide-react"
 import { ClientItem } from "../types"
 
+import { useAuthStore } from "@/store/useAuthStore"
+import { usePermissionStore } from "@/store/usePermissionStore"
+
 interface ClientsTableViewProps {
   clients: ClientItem[]
   onDeleteClient: (id: string) => void
@@ -15,6 +18,12 @@ export function ClientsTableView({
   onDeleteClient,
   onEditClient,
 }: ClientsTableViewProps) {
+  const { user } = useAuthStore()
+  const { canPerformAction } = usePermissionStore()
+
+  const canEditClient = canPerformAction(user, "Clients", "edit")
+  const canDeleteClient = canPerformAction(user, "Clients", "delete")
+
   const [searchText, setSearchText] = React.useState("")
   const [activeFilter, setActiveFilter] = React.useState("All clients")
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = React.useState(false)
@@ -238,22 +247,26 @@ export function ClientsTableView({
                       >
                         <Eye size={14} />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => onEditClient(client)}
-                        className="p-1 rounded text-slate-400 hover:text-blue-600 transition-colors"
-                        title="Edit"
-                      >
-                        <Edit3 size={14} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(client.id)}
-                        className="p-1 rounded text-slate-400 hover:text-rose-500 transition-colors"
-                        title="Delete"
-                      >
-                        <X size={14} />
-                      </button>
+                      {canEditClient && (
+                        <button
+                          type="button"
+                          onClick={() => onEditClient(client)}
+                          className="p-1 rounded text-slate-400 hover:text-blue-600 transition-colors"
+                          title="Edit"
+                        >
+                          <Edit3 size={14} />
+                        </button>
+                      )}
+                      {canDeleteClient && (
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(client.id)}
+                          className="p-1 rounded text-slate-400 hover:text-rose-500 transition-colors"
+                          title="Delete"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

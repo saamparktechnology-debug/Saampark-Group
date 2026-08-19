@@ -21,6 +21,7 @@ import { LeadFiltersDropdown } from "./LeadFiltersDropdown"
 import { updateLead } from "../services/leadService"
 import { LabelItem } from "./ManageLabelsModal"
 import { useAuthStore } from "@/store/useAuthStore"
+import { usePermissionStore } from "@/store/usePermissionStore"
 
 interface LeadKanbanProps {
   leads: Lead[]
@@ -57,6 +58,8 @@ export function LeadKanban({
   onToggleLeadLabel,
 }: LeadKanbanProps) {
   const { user } = useAuthStore()
+  const { canPerformAction } = usePermissionStore()
+  const canAddLead = canPerformAction(user, "Leads", "add")
   const isSuperAdminOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
 
   const [activeFilter, setActiveFilter] = React.useState("All Leads")
@@ -184,14 +187,16 @@ export function LeadKanban({
             <span>Import leads</span>
           </button>
 
-          <button
-            type="button"
-            onClick={onOpenAddModal}
-            className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm"
-          >
-            <Plus size={14} />
-            <span>Add lead</span>
-          </button>
+          {canAddLead && (
+            <button
+              type="button"
+              onClick={onOpenAddModal}
+              className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm"
+            >
+              <Plus size={14} />
+              <span>Add lead</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -233,13 +238,15 @@ export function LeadKanban({
           </div>
 
           {/* Plus Add Filter */}
-          <button
-            type="button"
-            onClick={onOpenAddModal}
-            className="p-1.5 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 border border-zinc-200 dark:border-zinc-700 rounded-lg bg-zinc-50/50 dark:bg-zinc-800/50"
-          >
-            <Plus size={14} />
-          </button>
+          {canAddLead && (
+            <button
+              type="button"
+              onClick={onOpenAddModal}
+              className="p-1.5 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 border border-zinc-200 dark:border-zinc-700 rounded-lg bg-zinc-50/50 dark:bg-zinc-800/50"
+            >
+              <Plus size={14} />
+            </button>
+          )}
 
           {/* Filter Quick Pills */}
           <div className="flex items-center gap-2 text-xs ml-1">

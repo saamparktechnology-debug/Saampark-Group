@@ -18,7 +18,6 @@ const ROLE_COLORS: Record<UserRole, string> = {
   "Super Admin": "bg-purple-500/10 text-purple-400 border-purple-500/20",
   "Admin": "bg-indigo-500/10 text-indigo-400 border-indigo-500/20",
   "Teams": "bg-blue-500/10 text-blue-400 border-blue-500/20",
-  "User": "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
   "Clients": "bg-amber-500/10 text-amber-400 border-amber-500/20",
 }
 
@@ -196,7 +195,11 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
                             <Edit2 size={16} />
                           </button>
                           <button
-                            onClick={() => onDelete(u.id)}
+                            onClick={() => {
+                              if (confirm(`Are you sure you want to delete user "${u.name}" (${u.email})?\n\nThis account will be permanently deleted and will no longer be able to log in.`)) {
+                                onDelete(u.id)
+                              }
+                            }}
                             title="Delete User"
                             className="p-1.5 rounded-lg text-muted-foreground hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
                           >

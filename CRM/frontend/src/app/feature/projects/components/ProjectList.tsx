@@ -16,6 +16,8 @@ import {
 } from "lucide-react"
 import { Project } from "../types"
 import { ProjectFiltersDropdown } from "./ProjectFiltersDropdown"
+import { useAuthStore } from "@/store/useAuthStore"
+import { usePermissionStore } from "@/store/usePermissionStore"
 
 interface ProjectListProps {
   projects: Project[]
@@ -32,6 +34,13 @@ export function ProjectList({
   onDeleteProject,
   onSelectProjectDetail,
 }: ProjectListProps) {
+  const { user } = useAuthStore()
+  const { canPerformAction } = usePermissionStore()
+
+  const canAddProject = canPerformAction(user, "Projects", "add")
+  const canEditProject = canPerformAction(user, "Projects", "edit")
+  const canDeleteProject = canPerformAction(user, "Projects", "delete")
+
   const [activeFilter, setActiveFilter] = React.useState("All projects")
   const [searchQuery, setSearchQuery] = React.useState("")
   const [isFiltersDropdownOpen, setIsFiltersDropdownOpen] = React.useState(false)
@@ -97,14 +106,16 @@ export function ProjectList({
             <span>Import projects</span>
           </button>
 
-          <button
-            type="button"
-            onClick={onOpenAddModal}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700/50 transition-colors shadow-2xs"
-          >
-            <Plus size={14} className="text-zinc-500" />
-            <span>Add project</span>
-          </button>
+          {canAddProject && (
+            <button
+              type="button"
+              onClick={onOpenAddModal}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700/50 transition-colors shadow-2xs"
+            >
+              <Plus size={14} className="text-zinc-500" />
+              <span>Add project</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -142,13 +153,15 @@ export function ProjectList({
           </div>
 
           {/* Plus Quick Button */}
-          <button
-            type="button"
-            onClick={onOpenAddModal}
-            className="p-1.5 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 border border-zinc-200 dark:border-zinc-700 rounded-md bg-zinc-50/50 dark:bg-zinc-800/50"
-          >
-            <Plus size={14} />
-          </button>
+          {canAddProject && (
+            <button
+              type="button"
+              onClick={onOpenAddModal}
+              className="p-1.5 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 border border-zinc-200 dark:border-zinc-700 rounded-md bg-zinc-50/50 dark:bg-zinc-800/50"
+            >
+              <Plus size={14} />
+            </button>
+          )}
 
           {/* Filter Pills matching Image 1 */}
           <div className="flex items-center gap-1.5 overflow-x-auto text-xs ml-1">
@@ -322,29 +335,31 @@ export function ProjectList({
                           <Layout size={14} />
                         </button>
 
-                        {/* Edit button */}
-                        <button
-                          type="button"
-                          onClick={() => onOpenEditModal(p)}
-                          className="p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded transition-colors"
-                          title="Edit project"
-                        >
-                          <Pencil size={14} />
-                        </button>
+                        {canEditProject && (
+                          <button
+                            type="button"
+                            onClick={() => onOpenEditModal(p)}
+                            className="p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded transition-colors"
+                            title="Edit project"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                        )}
 
-                        {/* Delete button */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (confirm(`Are you sure you want to delete project "${p.title}"?`)) {
-                              onDeleteProject(p.id)
-                            }
-                          }}
-                          className="p-1 text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 rounded transition-colors"
-                          title="Delete project"
-                        >
-                          <X size={14} />
-                        </button>
+                        {canDeleteProject && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (confirm(`Are you sure you want to delete project "${p.title}"?`)) {
+                                onDeleteProject(p.id)
+                              }
+                            }}
+                            className="p-1 text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 rounded transition-colors"
+                            title="Delete project"
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

@@ -18,6 +18,8 @@ import {
   Columns,
 } from "lucide-react"
 import { Task, TaskStatus } from "../types"
+import { useAuthStore } from "@/store/useAuthStore"
+import { usePermissionStore } from "@/store/usePermissionStore"
 
 interface TaskListProps {
   tasks: Task[]
@@ -52,6 +54,13 @@ export function TaskList({
   onDeleteTask,
   onOpenManageLabels,
 }: TaskListProps) {
+  const { user } = useAuthStore()
+  const { canPerformAction } = usePermissionStore()
+
+  const canAddTask = canPerformAction(user, "Tasks", "add")
+  const canEditTask = canPerformAction(user, "Tasks", "edit")
+  const canDeleteTask = canPerformAction(user, "Tasks", "delete")
+
   const [searchQuery, setSearchQuery] = React.useState("")
   const [activeFilterPill, setActiveFilterPill] = React.useState("All tasks")
   const [selectedTaskIds, setSelectedTaskIds] = React.useState<string[]>([])
@@ -167,23 +176,27 @@ export function TaskList({
             <span>Import tasks</span>
           </button>
 
-          <button
-            type="button"
-            onClick={onOpenAddModal}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700/50 transition-colors shadow-2xs"
-          >
-            <Plus size={13} className="text-zinc-500" />
-            <span>Add multiple tasks</span>
-          </button>
+          {canAddTask && (
+            <button
+              type="button"
+              onClick={onOpenAddModal}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700/50 transition-colors shadow-2xs"
+            >
+              <Plus size={13} className="text-zinc-500" />
+              <span>Add multiple tasks</span>
+            </button>
+          )}
 
-          <button
-            type="button"
-            onClick={onOpenAddModal}
-            className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm"
-          >
-            <Plus size={14} />
-            <span>Add task</span>
-          </button>
+          {canAddTask && (
+            <button
+              type="button"
+              onClick={onOpenAddModal}
+              className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm"
+            >
+              <Plus size={14} />
+              <span>Add task</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -494,22 +507,26 @@ export function TaskList({
                     {/* Actions */}
                     <td className="py-3 px-3 text-center">
                       <div className="flex items-center justify-center gap-2 text-zinc-400">
-                        <button
-                          type="button"
-                          onClick={() => onSelectTask(t)}
-                          className="hover:text-blue-600 dark:hover:text-blue-400 p-1 rounded transition-colors"
-                          title="Edit Task"
-                        >
-                          <Edit2 size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDeleteTask(t.id)}
-                          className="hover:text-rose-600 dark:hover:text-rose-400 p-1 rounded transition-colors"
-                          title="Delete Task"
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                        {canEditTask && (
+                          <button
+                            type="button"
+                            onClick={() => onSelectTask(t)}
+                            className="hover:text-blue-600 dark:hover:text-blue-400 p-1 rounded transition-colors"
+                            title="Edit Task"
+                          >
+                            <Edit2 size={13} />
+                          </button>
+                        )}
+                        {canDeleteTask && (
+                          <button
+                            type="button"
+                            onClick={() => onDeleteTask(t.id)}
+                            className="hover:text-rose-600 dark:hover:text-rose-400 p-1 rounded transition-colors"
+                            title="Delete Task"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

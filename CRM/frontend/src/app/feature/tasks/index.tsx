@@ -9,6 +9,8 @@ import { TasksGantt } from "./components/TasksGantt"
 import { AddTaskModal } from "./components/AddTaskModal"
 import { EditTaskModal } from "./components/EditTaskModal"
 import { ManageTaskLabelsModal } from "./components/ManageTaskLabelsModal"
+import { useAuthStore } from "@/store/useAuthStore"
+import { usePermissionStore } from "@/store/usePermissionStore"
 
 export default function TasksMain() {
   const [tasks, setTasks] = React.useState<Task[]>([])
@@ -46,6 +48,13 @@ export default function TasksMain() {
   }
 
   const handleDeleteTask = async (id: string) => {
+    const { user } = useAuthStore.getState()
+    const { canPerformAction } = usePermissionStore.getState()
+    if (!canPerformAction(user, "Tasks", "delete")) {
+      alert("Action forbidden: You do not have permission to delete tasks.")
+      return
+    }
+
     if (confirm("Are you sure you want to delete this task?")) {
       await taskService.deleteTask(id)
       setTasks((prev) => prev.filter((t) => t.id !== id))

@@ -5,12 +5,15 @@ import { motion, AnimatePresence } from "framer-motion"
 import { X, User, Mail, Shield, Building, Phone, UserCheck, Lock, ShieldCheck, CheckSquare, Square } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { User as UserType, UserRole, UserStatus } from "../types"
+import { api } from "@/lib/api"
 import { 
   ALL_MODULE_NAMES, 
   ModuleName, 
   ModuleActionFlags, 
   DEFAULT_FULL_ACTIONS, 
   DEFAULT_VIEW_ONLY_ACTIONS, 
+  normalizeRole,
+  DEFAULT_ROLE_PERMISSIONS,
   usePermissionStore 
 } from "@/store/usePermissionStore"
 
@@ -30,6 +33,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
   const [companyId, setCompanyId] = React.useState("tech")
   const [department, setDepartment] = React.useState("Project Management")
   const [phone, setPhone] = React.useState("+91 96543 21098")
+  const [password, setPassword] = React.useState("Password123")
   const [status, setStatus] = React.useState<UserStatus>("Active")
   const [allowedModules, setAllowedModules] = React.useState<ModuleName[]>([...ALL_MODULE_NAMES])
   
@@ -50,21 +54,35 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
       setCompanyId(editingUser.companyId || "tech")
       setDepartment(editingUser.department || "Project Management")
       setPhone(editingUser.phone || "+91 96543 21098")
+      setPassword(editingUser.password || "Password123")
       setStatus(editingUser.status || "Active")
 
       const userIdStr = String(editingUser.id)
-      if (userPermissions[userIdStr]) {
-        setAllowedModules(userPermissions[userIdStr])
-      } else {
-        setAllowedModules([...ALL_MODULE_NAMES])
-      }
+      const emailStr = (editingUser.email || "").toLowerCase().trim()
+      const normRole = normalizeRole(editingUser.role)
+      const roleMods = DEFAULT_ROLE_PERMISSIONS[normRole] || [...ALL_MODULE_NAMES]
 
-      if (userActionPermissions[userIdStr]) {
-        setActionMatrix({
-          ...actionMatrix,
-          ...userActionPermissions[userIdStr],
-        })
-      }
+      const storedUserMatrix = userActionPermissions[userIdStr] || userActionPermissions[emailStr]
+
+      const fullMatrix: Record<string, ModuleActionFlags> = {}
+      ALL_MODULE_NAMES.forEach((m) => {
+        if (storedUserMatrix && storedUserMatrix[m] !== undefined) {
+          fullMatrix[m] = { ...storedUserMatrix[m] }
+        } else {
+          const isAllowedByRole = normRole === "Super Admin" || normRole === "Admin" || roleMods.includes(m as ModuleName)
+          fullMatrix[m] = isAllowedByRole
+            ? { ...DEFAULT_FULL_ACTIONS }
+            : { view: false, add: false, edit: false, delete: false }
+        }
+      })
+
+      setActionMatrix(fullMatrix)
+
+      const activeMods = ALL_MODULE_NAMES.filter((m) => {
+        const flags = fullMatrix[m]
+        return flags ? (flags.view || flags.add || flags.edit || flags.delete) : false
+      })
+      setAllowedModules(activeMods.includes("Dashboard") ? activeMods : ["Dashboard", ...activeMods])
     } else {
       setName("")
       setEmail("")
@@ -81,16 +99,24 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
       })
       setActionMatrix(init)
     }
-  }, [editingUser, isOpen, userPermissions, userActionPermissions])
+  }, [editingUser?.id, isOpen])
 
   if (!isOpen) return null
 
   const handleRoleChange = (newRole: UserRole) => {
     setRole(newRole)
-    if (newRole === "Super Admin") {
-      setCompanyId("all")
-      setAllowedModules([...ALL_MODULE_NAMES])
-    }
+    const norm = normalizeRole(newRole)
+    const roleMods = DEFAULT_ROLE_PERMISSIONS[norm] || [...ALL_MODULE_NAMES]
+    setAllowedModules(roleMods)
+
+    const init: Record<string, ModuleActionFlags> = {}
+    ALL_MODULE_NAMES.forEach((m) => {
+      const isAllowed = roleMods.includes(m as ModuleName)
+      init[m] = isAllowed
+        ? { ...DEFAULT_FULL_ACTIONS }
+        : { view: false, add: false, edit: false, delete: false }
+    })
+    setActionMatrix(init)
   }
 
   const handleCheckboxChange = (mod: ModuleName, actionKey: keyof ModuleActionFlags, checked: boolean) => {
@@ -151,14 +177,26 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
       companyName: companyId === "all" ? "SAAMPARK Group (All)" : companyId === "tech" ? "SAAMPARK Technology" : "SAAMPARK Digital Marketing",
       department,
       phone,
+      password: password || "Password123",
       status,
     }
 
-    if (editingUser) {
-      const userIdStr = String(editingUser.id)
-      setUserPermissions(userIdStr, allowedModules)
-      setUserAllModuleActions(userIdStr, actionMatrix)
-    }
+    const targetId = editingUser ? editingUser.id : email.toLowerCase().trim()
+    const userIdStr = String(targetId)
+    const emailNorm = email.toLowerCase().trim()
+
+    setUserPermissions(userIdStr, allowedModules)
+    setUserAllModuleActions(userIdStr, actionMatrix)
+
+    // Sync to email key as well
+    setUserPermissions(emailNorm, allowedModules)
+    setUserAllModuleActions(emailNorm, actionMatrix)
+
+    // Persist permissions to backend database
+    api.put(`/users/${targetId}`, {
+      ...payload,
+      permissions: { actionMatrix, allowedModules }
+    }).catch((err) => console.warn("Backend permissions save warning:", err))
 
     onSave(payload)
     onClose()
@@ -234,7 +272,6 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
                   <option value="Super Admin">Super Admin</option>
                   <option value="Admin">Admin</option>
                   <option value="Teams">Teams</option>
-                  <option value="User">User</option>
                   <option value="Clients">Clients</option>
                 </select>
               </div>
@@ -282,6 +319,22 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
                 />
               </div>
             </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-foreground/80 mb-1.5 flex items-center gap-1.5">
+                <Lock size={14} /> Initial / Account Password *
+              </label>
+              <input
+                type="text"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter password (e.g. Password123)"
+                className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50"
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">Set the password for this account. User will use this to sign in.</p>
+            </div>
+
 
             <div>
               <label className="block text-xs font-semibold text-foreground/80 mb-1.5 flex items-center gap-1.5">

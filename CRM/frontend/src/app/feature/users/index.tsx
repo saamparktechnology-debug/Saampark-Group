@@ -7,7 +7,7 @@ import { Users as UsersIcon, UserPlus, ShieldCheck, UserCheck, Briefcase, Downlo
 import { Button } from "@/components/ui/Button"
 import { useAuthStore } from "@/store/useAuthStore"
 import { UserItem } from "./types"
-import { getUsers, recordUserAccount } from "./services/userService"
+import { getUsers, recordUserAccount, deleteUser } from "./services/userService"
 import { UserList } from "./components/UserList"
 import { UserModal } from "./components/UserModal"
 import { ModulePermissionsModal } from "./components/ModulePermissionsModal"
@@ -26,12 +26,24 @@ export default function UsersMain() {
 
   React.useEffect(() => {
     loadUsers()
+
+    const handleStorageChange = () => {
+      loadUsers()
+    }
+
+    window.addEventListener("storage", handleStorageChange)
+    const interval = setInterval(loadUsers, 2500)
+
+    return () => {
+      window.removeEventListener("storage", handleStorageChange)
+      clearInterval(interval)
+    }
   }, [loadUsers])
 
   // Metric counts
   const totalUsers = users.length
   const totalAdmins = users.filter((u) => u.role === "Super Admin" || u.role === "Admin").length
-  const totalTeams = users.filter((u) => u.role === "Teams" || u.role === "User").length
+  const totalTeams = users.filter((u) => u.role === "Teams").length
   const totalClients = users.filter((u) => u.role === "Clients").length
 
   const canConfigureModulePermissions = user?.role === "Super Admin" || user?.role === "Admin"
@@ -49,20 +61,39 @@ export default function UsersMain() {
   const handleSaveUser = async (userData: Partial<UserItem>) => {
     const saved = recordUserAccount(userData)
     
-    // Background sync attempt
+    // Background sync attempt with real backend API
     try {
+      const { AuthService, UserService } = await import("@/services/apiServices")
       if (!editingUser && userData.email) {
-        const { AuthService } = await import("@/services/apiServices")
         await AuthService.register({
           email: userData.email,
-          password: "Password123!",
+          password: userData.password || "Password123",
           full_name: userData.name || "User",
           role: userData.role,
         }).catch((err) => console.warn("Backend register call attempt:", err))
+      } else if (editingUser) {
+        // Map role name to role_id (1: Super Admin, 2: Admin, 3: Teams, 4: Clients)
+        const roleIdMap: Record<string, number> = {
+          "Super Admin": 1,
+          "Admin": 2,
+          "Teams": 3,
+          "User": 3,
+          "Clients": 4,
+        }
+        const role_id = roleIdMap[userData.role || ""] || 3
+        await UserService.updateUser(editingUser.id, {
+          full_name: userData.name,
+          phone: userData.phone,
+          status: userData.status?.toLowerCase(),
+          role_id,
+          department: userData.department,
+        }).catch((err) => console.warn("Backend user update warning:", err))
       }
     } catch (e) {
       console.warn("API sync silent fail:", e)
     }
+
+    if (!saved) return
 
     if (editingUser) {
       setUsers((prev) =>
@@ -73,7 +104,12 @@ export default function UsersMain() {
     }
   }
 
-  const handleToggleStatus = (id: string) => {
+  const handleToggleStatus = async (id: string) => {
+    try {
+      const { UserService } = await import("@/services/apiServices")
+      await UserService.toggleStatus(id).catch((err) => console.warn("Status toggle warning:", err))
+    } catch {}
+
     setUsers((prev) =>
       prev.map((u) => {
         if (u.id === id) {
@@ -85,7 +121,14 @@ export default function UsersMain() {
     )
   }
 
-  const handleDeleteUser = (id: string) => {
+
+  const handleDeleteUser = async (id: string) => {
+    const targetUser = users.find((u) => u.id === id)
+    if (targetUser) {
+      await deleteUser(id, targetUser.email)
+    } else {
+      await deleteUser(id)
+    }
     setUsers((prev) => prev.filter((u) => u.id !== id))
   }
 

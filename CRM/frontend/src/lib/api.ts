@@ -1,9 +1,6 @@
 const getBaseUrl = () => {
-  if (typeof window !== 'undefined') {
-    // In browser, route through local Next.js proxy to prevent CORS errors
-    return '/api/v1'
-  }
-  return process.env.NEXT_PUBLIC_API_BASE_URL || 'https://saampark-srm.onrender.com/api/v1'
+  // Always route through the local Next.js proxy → http://127.0.0.1:5000
+  return '/api/v1'
 }
 
 export interface ApiResponse<T = any> {
@@ -43,7 +40,7 @@ async function request<T = any>(endpoint: string, options: RequestInit = {}): Pr
   const url = `${baseUrl}${cleanEndpoint}`
 
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 800) // Fast 800ms timeout for snappy page loading
+  const timeoutId = setTimeout(() => controller.abort(), 5000)
 
   try {
     const response = await fetch(url, {

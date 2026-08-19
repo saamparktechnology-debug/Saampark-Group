@@ -28,14 +28,10 @@ export default function DashboardMain() {
   const [realUsers, setRealUsers] = React.useState<any[]>([])
   const [selectedUserEmail, setSelectedUserEmail] = React.useState<string>("")
   
-  // Interactive state for To-do and Notes
-  const [todos, setTodos] = React.useState([
-    { id: 1, text: "Set roles and permissions for team members", done: false },
-    { id: 2, text: "Setup notifications for tasks", done: false },
-    { id: 3, text: "Discuss with team members", done: false },
-  ])
+  // Interactive state for To-do and Notes (persisted in localStorage)
+  const [todos, setTodos] = React.useState<{ id: number; text: string; done: boolean }[]>([])
   const [newTodo, setNewTodo] = React.useState("")
-  const [noteText, setNoteText] = React.useState("My quick notes here...")
+  const [noteText, setNoteText] = React.useState("")
 
   React.useEffect(() => {
     if (typeof window !== "undefined") {
@@ -44,8 +40,47 @@ export default function DashboardMain() {
       if (accounts.length > 0 && !selectedUserEmail) {
         setSelectedUserEmail(accounts[0].email)
       }
+
+      // Load saved todos and sticky note from localStorage
+      const userKey = user?.email ? user.email.toLowerCase().trim() : "default"
+      const savedTodos = localStorage.getItem(`saampark_todos_${userKey}`)
+      if (savedTodos) {
+        try { setTodos(JSON.parse(savedTodos)) } catch {}
+      } else {
+        setTodos([
+          { id: 1, text: "Set roles and permissions for team members", done: false },
+          { id: 2, text: "Setup notifications for tasks", done: false },
+          { id: 3, text: "Discuss project deliverables with team", done: false },
+        ])
+      }
+
+      const savedNote = localStorage.getItem(`saampark_sticky_note_${userKey}`)
+      if (savedNote !== null) {
+        setNoteText(savedNote)
+      } else {
+        setNoteText("My quick notes here...")
+      }
     }
   }, [user])
+
+  // Save todos to localStorage when updated
+  const updateTodos = (newTodos: typeof todos) => {
+    setTodos(newTodos)
+    if (typeof window !== "undefined" && user?.email) {
+      const userKey = user.email.toLowerCase().trim()
+      localStorage.setItem(`saampark_todos_${userKey}`, JSON.stringify(newTodos))
+    }
+  }
+
+  // Save note to localStorage when updated
+  const updateNoteText = (text: string) => {
+    setNoteText(text)
+    if (typeof window !== "undefined" && user?.email) {
+      const userKey = user.email.toLowerCase().trim()
+      localStorage.setItem(`saampark_sticky_note_${userKey}`, text)
+    }
+  }
+
 
   // Timer tick interval
   React.useEffect(() => {
@@ -190,7 +225,7 @@ export default function DashboardMain() {
   // =========================================================================
   // 2. STAFF / TEAM MEMBER DASHBOARD VIEW (Rendered for Teams & User)
   // =========================================================================
-  if (normRole === 'Teams' || normRole === 'User') {
+  if (normRole === 'Teams') {
     return (
       <div className="space-y-6 pb-12 bg-background/50 min-h-screen p-4 sm:px-8 sm:py-6">
         {/* Header */}
@@ -760,7 +795,7 @@ export default function DashboardMain() {
               onChange={e => setNewTodo(e.target.value)}
               onKeyDown={e => {
                 if (e.key === 'Enter' && newTodo.trim()) {
-                  setTodos([{ id: Date.now(), text: newTodo, done: false }, ...todos])
+                  updateTodos([{ id: Date.now(), text: newTodo, done: false }, ...todos])
                   setNewTodo("")
                 }
               }}
@@ -768,7 +803,7 @@ export default function DashboardMain() {
             />
             <Button size="sm" variant="primary" className="shrink-0" onClick={() => {
               if (newTodo.trim()) {
-                setTodos([{ id: Date.now(), text: newTodo, done: false }, ...todos])
+                updateTodos([{ id: Date.now(), text: newTodo, done: false }, ...todos])
                 setNewTodo("")
               }
             }}>
@@ -788,7 +823,7 @@ export default function DashboardMain() {
           <div className="flex-1 overflow-y-auto space-y-1 custom-scrollbar">
             {todos.map(todo => (
               <div key={todo.id} className="flex items-center gap-3 p-2 hover:bg-surface-hover rounded group border-b border-border/30 last:border-0">
-                <button onClick={() => setTodos(todos.map(t => t.id === todo.id ? { ...t, done: !t.done } : t))} className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${todo.done ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground hover:border-primary'}`}>
+                <button onClick={() => updateTodos(todos.map(t => t.id === todo.id ? { ...t, done: !t.done } : t))} className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${todo.done ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground hover:border-primary'}`}>
                   {todo.done && <CheckCircle2 size={12} />}
                 </button>
                 <span className={`text-sm flex-1 truncate text-primary cursor-pointer hover:underline ${todo.done ? 'line-through text-muted-foreground' : ''}`}>
@@ -882,7 +917,7 @@ export default function DashboardMain() {
           <Widget title="Sticky Note (Private)" icon={FileText} className="h-full min-h-[400px] !bg-yellow-200/50 dark:!bg-yellow-900/30 border-yellow-300">
             <textarea 
               value={noteText}
-              onChange={e => setNoteText(e.target.value)}
+              onChange={e => updateNoteText(e.target.value)}
               className="w-full h-full bg-transparent text-yellow-900 dark:text-yellow-100 border-none rounded-none p-0 text-sm focus:outline-none focus:ring-0 resize-none"
               placeholder="My quick notes here..."
             />
