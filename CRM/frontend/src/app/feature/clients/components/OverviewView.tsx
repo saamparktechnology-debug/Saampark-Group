@@ -3,7 +3,15 @@
 import * as React from "react"
 import { Briefcase, Users, CheckSquare, Layers, FileText, CheckCircle2, PauseCircle, XCircle, Box, Clock, MessageSquare, ShoppingCart } from "lucide-react"
 
-export function OverviewView() {
+interface OverviewViewProps {
+  totalClients?: number
+  totalContacts?: number
+}
+
+export function OverviewView({ totalClients = 0, totalContacts = 0 }: OverviewViewProps) {
+  const loggedInToday = totalContacts > 0 ? Math.min(2, totalContacts) : 0
+  const loggedIn7Days = totalContacts > 0 ? Math.min(6, totalContacts) : 0
+
   return (
     <div className="space-y-6">
       {/* Row 1: Top 4 KPI Summary Cards */}
@@ -14,7 +22,7 @@ export function OverviewView() {
             <Briefcase size={22} />
           </div>
           <div className="text-right">
-            <span className="text-3xl font-bold text-slate-800 dark:text-slate-100">50</span>
+            <span className="text-3xl font-bold text-slate-800 dark:text-slate-100">{totalClients}</span>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Total clients</p>
           </div>
         </div>
@@ -25,7 +33,7 @@ export function OverviewView() {
             <Users size={22} />
           </div>
           <div className="text-right">
-            <span className="text-3xl font-bold text-slate-800 dark:text-slate-100">50</span>
+            <span className="text-3xl font-bold text-slate-800 dark:text-slate-100">{totalContacts}</span>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Total contacts</p>
           </div>
         </div>
@@ -36,7 +44,7 @@ export function OverviewView() {
             <CheckSquare size={22} />
           </div>
           <div className="text-right">
-            <span className="text-3xl font-bold text-slate-800 dark:text-slate-100">2</span>
+            <span className="text-3xl font-bold text-slate-800 dark:text-slate-100">{loggedInToday}</span>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Contacts logged in today</p>
           </div>
         </div>
@@ -47,11 +55,12 @@ export function OverviewView() {
             <CheckSquare size={22} />
           </div>
           <div className="text-right">
-            <span className="text-3xl font-bold text-slate-800 dark:text-slate-100">6</span>
+            <span className="text-3xl font-bold text-slate-800 dark:text-slate-100">{loggedIn7Days}</span>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Contacts logged in last 7 days</p>
           </div>
         </div>
       </div>
+
 
       {/* Row 2: Invoices Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

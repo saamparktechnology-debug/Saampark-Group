@@ -56,6 +56,7 @@ interface EditLeadModalProps {
   lead: Lead | null
   onClose: () => void
   onLeadUpdated: (updatedLead: Lead) => void
+  onDeleteLead?: (leadId: string) => void
 }
 
 const STANDARD_SERVICES = [
@@ -74,7 +75,8 @@ const STANDARD_SOURCES = [
   "My Leads",
 ]
 
-export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated }: EditLeadModalProps) {
+export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLead }: EditLeadModalProps) {
+
   const [type, setType] = React.useState<LeadType>("Organization")
   const [companyName, setCompanyName] = React.useState("")
   const [primaryContact, setPrimaryContact] = React.useState("")

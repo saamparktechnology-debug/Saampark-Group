@@ -10,6 +10,18 @@ import { ClientsTableView } from "./components/ClientsTableView"
 import { ContactsTableView } from "./components/ContactsTableView"
 import { AddClientModal } from "./components/AddClientModal"
 import { ManageClientLabelsModal } from "./components/ManageClientLabelsModal"
+import {
+  getStoredClients,
+  saveStoredClient,
+  deleteStoredClient,
+  getStoredContacts,
+  saveStoredContact,
+  deleteStoredContact,
+  getStoredClientLabels,
+  saveStoredClientLabel,
+  deleteStoredClientLabel,
+} from "./services/clientService"
+import { getUsers } from "@/app/feature/users/services/userService"
 
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
@@ -31,8 +43,83 @@ export default function ClientsMain() {
   const [isManageLabelsModalOpen, setIsManageLabelsModalOpen] = React.useState(false)
   const [selectedClientForEdit, setSelectedClientForEdit] = React.useState<ClientItem | null>(null)
 
+  // Sync real client users from userService with local client store
+  const loadClientData = React.useCallback(async () => {
+    try {
+      const allUsers = await getUsers()
+      const clientUsers = allUsers.filter((u) => u.role === "Clients")
+      const storedClients = getStoredClients()
+      const storedContacts = getStoredContacts()
+      const storedLabels = getStoredClientLabels()
+
+      // Convert user management client users into ClientItem format
+      const userClientsMap = new Map<string, ClientItem>()
+
+      // 1. Convert registered client users
+      clientUsers.forEach((cu) => {
+        const emailKey = cu.email.toLowerCase().trim()
+        userClientsMap.set(emailKey, {
+          id: cu.id || `cli_${cu.email}`,
+          name: cu.companyName || cu.name || "Client Account",
+          primaryContact: cu.name || "Primary Contact",
+          email: cu.email,
+          phone: cu.phone || "N/A",
+          group: "VIP",
+          label: "Potential",
+          labelColor: "#3b82f6",
+          projectsCount: 1,
+          totalInvoiced: "₹0",
+          paymentReceived: "₹0",
+          due: "₹0",
+        })
+
+      })
+
+      // 2. Add manually stored clients
+      storedClients.forEach((sc) => {
+        userClientsMap.set(sc.id, sc)
+      })
+
+      const mergedClients = Array.from(userClientsMap.values())
+      setClients(mergedClients)
+
+      // Convert registered client users into ContactItem format
+      const userContactsMap = new Map<string, ContactItem>()
+      clientUsers.forEach((cu) => {
+        const emailKey = cu.email.toLowerCase().trim()
+        userContactsMap.set(emailKey, {
+          id: `cnt_${cu.id}`,
+          name: cu.name,
+          clientName: cu.companyName || cu.name,
+          jobTitle: "Primary Contact",
+          email: cu.email,
+          phone: cu.phone || "N/A",
+          avatarSeed: cu.name,
+        })
+      })
+
+      storedContacts.forEach((sc) => {
+        userContactsMap.set(sc.id, sc)
+      })
+
+      setContacts(Array.from(userContactsMap.values()))
+      setLabels(storedLabels)
+    } catch (err) {
+      console.warn("Client sync warning:", err)
+    }
+  }, [])
+
+  React.useEffect(() => {
+    loadClientData()
+    const handleStorage = () => loadClientData()
+    window.addEventListener("storage", handleStorage)
+    return () => window.removeEventListener("storage", handleStorage)
+  }, [loadClientData])
+
   const handleSaveClient = (newClient: ClientItem) => {
-    setClients((prev) => [newClient, ...prev.filter((c) => c.id !== newClient.id)])
+    const updated = saveStoredClient(newClient)
+    setClients(updated)
+    loadClientData()
   }
 
   const handleDeleteClient = (id: string) => {
@@ -40,20 +127,27 @@ export default function ClientsMain() {
       alert("Action forbidden: You do not have permission to delete clients.")
       return
     }
-    setClients((prev) => prev.filter((c) => c.id !== id))
+    const updated = deleteStoredClient(id)
+    setClients(updated)
+    loadClientData()
   }
 
   const handleDeleteContact = (id: string) => {
-    setContacts((prev) => prev.filter((c) => c.id !== id))
+    const updated = deleteStoredContact(id)
+    setContacts(updated)
+    loadClientData()
   }
 
   const handleAddLabel = (label: ClientLabelItem) => {
-    setLabels((prev) => [...prev, label])
+    const updated = saveStoredClientLabel(label)
+    setLabels(updated)
   }
 
   const handleDeleteLabel = (id: string) => {
-    setLabels((prev) => prev.filter((l) => l.id !== id))
+    const updated = deleteStoredClientLabel(id)
+    setLabels(updated)
   }
+
 
   const isClientRole = user?.role === "Clients"
 
@@ -173,7 +267,10 @@ export default function ClientsMain() {
       </div>
 
       {/* Tab Views Content */}
-      {activeTab === "overview" && <OverviewView />}
+      {activeTab === "overview" && (
+        <OverviewView totalClients={clients.length} totalContacts={contacts.length} />
+      )}
+
       {activeTab === "clients" && (
         <ClientsTableView
           clients={clients}
