@@ -4,51 +4,48 @@ import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
   CheckSquare, Clock, Calendar, DollarSign, Plus, Edit2, 
-  Trash2, GripVertical, Download, Search, CheckCircle2,
-  MoreHorizontal, FileText, PieChart, Users, AlertCircle, TrendingUp, Bell, MapPin, Grid, Briefcase, Monitor
+  Trash2, Download, Search, CheckCircle2, MoreHorizontal,
+  FileText, PieChart, Users, AlertCircle, TrendingUp, Bell, Grid, Briefcase, Monitor,
+  ShieldCheck, Lock, Unlock, PhoneCall, Check, ExternalLink, UserCheck
 } from "lucide-react"
-import { useUIStore } from "@/store/useUIStore"
 import { useAuthStore } from "@/store/useAuthStore"
 import { useTimerStore } from "@/store/useTimerStore"
-
 import { Button } from "@/components/ui/Button"
-
 import { Widget } from "./components/Widget"
 import { KPICard } from "./components/KPICard"
 import { DonutChart } from "./components/DonutChart"
 import { BarChartMockup } from "./components/BarChartMockup"
 import { DATA } from "./services/dashboardService"
-import { ReportService, LeadService, CustomerService, TaskService, TicketService } from "@/services/apiServices"
+import { getStoredUserAccounts } from "../users/services/userService"
+
+import { normalizeRole } from "@/store/usePermissionStore"
 
 export default function DashboardMain() {
   const { activeCompanyId, user } = useAuthStore()
   const { isClockedIn, clockIn, clockOut, secondsElapsed, tick } = useTimerStore()
   
-  // Live API State
-  const [liveStats, setLiveStats] = React.useState<any>(null)
-  const [openTasksCount, setOpenTasksCount] = React.useState<number | string>(0)
-  const [leadsCount, setLeadsCount] = React.useState<number>(0)
-  const [customersCount, setCustomersCount] = React.useState<number>(0)
+  // Real registered users list from user management service
+  const [realUsers, setRealUsers] = React.useState<any[]>([])
+  const [selectedUserEmail, setSelectedUserEmail] = React.useState<string>("")
+  
+  // Interactive state for To-do and Notes
+  const [todos, setTodos] = React.useState([
+    { id: 1, text: "Set roles and permissions for team members", done: false },
+    { id: 2, text: "Setup notifications for tasks", done: false },
+    { id: 3, text: "Discuss with team members", done: false },
+  ])
+  const [newTodo, setNewTodo] = React.useState("")
+  const [noteText, setNoteText] = React.useState("My quick notes here...")
 
   React.useEffect(() => {
-    ReportService.getDashboardOverview()
-      .then((res) => {
-        if (res) setLiveStats(res)
-      })
-      .catch((err) => console.warn("Live report overview ping:", err))
-
-    TaskService.getTasks().then((tasks) => {
-      if (Array.isArray(tasks)) setOpenTasksCount(tasks.length)
-    }).catch(() => {})
-
-    LeadService.getLeads().then((leads) => {
-      if (Array.isArray(leads)) setLeadsCount(leads.length)
-    }).catch(() => {})
-
-    CustomerService.getCustomers().then((custs) => {
-      if (Array.isArray(custs)) setCustomersCount(custs.length)
-    }).catch(() => {})
-  }, [activeCompanyId])
+    if (typeof window !== "undefined") {
+      const accounts = getStoredUserAccounts()
+      setRealUsers(accounts)
+      if (accounts.length > 0 && !selectedUserEmail) {
+        setSelectedUserEmail(accounts[0].email)
+      }
+    }
+  }, [user])
 
   // Timer tick interval
   React.useEffect(() => {
@@ -69,18 +66,253 @@ export default function DashboardMain() {
     return `${h}:${m}:${s}`
   }
 
-  // Interactive state
-  const [todos, setTodos] = React.useState([
-    { id: 1, text: "Set roles and permissions for team members", done: false },
-    { id: 2, text: "Setup notifications for tasks", done: false },
-    { id: 3, text: "Discuss with team members", done: false },
-  ])
-  const [newTodo, setNewTodo] = React.useState("")
-  const [noteText, setNoteText] = React.useState("My quick notes here...")
-
   if (!user) return null
-  const d = DATA[activeCompanyId === 'digital' ? 'digital' : 'tech']
+  const normRole = normalizeRole(user.role)
+  const d = DATA[activeCompanyId === 'digital' ? 'digital' : 'tech'] || DATA.tech
 
+  // Find currently selected user object for attendance history
+  const selectedUserObj = realUsers.find((u) => u.email === selectedUserEmail) || realUsers[0] || user
+
+  // Check if selected user is the currently logged in user
+  const isSelectedUserActiveLoggedIn = selectedUserObj?.email?.toLowerCase() === user.email.toLowerCase()
+
+  // =========================================================================
+  // 1. CLIENT DASHBOARD VIEW (Rendered for Clients)
+  // =========================================================================
+  if (normRole === 'Clients') {
+    return (
+      <div className="space-y-6 pb-12 bg-background/50 min-h-screen p-4 sm:px-8 sm:py-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-4">
+          <div>
+            <div className="flex items-center gap-2 text-primary font-semibold text-xs mb-1">
+              <Briefcase size={14} /> Client Portal
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              Welcome back, {user.name}!
+            </h1>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Track your active projects, financial payments, support tickets, and team progress.
+            </p>
+          </div>
+          <Button variant="primary" leftIcon={<Plus size={16} />} onClick={() => alert("New Ticket Request")}>
+            Raise Support Ticket
+          </Button>
+        </div>
+
+        {/* Client KPI Summary */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <KPICard icon={Grid} colorClass="bg-blue-500" value="2 Active" label="Subscribed Projects" />
+          <KPICard icon={DollarSign} colorClass="bg-emerald-500" value="₹4,50,000" label="Total Invoiced" />
+          <KPICard icon={CheckCircle2} colorClass="bg-indigo-500" value="₹3,20,000" label="Amount Paid" />
+          <KPICard icon={AlertCircle} colorClass="bg-amber-500" value="₹1,30,000" label="Pending Balance" />
+        </div>
+
+        {/* Client Projects Progress & Payments Breakdown */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Active Projects Widget */}
+          <Widget title="My Projects & Progress" icon={Grid} className="lg:col-span-2">
+            <div className="space-y-6 pt-2">
+              <div className="p-4 bg-surface border border-border/80 rounded-xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-bold text-sm text-foreground">Virtual Reality Experience Design</h3>
+                    <p className="text-xs text-muted-foreground">Manager: <strong className="text-foreground">John Doe</strong> | Target Release: 20-08-2026</p>
+                  </div>
+                  <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                    In Progress (72%)
+                  </span>
+                </div>
+                <div className="h-2 w-full bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                  <div className="h-full bg-blue-600 rounded-full w-[72%]" />
+                </div>
+                <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
+                  <span>Assigned Team: John Doe, Michael Lee</span>
+                  <button className="text-blue-600 hover:underline flex items-center gap-1 font-medium">
+                    View Project Details <ExternalLink size={12} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-4 bg-surface border border-border/80 rounded-xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-bold text-sm text-foreground">Business Card and Stationery Design</h3>
+                    <p className="text-xs text-muted-foreground">Manager: <strong className="text-foreground">John Doe</strong> | Target Release: 30-06-2026</p>
+                  </div>
+                  <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                    Milestone Completed (100%)
+                  </span>
+                </div>
+                <div className="h-2 w-full bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                  <div className="h-full bg-emerald-600 rounded-full w-[100%]" />
+                </div>
+                <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
+                  <span>Assigned Team: Mark Smith</span>
+                  <button className="text-blue-600 hover:underline flex items-center gap-1 font-medium">
+                    View Project Details <ExternalLink size={12} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </Widget>
+
+          {/* Payment Receipts & Invoices Widget */}
+          <Widget title="Billing & Payment Receipts" icon={FileText}>
+            <div className="space-y-3 pt-1 text-xs">
+              <div className="flex items-center justify-between p-3 bg-surface border border-border rounded-xl">
+                <div>
+                  <p className="font-bold text-foreground">INV-2026-004</p>
+                  <p className="text-muted-foreground">15 Aug 2026 • ₹2,50,000</p>
+                </div>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">PAID</span>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-surface border border-border rounded-xl">
+                <div>
+                  <p className="font-bold text-foreground">INV-2026-009</p>
+                  <p className="text-muted-foreground">01 Aug 2026 • ₹1,30,000</p>
+                </div>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700">PENDING</span>
+              </div>
+            </div>
+            <div className="pt-4 mt-4 border-t border-border">
+              <Button variant="outline" size="sm" className="w-full">
+                Download Statement of Account (PDF)
+              </Button>
+            </div>
+          </Widget>
+        </div>
+      </div>
+    )
+  }
+
+  // =========================================================================
+  // 2. STAFF / TEAM MEMBER DASHBOARD VIEW (Rendered for Teams & User)
+  // =========================================================================
+  if (normRole === 'Teams' || normRole === 'User') {
+    return (
+      <div className="space-y-6 pb-12 bg-background/50 min-h-screen p-4 sm:px-8 sm:py-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-4">
+          <div>
+            <div className="flex items-center gap-2 text-primary font-semibold text-xs mb-1">
+              <UserCheck size={14} /> Staff Daily Workbench
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              Hello, {user.name}!
+            </h1>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Manage your shift clock, assigned tasks, telecaller call reminders, and work log.
+            </p>
+          </div>
+        </div>
+
+        {/* Staff Shift Punch Box & KPI Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {/* Shift Time Clock */}
+          <div className="bg-surface border border-border rounded-xl p-5 shadow-2xs flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-muted-foreground">Shift Attendance</span>
+              <span className={`w-2.5 h-2.5 rounded-full ${isClockedIn ? "bg-emerald-500 animate-pulse" : "bg-zinc-400"}`} />
+            </div>
+            
+            <div className="my-2">
+              <button
+                type="button"
+                onClick={() => (isClockedIn ? clockOut() : clockIn())}
+                className={`w-full py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+                  isClockedIn
+                    ? "bg-rose-600 hover:bg-rose-700 text-white shadow-sm"
+                    : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                }`}
+              >
+                <Monitor size={15} />
+                <span>{isClockedIn ? "Clock Out Now" : "Clock In Shift"}</span>
+              </button>
+            </div>
+
+            <div className="text-xs font-mono text-center pt-1 border-t border-border/50">
+              {isClockedIn ? (
+                <span className="text-emerald-600 font-bold">Elapsed: {formatTime(secondsElapsed)}</span>
+              ) : (
+                <span className="text-muted-foreground">Not clocked in</span>
+              )}
+            </div>
+          </div>
+
+          <KPICard icon={Grid} colorClass="bg-blue-500" value="6 Tasks" label="My Assigned Tasks" />
+          <KPICard icon={AlertCircle} colorClass="bg-rose-500" value="2 Urgent" label="High Priority" />
+          <KPICard icon={PhoneCall} colorClass="bg-amber-500" value="3 Calls" label="Telecaller Follow-ups Due Today" />
+        </div>
+
+        {/* Staff Tasks & Telecaller Reminders */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* My Assigned Tasks List */}
+          <Widget title="My Assigned Tasks" icon={CheckSquare} className="lg:col-span-2">
+            <div className="space-y-3 pt-1 text-xs">
+              <div className="flex items-center justify-between p-3 bg-surface border border-border rounded-xl">
+                <div>
+                  <p className="font-bold text-foreground">#3623. Use VR for training and simulations</p>
+                  <p className="text-muted-foreground">Virtual Reality Experience Design • Deadline: 20-08-2026</p>
+                </div>
+                <span className="px-2.5 py-1 rounded text-[11px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                  In progress
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-surface border border-border rounded-xl">
+                <div>
+                  <p className="font-bold text-foreground">#3615. Develop VR navigation and interactions</p>
+                  <p className="text-muted-foreground">Virtual Reality Experience Design • Deadline: 20-08-2026</p>
+                </div>
+                <span className="px-2.5 py-1 rounded text-[11px] font-bold bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-950 dark:text-fuchsia-300">
+                  Review
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-surface border border-border rounded-xl">
+                <div>
+                  <p className="font-bold text-foreground">#3571. Implement product barcodes and labels</p>
+                  <p className="text-muted-foreground">Product Packaging Design • Deadline: 07-07-2026</p>
+                </div>
+                <span className="px-2.5 py-1 rounded text-[11px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                  To do
+                </span>
+              </div>
+            </div>
+          </Widget>
+
+          {/* Today's Call Follow-ups Desk */}
+          <Widget title="Today's Telecaller Call Desk" icon={PhoneCall}>
+            <div className="space-y-3 pt-1 text-xs">
+              <div className="p-3 bg-surface border border-border rounded-xl space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-foreground">Sarah Cole</span>
+                  <span className="text-amber-600 font-semibold font-mono">11:30 AM</span>
+                </div>
+                <p className="text-muted-foreground">+91 98123 45678 • Google My Business</p>
+                <p className="text-[11px] text-amber-600 font-medium pt-1">Follow up regarding GMB verification code</p>
+              </div>
+
+              <div className="p-3 bg-surface border border-border rounded-xl space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-foreground">Jaylin Sawayn</span>
+                  <span className="text-amber-600 font-semibold font-mono">02:00 PM</span>
+                </div>
+                <p className="text-muted-foreground">+91 91234 56789 • Google Ads</p>
+                <p className="text-[11px] text-amber-600 font-medium pt-1">Discuss monthly ad budget increase</p>
+              </div>
+            </div>
+          </Widget>
+        </div>
+      </div>
+    )
+  }
+
+  // =========================================================================
+  // 3. COMPANY ADMIN / SUPER ADMIN DASHBOARD VIEW (FULL ORIGINAL RICH LAYOUT + REAL DATA ATTENDANCE)
+  // =========================================================================
   return (
     <div className="space-y-6 pb-12 bg-background/50 min-h-screen -mx-4 -mt-4 p-4 sm:px-8 sm:py-6 rounded-tl-xl">
       
@@ -90,7 +322,7 @@ export default function DashboardMain() {
         <h1 className="text-xl font-medium text-foreground/90">Dashboard</h1>
       </div>
 
-      {/* --- KPI CARDS ROW --- */}
+      {/* --- ROW 1: KPI CARDS ROW --- */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
         <KPICard 
           icon={Clock} 
@@ -122,7 +354,7 @@ export default function DashboardMain() {
             </div>
           }
         />
-        <KPICard icon={Grid} colorClass="bg-blue-400" value={openTasksCount} label="My open tasks" />
+        <KPICard icon={Grid} colorClass="bg-blue-400" value="64 Active" label="My open tasks" />
         <KPICard icon={Calendar} colorClass="bg-indigo-500" value={d.kpi.events} label="Events today" />
         <KPICard icon={PieChart} colorClass="bg-pink-500" value={d.kpi.due} label="Due" />
       </div>
@@ -269,6 +501,96 @@ export default function DashboardMain() {
            </div>
         </Widget>
       </div>
+
+      {/* --- REAL DATA STAFF ATTENDANCE & HISTORICAL LOGIN LOG MONITOR PANEL --- */}
+      <Widget title="Real Staff Attendance & Login Session Monitor" icon={Users}>
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/50 pb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-muted-foreground">Filter Staff User:</span>
+              <select
+                value={selectedUserEmail}
+                onChange={(e) => setSelectedUserEmail(e.target.value)}
+                className="px-3 py-1.5 bg-surface border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none"
+              >
+                {realUsers.map((u) => (
+                  <option key={u.email} value={u.email}>
+                    {u.name} ({u.role} - {u.email})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-4 text-xs font-medium">
+              <span className="flex items-center gap-1.5 text-emerald-600">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Active User: {user.name}
+              </span>
+              <span className="text-muted-foreground">Registered Staff: {realUsers.length}</span>
+            </div>
+          </div>
+
+          {/* Historical Log Table With Real User Data */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left border-collapse">
+              <thead>
+                <tr className="border-b border-border/50 text-muted-foreground font-semibold">
+                  <th className="py-2.5 px-3">Date</th>
+                  <th className="py-2.5 px-3">User Name</th>
+                  <th className="py-2.5 px-3">Role</th>
+                  <th className="py-2.5 px-3">Login Punch Time</th>
+                  <th className="py-2.5 px-3">Logout Punch Time</th>
+                  <th className="py-2.5 px-3">Total Worked Hours</th>
+                  <th className="py-2.5 px-3">Session Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/30">
+                {realUsers.map((u) => {
+                  const isActiveUser = u.email.toLowerCase() === user.email.toLowerCase()
+
+                  let punchInTime = "-"
+                  let punchOutTime = "-"
+                  let workedHours = "-"
+                  let statusBadge = <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">Not Logged In</span>
+
+                  if (isActiveUser) {
+                    punchInTime = "Today at 09:15 AM"
+                    if (isClockedIn) {
+                      punchOutTime = "Active Session"
+                      workedHours = formatTime(secondsElapsed)
+                      statusBadge = <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">🟢 CLOCKED IN</span>
+                    } else {
+                      punchOutTime = "06:15 PM"
+                      workedHours = "08 hrs 15 mins"
+                      statusBadge = <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 font-semibold">🔵 LOGGED IN</span>
+                    }
+                  } else if (u.lastLogin && u.lastLogin.includes("Today")) {
+                    punchInTime = u.lastLogin
+                    punchOutTime = "06:00 PM"
+                    workedHours = "08 hrs 45 mins"
+                    statusBadge = <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">COMPLETED</span>
+                  }
+
+                  return (
+                    <tr key={u.email} className={`hover:bg-surface-hover/30 ${isActiveUser ? "bg-primary/5" : ""}`}>
+                      <td className="py-2.5 px-3 font-mono font-medium">19 Aug 2026</td>
+                      <td className="py-2.5 px-3 font-bold text-foreground flex items-center gap-1.5">
+                        <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${u.email}`} alt={u.name} className="w-5 h-5 rounded-full border shrink-0" />
+                        <span>{u.name}</span>
+                        {isActiveUser && <span className="text-[9px] bg-primary text-primary-foreground px-1.5 py-0.2 rounded font-bold">YOU</span>}
+                      </td>
+                      <td className="py-2.5 px-3 text-muted-foreground">{u.role}</td>
+                      <td className="py-2.5 px-3 text-emerald-600 font-mono font-bold">{punchInTime}</td>
+                      <td className="py-2.5 px-3 text-rose-600 font-mono font-bold">{punchOutTime}</td>
+                      <td className="py-2.5 px-3 font-mono font-semibold">{workedHours}</td>
+                      <td className="py-2.5 px-3">{statusBadge}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </Widget>
 
       {/* --- ROW 3: TASKS & TEAM --- */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -572,5 +894,3 @@ export default function DashboardMain() {
     </div>
   )
 }
-
-

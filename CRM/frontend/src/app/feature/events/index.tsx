@@ -3,44 +3,138 @@
 import * as React from "react"
 import { motion } from "framer-motion"
 
-import { CalendarSidebar } from "./components/CalendarSidebar"
-import { CalendarRightPanel } from "./components/CalendarRightPanel"
-import { CalendarToolbar } from "./components/CalendarToolbar"
-import { CalendarView } from "./components/CalendarView"
-import { EventModal } from "./components/EventModal"
-import { EventDrawer } from "./components/EventDrawer"
+import { CalendarEvent, EventLabel, EventTypeOption, CalendarViewMode } from "./types"
+import { EventHeaderControls } from "./components/EventHeaderControls"
+import { CalendarGrid } from "./components/CalendarGrid"
+import { ManageLabelsModal } from "./components/ManageLabelsModal"
+import { AddEventModal } from "./components/AddEventModal"
+import { EventDetailsModal } from "./components/EventDetailsModal"
+import {
+  getStoredEvents,
+  saveStoredEvent,
+  deleteStoredEvent,
+  getStoredEventLabels,
+  saveStoredEventLabel,
+  deleteStoredEventLabel,
+} from "./services/eventService"
 
 export default function EventsMain() {
+  const [events, setEvents] = React.useState<CalendarEvent[]>([])
+  const [labels, setLabels] = React.useState<EventLabel[]>([])
+
+  const [selectedLabel, setSelectedLabel] = React.useState<string>("")
+  const [selectedEventType, setSelectedEventType] = React.useState<EventTypeOption>("Events")
+  const [viewMode, setViewMode] = React.useState<CalendarViewMode>("month")
+
+  // Modal Visibility States
+  const [isManageLabelsOpen, setIsManageLabelsOpen] = React.useState(false)
+  const [isAddEventOpen, setIsAddEventOpen] = React.useState(false)
+  const [selectedDateForNewEvent, setSelectedDateForNewEvent] = React.useState<string>("2026-08-15")
+
+  // Event Details Modal States
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = React.useState(false)
+  const [selectedEventDetails, setSelectedEventDetails] = React.useState<CalendarEvent | null>(null)
+
+  // Load stored persistent events on mount
+  React.useEffect(() => {
+    setEvents(getStoredEvents())
+    setLabels(getStoredEventLabels())
+  }, [])
+
+  // Date Cell Click Handler -> Opens Add Event Modal with clicked date pre-filled
+  const handleDateClick = (dateStr: string) => {
+    setSelectedDateForNewEvent(dateStr)
+    setIsAddEventOpen(true)
+  }
+
+  // Existing Event Click Handler -> Opens Event Details Modal
+  const handleEventClick = (evt: CalendarEvent) => {
+    setSelectedEventDetails(evt)
+    setIsDetailsModalOpen(true)
+  }
+
+  const handleAddLabel = (newLabel: EventLabel) => {
+    const updated = saveStoredEventLabel(newLabel)
+    setLabels(updated)
+  }
+
+  const handleDeleteLabel = (id: string) => {
+    const updated = deleteStoredEventLabel(id)
+    setLabels(updated)
+  }
+
+  const handleSaveEvent = (newEvent: Partial<CalendarEvent>) => {
+    const updated = saveStoredEvent(newEvent as CalendarEvent)
+    setEvents(updated)
+  }
+
+  const handleDeleteEvent = (id: string) => {
+    const updated = deleteStoredEvent(id)
+    setEvents(updated)
+  }
+
+  const handleEditEvent = (evt: CalendarEvent) => {
+    setSelectedDateForNewEvent(evt.startDate)
+    setIsAddEventOpen(true)
+  }
+
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
+    <motion.div
+      initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex flex-col h-[calc(100vh-8rem)]" // Fill available height minus topbar/padding
+      className="space-y-4 max-w-[1600px] mx-auto p-2"
     >
-      <div className="mb-2">
-        <h1 className="text-3xl font-bold tracking-tight">Calendar</h1>
-        <p className="text-muted-foreground mt-1">Manage events, meetings, and deadlines across your organization.</p>
-      </div>
+      {/* Top Header & Dropdown Controls */}
+      <EventHeaderControls
+        selectedLabel={selectedLabel}
+        onSelectLabel={setSelectedLabel}
+        selectedEventType={selectedEventType}
+        onSelectEventType={setSelectedEventType}
+        labels={labels}
+        onOpenManageLabels={() => setIsManageLabelsOpen(true)}
+        onOpenAddEvent={() => {
+          setSelectedDateForNewEvent("2026-08-15")
+          setIsAddEventOpen(true)
+        }}
+      />
 
-      <div className="flex gap-6 flex-1 min-h-0 mt-4">
-        {/* Left Filter Sidebar */}
-        <CalendarSidebar />
+      {/* Main Calendar View Grid */}
+      <CalendarGrid
+        events={events}
+        viewMode={viewMode}
+        onSelectViewMode={setViewMode}
+        selectedLabel={selectedLabel}
+        selectedEventType={selectedEventType}
+        onDateClick={handleDateClick}
+        onEventClick={handleEventClick}
+      />
 
-        {/* Main Calendar Area */}
-        <div className="flex-1 flex flex-col min-w-0 bg-background">
-          <CalendarToolbar />
-          <div className="flex-1 min-h-0 relative z-0">
-            <CalendarView />
-          </div>
-        </div>
+      {/* Manage Labels Modal */}
+      <ManageLabelsModal
+        isOpen={isManageLabelsOpen}
+        onClose={() => setIsManageLabelsOpen(false)}
+        labels={labels}
+        onAddLabel={handleAddLabel}
+        onDeleteLabel={handleDeleteLabel}
+      />
 
-        {/* Right Info Panel */}
-        <CalendarRightPanel />
-      </div>
+      {/* Add Event Modal */}
+      <AddEventModal
+        isOpen={isAddEventOpen}
+        onClose={() => setIsAddEventOpen(false)}
+        onSave={handleSaveEvent}
+        initialDate={selectedDateForNewEvent}
+        labels={labels}
+      />
 
-      {/* Global Overlays */}
-      <EventModal />
-      <EventDrawer />
+      {/* Event Details Modal */}
+      <EventDetailsModal
+        isOpen={isDetailsModalOpen}
+        onClose={() => setIsDetailsModalOpen(false)}
+        event={selectedEventDetails}
+        onDelete={handleDeleteEvent}
+        onEdit={handleEditEvent}
+      />
     </motion.div>
   )
 }

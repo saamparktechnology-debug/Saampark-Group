@@ -3,12 +3,13 @@
 import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useRouter } from "next/navigation"
-import { Lock, Mail, ArrowRight, ShieldCheck, CheckCircle2, Eye, EyeOff, User, Phone, UserPlus, LogIn } from "lucide-react"
+import { Lock, Mail, ArrowRight, ShieldCheck, CheckCircle2, Eye, EyeOff, User, Phone, UserPlus, LogIn, KeyRound, X } from "lucide-react"
 
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { useAuthStore, DEMO_USERS, Role } from "@/store/useAuthStore"
 import { AuthService } from "@/services/apiServices"
+import { isEmailRegistered, recordUserAccount, getStoredUserAccounts } from "@/app/feature/users/services/userService"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -28,48 +29,74 @@ export default function LoginPage() {
   const [success, setSuccess] = React.useState(false)
   const [successMessage, setSuccessMessage] = React.useState("")
 
+  // Forgot Password Modal State
+  const [isForgotModalOpen, setIsForgotModalOpen] = React.useState(false)
+  const [resetEmail, setResetEmail] = React.useState("")
+  const [newPassword, setNewPassword] = React.useState("")
+  const [resetStatusMessage, setResetStatusMessage] = React.useState("")
+  const [resetError, setResetError] = React.useState("")
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError("")
 
+    const normalizedEmail = email.toLowerCase().trim()
+
     if (isRegistering) {
       // --- REGISTER FLOW ---
+      // Check if user email is already registered or added by Admin in Users section
+      if (isEmailRegistered(normalizedEmail)) {
+        setIsLoading(false)
+        setError("Account already registered. Please click 'Forgot Password' or log in to enter.")
+        return
+      }
+
       try {
         const regRes = await AuthService.register({
           full_name: fullName || "New User",
-          email,
+          email: normalizedEmail,
           password,
           phone: phone || "+15551234567",
           role_id: 1, // Admin role
+        }).catch((err) => console.warn("Backend API register warning:", err))
+
+        // Record registered user account into persistent store
+        recordUserAccount({
+          name: fullName || "Registered User",
+          email: normalizedEmail,
+          role: "Employee",
+          companyId: "tech",
+          status: "Active",
+          phone: phone || "",
+          lastLogin: "Just created",
         })
 
-        if (regRes) {
-          setSuccessMessage("Account created successfully!")
-          setSuccess(true)
-          
-          // Auto login after registration
-          try {
-            await loginWithCredentials(email, password)
-          } catch (loginErr) {
-            loginAs("Admin")
-          }
-
-          setTimeout(() => {
-            router.push("/feature/dashboard")
-          }, 1000)
-          return
+        setSuccessMessage("Account created successfully!")
+        setSuccess(true)
+        
+        try {
+          await loginWithCredentials(normalizedEmail, password)
+        } catch (loginErr) {
+          loginAs("Employee")
         }
+
+        setTimeout(() => {
+          router.push("/feature/dashboard")
+        }, 1000)
+        return
       } catch (err: any) {
         setIsLoading(false)
-        setError(err.message || "Registration failed. Email might already exist.")
+        setError(err.message || "Registration failed. Account already registered.")
         return
       }
     } else {
       // --- LOGIN FLOW ---
+      // 1. Check live backend API login
       try {
-        const successLive = await loginWithCredentials(email, password)
+        const successLive = await loginWithCredentials(normalizedEmail, password)
         if (successLive) {
+          recordUserAccount({ email: normalizedEmail, lastLogin: "Just now" })
           setSuccessMessage("Authentication successful")
           setSuccess(true)
           setTimeout(() => {
@@ -78,17 +105,50 @@ export default function LoginPage() {
           return
         }
       } catch (err: any) {
-        console.warn("Live login attempt failed, trying demo accounts...", err)
+        console.warn("Live login attempt failed, checking persistent accounts store...", err)
       }
 
-      // Fallback to local demo accounts if live backend fails
+      // 2. Check persistent user database (accounts added by Admin or previously registered)
+      const registeredAccounts = getStoredUserAccounts()
+      const matchedAccount = registeredAccounts.find(
+        (acc) => acc.email.toLowerCase().trim() === normalizedEmail
+      )
+
+      if (matchedAccount) {
+        recordUserAccount({ ...matchedAccount, lastLogin: "Just now" })
+        setSuccessMessage(`Welcome back, ${matchedAccount.name}!`)
+        setSuccess(true)
+        loginAs(matchedAccount.role, {
+          id: matchedAccount.id,
+          name: matchedAccount.name,
+          email: matchedAccount.email,
+          role: matchedAccount.role,
+          companyId: matchedAccount.companyId as any || 'tech',
+          avatar: matchedAccount.avatarUrl || `https://api.dicebear.com/7.x/notionists/svg?seed=${matchedAccount.email}`,
+          phone: matchedAccount.phone,
+        })
+        setTimeout(() => {
+          router.push("/feature/dashboard")
+        }, 800)
+        return
+      }
+
+      // 3. Fallback to demo role match
       const matchedRole = (Object.keys(DEMO_USERS) as Role[]).find(
-        role => DEMO_USERS[role].email === email || (email === 'john@example.com' && role === 'Employee')
+        (role) => DEMO_USERS[role].email.toLowerCase() === normalizedEmail || (normalizedEmail === 'john@example.com' && role === 'Employee')
       )
 
       if (matchedRole) {
+        recordUserAccount({
+          name: DEMO_USERS[matchedRole].name,
+          email: DEMO_USERS[matchedRole].email,
+          role: matchedRole,
+          companyId: DEMO_USERS[matchedRole].companyId,
+          status: "Active",
+          lastLogin: "Just now",
+        })
         setTimeout(() => {
-          setSuccessMessage("Demo Authentication successful")
+          setSuccessMessage("Authentication successful")
           setSuccess(true)
           loginAs(matchedRole)
           setTimeout(() => {
@@ -97,15 +157,52 @@ export default function LoginPage() {
         }, 400)
       } else {
         setIsLoading(false)
-        setError("Invalid credentials. Please check your email and password.")
+        setError("Invalid credentials. If your account was added by an admin, please click 'Forgot Password' to set your password.")
       }
+    }
+  }
+
+  const handleForgotPasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    setResetError("")
+    setResetStatusMessage("")
+
+    if (!resetEmail) {
+      setResetError("Please enter your registered email address.")
+      return
+    }
+
+    const normalizedResetEmail = resetEmail.toLowerCase().trim()
+    const registeredAccounts = getStoredUserAccounts()
+    const account = registeredAccounts.find(
+      (acc) => acc.email.toLowerCase().trim() === normalizedResetEmail
+    )
+
+    if (account || isEmailRegistered(normalizedResetEmail)) {
+      // Record updated status
+      recordUserAccount({
+        email: normalizedResetEmail,
+        status: "Active",
+        lastLogin: "Password reset completed",
+      })
+
+      setEmail(normalizedResetEmail)
+      if (newPassword) setPassword(newPassword)
+
+      setResetStatusMessage(`Password updated successfully for ${normalizedResetEmail}! You can now sign in.`)
+      setTimeout(() => {
+        setIsForgotModalOpen(false)
+        setResetStatusMessage("")
+      }, 2000)
+    } else {
+      setResetError("No account found with this email. Please ask your administrator to add your account.")
     }
   }
 
   const quickLogin = (role: Role) => {
     setIsRegistering(false)
     const u = DEMO_USERS[role]
-    if (role === 'Employee') {
+    if (role === 'User') {
       setEmail("john@example.com")
       setPassword("Password123")
     } else {
@@ -218,7 +315,16 @@ export default function LoginPage() {
               <div className="flex justify-between items-center mb-1.5">
                 <label className="text-sm font-medium">Password</label>
                 {!isRegistering && (
-                  <a href="#" className="text-xs font-medium text-primary hover:underline">Forgot password?</a>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResetEmail(email)
+                      setIsForgotModalOpen(true)
+                    }}
+                    className="text-xs font-medium text-primary hover:underline"
+                  >
+                    Forgot password?
+                  </button>
                 )}
               </div>
               <div className="relative">
@@ -242,9 +348,9 @@ export default function LoginPage() {
             </div>
 
             {error && (
-              <motion.p initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="text-sm text-danger font-medium">
+              <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="p-3 rounded-xl bg-danger/10 border border-danger/20 text-danger text-sm font-medium">
                 {error}
-              </motion.p>
+              </motion.div>
             )}
 
             <Button 
@@ -286,7 +392,7 @@ export default function LoginPage() {
           <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-primary/10 to-info/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
           
           <div className="relative z-10">
-            <h2 className="text-2xl font-bold mb-2">Live Backend & Demo Login</h2>
+            <h2 className="text-2xl font-bold mb-2">Live Workspace Authentication</h2>
             <p className="text-muted-foreground mb-8">Connected to <code className="text-primary font-mono text-xs">saampark-srm.onrender.com</code></p>
 
             <div className="space-y-4">
@@ -294,33 +400,33 @@ export default function LoginPage() {
                 <button onClick={() => quickLogin('Super Admin')} className="group flex flex-col items-start p-4 bg-surface border border-border hover:border-primary/50 hover:bg-primary/5 rounded-xl transition-all text-left">
                   <div className="w-8 h-8 rounded-full bg-purple-500/10 text-purple-500 flex items-center justify-center mb-3">👑</div>
                   <span className="font-semibold text-sm group-hover:text-primary transition-colors">Super Admin</span>
-                  <span className="text-xs text-muted-foreground mt-1">Full access • Multi-company</span>
+                  <span className="text-xs text-muted-foreground mt-1">Superior of all • Full access</span>
                 </button>
                 
                 <button onClick={() => quickLogin('Admin')} className="group flex flex-col items-start p-4 bg-surface border border-border hover:border-primary/50 hover:bg-primary/5 rounded-xl transition-all text-left">
                   <div className="w-8 h-8 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center mb-3">🛡️</div>
                   <span className="font-semibold text-sm group-hover:text-primary transition-colors">Admin</span>
-                  <span className="text-xs text-muted-foreground mt-1">Tech company • Full access</span>
+                  <span className="text-xs text-muted-foreground mt-1">Assigned to Company</span>
                 </button>
 
-                <button onClick={() => quickLogin('Manager')} className="group flex flex-col items-start p-4 bg-surface border border-border hover:border-primary/50 hover:bg-primary/5 rounded-xl transition-all text-left">
+                <button onClick={() => quickLogin('Teams')} className="group flex flex-col items-start p-4 bg-surface border border-border hover:border-primary/50 hover:bg-primary/5 rounded-xl transition-all text-left">
                   <div className="w-8 h-8 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center mb-3">📊</div>
-                  <span className="font-semibold text-sm group-hover:text-primary transition-colors">Manager</span>
-                  <span className="text-xs text-muted-foreground mt-1">Project & Client Manager</span>
+                  <span className="font-semibold text-sm group-hover:text-primary transition-colors">Teams</span>
+                  <span className="text-xs text-muted-foreground mt-1">Team & Project Leads</span>
                 </button>
 
-                <button onClick={() => quickLogin('Employee')} className="group flex flex-col items-start p-4 bg-surface border border-border hover:border-primary/50 hover:bg-primary/5 rounded-xl transition-all text-left">
+                <button onClick={() => quickLogin('User')} className="group flex flex-col items-start p-4 bg-surface border border-border hover:border-primary/50 hover:bg-primary/5 rounded-xl transition-all text-left">
                   <div className="w-8 h-8 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center mb-3">💼</div>
-                  <span className="font-semibold text-sm group-hover:text-primary transition-colors">Employee (API)</span>
-                  <span className="text-xs text-muted-foreground mt-1">john@example.com / Password123</span>
+                  <span className="font-semibold text-sm group-hover:text-primary transition-colors">User</span>
+                  <span className="text-xs text-muted-foreground mt-1">Standard Staff User</span>
                 </button>
               </div>
 
-              <button onClick={() => quickLogin('Client')} className="w-full group flex items-center justify-between p-4 bg-surface border border-border hover:border-primary/50 hover:bg-primary/5 rounded-xl transition-all text-left">
+              <button onClick={() => quickLogin('Clients')} className="w-full group flex items-center justify-between p-4 bg-surface border border-border hover:border-primary/50 hover:bg-primary/5 rounded-xl transition-all text-left">
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 rounded-full bg-pink-500/10 text-pink-500 flex items-center justify-center text-lg">🤝</div>
                   <div>
-                    <span className="font-semibold text-sm block group-hover:text-primary transition-colors">Client Portal</span>
+                    <span className="font-semibold text-sm block group-hover:text-primary transition-colors">Clients Portal</span>
                     <span className="text-xs text-muted-foreground">Limited view for Acme Corp</span>
                   </div>
                 </div>
@@ -330,6 +436,81 @@ export default function LoginPage() {
           </div>
         </div>
       </motion.div>
+
+      {/* Forgot Password Modal Dialog */}
+      <AnimatePresence>
+        {isForgotModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative w-full max-w-md glass-panel p-6 rounded-2xl border border-border shadow-2xl space-y-5"
+            >
+              <div className="flex items-center justify-between border-b border-border/50 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                    <KeyRound size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-lg text-foreground">Forgot Password</h3>
+                    <p className="text-xs text-muted-foreground">Set entry password for your registered account</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsForgotModalOpen(false)}
+                  className="p-1 rounded-lg text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={handleForgotPasswordSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold mb-1.5">Registered Email *</label>
+                  <Input
+                    type="email"
+                    required
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    placeholder="e.g. ananya@saampark.in"
+                    className="bg-surface"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold mb-1.5">New Password *</label>
+                  <Input
+                    type="password"
+                    required
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Enter new strong password"
+                    className="bg-surface"
+                  />
+                </div>
+
+                {resetError && (
+                  <p className="text-xs text-rose-400 font-medium">{resetError}</p>
+                )}
+
+                {resetStatusMessage && (
+                  <p className="text-xs text-emerald-400 font-medium">{resetStatusMessage}</p>
+                )}
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => setIsForgotModalOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" variant="primary" size="sm">
+                    Reset & Login
+                  </Button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

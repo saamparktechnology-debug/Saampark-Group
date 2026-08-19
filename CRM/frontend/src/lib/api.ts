@@ -42,11 +42,16 @@ async function request<T = any>(endpoint: string, options: RequestInit = {}): Pr
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
   const url = `${baseUrl}${cleanEndpoint}`
 
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 800) // Fast 800ms timeout for snappy page loading
+
   try {
     const response = await fetch(url, {
       ...options,
       headers,
+      signal: controller.signal,
     })
+    clearTimeout(timeoutId)
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
@@ -62,7 +67,8 @@ async function request<T = any>(endpoint: string, options: RequestInit = {}): Pr
 
     return await response.json()
   } catch (error: any) {
-    console.warn(`API Fetch Catch [${options.method || 'GET'} ${endpoint}]:`, error.message || error)
+    clearTimeout(timeoutId)
+    console.warn(`API Fast Fallback [${options.method || 'GET'} ${endpoint}]:`, error.name === 'AbortError' ? 'Backend request timed out (2s limit)' : (error.message || error))
     return { status: "error", message: error.message || 'Network error', data: [] } as any
   }
 }

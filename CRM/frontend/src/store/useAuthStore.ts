@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware'
 import { AuthService } from '@/services/apiServices'
 import { setAuthToken } from '@/lib/api'
 
-export type Role = 'Super Admin' | 'Admin' | 'Manager' | 'Employee' | 'Client'
+export type Role = 'Super Admin' | 'Admin' | 'Clients' | 'Teams' | 'User'
 export type CompanyId = 'tech' | 'digital' | 'all'
 
 export interface User {
@@ -19,7 +19,7 @@ export interface User {
 export const DEMO_USERS: Record<Role, User> = {
   'Super Admin': {
     id: 'u1',
-    name: 'Super Admin',
+    name: 'Rahul Sharma (Super Admin)',
     email: 'superadmin@saampark.in',
     role: 'Super Admin',
     companyId: 'all',
@@ -27,35 +27,35 @@ export const DEMO_USERS: Record<Role, User> = {
   },
   'Admin': {
     id: 'u2',
-    name: 'Tech Admin',
+    name: 'Priya Patel (Admin)',
     email: 'admin@tech.saampark.in',
     role: 'Admin',
     companyId: 'tech',
     avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=TechAdmin',
   },
-  'Manager': {
+  'Teams': {
     id: 'u3',
-    name: 'Sales Manager',
-    email: 'manager@saampark.in',
-    role: 'Manager',
+    name: 'Sneha Gupta (Team Lead)',
+    email: 'team@saampark.in',
+    role: 'Teams',
     companyId: 'tech',
-    avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=Manager',
+    avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=Teams',
   },
-  'Employee': {
+  'User': {
     id: 'u4',
-    name: 'John Doe',
-    email: 'john@saampark.in',
-    role: 'Employee',
+    name: 'John Doe (User)',
+    email: 'john@example.com',
+    role: 'User',
     companyId: 'tech',
-    avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=Employee',
+    avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=User',
   },
-  'Client': {
+  'Clients': {
     id: 'u5',
-    name: 'Acme Corp Client',
+    name: 'Acme Corp (Client Portal)',
     email: 'client@acmecorp.com',
-    role: 'Client',
+    role: 'Clients',
     companyId: 'tech',
-    avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=Client',
+    avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=Clients',
   },
 }
 
@@ -71,7 +71,7 @@ interface AuthState {
   activeCompanyId: CompanyId | null
   
   // Actions
-  loginAs: (role: Role) => void
+  loginAs: (role: Role | string, customUser?: Partial<User>) => void
   loginWithCredentials: (email: string, password: string) => Promise<boolean>
   logout: () => void
   switchCompany: (companyId: CompanyId) => void
@@ -85,10 +85,45 @@ export const useAuthStore = create<AuthState>()(
       user: DEMO_USERS['Super Admin'],
       activeCompanyId: 'tech',
 
-      loginAs: (role: Role) => {
-        const user = DEMO_USERS[role]
-        const activeCompanyId = user.role === 'Super Admin' ? 'tech' : user.companyId
+      loginAs: (role: Role | string, customUser?: Partial<User>) => {
+        const demoUser = DEMO_USERS[role as Role]
         
+        const user: User = customUser
+          ? {
+              id: customUser.id || `u_${Date.now()}`,
+              name: customUser.name || 'User Account',
+              email: customUser.email || 'user@saampark.in',
+              role: (customUser.role as Role) || (role as Role) || 'User',
+              companyId: (customUser.companyId as CompanyId) || 'tech',
+              avatar: customUser.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${customUser.email || role}`,
+              phone: customUser.phone,
+            }
+          : demoUser || {
+              id: `u_${Date.now()}`,
+              name: `${role} User`,
+              email: 'user@saampark.in',
+              role: (role as Role) || 'User',
+              companyId: 'tech',
+              avatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${role}`,
+            }
+
+        const activeCompanyId = user.role === 'Super Admin' ? 'tech' : (user.companyId || 'tech')
+        
+        // Record logged in account in persistent real users database
+        if (typeof window !== 'undefined') {
+          import('../app/feature/users/services/userService').then(({ recordUserAccount }) => {
+            recordUserAccount({
+              id: String(user.id),
+              name: user.name,
+              email: user.email,
+              role: user.role,
+              companyId: activeCompanyId,
+              status: 'Active',
+              lastLogin: 'Today (Active Session)',
+            })
+          })
+        }
+
         set({
           isAuthenticated: true,
           user,
@@ -109,6 +144,21 @@ export const useAuthStore = create<AuthState>()(
               companyId: 'tech',
               avatar: res.user?.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${res.user?.email || 'user'}`,
               phone: res.user?.phone,
+            }
+
+            if (typeof window !== 'undefined') {
+              import('../app/feature/users/services/userService').then(({ recordUserAccount }) => {
+                recordUserAccount({
+                  id: String(userObj.id),
+                  name: userObj.name,
+                  email: userObj.email,
+                  role: userObj.role,
+                  companyId: userObj.companyId,
+                  status: 'Active',
+                  phone: userObj.phone,
+                  lastLogin: 'Just now',
+                })
+              })
             }
 
             set({
