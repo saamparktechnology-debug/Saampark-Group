@@ -144,19 +144,14 @@ const sendForgotPasswordOTP = async (req, res, next) => {
     const { email } = req.body;
     if (!email) return errorResponse(res, 400, 'Email address is required.');
 
-    const [users] = await pool.execute('SELECT full_name FROM users WHERE email = ?', [email.toLowerCase()]);
+    const [users] = await pool.execute('SELECT * FROM users WHERE email = ?', [email.toLowerCase()]);
+    const userName = users.length > 0 ? users[0].full_name : 'User';
 
-    // Always respond with success to prevent email enumeration
-    if (users.length === 0) {
-      return successResponse(res, 200, 'If an account with that email exists, an OTP has been sent.');
-    }
-
-    const user = users[0];
     try {
-      await sendPasswordResetOTP(email, user.full_name);
+      await sendPasswordResetOTP(email.toLowerCase(), userName);
     } catch (emailErr) {
       console.error('OTP email error:', emailErr.message);
-      return errorResponse(res, 500, 'Failed to send OTP email. Please try again later.');
+      return errorResponse(res, 500, `Failed to send OTP email: ${emailErr.message}`);
     }
 
     return successResponse(res, 200, 'OTP sent to your email address. Valid for 10 minutes.');
@@ -164,6 +159,7 @@ const sendForgotPasswordOTP = async (req, res, next) => {
     next(error);
   }
 };
+
 
 // ─── VERIFY RESET OTP ─────────────────────────────────────────────────────────
 const verifyResetOTP = async (req, res, next) => {
