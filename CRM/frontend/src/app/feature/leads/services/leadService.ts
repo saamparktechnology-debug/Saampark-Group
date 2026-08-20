@@ -655,87 +655,48 @@ function getPersistedLeads(): Lead[] {
   }
 }
 
-function savePersistedLeads(leads: Lead[]): void {
-  if (typeof window === "undefined") return
-  try {
-    localStorage.setItem(LEADS_STORAGE_KEY, JSON.stringify(leads))
-    saveModuleDataToDB("leads", leads)
-  } catch {}
-}
-
 export const getLeads = async (): Promise<Lead[]> => {
-  try {
-    const dbData = await fetchModuleDataFromDB<Lead[]>("leads", initialLeads)
-    if (Array.isArray(dbData) && dbData.length > 0) {
-      return dbData
-    }
-  } catch (err) {
-    console.warn("MySQL fetch error for leads:", err)
+  const dbData = await fetchModuleDataFromDB<Lead[]>("leads", initialLeads)
+  if (Array.isArray(dbData) && dbData.length > 0) {
+    return dbData
   }
-  return getPersistedLeads()
+  return filterGlobalDeletedItems([...initialLeads])
 }
-
 
 export const addLead = async (leadData: Omit<Lead, "id">): Promise<Lead> => {
-  const current = getPersistedLeads()
+  const current = await fetchModuleDataFromDB<Lead[]>("leads", initialLeads)
   const newId = (Math.max(...current.map((l) => parseInt(l.id) || 0), 0) + 1).toString()
   const newLead: Lead = {
     ...leadData,
     id: newId,
     createdAt: leadData.createdAt || `${new Date().toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' })}`,
-    service: leadData.service || "Website Devlopment",
+    service: leadData.service || "Website Development",
     source: leadData.source || "Social Media",
     reminderDate: leadData.reminderDate || "15 Aug 2025",
     reminderNotes: leadData.reminderNotes || "Follow up call scheduled",
-    caller: leadData.caller || leadData.owner || "John Doe",
+    caller: leadData.caller || leadData.owner || "Team",
   }
-
-  try {
-    const [first, ...rest] = leadData.name.split(" ")
-    await api.post("/leads", {
-      first_name: first,
-      last_name: rest.join(" "),
-      phone: leadData.phone,
-      company_name: leadData.name,
-      status: leadData.status || "New",
-    })
-  } catch (err) {
-    console.warn("Backend /leads API create warning:", err)
-  }
-
   const updated = [newLead, ...current]
-  savePersistedLeads(updated)
+  await saveModuleDataToDB("leads", updated)
   return newLead
 }
 
 export const updateLead = async (id: string, updates: Partial<Lead>): Promise<Lead> => {
-  try {
-    await api.put(`/leads/${id}`, updates)
-  } catch (err) {
-    console.warn("Backend /leads API update warning:", err)
-  }
-  const current = getPersistedLeads()
+  const current = await fetchModuleDataFromDB<Lead[]>("leads", initialLeads)
   const idx = current.findIndex((l) => l.id === id)
   if (idx === -1) throw new Error("Lead not found")
   current[idx] = { ...current[idx], ...updates }
-  savePersistedLeads(current)
+  await saveModuleDataToDB("leads", current)
   return { ...current[idx] }
 }
 
 export const deleteLead = async (id: string): Promise<boolean> => {
-  markGlobalItemDeleted(id, "leads")
-  try {
-    await api.delete(`/leads/${id}`)
-  } catch (err) {
-    console.warn("Backend /leads API delete warning:", err)
-  }
-  const current = getPersistedLeads()
+  await markGlobalItemDeleted(id, "leads")
+  const current = await fetchModuleDataFromDB<Lead[]>("leads", initialLeads)
   const filtered = current.filter((l) => l.id !== id)
-  savePersistedLeads(filtered)
+  await saveModuleDataToDB("leads", filtered)
   return true
 }
-
-
 
 export const unlockLead = async (id: string): Promise<Lead> => {
   return updateLead(id, { isLocked: false, lockedReason: undefined })
@@ -744,4 +705,5 @@ export const unlockLead = async (id: string): Promise<Lead> => {
 export const lockLead = async (id: string, reason?: string): Promise<Lead> => {
   return updateLead(id, { isLocked: true, lockedReason: reason || "Manually locked by Admin" })
 }
+
 

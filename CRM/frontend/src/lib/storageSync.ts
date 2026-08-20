@@ -17,19 +17,15 @@ export function saveLocalDeletedId(id: string | number): void {
   const strId = String(id).toLowerCase().trim()
   const current = getLocalDeletedIds()
   if (!current.includes(strId)) {
-    const updated = [...current, strId]
-    localStorage.setItem(UNIVERSAL_DELETED_KEY, JSON.stringify(updated))
+    localStorage.setItem(UNIVERSAL_DELETED_KEY, JSON.stringify([...current, strId]))
   }
 }
 
-// Global function to mark any item deleted across the entire application and sync to MySQL DB!
+// Global function to mark any item deleted across the entire application and sync to MySQL DB
 export async function markGlobalItemDeleted(id: string | number, moduleName?: string): Promise<void> {
   if (!id) return
   const strId = String(id).toLowerCase().trim()
   saveLocalDeletedId(strId)
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(new Event("storage"))
-  }
 
   try {
     await api.post("/deleted", { id: strId, moduleName })
@@ -43,15 +39,12 @@ export async function syncGlobalDeletedIds(): Promise<string[]> {
   const local = getLocalDeletedIds()
   try {
     const res = await api.get("/deleted")
-    const serverIds: string[] = Array.isArray(res) ? res : res?.data || []
-    if (Array.isArray(serverIds) && serverIds.length > 0) {
+    // Response shape: { status, message, data: string[] }
+    const serverIds: string[] = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : [])
+    if (serverIds.length > 0) {
       const merged = Array.from(new Set([...local, ...serverIds.map((s) => String(s).toLowerCase().trim())]))
       if (typeof window !== "undefined") {
-        const hasNew = merged.length > local.length
         localStorage.setItem(UNIVERSAL_DELETED_KEY, JSON.stringify(merged))
-        if (hasNew) {
-          window.dispatchEvent(new Event("storage"))
-        }
       }
       return merged
     }
@@ -61,7 +54,6 @@ export async function syncGlobalDeletedIds(): Promise<string[]> {
   return local
 }
 
-
 export function isGlobalItemDeleted(id: string | number, deletedIds?: string[]): boolean {
   if (!id) return false
   const strId = String(id).toLowerCase().trim()
@@ -70,21 +62,28 @@ export function isGlobalItemDeleted(id: string | number, deletedIds?: string[]):
 }
 
 export function filterGlobalDeletedItems<T extends { id: string | number }>(items: T[], deletedIds?: string[]): T[] {
+  if (!Array.isArray(items)) return []
   const list = deletedIds || getLocalDeletedIds()
   if (!list.length) return items
-  return items.filter((item) => !list.includes(String(item.id).toLowerCase().trim()))
+  return items.filter((item) => item?.id && !list.includes(String(item.id).toLowerCase().trim()))
 }
 
-// Generic helper to fetch any module data (Projects, Events, Expenses, Tickets, Subscriptions, Proposals, Estimates, Notes, Settings) from MySQL DB
+/**
+ * Fetch module data from MySQL DB.
+ * Response shape from backend: { status: "success", message: "...", data: <payload> }
+ */
 export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: T): Promise<T> {
   const localDeleted = await syncGlobalDeletedIds()
 
   try {
     const res = await api.get(`/store/${moduleKey}`)
-    const serverData = res?.data !== undefined ? res.data : res
-    if (serverData !== null && serverData !== undefined) {
+    // Backend wraps data in { status, message, data }
+    const serverData = res?.data !== undefined ? res.data : null
+
+    if (serverData !== null && serverData !== undefined && !(typeof serverData === "object" && !Array.isArray(serverData) && Object.keys(serverData).length === 0)) {
+      // Cache locally too
       if (typeof window !== "undefined") {
-        try { localStorage.setItem(`saampark_module_${moduleKey}`, JSON.stringify(serverData)) } catch {}
+        try { localStorage.setItem(`saampark_db_${moduleKey}`, JSON.stringify(serverData)) } catch {}
       }
       return filterGlobalDeletedItems(serverData as any, localDeleted) as any
     }
@@ -92,11 +91,13 @@ export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: 
     console.warn(`MySQL fetch warning for module ${moduleKey}:`, err)
   }
 
+  // Fallback: try local DB cache (NOT localStorage module store, which is per-device)
   if (typeof window !== "undefined") {
     try {
-      const local = localStorage.getItem(`saampark_module_${moduleKey}`)
+      const local = localStorage.getItem(`saampark_db_${moduleKey}`)
       if (local) {
-        try { return filterGlobalDeletedItems(JSON.parse(local), localDeleted) as any } catch {}
+        const parsed = JSON.parse(local)
+        return filterGlobalDeletedItems(parsed, localDeleted) as any
       }
     } catch {}
   }
@@ -104,19 +105,21 @@ export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: 
   return filterGlobalDeletedItems(fallbackData as any, localDeleted) as any
 }
 
-
-// Generic helper to save any module data to MySQL DB persistently
+/**
+ * Save module data to MySQL DB and local cache.
+ */
 export async function saveModuleDataToDB<T>(moduleKey: string, data: T): Promise<void> {
+  // Cache locally
   if (typeof window !== "undefined") {
     try {
-      localStorage.setItem(`saampark_module_${moduleKey}`, JSON.stringify(data))
+      localStorage.setItem(`saampark_db_${moduleKey}`, JSON.stringify(data))
     } catch {}
   }
 
+  // Persist to MySQL
   try {
     await api.post(`/store/${moduleKey}`, { data })
   } catch (err) {
     console.warn(`MySQL save warning for module ${moduleKey}:`, err)
   }
 }
-
