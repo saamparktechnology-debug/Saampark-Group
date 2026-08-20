@@ -3,22 +3,38 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 const app = require('./src/app');
 const pool = require('./src/config/db');
 
-const PORT = process.env.PORT || 5000;
+const PORT = parseInt(process.env.PORT || '5000', 10);
 
-// 1. Start HTTP Server immediately so Node event loop remains active 24/7 in PM2
-const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 CRM Backend Server running on port ${PORT}`);
-});
+// Keep event loop alive permanently in PM2 to prevent exit on socket collisions
+setInterval(() => {}, 60000);
 
-server.on('error', (err) => {
-  if (err.code === 'EADDRINUSE') {
-    console.error(`Port ${PORT} is in use, retrying...`);
-  } else {
-    console.error('Server socket error:', err.message);
+let server;
+
+function startHttpServer(portToUse) {
+  try {
+    server = app.listen(portToUse, '0.0.0.0', () => {
+      console.log(`🚀 CRM Backend Server running on port ${portToUse}`);
+    });
+
+    server.on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        console.error(`⚠️ Port ${portToUse} in use. Retrying binding in 3 seconds...`);
+        setTimeout(() => {
+          try { server.close(); } catch {}
+          startHttpServer(portToUse);
+        }, 3000);
+      } else {
+        console.error('Server socket error:', err.message);
+      }
+    });
+  } catch (err) {
+    console.error('Failed to bind server socket:', err.message);
   }
-});
+}
 
-// 2. Asynchronously verify DB Connection
+startHttpServer(PORT);
+
+// Asynchronously verify DB Connection
 async function checkDbConnection() {
   try {
     const connection = await pool.getConnection();
@@ -39,4 +55,5 @@ process.on('unhandledRejection', (err) => {
 process.on('uncaughtException', (err) => {
   console.error('UNCAUGHT EXCEPTION:', err);
 });
+
 
