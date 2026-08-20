@@ -1,4 +1,6 @@
 import { Lead } from "../types"
+import { api } from "@/lib/api"
+
 
 export const initialLeads: Lead[] = [
   // --- COLUMN: NEW ---
@@ -660,6 +662,36 @@ function savePersistedLeads(leads: Lead[]): void {
 }
 
 export const getLeads = async (): Promise<Lead[]> => {
+  try {
+    const res = await api.get("/leads")
+    const dbLeads: any[] = Array.isArray(res) ? res : res?.data || []
+    if (Array.isArray(dbLeads) && dbLeads.length > 0) {
+      const formatted: Lead[] = dbLeads.map((l: any) => ({
+        id: String(l.id),
+        type: l.type || "Person",
+        name: l.first_name ? `${l.first_name} ${l.last_name || ""}`.trim() : l.name || "Lead Name",
+        primaryContact: l.first_name || l.name || "Primary Contact",
+        phone: l.phone || "N/A",
+        service: l.service || "Website Devlopment",
+        reminderDate: l.reminder_date || "12 Aug 2025",
+        reminderNotes: l.reminder_notes || "Follow up call",
+        owner: l.assigned_agent_name || "John Doe",
+        caller: l.assigned_agent_name || "John Doe",
+        ownerAvatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${l.id}`,
+        labels: l.labels ? (typeof l.labels === "string" ? JSON.parse(l.labels) : l.labels) : ["Potential"],
+        createdAt: l.created_at ? l.created_at.split("T")[0] : "Today",
+        status: l.status || "New",
+        source: l.source_name || l.source || "Social Media",
+        city: l.city || "Mumbai",
+        state: l.state || "Maharashtra",
+        country: l.country || "India",
+        value: l.value || "₹1,50,000",
+      }))
+      return filterGlobalDeletedItems(formatted)
+    }
+  } catch (err) {
+    console.warn("Backend /leads API fetch warning:", err)
+  }
   return getPersistedLeads()
 }
 
@@ -676,12 +708,31 @@ export const addLead = async (leadData: Omit<Lead, "id">): Promise<Lead> => {
     reminderNotes: leadData.reminderNotes || "Follow up call scheduled",
     caller: leadData.caller || leadData.owner || "John Doe",
   }
+
+  try {
+    const [first, ...rest] = leadData.name.split(" ")
+    await api.post("/leads", {
+      first_name: first,
+      last_name: rest.join(" "),
+      phone: leadData.phone,
+      company_name: leadData.name,
+      status: leadData.status || "New",
+    })
+  } catch (err) {
+    console.warn("Backend /leads API create warning:", err)
+  }
+
   const updated = [newLead, ...current]
   savePersistedLeads(updated)
   return newLead
 }
 
 export const updateLead = async (id: string, updates: Partial<Lead>): Promise<Lead> => {
+  try {
+    await api.put(`/leads/${id}`, updates)
+  } catch (err) {
+    console.warn("Backend /leads API update warning:", err)
+  }
   const current = getPersistedLeads()
   const idx = current.findIndex((l) => l.id === id)
   if (idx === -1) throw new Error("Lead not found")
@@ -692,11 +743,17 @@ export const updateLead = async (id: string, updates: Partial<Lead>): Promise<Le
 
 export const deleteLead = async (id: string): Promise<boolean> => {
   markGlobalItemDeleted(id, "leads")
+  try {
+    await api.delete(`/leads/${id}`)
+  } catch (err) {
+    console.warn("Backend /leads API delete warning:", err)
+  }
   const current = getPersistedLeads()
   const filtered = current.filter((l) => l.id !== id)
   savePersistedLeads(filtered)
   return true
 }
+
 
 
 export const unlockLead = async (id: string): Promise<Lead> => {

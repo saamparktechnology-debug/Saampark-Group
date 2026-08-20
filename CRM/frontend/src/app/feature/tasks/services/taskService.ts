@@ -1,4 +1,7 @@
 import { Task } from "../types"
+import { api } from "@/lib/api"
+import { filterGlobalDeletedItems, markGlobalItemDeleted } from "@/lib/storageSync"
+
 
 export const initialTasks: Task[] = [
   // --- TABLE / SCREENSHOT 1 ITEMS ---
@@ -425,9 +428,8 @@ export const initialTasks: Task[] = [
   },
 ]
 
-import { filterGlobalDeletedItems, markGlobalItemDeleted } from "@/lib/storageSync"
-
 const TASKS_STORAGE_KEY = "saampark_tasks_store"
+
 
 function getPersistedTasks(): Task[] {
   if (typeof window === "undefined") return filterGlobalDeletedItems([...initialTasks])
@@ -450,10 +452,43 @@ function savePersistedTasks(tasks: Task[]): void {
 
 export const taskService = {
   getTasks: async (): Promise<Task[]> => {
+    try {
+      const res = await api.get("/tasks")
+      const dbTasks: any[] = Array.isArray(res) ? res : res?.data || []
+      if (Array.isArray(dbTasks) && dbTasks.length > 0) {
+        const formatted: Task[] = dbTasks.map((t: any) => ({
+          id: String(t.id),
+          title: t.title || "Task item",
+          startDate: t.start_date || "-",
+          deadline: t.deadline || "30-06-2026",
+          milestone: t.milestone || "General",
+          relatedTo: t.project_title || "CRM Workspace",
+          assignedTo: t.assigned_to_name || "John Doe",
+          assignedToAvatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${t.id}`,
+          status: t.status === "To_do" ? "To do" : t.status || "To do",
+          priority: t.priority || "Normal",
+          priorityIcon: "none",
+          labels: [],
+        }))
+        return filterGlobalDeletedItems(formatted)
+      }
+    } catch (err) {
+      console.warn("Backend /tasks API fetch warning:", err)
+    }
     return getPersistedTasks()
   },
 
   addTask: async (taskData: Omit<Task, "id">): Promise<Task> => {
+    try {
+      await api.post("/tasks", {
+        title: taskData.title,
+        status: taskData.status || "To_do",
+        priority: taskData.priority || "Medium",
+        deadline: taskData.deadline,
+      })
+    } catch (err) {
+      console.warn("Backend /tasks API create warning:", err)
+    }
     const currentTasks = getPersistedTasks()
     const nextId = (3650 + currentTasks.length + Math.floor(Math.random() * 100)).toString()
     const newTask: Task = {
@@ -466,6 +501,11 @@ export const taskService = {
   },
 
   updateTask: async (id: string, updates: Partial<Task>): Promise<Task> => {
+    try {
+      await api.put(`/tasks/${id}`, updates)
+    } catch (err) {
+      console.warn("Backend /tasks API update warning:", err)
+    }
     const currentTasks = getPersistedTasks()
     const idx = currentTasks.findIndex((t) => t.id === id)
     if (idx === -1) throw new Error("Task not found")
@@ -476,11 +516,17 @@ export const taskService = {
 
   deleteTask: async (id: string): Promise<void> => {
     markGlobalItemDeleted(id, "tasks")
+    try {
+      await api.delete(`/tasks/${id}`)
+    } catch (err) {
+      console.warn("Backend /tasks API delete warning:", err)
+    }
     const currentTasks = getPersistedTasks()
     const filtered = currentTasks.filter((t) => t.id !== id)
     savePersistedTasks(filtered)
   },
 }
+
 
 
 

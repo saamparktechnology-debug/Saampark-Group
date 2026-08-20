@@ -43,7 +43,15 @@ const updateTaskStatus = async (req, res, next) => {
     return successResponse(res, 200, 'Task status updated');
   } catch (error) {
     next(error);
+// Delete Task
+const deleteTask = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    await pool.execute('DELETE FROM tasks WHERE id = ?', [id]);
+    return successResponse(res, 200, 'Task deleted successfully');
+  } catch (error) {
+    next(error);
   }
 };
 
-module.exports = { createTask, getAllTasks, updateTaskStatus };
+module.exports = { createTask, getAllTasks, updateTaskStatus, deleteTask };
