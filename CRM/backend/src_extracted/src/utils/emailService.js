@@ -199,6 +199,17 @@ async function sendAdminCreatedAccountEmail(email, name = 'Team Member', role = 
   });
 }
 
+/**
+ * Send a welcome email to a newly registered user (stub — alias to sendAdminCreatedAccountEmail)
+ */
+async function sendWelcomeEmail(email, name = 'Team Member', role = 'Teams', companyName = 'SAAMPARK Technology') {
+  try {
+    await sendAdminCreatedAccountEmail(email, name, role, companyName, '');
+  } catch (err) {
+    console.warn('sendWelcomeEmail warning:', err.message);
+  }
+}
+
 module.exports = {
   sendPasswordResetOTP,
   sendEmailVerificationOTP,
@@ -208,4 +219,5 @@ module.exports = {
   generateOTP,
   storeOTP,
 };
+
 
