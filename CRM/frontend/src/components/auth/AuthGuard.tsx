@@ -70,9 +70,18 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
           return
         }
       } catch (e) {
-        console.warn("Session verification error:", e)
+        console.warn("Session verification error (forcing login redirect):", e)
+        state.logout()
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("saampark-auth")
+          localStorage.removeItem("saampark-auth-v2")
+        }
+        if (pathname !== "/login") {
+          router.replace("/login")
+        }
       }
     }
+
 
     verifyActiveSessionAndSyncPermissions()
 
