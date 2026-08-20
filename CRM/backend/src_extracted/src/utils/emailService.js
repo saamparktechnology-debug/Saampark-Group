@@ -146,27 +146,44 @@ async function sendEmailVerificationOTP(email, name = 'User') {
 }
 
 /**
- * Send welcome email after successful verification
+ * Send welcome email with credentials for admin-created accounts (bypasses OTP verification)
  */
-async function sendWelcomeEmail(email, name = 'User', role = 'Team Member') {
+async function sendAdminCreatedAccountEmail(email, name = 'Team Member', role = 'Teams', companyName = 'SAAMPARK Technology', tempPassword = '') {
   const html = `
-    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 520px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden;">
+    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden; border: 1px solid #1e1e2e;">
       <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); padding: 32px 40px; text-align: center;">
-        <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 700;">SAAMPARK CRM</h1>
-        <p style="color: rgba(255,255,255,0.8); margin: 8px 0 0; font-size: 13px;">Welcome Aboard 🚀</p>
+        <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.5px;">SAAMPARK CRM</h1>
+        <p style="color: rgba(255,255,255,0.85); margin: 8px 0 0; font-size: 13px;">Welcome to the Team! 🚀</p>
       </div>
-      <div style="padding: 40px; background: #16161e;">
-        <p style="color: #e2e8f0; font-size: 16px; margin: 0 0 16px;">Hi <strong>${name}</strong>,</p>
+      <div style="padding: 36px 40px; background: #16161e;">
+        <p style="color: #e2e8f0; font-size: 16px; margin: 0 0 12px;">Hello <strong>${name}</strong>,</p>
         <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0 0 24px;">
-          Your email has been verified and your <strong style="color: #6366f1;">${role}</strong> account is now active on SAAMPARK CRM.
+          Congratulations! An Administrator has added you to <strong style="color: #6366f1;">${companyName}</strong> with the role of <strong style="color: #10b981;">${role}</strong>.
         </p>
-        <div style="background: #1e1e2e; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
-          <p style="color: #e2e8f0; font-size: 13px; margin: 0;"><strong>Email:</strong> <span style="color: #6366f1;">${email}</span></p>
-          <p style="color: #e2e8f0; font-size: 13px; margin: 8px 0 0;"><strong>Role:</strong> <span style="color: #10b981;">${role}</span></p>
+
+        <div style="background: #1e1e2e; border: 1px solid #2d2d3d; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+          <p style="color: #94a3b8; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 16px; font-weight: 700;">Your Account Credentials</p>
+          <div style="margin-bottom: 12px;">
+            <span style="color: #64748b; font-size: 12px; display: block; margin-bottom: 4px;">Login Email:</span>
+            <span style="color: #e2e8f0; font-size: 15px; font-weight: 600; font-family: monospace;">${email}</span>
+          </div>
+          <div>
+            <span style="color: #64748b; font-size: 12px; display: block; margin-bottom: 4px;">Temporary Password:</span>
+            <span style="color: #f59e0b; font-size: 18px; font-weight: 700; font-family: monospace; letter-spacing: 1px;">${tempPassword}</span>
+          </div>
         </div>
-        <a href="http://localhost:3000/login" style="display: inline-block; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: 600; font-size: 14px;">
-          Login to Your Account →
-        </a>
+
+        <div style="background: #1e1b4b; border-left: 4px solid #6366f1; padding: 16px; border-radius: 6px; margin-bottom: 28px;">
+          <p style="color: #c7d2fe; font-size: 13px; margin: 0; line-height: 1.5;">
+            🔒 <strong>Security Instruction:</strong> Please log in to your account at <a href="https://crm.saampark.com" style="color: #818cf8; text-decoration: underline;">https://crm.saampark.com</a> and change your temporary password immediately from your <strong>Settings / Security</strong> profile.
+          </p>
+        </div>
+
+        <div style="text-align: center;">
+          <a href="https://crm.saampark.com/login" style="display: inline-block; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 10px; font-weight: 700; font-size: 14px;">
+            Log In to SAAMPARK CRM →
+          </a>
+        </div>
       </div>
       <div style="padding: 20px 40px; background: #0f0f13; text-align: center; border-top: 1px solid #1e1e2e;">
         <p style="color: #475569; font-size: 12px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
@@ -177,7 +194,7 @@ async function sendWelcomeEmail(email, name = 'User', role = 'Team Member') {
   await transporter.sendMail({
     from: '"SAAMPARK CRM" <supriyogod@gmail.com>',
     to: email,
-    subject: '🎉 Welcome to SAAMPARK CRM — Account Activated!',
+    subject: `🎉 Congratulations! You have been added as ${role} at ${companyName}`,
     html,
   });
 }
@@ -186,7 +203,9 @@ module.exports = {
   sendPasswordResetOTP,
   sendEmailVerificationOTP,
   sendWelcomeEmail,
+  sendAdminCreatedAccountEmail,
   verifyOTP,
   generateOTP,
   storeOTP,
 };
+

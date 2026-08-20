@@ -192,15 +192,24 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
     setUserPermissions(emailNorm, allowedModules)
     setUserAllModuleActions(emailNorm, actionMatrix)
 
-    // Persist permissions to backend database
-    api.put(`/users/${targetId}`, {
-      ...payload,
-      permissions: { actionMatrix, allowedModules }
-    }).catch((err) => console.warn("Backend permissions save warning:", err))
+    // Persist user & permissions to backend database
+    if (editingUser) {
+      api.put(`/users/${targetId}`, {
+        ...payload,
+        permissions: { actionMatrix, allowedModules }
+      }).catch((err) => console.warn("Backend permissions save warning:", err))
+    } else {
+      // Create user in DB (is_verified = 1) and send Welcome email with credentials
+      api.post("/users", {
+        ...payload,
+        permissions: { actionMatrix, allowedModules }
+      }).catch((err) => console.warn("Backend user create warning:", err))
+    }
 
     onSave(payload)
     onClose()
   }
+
 
   return (
     <AnimatePresence>
@@ -321,9 +330,23 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-foreground/80 mb-1.5 flex items-center gap-1.5">
-                <Lock size={14} /> Initial / Account Password *
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-semibold text-foreground/80 flex items-center gap-1.5">
+                  <Lock size={14} /> Initial / Account Password *
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789#@!"
+                    let gen = "Spk#"
+                    for (let i = 0; i < 6; i++) gen += chars.charAt(Math.floor(Math.random() * chars.length))
+                    setPassword(gen)
+                  }}
+                  className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                >
+                  🎲 Generate Random Password
+                </button>
+              </div>
               <input
                 type="text"
                 required
@@ -332,8 +355,9 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
                 placeholder="Enter password (e.g. Password123)"
                 className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50"
               />
-              <p className="text-[11px] text-muted-foreground mt-1">Set the password for this account. User will use this to sign in.</p>
+              <p className="text-[11px] text-muted-foreground mt-1">Set the initial password. A welcome email with login credentials and instructions to change password will be sent automatically.</p>
             </div>
+
 
 
             <div>

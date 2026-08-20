@@ -120,10 +120,66 @@ const deleteUser = async (req, res, next) => {
       ['inactive', id, id]
     );
 
-    return successResponse(res, 200, 'User removed successfully');
+// ─── CREATE USER (ADMIN CREATED - BYPASSES OTP) ─────────────────────────────
+const createUser = async (req, res, next) => {
+  try {
+    const { full_name, name, email, password, phone, role_id, role, company_id, companyName, department } = req.body;
+    const displayName = full_name || name;
+
+    if (!displayName || !email || !password) {
+      return errorResponse(res, 400, 'Name, email and password are required.');
+    }
+
+    const normEmail = email.toLowerCase().trim();
+
+    // Check existing
+    const [existing] = await pool.execute('SELECT id FROM users WHERE email = ? AND deleted_at IS NULL', [normEmail]);
+    if (existing.length > 0) {
+      return errorResponse(res, 400, 'An account with this email address already exists.');
+    }
+
+    const { hashPassword } = require('../utils/passwordHash');
+    const hashedPassword = await hashPassword(password);
+
+    // Map role string to ID if needed
+    let targetRoleId = 3;
+    if (role_id) {
+      targetRoleId = parseInt(role_id, 10);
+    } else if (role) {
+      const rLower = role.toLowerCase();
+      if (rLower.includes('super')) targetRoleId = 1;
+      else if (rLower.includes('admin')) targetRoleId = 2;
+      else if (rLower.includes('client')) targetRoleId = 4;
+      else targetRoleId = 3;
+    }
+
+    const roleName = targetRoleId === 1 ? 'Super Admin' : targetRoleId === 2 ? 'Admin' : targetRoleId === 4 ? 'Clients' : 'Teams';
+
+    // Admin created users are marked is_verified = 1 automatically!
+    const [result] = await pool.execute(
+      'INSERT INTO users (role_id, full_name, email, password_hash, phone, department, company_id, is_verified, status) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)',
+      [targetRoleId, displayName, normEmail, hashedPassword, phone || null, department || null, company_id || null, 'active']
+    );
+
+    // Send Welcome Email with credentials and change password instructions
+    const compName = companyName || (company_id === 'digital' ? 'SAAMPARK Digital Marketing' : 'SAAMPARK Technology');
+    try {
+      const { sendAdminCreatedAccountEmail } = require('../utils/emailService');
+      await sendAdminCreatedAccountEmail(normEmail, displayName, roleName, compName, password);
+      console.log(`Welcome credentials email sent to ${normEmail}`);
+    } catch (emailErr) {
+      console.warn('Welcome email warning:', emailErr.message);
+    }
+
+    return successResponse(res, 201, 'User account created successfully and welcome credentials email sent!', {
+      id: result.insertId,
+      full_name: displayName,
+      email: normEmail,
+      role_name: roleName,
+    });
   } catch (error) {
     next(error);
   }
 };
 
-module.exports = { getAllUsers, getUserById, updateUser, toggleUserStatus, deleteUser };
+module.exports = { getAllUsers, getUserById, updateUser, toggleUserStatus, deleteUser, createUser };

@@ -1,10 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const { getAllUsers, getUserById, updateUser, toggleUserStatus, deleteUser } = require('../controllers/userController');
+const { getAllUsers, getUserById, updateUser, toggleUserStatus, deleteUser, createUser } = require('../controllers/userController');
 const { authenticate, requireRole } = require('../middlewares/authMiddleware');
 
 // GET all users
 router.get('/', authenticate, getAllUsers);
+
+// CREATE user (Admin/Super Admin) — Bypasses OTP, sends welcome credentials email
+router.post('/', authenticate, requireRole(1, 2), createUser);
 
 // GET single user
 router.get('/:id', authenticate, getUserById);
