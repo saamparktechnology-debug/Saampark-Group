@@ -35,7 +35,14 @@ export default function TasksMain() {
 
   React.useEffect(() => {
     loadTasks()
+    const interval = setInterval(loadTasks, 2500)
+    window.addEventListener("storage", loadTasks)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener("storage", loadTasks)
+    }
   }, [loadTasks])
+
 
   const handleTaskAdded = (newTask: Task) => {
     setTasks((prev) => [newTask, ...prev])

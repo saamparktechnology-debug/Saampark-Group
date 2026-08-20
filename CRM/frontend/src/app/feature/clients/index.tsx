@@ -113,7 +113,12 @@ export default function ClientsMain() {
     loadClientData()
     const handleStorage = () => loadClientData()
     window.addEventListener("storage", handleStorage)
-    return () => window.removeEventListener("storage", handleStorage)
+    const interval = setInterval(loadClientData, 2500)
+
+    return () => {
+      window.removeEventListener("storage", handleStorage)
+      clearInterval(interval)
+    }
   }, [loadClientData])
 
   const handleSaveClient = (newClient: ClientItem) => {

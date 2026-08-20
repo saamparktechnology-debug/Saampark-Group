@@ -16,8 +16,12 @@ import { KPICard } from "./components/KPICard"
 import { DonutChart } from "./components/DonutChart"
 import { BarChartMockup } from "./components/BarChartMockup"
 import { DATA } from "./services/dashboardService"
-import { getStoredUserAccounts } from "../users/services/userService"
+import { getStoredUserAccounts, getUsers } from "../users/services/userService"
 import { taskService } from "../tasks/services/taskService"
+import { getProjects } from "../projects/services/projectService"
+import { Task } from "../tasks/types"
+import { Project } from "../projects/types"
+import { filterGlobalDeletedItems } from "@/lib/storageSync"
 
 import { normalizeRole } from "@/store/usePermissionStore"
 
@@ -37,8 +41,48 @@ export default function DashboardMain() {
   const [noteText, setNoteText] = React.useState("")
   const [activeTasksCount, setActiveTasksCount] = React.useState<number>(0)
 
+  const [liveTasks, setLiveTasks] = React.useState<Task[]>([])
+  const [liveProjects, setLiveProjects] = React.useState<Project[]>([])
+
+  const refreshLiveDashboard = React.useCallback(async () => {
+    try {
+      const [uList, tList, pList] = await Promise.all([
+        getUsers(),
+        taskService.getTasks(),
+        getProjects(),
+      ])
+      const cleanUsers = filterGlobalDeletedItems(uList)
+      const cleanTasks = filterGlobalDeletedItems(tList)
+      const cleanProjects = filterGlobalDeletedItems(pList)
+
+      setRealUsers(cleanUsers)
+      if (cleanUsers.length > 0 && !selectedUserEmail) {
+        setSelectedUserEmail(cleanUsers[0].email)
+      }
+
+      const active = cleanTasks.filter((t) => t.status !== "Done")
+      setActiveTasksCount(active.length)
+      setLiveTasks(cleanTasks)
+      setLiveProjects(cleanProjects)
+    } catch (e) {
+      console.warn("Dashboard refresh error:", e)
+    }
+  }, [selectedUserEmail])
+
+  React.useEffect(() => {
+    refreshLiveDashboard()
+    const interval = setInterval(refreshLiveDashboard, 2500)
+    window.addEventListener("storage", refreshLiveDashboard)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener("storage", refreshLiveDashboard)
+    }
+  }, [refreshLiveDashboard])
+
   React.useEffect(() => {
     if (typeof window !== "undefined") {
+
       const accounts = getStoredUserAccounts()
       setRealUsers(accounts)
       if (accounts.length > 0 && !selectedUserEmail) {
@@ -859,7 +903,12 @@ export default function DashboardMain() {
            {/* Open Projects List */}
            <Widget title="Open Projects" icon={Grid}>
               <div className="space-y-4 pt-2">
-                {d.openProjects.map((p: any, i: number) => (
+                {(liveProjects.length > 0 ? liveProjects.map(p => ({
+                  name: p.title,
+                  progress: p.progress || 0,
+                  start: p.startDate,
+                  deadline: p.deadline
+                })) : d.openProjects).map((p: any, i: number) => (
                   <div key={i} className="border-b border-border/40 pb-4 last:border-0 group cursor-pointer">
                     <div className="flex justify-between items-center mb-1">
                       <p className="text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">{p.name}</p>
@@ -903,7 +952,14 @@ export default function DashboardMain() {
                     </tr>
                   </thead>
                   <tbody>
-                    {d.myTasks.map((t: any, i: number) => (
+                    {(liveTasks.length > 0 ? liveTasks.map(t => ({
+                      id: t.id,
+                      title: t.title,
+                      start: t.startDate || "-",
+                      deadline: t.deadline || "-",
+                      status: t.status,
+                      statusColor: t.status === "Done" ? "bg-emerald-500" : "bg-blue-500"
+                    })) : d.myTasks).map((t: any, i: number) => (
                       <tr key={i} className="border-b border-border/20 hover:bg-surface-hover/20 transition-colors">
                         <td className="px-4 py-4 text-muted-foreground border-l-2 border-l-yellow-500">
                            <input type="checkbox" className="mr-2 rounded border-border" />
@@ -911,14 +967,14 @@ export default function DashboardMain() {
                         </td>
                         <td className="px-4 py-4 font-medium text-primary cursor-pointer hover:underline">
                           {t.title}
-                          <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] bg-green-500 text-white font-medium">{t.tag} ↓</span>
+                          {t.tag && <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] bg-green-500 text-white font-medium">{t.tag} ↓</span>}
                         </td>
-                        <td className="px-4 py-4 text-right text-muted-foreground">-</td>
+                        <td className="px-4 py-4 text-right text-muted-foreground">{t.start || "-"}</td>
                         <td className="px-4 py-4 text-right text-red-500 text-xs w-24">
-                           {t.deadline.split('-').join('\n-')}
+                           {String(t.deadline || "-").split('-').join('\n-')}
                         </td>
                         <td className="px-4 py-4">
-                           <span className={`px-2 py-1 text-xs font-bold rounded text-white ${t.statusColor}`}>{t.status}</span>
+                           <span className={`px-2 py-1 text-xs font-bold rounded text-white ${t.statusColor || "bg-blue-500"}`}>{t.status}</span>
                         </td>
                       </tr>
                     ))}

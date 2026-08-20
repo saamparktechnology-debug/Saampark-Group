@@ -36,8 +36,18 @@ export default function LeadsMain() {
   const [editingLead, setEditingLead] = React.useState<Lead | null>(null)
 
   React.useEffect(() => {
-    getLeads().then((data) => setLeads(data))
+    const fetchFreshLeads = () => {
+      getLeads().then((data) => setLeads(data))
+    }
+    fetchFreshLeads()
+    const interval = setInterval(fetchFreshLeads, 2500)
+    window.addEventListener("storage", fetchFreshLeads)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener("storage", fetchFreshLeads)
+    }
   }, [])
+
 
   const handleLeadAdded = (newLead: Lead) => {
     setLeads((prev) => [newLead, ...prev])

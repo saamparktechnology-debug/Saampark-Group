@@ -20,13 +20,23 @@ export default function ProjectsMain() {
   const [editingProject, setEditingProject] = React.useState<Project | null>(null)
 
   React.useEffect(() => {
-    getProjects().then((data) => {
-      setProjects(data)
-      if (data.length > 0) {
-        setSelectedProject(data[0])
-      }
-    })
-  }, [])
+    const fetchFreshProjects = () => {
+      getProjects().then((data) => {
+        setProjects(data)
+        if (data.length > 0 && !selectedProject) {
+          setSelectedProject(data[0])
+        }
+      })
+    }
+    fetchFreshProjects()
+    const interval = setInterval(fetchFreshProjects, 2500)
+    window.addEventListener("storage", fetchFreshProjects)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener("storage", fetchFreshProjects)
+    }
+  }, [selectedProject])
+
 
   const handleProjectAdded = (newProject: Project) => {
     setProjects((prev) => [newProject, ...prev])
