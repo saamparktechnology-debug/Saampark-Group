@@ -1,15 +1,5 @@
-require('dotenv').config();
-
-const requiredEnvVars = ['DB_HOST', 'DB_USER', 'DB_NAME', 'JWT_SECRET'];
-
-if (process.env.NODE_ENV === 'production') {
-  requiredEnvVars.forEach((varName) => {
-    if (!process.env[varName]) {
-      console.error(`❌ FATAL ERROR: Missing required environment variable: ${varName}`);
-      process.exit(1);
-    }
-  });
-}
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
 const env = {
   port: parseInt(process.env.PORT, 10) || 5000,
@@ -25,11 +15,11 @@ const env = {
   },
 
   jwt: {
-    secret: process.env.JWT_SECRET || 'super_secret_jwt_key_crm_default',
+    secret: process.env.JWT_SECRET || '8vK#2mQ!7xP@4zL$9rT^6nW&3cY*5sH@1jF!8dQ#0kV$6pX',
     expiresIn: process.env.JWT_EXPIRES_IN || '1d',
   },
 
   clientUrl: process.env.CLIENT_URL || 'http://localhost:3000',
 };
 
-module.exports = env;
+module.exports = env;
