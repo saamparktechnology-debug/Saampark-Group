@@ -9,9 +9,13 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
   const { isAuthenticated, user } = useAuthStore()
-  
+
   // Hydration state check to prevent flash of content
   const [isMounted, setIsMounted] = React.useState(false)
+
+  // Track consecutive failures before logging out (prevents flaky-network logouts)
+  const failureCountRef = React.useRef(0)
+  const MAX_FAILURES = 3
 
   React.useEffect(() => {
     setIsMounted(true)
@@ -35,62 +39,69 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         return
       }
 
-      try {
-        const rawDeleted = localStorage.getItem("saampark_deleted_user_emails")
-        const deletedEmails: string[] = rawDeleted ? JSON.parse(rawDeleted) : []
-        const emailNorm = state.user.email.toLowerCase().trim()
-
-        const demoEmails = ["superadmin@saampark.in", "admin@tech.saampark.in", "team@saampark.in", "client@acme.com", "user@saampark.in"]
-        if (demoEmails.includes(emailNorm)) {
-          console.warn("Revoking obsolete demo account session:", emailNorm)
-          state.logout()
-          if (typeof window !== "undefined") {
-            localStorage.removeItem("saampark-auth")
-            localStorage.removeItem("saampark-auth-v2")
-          }
-          router.replace("/login")
-          return
-        }
-
-        if (deletedEmails.includes(emailNorm)) {
-          state.logout()
-          router.replace("/login")
-          return
-        }
-
-        // Sync permissions and verify user exists in live database
-        const { getUsers } = await import("@/app/feature/users/services/userService")
-        const liveUsers = await getUsers()
-        const exists = liveUsers.some((u) => u.email.toLowerCase().trim() === emailNorm)
-
-        if (!exists) {
-          console.warn("Session revoked: User account deleted or non-existent.")
-          state.logout()
-          router.replace("/login")
-          return
-        }
-      } catch (e) {
-        console.warn("Session verification error (forcing login redirect):", e)
+      // Block obsolete demo accounts
+      const emailNorm = state.user.email.toLowerCase().trim()
+      const demoEmails = ["superadmin@saampark.in", "admin@tech.saampark.in", "team@saampark.in", "client@acme.com", "user@saampark.in"]
+      if (demoEmails.includes(emailNorm)) {
+        console.warn("Revoking obsolete demo account session:", emailNorm)
         state.logout()
         if (typeof window !== "undefined") {
           localStorage.removeItem("saampark-auth")
           localStorage.removeItem("saampark-auth-v2")
         }
-        if (pathname !== "/login") {
+        router.replace("/login")
+        return
+      }
+
+      // Check local deleted emails list (fast, no network)
+      try {
+        const rawDeleted = localStorage.getItem("saampark_deleted_user_emails")
+        const deletedEmails: string[] = rawDeleted ? JSON.parse(rawDeleted) : []
+        if (deletedEmails.includes(emailNorm)) {
+          state.logout()
           router.replace("/login")
+          return
         }
+      } catch {}
+
+      // Network check: verify user still exists in live database
+      // Only force-logout after MAX_FAILURES consecutive errors (prevents transient network issues)
+      try {
+        const { getUsers } = await import("@/app/feature/users/services/userService")
+        const liveUsers = await getUsers()
+
+        if (Array.isArray(liveUsers) && liveUsers.length > 0) {
+          const exists = liveUsers.some((u) => u.email.toLowerCase().trim() === emailNorm)
+          if (!exists) {
+            failureCountRef.current += 1
+            if (failureCountRef.current >= MAX_FAILURES) {
+              console.warn("Session revoked: User account deleted or non-existent.")
+              state.logout()
+              router.replace("/login")
+            }
+          } else {
+            // Reset failure count on success
+            failureCountRef.current = 0
+          }
+        } else {
+          // Empty result — could be a transient error, don't log out
+          console.warn("Session check: empty user list returned (skipping logout)")
+        }
+      } catch (e) {
+        // Network/API error — increment but don't immediately logout
+        console.warn("Session check error (will retry):", e)
       }
     }
 
-
     verifyActiveSessionAndSyncPermissions()
+
+    // Run every 30 seconds (was 3s — too aggressive, caused logouts on slow responses)
+    const interval = setInterval(verifyActiveSessionAndSyncPermissions, 30000)
 
     const handleStorageChange = () => {
       verifyActiveSessionAndSyncPermissions()
     }
-
     window.addEventListener("storage", handleStorageChange)
-    const interval = setInterval(verifyActiveSessionAndSyncPermissions, 3000)
 
     return () => {
       window.removeEventListener("storage", handleStorageChange)
