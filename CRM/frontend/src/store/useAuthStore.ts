@@ -183,7 +183,8 @@ export const useAuthStore = create<AuthState>()(
       },
     }),
     {
-      name: 'saampark-auth',
+      name: 'saampark-auth-v2',
     }
   )
 )
+

@@ -3,13 +3,12 @@
 import * as React from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { useAuthStore } from "@/store/useAuthStore"
-
 import { syncGlobalDeletedIds } from "@/lib/storageSync"
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
-  const { isAuthenticated, user, logout } = useAuthStore()
+  const { isAuthenticated, user } = useAuthStore()
   
   // Hydration state check to prevent flash of content
   const [isMounted, setIsMounted] = React.useState(false)
@@ -41,31 +40,39 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         const deletedEmails: string[] = rawDeleted ? JSON.parse(rawDeleted) : []
         const emailNorm = state.user.email.toLowerCase().trim()
 
+        const demoEmails = ["superadmin@saampark.in", "admin@tech.saampark.in", "team@saampark.in", "client@acme.com", "user@saampark.in"]
+        if (demoEmails.includes(emailNorm)) {
+          console.warn("Revoking obsolete demo account session:", emailNorm)
+          state.logout()
+          if (typeof window !== "undefined") {
+            localStorage.removeItem("saampark-auth")
+            localStorage.removeItem("saampark-auth-v2")
+          }
+          router.replace("/login")
+          return
+        }
+
         if (deletedEmails.includes(emailNorm)) {
           state.logout()
           router.replace("/login")
           return
         }
 
+        // Sync permissions and verify user exists in live database
+        const { getUsers } = await import("@/app/feature/users/services/userService")
+        const liveUsers = await getUsers()
+        const exists = liveUsers.some((u) => u.email.toLowerCase().trim() === emailNorm)
 
-          // Sync permissions and verify user exists in live database
-          const { getUsers } = await import("@/app/feature/users/services/userService")
-          const liveUsers = await getUsers()
-          const exists = liveUsers.some((u) => u.email.toLowerCase().trim() === emailNorm)
-
-          if (!exists) {
-            console.warn("Session revoked: User account deleted or non-existent.")
-            state.logout()
-            router.replace("/login")
-            return
-          }
-        } catch (e) {
-          console.warn("Session verification error:", e)
+        if (!exists) {
+          console.warn("Session revoked: User account deleted or non-existent.")
+          state.logout()
+          router.replace("/login")
+          return
         }
+      } catch (e) {
+        console.warn("Session verification error:", e)
+      }
     }
-
-
-
 
     verifyActiveSessionAndSyncPermissions()
 
@@ -106,4 +113,3 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   // Authenticated and not on login page, render protected children
   return <>{children}</>
 }
-
