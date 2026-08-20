@@ -72,10 +72,11 @@ interface AuthState {
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
-      isAuthenticated: true,
+      isAuthenticated: false,
       token: null,
-      user: DEMO_USERS['Super Admin'],
-      activeCompanyId: 'tech',
+      user: null,
+      activeCompanyId: null,
+
 
       loginAs: (role: Role | string, customUser?: Partial<User>) => {
         const demoUser = DEMO_USERS[role as Role]
