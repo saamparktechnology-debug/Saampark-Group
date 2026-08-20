@@ -147,7 +147,7 @@ export default function LoginPage() {
           }
         }
       } catch (backendErr: any) {
-        const msg: string = backendErr?.response?.data?.message || ""
+        const msg: string = backendErr?.response?.data?.message || backendErr?.message || ""
         // If email not verified, open verification modal
         if (msg.toLowerCase().includes("not verified")) {
           setVerifyEmail(normalizedEmail)
@@ -155,9 +155,15 @@ export default function LoginPage() {
           setIsLoading(false)
           return
         }
-        // For any other backend error, fall through to localStorage check
-        console.warn("Backend login attempt:", msg)
+        // If backend explicitly rejected credentials or user account, stop immediately
+        if (msg.toLowerCase().includes("invalid") || msg.toLowerCase().includes("password") || msg.toLowerCase().includes("not found") || msg.toLowerCase().includes("inactive") || msg.toLowerCase().includes("disabled")) {
+          setIsLoading(false)
+          setError(msg || "Invalid email or password. Please check your credentials.")
+          return
+        }
+        console.warn("Backend login attempt connection warning:", msg)
       }
+
 
       // ── DETERMINE MATCHED ROLE & ACCOUNT ────────────────────────────────────
       let matchedRole: Role | null = backendRole

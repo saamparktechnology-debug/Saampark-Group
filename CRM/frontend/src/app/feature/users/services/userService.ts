@@ -221,6 +221,13 @@ export function recordUserAccount(user: Partial<UserItem>, isNewRegistration = f
 
 // Delete user permanently
 export async function deleteUser(id: string, email?: string): Promise<boolean> {
+  // Call backend REST API to mark deleted_at in MySQL database
+  try {
+    await api.delete(`/users/${id}`)
+  } catch (err) {
+    console.warn("Backend user delete API call error:", err)
+  }
+
   const currentAccounts = getStoredUserAccounts();
   const targetUser = currentAccounts.find(
     (u) => u.id === id || (email && u.email.toLowerCase().trim() === email.toLowerCase().trim())
@@ -230,6 +237,7 @@ export async function deleteUser(id: string, email?: string): Promise<boolean> {
   if (targetEmail) {
     markUserAsDeleted(targetEmail);
   }
+
 
   const filtered = currentAccounts.filter(
     (acc) =>
