@@ -69,15 +69,7 @@ export function filterGlobalDeletedItems<T extends { id: string | number }>(item
 
 // Generic helper to fetch any module data (Projects, Events, Expenses, Tickets, Subscriptions, Proposals, Estimates, Notes, Settings) from MySQL DB
 export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: T): Promise<T> {
-  let currentFallback = fallbackData
-  if (typeof window !== "undefined") {
-    try {
-      const local = localStorage.getItem(`saampark_module_${moduleKey}`)
-      if (local) {
-        try { currentFallback = JSON.parse(local) } catch {}
-      }
-    } catch {}
-  }
+  const localDeleted = await syncGlobalDeletedIds()
 
   try {
     const res = await api.get(`/store/${moduleKey}`)
@@ -86,14 +78,24 @@ export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: 
       if (typeof window !== "undefined") {
         try { localStorage.setItem(`saampark_module_${moduleKey}`, JSON.stringify(serverData)) } catch {}
       }
-      return serverData as T
+      return filterGlobalDeletedItems(serverData as any, localDeleted) as any
     }
   } catch (err) {
     console.warn(`MySQL fetch warning for module ${moduleKey}:`, err)
   }
 
-  return currentFallback
+  if (typeof window !== "undefined") {
+    try {
+      const local = localStorage.getItem(`saampark_module_${moduleKey}`)
+      if (local) {
+        try { return filterGlobalDeletedItems(JSON.parse(local), localDeleted) as any } catch {}
+      }
+    } catch {}
+  }
+
+  return filterGlobalDeletedItems(fallbackData as any, localDeleted) as any
 }
+
 
 // Generic helper to save any module data to MySQL DB persistently
 export async function saveModuleDataToDB<T>(moduleKey: string, data: T): Promise<void> {

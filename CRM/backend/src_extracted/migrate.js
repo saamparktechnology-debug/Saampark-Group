@@ -126,9 +126,37 @@ async function migrate() {
     `);
     console.log('Created app_data table if not exists');
 
+    // Seed initial app_data modules if empty
+    const initialModules = [
+      { key: 'leads', data: [
+        { id: "1", type: "Person", name: "Sarah Cole", primaryContact: "Sarah Cole", phone: "+91 98123 45678", service: "Google My Business", reminderDate: "12 Aug 2025", reminderNotes: "Follow up regarding GMB verification code", owner: "John Doe", caller: "John Doe", ownerAvatar: "https://api.dicebear.com/7.x/notionists/svg?seed=SarahCole", labels: ["Call this week"], createdAt: "06 Aug 2025", status: "New", source: "Google", city: "Mumbai", state: "Maharashtra", country: "India", value: "₹1,50,000" },
+        { id: "2", type: "Person", name: "Michael Vance", primaryContact: "Michael Vance", phone: "+91 98234 56789", service: "Custom ERP System", reminderDate: "14 Aug 2025", reminderNotes: "Send proposal draft for review", owner: "Sarah Jenkins", caller: "Sarah Jenkins", ownerAvatar: "https://api.dicebear.com/7.x/notionists/svg?seed=MichaelVance", labels: ["Potential"], createdAt: "05 Aug 2025", status: "New", source: "LinkedIn", city: "Delhi", state: "Delhi", country: "India", value: "₹4,20,000" },
+        { id: "3", type: "Company", name: "Apex Tech Solutions", primaryContact: "David Miller", phone: "+91 98345 67890", service: "Mobile App Development", reminderDate: "10 Aug 2025", reminderNotes: "Schedule technical demo with CTO", owner: "Alex Turner", caller: "Alex Turner", ownerAvatar: "https://api.dicebear.com/7.x/notionists/svg?seed=DavidMiller", labels: ["High Priority"], createdAt: "04 Aug 2025", status: "In Discussion", source: "Website", city: "Bangalore", state: "Karnataka", country: "India", value: "₹8,50,000" },
+        { id: "4", type: "Person", name: "Emily Watson", primaryContact: "Emily Watson", phone: "+91 98456 78901", service: "SEO & Digital Marketing", reminderDate: "18 Aug 2025", reminderNotes: "Send monthly audit report", owner: "John Doe", caller: "John Doe", ownerAvatar: "https://api.dicebear.com/7.x/notionists/svg?seed=EmilyWatson", labels: ["Follow Up"], createdAt: "02 Aug 2025", status: "Qualified", source: "Referral", city: "Pune", state: "Maharashtra", country: "India", value: "₹2,00,000" }
+      ]},
+      { key: 'tasks', data: [
+        { id: "3642", title: "Add company logo and contact details", startDate: "-", deadline: "30-06-2026", milestone: "Beta Release", relatedTo: "WordPress Plugin Development", assignedTo: "John Doe", assignedToAvatar: "https://api.dicebear.com/7.x/notionists/svg?seed=JohnDoe", status: "To do", priority: "Normal", priorityIcon: "none", labels: [] },
+        { id: "3643", title: "Develop plugin documentation", startDate: "-", deadline: "02-07-2026", milestone: "Beta Release", relatedTo: "WordPress Plugin Development", assignedTo: "John Doe", assignedToAvatar: "https://api.dicebear.com/7.x/notionists/svg?seed=JohnDoe", status: "To do", priority: "Urgent", priorityIcon: "urgent", labels: [] },
+        { id: "3644", title: "Implement user authentication flow", startDate: "01-07-2026", deadline: "10-07-2026", milestone: "MVP Release", relatedTo: "Mobile App Redesign", assignedTo: "Mark Thomas", assignedToAvatar: "https://api.dicebear.com/7.x/notionists/svg?seed=MarkThomas", status: "In progress", priority: "High", priorityIcon: "high", labels: [] }
+      ]},
+      { key: 'projects', data: [
+        { id: "17", title: "WordPress Plugin Development", projectType: "Internal Project", client: "-", price: "-", startDate: "20-06-2026", deadline: "08-08-2026", progress: 29, status: "Open", labels: ["Urgent"], starred: true, totalHours: 37.08 },
+        { id: "19", title: "Website Maintenance and Updates", projectType: "Client Project", client: "Birdie Erdman", price: "$3,500.00", startDate: "08-07-2026", deadline: "12-08-2026", progress: 15, status: "Open", labels: ["Urgent"], totalHours: 12.5 }
+      ]}
+    ];
+
+    for (const mod of initialModules) {
+      await pool.execute(
+        `INSERT IGNORE INTO app_data (module_key, data_json) VALUES (?, ?)`,
+        [mod.key, JSON.stringify(mod.data)]
+      );
+    }
+    console.log('Seeded initial app_data modules in MySQL');
+
     console.log('\nMigration complete!');
 
     process.exit(0);
+
 
 
   } catch (err) {
