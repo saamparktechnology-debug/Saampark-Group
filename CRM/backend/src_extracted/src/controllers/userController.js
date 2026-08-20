@@ -114,11 +114,27 @@ const deleteUser = async (req, res, next) => {
       return errorResponse(res, 403, 'Super Admin accounts cannot be deleted.');
     }
 
+    // Fetch user details for deleted_items tracking
+    const [targetUsers] = await pool.execute('SELECT id, email FROM users WHERE id = ? OR email = ?', [id, id]);
+    if (targetUsers.length > 0) {
+      const emailNorm = targetUsers[0].email.toLowerCase().trim();
+      const idStr = String(targetUsers[0].id).toLowerCase().trim();
+      await pool.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "users")', [emailNorm]);
+      await pool.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "users")', [idStr]);
+    }
+
     // Soft delete: set deleted_at and deactivate
     await pool.execute(
       'UPDATE users SET deleted_at = NOW(), status = ? WHERE id = ? OR email = ?',
       ['inactive', id, id]
     );
+
+    return successResponse(res, 200, 'User removed successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
 
 // ─── CREATE USER (ADMIN CREATED - BYPASSES OTP) ─────────────────────────────
 const createUser = async (req, res, next) => {

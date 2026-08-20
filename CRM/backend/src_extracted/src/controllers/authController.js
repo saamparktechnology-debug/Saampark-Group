@@ -99,13 +99,14 @@ const login = async (req, res, next) => {
     }
 
     const [users] = await pool.execute(
-      'SELECT u.*, r.name as role_name FROM users u JOIN roles r ON u.role_id = r.id WHERE u.email = ?',
-      [email.toLowerCase()]
+      'SELECT u.*, r.name as role_name FROM users u JOIN roles r ON u.role_id = r.id WHERE u.email = ? AND u.deleted_at IS NULL AND u.status = "active"',
+      [email.toLowerCase().trim()]
     );
 
     if (users.length === 0) {
-      return errorResponse(res, 401, 'Account does not exist. Please contact your System Administrator.');
+      return errorResponse(res, 401, 'Account does not exist or has been deleted. Please contact your System Administrator.');
     }
+
 
     const user = users[0];
 
