@@ -23,7 +23,9 @@ import { normalizeRole } from "@/store/usePermissionStore"
 
 export default function DashboardMain() {
   const { activeCompanyId, user } = useAuthStore()
+  if (!user) return null
   const { isClockedIn, clockIn, clockOut, secondsElapsed, tick } = useTimerStore()
+
   
   // Real registered users list from user management service
   const [realUsers, setRealUsers] = React.useState<any[]>([])
