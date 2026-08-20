@@ -27,6 +27,9 @@ export async function markGlobalItemDeleted(id: string | number, moduleName?: st
   if (!id) return
   const strId = String(id).toLowerCase().trim()
   saveLocalDeletedId(strId)
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("storage"))
+  }
 
   try {
     await api.post("/deleted", { id: strId, moduleName })
@@ -44,7 +47,11 @@ export async function syncGlobalDeletedIds(): Promise<string[]> {
     if (Array.isArray(serverIds) && serverIds.length > 0) {
       const merged = Array.from(new Set([...local, ...serverIds.map((s) => String(s).toLowerCase().trim())]))
       if (typeof window !== "undefined") {
+        const hasNew = merged.length > local.length
         localStorage.setItem(UNIVERSAL_DELETED_KEY, JSON.stringify(merged))
+        if (hasNew) {
+          window.dispatchEvent(new Event("storage"))
+        }
       }
       return merged
     }
@@ -53,6 +60,7 @@ export async function syncGlobalDeletedIds(): Promise<string[]> {
   }
   return local
 }
+
 
 export function isGlobalItemDeleted(id: string | number, deletedIds?: string[]): boolean {
   if (!id) return false

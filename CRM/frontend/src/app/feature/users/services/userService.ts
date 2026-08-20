@@ -300,35 +300,41 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
 
 
   const deletedEmails = getDeletedUserEmails();
-  const storedAccounts = getStoredUserAccounts();
 
-  // Deduplicate by email
+  if (liveUsers.length > 0) {
+    const activeLive = liveUsers.filter((u) => !deletedEmails.includes(u.email.toLowerCase().trim()));
+    // Add default super admin accounts if missing
+    DEFAULT_SYSTEM_ACCOUNTS.forEach((sa) => {
+      if (!activeLive.some((u) => u.email.toLowerCase().trim() === sa.email.toLowerCase().trim()) && !deletedEmails.includes(sa.email.toLowerCase().trim())) {
+        activeLive.push(sa);
+      }
+    });
+    const finalUsers = filterGlobalDeletedItems(activeLive);
+    if (typeof window !== "undefined") {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(finalUsers)) } catch {}
+    }
+    if (!companyId || companyId === "all") return finalUsers;
+    return finalUsers.filter((u) => u.companyId === companyId || u.role === "Super Admin");
+  }
+
+  const storedAccounts = getStoredUserAccounts();
   const allAccountsMap = new Map<string, UserItem>();
 
-  // 1. Live database users (strictly exclude deleted user emails)
-  liveUsers.forEach((u) => {
+  DEFAULT_SYSTEM_ACCOUNTS.forEach((u) => {
     if (!deletedEmails.includes(u.email.toLowerCase().trim())) {
       allAccountsMap.set(u.email.toLowerCase().trim(), u);
     }
   });
 
-  // 2. Default demo system accounts
-  DEFAULT_SYSTEM_ACCOUNTS.forEach((u) => {
-    if (!allAccountsMap.has(u.email.toLowerCase().trim()) && !deletedEmails.includes(u.email.toLowerCase().trim())) {
-      allAccountsMap.set(u.email.toLowerCase().trim(), u);
-    }
-  });
-
-  // 3. Stored accounts
   storedAccounts.forEach((u) => {
-    if (!allAccountsMap.has(u.email.toLowerCase().trim()) && !deletedEmails.includes(u.email.toLowerCase().trim())) {
+    if (!deletedEmails.includes(u.email.toLowerCase().trim())) {
       allAccountsMap.set(u.email.toLowerCase().trim(), u);
     }
   });
-
 
   const merged = Array.from(allAccountsMap.values());
   const visibleAccounts = filterGlobalDeletedItems(merged);
+
 
 
   if (!companyId || companyId === "all") {
