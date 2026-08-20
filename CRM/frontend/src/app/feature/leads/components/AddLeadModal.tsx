@@ -73,9 +73,11 @@ const STANDARD_SOURCES = [
   "My Leads",
 ]
 
+import { useAuthStore } from "@/store/useAuthStore"
 import { getUsers } from "@/app/feature/users/services/userService"
 
 export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps) {
+  const { user } = useAuthStore()
   const [teamMembers, setTeamMembers] = React.useState<{ id: string; name: string; role?: string }[]>([])
   const [type, setType] = React.useState<LeadType>("Organization")
   const [companyName, setCompanyName] = React.useState("")
@@ -108,16 +110,23 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
       getUsers("all").then((list) => {
         const members = (list || []).map((u) => ({ id: u.id, name: u.name, role: u.role }))
         setTeamMembers(members)
-        if (members.length > 0) {
-          setCaller((prev) => (prev && members.some(m => m.name === prev) ? prev : members[0].name))
-          setOwner((prev) => (prev && members.some(m => m.name === prev) ? prev : members[0].name))
+
+        const defaultUserName = user?.name || user?.email || ""
+        const hasLoggedUser = members.some((m) => m.name === defaultUserName)
+
+        if (defaultUserName && (hasLoggedUser || user?.role === "Teams")) {
+          setCaller(defaultUserName)
+          setOwner(defaultUserName)
+        } else if (members.length > 0) {
+          setCaller(members[0].name)
+          setOwner(members[0].name)
         } else {
-          setCaller("")
-          setOwner("")
+          setCaller(defaultUserName || "Team")
+          setOwner(defaultUserName || "Team")
         }
       })
     }
-  }, [isOpen])
+  }, [isOpen, user])
 
   if (!isOpen) return null
 
@@ -129,6 +138,8 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
 
     const finalService = service === "Others" ? (customService.trim() || "Custom Service") : service
     const finalSource = source === "Others" ? (customSource.trim() || "Custom Source") : source
+    const effectiveCaller = caller || user?.name || "Team"
+    const effectiveOwner = owner || user?.name || "Team"
 
     setIsSubmitting(true)
     try {
@@ -141,8 +152,9 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
         reminderDate,
         reminderTime,
         reminderNotes,
-        caller: caller || owner,
-        owner,
+        caller: effectiveCaller,
+        owner: effectiveOwner,
+        createdBy: user?.name || user?.email || effectiveCaller,
         ownerAvatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${companyName}`,
         managers,
         source: finalSource,
@@ -156,8 +168,8 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
         vatNumber,
         gstNumber,
         currency,
-        labels: ["Call this week"],
-        createdAt: "06 Aug 2025",
+        labels: user?.role !== "Super Admin" && user?.role !== "Admin" ? ["My Leads", "Call this week"] : ["Call this week"],
+        createdAt: `${new Date().toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' })}`,
       })
 
       onLeadAdded(created)

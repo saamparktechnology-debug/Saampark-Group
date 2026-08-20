@@ -432,13 +432,18 @@ export function LeadList({
                       </div>
                     </td>
 
-                    {/* Owner */}
+                    {/* Owner / Caller */}
                     <td className={`py-3.5 px-4 ${isLocked ? "blur-[1px] opacity-60" : ""}`}>
                       <div className="flex items-center gap-2">
                         <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-amber-400 to-amber-600 text-white flex items-center justify-center text-[10px] font-bold">
-                          {(l.owner || "Owner").split(" ").map((n) => n[0]).join("")}
+                          {((l.caller || l.owner || l.createdBy || "Owner").split(" ").map((n) => n[0]).join("") || "U").slice(0, 2)}
                         </div>
-                        <span className="text-zinc-700 dark:text-zinc-300">{l.owner}</span>
+                        <div className="flex flex-col">
+                          <span className="text-zinc-700 dark:text-zinc-300 font-semibold">{l.caller || l.owner || "Team Member"}</span>
+                          {l.createdBy && l.createdBy !== (l.caller || l.owner) && (
+                            <span className="text-[10px] text-zinc-400">Added by: {l.createdBy}</span>
+                          )}
+                        </div>
                       </div>
                     </td>
 

@@ -127,11 +127,14 @@ export default function LeadsMain() {
     return leads.filter((l) => {
       const caller = (l.caller || "").toLowerCase().trim()
       const owner = (l.owner || "").toLowerCase().trim()
+      const createdBy = (l.createdBy || "").toLowerCase().trim()
       return (
         caller === normName ||
         caller === normEmail ||
         owner === normName ||
-        owner === normEmail
+        owner === normEmail ||
+        createdBy === normName ||
+        createdBy === normEmail
       )
     })
   }, [leads, user, isSuperOrAdmin])

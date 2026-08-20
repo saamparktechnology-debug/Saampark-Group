@@ -18,6 +18,7 @@ export interface Lead {
   phone: string
   owner: string
   caller?: string
+  createdBy?: string
   ownerAvatar?: string
   service?: string
   reminderDate?: string
