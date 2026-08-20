@@ -10,40 +10,61 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const { isAuthenticated, user } = useAuthStore()
 
-  // Hydration state check to prevent flash of content
   const [isMounted, setIsMounted] = React.useState(false)
 
-  // Track consecutive failures before logging out (prevents flaky-network logouts)
+  // Track when user last authenticated to avoid immediately re-verifying
+  const loginTimestampRef = React.useRef<number>(0)
+  // Track consecutive DB-failures before forcing logout
   const failureCountRef = React.useRef(0)
   const MAX_FAILURES = 3
+  // Grace period after login: don't run session verify for 10 seconds
+  const LOGIN_GRACE_MS = 10000
 
   React.useEffect(() => {
     setIsMounted(true)
   }, [])
 
-  // Active Session Revocation Check & Global Permission Sync
+  // Record login time whenever auth state becomes true
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      loginTimestampRef.current = Date.now()
+      failureCountRef.current = 0 // reset failure count on fresh login
+    }
+  }, [isAuthenticated])
+
+  // Simple redirect effect — runs immediately on auth state change
+  React.useEffect(() => {
+    if (!isMounted) return
+    const state = useAuthStore.getState()
+    const isAuth = Boolean(state.isAuthenticated && state.user && state.user.email)
+    if (!isAuth && pathname !== "/login") {
+      router.replace("/login")
+    } else if (isAuth && pathname === "/login") {
+      router.replace("/feature/dashboard")
+    }
+  }, [isAuthenticated, user, pathname, router, isMounted])
+
+  // Background session verification — runs every 30s, with grace period after login
   React.useEffect(() => {
     if (!isMounted) return
 
-    const verifyActiveSessionAndSyncPermissions = async () => {
-      // Sync all deleted items from MySQL database across all browsers
-      try {
-        await syncGlobalDeletedIds()
-      } catch {}
+    const verifySession = async () => {
+      // Never verify on login page itself
+      if (pathname === "/login") return
+
+      // Don't verify during login grace period
+      if (Date.now() - loginTimestampRef.current < LOGIN_GRACE_MS) return
+
+      await syncGlobalDeletedIds().catch(() => {})
 
       const state = useAuthStore.getState()
-      if (!state.isAuthenticated || !state.user?.email) {
-        if (pathname !== "/login") {
-          router.replace("/login")
-        }
-        return
-      }
+      if (!state.isAuthenticated || !state.user?.email) return
+
+      const emailNorm = state.user.email.toLowerCase().trim()
 
       // Block obsolete demo accounts
-      const emailNorm = state.user.email.toLowerCase().trim()
       const demoEmails = ["superadmin@saampark.in", "admin@tech.saampark.in", "team@saampark.in", "client@acme.com", "user@saampark.in"]
       if (demoEmails.includes(emailNorm)) {
-        console.warn("Revoking obsolete demo account session:", emailNorm)
         state.logout()
         if (typeof window !== "undefined") {
           localStorage.removeItem("saampark-auth")
@@ -64,8 +85,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         }
       } catch {}
 
-      // Network check: verify user still exists in live database
-      // Only force-logout after MAX_FAILURES consecutive errors (prevents transient network issues)
+      // Network check: verify user still exists — only force logout after MAX_FAILURES
       try {
         const { getUsers } = await import("@/app/feature/users/services/userService")
         const liveUsers = await getUsers()
@@ -75,61 +95,32 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
           if (!exists) {
             failureCountRef.current += 1
             if (failureCountRef.current >= MAX_FAILURES) {
-              console.warn("Session revoked: User account deleted or non-existent.")
+              console.warn("Session revoked: user deleted.")
               state.logout()
               router.replace("/login")
             }
           } else {
-            // Reset failure count on success
             failureCountRef.current = 0
           }
-        } else {
-          // Empty result — could be a transient error, don't log out
-          console.warn("Session check: empty user list returned (skipping logout)")
         }
+        // If empty list: skip (transient error, don't log out)
       } catch (e) {
-        // Network/API error — increment but don't immediately logout
         console.warn("Session check error (will retry):", e)
       }
     }
 
-    verifyActiveSessionAndSyncPermissions()
-
-    // Run every 30 seconds (was 3s — too aggressive, caused logouts on slow responses)
-    const interval = setInterval(verifyActiveSessionAndSyncPermissions, 30000)
-
-    const handleStorageChange = () => {
-      verifyActiveSessionAndSyncPermissions()
-    }
-    window.addEventListener("storage", handleStorageChange)
+    const storageHandler = () => verifySession()
+    window.addEventListener("storage", storageHandler)
+    const interval = setInterval(verifySession, 30000)
 
     return () => {
-      window.removeEventListener("storage", handleStorageChange)
+      window.removeEventListener("storage", storageHandler)
       clearInterval(interval)
     }
   }, [isMounted, pathname, router])
 
-  React.useEffect(() => {
-    if (isMounted) {
-      const state = useAuthStore.getState()
-      const isAuth = Boolean(state.isAuthenticated && state.user && state.user.email)
-      if (!isAuth && pathname !== "/login") {
-        router.replace("/login")
-      } else if (isAuth && pathname === "/login") {
-        router.replace("/feature/dashboard")
-      }
-    }
-  }, [isAuthenticated, user, pathname, router, isMounted])
-
-  // Don't render anything until mounted to prevent hydration errors with zustand persist
   if (!isMounted) return null
-
-  // If on login page and not authenticated, render children (the login page)
   if (pathname === "/login") return <>{children}</>
-
-  // If not authenticated, don't render protected children
   if (!isAuthenticated || !user) return null
-
-  // Authenticated and not on login page, render protected children
   return <>{children}</>
 }
