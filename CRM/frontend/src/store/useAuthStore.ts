@@ -16,40 +16,13 @@ export interface User {
   phone?: string
 }
 
-export const DEMO_USERS: Record<Role, User> = {
-  'Super Admin': {
-    id: 'u1',
-    name: 'Rahul Sharma (Super Admin)',
-    email: 'superadmin@saampark.in',
-    role: 'Super Admin',
-    companyId: 'all',
-    avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=SuperAdmin',
-  },
-  'Admin': {
-    id: 'u2',
-    name: 'Priya Patel (Admin)',
-    email: 'admin@tech.saampark.in',
-    role: 'Admin',
-    companyId: 'tech',
-    avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=TechAdmin',
-  },
-  'Teams': {
-    id: 'u3',
-    name: 'Sneha Gupta (Team Member)',
-    email: 'team@saampark.in',
-    role: 'Teams',
-    companyId: 'tech',
-    avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=Teams',
-  },
-  'Clients': {
-    id: 'u5',
-    name: 'Acme Corp (Client)',
-    email: 'client@acme.com',
-    role: 'Clients',
-    companyId: 'tech',
-    avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=Client',
-  },
+export const DEMO_USERS: Record<Role, User | null> = {
+  'Super Admin': null,
+  'Admin': null,
+  'Teams': null,
+  'Clients': null,
 }
+
 
 export const COMPANIES = [
   { id: 'tech', name: 'SAAMPARK Technology', logo: '💻' },

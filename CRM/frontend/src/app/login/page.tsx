@@ -191,14 +191,15 @@ export default function LoginPage() {
           const matchedDemoKey = (Object.keys(DEMO_USERS) as Role[]).find(
             (r) => DEMO_USERS[r]?.email?.toLowerCase() === normalizedEmail
           )
-          if (matchedDemoKey) {
+          if (matchedDemoKey && DEMO_USERS[matchedDemoKey]) {
+            const demoObj = DEMO_USERS[matchedDemoKey]!
             matchedRole = normalizeRole(matchedDemoKey)
             matchedAccount = {
-              id: DEMO_USERS[matchedDemoKey].id,
-              name: DEMO_USERS[matchedDemoKey].name,
-              email: DEMO_USERS[matchedDemoKey].email,
+              id: String(demoObj.id),
+              name: demoObj.name,
+              email: demoObj.email,
               role: matchedDemoKey,
-              companyId: DEMO_USERS[matchedDemoKey].companyId,
+              companyId: demoObj.companyId,
               status: "Active",
               joinedDate: "2026-01-01",
             }
@@ -206,6 +207,7 @@ export default function LoginPage() {
             if (password !== demoPass) {
               setIsLoading(false)
               setError("Invalid password.")
+
               return
             }
           }

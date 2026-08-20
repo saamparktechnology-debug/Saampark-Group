@@ -29,17 +29,24 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       } catch {}
 
       const state = useAuthStore.getState()
-      if (state.isAuthenticated && state.user?.email) {
-        try {
-          const rawDeleted = localStorage.getItem("saampark_deleted_user_emails")
-          const deletedEmails: string[] = rawDeleted ? JSON.parse(rawDeleted) : []
-          const emailNorm = state.user.email.toLowerCase().trim()
+      if (!state.isAuthenticated || !state.user?.email) {
+        if (pathname !== "/login") {
+          router.replace("/login")
+        }
+        return
+      }
 
-          if (deletedEmails.includes(emailNorm)) {
-            state.logout()
-            router.replace("/login")
-            return
-          }
+      try {
+        const rawDeleted = localStorage.getItem("saampark_deleted_user_emails")
+        const deletedEmails: string[] = rawDeleted ? JSON.parse(rawDeleted) : []
+        const emailNorm = state.user.email.toLowerCase().trim()
+
+        if (deletedEmails.includes(emailNorm)) {
+          state.logout()
+          router.replace("/login")
+          return
+        }
+
 
           // Sync permissions and verify user exists in live database
           const { getUsers } = await import("@/app/feature/users/services/userService")
@@ -55,8 +62,8 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         } catch (e) {
           console.warn("Session verification error:", e)
         }
-      }
     }
+
 
 
 
