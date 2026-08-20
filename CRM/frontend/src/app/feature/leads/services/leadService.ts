@@ -761,7 +761,20 @@ export const deleteLead = async (id: string): Promise<boolean> => {
 }
 
 export const unlockLead = async (id: string): Promise<Lead> => {
-  return updateLead(id, { isLocked: false, lockedReason: undefined }, "Super Admin")
+  // Automatically advance reminderDate to Tomorrow so background overdue check doesn't immediately re-lock it
+  const tomorrow = new Date()
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  const formattedTomorrow = tomorrow.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' })
+
+  return updateLead(
+    id,
+    {
+      isLocked: false,
+      lockedReason: undefined,
+      reminderDate: formattedTomorrow,
+    },
+    "Super Admin"
+  )
 }
 
 export const lockLead = async (id: string, reason?: string): Promise<Lead> => {
