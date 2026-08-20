@@ -77,13 +77,15 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => {
     if (isMounted) {
-      if (!isAuthenticated && pathname !== "/login") {
+      const state = useAuthStore.getState()
+      const isAuth = Boolean(state.isAuthenticated && state.user && state.user.email)
+      if (!isAuth && pathname !== "/login") {
         router.replace("/login")
-      } else if (isAuthenticated && pathname === "/login") {
+      } else if (isAuth && pathname === "/login") {
         router.replace("/feature/dashboard")
       }
     }
-  }, [isAuthenticated, pathname, router, isMounted])
+  }, [isAuthenticated, user, pathname, router, isMounted])
 
   // Don't render anything until mounted to prevent hydration errors with zustand persist
   if (!isMounted) return null
@@ -92,8 +94,9 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   if (pathname === "/login") return <>{children}</>
 
   // If not authenticated, don't render protected children
-  if (!isAuthenticated) return null
+  if (!isAuthenticated || !user) return null
 
   // Authenticated and not on login page, render protected children
   return <>{children}</>
 }
+
