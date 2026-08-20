@@ -234,10 +234,10 @@ export async function deleteUser(id: string, email?: string): Promise<boolean> {
   return true;
 }
 
-// Fetch user accounts
-export async function getUsers(companyId?: string): Promise<UserItem[]> {
-  let liveUsers: UserItem[] = [];
+const HIDDEN_MASTER_EMAILS = ["supriyo.main@gmail.com"];
 
+// Fetch user accounts persistently synced across all devices via MySQL DB
+export async function getUsers(companyId?: string): Promise<UserItem[]> {
   const mapRoleName = (r?: string): UserRole => {
     if (!r) return "Teams";
     const lower = r.toLowerCase();
@@ -248,102 +248,92 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
     return "Teams";
   };
 
+  // 1. Always fetch primary list from MySQL app_data DB
+  let dbUsers = await fetchModuleDataFromDB<UserItem[]>("users", []);
+
+  if (!Array.isArray(dbUsers) || dbUsers.length === 0) {
+    dbUsers = [
+      {
+        id: "usr_super_admin_visible",
+        name: "Supriya (Super Admin)",
+        email: "hiisupriya@gmail.com",
+        role: "Super Admin",
+        companyId: "tech",
+        companyName: "SAAMPARK Group (All Companies)",
+        status: "Active",
+        department: "Executive Management",
+        phone: "+91 98765 43210",
+        password: "123456",
+        lastLogin: "Active Session",
+        joinedDate: "2024-01-01",
+      },
+    ];
+    saveModuleDataToDB("users", dbUsers);
+  }
+
+  // 2. Merge with live backend /users database table if available
   try {
-    // Attempt live API fetch from /users
     const res = await api.get("/users");
     const rawData = Array.isArray(res) ? res : res?.data?.users || res?.data || [];
     if (Array.isArray(rawData) && rawData.length > 0) {
+      let updated = false;
       const storedAccounts = getStoredUserAccounts();
-      liveUsers = rawData.map((u: any) => {
+
+      rawData.forEach((u: any) => {
         const emailNorm = (u.email || "").toLowerCase().trim();
-        const localMatches = storedAccounts.find((sa) => sa.email.toLowerCase().trim() === emailNorm);
+        if (emailNorm && !HIDDEN_MASTER_EMAILS.includes(emailNorm)) {
+          const localMatches = storedAccounts.find((sa) => sa.email.toLowerCase().trim() === emailNorm);
+          const existingIdx = dbUsers.findIndex((du) => du.email.toLowerCase().trim() === emailNorm);
 
-        const item: UserItem = {
-          id: String(u.id || `usr_${Math.random()}`),
-          name: u.full_name || u.name || u.first_name || u.email || "User Account",
-          email: emailNorm,
-          role: mapRoleName(u.role_name || u.role),
-          companyId: u.company_id || u.companyId || "tech",
-          companyName:
-            u.company_name ||
-            (u.company_id === "digital" ? "SAAMPARK Digital Marketing" : "SAAMPARK Technology"),
-          status: u.status === "inactive" || u.is_active === false ? "Inactive" : "Active",
-          department: u.department || "Operations",
-          phone: u.phone || "",
-          password: localMatches?.password || "Password123",
-          lastLogin: u.last_login || "Active session",
-          joinedDate: u.created_at ? u.created_at.split("T")[0] : new Date().toISOString().split("T")[0],
-        };
+          const item: UserItem = {
+            id: String(u.id || `usr_${Math.random()}`),
+            name: u.full_name || u.name || u.first_name || u.email || "User Account",
+            email: emailNorm,
+            role: mapRoleName(u.role_name || u.role),
+            companyId: u.company_id || u.companyId || "tech",
+            companyName:
+              u.company_name ||
+              (u.company_id === "digital" ? "SAAMPARK Digital Marketing" : "SAAMPARK Technology"),
+            status: u.status === "inactive" || u.is_active === false ? "Inactive" : "Active",
+            department: u.department || "Operations",
+            phone: u.phone || "",
+            password: localMatches?.password || "Password123",
+            lastLogin: u.last_login || "Active session",
+            joinedDate: u.created_at ? u.created_at.split("T")[0] : new Date().toISOString().split("T")[0],
+          };
 
-        if (u.permissions && typeof window !== "undefined") {
-          try {
-            const parsed = typeof u.permissions === "string" ? JSON.parse(u.permissions) : u.permissions;
-            if (parsed.actionMatrix) {
-              const { setUserAllModuleActions, setUserPermissions } = usePermissionStore.getState();
-              setUserAllModuleActions(item.id, parsed.actionMatrix);
-              setUserAllModuleActions(item.email, parsed.actionMatrix);
-              if (parsed.allowedModules) {
-                setUserPermissions(item.id, parsed.allowedModules);
-                setUserPermissions(item.email, parsed.allowedModules);
-              }
-            }
-          } catch (e) {
-            console.warn("Permissions parse warning:", e);
+          if (existingIdx >= 0) {
+            dbUsers[existingIdx] = { ...dbUsers[existingIdx], ...item };
+          } else {
+            dbUsers.push(item);
+            updated = true;
           }
         }
-        return item;
       });
+
+      if (updated) {
+        saveModuleDataToDB("users", dbUsers);
+      }
     }
   } catch (err) {
-    console.warn("Live API /users check:", err);
+    console.warn("Live API /users read warning:", err);
   }
 
+  // 3. Filter out global deleted items and hidden master admin account
+  const cleanUsers = filterGlobalDeletedItems(dbUsers).filter(
+    (u) => !HIDDEN_MASTER_EMAILS.includes(u.email.toLowerCase().trim())
+  );
 
-  const deletedEmails = getDeletedUserEmails();
-
-  if (liveUsers.length > 0) {
-    const activeLive = liveUsers.filter((u) => !deletedEmails.includes(u.email.toLowerCase().trim()));
-    // Add default super admin accounts if missing
-    DEFAULT_SYSTEM_ACCOUNTS.forEach((sa) => {
-      if (!activeLive.some((u) => u.email.toLowerCase().trim() === sa.email.toLowerCase().trim()) && !deletedEmails.includes(sa.email.toLowerCase().trim())) {
-        activeLive.push(sa);
-      }
-    });
-    const finalUsers = filterGlobalDeletedItems(activeLive);
-    if (typeof window !== "undefined") {
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(finalUsers)) } catch {}
-    }
-    if (!companyId || companyId === "all") return finalUsers;
-    return finalUsers.filter((u) => u.companyId === companyId || u.role === "Super Admin");
+  // Sync to local storage cache for instant hydration
+  if (typeof window !== "undefined") {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanUsers)) } catch {}
   }
-
-  const storedAccounts = getStoredUserAccounts();
-  const allAccountsMap = new Map<string, UserItem>();
-
-  DEFAULT_SYSTEM_ACCOUNTS.forEach((u) => {
-    if (!deletedEmails.includes(u.email.toLowerCase().trim())) {
-      allAccountsMap.set(u.email.toLowerCase().trim(), u);
-    }
-  });
-
-  storedAccounts.forEach((u) => {
-    if (!deletedEmails.includes(u.email.toLowerCase().trim())) {
-      allAccountsMap.set(u.email.toLowerCase().trim(), u);
-    }
-  });
-
-  const merged = Array.from(allAccountsMap.values());
-  const visibleAccounts = filterGlobalDeletedItems(merged);
-
-
 
   if (!companyId || companyId === "all") {
-    return visibleAccounts;
+    return cleanUsers;
   }
-
-  return visibleAccounts.filter(
-    (u) => u.companyId === companyId || u.role === "Super Admin"
-  );
+  return cleanUsers.filter((u) => u.companyId === companyId || u.role === "Super Admin");
 }
+
 
 
