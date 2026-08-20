@@ -284,12 +284,17 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
         if (emailNorm && !HIDDEN_MASTER_EMAILS.includes(emailNorm)) {
           const localMatches = storedAccounts.find((sa) => sa.email.toLowerCase().trim() === emailNorm);
           const existingIdx = dbUsers.findIndex((du) => du.email.toLowerCase().trim() === emailNorm);
+          const existingItem = existingIdx >= 0 ? dbUsers[existingIdx] : null;
+          const mappedRole = mapRoleName(u.role_name || u.role);
+          const finalRole = (existingItem?.role && (existingItem.role === "Super Admin" || existingItem.role === "Admin"))
+            ? existingItem.role
+            : mappedRole;
 
           const item: UserItem = {
             id: String(u.id || `usr_${Math.random()}`),
             name: u.full_name || u.name || u.first_name || u.email || "User Account",
             email: emailNorm,
-            role: mapRoleName(u.role_name || u.role),
+            role: finalRole,
             companyId: u.company_id || u.companyId || "tech",
             companyName:
               u.company_name ||
@@ -297,13 +302,13 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
             status: u.status === "inactive" || u.is_active === false ? "Inactive" : "Active",
             department: u.department || "Operations",
             phone: u.phone || "",
-            password: localMatches?.password || "Password123",
+            password: localMatches?.password || existingItem?.password || "Password123",
             lastLogin: u.last_login || "Active session",
             joinedDate: u.created_at ? u.created_at.split("T")[0] : new Date().toISOString().split("T")[0],
           };
 
           if (existingIdx >= 0) {
-            dbUsers[existingIdx] = { ...dbUsers[existingIdx], ...item };
+            dbUsers[existingIdx] = { ...existingItem, ...item };
           } else {
             dbUsers.push(item);
             updated = true;

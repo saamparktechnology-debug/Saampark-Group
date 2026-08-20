@@ -61,27 +61,31 @@ export default function UsersMain() {
   const handleSaveUser = async (userData: Partial<UserItem>) => {
     const saved = recordUserAccount(userData)
     
-    // Background sync attempt with real backend API
+    // Background sync with real backend MySQL API
     try {
-      const { AuthService, UserService } = await import("@/services/apiServices")
+      const { api } = await import("@/lib/api")
+      const roleIdMap: Record<string, number> = {
+        "Super Admin": 1,
+        "Admin": 2,
+        "Teams": 3,
+        "User": 3,
+        "Clients": 4,
+      }
+      const role_id = roleIdMap[userData.role || ""] || 3
+
       if (!editingUser && userData.email) {
-        await AuthService.register({
+        await api.post("/users", {
+          full_name: userData.name || "User Account",
           email: userData.email,
           password: userData.password || "Password123",
-          full_name: userData.name || "User",
+          role_id,
           role: userData.role,
-        }).catch((err) => console.warn("Backend register call attempt:", err))
+          company_id: userData.companyId || "tech",
+          department: userData.department || "General",
+          phone: userData.phone || "",
+        }).catch((err) => console.warn("Backend user create warning:", err))
       } else if (editingUser) {
-        // Map role name to role_id (1: Super Admin, 2: Admin, 3: Teams, 4: Clients)
-        const roleIdMap: Record<string, number> = {
-          "Super Admin": 1,
-          "Admin": 2,
-          "Teams": 3,
-          "User": 3,
-          "Clients": 4,
-        }
-        const role_id = roleIdMap[userData.role || ""] || 3
-        await UserService.updateUser(editingUser.id, {
+        await api.put(`/users/${editingUser.id}`, {
           full_name: userData.name,
           phone: userData.phone,
           status: userData.status?.toLowerCase(),

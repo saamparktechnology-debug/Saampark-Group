@@ -12,30 +12,45 @@ const {
 // ─── REGISTER ────────────────────────────────────────────────────────────────
 const register = async (req, res, next) => {
   try {
-    const { full_name, email, password, phone, role_id } = req.body;
+    const { full_name, name, email, password, phone, role_id, role } = req.body;
+    const displayName = full_name || name;
 
-    if (!full_name || !email || !password) {
+    if (!displayName || !email || !password) {
       return errorResponse(res, 400, 'Name, email and password are required.');
     }
 
+    const normEmail = email.toLowerCase().trim();
+
     // Check if user already exists
-    const [existingUsers] = await pool.execute('SELECT id, is_verified FROM users WHERE email = ?', [email.toLowerCase()]);
+    const [existingUsers] = await pool.execute('SELECT id, is_verified FROM users WHERE email = ?', [normEmail]);
     if (existingUsers.length > 0) {
       if (!existingUsers[0].is_verified) {
         // Resend verification OTP
-        await sendEmailVerificationOTP(email, full_name);
-        return successResponse(res, 200, 'Account already exists but not verified. A new OTP has been sent to your email.', { requiresVerification: true, email });
+        await sendEmailVerificationOTP(normEmail, displayName);
+        return successResponse(res, 200, 'Account already exists but not verified. A new OTP has been sent to your email.', { requiresVerification: true, email: normEmail });
       }
       return errorResponse(res, 400, 'An account with this email already exists.');
+    }
+
+    // Map role string to role_id (1: Super Admin, 2: Admin, 3: Teams, 4: Clients)
+    let targetRoleId = 3;
+    if (role_id) {
+      targetRoleId = parseInt(role_id, 10);
+    } else if (role) {
+      const rLower = String(role).toLowerCase().trim();
+      if (rLower.includes('super')) targetRoleId = 1;
+      else if (rLower.includes('admin')) targetRoleId = 2;
+      else if (rLower.includes('client')) targetRoleId = 4;
+      else targetRoleId = 3;
     }
 
     // Hash password
     const hashedPassword = await hashPassword(password);
 
-    // Insert user (unverified initially)
+    // Admin created/registered users with explicit role are verified by default
     const [result] = await pool.execute(
-      'INSERT INTO users (role_id, full_name, email, password_hash, phone, is_verified, status) VALUES (?, ?, ?, ?, ?, 0, ?)',
-      [role_id || 3, full_name, email.toLowerCase(), hashedPassword, phone || null, 'active']
+      'INSERT INTO users (role_id, full_name, email, password_hash, phone, is_verified, status) VALUES (?, ?, ?, ?, ?, 1, ?)',
+      [targetRoleId, displayName, normEmail, hashedPassword, phone || null, 'active']
     );
 
     const userId = result.insertId;

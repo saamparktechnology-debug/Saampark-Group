@@ -169,50 +169,60 @@ export default function LoginPage() {
       let matchedRole: Role | null = backendRole
       let matchedAccount: any = backendUser
 
-      if (!matchedRole) {
-        // Fallback: check localStorage registered accounts
-        const registeredAccounts = getStoredUserAccounts()
-        const localAccount = registeredAccounts.find(
-          (acc) => acc.email.toLowerCase().trim() === normalizedEmail
-        )
-        if (localAccount) {
-          matchedRole = normalizeRole(localAccount.role)
-          matchedAccount = localAccount
+      // Check role_id mapping if backendRole wasn't Super Admin / Admin
+      if (backendUser && backendUser.role_id) {
+        const rid = parseInt(String(backendUser.role_id), 10)
+        if (rid === 1) matchedRole = "Super Admin"
+        else if (rid === 2) matchedRole = "Admin"
+        else if (rid === 4) matchedRole = "Clients"
+      }
 
-          // Validate password against stored password
+      // Fallback or override check from registered user accounts database
+      const registeredAccounts = getStoredUserAccounts()
+      const localAccount = registeredAccounts.find(
+        (acc) => acc.email.toLowerCase().trim() === normalizedEmail
+      )
+
+      if (localAccount) {
+        const normLocalRole = normalizeRole(localAccount.role)
+        if (!matchedRole || normLocalRole === "Super Admin" || normLocalRole === "Admin") {
+          matchedRole = normLocalRole
+          matchedAccount = { ...localAccount, ...matchedAccount }
+        }
+
+        // Validate password against stored password if login was local
+        if (!backendUser) {
           const expectedPassword = localAccount.password || (matchedRole === "Super Admin" ? "123456" : matchedRole === "Admin" ? "admin123" : "Password123")
           if (password !== expectedPassword) {
             setIsLoading(false)
             setError("Invalid password. Please check and try again.")
             return
           }
-        } else {
-          // Check demo accounts
-          const matchedDemoKey = (Object.keys(DEMO_USERS) as Role[]).find(
-            (r) => DEMO_USERS[r]?.email?.toLowerCase() === normalizedEmail
-          )
-          if (matchedDemoKey && DEMO_USERS[matchedDemoKey]) {
-            const demoObj = DEMO_USERS[matchedDemoKey]!
-            matchedRole = normalizeRole(matchedDemoKey)
-            matchedAccount = {
-              id: String(demoObj.id),
-              name: demoObj.name,
-              email: demoObj.email,
-              role: matchedDemoKey,
-              companyId: demoObj.companyId,
-              status: "Active",
-              joinedDate: "2026-01-01",
-            }
-            const demoPass = matchedRole === "Super Admin" ? "123456" : matchedRole === "Admin" ? "admin123" : "Password123"
-            if (password !== demoPass) {
-              setIsLoading(false)
-              setError("Invalid password.")
-
-              return
-            }
+        }
+      } else if (!matchedRole) {
+        // Check demo accounts
+        const matchedDemoKey = (Object.keys(DEMO_USERS) as Role[]).find(
+          (r) => DEMO_USERS[r]?.email?.toLowerCase() === normalizedEmail
+        )
+        if (matchedDemoKey && DEMO_USERS[matchedDemoKey]) {
+          const demoObj = DEMO_USERS[matchedDemoKey]!
+          matchedRole = normalizeRole(matchedDemoKey)
+          matchedAccount = {
+            id: String(demoObj.id),
+            name: demoObj.name,
+            email: demoObj.email,
+            role: matchedDemoKey,
+            companyId: demoObj.companyId,
+            status: "Active",
+            joinedDate: "2026-01-01",
+          }
+          const demoPass = matchedRole === "Super Admin" ? "123456" : matchedRole === "Admin" ? "admin123" : "Password123"
+          if (password !== demoPass) {
+            setIsLoading(false)
+            setError("Invalid password.")
+            return
           }
         }
-
       }
 
       if (!matchedAccount || !matchedRole) {
