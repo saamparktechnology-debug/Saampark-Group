@@ -655,10 +655,49 @@ function getPersistedLeads(): Lead[] {
   }
 }
 
+// Helper to check if a reminder date is in the past (< today)
+function isReminderDateOverdue(dateStr?: string): boolean {
+  if (!dateStr) return false
+  try {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const parsed = new Date(dateStr)
+    if (isNaN(parsed.getTime())) return false
+    parsed.setHours(0, 0, 0, 0)
+    return parsed.getTime() < today.getTime()
+  } catch {
+    return false
+  }
+}
+
 export const getLeads = async (): Promise<Lead[]> => {
-  // Use [] as fallback — never show hardcoded demo data
   const dbData = await fetchModuleDataFromDB<Lead[]>("leads", [])
-  return Array.isArray(dbData) ? dbData : []
+  const list = Array.isArray(dbData) ? dbData : []
+
+  // Auto-lock leads if daily update or reminder date was missed (overdue)
+  let hasChanges = false
+  const processed = list.map((lead) => {
+    if (
+      !lead.isLocked &&
+      lead.status !== "Won" &&
+      lead.status !== "Lost" &&
+      isReminderDateOverdue(lead.reminderDate)
+    ) {
+      hasChanges = true
+      return {
+        ...lead,
+        isLocked: true,
+        lockedReason: "Overdue: Lead status or reminder date was not updated daily by caller.",
+      }
+    }
+    return lead
+  })
+
+  if (hasChanges) {
+    saveModuleDataToDB("leads", processed)
+  }
+
+  return processed
 }
 
 export const addLead = async (leadData: Omit<Lead, "id">): Promise<Lead> => {
@@ -673,17 +712,42 @@ export const addLead = async (leadData: Omit<Lead, "id">): Promise<Lead> => {
     reminderDate: leadData.reminderDate || "15 Aug 2025",
     reminderNotes: leadData.reminderNotes || "Follow up call scheduled",
     caller: leadData.caller || leadData.owner || "Team",
+    isLocked: false,
   }
   const updated = [newLead, ...current]
   await saveModuleDataToDB("leads", updated)
   return newLead
 }
 
-export const updateLead = async (id: string, updates: Partial<Lead>): Promise<Lead> => {
+export const updateLead = async (id: string, updates: Partial<Lead>, userRole?: string): Promise<Lead> => {
   const current = await fetchModuleDataFromDB<Lead[]>("leads", [])
   const idx = current.findIndex((l) => l.id === id)
   if (idx === -1) throw new Error("Lead not found")
-  current[idx] = { ...current[idx], ...updates }
+
+  const target = current[idx]
+  const isSuperOrAdmin = userRole === "Super Admin" || userRole === "Admin"
+
+  // Prevent callers/teams from updating a locked lead unless being explicitly unlocked by Admin
+  if (target.isLocked && !isSuperOrAdmin && updates.isLocked !== false) {
+    throw new Error("This lead is locked due to missing daily updates. Only an Admin or Super Admin can unlock it.")
+  }
+
+  // If status or reminderDate is updated to future, clear auto-lock
+  let nextIsLocked = updates.isLocked !== undefined ? updates.isLocked : target.isLocked
+  let nextReason = updates.lockedReason !== undefined ? updates.lockedReason : target.lockedReason
+
+  if (updates.reminderDate && !isReminderDateOverdue(updates.reminderDate)) {
+    nextIsLocked = false
+    nextReason = undefined
+  }
+
+  current[idx] = {
+    ...target,
+    ...updates,
+    isLocked: nextIsLocked,
+    lockedReason: nextReason,
+  }
+
   await saveModuleDataToDB("leads", current)
   return { ...current[idx] }
 }
@@ -697,11 +761,12 @@ export const deleteLead = async (id: string): Promise<boolean> => {
 }
 
 export const unlockLead = async (id: string): Promise<Lead> => {
-  return updateLead(id, { isLocked: false, lockedReason: undefined })
+  return updateLead(id, { isLocked: false, lockedReason: undefined }, "Super Admin")
 }
 
 export const lockLead = async (id: string, reason?: string): Promise<Lead> => {
-  return updateLead(id, { isLocked: true, lockedReason: reason || "Manually locked by Admin" })
+  return updateLead(id, { isLocked: true, lockedReason: reason || "Manually locked by Admin" }, "Super Admin")
 }
+
 
 

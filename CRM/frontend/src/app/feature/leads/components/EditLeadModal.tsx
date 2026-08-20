@@ -3,7 +3,8 @@
 import * as React from "react"
 import { X, Check, Calendar, Clock, Wrench, FileText, User as UserIcon, Trash2 } from "lucide-react"
 import { Lead, LeadStatus, LeadType } from "../types"
-import { updateLead } from "../services/leadService"
+import { updateLead, unlockLead } from "../services/leadService"
+import { useAuthStore } from "@/store/useAuthStore"
 
 // Helper to convert date string "12 Aug 2025" or ISO "YYYY-MM-DD" to "YYYY-MM-DD" for input[type="date"]
 function formatDateForInput(dateStr?: string): string {
@@ -75,8 +76,12 @@ const STANDARD_SOURCES = [
   "My Leads",
 ]
 
-export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLead }: EditLeadModalProps) {
+import { getUsers } from "@/app/feature/users/services/userService"
 
+export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLead }: EditLeadModalProps) {
+  const { user } = useAuthStore()
+  const isSuperOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
+  const [teamMembers, setTeamMembers] = React.useState<{ id: string; name: string; role?: string }[]>([])
   const [type, setType] = React.useState<LeadType>("Organization")
   const [companyName, setCompanyName] = React.useState("")
   const [primaryContact, setPrimaryContact] = React.useState("")
@@ -86,8 +91,8 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
   const [reminderDate, setReminderDate] = React.useState("12 Aug 2025")
   const [reminderTime, setReminderTime] = React.useState("11:30 AM")
   const [reminderNotes, setReminderNotes] = React.useState("")
-  const [caller, setCaller] = React.useState("John Doe")
-  const [owner, setOwner] = React.useState("John Doe")
+  const [caller, setCaller] = React.useState("")
+  const [owner, setOwner] = React.useState("")
   const [managers, setManagers] = React.useState("")
   const [source, setSource] = React.useState("Social Media")
   const [customSource, setCustomSource] = React.useState("")
@@ -102,6 +107,15 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
   const [gstNumber, setGstNumber] = React.useState("")
   const [currency, setCurrency] = React.useState("Keep it blank to use the default (INR - ₹)")
   const [isSubmitting, setIsSubmitting] = React.useState(false)
+
+  React.useEffect(() => {
+    if (isOpen) {
+      getUsers("all").then((list) => {
+        const members = (list || []).map((u) => ({ id: u.id, name: u.name, role: u.role }))
+        setTeamMembers(members)
+      })
+    }
+  }, [isOpen])
 
   React.useEffect(() => {
     if (lead) {
@@ -186,14 +200,25 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
         vatNumber,
         gstNumber,
         currency,
-      })
+      }, user?.role)
 
       onLeadUpdated(updated)
       onClose()
-    } catch (err) {
-      console.error(err)
+    } catch (err: any) {
+      alert(err?.message || "Failed to update lead")
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const handleUnlock = async () => {
+    if (!lead) return
+    try {
+      const unlocked = await unlockLead(lead.id)
+      onLeadUpdated(unlocked)
+      alert("Lead unlocked successfully! Caller can now update this lead.")
+    } catch (err: any) {
+      alert(err?.message || "Failed to unlock lead")
     }
   }
 
@@ -208,6 +233,11 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
             <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300">
               {status}
             </span>
+            {lead?.isLocked && (
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 flex items-center gap-1">
+                🔒 LOCKED
+              </span>
+            )}
           </div>
           <button
             type="button"
@@ -217,6 +247,30 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
             <X size={18} />
           </button>
         </div>
+
+        {/* Locked Lead Alert Banner */}
+        {lead?.isLocked && (
+          <div className="bg-red-50 dark:bg-red-950/50 border-b border-red-200 dark:border-red-800 px-6 py-3 flex items-center justify-between gap-3 text-xs text-red-700 dark:text-red-300">
+            <div className="flex items-center gap-2">
+              <span className="text-base">🔒</span>
+              <div>
+                <p className="font-bold">Lead Auto-Locked</p>
+                <p className="text-[11px] opacity-90">{lead.lockedReason || "Daily status or reminder date update missed."}</p>
+              </div>
+            </div>
+            {isSuperOrAdmin ? (
+              <button
+                type="button"
+                onClick={handleUnlock}
+                className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-md font-bold shadow-sm transition-colors text-xs whitespace-nowrap"
+              >
+                🔓 Unlock Lead
+              </button>
+            ) : (
+              <span className="font-semibold italic text-[11px]">Only Admin can unlock</span>
+            )}
+          </div>
+        )}
 
         {/* Form Body */}
         <div className="p-6 overflow-y-auto space-y-4 text-xs flex-1">
@@ -371,18 +425,17 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
             <select
               value={caller}
               onChange={(e) => setCaller(e.target.value)}
-              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200"
+              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-semibold"
             >
-              <option value="John Doe">John Doe</option>
-              <option value="Michael Lee">Michael Lee</option>
-              <option value="Mark Smith">Mark Smith</option>
-              <option value="Daniel White">Daniel White</option>
-              <option value="Ethan Anderson">Ethan Anderson</option>
-              <option value="Oliver Robinson">Oliver Robinson</option>
-              <option value="David Miller">David Miller</option>
-              <option value="Emma Davis">Emma Davis</option>
-              <option value="Henry Clark">Henry Clark</option>
-              <option value="Sara Ann">Sara Ann</option>
+              {teamMembers.length === 0 ? (
+                <option value="">No team members available</option>
+              ) : (
+                teamMembers.map((m) => (
+                  <option key={m.id || m.name} value={m.name}>
+                    {m.name} {m.role ? `(${m.role})` : ""}
+                  </option>
+                ))
+              )}
             </select>
           </div>
 

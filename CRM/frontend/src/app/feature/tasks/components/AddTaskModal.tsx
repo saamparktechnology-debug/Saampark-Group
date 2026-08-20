@@ -5,6 +5,8 @@ import { X, Check, Paperclip, Mic, HelpCircle } from "lucide-react"
 import { Task, TaskStatus, TaskPriority } from "../types"
 import { taskService } from "../services/taskService"
 
+import { getUsers } from "@/app/feature/users/services/userService"
+
 interface AddTaskModalProps {
   isOpen: boolean
   onClose: () => void
@@ -12,11 +14,12 @@ interface AddTaskModalProps {
 }
 
 export function AddTaskModal({ isOpen, onClose, onTaskAdded }: AddTaskModalProps) {
+  const [teamMembers, setTeamMembers] = React.useState<{ id: string; name: string; role?: string }[]>([])
   const [title, setTitle] = React.useState("")
   const [description, setDescription] = React.useState("")
   const [relatedTo, setRelatedTo] = React.useState("-")
   const [points, setPoints] = React.useState("1 Point")
-  const [assignedTo, setAssignedTo] = React.useState("John Doe")
+  const [assignedTo, setAssignedTo] = React.useState("")
   const [collaborators, setCollaborators] = React.useState("")
   const [status, setStatus] = React.useState<TaskStatus>("To do")
   const [priority, setPriority] = React.useState<TaskPriority | "Priority">("Priority")
@@ -25,6 +28,20 @@ export function AddTaskModal({ isOpen, onClose, onTaskAdded }: AddTaskModalProps
   const [deadline, setDeadline] = React.useState("")
   const [isRecurring, setIsRecurring] = React.useState(false)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
+
+  React.useEffect(() => {
+    if (isOpen) {
+      getUsers("all").then((list) => {
+        const members = (list || []).map((u) => ({ id: u.id, name: u.name, role: u.role }))
+        setTeamMembers(members)
+        if (members.length > 0) {
+          setAssignedTo((prev) => (prev && members.some(m => m.name === prev) ? prev : members[0].name))
+        } else {
+          setAssignedTo("")
+        }
+      })
+    }
+  }, [isOpen])
 
   if (!isOpen) return null
 
@@ -158,15 +175,17 @@ export function AddTaskModal({ isOpen, onClose, onTaskAdded }: AddTaskModalProps
             <select
               value={assignedTo}
               onChange={(e) => setAssignedTo(e.target.value)}
-              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200"
+              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-semibold"
             >
-              <option value="John Doe">John Doe</option>
-              <option value="Michael Lee">Michael Lee</option>
-              <option value="Mark Smith">Mark Smith</option>
-              <option value="Daniel White">Daniel White</option>
-              <option value="Ethan Anderson">Ethan Anderson</option>
-              <option value="Olivia Brown">Olivia Brown</option>
-              <option value="Sara Ann">Sara Ann</option>
+              {teamMembers.length === 0 ? (
+                <option value="">No team members available</option>
+              ) : (
+                teamMembers.map((m) => (
+                  <option key={m.id || m.name} value={m.name}>
+                    {m.name} {m.role ? `(${m.role})` : ""}
+                  </option>
+                ))
+              )}
             </select>
           </div>
 

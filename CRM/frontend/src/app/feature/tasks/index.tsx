@@ -74,13 +74,33 @@ export default function TasksMain() {
     setIsEditModalOpen(true)
   }
 
+  const { user } = useAuthStore()
+  const isSuperOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
+
+  const visibleTasks = React.useMemo(() => {
+    if (!user || isSuperOrAdmin) return tasks
+    const normName = (user.name || "").toLowerCase().trim()
+    const normEmail = (user.email || "").toLowerCase().trim()
+    return tasks.filter((t) => {
+      const assigned = (t.assignedTo || "").toLowerCase().trim()
+      const collab = (t.collaborators || "").toLowerCase().trim()
+      return (
+        assigned === normName ||
+        assigned === normEmail ||
+        assigned === "team" ||
+        collab.includes(normName) ||
+        collab.includes(normEmail)
+      )
+    })
+  }, [tasks, user, isSuperOrAdmin])
+
   return (
     <div className="p-4 sm:p-6 max-w-[1600px] mx-auto space-y-6">
       
       {/* View Switcher: List vs Kanban vs Gantt */}
       {activeViewTab === "list" && (
         <TaskList
-          tasks={tasks}
+          tasks={visibleTasks}
           activeViewTab={activeViewTab}
           onChangeViewTab={setActiveViewTab}
           onOpenAddModal={() => setIsAddModalOpen(true)}
@@ -92,7 +112,7 @@ export default function TasksMain() {
 
       {activeViewTab === "kanban" && (
         <TaskKanban
-          tasks={tasks}
+          tasks={visibleTasks}
           activeViewTab={activeViewTab}
           onChangeViewTab={setActiveViewTab}
           onOpenAddModal={() => setIsAddModalOpen(true)}
@@ -103,7 +123,7 @@ export default function TasksMain() {
 
       {activeViewTab === "gantt" && (
         <TasksGantt
-          tasks={tasks}
+          tasks={visibleTasks}
           activeViewTab={activeViewTab}
           onChangeViewTab={setActiveViewTab}
           onOpenAddModal={() => setIsAddModalOpen(true)}

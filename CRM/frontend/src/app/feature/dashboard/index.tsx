@@ -60,14 +60,32 @@ export default function DashboardMain() {
         setSelectedUserEmail(cleanUsers[0].email)
       }
 
-      const active = cleanTasks.filter((t) => t.status !== "Done")
+      const isSuperOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
+      let scopedTasks = cleanTasks
+      if (user && !isSuperOrAdmin) {
+        const normName = (user.name || "").toLowerCase().trim()
+        const normEmail = (user.email || "").toLowerCase().trim()
+        scopedTasks = cleanTasks.filter((t) => {
+          const assigned = (t.assignedTo || "").toLowerCase().trim()
+          const collab = (t.collaborators || "").toLowerCase().trim()
+          return (
+            assigned === normName ||
+            assigned === normEmail ||
+            assigned === "team" ||
+            collab.includes(normName) ||
+            collab.includes(normEmail)
+          )
+        })
+      }
+
+      const active = scopedTasks.filter((t) => t.status !== "Done")
       setActiveTasksCount(active.length)
-      setLiveTasks(cleanTasks)
+      setLiveTasks(scopedTasks)
       setLiveProjects(cleanProjects)
     } catch (e) {
       console.warn("Dashboard refresh error:", e)
     }
-  }, [selectedUserEmail])
+  }, [selectedUserEmail, user])
 
   React.useEffect(() => {
     refreshLiveDashboard()

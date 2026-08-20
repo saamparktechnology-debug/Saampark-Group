@@ -117,6 +117,25 @@ export default function LeadsMain() {
     handleLeadUpdated(updated)
   }
 
+  const { user } = useAuthStore()
+  const isSuperOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
+
+  const visibleLeads = React.useMemo(() => {
+    if (!user || isSuperOrAdmin) return leads
+    const normName = (user.name || "").toLowerCase().trim()
+    const normEmail = (user.email || "").toLowerCase().trim()
+    return leads.filter((l) => {
+      const caller = (l.caller || "").toLowerCase().trim()
+      const owner = (l.owner || "").toLowerCase().trim()
+      return (
+        caller === normName ||
+        caller === normEmail ||
+        owner === normName ||
+        owner === normEmail
+      )
+    })
+  }, [leads, user, isSuperOrAdmin])
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 15 }}
@@ -126,7 +145,7 @@ export default function LeadsMain() {
     >
       {activeViewTab === "list" ? (
         <LeadList
-          leads={leads}
+          leads={visibleLeads}
           availableLabels={availableLabels}
           activeViewTab={activeViewTab}
           onChangeViewTab={setActiveViewTab}
@@ -140,7 +159,7 @@ export default function LeadsMain() {
         />
       ) : (
         <LeadKanban
-          leads={leads}
+          leads={visibleLeads}
           availableLabels={availableLabels}
           activeViewTab={activeViewTab}
           onChangeViewTab={setActiveViewTab}

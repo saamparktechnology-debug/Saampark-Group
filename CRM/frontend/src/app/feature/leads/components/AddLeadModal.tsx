@@ -73,7 +73,10 @@ const STANDARD_SOURCES = [
   "My Leads",
 ]
 
+import { getUsers } from "@/app/feature/users/services/userService"
+
 export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps) {
+  const [teamMembers, setTeamMembers] = React.useState<{ id: string; name: string; role?: string }[]>([])
   const [type, setType] = React.useState<LeadType>("Organization")
   const [companyName, setCompanyName] = React.useState("")
   const [primaryContact, setPrimaryContact] = React.useState("")
@@ -83,8 +86,8 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
   const [reminderDate, setReminderDate] = React.useState("12 Aug 2025")
   const [reminderTime, setReminderTime] = React.useState("11:30 AM")
   const [reminderNotes, setReminderNotes] = React.useState("")
-  const [caller, setCaller] = React.useState("John Doe")
-  const [owner, setOwner] = React.useState("John Doe")
+  const [caller, setCaller] = React.useState("")
+  const [owner, setOwner] = React.useState("")
   const [managers, setManagers] = React.useState("")
   const [source, setSource] = React.useState("Social Media")
   const [customSource, setCustomSource] = React.useState("")
@@ -99,6 +102,22 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
   const [gstNumber, setGstNumber] = React.useState("")
   const [currency, setCurrency] = React.useState("Keep it blank to use the default (INR - ₹)")
   const [isSubmitting, setIsSubmitting] = React.useState(false)
+
+  React.useEffect(() => {
+    if (isOpen) {
+      getUsers("all").then((list) => {
+        const members = (list || []).map((u) => ({ id: u.id, name: u.name, role: u.role }))
+        setTeamMembers(members)
+        if (members.length > 0) {
+          setCaller((prev) => (prev && members.some(m => m.name === prev) ? prev : members[0].name))
+          setOwner((prev) => (prev && members.some(m => m.name === prev) ? prev : members[0].name))
+        } else {
+          setCaller("")
+          setOwner("")
+        }
+      })
+    }
+  }, [isOpen])
 
   if (!isOpen) return null
 
@@ -318,15 +337,17 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
             <select
               value={caller}
               onChange={(e) => setCaller(e.target.value)}
-              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200"
+              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-semibold"
             >
-              <option value="John Doe">John Doe</option>
-              <option value="Michael Lee">Michael Lee</option>
-              <option value="Mark Smith">Mark Smith</option>
-              <option value="Daniel White">Daniel White</option>
-              <option value="Ethan Anderson">Ethan Anderson</option>
-              <option value="Oliver Robinson">Oliver Robinson</option>
-              <option value="Sara Ann">Sara Ann</option>
+              {teamMembers.length === 0 ? (
+                <option value="">No team members available</option>
+              ) : (
+                teamMembers.map((m) => (
+                  <option key={m.id || m.name} value={m.name}>
+                    {m.name} {m.role ? `(${m.role})` : ""}
+                  </option>
+                ))
+              )}
             </select>
           </div>
 
