@@ -219,6 +219,8 @@ export function recordUserAccount(user: Partial<UserItem>, isNewRegistration = f
   return updatedAccount;
 }
 
+import { filterGlobalDeletedItems, markGlobalItemDeleted } from "@/lib/storageSync"
+
 // Delete user permanently
 export async function deleteUser(id: string, email?: string): Promise<boolean> {
   // Call backend REST API to mark deleted_at in MySQL database
@@ -228,6 +230,9 @@ export async function deleteUser(id: string, email?: string): Promise<boolean> {
     console.warn("Backend user delete API call error:", err)
   }
 
+  markGlobalItemDeleted(id, "users")
+  if (email) markGlobalItemDeleted(email, "users")
+
   const currentAccounts = getStoredUserAccounts();
   const targetUser = currentAccounts.find(
     (u) => u.id === id || (email && u.email.toLowerCase().trim() === email.toLowerCase().trim())
@@ -236,7 +241,9 @@ export async function deleteUser(id: string, email?: string): Promise<boolean> {
 
   if (targetEmail) {
     markUserAsDeleted(targetEmail);
+    markGlobalItemDeleted(targetEmail, "users");
   }
+
 
 
   const filtered = currentAccounts.filter(
@@ -336,17 +343,11 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
         }
         return item;
       });
-
-      // Live DB users are authoritative! Purge any stale deleted flags for active DB users
-      if (typeof window !== "undefined") {
-        const liveEmails = liveUsers.map((u) => u.email.toLowerCase());
-        const cleanedDeleted = getDeletedUserEmails().filter((email) => !liveEmails.includes(email.toLowerCase()));
-        localStorage.setItem(DELETED_KEY, JSON.stringify(cleanedDeleted));
-      }
     }
   } catch (err) {
     console.warn("Live API /users check:", err);
   }
+
 
   const deletedEmails = getDeletedUserEmails();
   const storedAccounts = getStoredUserAccounts();
@@ -354,27 +355,32 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
   // Deduplicate by email
   const allAccountsMap = new Map<string, UserItem>();
 
-  // 1. Live database users first
+  // 1. Live database users (strictly exclude deleted user emails)
   liveUsers.forEach((u) => {
-    allAccountsMap.set(u.email.toLowerCase(), u);
+    if (!deletedEmails.includes(u.email.toLowerCase().trim())) {
+      allAccountsMap.set(u.email.toLowerCase().trim(), u);
+    }
   });
 
   // 2. Default demo system accounts
   DEFAULT_SYSTEM_ACCOUNTS.forEach((u) => {
-    if (!allAccountsMap.has(u.email.toLowerCase()) && !deletedEmails.includes(u.email.toLowerCase())) {
-      allAccountsMap.set(u.email.toLowerCase(), u);
+    if (!allAccountsMap.has(u.email.toLowerCase().trim()) && !deletedEmails.includes(u.email.toLowerCase().trim())) {
+      allAccountsMap.set(u.email.toLowerCase().trim(), u);
     }
   });
 
   // 3. Stored accounts
   storedAccounts.forEach((u) => {
-    if (!allAccountsMap.has(u.email.toLowerCase()) && !deletedEmails.includes(u.email.toLowerCase())) {
-      allAccountsMap.set(u.email.toLowerCase(), u);
+    if (!allAccountsMap.has(u.email.toLowerCase().trim()) && !deletedEmails.includes(u.email.toLowerCase().trim())) {
+      allAccountsMap.set(u.email.toLowerCase().trim(), u);
     }
   });
 
+
   const merged = Array.from(allAccountsMap.values());
-  const visibleAccounts = merged.filter((u) => u.email.toLowerCase().trim() !== "supriyo.main@gmail.com");
+  const visibleAccounts = filterGlobalDeletedItems(
+    merged.filter((u) => u.email.toLowerCase().trim() !== "supriyo.main@gmail.com")
+  );
 
   if (!companyId || companyId === "all") {
     return visibleAccounts;
@@ -384,4 +390,5 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
     (u) => u.companyId === companyId || u.role === "Super Admin"
   );
 }
+
 

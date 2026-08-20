@@ -636,14 +636,36 @@ export const initialLeads: Lead[] = [
   },
 ]
 
-let leadsStore = [...initialLeads]
+import { filterGlobalDeletedItems, markGlobalItemDeleted } from "@/lib/storageSync"
+
+const LEADS_STORAGE_KEY = "saampark_leads_store"
+
+function getPersistedLeads(): Lead[] {
+  if (typeof window === "undefined") return filterGlobalDeletedItems([...initialLeads])
+  try {
+    const raw = localStorage.getItem(LEADS_STORAGE_KEY)
+    let list: Lead[] = raw ? JSON.parse(raw) : [...initialLeads]
+    if (!Array.isArray(list) || list.length === 0) list = [...initialLeads]
+    return filterGlobalDeletedItems(list)
+  } catch {
+    return filterGlobalDeletedItems([...initialLeads])
+  }
+}
+
+function savePersistedLeads(leads: Lead[]): void {
+  if (typeof window === "undefined") return
+  try {
+    localStorage.setItem(LEADS_STORAGE_KEY, JSON.stringify(leads))
+  } catch {}
+}
 
 export const getLeads = async (): Promise<Lead[]> => {
-  return Promise.resolve([...leadsStore])
+  return getPersistedLeads()
 }
 
 export const addLead = async (leadData: Omit<Lead, "id">): Promise<Lead> => {
-  const newId = (Math.max(...leadsStore.map(l => parseInt(l.id) || 0), 0) + 1).toString()
+  const current = getPersistedLeads()
+  const newId = (Math.max(...current.map((l) => parseInt(l.id) || 0), 0) + 1).toString()
   const newLead: Lead = {
     ...leadData,
     id: newId,
@@ -654,20 +676,28 @@ export const addLead = async (leadData: Omit<Lead, "id">): Promise<Lead> => {
     reminderNotes: leadData.reminderNotes || "Follow up call scheduled",
     caller: leadData.caller || leadData.owner || "John Doe",
   }
-  leadsStore = [newLead, ...leadsStore]
-  return Promise.resolve(newLead)
+  const updated = [newLead, ...current]
+  savePersistedLeads(updated)
+  return newLead
 }
 
 export const updateLead = async (id: string, updates: Partial<Lead>): Promise<Lead> => {
-  leadsStore = leadsStore.map((l) => (l.id === id ? { ...l, ...updates } : l))
-  const updated = leadsStore.find((l) => l.id === id)!
-  return Promise.resolve(updated)
+  const current = getPersistedLeads()
+  const idx = current.findIndex((l) => l.id === id)
+  if (idx === -1) throw new Error("Lead not found")
+  current[idx] = { ...current[idx], ...updates }
+  savePersistedLeads(current)
+  return { ...current[idx] }
 }
 
 export const deleteLead = async (id: string): Promise<boolean> => {
-  leadsStore = leadsStore.filter((l) => l.id !== id)
-  return Promise.resolve(true)
+  markGlobalItemDeleted(id, "leads")
+  const current = getPersistedLeads()
+  const filtered = current.filter((l) => l.id !== id)
+  savePersistedLeads(filtered)
+  return true
 }
+
 
 export const unlockLead = async (id: string): Promise<Lead> => {
   return updateLead(id, { isLocked: false, lockedReason: undefined })
@@ -676,3 +706,4 @@ export const unlockLead = async (id: string): Promise<Lead> => {
 export const lockLead = async (id: string, reason?: string): Promise<Lead> => {
   return updateLead(id, { isLocked: true, lockedReason: reason || "Manually locked by Admin" })
 }
+

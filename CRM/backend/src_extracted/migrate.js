@@ -106,9 +106,20 @@ async function migrate() {
     `, [passHash, passHash]);
     console.log('Seeded Super Admin: hiisupriya@gmail.com');
 
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS deleted_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        item_id VARCHAR(255) NOT NULL UNIQUE,
+        module_name VARCHAR(100) NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    console.log('Created deleted_items table if not exists');
+
     console.log('\nMigration complete!');
 
     process.exit(0);
+
   } catch (err) {
     console.error('Migration error:', err.message);
     process.exit(1);

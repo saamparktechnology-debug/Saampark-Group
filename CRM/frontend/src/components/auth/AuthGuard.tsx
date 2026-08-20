@@ -4,6 +4,8 @@ import * as React from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { useAuthStore } from "@/store/useAuthStore"
 
+import { syncGlobalDeletedIds } from "@/lib/storageSync"
+
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -21,6 +23,11 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     if (!isMounted) return
 
     const verifyActiveSessionAndSyncPermissions = async () => {
+      // Sync all deleted items from MySQL database across all browsers
+      try {
+        await syncGlobalDeletedIds()
+      } catch {}
+
       const state = useAuthStore.getState()
       if (state.isAuthenticated && state.user?.email) {
         try {
@@ -40,6 +47,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         }
       }
     }
+
 
     verifyActiveSessionAndSyncPermissions()
 

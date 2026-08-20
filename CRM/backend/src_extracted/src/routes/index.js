@@ -12,6 +12,7 @@ const ticketRoutes = require('./ticketRoutes');
 const campaignRoutes = require('./campaignRoutes');
 const reportRoutes = require('./reportRoutes');
 const subscriptionRoutes = require('./subscriptionRoutes');
+const deletedRoutes = require('./deletedRoutes');
 
 // Mount Sub-Routers
 router.use('/auth', authRoutes);
@@ -25,5 +26,6 @@ router.use('/tickets', ticketRoutes);
 router.use('/campaigns', campaignRoutes);
 router.use('/reports', reportRoutes);
 router.use('/subscriptions', subscriptionRoutes);
+router.use('/deleted', deletedRoutes);
 
-module.exports = router;
+module.exports = router;

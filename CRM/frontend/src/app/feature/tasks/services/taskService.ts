@@ -425,17 +425,19 @@ export const initialTasks: Task[] = [
   },
 ]
 
+import { filterGlobalDeletedItems, markGlobalItemDeleted } from "@/lib/storageSync"
+
 const TASKS_STORAGE_KEY = "saampark_tasks_store"
 
 function getPersistedTasks(): Task[] {
-  if (typeof window === "undefined") return [...initialTasks]
+  if (typeof window === "undefined") return filterGlobalDeletedItems([...initialTasks])
   try {
     const raw = localStorage.getItem(TASKS_STORAGE_KEY)
-    if (!raw) return [...initialTasks]
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : [...initialTasks]
+    let list: Task[] = raw ? JSON.parse(raw) : [...initialTasks]
+    if (!Array.isArray(list) || list.length === 0) list = [...initialTasks]
+    return filterGlobalDeletedItems(list)
   } catch {
-    return [...initialTasks]
+    return filterGlobalDeletedItems([...initialTasks])
   }
 }
 
@@ -473,9 +475,12 @@ export const taskService = {
   },
 
   deleteTask: async (id: string): Promise<void> => {
+    markGlobalItemDeleted(id, "tasks")
     const currentTasks = getPersistedTasks()
     const filtered = currentTasks.filter((t) => t.id !== id)
     savePersistedTasks(filtered)
   },
 }
+
+
 

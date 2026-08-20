@@ -2,6 +2,8 @@
 
 import { ClientItem, ContactItem, ClientLabelItem } from "../types"
 
+import { filterGlobalDeletedItems, markGlobalItemDeleted } from "@/lib/storageSync"
+
 const CLIENTS_STORAGE_KEY = "saampark_stored_clients"
 const CONTACTS_STORAGE_KEY = "saampark_stored_contacts"
 const CLIENT_LABELS_STORAGE_KEY = "saampark_stored_client_labels"
@@ -11,7 +13,8 @@ export function getStoredClients(): ClientItem[] {
   try {
     const raw = localStorage.getItem(CLIENTS_STORAGE_KEY)
     if (!raw) return []
-    return JSON.parse(raw)
+    const parsed: ClientItem[] = JSON.parse(raw)
+    return filterGlobalDeletedItems(parsed)
   } catch (err) {
     console.error("Error reading stored clients:", err)
     return []
@@ -46,6 +49,7 @@ export function saveStoredClient(client: ClientItem): ClientItem[] {
 export function deleteStoredClient(id: string): ClientItem[] {
   if (typeof window === "undefined") return []
   try {
+    markGlobalItemDeleted(id, "clients")
     const current = getStoredClients()
     const updated = current.filter((c) => c.id !== id)
     localStorage.setItem(CLIENTS_STORAGE_KEY, JSON.stringify(updated))
@@ -55,6 +59,8 @@ export function deleteStoredClient(id: string): ClientItem[] {
     return []
   }
 }
+
+
 
 export function getStoredContacts(): ContactItem[] {
   if (typeof window === "undefined") return []
