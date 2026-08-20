@@ -33,20 +33,31 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         try {
           const rawDeleted = localStorage.getItem("saampark_deleted_user_emails")
           const deletedEmails: string[] = rawDeleted ? JSON.parse(rawDeleted) : []
-          if (deletedEmails.includes(state.user.email.toLowerCase().trim())) {
+          const emailNorm = state.user.email.toLowerCase().trim()
+
+          if (deletedEmails.includes(emailNorm)) {
             state.logout()
             router.replace("/login")
             return
           }
 
-          // Sync permissions from MySQL backend API across all pages
+          // Sync permissions and verify user exists in live database
           const { getUsers } = await import("@/app/feature/users/services/userService")
-          await getUsers()
+          const liveUsers = await getUsers()
+          const exists = liveUsers.some((u) => u.email.toLowerCase().trim() === emailNorm)
+
+          if (!exists) {
+            console.warn("Session revoked: User account deleted or non-existent.")
+            state.logout()
+            router.replace("/login")
+            return
+          }
         } catch (e) {
           console.warn("Session verification error:", e)
         }
       }
     }
+
 
 
     verifyActiveSessionAndSyncPermissions()
