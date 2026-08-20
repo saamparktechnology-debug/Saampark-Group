@@ -459,16 +459,13 @@ function savePersistedTasks(tasks: Task[]): void {
 
 export const taskService = {
   getTasks: async (): Promise<Task[]> => {
-    const dbData = await fetchModuleDataFromDB<Task[]>("tasks", initialTasks)
-    if (Array.isArray(dbData) && dbData.length > 0) {
-      return dbData
-    }
-    return filterGlobalDeletedItems([...initialTasks])
+    // Use [] as fallback — never show hardcoded demo data
+    const dbData = await fetchModuleDataFromDB<Task[]>("tasks", [])
+    return Array.isArray(dbData) ? dbData : []
   },
 
   addTask: async (taskData: Omit<Task, "id">): Promise<Task> => {
-    // Always read current list from DB to ensure cross-device consistency
-    const current = await fetchModuleDataFromDB<Task[]>("tasks", initialTasks)
+    const current = await fetchModuleDataFromDB<Task[]>("tasks", [])
     const nextId = (3650 + current.length + Math.floor(Math.random() * 100)).toString()
     const newTask: Task = { ...taskData, id: nextId }
     const updated = [newTask, ...current]
@@ -477,7 +474,7 @@ export const taskService = {
   },
 
   updateTask: async (id: string, updates: Partial<Task>): Promise<Task> => {
-    const current = await fetchModuleDataFromDB<Task[]>("tasks", initialTasks)
+    const current = await fetchModuleDataFromDB<Task[]>("tasks", [])
     const idx = current.findIndex((t) => t.id === id)
     if (idx === -1) throw new Error("Task not found")
     current[idx] = { ...current[idx], ...updates }
@@ -487,7 +484,7 @@ export const taskService = {
 
   deleteTask: async (id: string): Promise<void> => {
     await markGlobalItemDeleted(id, "tasks")
-    const current = await fetchModuleDataFromDB<Task[]>("tasks", initialTasks)
+    const current = await fetchModuleDataFromDB<Task[]>("tasks", [])
     const filtered = current.filter((t) => t.id !== id)
     await saveModuleDataToDB("tasks", filtered)
   },

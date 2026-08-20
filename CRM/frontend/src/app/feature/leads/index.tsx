@@ -35,18 +35,30 @@ export default function LeadsMain() {
   const [isManageLabelsModalOpen, setIsManageLabelsModalOpen] = React.useState(false)
   const [editingLead, setEditingLead] = React.useState<Lead | null>(null)
 
+  const [isLoading, setIsLoading] = React.useState(true)
+
   React.useEffect(() => {
-    const fetchFreshLeads = () => {
-      getLeads().then((data) => setLeads(data))
+    const fetchFreshLeads = async (showLoading = false) => {
+      if (showLoading) setIsLoading(true)
+      try {
+        const data = await getLeads()
+        setLeads(data)
+      } catch (err) {
+        console.warn("Error loading leads:", err)
+      } finally {
+        if (showLoading) setIsLoading(false)
+      }
     }
-    fetchFreshLeads()
-    const interval = setInterval(fetchFreshLeads, 2500)
-    window.addEventListener("storage", fetchFreshLeads)
+    fetchFreshLeads(true)                              // first load: show spinner
+    const interval = setInterval(() => fetchFreshLeads(false), 5000)  // background: silent
+    const storageHandler = () => fetchFreshLeads(false)
+    window.addEventListener("storage", storageHandler)
     return () => {
       clearInterval(interval)
-      window.removeEventListener("storage", fetchFreshLeads)
+      window.removeEventListener("storage", storageHandler)
     }
   }, [])
+
 
 
   const handleLeadAdded = (newLead: Lead) => {

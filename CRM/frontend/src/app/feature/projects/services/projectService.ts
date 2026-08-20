@@ -172,12 +172,13 @@ export const initialProjects: Project[] = [
 import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted, filterGlobalDeletedItems } from "@/lib/storageSync"
 
 export const getProjects = async (): Promise<Project[]> => {
-  const data = await fetchModuleDataFromDB<Project[]>("projects", initialProjects)
-  return filterGlobalDeletedItems(data)
+  // Use [] as fallback — never show hardcoded demo data
+  const data = await fetchModuleDataFromDB<Project[]>("projects", [])
+  return Array.isArray(data) ? filterGlobalDeletedItems(data) : []
 }
 
 export const addProject = async (project: Omit<Project, "id">): Promise<Project> => {
-  const current = await getProjects()
+  const current = await fetchModuleDataFromDB<Project[]>("projects", [])
   const newId = (Math.max(...current.map(p => parseInt(p.id) || 0), 0) + 1).toString()
   const newProject: Project = {
     ...project,
@@ -198,7 +199,7 @@ export const addProject = async (project: Omit<Project, "id">): Promise<Project>
 }
 
 export const updateProject = async (id: string, updates: Partial<Project>): Promise<Project> => {
-  const current = await getProjects()
+  const current = await fetchModuleDataFromDB<Project[]>("projects", [])
   const idx = current.findIndex(p => p.id === id)
   if (idx === -1) throw new Error("Project not found")
   current[idx] = { ...current[idx], ...updates }
@@ -207,10 +208,11 @@ export const updateProject = async (id: string, updates: Partial<Project>): Prom
 }
 
 export const deleteProject = async (id: string): Promise<boolean> => {
-  markGlobalItemDeleted(id, "projects")
-  const current = await getProjects()
+  await markGlobalItemDeleted(id, "projects")
+  const current = await fetchModuleDataFromDB<Project[]>("projects", [])
   const filtered = current.filter(p => p.id !== id)
   await saveModuleDataToDB("projects", filtered)
   return true
 }
+
 

@@ -656,15 +656,13 @@ function getPersistedLeads(): Lead[] {
 }
 
 export const getLeads = async (): Promise<Lead[]> => {
-  const dbData = await fetchModuleDataFromDB<Lead[]>("leads", initialLeads)
-  if (Array.isArray(dbData) && dbData.length > 0) {
-    return dbData
-  }
-  return filterGlobalDeletedItems([...initialLeads])
+  // Use [] as fallback — never show hardcoded demo data
+  const dbData = await fetchModuleDataFromDB<Lead[]>("leads", [])
+  return Array.isArray(dbData) ? dbData : []
 }
 
 export const addLead = async (leadData: Omit<Lead, "id">): Promise<Lead> => {
-  const current = await fetchModuleDataFromDB<Lead[]>("leads", initialLeads)
+  const current = await fetchModuleDataFromDB<Lead[]>("leads", [])
   const newId = (Math.max(...current.map((l) => parseInt(l.id) || 0), 0) + 1).toString()
   const newLead: Lead = {
     ...leadData,
@@ -682,7 +680,7 @@ export const addLead = async (leadData: Omit<Lead, "id">): Promise<Lead> => {
 }
 
 export const updateLead = async (id: string, updates: Partial<Lead>): Promise<Lead> => {
-  const current = await fetchModuleDataFromDB<Lead[]>("leads", initialLeads)
+  const current = await fetchModuleDataFromDB<Lead[]>("leads", [])
   const idx = current.findIndex((l) => l.id === id)
   if (idx === -1) throw new Error("Lead not found")
   current[idx] = { ...current[idx], ...updates }
@@ -692,7 +690,7 @@ export const updateLead = async (id: string, updates: Partial<Lead>): Promise<Le
 
 export const deleteLead = async (id: string): Promise<boolean> => {
   await markGlobalItemDeleted(id, "leads")
-  const current = await fetchModuleDataFromDB<Lead[]>("leads", initialLeads)
+  const current = await fetchModuleDataFromDB<Lead[]>("leads", [])
   const filtered = current.filter((l) => l.id !== id)
   await saveModuleDataToDB("leads", filtered)
   return true

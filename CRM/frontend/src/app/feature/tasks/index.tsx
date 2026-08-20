@@ -21,27 +21,28 @@ export default function TasksMain() {
   const [isManageLabelsOpen, setIsManageLabelsOpen] = React.useState(false)
   const [isLoading, setIsLoading] = React.useState(true)
 
-  const loadTasks = React.useCallback(async () => {
-    setIsLoading(true)
+  const loadTasks = React.useCallback(async (showLoading = false) => {
+    if (showLoading) setIsLoading(true)
     try {
       const data = await taskService.getTasks()
       setTasks(data)
     } catch (err) {
       console.error("Error loading tasks:", err)
     } finally {
-      setIsLoading(false)
+      if (showLoading) setIsLoading(false)
     }
   }, [])
 
   React.useEffect(() => {
-    loadTasks()
-    const interval = setInterval(loadTasks, 2500)
-    window.addEventListener("storage", loadTasks)
+    loadTasks(true)                              // first load: show spinner
+    const interval = setInterval(() => loadTasks(false), 5000)  // background polls: silent
+    window.addEventListener("storage", () => loadTasks(false))
     return () => {
       clearInterval(interval)
-      window.removeEventListener("storage", loadTasks)
+      window.removeEventListener("storage", () => loadTasks(false))
     }
   }, [loadTasks])
+
 
 
   const handleTaskAdded = (newTask: Task) => {
