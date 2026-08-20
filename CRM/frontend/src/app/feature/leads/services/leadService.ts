@@ -638,7 +638,8 @@ export const initialLeads: Lead[] = [
   },
 ]
 
-import { filterGlobalDeletedItems, markGlobalItemDeleted } from "@/lib/storageSync"
+import { filterGlobalDeletedItems, markGlobalItemDeleted, fetchModuleDataFromDB, saveModuleDataToDB } from "@/lib/storageSync"
+
 
 const LEADS_STORAGE_KEY = "saampark_leads_store"
 
@@ -658,42 +659,22 @@ function savePersistedLeads(leads: Lead[]): void {
   if (typeof window === "undefined") return
   try {
     localStorage.setItem(LEADS_STORAGE_KEY, JSON.stringify(leads))
+    saveModuleDataToDB("leads", leads)
   } catch {}
 }
 
 export const getLeads = async (): Promise<Lead[]> => {
   try {
-    const res = await api.get("/leads")
-    const dbLeads: any[] = Array.isArray(res) ? res : res?.data || []
-    if (Array.isArray(dbLeads) && dbLeads.length > 0) {
-      const formatted: Lead[] = dbLeads.map((l: any) => ({
-        id: String(l.id),
-        type: l.type || "Person",
-        name: l.first_name ? `${l.first_name} ${l.last_name || ""}`.trim() : l.name || "Lead Name",
-        primaryContact: l.first_name || l.name || "Primary Contact",
-        phone: l.phone || "N/A",
-        service: l.service || "Website Devlopment",
-        reminderDate: l.reminder_date || "12 Aug 2025",
-        reminderNotes: l.reminder_notes || "Follow up call",
-        owner: l.assigned_agent_name || "John Doe",
-        caller: l.assigned_agent_name || "John Doe",
-        ownerAvatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${l.id}`,
-        labels: l.labels ? (typeof l.labels === "string" ? JSON.parse(l.labels) : l.labels) : ["Potential"],
-        createdAt: l.created_at ? l.created_at.split("T")[0] : "Today",
-        status: l.status || "New",
-        source: l.source_name || l.source || "Social Media",
-        city: l.city || "Mumbai",
-        state: l.state || "Maharashtra",
-        country: l.country || "India",
-        value: l.value || "₹1,50,000",
-      }))
-      return filterGlobalDeletedItems(formatted)
+    const dbData = await fetchModuleDataFromDB<Lead[]>("leads", initialLeads)
+    if (Array.isArray(dbData) && dbData.length > 0) {
+      return dbData
     }
   } catch (err) {
-    console.warn("Backend /leads API fetch warning:", err)
+    console.warn("MySQL fetch error for leads:", err)
   }
   return getPersistedLeads()
 }
+
 
 export const addLead = async (leadData: Omit<Lead, "id">): Promise<Lead> => {
   const current = getPersistedLeads()

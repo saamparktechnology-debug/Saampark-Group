@@ -91,15 +91,17 @@ export function getStoredUserAccounts(): UserItem[] {
   }
 }
 
-// Helper to save user accounts into localStorage
+// Helper to save user accounts into localStorage & MySQL DB
 export function saveUserAccounts(accounts: UserItem[]): void {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
+    saveModuleDataToDB("users", accounts);
   } catch (err) {
     console.error("Error saving user accounts:", err);
   }
 }
+
 
 // Helper to check if an email is already registered in the system
 export function isEmailRegistered(email: string): boolean {
@@ -166,7 +168,8 @@ export function recordUserAccount(user: Partial<UserItem>, isNewRegistration = f
   return updatedAccount;
 }
 
-import { filterGlobalDeletedItems, markGlobalItemDeleted } from "@/lib/storageSync"
+import { filterGlobalDeletedItems, markGlobalItemDeleted, fetchModuleDataFromDB, saveModuleDataToDB } from "@/lib/storageSync"
+
 
 // Delete user permanently
 export async function deleteUser(id: string, email?: string): Promise<boolean> {
@@ -325,9 +328,8 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
 
 
   const merged = Array.from(allAccountsMap.values());
-  const visibleAccounts = filterGlobalDeletedItems(
-    merged.filter((u) => u.email.toLowerCase().trim() !== "supriyo.main@gmail.com")
-  );
+  const visibleAccounts = filterGlobalDeletedItems(merged);
+
 
   if (!companyId || companyId === "all") {
     return visibleAccounts;

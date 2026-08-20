@@ -8,13 +8,19 @@ const CLIENTS_STORAGE_KEY = "saampark_stored_clients"
 const CONTACTS_STORAGE_KEY = "saampark_stored_contacts"
 const CLIENT_LABELS_STORAGE_KEY = "saampark_stored_client_labels"
 
+import { fetchModuleDataFromDB, saveModuleDataToDB } from "@/lib/storageSync"
+
 export function getStoredClients(): ClientItem[] {
   if (typeof window === "undefined") return []
   try {
     const raw = localStorage.getItem(CLIENTS_STORAGE_KEY)
-    if (!raw) return []
-    const parsed: ClientItem[] = JSON.parse(raw)
-    return filterGlobalDeletedItems(parsed)
+    const local = raw ? JSON.parse(raw) : []
+    fetchModuleDataFromDB<ClientItem[]>("clients", local).then(dbData => {
+      if (Array.isArray(dbData) && dbData.length > 0 && typeof window !== "undefined") {
+        try { localStorage.setItem(CLIENTS_STORAGE_KEY, JSON.stringify(dbData)) } catch {}
+      }
+    }).catch(() => {})
+    return filterGlobalDeletedItems(local)
   } catch (err) {
     console.error("Error reading stored clients:", err)
     return []
@@ -27,6 +33,7 @@ export function saveStoredClient(client: ClientItem): ClientItem[] {
     const current = getStoredClients()
     const updated = [client, ...current.filter((c) => c.id !== client.id)]
     localStorage.setItem(CLIENTS_STORAGE_KEY, JSON.stringify(updated))
+    saveModuleDataToDB("clients", updated)
 
     // Automatically sync contact entry for this client
     saveStoredContact({
@@ -53,12 +60,14 @@ export function deleteStoredClient(id: string): ClientItem[] {
     const current = getStoredClients()
     const updated = current.filter((c) => c.id !== id)
     localStorage.setItem(CLIENTS_STORAGE_KEY, JSON.stringify(updated))
+    saveModuleDataToDB("clients", updated)
     return updated
   } catch (err) {
     console.error("Error deleting client:", err)
     return []
   }
 }
+
 
 
 

@@ -1,6 +1,8 @@
 import { Task } from "../types"
 import { api } from "@/lib/api"
-import { filterGlobalDeletedItems, markGlobalItemDeleted } from "@/lib/storageSync"
+import { filterGlobalDeletedItems, markGlobalItemDeleted, fetchModuleDataFromDB, saveModuleDataToDB } from "@/lib/storageSync"
+
+
 
 
 export const initialTasks: Task[] = [
@@ -420,15 +422,19 @@ export const initialTasks: Task[] = [
     milestone: "Beta Release",
     relatedTo: "Branding",
     assignedTo: "Sara Ann",
-    assignedToAvatar: "https://api.dicebear.com/7.x/notionists/svg?seed=SaraAnn",
     status: "Done",
     priority: "Normal",
     priorityIcon: "none",
     labels: [],
   },
+
 ]
 
 const TASKS_STORAGE_KEY = "saampark_tasks_store"
+
+
+
+
 
 
 function getPersistedTasks(): Task[] {
@@ -447,36 +453,23 @@ function savePersistedTasks(tasks: Task[]): void {
   if (typeof window === "undefined") return
   try {
     localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks))
+    saveModuleDataToDB("tasks", tasks)
   } catch {}
 }
 
 export const taskService = {
   getTasks: async (): Promise<Task[]> => {
     try {
-      const res = await api.get("/tasks")
-      const dbTasks: any[] = Array.isArray(res) ? res : res?.data || []
-      if (Array.isArray(dbTasks) && dbTasks.length > 0) {
-        const formatted: Task[] = dbTasks.map((t: any) => ({
-          id: String(t.id),
-          title: t.title || "Task item",
-          startDate: t.start_date || "-",
-          deadline: t.deadline || "30-06-2026",
-          milestone: t.milestone || "General",
-          relatedTo: t.project_title || "CRM Workspace",
-          assignedTo: t.assigned_to_name || "John Doe",
-          assignedToAvatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${t.id}`,
-          status: t.status === "To_do" ? "To do" : t.status || "To do",
-          priority: t.priority || "Normal",
-          priorityIcon: "none",
-          labels: [],
-        }))
-        return filterGlobalDeletedItems(formatted)
+      const dbData = await fetchModuleDataFromDB<Task[]>("tasks", initialTasks)
+      if (Array.isArray(dbData) && dbData.length > 0) {
+        return dbData
       }
     } catch (err) {
-      console.warn("Backend /tasks API fetch warning:", err)
+      console.warn("MySQL fetch error for tasks:", err)
     }
     return getPersistedTasks()
   },
+
 
   addTask: async (taskData: Omit<Task, "id">): Promise<Task> => {
     try {
