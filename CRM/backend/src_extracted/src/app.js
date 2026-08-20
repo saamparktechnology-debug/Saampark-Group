@@ -13,18 +13,12 @@ const app = express();
 // Security headers
 app.use(helmet());
 
-// Enable CORS — only allow from our frontend
-const allowedOrigins = [
-  process.env.CLIENT_URL || 'http://localhost:3000',
-  'http://localhost:3001',
-];
+// Enable CORS — allow from all domains including crm.saampark.com
 app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error('Not allowed by CORS'));
-  },
+  origin: true,
   credentials: true,
 }));
+
 
 // Body Parsers
 app.use(express.json({ limit: '10mb' }));
