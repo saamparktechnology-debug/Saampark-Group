@@ -1,11 +1,12 @@
 import { Subscription } from "../types"
 import { SubscriptionService } from "@/services/apiServices"
+import { fetchModuleDataFromDB, saveModuleDataToDB, filterGlobalDeletedItems, markGlobalItemDeleted } from "@/lib/storageSync"
 
 export const getSubscriptions = async (companyId: string): Promise<Subscription[]> => {
   try {
     const liveSubs = await SubscriptionService.getSubscriptions()
-    if (Array.isArray(liveSubs)) {
-      return liveSubs.map((s: any) => ({
+    if (Array.isArray(liveSubs) && liveSubs.length > 0) {
+      const mapped = liveSubs.map((s: any) => ({
         id: String(s.id || s._id),
         clientName: s.customer_id ? `Customer #${s.customer_id}` : 'Customer',
         planName: s.package_id ? `Package 0${s.package_id}` : 'Standard Package',
@@ -14,9 +15,16 @@ export const getSubscriptions = async (companyId: string): Promise<Subscription[
         billingCycle: s.billing_cycle ? s.billing_cycle.charAt(0).toUpperCase() + s.billing_cycle.slice(1) : 'Monthly',
         nextBillingDate: s.next_billing_date || '-',
       }))
+      return filterGlobalDeletedItems(mapped)
     }
   } catch (err) {
     console.error("API error loading subscriptions:", err)
   }
-  return []
+  const fallback = await fetchModuleDataFromDB<Subscription[]>("subscriptions", [])
+  return filterGlobalDeletedItems(fallback)
 }
+
+export const deleteSubscription = async (id: string): Promise<void> => {
+  markGlobalItemDeleted(id, "subscriptions")
+}
+

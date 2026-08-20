@@ -2,6 +2,8 @@
 
 import { CalendarEvent, EventLabel } from "../types"
 
+import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted, filterGlobalDeletedItems } from "@/lib/storageSync"
+
 const EVENTS_STORAGE_KEY = "saampark_stored_events"
 const EVENT_LABELS_STORAGE_KEY = "saampark_stored_event_labels"
 
@@ -10,11 +12,17 @@ export function getStoredEvents(): CalendarEvent[] {
   try {
     const raw = localStorage.getItem(EVENTS_STORAGE_KEY)
     if (!raw) return []
-    return JSON.parse(raw)
+    const parsed: CalendarEvent[] = JSON.parse(raw)
+    return filterGlobalDeletedItems(parsed)
   } catch (err) {
     console.error("Error reading stored events:", err)
     return []
   }
+}
+
+export async function getStoredEventsAsync(): Promise<CalendarEvent[]> {
+  const data = await fetchModuleDataFromDB<CalendarEvent[]>("events", getStoredEvents())
+  return filterGlobalDeletedItems(data)
 }
 
 export function saveStoredEvent(evt: CalendarEvent): CalendarEvent[] {
@@ -23,6 +31,7 @@ export function saveStoredEvent(evt: CalendarEvent): CalendarEvent[] {
     const current = getStoredEvents()
     const updated = [evt, ...current.filter((e) => e.id !== evt.id)]
     localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(updated))
+    saveModuleDataToDB("events", updated).catch(() => {})
     return updated
   } catch (err) {
     console.error("Error saving event:", err)
@@ -33,15 +42,18 @@ export function saveStoredEvent(evt: CalendarEvent): CalendarEvent[] {
 export function deleteStoredEvent(id: string): CalendarEvent[] {
   if (typeof window === "undefined") return []
   try {
+    markGlobalItemDeleted(id, "events")
     const current = getStoredEvents()
     const updated = current.filter((e) => e.id !== id)
     localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(updated))
+    saveModuleDataToDB("events", updated).catch(() => {})
     return updated
   } catch (err) {
     console.error("Error deleting event:", err)
     return []
   }
 }
+
 
 export function getStoredEventLabels(): EventLabel[] {
   if (typeof window === "undefined") return []

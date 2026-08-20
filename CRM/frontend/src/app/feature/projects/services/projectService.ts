@@ -169,14 +169,16 @@ export const initialProjects: Project[] = [
   },
 ]
 
-let projectsStore = [...initialProjects]
+import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted, filterGlobalDeletedItems } from "@/lib/storageSync"
 
 export const getProjects = async (): Promise<Project[]> => {
-  return Promise.resolve([...projectsStore])
+  const data = await fetchModuleDataFromDB<Project[]>("projects", initialProjects)
+  return filterGlobalDeletedItems(data)
 }
 
 export const addProject = async (project: Omit<Project, "id">): Promise<Project> => {
-  const newId = (Math.max(...projectsStore.map(p => parseInt(p.id) || 0), 0) + 1).toString()
+  const current = await getProjects()
+  const newId = (Math.max(...current.map(p => parseInt(p.id) || 0), 0) + 1).toString()
   const newProject: Project = {
     ...project,
     id: newId,
@@ -190,17 +192,25 @@ export const addProject = async (project: Omit<Project, "id">): Promise<Project>
       { id: `act-${Date.now()}`, user: "John Doe", timestamp: "Just now", action: "Created", title: `Project "${project.title}" created`, badge: "Project" }
     ]
   }
-  projectsStore = [newProject, ...projectsStore]
-  return Promise.resolve(newProject)
+  const updated = [newProject, ...current]
+  await saveModuleDataToDB("projects", updated)
+  return newProject
 }
 
 export const updateProject = async (id: string, updates: Partial<Project>): Promise<Project> => {
-  projectsStore = projectsStore.map(p => p.id === id ? { ...p, ...updates } : p)
-  const updated = projectsStore.find(p => p.id === id)!
-  return Promise.resolve(updated)
+  const current = await getProjects()
+  const idx = current.findIndex(p => p.id === id)
+  if (idx === -1) throw new Error("Project not found")
+  current[idx] = { ...current[idx], ...updates }
+  await saveModuleDataToDB("projects", current)
+  return { ...current[idx] }
 }
 
 export const deleteProject = async (id: string): Promise<boolean> => {
-  projectsStore = projectsStore.filter(p => p.id !== id)
-  return Promise.resolve(true)
+  markGlobalItemDeleted(id, "projects")
+  const current = await getProjects()
+  const filtered = current.filter(p => p.id !== id)
+  await saveModuleDataToDB("projects", filtered)
+  return true
 }
+

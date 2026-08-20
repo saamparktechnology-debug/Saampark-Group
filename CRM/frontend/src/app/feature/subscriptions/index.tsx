@@ -10,6 +10,8 @@ import { Subscription } from "./types"
 import { getSubscriptions } from "./services/subscriptionService"
 import { SubscriptionList } from "./components/SubscriptionList"
 
+import { deleteSubscription } from "./services/subscriptionService"
+
 export default function SubscriptionsMain() {
   const { activeCompanyId } = useAuthStore()
   const [subscriptions, setSubscriptions] = React.useState<Subscription[]>([])
@@ -19,8 +21,10 @@ export default function SubscriptionsMain() {
   }, [activeCompanyId])
 
   const handleDelete = (id: string) => {
+    deleteSubscription(id)
     setSubscriptions((prev) => prev.filter((s) => s.id !== id))
   }
+
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">

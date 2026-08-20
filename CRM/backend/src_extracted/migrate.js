@@ -116,9 +116,20 @@ async function migrate() {
     `);
     console.log('Created deleted_items table if not exists');
 
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS app_data (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        module_key VARCHAR(100) UNIQUE NOT NULL,
+        data_json LONGTEXT NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW() ON UPDATE NOW()
+      )
+    `);
+    console.log('Created app_data table if not exists');
+
     console.log('\nMigration complete!');
 
     process.exit(0);
+
 
   } catch (err) {
     console.error('Migration error:', err.message);

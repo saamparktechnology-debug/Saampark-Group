@@ -13,6 +13,8 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { useTheme } from "next-themes"
 import { AuthService } from "@/services/apiServices"
 
+import { fetchModuleDataFromDB, saveModuleDataToDB } from "@/lib/storageSync"
+
 type SettingsTab = "company" | "smtp" | "profile" | "theme"
 
 export default function SettingsMain() {
@@ -37,6 +39,23 @@ export default function SettingsMain() {
   const [smtpHost, setSmtpHost] = React.useState("smtp.gmail.com")
   const [smtpPort, setSmtpPort] = React.useState("587")
 
+  // Load settings from MySQL DB on mount
+  React.useEffect(() => {
+    fetchModuleDataFromDB("settings", null).then((saved: any) => {
+      if (saved) {
+        if (saved.companyName) setCompanyName(saved.companyName)
+        if (saved.currency) setCurrency(saved.currency)
+        if (saved.currencySymbol) setCurrencySymbol(saved.currencySymbol)
+        if (saved.address) setAddress(saved.address)
+        if (saved.industry) setIndustry(saved.industry)
+        if (saved.smtpUser) setSmtpUser(saved.smtpUser)
+        if (saved.smtpPass) setSmtpPass(saved.smtpPass)
+        if (saved.smtpHost) setSmtpHost(saved.smtpHost)
+        if (saved.smtpPort) setSmtpPort(saved.smtpPort)
+      }
+    })
+  }, [])
+
   // User Profile Settings Form State
   const [name, setName] = React.useState(user?.name || "")
   const [email, setEmail] = React.useState(user?.email || "")
@@ -45,27 +64,32 @@ export default function SettingsMain() {
   const [newPassword, setNewPassword] = React.useState("")
   const [confirmPassword, setConfirmPassword] = React.useState("")
 
-  const handleSaveCompany = (e: React.FormEvent) => {
+  const handleSaveCompany = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    setTimeout(() => {
-      setLoading(false)
-      setSuccessMsg("Company Profile updated successfully!")
-      setTimeout(() => setSuccessMsg(""), 3000)
-    }, 600)
+    await saveModuleDataToDB("settings", {
+      companyName, currency, currencySymbol, address, industry,
+      smtpUser, smtpPass, smtpHost, smtpPort
+    })
+    setLoading(false)
+    setSuccessMsg("Company settings saved to MySQL database successfully!")
+    setTimeout(() => setSuccessMsg(""), 3000)
   }
 
-  const handleSaveSMTP = (e: React.FormEvent) => {
+  const handleSaveSmtp = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    setTimeout(() => {
-      setLoading(false)
-      setSuccessMsg("SMTP Configuration saved and verified!")
-      setTimeout(() => setSuccessMsg(""), 3000)
-    }, 600)
+    await saveModuleDataToDB("settings", {
+      companyName, currency, currencySymbol, address, industry,
+      smtpUser, smtpPass, smtpHost, smtpPort
+    })
+    setLoading(false)
+    setSuccessMsg("SMTP configurations saved to MySQL database successfully!")
+    setTimeout(() => setSuccessMsg(""), 3000)
   }
 
   const handleSaveProfile = async (e: React.FormEvent) => {
+
     e.preventDefault()
     setErrorMsg("")
     if (newPassword && newPassword !== confirmPassword) {
@@ -211,7 +235,8 @@ export default function SettingsMain() {
 
       {/* ── TAB 2: SMTP EMAIL CONFIG ──────────────────────────────────────────── */}
       {activeTab === "smtp" && (
-        <form onSubmit={handleSaveSMTP} className="bg-surface border border-border rounded-2xl p-6 space-y-6 max-w-2xl">
+        <form onSubmit={handleSaveSmtp} className="bg-surface border border-border rounded-2xl p-6 space-y-6 max-w-2xl">
+
           <h3 className="font-bold text-base text-foreground flex items-center gap-2">
             <Mail size={18} className="text-primary" /> System Email & SMTP Config
           </h3>

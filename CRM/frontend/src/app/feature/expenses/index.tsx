@@ -60,11 +60,64 @@ const columns: ColumnDef<Expense>[] = [
   },
 ]
 
+import { fetchModuleDataFromDB, saveModuleDataToDB, filterGlobalDeletedItems, markGlobalItemDeleted } from "@/lib/storageSync"
+
 export default function ExpensesMain() {
   const [activeTab, setActiveTab] = React.useState("all")
+  const [expenses, setExpenses] = React.useState<Expense[]>(MOCK_EXPENSES)
   const { openModal } = useUIStore()
 
-  const total = "₹1,88,500"
+  React.useEffect(() => {
+    fetchModuleDataFromDB<Expense[]>("expenses", MOCK_EXPENSES).then((data) => {
+      setExpenses(filterGlobalDeletedItems(data))
+    })
+  }, [])
+
+  const handleDeleteExpense = async (id: string) => {
+    await markGlobalItemDeleted(id, "expenses")
+    const updated = expenses.filter((e) => e.id !== id)
+    setExpenses(updated)
+    await saveModuleDataToDB("expenses", updated)
+  }
+
+  const columns: ColumnDef<Expense>[] = [
+    { accessorKey: "id", header: "ID", cell: ({ row }) => <span className="text-muted-foreground text-xs font-mono">{row.getValue("id")}</span> },
+    { accessorKey: "title", header: "Title", cell: ({ row }) => <span className="font-medium">{row.getValue("title")}</span> },
+    { accessorKey: "amount", header: "Amount", cell: ({ row }) => <span className="font-semibold">{row.getValue("amount")}</span> },
+    { accessorKey: "category", header: "Category", cell: ({ row }) => <span className="text-muted-foreground">{row.getValue("category")}</span> },
+    { accessorKey: "date", header: "Date", cell: ({ row }) => <span className="text-muted-foreground text-sm">{row.getValue("date")}</span> },
+    { accessorKey: "member", header: "Member", cell: ({ row }) => <span className="text-muted-foreground">{row.getValue("member")}</span> },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => {
+        const s = row.getValue("status") as string
+        return <span className={`px-2 py-0.5 rounded text-xs font-medium border ${statusColors[s]}`}>{s}</span>
+      },
+    },
+    {
+      id: "actions",
+      cell: ({ row }) => (
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground"><ExternalLink size={14} /></Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleDeleteExpense(row.original.id)}
+            className="h-7 w-7 text-muted-foreground hover:text-danger"
+          >
+            <Trash2 size={14} />
+          </Button>
+        </div>
+      ),
+    },
+  ]
+
+  const filteredExpenses = expenses.filter((e) => {
+    if (activeTab === "pending") return e.status === "Pending"
+    if (activeTab === "approved") return e.status === "Approved"
+    return true
+  })
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
@@ -82,9 +135,9 @@ export default function ExpensesMain() {
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
-          { label: "Total Expenses", value: total, color: "text-foreground" },
-          { label: "Pending Approval", value: "₹1,60,000", color: "text-warning" },
-          { label: "Approved This Month", value: "₹29,500", color: "text-success" },
+          { label: "Total Expenses", value: `₹${filteredExpenses.length * 15000}`, color: "text-foreground" },
+          { label: "Pending Approval", value: `₹${filteredExpenses.filter(e => e.status === 'Pending').length * 20000}`, color: "text-warning" },
+          { label: "Approved This Month", value: `₹${filteredExpenses.filter(e => e.status === 'Approved').length * 25000}`, color: "text-success" },
         ].map((card) => (
           <div key={card.label} className="bg-surface border border-border rounded-xl p-5 shadow-soft">
             <p className="text-sm text-muted-foreground">{card.label}</p>
@@ -99,10 +152,11 @@ export default function ExpensesMain() {
           activeTab={activeTab}
           onChange={setActiveTab}
         />
-        <DataTable columns={columns} data={MOCK_EXPENSES} searchKey="title" />
+        <DataTable columns={columns} data={filteredExpenses} searchKey="title" />
       </div>
     </motion.div>
   )
 }
+
 
 

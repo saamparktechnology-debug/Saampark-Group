@@ -37,8 +37,24 @@ const colorMap = {
   purple: "bg-[#faf5ff] border-[#f3e8ff] hover:shadow-[#f3e8ff]/50 dark:bg-purple-950/20 dark:border-purple-900/30",
 }
 
+import { fetchModuleDataFromDB, saveModuleDataToDB, filterGlobalDeletedItems, markGlobalItemDeleted } from "@/lib/storageSync"
+
 export default function NotesMain() {
   const [activeTab, setActiveTab] = React.useState("grid")
+  const [notes, setNotes] = React.useState<Note[]>(MOCK_NOTES)
+
+  React.useEffect(() => {
+    fetchModuleDataFromDB<Note[]>("notes", MOCK_NOTES).then((data) => {
+      setNotes(filterGlobalDeletedItems(data))
+    })
+  }, [])
+
+  const handleDeleteNote = async (id: string) => {
+    await markGlobalItemDeleted(id, "notes")
+    const updated = notes.filter((n) => n.id !== id)
+    setNotes(updated)
+    await saveModuleDataToDB("notes", updated)
+  }
 
   return (
     <motion.div 
@@ -65,7 +81,7 @@ export default function NotesMain() {
         
         {activeTab === 'grid' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
-            {MOCK_NOTES.map((note) => (
+            {notes.map((note) => (
               <motion.div
                 key={note.id}
                 whileHover={{ y: -4, scale: 1.01 }}
@@ -73,7 +89,7 @@ export default function NotesMain() {
               >
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <h3 className="font-semibold text-foreground text-sm line-clamp-2 leading-tight">{note.title}</h3>
-                  <button className="text-muted-foreground hover:text-foreground -mt-1"><MoreVertical size={16} /></button>
+                  <button onClick={() => handleDeleteNote(note.id)} className="text-muted-foreground hover:text-danger -mt-1"><MoreVertical size={16} /></button>
                 </div>
                 
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-3">
@@ -110,5 +126,6 @@ export default function NotesMain() {
     </motion.div>
   )
 }
+
 
 

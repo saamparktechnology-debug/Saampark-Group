@@ -66,3 +66,47 @@ export function filterGlobalDeletedItems<T extends { id: string | number }>(item
   if (!list.length) return items
   return items.filter((item) => !list.includes(String(item.id).toLowerCase().trim()))
 }
+
+// Generic helper to fetch any module data (Projects, Events, Expenses, Tickets, Subscriptions, Proposals, Estimates, Notes, Settings) from MySQL DB
+export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: T): Promise<T> {
+  let currentFallback = fallbackData
+  if (typeof window !== "undefined") {
+    try {
+      const local = localStorage.getItem(`saampark_module_${moduleKey}`)
+      if (local) {
+        try { currentFallback = JSON.parse(local) } catch {}
+      }
+    } catch {}
+  }
+
+  try {
+    const res = await api.get(`/store/${moduleKey}`)
+    const serverData = res?.data !== undefined ? res.data : res
+    if (serverData !== null && serverData !== undefined) {
+      if (typeof window !== "undefined") {
+        try { localStorage.setItem(`saampark_module_${moduleKey}`, JSON.stringify(serverData)) } catch {}
+      }
+      return serverData as T
+    }
+  } catch (err) {
+    console.warn(`MySQL fetch warning for module ${moduleKey}:`, err)
+  }
+
+  return currentFallback
+}
+
+// Generic helper to save any module data to MySQL DB persistently
+export async function saveModuleDataToDB<T>(moduleKey: string, data: T): Promise<void> {
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem(`saampark_module_${moduleKey}`, JSON.stringify(data))
+    } catch {}
+  }
+
+  try {
+    await api.post(`/store/${moduleKey}`, { data })
+  } catch (err) {
+    console.warn(`MySQL save warning for module ${moduleKey}:`, err)
+  }
+}
+

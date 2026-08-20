@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/Button"
 import { Tabs } from "@/components/ui/Tabs"
 import { useUIStore } from "@/store/useUIStore"
 import { TicketService } from "@/services/apiServices"
+import { filterGlobalDeletedItems, markGlobalItemDeleted } from "@/lib/storageSync"
+
 
 type Ticket = {
   id: string
@@ -82,12 +84,14 @@ export default function TicketsMain() {
   const { openModal } = useUIStore()
   const [tickets, setTickets] = React.useState<Ticket[]>([])
 
+
+
   const loadTickets = React.useCallback(() => {
     TicketService.getTickets()
       .then((res) => {
         if (Array.isArray(res)) {
           const live: Ticket[] = res.map((t: any) => ({
-            id: `#T-${t.id || t._id}`,
+            id: String(t.id || t._id),
             subject: t.subject || 'Support Ticket',
             from: t.customer_id ? `Customer #${t.customer_id}` : 'Customer',
             category: t.category || 'General Support',
@@ -95,11 +99,17 @@ export default function TicketsMain() {
             status: t.status === 'closed' ? 'Closed' : t.status === 'open' ? 'Open' : 'New',
             createdAt: t.createdAt ? new Date(t.createdAt).toISOString().split('T')[0] : 'Today',
           }))
-          setTickets(live)
+          setTickets(filterGlobalDeletedItems(live))
         }
       })
       .catch((err) => console.error("Error loading live tickets API:", err))
   }, [])
+
+  const handleDeleteTicket = async (id: string) => {
+    await markGlobalItemDeleted(id, "tickets")
+    setTickets((prev) => prev.filter((t) => t.id !== id))
+  }
+
 
   React.useEffect(() => {
     loadTickets()
