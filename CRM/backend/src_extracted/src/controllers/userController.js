@@ -226,6 +226,8 @@ const createUser = async (req, res, next) => {
 
     let userId = null;
 
+    const compVal = company_id ? String(company_id) : 'tech';
+
     if (existing.length > 0 && existing[0].deleted_at) {
       // Re-activate soft deleted account
       userId = existing[0].id;
@@ -233,7 +235,7 @@ const createUser = async (req, res, next) => {
         `UPDATE users 
          SET full_name = ?, password_hash = ?, phone = ?, department = ?, company_id = ?, role_id = ?, permissions = ?, is_verified = 1, status = 'active', deleted_at = NULL, updated_at = NOW() 
          WHERE id = ?`,
-        [displayName, hashedPassword, phone || null, department || null, company_id || null, targetRoleId, permStr, userId]
+        [displayName, hashedPassword, phone || null, department || null, compVal, targetRoleId, permStr, userId]
       );
       // Remove from deleted_items tracking
       await pool.execute('DELETE FROM deleted_items WHERE item_id = ? AND module_name = "users"', [normEmail]);
@@ -241,7 +243,7 @@ const createUser = async (req, res, next) => {
       // Admin created users are marked is_verified = 1 automatically!
       const [result] = await pool.execute(
         'INSERT INTO users (role_id, full_name, email, password_hash, phone, department, company_id, permissions, is_verified, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)',
-        [targetRoleId, displayName, normEmail, hashedPassword, phone || null, department || null, company_id || null, permStr, 'active']
+        [targetRoleId, displayName, normEmail, hashedPassword, phone || null, department || null, compVal, permStr, 'active']
       );
       userId = result.insertId;
     }

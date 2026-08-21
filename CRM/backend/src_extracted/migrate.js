@@ -14,7 +14,7 @@ async function migrate() {
       { col: 'deleted_at', sql: 'ALTER TABLE users ADD COLUMN deleted_at DATETIME NULL' },
       { col: 'department', sql: 'ALTER TABLE users ADD COLUMN department VARCHAR(100) NULL' },
       { col: 'updated_at', sql: 'ALTER TABLE users ADD COLUMN updated_at DATETIME DEFAULT NOW()' },
-      { col: 'company_id', sql: 'ALTER TABLE users ADD COLUMN company_id INT NULL' },
+      { col: 'company_id', sql: 'ALTER TABLE users ADD COLUMN company_id VARCHAR(100) NULL' },
     ];
 
     for (const m of migrations) {
@@ -28,6 +28,13 @@ async function migrate() {
       } else {
         console.log('Already exists:', m.col);
       }
+    }
+
+    try {
+      await pool.execute('ALTER TABLE users MODIFY COLUMN company_id VARCHAR(100) NULL');
+      console.log('Modified company_id column to VARCHAR(100)');
+    } catch (e) {
+      console.log('Modify company_id column notice:', e.message);
     }
 
     // Mark all existing users as verified (they were created before this feature)
