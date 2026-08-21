@@ -220,7 +220,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
     onSave({
       ...payload,
       permissions,
-    })
+    } as any)
     onClose()
   }
 

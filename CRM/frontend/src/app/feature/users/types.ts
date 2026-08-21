@@ -17,6 +17,7 @@ export interface UserItem {
   lastLogin?: string;
   joinedDate: string;
   allowedModules?: string[];
+  permissions?: any;
 }
 
 export type User = UserItem;
