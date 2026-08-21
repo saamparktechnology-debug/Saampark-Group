@@ -772,6 +772,58 @@ export const getLeads = async (): Promise<Lead[]> => {
   return processed
 }
 
+import { saveStoredClient, getStoredClients } from "../../clients/services/clientService"
+import { recordUserAccount } from "../../users/services/userService"
+
+export async function checkAndAutoConvertLeadToClient(lead: Lead): Promise<void> {
+  if (!lead || lead.status !== "Won") return
+
+  try {
+    const storedClients = getStoredClients()
+    const emailNorm = (lead.email || `lead_${lead.id}@saampark.in`).toLowerCase().trim()
+    const clientName = lead.name || "Won Client"
+
+    const exists = storedClients.some(
+      (c) => c.name.toLowerCase().trim() === clientName.toLowerCase().trim() || c.email?.toLowerCase().trim() === emailNorm
+    )
+
+    if (!exists) {
+      const newClient = {
+        id: `cli_${lead.id}`,
+        name: clientName,
+        primaryContact: lead.primaryContact || lead.name,
+        email: emailNorm,
+        phone: lead.phone || "N/A",
+        group: "VIP",
+        label: lead.service || "Potential",
+        labelColor: "#3b82f6",
+        projectsCount: 0,
+        totalInvoiced: lead.value || "₹0",
+        paymentReceived: "₹0",
+        due: lead.value || "₹0",
+        address: `${lead.city || ""}, ${lead.state || ""}, ${lead.country || ""}`.trim(),
+      }
+
+      saveStoredClient(newClient as any)
+
+      // Register client account for login
+      recordUserAccount({
+        id: `usr_cli_${lead.id}`,
+        name: lead.primaryContact || lead.name,
+        email: emailNorm,
+        role: "Clients",
+        companyId: "tech",
+        companyName: "SAAMPARK Technology",
+        phone: lead.phone,
+        password: "Password123",
+        status: "Active",
+      }, true)
+    }
+  } catch (err) {
+    console.warn("Auto-convert lead to client error:", err)
+  }
+}
+
 export const addLead = async (leadData: Omit<Lead, "id">): Promise<Lead> => {
   const current = await fetchModuleDataFromDB<Lead[]>("leads", [])
   const maxNum = Math.max(100, ...current.map((l) => parseInt(l.id) || 0))
@@ -795,6 +847,7 @@ export const addLead = async (leadData: Omit<Lead, "id">): Promise<Lead> => {
   const updated = [newLead, ...current]
   await saveModuleDataToDB("leads", updated)
   syncLeadReminderTask(newLead)
+  checkAndAutoConvertLeadToClient(newLead)
   return newLead
 }
 
@@ -829,6 +882,7 @@ export const updateLead = async (id: string, updates: Partial<Lead>, userRole?: 
 
   await saveModuleDataToDB("leads", current)
   syncLeadReminderTask(current[idx])
+  checkAndAutoConvertLeadToClient(current[idx])
   return { ...current[idx] }
 }
 

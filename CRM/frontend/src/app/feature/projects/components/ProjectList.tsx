@@ -305,21 +305,91 @@ export function ProjectList({
                       </span>
                     </td>
 
-                    {/* Progress Bar */}
-                    <td className="py-3.5 px-4">
-                      <div className="w-24 bg-zinc-100 dark:bg-zinc-800 h-2 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all duration-300 ${
-                            p.status === "Completed" ? "bg-emerald-500" : "bg-blue-600"
-                          }`}
-                          style={{ width: `${p.progress}%` }}
-                        />
+                    {/* Progress Bar & Interactive Team Completion Slider */}
+                    <td className="py-3.5 px-4 min-w-[130px]">
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-[11px] font-semibold text-zinc-600 dark:text-zinc-400">
+                          <span>{p.progress}%</span>
+                          {p.status === "In Progress" && (
+                            <span className="text-[10px] text-blue-600 font-normal">Team Slider</span>
+                          )}
+                        </div>
+                        <div className="w-28 bg-zinc-100 dark:bg-zinc-800 h-2 rounded-full overflow-hidden relative">
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              p.status === "Completed" || p.status === "Finished" ? "bg-emerald-500" : "bg-blue-600"
+                            }`}
+                            style={{ width: `${p.progress}%` }}
+                          />
+                        </div>
+                        {p.status === "In Progress" && (
+                          <input
+                            type="range"
+                            min="1"
+                            max="100"
+                            value={p.progress || 1}
+                            onChange={async (e) => {
+                              const val = Number(e.target.value)
+                              const { updateProject } = await import("../services/projectService")
+                              await updateProject(p.id, { progress: val })
+                              p.progress = val
+                            }}
+                            className="w-28 h-1 accent-blue-600 cursor-pointer block"
+                            title="Adjust completion percentage (1% - 100%)"
+                          />
+                        )}
                       </div>
                     </td>
 
-                    {/* Status */}
-                    <td className="py-3.5 px-4 font-normal text-zinc-800 dark:text-zinc-200">
-                      {p.status}
+                    {/* Status & Payment Approval Controls */}
+                    <td className="py-3.5 px-4">
+                      {p.status === "Payment Pending" || p.paymentStatus === "Payment Pending" ? (
+                        <div className="space-y-1">
+                          <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300">
+                            Payment Pending
+                          </span>
+                          {(user?.role === "Super Admin" || user?.role === "Admin") && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const { updateProject } = await import("../services/projectService")
+                                const { updateInvoiceStatus } = await import("@/app/feature/sales/invoices/services/invoiceService")
+                                await updateProject(p.id, { status: "In Progress", paymentStatus: "Paid" })
+                                await updateInvoiceStatus(p.title, "Fully paid").catch(() => {})
+                                window.location.reload()
+                              }}
+                              className="block px-2 py-0.5 rounded bg-emerald-600 text-white font-bold text-[10px] hover:bg-emerald-700 shadow-2xs"
+                              title="Approve payment and mark project active"
+                            >
+                              Approve Payment & Activate
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <select
+                          value={p.status}
+                          disabled={!(user?.role === "Super Admin" || user?.role === "Admin")}
+                          onChange={async (e) => {
+                            const newStatus = e.target.value as any
+                            const { updateProject } = await import("../services/projectService")
+                            await updateProject(p.id, { status: newStatus })
+                            p.status = newStatus
+                          }}
+                          className={`px-2 py-1 rounded text-xs font-semibold border bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 ${
+                            p.status === "Completed" || p.status === "Finished"
+                              ? "text-emerald-600 border-emerald-300"
+                              : p.status === "Cancelled"
+                              ? "text-rose-600 border-rose-300"
+                              : "text-blue-600 border-blue-300"
+                          }`}
+                        >
+                          <option value="In Progress">In Progress</option>
+                          <option value="Open">Open</option>
+                          <option value="Hold">Hold</option>
+                          <option value="Finished">Finished / Completed</option>
+                          <option value="Cancelled">Cancelled</option>
+                        </select>
+                      )}
                     </td>
 
                     {/* Row Action Icons matching Image 1 */}

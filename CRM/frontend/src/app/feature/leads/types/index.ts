@@ -16,6 +16,7 @@ export interface Lead {
   name: string
   primaryContact: string
   phone: string
+  email?: string
   owner: string
   caller?: string
   createdBy?: string

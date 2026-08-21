@@ -63,8 +63,47 @@ export function Sidebar() {
   const { user } = useAuthStore()
   const { isModuleAllowed, userActionPermissions, userPermissions } = usePermissionStore()
 
+  const [badgeCounts, setBadgeCounts] = React.useState<Record<string, number | string>>({
+    Tickets: 21,
+  })
+
   React.useEffect(() => {
     getUsers()
+
+    const loadBadges = async () => {
+      try {
+        const { getLeads } = await import("@/app/feature/leads/services/leadService")
+        const { getProjects } = await import("@/app/feature/projects/services/projectService")
+        const { taskService } = await import("@/app/feature/tasks/services/taskService")
+        const { getInvoices } = await import("@/app/feature/sales/invoices/services/invoiceService")
+
+        const [leads, projects, tasks, invoices] = await Promise.all([
+          getLeads().catch(() => []),
+          getProjects().catch(() => []),
+          taskService.getTasks().catch(() => []),
+          getInvoices().catch(() => []),
+        ])
+
+        const pendingLeads = (leads || []).filter((l) => l.isLocked || (l.reminderDate && l.reminderDate !== "None")).length
+        const pendingProjects = (projects || []).filter((p) => p.status === "Payment Pending" || p.paymentStatus === "Payment Pending").length
+        const openTasks = (tasks || []).filter((t) => t.status !== "Done").length
+        const unpaidInvoices = (invoices || []).filter((i) => i.status === "Not paid" || i.status === "Payment Pending" || i.status === "Draft").length
+
+        setBadgeCounts({
+          Leads: pendingLeads > 0 ? pendingLeads : "!",
+          Projects: pendingProjects > 0 ? pendingProjects : "",
+          Tasks: openTasks > 0 ? openTasks : "",
+          Tickets: 21,
+          Sales: unpaidInvoices > 0 ? unpaidInvoices : "",
+        })
+      } catch (err) {
+        console.warn("Sidebar badge error:", err)
+      }
+    }
+
+    loadBadges()
+    const interval = setInterval(loadBadges, 5000)
+    return () => clearInterval(interval)
   }, [])
 
   // Dynamically filter navigation items based on user role & permissions configured by Super Admin / Admin
@@ -108,6 +147,8 @@ export function Sidebar() {
       <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 space-y-1 scrollbar-hide">
         {allowedNavItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+          const itemBadge = badgeCounts[item.name] !== undefined && badgeCounts[item.name] !== "" ? badgeCounts[item.name] : item.badge
+
           return (
             <Link key={item.name} href={item.href} className="block px-3">
               <motion.div
@@ -140,9 +181,11 @@ export function Sidebar() {
                       <span className="text-sm whitespace-nowrap overflow-hidden">
                         {item.name}
                       </span>
-                      {item.badge && (
-                        <span className="ml-auto bg-indigo-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-sm shrink-0">
-                          {item.badge}
+                      {itemBadge && (
+                        <span className={`ml-auto text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-xs shrink-0 ${
+                          item.name === "Projects" || item.name === "Leads" ? "bg-rose-600 animate-pulse" : "bg-indigo-600"
+                        }`}>
+                          {itemBadge}
                         </span>
                       )}
                     </motion.div>

@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Search, ChevronDown, FileSpreadsheet, Printer, LayoutGrid, SlidersHorizontal, Edit3, X, Eye, ChevronLeft, ChevronRight, User } from "lucide-react"
+import { Search, ChevronDown, FileSpreadsheet, Printer, LayoutGrid, SlidersHorizontal, Edit3, X, Eye, ChevronLeft, ChevronRight, User, FolderPlus } from "lucide-react"
 import { ClientItem } from "../types"
 
 import { useAuthStore } from "@/store/useAuthStore"
@@ -11,12 +11,14 @@ interface ClientsTableViewProps {
   clients: ClientItem[]
   onDeleteClient: (id: string) => void
   onEditClient: (client: ClientItem) => void
+  onAddProjectClient?: (client: ClientItem) => void
 }
 
 export function ClientsTableView({
   clients,
   onDeleteClient,
   onEditClient,
+  onAddProjectClient,
 }: ClientsTableViewProps) {
   const { user } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
@@ -240,6 +242,17 @@ export function ClientsTableView({
                   <td className="py-3 px-3 font-medium text-slate-800 dark:text-slate-100">{client.due}</td>
                   <td className="py-3 px-3 text-right">
                     <div className="flex items-center justify-end gap-1.5">
+                      {onAddProjectClient && (
+                        <button
+                          type="button"
+                          onClick={() => onAddProjectClient(client)}
+                          className="px-2 py-1 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 hover:bg-blue-100 font-semibold flex items-center gap-1 text-[11px] shadow-2xs border border-blue-200/60 dark:border-blue-800/60"
+                          title="Add Project for this client"
+                        >
+                          <FolderPlus size={13} />
+                          <span>+ Add Project</span>
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"

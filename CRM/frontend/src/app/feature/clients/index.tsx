@@ -10,6 +10,7 @@ import { ClientsTableView } from "./components/ClientsTableView"
 import { ContactsTableView } from "./components/ContactsTableView"
 import { AddClientModal } from "./components/AddClientModal"
 import { ManageClientLabelsModal } from "./components/ManageClientLabelsModal"
+import { AddClientProjectModal } from "./components/AddClientProjectModal"
 import {
   getStoredClients,
   saveStoredClient,
@@ -42,6 +43,9 @@ export default function ClientsMain() {
   const [isAddClientModalOpen, setIsAddClientModalOpen] = React.useState(false)
   const [isManageLabelsModalOpen, setIsManageLabelsModalOpen] = React.useState(false)
   const [selectedClientForEdit, setSelectedClientForEdit] = React.useState<ClientItem | null>(null)
+  
+  const [isAddProjectModalOpen, setIsAddProjectModalOpen] = React.useState(false)
+  const [selectedClientForProject, setSelectedClientForProject] = React.useState<ClientItem | null>(null)
 
   // Sync real client users from userService with local client store
   const loadClientData = React.useCallback(async () => {
@@ -284,6 +288,10 @@ export default function ClientsMain() {
             setSelectedClientForEdit(client)
             setIsAddClientModalOpen(true)
           }}
+          onAddProjectClient={(client) => {
+            setSelectedClientForProject(client)
+            setIsAddProjectModalOpen(true)
+          }}
         />
       )}
       {activeTab === "contacts" && (
@@ -299,6 +307,17 @@ export default function ClientsMain() {
         onClose={() => setIsAddClientModalOpen(false)}
         onSave={handleSaveClient}
         initialData={selectedClientForEdit}
+      />
+
+      {/* Add Client Project & Invoice Modal */}
+      <AddClientProjectModal
+        isOpen={isAddProjectModalOpen}
+        client={selectedClientForProject}
+        onClose={() => {
+          setIsAddProjectModalOpen(false)
+          setSelectedClientForProject(null)
+        }}
+        onProjectCreated={loadClientData}
       />
 
       {/* Manage Labels Modal */}

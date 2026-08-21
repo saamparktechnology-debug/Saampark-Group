@@ -1,5 +1,5 @@
 export type ProjectType = "Client Project" | "Internal Project"
-export type ProjectStatus = "Open" | "Completed" | "Hold" | "In Progress"
+export type ProjectStatus = "Payment Pending" | "Open" | "In Progress" | "Completed" | "Hold" | "Finished" | "Cancelled"
 
 export interface ProjectMember {
   id: string
@@ -39,6 +39,12 @@ export interface Project {
   description?: string
   starred?: boolean
   totalHours?: number
+  paymentStatus?: "Payment Pending" | "Paid"
+  baseAmount?: number
+  gstRate?: number
+  gstAmount?: number
+  totalAmount?: number
+  billedBy?: string
   members?: ProjectMember[]
   taskBreakdown?: TaskBreakdown
   activityLogs?: ActivityItem[]
