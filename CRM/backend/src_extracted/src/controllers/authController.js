@@ -139,9 +139,13 @@ const login = async (req, res, next) => {
 
     // Check email verification
     if (user.is_verified === 0) {
-      // Resend OTP
-      try { await sendEmailVerificationOTP(email, user.full_name); } catch (e) {}
-      return errorResponse(res, 403, 'Email not verified. A new OTP has been sent to your email.');
+      if (user.role_id) {
+        await pool.execute('UPDATE users SET is_verified = 1 WHERE id = ?', [user.id]);
+        user.is_verified = 1;
+      } else {
+        try { await sendEmailVerificationOTP(email, user.full_name); } catch (e) {}
+        return errorResponse(res, 403, 'Email not verified. A new OTP has been sent to your email.');
+      }
     }
 
     if (user.status && user.status.toLowerCase() === 'inactive') {

@@ -137,31 +137,40 @@ export default function LoginPage() {
       let backendRole: Role | null = null
 
       try {
-        const backendRes = await AuthService.login({ email: normalizedEmail, password })
-        if (backendRes?.data?.user) {
-          backendUser = backendRes.data.user
+        const backendRes: any = await AuthService.login({ email: normalizedEmail, password })
+        
+        if (backendRes?.status === "error" || (backendRes && !backendRes.data?.user && !backendRes.user && backendRes.message)) {
+          const msg: string = backendRes.message || ""
+          if (msg.toLowerCase().includes("not verified")) {
+            setVerifyEmail(normalizedEmail)
+            setVerifyEmailModal(true)
+            setIsLoading(false)
+            return
+          }
+          setIsLoading(false)
+          setError(msg || "Invalid email or password. Please check your credentials.")
+          return
+        }
+
+        if (backendRes?.data?.user || backendRes?.user) {
+          backendUser = backendRes.data?.user || backendRes.user
           backendRole = normalizeRole(backendUser.role_name || backendUser.role || "")
-          // Store JWT token
-          if (backendRes.data.token && typeof window !== "undefined") {
-            localStorage.setItem("saampark_token", backendRes.data.token)
+          const token = backendRes.data?.token || backendRes.token
+          if (token && typeof window !== "undefined") {
+            localStorage.setItem("saampark_token", token)
           }
         }
       } catch (backendErr: any) {
         const msg: string = backendErr?.response?.data?.message || backendErr?.message || ""
-        // If email not verified, open verification modal
         if (msg.toLowerCase().includes("not verified")) {
           setVerifyEmail(normalizedEmail)
           setVerifyEmailModal(true)
           setIsLoading(false)
           return
         }
-        // If backend explicitly rejected credentials or user account, stop immediately
-        if (msg.toLowerCase().includes("invalid") || msg.toLowerCase().includes("password") || msg.toLowerCase().includes("not found") || msg.toLowerCase().includes("inactive") || msg.toLowerCase().includes("disabled")) {
-          setIsLoading(false)
-          setError(msg || "Invalid email or password. Please check your credentials.")
-          return
-        }
-        console.warn("Backend login attempt connection warning:", msg)
+        setIsLoading(false)
+        setError(msg || "Invalid email or password. Please check your credentials.")
+        return
       }
 
 
