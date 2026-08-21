@@ -268,6 +268,8 @@ const createUser = async (req, res, next) => {
         password: password || 'Password123',
         lastLogin: 'Just created',
         joinedDate: new Date().toISOString().split('T')[0],
+        permissions: permissions || null,
+        allowedModules: permissions?.allowedModules,
       };
 
       const existingIdx = currentUsers.findIndex((u) => (u.email || '').toLowerCase().trim() === normEmail);

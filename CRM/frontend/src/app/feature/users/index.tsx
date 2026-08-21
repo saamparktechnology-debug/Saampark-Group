@@ -61,9 +61,8 @@ export default function UsersMain() {
 
   const handleSaveUser = async (userData: Partial<UserItem>) => {
     const isNew = !editingUser
-    const saved = recordUserAccount(userData, isNew)
-    
-    // Background sync with real backend MySQL API
+    let realId = editingUser?.id ? String(editingUser.id) : ""
+
     try {
       const { api } = await import("@/lib/api")
       const roleIdMap: Record<string, number> = {
@@ -76,7 +75,7 @@ export default function UsersMain() {
       const role_id = roleIdMap[userData.role || ""] || 3
 
       if (!editingUser && userData.email) {
-        await api.post("/users", {
+        const res: any = await api.post("/users", {
           full_name: userData.name || "User Account",
           email: userData.email,
           password: userData.password || "Password123",
@@ -86,7 +85,14 @@ export default function UsersMain() {
           department: userData.department || "General",
           phone: userData.phone || "",
           permissions: (userData as any).permissions,
-        }).catch((err) => console.warn("Backend user create warning:", err))
+        }).catch((err) => {
+          console.warn("Backend user create warning:", err)
+          return null
+        })
+
+        if (res?.data?.id || res?.id) {
+          realId = String(res?.data?.id || res?.id)
+        }
       } else if (editingUser) {
         await api.put(`/users/${editingUser.id}`, {
           full_name: userData.name,
@@ -101,6 +107,15 @@ export default function UsersMain() {
     } catch (e) {
       console.warn("API sync silent fail:", e)
     }
+
+    const saved = recordUserAccount(
+      {
+        ...userData,
+        id: realId || userData.id,
+        permissions: (userData as any).permissions,
+      },
+      isNew
+    )
 
     if (!saved) return
 
