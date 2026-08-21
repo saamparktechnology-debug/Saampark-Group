@@ -145,7 +145,7 @@ export function recordUserAccount(user: Partial<UserItem>, isNewRegistration = f
     id: user.id || (existingIndex >= 0 ? currentAccounts[existingIndex].id : `usr_${Date.now()}`),
     name: user.name || (existingIndex >= 0 ? currentAccounts[existingIndex].name : "User Account"),
     email: normalizedEmail,
-    role: user.role || (existingIndex >= 0 ? currentAccounts[existingIndex].role : "Teams"),
+    role: user.role !== undefined ? user.role : (existingIndex >= 0 ? currentAccounts[existingIndex].role : "Teams"),
     companyId: user.companyId || (existingIndex >= 0 ? currentAccounts[existingIndex].companyId : "tech"),
     companyName:
       user.companyName ||
@@ -294,9 +294,7 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
           const existingIdx = dbUsers.findIndex((du) => du.email.toLowerCase().trim() === emailNorm);
           const existingItem = existingIdx >= 0 ? dbUsers[existingIdx] : null;
           const mappedRole = mapRoleName(u.role_name || u.role);
-          const finalRole = (existingItem?.role && (existingItem.role === "Super Admin" || existingItem.role === "Admin"))
-            ? existingItem.role
-            : mappedRole;
+          const finalRole = (mappedRole && mappedRole !== "Teams") ? mappedRole : (existingItem?.role || localMatches?.role || mappedRole || "Teams");
 
           let permObj: any = null;
           if (typeof u.permissions === "string") {

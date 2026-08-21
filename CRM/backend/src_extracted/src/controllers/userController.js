@@ -50,7 +50,14 @@ const updateUser = async (req, res, next) => {
     const displayName = full_name || name || null;
     const phoneVal = phone !== undefined ? (phone || null) : null;
     const statusVal = status || null;
-    const roleIdVal = role_id ? parseInt(role_id, 10) : null;
+    let roleIdVal = role_id ? parseInt(role_id, 10) : null;
+    if (!roleIdVal && req.body.role) {
+      const rLower = String(req.body.role).toLowerCase();
+      if (rLower.includes('super admin')) roleIdVal = 1;
+      else if (rLower.includes('admin')) roleIdVal = 2;
+      else if (rLower.includes('client')) roleIdVal = 4;
+      else roleIdVal = 3;
+    }
     const targetEmail = (email || id || '').toLowerCase().trim();
 
     // Build dynamic SET clause

@@ -122,11 +122,18 @@ export default function UsersMain() {
     setUsers((prev) => {
       let nextList: UserItem[] = []
       if (editingUser) {
-        nextList = prev.map((u) => (u.id === editingUser.id ? ({ ...u, ...saved, permissions: (userData as any).permissions } as UserItem) : u))
+        nextList = prev.map((u) =>
+          u.id === editingUser.id || u.email.toLowerCase().trim() === saved.email.toLowerCase().trim()
+            ? ({ ...u, ...saved, role: userData.role || saved.role, permissions: (userData as any).permissions } as UserItem)
+            : u
+        )
       } else {
-        nextList = [saved, ...prev.filter((u) => u.email.toLowerCase() !== saved.email.toLowerCase())]
+        nextList = [saved, ...prev.filter((u) => u.email.toLowerCase().trim() !== saved.email.toLowerCase().trim())]
       }
       saveModuleDataToDB("users", nextList)
+      if (typeof window !== "undefined") {
+        try { localStorage.setItem("saampark_registered_accounts", JSON.stringify(nextList)); } catch {}
+      }
       return nextList
     })
   }
