@@ -13,8 +13,6 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 
 export const INITIAL_LABELS: LabelItem[] = [
-  { id: "lbl_1", name: "50% Probability", color: "#eab308" },
-  { id: "lbl_2", name: "90% Probability", color: "#84cc16" },
   { id: "lbl_3", name: "Call this week", color: "#a855f7" },
   { id: "lbl_4", name: "Corporate", color: "#d8b4fe" },
   { id: "lbl_5", name: "Inactive", color: "#9ca3af" },
@@ -122,19 +120,46 @@ export default function LeadsMain() {
 
   const visibleLeads = React.useMemo(() => {
     if (!user || isSuperOrAdmin) return leads
-    const normName = (user.name || "").toLowerCase().trim()
-    const normEmail = (user.email || "").toLowerCase().trim()
+
+    const uName = (user.name || (user as any).full_name || "").toLowerCase().trim()
+    const uEmail = (user.email || "").toLowerCase().trim()
+    const uId = String(user.id || "").toLowerCase().trim()
+
     return leads.filter((l) => {
       const caller = (l.caller || "").toLowerCase().trim()
       const owner = (l.owner || "").toLowerCase().trim()
       const createdBy = (l.createdBy || "").toLowerCase().trim()
+      const assignedTo = (l.assignedTo || (l as any).assigned_to || "").toString().toLowerCase().trim()
+      const managers = (l.managers || "").toLowerCase().trim()
+
+      const checkMatch = (val: string) => {
+        if (!val) return false
+        if (val === "team" || val === "teams" || val === "all") return true
+
+        const targets = val.split(/[,;]+/).map((s) => s.trim()).filter(Boolean)
+        if (targets.length === 0) targets.push(val)
+
+        return targets.some((t) => {
+          if (t === "team" || t === "teams" || t === "all") return true
+          if (uEmail && t === uEmail) return true
+          if (uName && t === uName) return true
+          if (uId && t === uId) return true
+          if (uName && (t.includes(uName) || uName.includes(t))) return true
+          if (uEmail && (t.includes(uEmail) || uEmail.includes(t))) return true
+          if (uName) {
+            const parts = uName.split(/\s+/).filter((p: string) => p.length > 2)
+            if (parts.some((p: string) => t.includes(p))) return true
+          }
+          return false
+        })
+      }
+
       return (
-        caller === normName ||
-        caller === normEmail ||
-        owner === normName ||
-        owner === normEmail ||
-        createdBy === normName ||
-        createdBy === normEmail
+        checkMatch(caller) ||
+        checkMatch(owner) ||
+        checkMatch(createdBy) ||
+        checkMatch(assignedTo) ||
+        checkMatch(managers)
       )
     })
   }, [leads, user, isSuperOrAdmin])

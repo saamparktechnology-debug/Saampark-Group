@@ -43,6 +43,9 @@ const updateTaskStatus = async (req, res, next) => {
     return successResponse(res, 200, 'Task status updated');
   } catch (error) {
     next(error);
+  }
+};
+
 // Delete Task
 const deleteTask = async (req, res, next) => {
   try {

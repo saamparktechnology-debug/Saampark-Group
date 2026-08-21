@@ -55,11 +55,17 @@ const ALL_NAV_ITEMS = [
   { name: "Settings", href: "/feature/settings", icon: Settings },
 ]
 
+import { getUsers } from "@/app/feature/users/services/userService"
+
 export function Sidebar() {
   const pathname = usePathname()
   const { isSidebarCollapsed } = useUIStore()
   const { user } = useAuthStore()
   const { isModuleAllowed, userActionPermissions, userPermissions } = usePermissionStore()
+
+  React.useEffect(() => {
+    getUsers()
+  }, [])
 
   // Dynamically filter navigation items based on user role & permissions configured by Super Admin / Admin
   const allowedNavItems = React.useMemo(() => {

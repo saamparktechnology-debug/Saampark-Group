@@ -45,12 +45,13 @@ const getUserById = async (req, res, next) => {
 const updateUser = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { full_name, name, phone, role_id, status, permissions, department } = req.body;
+    const { full_name, name, email, phone, role_id, status, permissions, department } = req.body;
 
     const displayName = full_name || name || null;
     const phoneVal = phone !== undefined ? (phone || null) : null;
     const statusVal = status || null;
     const roleIdVal = role_id ? parseInt(role_id, 10) : null;
+    const targetEmail = (email || id || '').toLowerCase().trim();
 
     // Build dynamic SET clause
     const setClauses = [];
@@ -72,12 +73,63 @@ const updateUser = async (req, res, next) => {
     }
 
     setClauses.push('updated_at = NOW()');
-    params.push(id, id);
+    params.push(id, id, targetEmail);
 
     await pool.execute(
-      `UPDATE users SET ${setClauses.join(', ')} WHERE id = ? OR email = ?`,
+      `UPDATE users SET ${setClauses.join(', ')} WHERE id = ? OR email = ? OR email = ?`,
       params
     );
+
+    // Also sync updated user record & permissions into app_data JSON store
+    try {
+      const [appDataRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "users"');
+      let currentUsers = [];
+      if (appDataRows.length > 0) {
+        try { currentUsers = JSON.parse(appDataRows[0].data_json) } catch {}
+      }
+      if (!Array.isArray(currentUsers)) currentUsers = [];
+
+      const [updatedUserRows] = await pool.execute('SELECT u.*, r.name as role_name FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id = ? OR u.email = ? OR u.email = ?', [id, id, targetEmail]);
+      if (updatedUserRows.length > 0) {
+        const u = updatedUserRows[0];
+        const emailNorm = (u.email || '').toLowerCase().trim();
+        let permObj = null;
+        if (typeof u.permissions === 'string') {
+          try { permObj = JSON.parse(u.permissions); } catch {}
+        } else if (u.permissions && typeof u.permissions === 'object') {
+          permObj = u.permissions;
+        }
+
+        const updatedItem = {
+          id: String(u.id),
+          name: u.full_name || u.email,
+          email: emailNorm,
+          role: u.role_name || 'Teams',
+          companyId: u.company_id || 'tech',
+          companyName: u.company_name || 'SAAMPARK Technology',
+          status: u.status === 'inactive' ? 'Inactive' : 'Active',
+          department: u.department || 'General',
+          phone: u.phone || '',
+          permissions: permObj,
+          allowedModules: permObj?.allowedModules,
+        };
+
+        const existingIdx = currentUsers.findIndex((cu) => (cu.email || '').toLowerCase().trim() === emailNorm);
+        if (existingIdx >= 0) {
+          currentUsers[existingIdx] = { ...currentUsers[existingIdx], ...updatedItem };
+        } else {
+          currentUsers.unshift(updatedItem);
+        }
+
+        await pool.execute(
+          `INSERT INTO app_data (module_key, data_json) VALUES ('users', ?)
+           ON DUPLICATE KEY UPDATE data_json = VALUES(data_json), updated_at = NOW()`,
+          [JSON.stringify(currentUsers)]
+        );
+      }
+    } catch (appErr) {
+      console.warn('App data sync on updateUser warning:', appErr.message);
+    }
 
     return successResponse(res, 200, 'User updated successfully');
   } catch (error) {
@@ -139,7 +191,7 @@ const deleteUser = async (req, res, next) => {
 // ─── CREATE USER (ADMIN CREATED - BYPASSES OTP) ─────────────────────────────
 const createUser = async (req, res, next) => {
   try {
-    const { full_name, name, email, password, phone, role_id, role, company_id, companyName, department } = req.body;
+    const { full_name, name, email, password, phone, role_id, role, company_id, companyName, department, permissions } = req.body;
     const displayName = full_name || name;
 
     if (!displayName || !email || !password) {
@@ -148,9 +200,9 @@ const createUser = async (req, res, next) => {
 
     const normEmail = email.toLowerCase().trim();
 
-    // Check existing
-    const [existing] = await pool.execute('SELECT id FROM users WHERE email = ? AND deleted_at IS NULL', [normEmail]);
-    if (existing.length > 0) {
+    // Check existing users (including soft-deleted)
+    const [existing] = await pool.execute('SELECT id, deleted_at FROM users WHERE email = ?', [normEmail]);
+    if (existing.length > 0 && !existing[0].deleted_at) {
       return errorResponse(res, 400, 'An account with this email address already exists.');
     }
 
@@ -170,12 +222,69 @@ const createUser = async (req, res, next) => {
     }
 
     const roleName = targetRoleId === 1 ? 'Super Admin' : targetRoleId === 2 ? 'Admin' : targetRoleId === 4 ? 'Clients' : 'Teams';
+    const permStr = permissions ? (typeof permissions === 'string' ? permissions : JSON.stringify(permissions)) : null;
 
-    // Admin created users are marked is_verified = 1 automatically!
-    const [result] = await pool.execute(
-      'INSERT INTO users (role_id, full_name, email, password_hash, phone, department, company_id, is_verified, status) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)',
-      [targetRoleId, displayName, normEmail, hashedPassword, phone || null, department || null, company_id || null, 'active']
-    );
+    let userId = null;
+
+    if (existing.length > 0 && existing[0].deleted_at) {
+      // Re-activate soft deleted account
+      userId = existing[0].id;
+      await pool.execute(
+        `UPDATE users 
+         SET full_name = ?, password_hash = ?, phone = ?, department = ?, company_id = ?, role_id = ?, permissions = ?, is_verified = 1, status = 'active', deleted_at = NULL, updated_at = NOW() 
+         WHERE id = ?`,
+        [displayName, hashedPassword, phone || null, department || null, company_id || null, targetRoleId, permStr, userId]
+      );
+      // Remove from deleted_items tracking
+      await pool.execute('DELETE FROM deleted_items WHERE item_id = ? AND module_name = "users"', [normEmail]);
+    } else {
+      // Admin created users are marked is_verified = 1 automatically!
+      const [result] = await pool.execute(
+        'INSERT INTO users (role_id, full_name, email, password_hash, phone, department, company_id, permissions, is_verified, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)',
+        [targetRoleId, displayName, normEmail, hashedPassword, phone || null, department || null, company_id || null, permStr, 'active']
+      );
+      userId = result.insertId;
+    }
+
+    // Sync newly created user to app_data JSON store for real-time cross-browser hydration
+    try {
+      const [appDataRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "users"');
+      let currentUsers = [];
+      if (appDataRows.length > 0) {
+        try { currentUsers = JSON.parse(appDataRows[0].data_json) } catch {}
+      }
+      if (!Array.isArray(currentUsers)) currentUsers = [];
+
+      const newUserItem = {
+        id: String(userId),
+        name: displayName,
+        email: normEmail,
+        role: roleName,
+        companyId: company_id || 'tech',
+        companyName: companyName || (company_id === 'digital' ? 'SAAMPARK Digital Marketing' : 'SAAMPARK Technology'),
+        status: 'Active',
+        department: department || 'General',
+        phone: phone || '',
+        password: password || 'Password123',
+        lastLogin: 'Just created',
+        joinedDate: new Date().toISOString().split('T')[0],
+      };
+
+      const existingIdx = currentUsers.findIndex((u) => (u.email || '').toLowerCase().trim() === normEmail);
+      if (existingIdx >= 0) {
+        currentUsers[existingIdx] = { ...currentUsers[existingIdx], ...newUserItem };
+      } else {
+        currentUsers.unshift(newUserItem);
+      }
+
+      await pool.execute(
+        `INSERT INTO app_data (module_key, data_json) VALUES ('users', ?)
+         ON DUPLICATE KEY UPDATE data_json = VALUES(data_json), updated_at = NOW()`,
+        [JSON.stringify(currentUsers)]
+      );
+    } catch (appDataErr) {
+      console.warn('App data sync warning:', appDataErr.message);
+    }
 
     // Send Welcome Email with credentials and change password instructions
     const compName = companyName || (company_id === 'digital' ? 'SAAMPARK Digital Marketing' : 'SAAMPARK Technology');
@@ -188,7 +297,7 @@ const createUser = async (req, res, next) => {
     }
 
     return successResponse(res, 201, 'User account created successfully and welcome credentials email sent!', {
-      id: result.insertId,
+      id: userId,
       full_name: displayName,
       email: normEmail,
       role_name: roleName,

@@ -75,6 +75,17 @@ router.put('/:id', authenticate, requireRole(1, 2, 3), async (req, res, next) =>
   } catch (err) { next(err); }
 });
 
+// PATCH task status only (used by the frontend Kanban drag-and-drop:
+// api.patch(`/tasks/${id}/status`, { status }) — this route was missing and 404'd)
+router.patch('/:id/status', authenticate, async (req, res, next) => {
+  try {
+    const { status } = req.body;
+    if (!status) return errorResponse(res, 400, 'Status is required.');
+    await pool.execute('UPDATE tasks SET status = ? WHERE id = ?', [status, req.params.id]);
+    return successResponse(res, 200, 'Task status updated');
+  } catch (err) { next(err); }
+});
+
 // DELETE task
 router.delete('/:id', authenticate, requireRole(1, 2), async (req, res, next) => {
   try {

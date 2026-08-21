@@ -88,6 +88,80 @@ async function migrate() {
       console.log('Tickets migration note:', e.message);
     }
 
+    // ── Create projects table ────────────────────────────────────────────────
+    // taskRoutes.js LEFT JOINs `projects` to expose project_title. The table was
+    // never created by the dump or this script, so GET /tasks threw
+    // "Table 'crm_db.projects' doesn't exist" and returned 500.
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS projects (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        client_id INT NULL,
+        company_id INT NULL,
+        project_type VARCHAR(100) NULL,
+        status VARCHAR(50) DEFAULT 'Open',
+        progress INT DEFAULT 0,
+        price DECIMAL(12,2) DEFAULT 0.00,
+        start_date DATE NULL,
+        deadline DATE NULL,
+        description TEXT NULL,
+        created_by INT NULL,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW() ON UPDATE NOW()
+      )
+    `);
+    console.log('projects table ready');
+
+    // ── Reconcile the `tasks` table with what the API actually writes ─────────
+    // The dump defines tasks(assigned_to NOT NULL, due_date NOT NULL,
+    // status ENUM('pending','in_progress','completed','cancelled'),
+    // priority ENUM('low','medium','high')) but taskRoutes.js inserts
+    // project_id/start_date/deadline/created_by and values like 'To_do'/'Medium'.
+    // Add the missing columns and widen the enums to VARCHAR so BOTH the legacy
+    // lowercase values and the frontend's capitalised values are accepted.
+    try {
+      const [taskCols] = await pool.execute('SHOW COLUMNS FROM tasks');
+      const tc = taskCols.map(r => r.Field);
+
+      const taskAdditions = [
+        { col: 'project_id', sql: 'ALTER TABLE tasks ADD COLUMN project_id INT NULL' },
+        { col: 'start_date', sql: 'ALTER TABLE tasks ADD COLUMN start_date DATE NULL' },
+        { col: 'deadline', sql: 'ALTER TABLE tasks ADD COLUMN deadline DATE NULL' },
+        { col: 'created_by', sql: 'ALTER TABLE tasks ADD COLUMN created_by INT NULL' },
+      ];
+      for (const a of taskAdditions) {
+        if (!tc.includes(a.col)) {
+          await pool.execute(a.sql);
+          console.log('Added column to tasks:', a.col);
+        }
+      }
+
+      // Relax NOT NULL constraints the API does not always supply
+      await pool.execute('ALTER TABLE tasks MODIFY assigned_to INT NULL');
+      await pool.execute('ALTER TABLE tasks MODIFY due_date DATETIME NULL');
+      // Widen constrained enums to free-form strings
+      await pool.execute("ALTER TABLE tasks MODIFY status VARCHAR(50) DEFAULT 'pending'");
+      await pool.execute("ALTER TABLE tasks MODIFY priority VARCHAR(20) DEFAULT 'medium'");
+      console.log('tasks table reconciled (nullable assigned_to/due_date, widened status/priority)');
+    } catch (e) {
+      console.log('Tasks migration note:', e.message);
+    }
+
+    // ── users.permissions ────────────────────────────────────────────────────
+    // authController.getProfile (GET /auth/me) selects u.permissions, which never
+    // existed → /auth/me returned 500 right after a successful login.
+    try {
+      const [uCols] = await pool.execute('SHOW COLUMNS FROM users');
+      if (!uCols.map(r => r.Field).includes('permissions')) {
+        await pool.execute('ALTER TABLE users ADD COLUMN permissions TEXT NULL');
+        console.log('Added permissions column to users');
+      } else {
+        console.log('Already exists: users.permissions');
+      }
+    } catch (e) {
+      console.log('Users permissions migration note:', e.message);
+    }
+
     // Seed Super Admin Accounts (password: 123456)
     const { hashPassword } = require('./src/utils/passwordHash');
     const passHash = await hashPassword('123456');
@@ -131,10 +205,10 @@ async function migrate() {
     // Seed initial app_data modules if empty
     const initialModules = [
       { key: 'leads', data: [
-        { id: "1", type: "Person", name: "Sarah Cole", primaryContact: "Sarah Cole", phone: "+91 98123 45678", service: "Google My Business", reminderDate: "12 Aug 2025", reminderNotes: "Follow up regarding GMB verification code", owner: "John Doe", caller: "John Doe", ownerAvatar: "https://api.dicebear.com/7.x/notionists/svg?seed=SarahCole", labels: ["Call this week"], createdAt: "06 Aug 2025", status: "New", source: "Google", city: "Mumbai", state: "Maharashtra", country: "India", value: "₹1,50,000" },
-        { id: "2", type: "Person", name: "Michael Vance", primaryContact: "Michael Vance", phone: "+91 98234 56789", service: "Custom ERP System", reminderDate: "14 Aug 2025", reminderNotes: "Send proposal draft for review", owner: "Sarah Jenkins", caller: "Sarah Jenkins", ownerAvatar: "https://api.dicebear.com/7.x/notionists/svg?seed=MichaelVance", labels: ["Potential"], createdAt: "05 Aug 2025", status: "New", source: "LinkedIn", city: "Delhi", state: "Delhi", country: "India", value: "₹4,20,000" },
-        { id: "3", type: "Company", name: "Apex Tech Solutions", primaryContact: "David Miller", phone: "+91 98345 67890", service: "Mobile App Development", reminderDate: "10 Aug 2025", reminderNotes: "Schedule technical demo with CTO", owner: "Alex Turner", caller: "Alex Turner", ownerAvatar: "https://api.dicebear.com/7.x/notionists/svg?seed=DavidMiller", labels: ["High Priority"], createdAt: "04 Aug 2025", status: "In Discussion", source: "Website", city: "Bangalore", state: "Karnataka", country: "India", value: "₹8,50,000" },
-        { id: "4", type: "Person", name: "Emily Watson", primaryContact: "Emily Watson", phone: "+91 98456 78901", service: "SEO & Digital Marketing", reminderDate: "18 Aug 2025", reminderNotes: "Send monthly audit report", owner: "John Doe", caller: "John Doe", ownerAvatar: "https://api.dicebear.com/7.x/notionists/svg?seed=EmilyWatson", labels: ["Follow Up"], createdAt: "02 Aug 2025", status: "Qualified", source: "Referral", city: "Pune", state: "Maharashtra", country: "India", value: "₹2,00,000" }
+        { id: "lead_101", type: "Person", name: "Sarah Cole", primaryContact: "Sarah Cole", phone: "+91 98123 45678", service: "Google My Business", reminderDate: "18 Aug 2026", reminderNotes: "Follow up regarding GMB verification code", owner: "Supriya (Super Admin)", caller: "Supriya (Super Admin)", ownerAvatar: "https://api.dicebear.com/7.x/notionists/svg?seed=SarahCole", labels: ["Call this week"], createdAt: "06 Aug 2026", status: "New", source: "Google", city: "Mumbai", state: "Maharashtra", country: "India", value: "₹1,50,000" },
+        { id: "lead_102", type: "Person", name: "Michael Vance", primaryContact: "Michael Vance", phone: "+91 98234 56789", service: "Custom ERP System", reminderDate: "20 Aug 2026", reminderNotes: "Send proposal draft for review", owner: "Supriya (Super Admin)", caller: "Supriya (Super Admin)", ownerAvatar: "https://api.dicebear.com/7.x/notionists/svg?seed=MichaelVance", labels: ["Potential"], createdAt: "05 Aug 2026", status: "New", source: "LinkedIn", city: "Delhi", state: "Delhi", country: "India", value: "₹4,20,000" },
+        { id: "lead_103", type: "Company", name: "Apex Tech Solutions", primaryContact: "David Miller", phone: "+91 98345 67890", service: "Mobile App Development", reminderDate: "22 Aug 2026", reminderNotes: "Schedule technical demo with CTO", owner: "Supriya (Super Admin)", caller: "Supriya (Super Admin)", ownerAvatar: "https://api.dicebear.com/7.x/notionists/svg?seed=DavidMiller", labels: ["High Priority"], createdAt: "04 Aug 2026", status: "Discussion", source: "Website", city: "Bangalore", state: "Karnataka", country: "India", value: "₹8,50,000" },
+        { id: "lead_104", type: "Person", name: "Emily Watson", primaryContact: "Emily Watson", phone: "+91 98456 78901", service: "SEO & Digital Marketing", reminderDate: "25 Aug 2026", reminderNotes: "Send monthly audit report", owner: "Supriya (Super Admin)", caller: "Supriya (Super Admin)", ownerAvatar: "https://api.dicebear.com/7.x/notionists/svg?seed=EmilyWatson", labels: ["Follow Up"], createdAt: "02 Aug 2026", status: "Qualified", source: "Referral", city: "Pune", state: "Maharashtra", country: "India", value: "₹2,00,000" }
       ]},
       { key: 'tasks', data: [
         { id: "3642", title: "Add company logo and contact details", startDate: "-", deadline: "30-06-2026", milestone: "Beta Release", relatedTo: "WordPress Plugin Development", assignedTo: "John Doe", assignedToAvatar: "https://api.dicebear.com/7.x/notionists/svg?seed=JohnDoe", status: "To do", priority: "Normal", priorityIcon: "none", labels: [] },

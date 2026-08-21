@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button"
 import { useAuthStore } from "@/store/useAuthStore"
 import { UserItem } from "./types"
 import { getUsers, recordUserAccount, deleteUser } from "./services/userService"
+import { saveModuleDataToDB } from "@/lib/storageSync"
 import { UserList } from "./components/UserList"
 import { UserModal } from "./components/UserModal"
 import { ModulePermissionsModal } from "./components/ModulePermissionsModal"
@@ -59,7 +60,8 @@ export default function UsersMain() {
   }
 
   const handleSaveUser = async (userData: Partial<UserItem>) => {
-    const saved = recordUserAccount(userData)
+    const isNew = !editingUser
+    const saved = recordUserAccount(userData, isNew)
     
     // Background sync with real backend MySQL API
     try {
@@ -83,14 +85,17 @@ export default function UsersMain() {
           company_id: userData.companyId || "tech",
           department: userData.department || "General",
           phone: userData.phone || "",
+          permissions: (userData as any).permissions,
         }).catch((err) => console.warn("Backend user create warning:", err))
       } else if (editingUser) {
         await api.put(`/users/${editingUser.id}`, {
           full_name: userData.name,
+          email: userData.email || editingUser.email,
           phone: userData.phone,
           status: userData.status?.toLowerCase(),
           role_id,
           department: userData.department,
+          permissions: (userData as any).permissions,
         }).catch((err) => console.warn("Backend user update warning:", err))
       }
     } catch (e) {
@@ -99,13 +104,16 @@ export default function UsersMain() {
 
     if (!saved) return
 
-    if (editingUser) {
-      setUsers((prev) =>
-        prev.map((u) => (u.id === editingUser.id ? ({ ...u, ...saved } as UserItem) : u))
-      )
-    } else {
-      setUsers((prev) => [saved, ...prev.filter((u) => u.email.toLowerCase() !== saved.email.toLowerCase())])
-    }
+    setUsers((prev) => {
+      let nextList: UserItem[] = []
+      if (editingUser) {
+        nextList = prev.map((u) => (u.id === editingUser.id ? ({ ...u, ...saved, permissions: (userData as any).permissions } as UserItem) : u))
+      } else {
+        nextList = [saved, ...prev.filter((u) => u.email.toLowerCase() !== saved.email.toLowerCase())]
+      }
+      saveModuleDataToDB("users", nextList)
+      return nextList
+    })
   }
 
   const handleToggleStatus = async (id: string) => {

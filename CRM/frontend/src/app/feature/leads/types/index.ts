@@ -42,4 +42,6 @@ export interface Lead {
   currency?: string
   isLocked?: boolean
   lockedReason?: string
+  assignedTo?: string
+  assigned_to?: string | number
 }

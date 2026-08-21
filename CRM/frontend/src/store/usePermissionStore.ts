@@ -203,16 +203,15 @@ export const usePermissionStore = create<PermissionState>()(
           (emailStr ? state.userActionPermissions[emailStr] : undefined)
 
         const userMods = state.userPermissions[userIdStr] || (emailStr ? state.userPermissions[emailStr] : undefined)
-        if (userMods && userMods.length > 0) {
-          return userMods
-        }
-
         const roleMods = state.rolePermissions[normRole] || DEFAULT_ROLE_PERMISSIONS[normRole] || ['Dashboard']
 
         const activeMods = ALL_MODULE_NAMES.filter((m) => {
           if (userMatrix && userMatrix[m] !== undefined) {
             const flags = userMatrix[m]
             return flags ? (flags.view || flags.add || flags.edit || flags.delete) : false
+          }
+          if (userMods && userMods.length > 0) {
+            return userMods.includes(m as ModuleName)
           }
           return roleMods.includes(m as ModuleName)
         })

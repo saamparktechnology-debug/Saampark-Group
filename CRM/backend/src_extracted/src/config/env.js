@@ -9,8 +9,12 @@ const env = {
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT, 10) || 3306,
     user: process.env.DB_USER || 'root',
-    password: (process.env.DB_PASSWORD && process.env.DB_PASSWORD.trim() !== '') ? process.env.DB_PASSWORD : 'RootPass123',
-
+    // Use DB_PASSWORD exactly as provided in .env (an empty value is valid —
+    // that is the XAMPP/MAMP default for the root user). Previously this fell
+    // back to a hard-coded 'RootPass123' whenever DB_PASSWORD was blank, which
+    // contradicted import_db.js/test_db.js (they connect with an empty password)
+    // and caused "Access denied for user 'root'@'localhost'" on a default XAMPP.
+    password: process.env.DB_PASSWORD ?? '',
     database: process.env.DB_NAME || 'crm_db',
     connectionLimit: parseInt(process.env.DB_CONNECTION_LIMIT, 10) || 10,
   },

@@ -246,29 +246,6 @@ export function LeadList({
 
           {/* Quick Filter Pills */}
           <div className="flex items-center gap-1.5 text-xs ml-1">
-            <button
-              type="button"
-              onClick={() => setActiveFilter("50%")}
-              className={`px-3 py-1 rounded-full whitespace-nowrap transition-colors ${
-                activeFilter === "50%"
-                  ? "bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-medium border border-blue-200 dark:border-blue-800"
-                  : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-              }`}
-            >
-              50%
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveFilter("90%")}
-              className={`px-3 py-1 rounded-full whitespace-nowrap transition-colors ${
-                activeFilter === "90%"
-                  ? "bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-medium border border-blue-200 dark:border-blue-800"
-                  : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-              }`}
-            >
-              90%
-            </button>
 
             <button
               type="button"

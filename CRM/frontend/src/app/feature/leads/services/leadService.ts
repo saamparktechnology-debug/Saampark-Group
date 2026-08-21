@@ -658,6 +658,17 @@ function getPersistedLeads(): Lead[] {
 // Helper to check if a reminder date is in the past (< today)
 function isReminderDateOverdue(dateStr?: string): boolean {
   if (!dateStr) return false
+  const lower = dateStr.toString().toLowerCase().trim()
+  if (
+    lower === "none" ||
+    lower === "00,00,0000" ||
+    lower === "00-00-0000" ||
+    lower === "00/00/0000" ||
+    lower === "00.00.0000" ||
+    lower === "-"
+  ) {
+    return false
+  }
   try {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
@@ -702,14 +713,20 @@ export const getLeads = async (): Promise<Lead[]> => {
 
 export const addLead = async (leadData: Omit<Lead, "id">): Promise<Lead> => {
   const current = await fetchModuleDataFromDB<Lead[]>("leads", [])
-  const newId = (Math.max(...current.map((l) => parseInt(l.id) || 0), 0) + 1).toString()
+  const maxNum = Math.max(100, ...current.map((l) => parseInt(l.id) || 0))
+  const newId = (maxNum > 0 ? maxNum + 1 : Date.now()).toString()
+  
+  const tomorrow = new Date()
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  const defaultFutureReminderDate = tomorrow.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' })
+
   const newLead: Lead = {
     ...leadData,
     id: newId,
     createdAt: leadData.createdAt || `${new Date().toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' })}`,
     service: leadData.service || "Website Development",
     source: leadData.source || "Social Media",
-    reminderDate: leadData.reminderDate || "15 Aug 2025",
+    reminderDate: leadData.reminderDate || defaultFutureReminderDate,
     reminderNotes: leadData.reminderNotes || "Follow up call scheduled",
     caller: leadData.caller || leadData.owner || "Team",
     isLocked: false,

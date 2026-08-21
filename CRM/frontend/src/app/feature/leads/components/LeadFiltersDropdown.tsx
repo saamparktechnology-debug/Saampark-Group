@@ -44,8 +44,6 @@ export function LeadFiltersDropdown({
   const baseOptions = [
     { id: "My leads", label: "My leads" },
     { id: "All leads", label: "All leads" },
-    { id: "50%", label: "50%" },
-    { id: "90%", label: "90%" },
   ]
 
   const labelOptions = (availableLabels || []).map((lbl) => ({

@@ -125,6 +125,14 @@ export function recordUserAccount(user: Partial<UserItem>, isNewRegistration = f
   if (isNewRegistration && typeof window !== "undefined") {
     const deletedEmails = getDeletedUserEmails().filter((e) => e !== normalizedEmail);
     localStorage.setItem(DELETED_KEY, JSON.stringify(deletedEmails));
+    try {
+      const rawUniv = localStorage.getItem("saampark_universal_deleted_ids");
+      if (rawUniv) {
+        const univList: string[] = JSON.parse(rawUniv);
+        const filteredUniv = univList.filter((id) => id.toLowerCase().trim() !== normalizedEmail);
+        localStorage.setItem("saampark_universal_deleted_ids", JSON.stringify(filteredUniv));
+      }
+    } catch {}
   }
 
   const currentAccounts = getStoredUserAccounts();
@@ -290,6 +298,25 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
             ? existingItem.role
             : mappedRole;
 
+          let permObj: any = null;
+          if (typeof u.permissions === "string") {
+            try { permObj = JSON.parse(u.permissions); } catch {}
+          } else if (u.permissions && typeof u.permissions === "object") {
+            permObj = u.permissions;
+          }
+
+          if (permObj) {
+            const userIdStr = String(u.id);
+            if (Array.isArray(permObj.allowedModules)) {
+              usePermissionStore.getState().setUserPermissions(userIdStr, permObj.allowedModules);
+              usePermissionStore.getState().setUserPermissions(emailNorm, permObj.allowedModules);
+            }
+            if (permObj.actionMatrix && typeof permObj.actionMatrix === "object") {
+              usePermissionStore.getState().setUserAllModuleActions(userIdStr, permObj.actionMatrix);
+              usePermissionStore.getState().setUserAllModuleActions(emailNorm, permObj.actionMatrix);
+            }
+          }
+
           const item: UserItem = {
             id: String(u.id || `usr_${Math.random()}`),
             name: u.full_name || u.name || u.first_name || u.email || "User Account",
@@ -305,33 +332,33 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
             password: localMatches?.password || existingItem?.password || "Password123",
             lastLogin: u.last_login || "Active session",
             joinedDate: u.created_at ? u.created_at.split("T")[0] : new Date().toISOString().split("T")[0],
+            allowedModules: permObj?.allowedModules || existingItem?.allowedModules,
           };
 
           if (existingIdx >= 0) {
             dbUsers[existingIdx] = { ...existingItem, ...item };
           } else {
             dbUsers.push(item);
-            updated = true;
           }
         }
       });
 
-      if (updated) {
-        saveModuleDataToDB("users", dbUsers);
-      }
+      saveModuleDataToDB("users", dbUsers);
     }
   } catch (err) {
     console.warn("Live API /users read warning:", err);
   }
 
-  // 3. Filter out global deleted items and hidden master admin account
-  const cleanUsers = filterGlobalDeletedItems(dbUsers).filter(
-    (u) => !HIDDEN_MASTER_EMAILS.includes(u.email.toLowerCase().trim())
-  );
+  // 3. Filter out deleted user emails and hidden master admin account
+  const deletedEmails = getDeletedUserEmails().map((e) => e.toLowerCase().trim());
+  const cleanUsers = dbUsers.filter((u) => {
+    const emailNorm = (u.email || "").toLowerCase().trim();
+    return !HIDDEN_MASTER_EMAILS.includes(emailNorm) && !deletedEmails.includes(emailNorm);
+  });
 
   // Sync to local storage cache for instant hydration
   if (typeof window !== "undefined") {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanUsers)) } catch {}
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanUsers)); } catch {}
   }
 
   if (!companyId || companyId === "all") {

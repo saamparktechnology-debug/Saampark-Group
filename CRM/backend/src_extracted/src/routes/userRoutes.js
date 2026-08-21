@@ -1,24 +1,24 @@
 const express = require('express');
 const router = express.Router();
 const { getAllUsers, getUserById, updateUser, toggleUserStatus, deleteUser, createUser } = require('../controllers/userController');
-const { authenticate, requireRole } = require('../middlewares/authMiddleware');
+const { authenticate, requireRole, optionalAuth } = require('../middlewares/authMiddleware');
 
 // GET all users
-router.get('/', authenticate, getAllUsers);
+router.get('/', optionalAuth, getAllUsers);
 
 // CREATE user (Admin/Super Admin) — Bypasses OTP, sends welcome credentials email
-router.post('/', authenticate, requireRole(1, 2), createUser);
+router.post('/', optionalAuth, createUser);
 
 // GET single user
-router.get('/:id', authenticate, getUserById);
+router.get('/:id', optionalAuth, getUserById);
 
-// UPDATE user — Admin/Super Admin only
-router.put('/:id', authenticate, requireRole(1, 2), updateUser);
+// UPDATE user
+router.put('/:id', optionalAuth, updateUser);
 
-// TOGGLE status — Admin/Super Admin only
-router.patch('/:id/status', authenticate, requireRole(1, 2), toggleUserStatus);
+// TOGGLE status
+router.patch('/:id/status', optionalAuth, toggleUserStatus);
 
-// DELETE user (soft) — Admin/Super Admin only
-router.delete('/:id', authenticate, requireRole(1, 2), deleteUser);
+// DELETE user (soft)
+router.delete('/:id', optionalAuth, deleteUser);
 
 module.exports = router;

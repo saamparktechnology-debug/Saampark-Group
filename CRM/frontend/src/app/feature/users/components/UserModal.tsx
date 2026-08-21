@@ -62,12 +62,34 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
       const normRole = normalizeRole(editingUser.role)
       const roleMods = DEFAULT_ROLE_PERMISSIONS[normRole] || [...ALL_MODULE_NAMES]
 
-      const storedUserMatrix = userActionPermissions[userIdStr] || userActionPermissions[emailStr]
+      // Prioritize explicit permissions on editingUser
+      let userMatrix: Record<string, ModuleActionFlags> | null = null
+      let userAllowedList: string[] | null = null
+
+      if ((editingUser as any).permissions) {
+        let pObj = typeof (editingUser as any).permissions === "string" 
+          ? JSON.parse((editingUser as any).permissions) 
+          : (editingUser as any).permissions
+        if (pObj?.actionMatrix) userMatrix = pObj.actionMatrix
+        if (Array.isArray(pObj?.allowedModules)) userAllowedList = pObj.allowedModules
+      }
+
+      if (!userMatrix) {
+        userMatrix = userActionPermissions[userIdStr] || userActionPermissions[emailStr] || null
+      }
+      if (!userAllowedList) {
+        userAllowedList = editingUser.allowedModules || userPermissions[userIdStr] || userPermissions[emailStr] || null
+      }
 
       const fullMatrix: Record<string, ModuleActionFlags> = {}
       ALL_MODULE_NAMES.forEach((m) => {
-        if (storedUserMatrix && storedUserMatrix[m] !== undefined) {
-          fullMatrix[m] = { ...storedUserMatrix[m] }
+        if (userMatrix && userMatrix[m] !== undefined) {
+          fullMatrix[m] = { ...userMatrix[m] }
+        } else if (userAllowedList && Array.isArray(userAllowedList)) {
+          const isAllowed = userAllowedList.includes(m)
+          fullMatrix[m] = isAllowed
+            ? { ...DEFAULT_FULL_ACTIONS }
+            : { view: false, add: false, edit: false, delete: false }
         } else {
           const isAllowedByRole = normRole === "Super Admin" || normRole === "Admin" || roleMods.includes(m as ModuleName)
           fullMatrix[m] = isAllowedByRole
@@ -192,21 +214,13 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
     setUserPermissions(emailNorm, allowedModules)
     setUserAllModuleActions(emailNorm, actionMatrix)
 
-    // Persist user & permissions to backend database
-    if (editingUser) {
-      api.put(`/users/${targetId}`, {
-        ...payload,
-        permissions: { actionMatrix, allowedModules }
-      }).catch((err) => console.warn("Backend permissions save warning:", err))
-    } else {
-      // Create user in DB (is_verified = 1) and send Welcome email with credentials
-      api.post("/users", {
-        ...payload,
-        permissions: { actionMatrix, allowedModules }
-      }).catch((err) => console.warn("Backend user create warning:", err))
-    }
+    // Sync permissions locally and pass to onSave
+    const permissions = { actionMatrix, allowedModules }
 
-    onSave(payload)
+    onSave({
+      ...payload,
+      permissions,
+    })
     onClose()
   }
 

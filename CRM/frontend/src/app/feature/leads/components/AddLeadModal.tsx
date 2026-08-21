@@ -83,10 +83,16 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
   const [companyName, setCompanyName] = React.useState("")
   const [primaryContact, setPrimaryContact] = React.useState("")
   const [status, setStatus] = React.useState<LeadStatus>("New")
-  const [service, setService] = React.useState("Website Devlopment")
+  const [selectedServices, setSelectedServices] = React.useState<string[]>(["Website Devlopment"])
   const [customService, setCustomService] = React.useState("")
-  const [reminderDate, setReminderDate] = React.useState("12 Aug 2025")
-  const [reminderTime, setReminderTime] = React.useState("11:30 AM")
+  const [isNoReminder, setIsNoReminder] = React.useState(false)
+  const [reminderDate, setReminderDate] = React.useState(() => {
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    return tomorrow.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+  })
+  const [reminderTimeVal, setReminderTimeVal] = React.useState("11:30")
+  const [timeAmPm, setTimeAmPm] = React.useState<"AM" | "PM">("AM")
   const [reminderNotes, setReminderNotes] = React.useState("")
   const [caller, setCaller] = React.useState("")
   const [owner, setOwner] = React.useState("")
@@ -94,16 +100,22 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
   const [source, setSource] = React.useState("Social Media")
   const [customSource, setCustomSource] = React.useState("")
   const [address, setAddress] = React.useState("")
-  const [city, setCity] = React.useState("Mumbai")
-  const [state, setState] = React.useState("Maharashtra")
-  const [zip, setZip] = React.useState("400001")
-  const [country, setCountry] = React.useState("India")
+  const [city, setCity] = React.useState("")
+  const [state, setState] = React.useState("")
+  const [zip, setZip] = React.useState("")
+  const [country, setCountry] = React.useState("")
   const [phone, setPhone] = React.useState("")
   const [website, setWebsite] = React.useState("")
   const [vatNumber, setVatNumber] = React.useState("")
   const [gstNumber, setGstNumber] = React.useState("")
   const [currency, setCurrency] = React.useState("Keep it blank to use the default (INR - ₹)")
   const [isSubmitting, setIsSubmitting] = React.useState(false)
+
+  const toggleService = (svc: string) => {
+    setSelectedServices((prev) =>
+      prev.includes(svc) ? prev.filter((s) => s !== svc) : [...prev, svc]
+    )
+  }
 
   React.useEffect(() => {
     if (isOpen) {
@@ -136,10 +148,13 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
       return
     }
 
-    const finalService = service === "Others" ? (customService.trim() || "Custom Service") : service
+    const activeSvcs = selectedServices.map((s) => (s === "Others" ? (customService.trim() || "Custom Service") : s)).filter(Boolean)
+    const finalService = activeSvcs.length > 0 ? activeSvcs.join(", ") : "Website Devlopment"
     const finalSource = source === "Others" ? (customSource.trim() || "Custom Source") : source
     const effectiveCaller = caller || user?.name || "Team"
     const effectiveOwner = owner || user?.name || "Team"
+    const finalReminderDate = isNoReminder ? "None" : reminderDate
+    const finalReminderTime = isNoReminder ? "" : `${reminderTimeVal} ${timeAmPm}`
 
     setIsSubmitting(true)
     try {
@@ -149,11 +164,12 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
         primaryContact: primaryContact || companyName,
         status,
         service: finalService,
-        reminderDate,
-        reminderTime,
+        reminderDate: finalReminderDate,
+        reminderTime: finalReminderTime,
         reminderNotes,
         caller: effectiveCaller,
         owner: effectiveOwner,
+        assignedTo: effectiveCaller || effectiveOwner,
         createdBy: user?.name || user?.email || effectiveCaller,
         ownerAvatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${companyName}`,
         managers,
@@ -241,39 +257,46 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
             />
           </div>
 
-          {/* Service Selector with Others option */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <label className="text-zinc-500 font-medium flex items-center gap-1">
+          {/* Services Multi-Select Tick Boxes */}
+          <div className="grid grid-cols-4 items-start gap-4">
+            <label className="text-zinc-500 font-medium flex items-center gap-1 pt-1">
               <Wrench size={13} className="text-zinc-400" />
-              <span>Service</span>
+              <span>Services</span>
             </label>
-            <select
-              value={service}
-              onChange={(e) => setService(e.target.value)}
-              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200"
-            >
-              {STANDARD_SERVICES.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-              <option value="Others">Others</option>
-            </select>
-          </div>
-
-          {/* Custom Service Input Form when Others is selected */}
-          {service === "Others" && (
-            <div className="grid grid-cols-4 items-center gap-4 animate-in fade-in duration-150">
-              <label className="text-zinc-500 font-medium text-blue-600 dark:text-blue-400 font-semibold">
-                Custom Service
-              </label>
-              <input
-                type="text"
-                placeholder="Type custom service name..."
-                value={customService}
-                onChange={(e) => setCustomService(e.target.value)}
-                className="col-span-3 px-3 py-2 bg-blue-50/60 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-medium placeholder-zinc-400"
-              />
+            <div className="col-span-3 space-y-2 bg-zinc-50 dark:bg-zinc-800/60 p-3 rounded-lg border border-zinc-200 dark:border-zinc-700">
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {STANDARD_SERVICES.map((s) => (
+                  <label key={s} className="flex items-center gap-2 cursor-pointer text-zinc-700 dark:text-zinc-300 hover:text-blue-600">
+                    <input
+                      type="checkbox"
+                      checked={selectedServices.includes(s)}
+                      onChange={() => toggleService(s)}
+                      className="rounded text-blue-600 focus:ring-blue-500"
+                    />
+                    <span>{s}</span>
+                  </label>
+                ))}
+                <label className="flex items-center gap-2 cursor-pointer text-zinc-700 dark:text-zinc-300 hover:text-blue-600">
+                  <input
+                    type="checkbox"
+                    checked={selectedServices.includes("Others")}
+                    onChange={() => toggleService("Others")}
+                    className="rounded text-blue-600 focus:ring-blue-500"
+                  />
+                  <span>Others</span>
+                </label>
+              </div>
+              {selectedServices.includes("Others") && (
+                <input
+                  type="text"
+                  placeholder="Type custom service name..."
+                  value={customService}
+                  onChange={(e) => setCustomService(e.target.value)}
+                  className="w-full mt-2 px-3 py-1.5 bg-white dark:bg-zinc-900 border border-blue-200 dark:border-blue-800 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 text-xs"
+                />
+              )}
             </div>
-          )}
+          </div>
 
           {/* Stage / Status Selector */}
           <div className="grid grid-cols-4 items-center gap-4">
@@ -294,34 +317,56 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
             </select>
           </div>
 
-          {/* Remainder Date & Time */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <label className="text-zinc-500 font-medium flex items-center gap-1">
+          {/* Reminder Date & Time with None / 00,00,0000 and AM/PM format */}
+          <div className="grid grid-cols-4 items-start gap-4">
+            <label className="text-zinc-500 font-medium flex items-center gap-1 pt-1">
               <Calendar size={13} className="text-amber-500" />
               <span>Reminder Date & Time</span>
             </label>
-            <div className="col-span-3 flex items-center gap-2">
-              {/* Date Input with Calendar icon */}
-              <div className="flex-1 relative flex items-center">
-                <input
-                  type="date"
-                  value={formatDateForInput(reminderDate)}
-                  onChange={(e) => setReminderDate(formatDateForDisplay(e.target.value))}
-                  className="w-full pl-8 pr-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-amber-600 dark:text-amber-400 font-semibold cursor-pointer text-xs"
-                />
-                <Calendar size={14} className="absolute left-2.5 text-amber-500 pointer-events-none" />
+            <div className="col-span-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                  <input
+                    type="checkbox"
+                    checked={isNoReminder}
+                    onChange={(e) => setIsNoReminder(e.target.checked)}
+                    className="rounded text-amber-500 focus:ring-amber-500"
+                  />
+                  <span className="text-amber-600 dark:text-amber-400 font-mono">None / 00,00,0000 (No Auto-Lock)</span>
+                </label>
               </div>
 
-              {/* Time Input with Clock icon */}
-              <div className="w-36 relative flex items-center">
-                <input
-                  type="time"
-                  value={formatTimeForInput(reminderTime)}
-                  onChange={(e) => setReminderTime(formatTimeForDisplay(e.target.value))}
-                  className="w-full pl-8 pr-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-amber-600 dark:text-amber-400 font-semibold cursor-pointer text-xs"
-                />
-                <Clock size={14} className="absolute left-2.5 text-amber-500 pointer-events-none" />
-              </div>
+              {!isNoReminder && (
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 relative flex items-center">
+                    <input
+                      type="date"
+                      value={formatDateForInput(reminderDate)}
+                      onChange={(e) => setReminderDate(formatDateForDisplay(e.target.value))}
+                      className="w-full pl-8 pr-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-amber-600 dark:text-amber-400 font-semibold cursor-pointer text-xs"
+                    />
+                    <Calendar size={14} className="absolute left-2.5 text-amber-500 pointer-events-none" />
+                  </div>
+
+                  <div className="flex items-center gap-1 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md px-2 py-1">
+                    <input
+                      type="text"
+                      placeholder="11:30"
+                      value={reminderTimeVal}
+                      onChange={(e) => setReminderTimeVal(e.target.value)}
+                      className="w-16 text-center font-mono font-semibold text-xs text-amber-600 dark:text-amber-400 bg-transparent focus:outline-none"
+                    />
+                    <select
+                      value={timeAmPm}
+                      onChange={(e) => setTimeAmPm(e.target.value as "AM" | "PM")}
+                      className="bg-transparent font-semibold text-xs text-amber-600 dark:text-amber-400 cursor-pointer focus:outline-none border-l border-zinc-200 dark:border-zinc-700 pl-1"
+                    >
+                      <option value="AM">AM</option>
+                      <option value="PM">PM</option>
+                    </select>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
