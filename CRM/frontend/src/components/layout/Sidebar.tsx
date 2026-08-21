@@ -84,10 +84,12 @@ export function Sidebar() {
       className="fixed top-0 left-0 h-screen glass-panel border-r border-border flex flex-col z-40 overflow-hidden"
     >
       <div className="h-16 flex items-center justify-center border-b border-border/50 shrink-0">
-        <div className="flex items-center gap-3 w-full px-4">
-          <div className="min-w-8 w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-glow shrink-0">
-            <div className="w-5 h-5 bg-background rounded-full border-2 border-transparent" style={{ borderTopColor: 'white', borderRightColor: 'white' }} />
-          </div>
+        <Link href="/feature/dashboard" className="flex items-center gap-3 w-full px-4 group">
+          <img 
+            src="/logo.png" 
+            alt="SAAMPARK Logo" 
+            className="min-w-8 w-8 h-8 rounded-full object-cover shrink-0 shadow-sm border border-primary/20 group-hover:scale-105 transition-transform" 
+          />
           <AnimatePresence>
             {!isSidebarCollapsed && (
               <motion.span 
@@ -100,7 +102,7 @@ export function Sidebar() {
               </motion.span>
             )}
           </AnimatePresence>
-        </div>
+        </Link>
       </div>
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 space-y-1 scrollbar-hide">
