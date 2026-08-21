@@ -43,17 +43,21 @@ export default function DashboardMain() {
 
   const [liveTasks, setLiveTasks] = React.useState<Task[]>([])
   const [liveProjects, setLiveProjects] = React.useState<Project[]>([])
+  const [liveLeads, setLiveLeads] = React.useState<any[]>([])
 
   const refreshLiveDashboard = React.useCallback(async () => {
     try {
-      const [uList, tList, pList] = await Promise.all([
+      const { getLeads } = await import("../leads/services/leadService")
+      const [uList, tList, pList, lList] = await Promise.all([
         getUsers(),
         taskService.getTasks(),
         getProjects(),
+        getLeads(),
       ])
       const cleanUsers = filterGlobalDeletedItems(uList)
       const cleanTasks = filterGlobalDeletedItems(tList)
       const cleanProjects = filterGlobalDeletedItems(pList)
+      const cleanLeads = filterGlobalDeletedItems(lList)
 
       setRealUsers(cleanUsers)
       if (cleanUsers.length > 0 && !selectedUserEmail) {
@@ -71,7 +75,8 @@ export default function DashboardMain() {
           return (
             assigned === normName ||
             assigned === normEmail ||
-            assigned === "team" ||
+            (normName && assigned.includes(normName)) ||
+            (normEmail && assigned.includes(normEmail)) ||
             collab.includes(normName) ||
             collab.includes(normEmail)
           )
@@ -80,8 +85,9 @@ export default function DashboardMain() {
 
       const active = scopedTasks.filter((t) => t.status !== "Done")
       setActiveTasksCount(active.length)
-      setLiveTasks(scopedTasks)
+      setLiveTasks(cleanTasks)
       setLiveProjects(cleanProjects)
+      setLiveLeads(cleanLeads)
     } catch (e) {
       console.warn("Dashboard refresh error:", e)
     }
@@ -300,6 +306,43 @@ export default function DashboardMain() {
     )
   }
 
+  // Computed metrics for staff/team member views
+  const normName = (user?.name || "").toLowerCase().trim()
+  const normEmail = (user?.email || "").toLowerCase().trim()
+
+  const myTasks = React.useMemo(() => {
+    return liveTasks.filter((t) => {
+      const assigned = (t.assignedTo || "").toLowerCase().trim()
+      const collab = (t.collaborators || "").toLowerCase().trim()
+      if (!assigned) return false
+      return (
+        assigned === normName ||
+        assigned === normEmail ||
+        (normName && (assigned.includes(normName) || normName.includes(assigned))) ||
+        (normEmail && assigned.includes(normEmail)) ||
+        (collab && normName && collab.includes(normName))
+      )
+    })
+  }, [liveTasks, normName, normEmail])
+
+  const myUrgentTasks = React.useMemo(() => {
+    return myTasks.filter((t) => t.priority === "Urgent" || t.priority === "High")
+  }, [myTasks])
+
+  const myCallReminders = React.useMemo(() => {
+    return liveLeads.filter((l) => {
+      const caller = (l.caller || l.owner || "").toLowerCase().trim()
+      const isCallerMatch =
+        caller.includes(normName) ||
+        normName.includes(caller) ||
+        (normEmail && caller.includes(normEmail))
+      const hasReminder =
+        l.reminderDate &&
+        !["none", "00,00,0000", "00-00-0000", "00/00/0000"].includes(l.reminderDate.toLowerCase().trim())
+      return isCallerMatch && hasReminder
+    })
+  }, [liveLeads, normName, normEmail])
+
   // =========================================================================
   // 2. STAFF / TEAM MEMBER DASHBOARD VIEW (Rendered for Teams & User)
   // =========================================================================
@@ -354,9 +397,9 @@ export default function DashboardMain() {
             </div>
           </div>
 
-          <KPICard icon={Grid} colorClass="bg-blue-500" value="6 Tasks" label="My Assigned Tasks" />
-          <KPICard icon={AlertCircle} colorClass="bg-rose-500" value="2 Urgent" label="High Priority" />
-          <KPICard icon={PhoneCall} colorClass="bg-amber-500" value="3 Calls" label="Telecaller Follow-ups Due Today" />
+          <KPICard icon={Grid} colorClass="bg-blue-500" value={`${myTasks.length} Tasks`} label="My Assigned Tasks" />
+          <KPICard icon={AlertCircle} colorClass="bg-rose-500" value={`${myUrgentTasks.length} Urgent`} label="High Priority" />
+          <KPICard icon={PhoneCall} colorClass="bg-amber-500" value={`${myCallReminders.length} Calls`} label="Telecaller Follow-ups Due" />
         </div>
 
         {/* Staff Tasks & Telecaller Reminders */}
@@ -364,58 +407,41 @@ export default function DashboardMain() {
           {/* My Assigned Tasks List */}
           <Widget title="My Assigned Tasks" icon={CheckSquare} className="lg:col-span-2">
             <div className="space-y-3 pt-1 text-xs">
-              <div className="flex items-center justify-between p-3 bg-surface border border-border rounded-xl">
-                <div>
-                  <p className="font-bold text-foreground">#3623. Use VR for training and simulations</p>
-                  <p className="text-muted-foreground">Virtual Reality Experience Design • Deadline: 20-08-2026</p>
-                </div>
-                <span className="px-2.5 py-1 rounded text-[11px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
-                  In progress
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-surface border border-border rounded-xl">
-                <div>
-                  <p className="font-bold text-foreground">#3615. Develop VR navigation and interactions</p>
-                  <p className="text-muted-foreground">Virtual Reality Experience Design • Deadline: 20-08-2026</p>
-                </div>
-                <span className="px-2.5 py-1 rounded text-[11px] font-bold bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-950 dark:text-fuchsia-300">
-                  Review
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-surface border border-border rounded-xl">
-                <div>
-                  <p className="font-bold text-foreground">#3571. Implement product barcodes and labels</p>
-                  <p className="text-muted-foreground">Product Packaging Design • Deadline: 07-07-2026</p>
-                </div>
-                <span className="px-2.5 py-1 rounded text-[11px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-                  To do
-                </span>
-              </div>
+              {myTasks.length === 0 ? (
+                <div className="p-4 text-center text-muted-foreground">No tasks currently assigned to you.</div>
+              ) : (
+                myTasks.slice(0, 6).map((t) => (
+                  <div key={t.id} className="flex items-center justify-between p-3 bg-surface border border-border rounded-xl">
+                    <div>
+                      <p className="font-bold text-foreground">#{t.id}. {t.title}</p>
+                      <p className="text-muted-foreground">{t.relatedTo || "General Task"} • Deadline: {t.deadline}</p>
+                    </div>
+                    <span className="px-2.5 py-1 rounded text-[11px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                      {t.status}
+                    </span>
+                  </div>
+                ))
+              )}
             </div>
           </Widget>
 
           {/* Today's Call Follow-ups Desk */}
           <Widget title="Today's Telecaller Call Desk" icon={PhoneCall}>
             <div className="space-y-3 pt-1 text-xs">
-              <div className="p-3 bg-surface border border-border rounded-xl space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-foreground">Sarah Cole</span>
-                  <span className="text-amber-600 font-semibold font-mono">11:30 AM</span>
-                </div>
-                <p className="text-muted-foreground">+91 98123 45678 • Google My Business</p>
-                <p className="text-[11px] text-amber-600 font-medium pt-1">Follow up regarding GMB verification code</p>
-              </div>
-
-              <div className="p-3 bg-surface border border-border rounded-xl space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-foreground">Jaylin Sawayn</span>
-                  <span className="text-amber-600 font-semibold font-mono">02:00 PM</span>
-                </div>
-                <p className="text-muted-foreground">+91 91234 56789 • Google Ads</p>
-                <p className="text-[11px] text-amber-600 font-medium pt-1">Discuss monthly ad budget increase</p>
-              </div>
+              {myCallReminders.length === 0 ? (
+                <div className="p-4 text-center text-muted-foreground">No follow-up calls scheduled.</div>
+              ) : (
+                myCallReminders.slice(0, 6).map((l) => (
+                  <div key={l.id} className="p-3 bg-surface border border-border rounded-xl space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-foreground">{l.name}</span>
+                      <span className="text-amber-600 font-semibold font-mono">{l.reminderTime || "11:30 AM"}</span>
+                    </div>
+                    <p className="text-muted-foreground">{l.phone || "+91 98765 43210"} • {l.service || "Services"}</p>
+                    <p className="text-[11px] text-amber-600 font-medium pt-1">{l.reminderNotes || "Follow up call scheduled"}</p>
+                  </div>
+                ))
+              )}
             </div>
           </Widget>
         </div>

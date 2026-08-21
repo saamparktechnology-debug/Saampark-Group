@@ -681,6 +681,60 @@ function isReminderDateOverdue(dateStr?: string): boolean {
   }
 }
 
+import { taskService } from "../../tasks/services/taskService"
+
+export async function syncLeadReminderTask(lead: Lead): Promise<void> {
+  if (!lead || !lead.name) return
+  const rDate = (lead.reminderDate || "").toString().toLowerCase().trim()
+  if (!rDate || rDate === "none" || rDate === "00,00,0000" || rDate === "00-00-0000" || rDate === "00/00/0000") {
+    return
+  }
+
+  const assignedTo = lead.caller || lead.owner || "Team"
+  const taskId = `lead_task_${lead.id}`
+
+  try {
+    const existingTasks = await taskService.getTasks()
+    const found = existingTasks.find((t) => t.id === taskId || t.id === `task_${lead.id}` || t.relatedTo === `Lead: ${lead.name}`)
+
+    const taskTitle = `Follow-up Call: ${lead.name}`
+    const deadlineVal = `${lead.reminderDate}${lead.reminderTime ? ` (${lead.reminderTime})` : ''}`
+    const isDone = lead.status === "Won" || lead.status === "Lost"
+    const desc = `Primary Contact: ${lead.primaryContact || lead.name}. Phone: ${lead.phone || 'N/A'}. Services: ${lead.service || 'N/A'}. Notes: ${lead.reminderNotes || 'Follow up call scheduled'}`
+
+    if (found) {
+      await taskService.updateTask(found.id, {
+        title: taskTitle,
+        assignedTo,
+        deadline: deadlineVal,
+        description: desc,
+        status: isDone ? "Done" : (found.status || "To do"),
+        priority: "High",
+      })
+    } else {
+      await taskService.addTask({
+        id: taskId,
+        title: taskTitle,
+        startDate: lead.createdAt || new Date().toISOString().split("T")[0],
+        deadline: deadlineVal,
+        milestone: "Lead Follow-up",
+        relatedTo: `Lead: ${lead.name}`,
+        assignedTo,
+        assignedToAvatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${assignedTo}`,
+        collaborators: "-",
+        status: isDone ? "Done" : "To do",
+        priority: "High",
+        priorityIcon: "up",
+        labels: ["Follow-up"],
+        points: "2 Points",
+        description: desc,
+      } as any)
+    }
+  } catch (err) {
+    console.warn("Sync lead reminder task warning:", err)
+  }
+}
+
 export const getLeads = async (): Promise<Lead[]> => {
   const dbData = await fetchModuleDataFromDB<Lead[]>("leads", [])
   const list = Array.isArray(dbData) ? dbData : []
@@ -708,6 +762,13 @@ export const getLeads = async (): Promise<Lead[]> => {
     saveModuleDataToDB("leads", processed)
   }
 
+  // Asynchronously sync valid lead call reminders to Tasks
+  processed.forEach((lead) => {
+    if (lead.reminderDate && lead.caller) {
+      syncLeadReminderTask(lead).catch(() => {})
+    }
+  })
+
   return processed
 }
 
@@ -733,6 +794,7 @@ export const addLead = async (leadData: Omit<Lead, "id">): Promise<Lead> => {
   }
   const updated = [newLead, ...current]
   await saveModuleDataToDB("leads", updated)
+  syncLeadReminderTask(newLead)
   return newLead
 }
 
@@ -766,6 +828,7 @@ export const updateLead = async (id: string, updates: Partial<Lead>, userRole?: 
   }
 
   await saveModuleDataToDB("leads", current)
+  syncLeadReminderTask(current[idx])
   return { ...current[idx] }
 }
 

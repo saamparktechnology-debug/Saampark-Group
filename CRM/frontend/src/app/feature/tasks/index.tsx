@@ -84,12 +84,14 @@ export default function TasksMain() {
     return tasks.filter((t) => {
       const assigned = (t.assignedTo || "").toLowerCase().trim()
       const collab = (t.collaborators || "").toLowerCase().trim()
+      if (!assigned) return false
       return (
         assigned === normName ||
         assigned === normEmail ||
-        assigned === "team" ||
-        collab.includes(normName) ||
-        collab.includes(normEmail)
+        (normName && (assigned.includes(normName) || normName.includes(assigned))) ||
+        (normEmail && assigned.includes(normEmail)) ||
+        (collab && normName && collab.includes(normName)) ||
+        (collab && normEmail && collab.includes(normEmail))
       )
     })
   }, [tasks, user, isSuperOrAdmin])
