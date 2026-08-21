@@ -119,7 +119,11 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
   React.useEffect(() => {
     if (isOpen) {
       getUsers("all").then((list) => {
-        const members = (list || []).map((u) => ({ id: u.id, name: u.name, role: u.role }))
+        const teamOnly = (list || []).filter((u) => {
+          const r = (u.role || "").toLowerCase().trim()
+          return (r === "teams" || r === "team" || r.includes("team")) && !r.includes("admin") && !r.includes("client")
+        })
+        const members = (teamOnly.length > 0 ? teamOnly : (list || []).filter(u => u.role !== "Clients")).map((u) => ({ id: u.id, name: u.name, role: u.role }))
         setTeamMembers(members)
       })
     }
