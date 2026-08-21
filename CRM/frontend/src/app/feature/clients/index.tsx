@@ -11,6 +11,7 @@ import { ContactsTableView } from "./components/ContactsTableView"
 import { AddClientModal } from "./components/AddClientModal"
 import { ManageClientLabelsModal } from "./components/ManageClientLabelsModal"
 import { AddClientProjectModal } from "./components/AddClientProjectModal"
+import { InvoiceModal } from "@/app/feature/sales/invoices/components/InvoiceModal"
 import {
   getStoredClients,
   saveStoredClient,
@@ -46,6 +47,9 @@ export default function ClientsMain() {
   
   const [isAddProjectModalOpen, setIsAddProjectModalOpen] = React.useState(false)
   const [selectedClientForProject, setSelectedClientForProject] = React.useState<ClientItem | null>(null)
+  
+  const [isInvoiceModalOpen, setIsInvoiceModalOpen] = React.useState(false)
+  const [selectedCreatedInvoice, setSelectedCreatedInvoice] = React.useState<any>(null)
 
   // Sync real client users from userService with local client store
   const loadClientData = React.useCallback(async () => {
@@ -318,6 +322,20 @@ export default function ClientsMain() {
           setSelectedClientForProject(null)
         }}
         onProjectCreated={loadClientData}
+        onInvoiceCreated={(inv) => {
+          setSelectedCreatedInvoice(inv)
+          setIsInvoiceModalOpen(true)
+        }}
+      />
+
+      {/* Generated Invoice View Modal */}
+      <InvoiceModal
+        isOpen={isInvoiceModalOpen}
+        invoice={selectedCreatedInvoice}
+        onClose={() => {
+          setIsInvoiceModalOpen(false)
+          setSelectedCreatedInvoice(null)
+        }}
       />
 
       {/* Manage Labels Modal */}

@@ -63,10 +63,20 @@ export function Sidebar() {
   const { user } = useAuthStore()
   const { isModuleAllowed, userActionPermissions, userPermissions } = usePermissionStore()
 
-  const [badgeCounts, setBadgeCounts] = React.useState<Record<string, number | string>>({
+  const [rawCounts, setRawCounts] = React.useState<Record<string, number>>({
     Tickets: 21,
   })
+  const [visitedCounts, setVisitedCounts] = React.useState<Record<string, number>>({})
 
+  // Load visited counts from localStorage
+  React.useEffect(() => {
+    try {
+      const stored = localStorage.getItem("saampark_visited_badge_counts")
+      if (stored) setVisitedCounts(JSON.parse(stored))
+    } catch {}
+  }, [])
+
+  // Poll module data and calculate counts
   React.useEffect(() => {
     getUsers()
 
@@ -89,12 +99,12 @@ export function Sidebar() {
         const openTasks = (tasks || []).filter((t) => t.status !== "Done").length
         const unpaidInvoices = (invoices || []).filter((i) => i.status === "Not paid" || i.status === "Payment Pending" || i.status === "Draft").length
 
-        setBadgeCounts({
-          Leads: pendingLeads > 0 ? pendingLeads : "!",
-          Projects: pendingProjects > 0 ? pendingProjects : "",
-          Tasks: openTasks > 0 ? openTasks : "",
+        setRawCounts({
+          Leads: pendingLeads,
+          Projects: pendingProjects,
+          Tasks: openTasks,
           Tickets: 21,
-          Sales: unpaidInvoices > 0 ? unpaidInvoices : "",
+          Sales: unpaidInvoices,
         })
       } catch (err) {
         console.warn("Sidebar badge error:", err)
@@ -102,9 +112,25 @@ export function Sidebar() {
     }
 
     loadBadges()
-    const interval = setInterval(loadBadges, 5000)
+    const interval = setInterval(loadBadges, 4000)
     return () => clearInterval(interval)
   }, [])
+
+  // Whenever user navigates to a module page, automatically mark that module's current count as visited
+  React.useEffect(() => {
+    const activeItem = ALL_NAV_ITEMS.find(item => pathname === item.href || pathname.startsWith(item.href + '/'))
+    if (activeItem) {
+      const currentRaw = rawCounts[activeItem.name] || 0
+      setVisitedCounts(prev => {
+        if (prev[activeItem.name] === currentRaw) return prev
+        const updated = { ...prev, [activeItem.name]: currentRaw }
+        try {
+          localStorage.setItem("saampark_visited_badge_counts", JSON.stringify(updated))
+        } catch {}
+        return updated
+      })
+    }
+  }, [pathname, rawCounts])
 
   // Dynamically filter navigation items based on user role & permissions configured by Super Admin / Admin
   const allowedNavItems = React.useMemo(() => {
@@ -147,7 +173,11 @@ export function Sidebar() {
       <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 space-y-1 scrollbar-hide">
         {allowedNavItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
-          const itemBadge = badgeCounts[item.name] !== undefined && badgeCounts[item.name] !== "" ? badgeCounts[item.name] : item.badge
+          const raw = rawCounts[item.name] !== undefined ? rawCounts[item.name] : (typeof item.badge === "number" ? item.badge : 0)
+          const visited = visitedCounts[item.name] || 0
+          const unreadDiff = raw - visited
+          const showBadge = unreadDiff > 0 && !isActive
+          const itemBadge = showBadge ? unreadDiff : null
 
           return (
             <Link key={item.name} href={item.href} className="block px-3">

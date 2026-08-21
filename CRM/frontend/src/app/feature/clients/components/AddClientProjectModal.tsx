@@ -13,6 +13,7 @@ interface AddClientProjectModalProps {
   client: ClientItem | null
   onClose: () => void
   onProjectCreated: () => void
+  onInvoiceCreated?: (invoice: any) => void
 }
 
 export function AddClientProjectModal({
@@ -20,6 +21,7 @@ export function AddClientProjectModal({
   client,
   onClose,
   onProjectCreated,
+  onInvoiceCreated,
 }: AddClientProjectModalProps) {
   const [projectTitle, setProjectTitle] = React.useState("")
   const [category, setCategory] = React.useState("Website Development")
@@ -114,7 +116,7 @@ export function AddClientProjectModal({
 
       // 2. Generate Invoice
       const invoiceId = `INV #${Math.floor(100 + Math.random() * 900)}`
-      await addInvoice({
+      const createdInvoice = await addInvoice({
         id: invoiceId,
         client: client.name,
         clientEmail: client.email,
@@ -165,9 +167,11 @@ export function AddClientProjectModal({
         } catch {}
       }
 
-      alert(`Project & Invoice ${invoiceId} generated successfully!`)
       onProjectCreated()
       onClose()
+      if (onInvoiceCreated) {
+        onInvoiceCreated(createdInvoice)
+      }
     } catch (err) {
       console.error(err)
       alert("Error creating project and invoice.")
