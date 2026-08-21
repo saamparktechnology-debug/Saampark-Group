@@ -114,14 +114,26 @@ const login = async (req, res, next) => {
     }
 
     const [users] = await pool.execute(
-      'SELECT u.*, r.name as role_name FROM users u JOIN roles r ON u.role_id = r.id WHERE u.email = ? AND u.deleted_at IS NULL AND u.status = "active"',
+      `SELECT u.*, COALESCE(r.name, 'Teams') as role_name 
+       FROM users u 
+       LEFT JOIN roles r ON u.role_id = r.id 
+       WHERE LOWER(u.email) = ? AND u.deleted_at IS NULL AND (LOWER(u.status) = 'active' OR u.status IS NULL)`,
       [email.toLowerCase().trim()]
     );
 
     if (users.length === 0) {
-      return errorResponse(res, 401, 'Account does not exist or has been deleted. Please contact your System Administrator.');
+      // Fallback check: check if account exists but deleted/inactive to give helpful error
+      const [allUserCheck] = await pool.execute('SELECT status, deleted_at FROM users WHERE LOWER(email) = ?', [email.toLowerCase().trim()]);
+      if (allUserCheck.length > 0) {
+        if (allUserCheck[0].deleted_at) {
+          return errorResponse(res, 401, 'Account has been deleted. Please contact your System Administrator.');
+        }
+        if (allUserCheck[0].status && allUserCheck[0].status.toLowerCase() === 'inactive') {
+          return errorResponse(res, 403, 'Your account is currently deactivated. Please contact your administrator.');
+        }
+      }
+      return errorResponse(res, 401, 'Account does not exist. Please check your email or contact your administrator.');
     }
-
 
     const user = users[0];
 
@@ -132,7 +144,7 @@ const login = async (req, res, next) => {
       return errorResponse(res, 403, 'Email not verified. A new OTP has been sent to your email.');
     }
 
-    if (user.status !== 'active') {
+    if (user.status && user.status.toLowerCase() === 'inactive') {
       return errorResponse(res, 403, 'Your account is deactivated. Please contact your administrator.');
     }
 

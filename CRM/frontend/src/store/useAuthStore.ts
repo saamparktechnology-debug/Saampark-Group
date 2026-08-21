@@ -108,14 +108,6 @@ export const useAuthStore = create<AuthState>()(
 
       loginWithCredentials: async (email: string, password: string) => {
         const normEmail = email.toLowerCase().trim()
-        if (typeof window !== 'undefined') {
-          const rawDeleted = localStorage.getItem("saampark_deleted_user_emails")
-          const deletedEmails: string[] = rawDeleted ? JSON.parse(rawDeleted) : []
-          if (deletedEmails.includes(normEmail)) {
-            throw new Error("Account does not exist. Please create one.")
-          }
-        }
-
         try {
           const res = await AuthService.login({ email: normEmail, password })
           if (res && res.token) {
