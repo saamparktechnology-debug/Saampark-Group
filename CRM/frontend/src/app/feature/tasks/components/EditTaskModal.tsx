@@ -5,6 +5,8 @@ import { X, Check, Paperclip, Mic, HelpCircle } from "lucide-react"
 import { Task, TaskStatus, TaskPriority } from "../types"
 import { taskService } from "../services/taskService"
 
+import { getUsers } from "@/app/feature/users/services/userService"
+
 interface EditTaskModalProps {
   isOpen: boolean
   task: Task | null
@@ -13,11 +15,12 @@ interface EditTaskModalProps {
 }
 
 export function EditTaskModal({ isOpen, task, onClose, onTaskUpdated }: EditTaskModalProps) {
+  const [teamMembers, setTeamMembers] = React.useState<{ id: string; name: string; role?: string }[]>([])
   const [title, setTitle] = React.useState("")
   const [description, setDescription] = React.useState("")
   const [relatedTo, setRelatedTo] = React.useState("-")
   const [points, setPoints] = React.useState("1 Point")
-  const [assignedTo, setAssignedTo] = React.useState("John Doe")
+  const [assignedTo, setAssignedTo] = React.useState("")
   const [collaborators, setCollaborators] = React.useState("")
   const [status, setStatus] = React.useState<TaskStatus>("To do")
   const [priority, setPriority] = React.useState<TaskPriority | "Priority">("Priority")
@@ -28,12 +31,25 @@ export function EditTaskModal({ isOpen, task, onClose, onTaskUpdated }: EditTask
   const [isSubmitting, setIsSubmitting] = React.useState(false)
 
   React.useEffect(() => {
+    if (isOpen) {
+      getUsers("all").then((list) => {
+        const teamOnly = (list || []).filter((u) => {
+          const r = (u.role || "").toLowerCase().trim()
+          return (r === "teams" || r === "team" || r.includes("team")) && !r.includes("admin") && !r.includes("client")
+        })
+        const members = (teamOnly.length > 0 ? teamOnly : (list || []).filter(u => u.role !== "Clients")).map((u) => ({ id: u.id, name: u.name, role: u.role }))
+        setTeamMembers(members)
+      })
+    }
+  }, [isOpen])
+
+  React.useEffect(() => {
     if (task) {
       setTitle(task.title || "")
       setDescription(task.description || "")
       setRelatedTo(task.relatedTo || "-")
       setPoints(task.points || "1 Point")
-      setAssignedTo(task.assignedTo || "John Doe")
+      setAssignedTo(task.assignedTo || "")
       setCollaborators(task.collaborators || "")
       setStatus(task.status || "To do")
       setPriority(task.priority || "Priority")
@@ -197,13 +213,20 @@ export function EditTaskModal({ isOpen, task, onClose, onTaskUpdated }: EditTask
               onChange={(e) => setAssignedTo(e.target.value)}
               className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200"
             >
-              <option value="John Doe">John Doe</option>
-              <option value="Michael Lee">Michael Lee</option>
-              <option value="Mark Smith">Mark Smith</option>
-              <option value="Daniel White">Daniel White</option>
-              <option value="Ethan Anderson">Ethan Anderson</option>
-              <option value="Olivia Brown">Olivia Brown</option>
-              <option value="Sara Ann">Sara Ann</option>
+              {teamMembers.length === 0 ? (
+                <option value="">No team members available</option>
+              ) : (
+                <>
+                  {assignedTo && !teamMembers.some((m) => m.name === assignedTo) && (
+                    <option value={assignedTo}>{assignedTo} (Current)</option>
+                  )}
+                  {teamMembers.map((m) => (
+                    <option key={m.id || m.name} value={m.name}>
+                      {m.name} {m.role ? `(${m.role})` : ""}
+                    </option>
+                  ))}
+                </>
+              )}
             </select>
           </div>
 
