@@ -11,6 +11,7 @@ import { ContactsTableView } from "./components/ContactsTableView"
 import { AddClientModal } from "./components/AddClientModal"
 import { ManageClientLabelsModal } from "./components/ManageClientLabelsModal"
 import { AddClientProjectModal } from "./components/AddClientProjectModal"
+import { ClientHistoryModal } from "./components/ClientHistoryModal"
 import { InvoiceModal } from "@/app/feature/sales/invoices/components/InvoiceModal"
 import {
   getStoredClients,
@@ -50,6 +51,9 @@ export default function ClientsMain() {
   
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = React.useState(false)
   const [selectedCreatedInvoice, setSelectedCreatedInvoice] = React.useState<any>(null)
+
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = React.useState(false)
+  const [selectedClientForHistory, setSelectedClientForHistory] = React.useState<ClientItem | null>(null)
 
   // Sync real client users from userService with local client store
   const loadClientData = React.useCallback(async () => {
@@ -316,6 +320,10 @@ export default function ClientsMain() {
             setSelectedClientForProject(client)
             setIsAddProjectModalOpen(true)
           }}
+          onViewClientHistory={(client) => {
+            setSelectedClientForHistory(client)
+            setIsHistoryModalOpen(true)
+          }}
         />
       )}
       {activeTab === "contacts" && (
@@ -331,6 +339,24 @@ export default function ClientsMain() {
         onClose={() => setIsAddClientModalOpen(false)}
         onSave={handleSaveClient}
         initialData={selectedClientForEdit}
+      />
+
+      {/* Client Project & Invoice History Modal */}
+      <ClientHistoryModal
+        isOpen={isHistoryModalOpen}
+        client={selectedClientForHistory}
+        onClose={() => {
+          setIsHistoryModalOpen(false)
+          setSelectedClientForHistory(null)
+        }}
+        onSelectInvoice={(inv) => {
+          setSelectedCreatedInvoice(inv)
+          setIsInvoiceModalOpen(true)
+        }}
+        onAddProjectForClient={(client) => {
+          setSelectedClientForProject(client)
+          setIsAddProjectModalOpen(true)
+        }}
       />
 
       {/* Add Client Project & Invoice Modal */}

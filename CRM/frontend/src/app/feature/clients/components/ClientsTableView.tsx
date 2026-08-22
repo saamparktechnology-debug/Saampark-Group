@@ -12,6 +12,7 @@ interface ClientsTableViewProps {
   onDeleteClient: (id: string) => void
   onEditClient: (client: ClientItem) => void
   onAddProjectClient?: (client: ClientItem) => void
+  onViewClientHistory?: (client: ClientItem) => void
 }
 
 export function ClientsTableView({
@@ -19,6 +20,7 @@ export function ClientsTableView({
   onDeleteClient,
   onEditClient,
   onAddProjectClient,
+  onViewClientHistory,
 }: ClientsTableViewProps) {
   const { user } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
@@ -255,8 +257,9 @@ export function ClientsTableView({
                       )}
                       <button
                         type="button"
-                        className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                        title="View"
+                        onClick={() => onViewClientHistory && onViewClientHistory(client)}
+                        className="p-1 rounded text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                        title="View Client Project & Invoice History"
                       >
                         <Eye size={14} />
                       </button>
