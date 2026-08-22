@@ -138,11 +138,20 @@ export function Sidebar() {
     return ALL_NAV_ITEMS.filter((item) => isModuleAllowed(user, item.name))
   }, [user, isModuleAllowed, userActionPermissions, userPermissions])
 
+  const [isMobile, setIsMobile] = React.useState(false)
+
+  React.useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768)
+    checkMobile()
+    window.addEventListener("resize", checkMobile)
+    return () => window.removeEventListener("resize", checkMobile)
+  }, [])
+
   return (
     <motion.aside 
       initial={false}
       animate={{ 
-        width: isSidebarCollapsed ? 64 : 256,
+        width: isMobile ? (isSidebarCollapsed ? 0 : 256) : (isSidebarCollapsed ? 64 : 256),
         x: 0,
         opacity: 1
       }}

@@ -53,14 +53,23 @@ export function Topbar() {
 
   const stop = (e: React.MouseEvent) => e.stopPropagation()
 
+  const [isMobile, setIsMobile] = React.useState(false)
+
+  React.useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768)
+    checkMobile()
+    window.addEventListener("resize", checkMobile)
+    return () => window.removeEventListener("resize", checkMobile)
+  }, [])
+
   if (!user) return null
 
   const activeCompany = COMPANIES.find(c => c.id === activeCompanyId)
 
   return (
     <header
-      style={{ left: isSidebarCollapsed ? 64 : 256 }}
-      className="fixed top-0 right-0 h-16 glass-panel border-b border-border/50 flex items-center justify-between px-6 z-30 transition-[left] duration-300 ease-in-out"
+      style={{ left: isMobile ? 0 : (isSidebarCollapsed ? 64 : 256) }}
+      className="fixed top-0 right-0 h-16 glass-panel border-b border-border/50 flex items-center justify-between px-3 sm:px-6 z-30 transition-[left] duration-300 ease-in-out"
     >
       {/* ── LEFT: Hamburger + Nav shortcuts ─────────────────────────────── */}
       <div className="flex items-center gap-1">

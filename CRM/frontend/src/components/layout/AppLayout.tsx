@@ -9,13 +9,23 @@ import { usePathname } from "next/navigation"
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const { isSidebarCollapsed } = useUIStore()
   const pathname = usePathname()
+  const [isMobile, setIsMobile] = React.useState(false)
+
+  React.useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768)
+    checkMobile()
+    window.addEventListener("resize", checkMobile)
+    return () => window.removeEventListener("resize", checkMobile)
+  }, [])
 
   if (pathname === "/login") {
     return <>{children}</>
   }
 
+  const leftPadding = isMobile ? 0 : (isSidebarCollapsed ? 64 : 256)
+
   return (
-    <div className="min-h-screen bg-background relative overflow-hidden">
+    <div className="min-h-screen bg-background relative overflow-x-hidden">
       {/* Background Ambient Mesh/Glow */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
         <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-primary/5 blur-[120px]" />
@@ -26,10 +36,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <Topbar />
 
       <main
-        style={{ paddingLeft: isSidebarCollapsed ? 64 : 256 }}
+        style={{ paddingLeft: leftPadding }}
         className="relative z-10 pt-16 min-h-screen transition-[padding-left] duration-300 ease-in-out"
       >
-        <div className="p-4 md:p-8 max-w-[1800px] mx-auto">
+        <div className="p-3 sm:p-6 md:p-8 max-w-[1800px] mx-auto overflow-x-auto">
           {children}
         </div>
       </main>
