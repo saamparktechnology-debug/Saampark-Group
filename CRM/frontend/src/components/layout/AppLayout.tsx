@@ -37,7 +37,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
       <main
         style={{ paddingLeft: leftPadding }}
-        className="relative z-10 pt-16 min-h-screen transition-[padding-left] duration-300 ease-in-out"
+        className="relative pt-16 min-h-screen transition-[padding-left] duration-300 ease-in-out"
       >
         <div className="p-3 sm:p-6 md:p-8 max-w-[1800px] mx-auto overflow-x-auto">
           {children}

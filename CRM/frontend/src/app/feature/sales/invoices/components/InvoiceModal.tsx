@@ -47,7 +47,7 @@ export function InvoiceModal({
   const isPaid = invoice.status === "Fully paid" || invoice.status === "Credited"
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-md p-2 sm:p-4 overflow-y-auto print:p-0 print:bg-white print:static">
+    <div className="fixed inset-0 top-14 sm:top-0 z-[99999] flex items-start sm:items-center justify-center bg-black/85 backdrop-blur-md p-2 sm:p-6 overflow-y-auto print:p-0 print:bg-white print:static">
       <style>{`
         @media print {
           body * { visibility: hidden; }
@@ -57,7 +57,7 @@ export function InvoiceModal({
         }
       `}</style>
 
-      <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden max-h-[96vh] my-auto print:max-h-none print:shadow-none print:border-none print:w-full print:rounded-none">
+      <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden max-h-[86vh] sm:max-h-[95vh] my-auto print:max-h-none print:shadow-none print:border-none print:w-full print:rounded-none">
         
         {/* Action Header Bar (Hidden during print) */}
         <div className="no-print flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-3.5 border-b border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/90 dark:bg-zinc-900/90 backdrop-blur-md shrink-0">

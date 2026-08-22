@@ -813,7 +813,7 @@ export async function checkAndAutoConvertLeadToClient(lead: Lead): Promise<void>
         email: emailNorm,
         role: "Clients",
         companyId: "tech",
-        companyName: "SAAMPARK Technology",
+        companyName: clientName,
         phone: lead.phone,
         password: "Password123",
         status: "Active",

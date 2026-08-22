@@ -60,57 +60,71 @@ export default function ClientsMain() {
       const storedContacts = getStoredContacts()
       const storedLabels = getStoredClientLabels()
 
-      // Convert user management client users into ClientItem format
       const userClientsMap = new Map<string, ClientItem>()
 
-      // 1. Convert registered client users
+      // 1. Add stored clients first (primary source of truth)
+      storedClients.forEach((sc) => {
+        const idKey = sc.id.toLowerCase().trim()
+        userClientsMap.set(idKey, sc)
+        if (sc.email) userClientsMap.set(sc.email.toLowerCase().trim(), sc)
+      })
+
+      // 2. Add registered client users if not deleted & not already present
       clientUsers.forEach((cu) => {
         const emailKey = cu.email.toLowerCase().trim()
-        userClientsMap.set(emailKey, {
-          id: cu.id || `cli_${cu.email}`,
-          name: cu.companyName || cu.name || "Client Account",
-          primaryContact: cu.name || "Primary Contact",
-          email: cu.email,
-          phone: cu.phone || "N/A",
-          group: "VIP",
-          label: "Potential",
-          labelColor: "#3b82f6",
-          projectsCount: 1,
-          totalInvoiced: "₹0",
-          paymentReceived: "₹0",
-          due: "₹0",
-        })
+        const idKey = cu.id.toLowerCase().trim()
 
+        if (!userClientsMap.has(emailKey) && !userClientsMap.has(idKey)) {
+          const compName = (cu.companyName && cu.companyName !== "SAAMPARK Technology" && cu.companyName !== "SAAMPARK Group (All Companies)" && cu.companyName !== "Saampark Group")
+            ? cu.companyName
+            : cu.name
+
+          userClientsMap.set(emailKey, {
+            id: cu.id || `cli_${cu.email}`,
+            name: compName,
+            primaryContact: cu.name || "Primary Contact",
+            email: cu.email,
+            phone: cu.phone || "N/A",
+            group: "VIP",
+            label: "Potential",
+            labelColor: "#3b82f6",
+            projectsCount: 0,
+            totalInvoiced: "₹0",
+            paymentReceived: "₹0",
+            due: "₹0",
+          })
+        }
       })
 
-      // 2. Add manually stored clients
-      storedClients.forEach((sc) => {
-        userClientsMap.set(sc.id, sc)
-      })
-
-      const mergedClients = Array.from(userClientsMap.values())
+      const mergedClients = Array.from(new Set(userClientsMap.values()))
       setClients(mergedClients)
 
       // Convert registered client users into ContactItem format
       const userContactsMap = new Map<string, ContactItem>()
-      clientUsers.forEach((cu) => {
-        const emailKey = cu.email.toLowerCase().trim()
-        userContactsMap.set(emailKey, {
-          id: `cnt_${cu.id}`,
-          name: cu.name,
-          clientName: cu.companyName || cu.name,
-          jobTitle: "Primary Contact",
-          email: cu.email,
-          phone: cu.phone || "N/A",
-          avatarSeed: cu.name,
-        })
-      })
 
       storedContacts.forEach((sc) => {
-        userContactsMap.set(sc.id, sc)
+        userContactsMap.set(sc.id.toLowerCase().trim(), sc)
+        if (sc.email) userContactsMap.set(sc.email.toLowerCase().trim(), sc)
       })
 
-      setContacts(Array.from(userContactsMap.values()))
+      clientUsers.forEach((cu) => {
+        const emailKey = cu.email.toLowerCase().trim()
+        const idKey = `cnt_${cu.id}`.toLowerCase().trim()
+
+        if (!userContactsMap.has(emailKey) && !userContactsMap.has(idKey)) {
+          userContactsMap.set(emailKey, {
+            id: `cnt_${cu.id}`,
+            name: cu.name,
+            clientName: (cu.companyName && cu.companyName !== "SAAMPARK Technology" && cu.companyName !== "SAAMPARK Group (All Companies)" && cu.companyName !== "Saampark Group") ? cu.companyName : cu.name,
+            jobTitle: "Primary Contact",
+            email: cu.email,
+            phone: cu.phone || "N/A",
+            avatarSeed: cu.name,
+          })
+        }
+      })
+
+      setContacts(Array.from(new Set(userContactsMap.values())))
       setLabels(storedLabels)
     } catch (err) {
       console.warn("Client sync warning:", err)
@@ -121,7 +135,7 @@ export default function ClientsMain() {
     loadClientData()
     const handleStorage = () => loadClientData()
     window.addEventListener("storage", handleStorage)
-    const interval = setInterval(loadClientData, 2500)
+    const interval = setInterval(loadClientData, 4000)
 
     return () => {
       window.removeEventListener("storage", handleStorage)
@@ -140,9 +154,15 @@ export default function ClientsMain() {
       alert("Action forbidden: You do not have permission to delete clients.")
       return
     }
-    const updated = deleteStoredClient(id)
-    setClients(updated)
-    loadClientData()
+    const target = clients.find((c) => c.id === id)
+    const email = target?.email
+
+    deleteStoredClient(id, email)
+    deleteStoredContact(id, email)
+    deleteStoredContact(`cnt_${id}`, email)
+
+    setClients((prev) => prev.filter((c) => c.id !== id && (!email || c.email?.toLowerCase().trim() !== email.toLowerCase().trim())))
+    setContacts((prev) => prev.filter((cnt) => cnt.id !== id && cnt.id !== `cnt_${id}` && (!email || cnt.email?.toLowerCase().trim() !== email.toLowerCase().trim())))
   }
 
   const handleDeleteContact = (id: string) => {

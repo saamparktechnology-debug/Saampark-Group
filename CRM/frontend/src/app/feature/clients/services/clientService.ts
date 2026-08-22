@@ -1,14 +1,12 @@
 "use client"
 
 import { ClientItem, ContactItem, ClientLabelItem } from "../types"
-
-import { filterGlobalDeletedItems, markGlobalItemDeleted } from "@/lib/storageSync"
+import { filterGlobalDeletedItems, markGlobalItemDeleted, fetchModuleDataFromDB, saveModuleDataToDB } from "@/lib/storageSync"
+import { markUserAsDeleted } from "@/app/feature/users/services/userService"
 
 const CLIENTS_STORAGE_KEY = "saampark_stored_clients"
 const CONTACTS_STORAGE_KEY = "saampark_stored_contacts"
 const CLIENT_LABELS_STORAGE_KEY = "saampark_stored_client_labels"
-
-import { fetchModuleDataFromDB, saveModuleDataToDB } from "@/lib/storageSync"
 
 export function getStoredClients(): ClientItem[] {
   if (typeof window === "undefined") return []
@@ -31,7 +29,7 @@ export function saveStoredClient(client: ClientItem): ClientItem[] {
   if (typeof window === "undefined") return []
   try {
     const current = getStoredClients()
-    const updated = [client, ...current.filter((c) => c.id !== client.id)]
+    const updated = [client, ...current.filter((c) => c.id !== client.id && c.email?.toLowerCase().trim() !== client.email?.toLowerCase().trim())]
     localStorage.setItem(CLIENTS_STORAGE_KEY, JSON.stringify(updated))
     saveModuleDataToDB("clients", updated)
 
@@ -53,12 +51,31 @@ export function saveStoredClient(client: ClientItem): ClientItem[] {
   }
 }
 
-export function deleteStoredClient(id: string): ClientItem[] {
+export function deleteStoredClient(id: string, email?: string): ClientItem[] {
   if (typeof window === "undefined") return []
   try {
     markGlobalItemDeleted(id, "clients")
+    markGlobalItemDeleted(id, "users")
+
+    if (email) {
+      const normEmail = email.toLowerCase().trim()
+      markGlobalItemDeleted(normEmail, "clients")
+      markGlobalItemDeleted(normEmail, "users")
+      markUserAsDeleted(normEmail)
+    }
+
+    // Remove from local storage accounts
+    const accountsRaw = localStorage.getItem("saampark_registered_accounts")
+    if (accountsRaw) {
+      try {
+        const parsed: any[] = JSON.parse(accountsRaw)
+        const updatedAccounts = parsed.filter(a => a.id !== id && (!email || a.email?.toLowerCase().trim() !== email.toLowerCase().trim()))
+        localStorage.setItem("saampark_registered_accounts", JSON.stringify(updatedAccounts))
+      } catch {}
+    }
+
     const current = getStoredClients()
-    const updated = current.filter((c) => c.id !== id)
+    const updated = current.filter((c) => c.id !== id && (!email || c.email?.toLowerCase().trim() !== email.toLowerCase().trim()))
     localStorage.setItem(CLIENTS_STORAGE_KEY, JSON.stringify(updated))
     saveModuleDataToDB("clients", updated)
     return updated
@@ -68,15 +85,12 @@ export function deleteStoredClient(id: string): ClientItem[] {
   }
 }
 
-
-
-
 export function getStoredContacts(): ContactItem[] {
   if (typeof window === "undefined") return []
   try {
     const raw = localStorage.getItem(CONTACTS_STORAGE_KEY)
     if (!raw) return []
-    return JSON.parse(raw)
+    return filterGlobalDeletedItems(JSON.parse(raw))
   } catch (err) {
     console.error("Error reading stored contacts:", err)
     return []
@@ -96,11 +110,16 @@ export function saveStoredContact(contact: ContactItem): ContactItem[] {
   }
 }
 
-export function deleteStoredContact(id: string): ContactItem[] {
+export function deleteStoredContact(id: string, email?: string): ContactItem[] {
   if (typeof window === "undefined") return []
   try {
+    markGlobalItemDeleted(id, "contacts")
+    if (email) {
+      markGlobalItemDeleted(email.toLowerCase().trim(), "contacts")
+    }
+
     const current = getStoredContacts()
-    const updated = current.filter((c) => c.id !== id)
+    const updated = current.filter((c) => c.id !== id && c.id !== `cnt_${id}` && (!email || c.email?.toLowerCase().trim() !== email.toLowerCase().trim()))
     localStorage.setItem(CONTACTS_STORAGE_KEY, JSON.stringify(updated))
     return updated
   } catch (err) {
