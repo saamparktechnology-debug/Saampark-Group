@@ -1,9 +1,11 @@
 "use client"
 
 import * as React from "react"
-import { X, Check, Paperclip, Mic, HelpCircle } from "lucide-react"
+import { X, Check, Paperclip, Mic, HelpCircle, Trash2 } from "lucide-react"
 import { Task, TaskStatus, TaskPriority } from "../types"
 import { taskService } from "../services/taskService"
+import { useAuthStore } from "@/store/useAuthStore"
+import { usePermissionStore } from "@/store/usePermissionStore"
 
 import { getUsers } from "@/app/feature/users/services/userService"
 
@@ -12,9 +14,14 @@ interface EditTaskModalProps {
   task: Task | null
   onClose: () => void
   onTaskUpdated: (updatedTask: Task) => void
+  onDeleteTask?: (id: string) => void
 }
 
-export function EditTaskModal({ isOpen, task, onClose, onTaskUpdated }: EditTaskModalProps) {
+export function EditTaskModal({ isOpen, task, onClose, onTaskUpdated, onDeleteTask }: EditTaskModalProps) {
+  const { user } = useAuthStore()
+  const { canPerformAction } = usePermissionStore()
+  const canDeleteTask = canPerformAction(user, "Tasks", "delete")
+
   const [teamMembers, setTeamMembers] = React.useState<{ id: string; name: string; role?: string }[]>([])
   const [title, setTitle] = React.useState("")
   const [description, setDescription] = React.useState("")
@@ -311,6 +318,21 @@ export function EditTaskModal({ isOpen, task, onClose, onTaskUpdated }: EditTask
         {/* Footer */}
         <div className="flex items-center justify-between px-6 py-4 bg-zinc-50/50 dark:bg-zinc-800/40 border-t border-zinc-100 dark:border-zinc-800">
           <div className="flex items-center gap-2">
+            {canDeleteTask && onDeleteTask && (
+              <button
+                type="button"
+                onClick={() => {
+                  onDeleteTask(task.id)
+                  onClose()
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-900/60 transition-colors"
+                title="Delete Task"
+              >
+                <Trash2 size={13} />
+                <span>Delete</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => alert("Upload file clicked")}

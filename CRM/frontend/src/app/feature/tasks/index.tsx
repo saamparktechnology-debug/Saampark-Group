@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Task } from "./types"
+import { Task, TaskStatus } from "./types"
 import { taskService } from "./services/taskService"
 import { TaskList } from "./components/TaskList"
 import { TaskKanban } from "./components/TaskKanban"
@@ -51,8 +51,29 @@ export default function TasksMain() {
 
   const handleTaskUpdated = (updatedTask: Task) => {
     setTasks((prev) =>
-      prev.map((t) => (t.id === updatedTask.id ? updatedTask : t))
+      prev.map((t) =>
+        String(t.id).toLowerCase().trim() === String(updatedTask.id).toLowerCase().trim()
+          ? updatedTask
+          : t
+      )
     )
+  }
+
+  const handleUpdateTaskStatus = async (id: string, newStatus: TaskStatus) => {
+    // 1. Optimistic update
+    setTasks((prev) =>
+      prev.map((t) =>
+        String(t.id).toLowerCase().trim() === String(id).toLowerCase().trim()
+          ? { ...t, status: newStatus }
+          : t
+      )
+    )
+    // 2. Persist to DB
+    try {
+      await taskService.updateTask(id, { status: newStatus })
+    } catch (err) {
+      console.error("Failed to update status:", err)
+    }
   }
 
   const handleDeleteTask = async (id: string) => {
@@ -64,8 +85,14 @@ export default function TasksMain() {
     }
 
     if (confirm("Are you sure you want to delete this task?")) {
-      await taskService.deleteTask(id)
-      setTasks((prev) => prev.filter((t) => t.id !== id))
+      const strId = String(id).toLowerCase().trim()
+      // Optimistically remove from state immediately
+      setTasks((prev) => prev.filter((t) => String(t.id).toLowerCase().trim() !== strId))
+      try {
+        await taskService.deleteTask(id)
+      } catch (err) {
+        console.error("Failed to delete task:", err)
+      }
     }
   }
 
@@ -108,6 +135,7 @@ export default function TasksMain() {
           onOpenAddModal={() => setIsAddModalOpen(true)}
           onSelectTask={handleSelectTask}
           onDeleteTask={handleDeleteTask}
+          onUpdateTaskStatus={handleUpdateTaskStatus}
           onOpenManageLabels={() => setIsManageLabelsOpen(true)}
         />
       )}
@@ -148,6 +176,7 @@ export default function TasksMain() {
           setSelectedTask(null)
         }}
         onTaskUpdated={handleTaskUpdated}
+        onDeleteTask={handleDeleteTask}
       />
 
       {/* Manage Labels Modal */}

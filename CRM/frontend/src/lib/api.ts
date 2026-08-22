@@ -1,6 +1,5 @@
 const getBaseUrl = () => {
-  // Always route through the local Next.js proxy → http://127.0.0.1:5000
-  return '/api/v1'
+  return process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:5000/api/v1'
 }
 
 export interface ApiResponse<T = any> {
@@ -40,7 +39,7 @@ async function request<T = any>(endpoint: string, options: RequestInit = {}): Pr
   const url = `${baseUrl}${cleanEndpoint}`
 
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 5000)
+  const timeoutId = setTimeout(() => controller.abort(), 8000)
 
   try {
     const response = await fetch(url, {

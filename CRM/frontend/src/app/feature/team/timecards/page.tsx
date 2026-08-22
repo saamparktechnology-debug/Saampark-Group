@@ -20,16 +20,7 @@ type TimeCard = {
   duration: string
 }
 
-const MOCK_TIMECARDS: TimeCard[] = [
-  { id: "1", member: "Michael Wood", avatarUrl: "https://i.pravatar.cc/150?u=3", inDate: "01-08-2026", inTime: "06:45:12 pm", outDate: "-", outTime: "-", duration: "00:00:00" },
-  { id: "2", member: "Sara Ann", avatarUrl: "https://i.pravatar.cc/150?u=5", inDate: "01-08-2026", inTime: "06:45:07 pm", outDate: "-", outTime: "-", duration: "00:00:00" },
-  { id: "3", member: "Richard Gray", avatarUrl: "https://i.pravatar.cc/150?u=4", inDate: "01-08-2026", inTime: "11:45:00 am", outDate: "01-08-2026", outTime: "05:20:00 pm", duration: "05:35:00" },
-  { id: "4", member: "Mark Thomas", avatarUrl: "https://i.pravatar.cc/150?u=2", inDate: "01-08-2026", inTime: "11:30:00 am", outDate: "01-08-2026", outTime: "02:45:00 pm", duration: "03:15:00" },
-  { id: "5", member: "Michael Wood", avatarUrl: "https://i.pravatar.cc/150?u=3", inDate: "01-08-2026", inTime: "10:50:00 am", outDate: "01-08-2026", outTime: "05:15:00 pm", duration: "06:25:00" },
-  { id: "6", member: "Sara Ann", avatarUrl: "https://i.pravatar.cc/150?u=5", inDate: "01-08-2026", inTime: "09:40:00 am", outDate: "01-08-2026", outTime: "05:35:00 pm", duration: "07:55:00" },
-  { id: "7", member: "John Doe", avatarUrl: "https://i.pravatar.cc/150?u=1", inDate: "01-08-2026", inTime: "09:25:00 am", outDate: "01-08-2026", outTime: "03:15:00 pm", duration: "05:50:00" },
-  { id: "8", member: "John Doe", avatarUrl: "https://i.pravatar.cc/150?u=1", inDate: "01-08-2026", inTime: "07:46:40 am", outDate: "-", outTime: "-", duration: "00:00:00" },
-]
+const MOCK_TIMECARDS: TimeCard[] = []
 
 export const columns: ColumnDef<TimeCard>[] = [
   {

@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { Role, User } from './useAuthStore'
 
-export const ALL_MODULE_NAMES = [
+export const ALL_NAV_MODULES = [
   'Dashboard',
   'Events',
   'Clients',
@@ -25,13 +25,60 @@ export const ALL_MODULE_NAMES = [
   'Settings',
 ] as const
 
-export type ModuleName = typeof ALL_MODULE_NAMES[number]
+// Configurable modules in permission matrix (Dashboard is removed from configurable CRUD since it's global view)
+export const CONFIGURABLE_MODULES = [
+  'Events',
+  'Clients',
+  'Projects',
+  'Tasks',
+  'Leads',
+  'Subscriptions',
+  'Sales',
+  'Estimates',
+  'Proposals',
+  'Notes',
+  'Messages',
+  'Team',
+  'Users',
+  'Tickets',
+  'Knowledge base',
+  'Files',
+  'Expenses',
+  'Reports',
+  'Settings',
+] as const
+
+export const ALL_MODULE_NAMES = CONFIGURABLE_MODULES
+
+export type ModuleName = typeof ALL_NAV_MODULES[number]
 
 export interface ModuleActionFlags {
   view: boolean
   add: boolean
   edit: boolean
   delete: boolean
+}
+
+export const MODULE_ACTION_CONFIG: Record<string, { hasAdd: boolean; hasEdit: boolean; hasDelete: boolean; description: string }> = {
+  Events: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage calendar schedules & reminders" },
+  Clients: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage customer profiles & accounts" },
+  Projects: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage delivery roadmaps & milestones" },
+  Tasks: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage deliverables, kanban & status" },
+  Leads: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage sales pipeline & telecalling" },
+  Subscriptions: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage recurring retainers & billing cycles" },
+  Sales: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage tax invoices, orders & payments" },
+  Estimates: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage dynamic itemized service quotes" },
+  Proposals: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage formal business proposals" },
+  Notes: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage global broadcasts & scratchpads" },
+  Messages: { hasAdd: true, hasEdit: false, hasDelete: true, description: "Real-time multi-user live chat" },
+  Team: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage team workload & member profiles" },
+  Users: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage account logins & RBAC permissions" },
+  Tickets: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage dispute inquiries & resolutions" },
+  'Knowledge base': { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage help center articles & guides" },
+  Files: { hasAdd: true, hasEdit: false, hasDelete: true, description: "Manage cloud document & Google Drive links" },
+  Expenses: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage operating expenses & approvals" },
+  Reports: { hasAdd: false, hasEdit: true, hasDelete: false, description: "View & export business analytics" },
+  Settings: { hasAdd: false, hasEdit: true, hasDelete: false, description: "Configure system & workspace preferences" },
 }
 
 export const DEFAULT_FULL_ACTIONS: ModuleActionFlags = {
@@ -48,7 +95,7 @@ export const DEFAULT_VIEW_ONLY_ACTIONS: ModuleActionFlags = {
   delete: false,
 }
 
-// Role normalization helper to prevent singular/plural or API mismatch
+// Role normalization helper
 export function normalizeRole(role: string): Role {
   if (!role) return 'Teams'
   const lower = role.toLowerCase().trim()
@@ -60,8 +107,8 @@ export function normalizeRole(role: string): Role {
 }
 
 export const DEFAULT_ROLE_PERMISSIONS: Record<Role, ModuleName[]> = {
-  'Super Admin': [...ALL_MODULE_NAMES],
-  'Admin': [...ALL_MODULE_NAMES],
+  'Super Admin': [...ALL_NAV_MODULES],
+  'Admin': [...ALL_NAV_MODULES],
   'Teams': [
     'Dashboard', 'Events', 'Clients', 'Projects', 'Tasks',
     'Leads', 'Subscriptions', 'Sales', 'Estimates', 'Notes',
@@ -69,7 +116,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, ModuleName[]> = {
     'Expenses', 'Reports', 'Settings'
   ],
   'Clients': [
-    'Dashboard', 'Knowledge base', 'Files', 'Tickets', 'Projects', 'Sales'
+    'Dashboard', 'Knowledge base', 'Files', 'Tickets', 'Projects', 'Sales', 'Estimates', 'Proposals', 'Messages', 'Notes'
   ]
 }
 
@@ -192,7 +239,7 @@ export const usePermissionStore = create<PermissionState>()(
         if (!user) return ['Dashboard']
         
         const normRole = normalizeRole(user.role)
-        if (normRole === 'Super Admin' || normRole === 'Admin') return [...ALL_MODULE_NAMES]
+        if (normRole === 'Super Admin' || normRole === 'Admin') return [...ALL_NAV_MODULES]
 
         const state = get()
         const userIdStr = String(user.id)
@@ -205,7 +252,7 @@ export const usePermissionStore = create<PermissionState>()(
         const userMods = state.userPermissions[userIdStr] || (emailStr ? state.userPermissions[emailStr] : undefined)
         const roleMods = state.rolePermissions[normRole] || DEFAULT_ROLE_PERMISSIONS[normRole] || ['Dashboard']
 
-        const activeMods = ALL_MODULE_NAMES.filter((m) => {
+        const activeMods = ALL_NAV_MODULES.filter((m) => {
           if (userMatrix && userMatrix[m] !== undefined) {
             const flags = userMatrix[m]
             return flags ? (flags.view || flags.add || flags.edit || flags.delete) : false
@@ -222,6 +269,9 @@ export const usePermissionStore = create<PermissionState>()(
       getUserModuleActions: (user: User | null, moduleName: string): ModuleActionFlags => {
         if (!user) return { view: false, add: false, edit: false, delete: false }
         
+        // Dashboard is always viewable
+        if (moduleName === 'Dashboard') return { view: true, add: false, edit: false, delete: false }
+
         const normRole = normalizeRole(user.role)
         if (normRole === 'Super Admin' || normRole === 'Admin') return { ...DEFAULT_FULL_ACTIONS }
 
@@ -244,11 +294,14 @@ export const usePermissionStore = create<PermissionState>()(
       canPerformAction: (user: User | null, moduleName: string, action: keyof ModuleActionFlags): boolean => {
         if (!user) return false
         
+        // Dashboard is view-only
+        if (moduleName === 'Dashboard') return action === 'view'
+
         const normRole = normalizeRole(user.role)
         if (normRole === 'Super Admin' || normRole === 'Admin') return true
 
         const flags = get().getUserModuleActions(user, moduleName)
-        return flags[action]
+        return Boolean(flags && flags[action])
       },
     }),
     {

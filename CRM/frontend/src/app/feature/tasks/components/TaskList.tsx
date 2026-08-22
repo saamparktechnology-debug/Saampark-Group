@@ -28,6 +28,7 @@ interface TaskListProps {
   onOpenAddModal: () => void
   onSelectTask: (task: Task) => void
   onDeleteTask: (id: string) => void
+  onUpdateTaskStatus?: (id: string, newStatus: TaskStatus) => void
   onOpenManageLabels: () => void
 }
 
@@ -52,6 +53,7 @@ export function TaskList({
   onOpenAddModal,
   onSelectTask,
   onDeleteTask,
+  onUpdateTaskStatus,
   onOpenManageLabels,
 }: TaskListProps) {
   const { user } = useAuthStore()
@@ -81,37 +83,48 @@ export function TaskList({
     }
   }
 
-  const filteredTasks = (tasks || []).filter((t) => {
-    if (!t) return false
-    const titleStr = t.title || ""
-    const relStr = t.relatedTo || ""
-    const assignStr = t.assignedTo || ""
-    const idStr = t.id || ""
+  const filteredTasks = React.useMemo(() => {
+    const list = tasks || []
+    const seen = new Set<string>()
+    const uniqueList = list.filter((t) => {
+      if (!t || !t.id) return false
+      const normId = String(t.id).toLowerCase().trim()
+      if (seen.has(normId)) return false
+      seen.add(normId)
+      return true
+    })
 
-    const matchesSearch =
-      titleStr.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      relStr.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      assignStr.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      idStr.includes(searchQuery)
+    return uniqueList.filter((t) => {
+      const titleStr = t.title || ""
+      const relStr = t.relatedTo || ""
+      const assignStr = t.assignedTo || ""
+      const idStr = String(t.id || "")
 
-    if (activeFilterPill === "All tasks" || activeFilterPill === "My Tasks" || activeFilterPill === "Recently Updated") {
+      const matchesSearch =
+        titleStr.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        relStr.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        assignStr.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        idStr.includes(searchQuery)
+
+      if (activeFilterPill === "All tasks" || activeFilterPill === "My Tasks" || activeFilterPill === "Recently Updated") {
+        return matchesSearch
+      }
+
+      if (activeFilterPill === "Bug") {
+        return matchesSearch && (t.labels || []).includes("Bug")
+      }
+
+      if (activeFilterPill === "exclamation") {
+        return matchesSearch && (t.priorityIcon === "exclamation" || t.priority === "Urgent")
+      }
+
+      if (activeFilterPill === "up") {
+        return matchesSearch && (t.priorityIcon === "up" || t.priority === "High")
+      }
+
       return matchesSearch
-    }
-
-    if (activeFilterPill === "Bug") {
-      return matchesSearch && (t.labels || []).includes("Bug")
-    }
-
-    if (activeFilterPill === "exclamation") {
-      return matchesSearch && (t.priorityIcon === "exclamation" || t.priority === "Urgent")
-    }
-
-    if (activeFilterPill === "up") {
-      return matchesSearch && (t.priorityIcon === "up" || t.priority === "High")
-    }
-
-    return matchesSearch
-  })
+    })
+  }, [tasks, searchQuery, activeFilterPill])
 
   return (
     <div className="space-y-4">
@@ -493,15 +506,30 @@ export function TaskList({
                       {t.collaborators || "-"}
                     </td>
 
-                    {/* Status Badge */}
+                    {/* Status Badge with Quick Status Switcher */}
                     <td className="py-3 px-3">
-                      <span
-                        className={`px-2.5 py-1 rounded text-[11px] font-semibold border ${
-                          statusBadgeStyles[t.status] || "bg-zinc-100 text-zinc-600"
-                        }`}
-                      >
-                        {t.status}
-                      </span>
+                      {canEditTask && onUpdateTaskStatus ? (
+                        <select
+                          value={t.status}
+                          onChange={(e) => onUpdateTaskStatus(t.id, e.target.value as TaskStatus)}
+                          className={`px-2.5 py-1 rounded text-[11px] font-semibold border cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors ${
+                            statusBadgeStyles[t.status] || "bg-zinc-100 text-zinc-600"
+                          }`}
+                        >
+                          <option value="To do" className="bg-white text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100">To do</option>
+                          <option value="In progress" className="bg-white text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100">In progress</option>
+                          <option value="Review" className="bg-white text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100">Review</option>
+                          <option value="Done" className="bg-white text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100">Done</option>
+                        </select>
+                      ) : (
+                        <span
+                          className={`px-2.5 py-1 rounded text-[11px] font-semibold border ${
+                            statusBadgeStyles[t.status] || "bg-zinc-100 text-zinc-600"
+                          }`}
+                        >
+                          {t.status}
+                        </span>
+                      )}
                     </td>
 
                     {/* Actions */}

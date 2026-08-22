@@ -4,6 +4,7 @@ type UIState = {
   // Global Layout
   isSidebarCollapsed: boolean
   toggleSidebar: () => void
+  setSidebarCollapsed: (collapsed: boolean) => void
 
   // All Modal States
   isTodoModalOpen: boolean
@@ -30,7 +31,7 @@ type UIState = {
   toggleModal: (name: string) => void
 }
 
-type ModalNames = keyof Omit<UIState, 'isSidebarCollapsed' | 'toggleSidebar' | 'openModal' | 'closeModal' | 'toggleModal'>
+type ModalNames = keyof Omit<UIState, 'isSidebarCollapsed' | 'toggleSidebar' | 'setSidebarCollapsed' | 'openModal' | 'closeModal' | 'toggleModal'>
 
 const MODAL_KEYS: ModalNames[] = [
   'isTodoModalOpen','isTimerModalOpen','isGlobalSearchOpen',
@@ -46,6 +47,7 @@ const initialState = Object.fromEntries(MODAL_KEYS.map(k => [k, false])) as Reco
 export const useUIStore = create<UIState>((set) => ({
   isSidebarCollapsed: false,
   toggleSidebar: () => set((state) => ({ isSidebarCollapsed: !state.isSidebarCollapsed })),
+  setSidebarCollapsed: (collapsed: boolean) => set({ isSidebarCollapsed: collapsed }),
 
   ...initialState,
 

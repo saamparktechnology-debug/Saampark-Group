@@ -24,7 +24,20 @@ export const getSubscriptions = async (companyId: string): Promise<Subscription[
   return filterGlobalDeletedItems(fallback)
 }
 
-export const deleteSubscription = async (id: string): Promise<void> => {
-  markGlobalItemDeleted(id, "subscriptions")
+export const addSubscription = async (sub: Omit<Subscription, "id">): Promise<Subscription> => {
+  const current = await fetchModuleDataFromDB<Subscription[]>("subscriptions", [])
+  const newSub: Subscription = {
+    ...sub,
+    id: `sub_${Date.now()}`,
+  }
+  const updated = [newSub, ...current]
+  await saveModuleDataToDB("subscriptions", updated)
+  return newSub
 }
 
+export const deleteSubscription = async (id: string): Promise<void> => {
+  await markGlobalItemDeleted(id, "subscriptions")
+  const current = await fetchModuleDataFromDB<Subscription[]>("subscriptions", [])
+  const updated = current.filter(s => s.id !== id)
+  await saveModuleDataToDB("subscriptions", updated)
+}

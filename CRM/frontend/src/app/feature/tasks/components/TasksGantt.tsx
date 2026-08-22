@@ -19,6 +19,18 @@ export function TasksGantt({
 }: TasksGanttProps) {
   const months = ["Jun 2026", "Jul 2026", "Aug 2026", "Sep 2026"]
 
+  const uniqueTasks = React.useMemo(() => {
+    const list = tasks || []
+    const seen = new Set<string>()
+    return list.filter((t) => {
+      if (!t || !t.id) return false
+      const normId = String(t.id).toLowerCase().trim()
+      if (seen.has(normId)) return false
+      seen.add(normId)
+      return true
+    })
+  }, [tasks])
+
   return (
     <div className="space-y-4">
       {/* Top Tabs Bar */}
@@ -75,7 +87,7 @@ export function TasksGantt({
         </div>
 
         <div className="space-y-3">
-          {tasks.slice(0, 10).map((t, index) => {
+          {uniqueTasks.slice(0, 10).map((t, index) => {
             const widthPct = 30 + (index * 7) % 50
             const offsetPct = (index * 12) % 40
 

@@ -8,8 +8,12 @@ import { ProjectList } from "./components/ProjectList"
 import { AddProjectModal } from "./components/AddProjectModal"
 import { EditProjectModal } from "./components/EditProjectModal"
 import { ProjectDetailView } from "./components/ProjectDetailView"
+import { useAuthStore } from "@/store/useAuthStore"
 
 export default function ProjectsMain() {
+  const { user } = useAuthStore()
+  const isSuperOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
+
   const [projects, setProjects] = React.useState<Project[]>([])
   const [viewMode, setViewMode] = React.useState<"table" | "detail">("table")
   const [selectedProject, setSelectedProject] = React.useState<Project | null>(null)
@@ -36,6 +40,33 @@ export default function ProjectsMain() {
       window.removeEventListener("storage", fetchFreshProjects)
     }
   }, [selectedProject])
+
+  const visibleProjects = React.useMemo(() => {
+    if (!user || isSuperOrAdmin) return projects
+    const normName = (user.name || "").toLowerCase().trim()
+    const normEmail = (user.email || "").toLowerCase().trim()
+    const roleStr = String(user.role || "").toLowerCase()
+    const isClient = roleStr.includes("client")
+
+    return projects.filter((p) => {
+      if (isClient) {
+        const clientName = (p.client || "").toLowerCase().trim()
+        return clientName === normName || clientName === normEmail || (normName && clientName.includes(normName))
+      }
+      // For team members: check if member of project
+      const members = p.members || []
+      return members.some((m) => {
+        const mName = (m.name || "").toLowerCase().trim()
+        const mEmail = (m.email || "").toLowerCase().trim()
+        return (
+          mName === normName ||
+          mEmail === normEmail ||
+          (normName && (mName.includes(normName) || normName.includes(mName))) ||
+          (normEmail && (mEmail.includes(normEmail) || normEmail.includes(mEmail)))
+        )
+      })
+    })
+  }, [projects, user, isSuperOrAdmin])
 
 
   const handleProjectAdded = (newProject: Project) => {
@@ -76,7 +107,7 @@ export default function ProjectsMain() {
     >
       {viewMode === "table" ? (
         <ProjectList
-          projects={projects}
+          projects={visibleProjects}
           onOpenAddModal={() => setIsAddModalOpen(true)}
           onOpenEditModal={handleOpenEditModal}
           onDeleteProject={handleDeleteProject}
@@ -85,7 +116,7 @@ export default function ProjectsMain() {
       ) : (
         selectedProject && (
           <ProjectDetailView
-            projects={projects}
+            projects={visibleProjects}
             selectedProject={selectedProject}
             onSelectProject={setSelectedProject}
             onBackToTable={() => setViewMode("table")}

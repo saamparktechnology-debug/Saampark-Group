@@ -433,7 +433,8 @@ export function LeadKanban({
                             <img
                               src={
                                 l.ownerAvatar ||
-                                `https://api.dicebear.com/7.x/notionists/svg?seed=${l.name}`
+                                (user?.avatar && (l.caller === user.name || l.owner === user.name) ? user.avatar : null) ||
+                                `https://api.dicebear.com/7.x/notionists/svg?seed=${l.caller || l.name}`
                               }
                               alt={l.name}
                               className="w-6 h-6 rounded-full border border-zinc-200 object-cover shrink-0"

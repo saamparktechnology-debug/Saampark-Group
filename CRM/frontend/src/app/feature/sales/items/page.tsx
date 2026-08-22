@@ -17,17 +17,7 @@ type Item = {
   rate: number
 }
 
-const MOCK_ITEMS: Item[] = [
-  { id: "I-1", title: "Website Design", description: "Custom website templates for your brand.", category: "Design", unitType: "Hour", rate: 20 },
-  { id: "I-2", title: "SEO", description: "SEO for your websites", category: "Services", unitType: "Hour", rate: 10 },
-  { id: "I-3", title: "Logo Design", description: "Logo design for your brand.", category: "Design", unitType: "PC", rate: 100 },
-  { id: "I-4", title: "Domain .com", description: "Get a dot com domain", category: "Services", unitType: "PC", rate: 900 },
-  { id: "I-5", title: "Custom app development", description: "App for your business", category: "Development", unitType: "PC", rate: 1000 },
-  { id: "I-6", title: "Content writing", description: "We write content for different types of websites, apps, etc.", category: "Services", unitType: "Hour", rate: 15 },
-  { id: "I-7", title: "bas", description: "zz", category: "Design", unitType: "z", rate: 0 },
-  { id: "I-8", title: "Art pictures", description: "Hand art pictures for your website.", category: "Design", unitType: "PC", rate: 40 },
-  { id: "I-9", title: "10GB Hosting", description: "Cloud Hosting service 10GB Space\n- Free support\n- 24 hours up time\n- Supper fast", category: "Services", unitType: "PC", rate: 100 },
-]
+const MOCK_ITEMS: Item[] = []
 
 export const columns: ColumnDef<Item>[] = [
   {

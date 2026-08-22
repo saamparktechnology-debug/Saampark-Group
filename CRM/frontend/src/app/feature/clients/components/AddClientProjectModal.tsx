@@ -6,6 +6,9 @@ import { ClientItem } from "../types"
 import { getUsers } from "@/app/feature/users/services/userService"
 import { addProject } from "@/app/feature/projects/services/projectService"
 import { addInvoice } from "@/app/feature/sales/invoices/services/invoiceService"
+import { addOrder } from "@/app/feature/sales/orders/services/orderService"
+import { addPayment } from "@/app/feature/sales/payments/services/paymentService"
+import { taskService } from "@/app/feature/tasks/services/taskService"
 import { saveStoredClient, getStoredClients } from "../services/clientService"
 
 interface AddClientProjectModalProps {
@@ -133,7 +136,39 @@ export function AddClientProjectModal({
         billedBy: billedByAdmin,
       })
 
-      // 3. Update Client Stats
+      // 3. Automatically create Order in Sales Order List
+      await addOrder({
+        client: client.name,
+        clientEmail: client.email,
+        project: projectTitle,
+        orderDate: startDate || new Date().toISOString().split("T")[0],
+        deliveryDate: deadline || "30-06-2026",
+        itemsCount: 1,
+        totalAmount: formattedTotal,
+        paymentStatus: paymentStatus === "Paid" ? "Paid" : "Unpaid",
+        status: paymentStatus === "Paid" ? "Completed" : "Processing",
+        notes: description || `Order generated for project: ${projectTitle} (${category})`,
+        invoiceId: invoiceId,
+      })
+
+      // 4. Automatically record Payment if settled
+      if (paymentStatus === "Paid") {
+        await addPayment({
+          invoiceId: invoiceId,
+          client: client.name,
+          clientEmail: client.email,
+          project: projectTitle,
+          paymentDate: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }).replace(/\//g, "-"),
+          paymentMethod: "Bank Transfer / UPI",
+          transactionRef: `TXN-${Date.now().toString().slice(-6)}`,
+          note: `Upfront full invoice payment for ${projectTitle}`,
+          amount: formattedTotal,
+          amountNum: totalAmount,
+          status: "Completed",
+        })
+      }
+
+      // 5. Update Client Stats
       const storedClients = getStoredClients()
       const existingIdx = storedClients.findIndex(c => c.id === client.id || c.email === client.email)
       const currentInvoicedNum = parseInt((client.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
@@ -150,7 +185,28 @@ export function AddClientProjectModal({
 
       saveStoredClient(updatedClient)
 
-      // 4. Notify Client
+      // 4. Automatically create Task(s) in Tasks section for assigned team member(s)
+      const membersToAssign = assignedMembers.length > 0 ? assignedMembers : ["Unassigned"]
+      const tasksToCreate = membersToAssign.map((memberName) => ({
+        title: `${projectTitle} - Initial Setup & Execution`,
+        description: `Deliverable for client ${client.name}. Project: ${projectTitle}. Billed: ${formattedTotal}. Scope: ${description || projectTitle}`,
+        relatedTo: projectTitle,
+        points: "3 Points",
+        assignedTo: memberName,
+        assignedToAvatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${memberName.replace(/\s/g, "")}`,
+        collaborators: assignedMembers.filter((m) => m !== memberName).join(", ") || "-",
+        status: "To do" as const,
+        priority: "High" as const,
+        priorityIcon: "up" as const,
+        labels: [category, "Client Project"],
+        startDate: startDate || "-",
+        deadline: deadline || "30-06-2026",
+        milestone: "Beta Release",
+        isRecurring: false,
+      }))
+      await taskService.addTasks(tasksToCreate)
+
+      // 5. Notify Client
       if (typeof window !== "undefined") {
         try {
           const notifKey = `saampark_notifications_${(client.email || "").toLowerCase().trim()}`

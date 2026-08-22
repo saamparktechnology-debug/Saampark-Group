@@ -1,4 +1,5 @@
-import { fetchModuleDataFromDB, saveModuleDataToDB } from "@/lib/storageSync"
+import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted, filterGlobalDeletedItems } from "@/lib/storageSync"
+import { getStoredClients, saveStoredClient } from "@/app/feature/clients/services/clientService"
 
 export type InvoiceStatus = "Draft" | "Partially paid" | "Fully paid" | "Not paid" | "Credited" | "Payment Pending"
 
@@ -17,21 +18,14 @@ export interface InvoiceItem {
   due: string
   status: InvoiceStatus
   billedBy?: string
+  lastReminderSent?: string
 }
 
-export const INITIAL_INVOICES: InvoiceItem[] = [
-  { id: "INV #28", client: "Acme Corp", project: "Product Photography and Cataloging", billDate: "01-08-2026", dueDate: "-", totalInvoiced: "₹30,000", paymentReceived: "₹0", due: "₹0", status: "Draft" },
-  { id: "INV #27", client: "Stark Enterprises", project: "Social Media Marketing Campaign", billDate: "27-07-2026", dueDate: "10-08-2026", totalInvoiced: "₹12,000", paymentReceived: "₹0", due: "₹12,000", status: "Draft" },
-  { id: "INV #24", client: "Wayne Tech", project: "Event Planning and Management", billDate: "01-08-2026", dueDate: "14-08-2026", totalInvoiced: "₹13,500", paymentReceived: "₹6,750", due: "₹6,750", status: "Partially paid" },
-  { id: "INV #23", client: "TechNova Solutions", project: "Podcast Production and Editing", billDate: "26-07-2026", dueDate: "09-08-2026", totalInvoiced: "₹9,000", paymentReceived: "₹9,000", due: "₹0", status: "Fully paid" },
-  { id: "INV #22", client: "Global Industries", project: "SEO Optimization Strategy", billDate: "23-07-2026", dueDate: "06-08-2026", totalInvoiced: "₹36,000", paymentReceived: "₹36,000", due: "₹0", status: "Fully paid" },
-  { id: "INV #21", client: "Acme Corp", project: "Product Photography and Cataloging", billDate: "25-07-2026", dueDate: "06-08-2026", totalInvoiced: "₹50,000", paymentReceived: "₹50,000", due: "₹0", status: "Credited" },
-  { id: "INV #19", client: "Patel & Associates", project: "E-commerce Website Design", billDate: "24-07-2026", dueDate: "05-08-2026", totalInvoiced: "₹9,000", paymentReceived: "₹0", due: "₹9,000", status: "Not paid" },
-]
+export const INITIAL_INVOICES: InvoiceItem[] = []
 
 export const getInvoices = async (): Promise<InvoiceItem[]> => {
-  const data = await fetchModuleDataFromDB<InvoiceItem[]>("invoices", INITIAL_INVOICES)
-  return Array.isArray(data) && data.length > 0 ? data : INITIAL_INVOICES
+  const data = await fetchModuleDataFromDB<InvoiceItem[]>("invoices", [])
+  return Array.isArray(data) ? filterGlobalDeletedItems(data) : []
 }
 
 export const addInvoice = async (invoice: Omit<InvoiceItem, "id"> & { id?: string }): Promise<InvoiceItem> => {
@@ -43,17 +37,139 @@ export const addInvoice = async (invoice: Omit<InvoiceItem, "id"> & { id?: strin
   return newInvoice
 }
 
-export const updateInvoiceStatus = async (id: string, status: InvoiceStatus, paymentReceived?: string): Promise<InvoiceItem | null> => {
+export const updateInvoiceStatus = async (
+  id: string, 
+  status: InvoiceStatus, 
+  paymentReceived?: string,
+  due?: string
+): Promise<InvoiceItem | null> => {
   const current = await getInvoices()
-  const idx = current.findIndex((i) => i.id === id)
+  const strId = String(id).toLowerCase().trim()
+  const idx = current.findIndex((i) => String(i.id).toLowerCase().trim() === strId)
   if (idx === -1) return null
   const target = current[idx]
   current[idx] = {
     ...target,
     status,
     paymentReceived: paymentReceived !== undefined ? paymentReceived : (status === "Fully paid" ? target.totalInvoiced : target.paymentReceived),
-    due: status === "Fully paid" ? "₹0" : target.due,
+    due: due !== undefined ? due : (status === "Fully paid" ? "₹0" : target.due),
   }
   await saveModuleDataToDB("invoices", current)
   return current[idx]
+}
+
+export const markPaymentCompleted = async (
+  invoiceId: string, 
+  paymentMethod: string = "UPI / Net Banking",
+  transactionRef: string = ""
+): Promise<InvoiceItem | null> => {
+  const current = await getInvoices()
+  const strId = String(invoiceId).toLowerCase().trim()
+  const idx = current.findIndex((i) => String(i.id).toLowerCase().trim() === strId)
+  if (idx === -1) return null
+
+  const target = current[idx]
+  const updated: InvoiceItem = {
+    ...target,
+    status: "Fully paid",
+    paymentReceived: target.totalInvoiced,
+    due: "₹0",
+  }
+  current[idx] = updated
+  await saveModuleDataToDB("invoices", current)
+
+  // 1. Record completed payment entry in payments store
+  try {
+    const { addPayment } = await import("@/app/feature/sales/payments/services/paymentService")
+    const dueAmountNum = parseInt(target.due.replace(/[^0-9]/g, "")) || parseInt(target.totalInvoiced.replace(/[^0-9]/g, "")) || 0
+    await addPayment({
+      invoiceId: target.id,
+      client: target.client,
+      clientEmail: target.clientEmail,
+      project: target.project,
+      paymentDate: new Date().toLocaleDateString("en-GB"),
+      paymentMethod,
+      transactionRef: transactionRef || `TXN${Date.now()}`,
+      note: `Full clearance settlement for ${target.id}`,
+      amount: target.totalInvoiced,
+      amountNum: dueAmountNum,
+      status: "Completed"
+    })
+  } catch (err) {
+    console.warn("Error creating payment entry:", err)
+  }
+
+  // 2. Update Client Statistics
+  try {
+    const clients = getStoredClients()
+    const cIdx = clients.findIndex(c => c.name.toLowerCase() === target.client.toLowerCase() || (target.clientEmail && c.email === target.clientEmail))
+    if (cIdx !== -1) {
+      const c = clients[cIdx]
+      const currentPaid = parseInt((c.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
+      const currentDue = parseInt((c.due || "0").replace(/[^0-9]/g, "")) || 0
+      const clearedAmount = parseInt(target.totalInvoiced.replace(/[^0-9]/g, "")) || 0
+      
+      saveStoredClient({
+        ...c,
+        paymentReceived: `₹${(currentPaid + clearedAmount).toLocaleString("en-IN")}`,
+        due: `₹${Math.max(0, currentDue - clearedAmount).toLocaleString("en-IN")}`
+      })
+    }
+  } catch (err) {
+    console.warn("Error updating client balance:", err)
+  }
+
+  // 3. Notify Client of payment confirmation
+  if (typeof window !== "undefined" && target.clientEmail) {
+    try {
+      const notifKey = `saampark_notifications_${target.clientEmail.toLowerCase().trim()}`
+      const prevRaw = localStorage.getItem(notifKey)
+      const prevNotifs = prevRaw ? JSON.parse(prevRaw) : []
+      const newNotif = {
+        id: Date.now(),
+        title: `Payment Received for ${target.id}`,
+        message: `Your payment of ${target.totalInvoiced} for ${target.project} has been verified and marked Fully Paid. Thank you!`,
+        timestamp: new Date().toLocaleString(),
+        read: false,
+      }
+      localStorage.setItem(notifKey, JSON.stringify([newNotif, ...prevNotifs]))
+    } catch {}
+  }
+
+  return updated
+}
+
+export const sendPaymentReminder = async (invoiceId: string): Promise<{ success: boolean; message: string }> => {
+  const current = await getInvoices()
+  const strId = String(invoiceId).toLowerCase().trim()
+  const idx = current.findIndex((i) => String(i.id).toLowerCase().trim() === strId)
+  if (idx === -1) return { success: false, message: "Invoice not found" }
+
+  const target = current[idx]
+  const now = new Date().toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })
+  target.lastReminderSent = now
+  current[idx] = target
+  await saveModuleDataToDB("invoices", current)
+
+  if (target.clientEmail) {
+    const { sendPaymentReminderNotification } = await import("@/app/feature/sales/payments/services/paymentService")
+    return await sendPaymentReminderNotification(
+      target.clientEmail,
+      target.client,
+      target.id,
+      target.due || target.totalInvoiced,
+      target.dueDate
+    )
+  }
+
+  return { success: true, message: `Payment reminder logged for ${target.client}.` }
+}
+
+export const deleteInvoice = async (id: string): Promise<boolean> => {
+  const strId = String(id).toLowerCase().trim()
+  await markGlobalItemDeleted(strId, "invoices")
+  const current = await getInvoices()
+  const filtered = current.filter(i => String(i.id).toLowerCase().trim() !== strId)
+  await saveModuleDataToDB("invoices", filtered)
+  return true
 }

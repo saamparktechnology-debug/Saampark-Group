@@ -48,37 +48,48 @@ export function TaskKanban({
   const [activeFilterPill, setActiveFilterPill] = React.useState("All tasks")
   const [draggedTaskId, setDraggedTaskId] = React.useState<string | null>(null)
 
-  const filteredTasks = (tasks || []).filter((t) => {
-    if (!t) return false
-    const titleStr = t.title || ""
-    const relStr = t.relatedTo || ""
-    const assignStr = t.assignedTo || ""
-    const idStr = t.id || ""
+  const filteredTasks = React.useMemo(() => {
+    const list = tasks || []
+    const seen = new Set<string>()
+    const uniqueList = list.filter((t) => {
+      if (!t || !t.id) return false
+      const normId = String(t.id).toLowerCase().trim()
+      if (seen.has(normId)) return false
+      seen.add(normId)
+      return true
+    })
 
-    const matchesSearch =
-      titleStr.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      relStr.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      assignStr.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      idStr.includes(searchQuery)
+    return uniqueList.filter((t) => {
+      const titleStr = t.title || ""
+      const relStr = t.relatedTo || ""
+      const assignStr = t.assignedTo || ""
+      const idStr = String(t.id || "")
 
-    if (activeFilterPill === "All tasks" || activeFilterPill === "My tasks" || activeFilterPill === "Recently updated") {
+      const matchesSearch =
+        titleStr.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        relStr.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        assignStr.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        idStr.includes(searchQuery)
+
+      if (activeFilterPill === "All tasks" || activeFilterPill === "My tasks" || activeFilterPill === "Recently updated") {
+        return matchesSearch
+      }
+
+      if (activeFilterPill === "Bug") {
+        return matchesSearch && (t.labels || []).includes("Bug")
+      }
+
+      if (activeFilterPill === "exclamation") {
+        return matchesSearch && (t.priorityIcon === "exclamation" || t.priority === "Urgent")
+      }
+
+      if (activeFilterPill === "up") {
+        return matchesSearch && (t.priorityIcon === "up" || t.priority === "High")
+      }
+
       return matchesSearch
-    }
-
-    if (activeFilterPill === "Bug") {
-      return matchesSearch && (t.labels || []).includes("Bug")
-    }
-
-    if (activeFilterPill === "exclamation") {
-      return matchesSearch && (t.priorityIcon === "exclamation" || t.priority === "Urgent")
-    }
-
-    if (activeFilterPill === "up") {
-      return matchesSearch && (t.priorityIcon === "up" || t.priority === "High")
-    }
-
-    return matchesSearch
-  })
+    })
+  }, [tasks, searchQuery, activeFilterPill])
 
   // Drag & drop handlers
   const handleDragStart = (id: string) => {
@@ -91,12 +102,26 @@ export function TaskKanban({
 
   const handleDrop = async (newStatus: TaskStatus) => {
     if (!draggedTaskId) return
-    const targetTask = tasks.find((t) => t.id === draggedTaskId)
-    if (targetTask && targetTask.status !== newStatus) {
-      const updated = await taskService.updateTask(draggedTaskId, { status: newStatus })
-      onTaskUpdated(updated)
-    }
+    const idToUpdate = draggedTaskId
     setDraggedTaskId(null)
+
+    const targetTask = tasks.find(
+      (t) => String(t.id).toLowerCase().trim() === String(idToUpdate).toLowerCase().trim()
+    )
+
+    if (targetTask && targetTask.status !== newStatus) {
+      // 1. Optimistically update local UI state immediately
+      const optimisticTask: Task = { ...targetTask, status: newStatus }
+      onTaskUpdated(optimisticTask)
+
+      // 2. Asynchronously persist to MySQL DB & cache
+      try {
+        const updated = await taskService.updateTask(idToUpdate, { status: newStatus })
+        onTaskUpdated(updated)
+      } catch (err) {
+        console.error("Error updating task status on drop:", err)
+      }
+    }
   }
 
   return (

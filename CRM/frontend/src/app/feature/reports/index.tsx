@@ -10,6 +10,13 @@ import {
 import { Button } from "@/components/ui/Button"
 import { useAuthStore } from "@/store/useAuthStore"
 import { getStoredUserAccounts } from "../users/services/userService"
+import { getInvoices, InvoiceItem } from "../sales/invoices/services/invoiceService"
+import { getPayments, PaymentItem } from "../sales/payments/services/paymentService"
+import { fetchModuleDataFromDB } from "@/lib/storageSync"
+import { taskService } from "../tasks/services/taskService"
+import { Task } from "../tasks/types"
+import { getLeads } from "../leads/services/leadService"
+import { Lead } from "../leads/types"
 
 type ReportTab = "revenue" | "leads" | "productivity" | "attendance" | "expenses"
 
@@ -20,11 +27,21 @@ export default function ReportsMain() {
   const [customStartDate, setCustomStartDate] = React.useState("2026-08-01")
   const [customEndDate, setCustomEndDate] = React.useState("2026-08-31")
   const [users, setUsers] = React.useState<any[]>([])
+  const [invoices, setInvoices] = React.useState<InvoiceItem[]>([])
+  const [payments, setPayments] = React.useState<PaymentItem[]>([])
+  const [expenses, setExpenses] = React.useState<any[]>([])
+  const [tasks, setTasks] = React.useState<Task[]>([])
+  const [leads, setLeads] = React.useState<Lead[]>([])
 
   React.useEffect(() => {
     if (typeof window !== "undefined") {
       setUsers(getStoredUserAccounts())
     }
+    getInvoices().then(setInvoices).catch(() => [])
+    getPayments().then(setPayments).catch(() => [])
+    fetchModuleDataFromDB<any[]>("expenses", []).then(setExpenses).catch(() => [])
+    taskService.getTasks().then(setTasks).catch(() => [])
+    getLeads().then(setLeads).catch(() => [])
   }, [])
 
   // Export report to CSV

@@ -37,15 +37,10 @@ interface EventState {
   closeEventDrawer: () => void
 }
 
-const INITIAL_EVENTS: AppEvent[] = [
-  { id: '1', title: 'Q3 Planning Meeting', start: new Date(new Date().setHours(10, 0, 0, 0)).toISOString(), end: new Date(new Date().setHours(11, 30, 0, 0)).toISOString(), category: 'Meeting', className: 'event-meeting', location: 'Zoom Room A', description: 'Discuss Q3 objectives.' },
-  { id: '2', title: 'Company Anniversary', start: new Date(new Date().setDate(new Date().getDate() + 2)).toISOString(), allDay: true, category: 'Holiday', className: 'event-holiday' },
-  { id: '3', title: 'Frontend Team Training', start: new Date(new Date().setDate(new Date().getDate() + 4)).toISOString(), category: 'Training', className: 'event-training' },
-  { id: '4', title: 'Project X Deadline', start: new Date(new Date().setDate(new Date().getDate() + 7)).toISOString(), allDay: true, category: 'Deadline', className: 'event-deadline' },
-]
+const INITIAL_EVENTS: AppEvent[] = []
 
 export const useEventStore = create<EventState>((set) => ({
-  events: INITIAL_EVENTS,
+  events: [],
   activeFilters: ['Meeting', 'Holiday', 'Deadline', 'Training', 'Default'],
   searchQuery: '',
   isAddModalOpen: false,

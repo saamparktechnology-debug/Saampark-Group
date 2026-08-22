@@ -1,162 +1,430 @@
 "use client"
 
 import * as React from "react"
-import { motion } from "framer-motion"
-import { Plus, Download, ExternalLink, Trash2 } from "lucide-react"
-import { ColumnDef } from "@tanstack/react-table"
+import { motion, AnimatePresence } from "framer-motion"
+import { 
+  Calculator, Plus, Search, Download, Trash2, CheckCircle2, 
+  Clock, XCircle, FileText, Printer, X, Check, DollarSign 
+} from "lucide-react"
+import { useAuthStore } from "@/store/useAuthStore"
+import { usePermissionStore } from "@/store/usePermissionStore"
+import { fetchModuleDataFromDB, saveModuleDataToDB, filterGlobalDeletedItems, markGlobalItemDeleted } from "@/lib/storageSync"
 
-import { DataTable } from "@/components/ui/DataTable"
-import { Button } from "@/components/ui/Button"
-import { Tabs } from "@/components/ui/Tabs"
-import { useUIStore } from "@/store/useUIStore"
-
-type Expense = {
+export interface ExpenseItem {
   id: string
+  expenseNumber: string
   title: string
   amount: string
+  amountNum: number
   category: string
   date: string
   member: string
+  receiptUrl?: string
   status: "Approved" | "Pending" | "Rejected"
+  notes?: string
 }
-
-const MOCK_EXPENSES: Expense[] = [
-  { id: "EXP-001", title: "Adobe Creative Suite", amount: "₹4,500/mo", category: "Software", date: "2026-07-01", member: "John Doe", status: "Approved" },
-  { id: "EXP-002", title: "AWS Server Costs", amount: "₹25,000", category: "Hardware", date: "2026-07-15", member: "Mark Thomas", status: "Approved" },
-  { id: "EXP-003", title: "Google Ads Campaign", amount: "₹95,000", category: "Marketing", date: "2026-07-20", member: "Sara Ann", status: "Pending" },
-  { id: "EXP-004", title: "Conference Travel", amount: "₹65,000", category: "Travel", date: "2026-07-22", member: "Richard Gray", status: "Pending" },
-  { id: "EXP-005", title: "Office Supplies", amount: "₹3,500", category: "Other", date: "2026-07-28", member: "Michael Wood", status: "Rejected" },
-]
-
-const statusColors: Record<string, string> = {
-  Approved: "bg-success/10 text-success border-success/20",
-  Pending: "bg-warning/10 text-warning border-warning/20",
-  Rejected: "bg-danger/10 text-danger border-danger/20",
-}
-
-const columns: ColumnDef<Expense>[] = [
-  { accessorKey: "id", header: "ID", cell: ({ row }) => <span className="text-muted-foreground text-xs font-mono">{row.getValue("id")}</span> },
-  { accessorKey: "title", header: "Title", cell: ({ row }) => <span className="font-medium">{row.getValue("title")}</span> },
-  { accessorKey: "amount", header: "Amount", cell: ({ row }) => <span className="font-semibold">{row.getValue("amount")}</span> },
-  { accessorKey: "category", header: "Category", cell: ({ row }) => <span className="text-muted-foreground">{row.getValue("category")}</span> },
-  { accessorKey: "date", header: "Date", cell: ({ row }) => <span className="text-muted-foreground text-sm">{row.getValue("date")}</span> },
-  { accessorKey: "member", header: "Member", cell: ({ row }) => <span className="text-muted-foreground">{row.getValue("member")}</span> },
-  {
-    accessorKey: "status",
-    header: "Status",
-    cell: ({ row }) => {
-      const s = row.getValue("status") as string
-      return <span className={`px-2 py-0.5 rounded text-xs font-medium border ${statusColors[s]}`}>{s}</span>
-    },
-  },
-  {
-    id: "actions",
-    cell: () => (
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground"><ExternalLink size={14} /></Button>
-        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-danger"><Trash2 size={14} /></Button>
-      </div>
-    ),
-  },
-]
-
-import { fetchModuleDataFromDB, saveModuleDataToDB, filterGlobalDeletedItems, markGlobalItemDeleted } from "@/lib/storageSync"
 
 export default function ExpensesMain() {
-  const [activeTab, setActiveTab] = React.useState("all")
-  const [expenses, setExpenses] = React.useState<Expense[]>(MOCK_EXPENSES)
-  const { openModal } = useUIStore()
+  const { user } = useAuthStore()
+  const { canPerformAction } = usePermissionStore()
+  
+  const isAdmin = user?.role === "Super Admin" || user?.role === "Admin"
+  const canAddExpense = canPerformAction(user, "Expenses", "add")
+  const canEditExpense = canPerformAction(user, "Expenses", "edit")
+  const canDeleteExpense = canPerformAction(user, "Expenses", "delete")
 
-  React.useEffect(() => {
-    fetchModuleDataFromDB<Expense[]>("expenses", MOCK_EXPENSES).then((data) => {
-      setExpenses(filterGlobalDeletedItems(data))
-    })
-  }, [])
+  const [expenses, setExpenses] = React.useState<ExpenseItem[]>([])
+  const [searchQuery, setSearchQuery] = React.useState("")
+  const [selectedCategory, setSelectedCategory] = React.useState("all")
+  const [isAddModalOpen, setIsAddModalOpen] = React.useState(false)
+  const [toastMessage, setToastMessage] = React.useState<string | null>(null)
 
-  const handleDeleteExpense = async (id: string) => {
-    await markGlobalItemDeleted(id, "expenses")
-    const updated = expenses.filter((e) => e.id !== id)
-    setExpenses(updated)
-    await saveModuleDataToDB("expenses", updated)
+  // Form State
+  const [title, setTitle] = React.useState("")
+  const [amount, setAmount] = React.useState("")
+  const [category, setCategory] = React.useState("Cloud & Server Infrastructure")
+  const [member, setMember] = React.useState(user?.name || "Admin")
+  const [receiptUrl, setReceiptUrl] = React.useState("")
+  const [notes, setNotes] = React.useState("")
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg)
+    setTimeout(() => setToastMessage(null), 4000)
   }
 
-  const columns: ColumnDef<Expense>[] = [
-    { accessorKey: "id", header: "ID", cell: ({ row }) => <span className="text-muted-foreground text-xs font-mono">{row.getValue("id")}</span> },
-    { accessorKey: "title", header: "Title", cell: ({ row }) => <span className="font-medium">{row.getValue("title")}</span> },
-    { accessorKey: "amount", header: "Amount", cell: ({ row }) => <span className="font-semibold">{row.getValue("amount")}</span> },
-    { accessorKey: "category", header: "Category", cell: ({ row }) => <span className="text-muted-foreground">{row.getValue("category")}</span> },
-    { accessorKey: "date", header: "Date", cell: ({ row }) => <span className="text-muted-foreground text-sm">{row.getValue("date")}</span> },
-    { accessorKey: "member", header: "Member", cell: ({ row }) => <span className="text-muted-foreground">{row.getValue("member")}</span> },
-    {
-      accessorKey: "status",
-      header: "Status",
-      cell: ({ row }) => {
-        const s = row.getValue("status") as string
-        return <span className={`px-2 py-0.5 rounded text-xs font-medium border ${statusColors[s]}`}>{s}</span>
-      },
-    },
-    {
-      id: "actions",
-      cell: ({ row }) => (
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground"><ExternalLink size={14} /></Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => handleDeleteExpense(row.original.id)}
-            className="h-7 w-7 text-muted-foreground hover:text-danger"
-          >
-            <Trash2 size={14} />
-          </Button>
-        </div>
-      ),
-    },
-  ]
+  const loadExpenses = React.useCallback(async () => {
+    const data = await fetchModuleDataFromDB<ExpenseItem[]>("expenses", [])
+    setExpenses(Array.isArray(data) ? filterGlobalDeletedItems(data) : [])
+  }, [])
 
-  const filteredExpenses = expenses.filter((e) => {
-    if (activeTab === "pending") return e.status === "Pending"
-    if (activeTab === "approved") return e.status === "Approved"
-    return true
-  })
+  React.useEffect(() => {
+    loadExpenses()
+    const interval = setInterval(loadExpenses, 4000)
+    return () => clearInterval(interval)
+  }, [loadExpenses])
+
+  const filteredExpenses = React.useMemo(() => {
+    return expenses.filter((e) => {
+      const matchSearch =
+        e.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        e.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        e.member.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        e.amount.toLowerCase().includes(searchQuery.toLowerCase())
+
+      if (!matchSearch) return false
+      if (selectedCategory === "all") return true
+      return e.category === selectedCategory
+    })
+  }, [expenses, searchQuery, selectedCategory])
+
+  const handleAddExpense = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!title.trim() || !amount.trim()) {
+      alert("Please fill in title and amount.")
+      return
+    }
+
+    const numAmount = parseInt(amount.replace(/[^0-9]/g, "")) || 0
+    const formattedAmount = `₹${numAmount.toLocaleString("en-IN")}`
+    const maxNum = expenses.reduce((max, exp) => {
+      const num = parseInt(String(exp.expenseNumber || "").replace(/[^0-9]/g, "")) || 0
+      return Math.max(max, num)
+    }, 100)
+
+    const newExp: ExpenseItem = {
+      id: `exp_${Date.now()}`,
+      expenseNumber: `EXP #${maxNum + 1}`,
+      title,
+      amount: formattedAmount,
+      amountNum: numAmount,
+      category,
+      date: new Date().toLocaleDateString("en-IN", { dateStyle: "medium" }),
+      member: member || user?.name || "Admin",
+      receiptUrl,
+      status: isAdmin ? "Approved" : "Pending",
+      notes,
+    }
+
+    const updated = [newExp, ...expenses]
+    setExpenses(updated)
+    await saveModuleDataToDB("expenses", updated)
+    showToast(`✅ Expense ${newExp.expenseNumber} recorded!`)
+    setIsAddModalOpen(false)
+    setTitle("")
+    setAmount("")
+    setNotes("")
+  }
+
+  const handleUpdateStatus = async (id: string, status: ExpenseItem["status"]) => {
+    const updated = expenses.map(e => e.id === id ? { ...e, status } : e)
+    setExpenses(updated)
+    await saveModuleDataToDB("expenses", updated)
+    showToast(`Expense updated to ${status}.`)
+  }
+
+  const handleDelete = async (id: string) => {
+    if (confirm("Delete this expense record?")) {
+      await markGlobalItemDeleted(id, "expenses")
+      const updated = expenses.filter(e => e.id !== id)
+      setExpenses(updated)
+      await saveModuleDataToDB("expenses", updated)
+      showToast("Expense removed.")
+    }
+  }
+
+  const totalExpenseNum = expenses.reduce((sum, e) => sum + (e.amountNum || 0), 0)
+  const approvedNum = expenses.filter(e => e.status === "Approved").reduce((sum, e) => sum + (e.amountNum || 0), 0)
+  const pendingCount = expenses.filter(e => e.status === "Pending").length
 
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <motion.div 
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2 }}
+      className="space-y-6 max-w-[1600px] mx-auto p-4 sm:p-6"
+    >
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="fixed top-5 right-5 z-[99999] bg-zinc-900 text-white px-4 py-2.5 rounded-xl shadow-2xl text-xs font-semibold flex items-center gap-2 border border-zinc-700"
+          >
+            <span>{toastMessage}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ---------------- TOP HEADER ---------------- */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-100 dark:border-zinc-800 pb-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Expenses</h1>
-          <p className="text-muted-foreground mt-1">Track and manage all team expenses and budgets.</p>
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2.5">
+            <Calculator className="text-blue-600 dark:text-blue-400" size={24} />
+            <span>Operational Expenses</span>
+          </h1>
+          <p className="text-xs text-zinc-500 mt-1">
+            Track business operating costs, cloud infrastructure, subcontracting fees, and vendor receipts
+          </p>
         </div>
+
         <div className="flex items-center gap-2">
-          <Button variant="secondary" leftIcon={<Download size={16} />}>Export</Button>
-          <Button variant="primary" leftIcon={<Plus size={16} />} onClick={() => openModal("isAddExpenseModalOpen")}>Add Expense</Button>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 shadow-2xs"
+          >
+            <Printer size={13} className="text-zinc-500" />
+            <span>Print</span>
+          </button>
+
+          {canAddExpense && (
+            <button
+              type="button"
+              onClick={() => setIsAddModalOpen(true)}
+              className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm cursor-pointer"
+            >
+              <Plus size={14} />
+              <span>Add Expense</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Summary Cards */}
+      {/* ---------------- KPI CARDS ---------------- */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {[
-          { label: "Total Expenses", value: `₹${filteredExpenses.length * 15000}`, color: "text-foreground" },
-          { label: "Pending Approval", value: `₹${filteredExpenses.filter(e => e.status === 'Pending').length * 20000}`, color: "text-warning" },
-          { label: "Approved This Month", value: `₹${filteredExpenses.filter(e => e.status === 'Approved').length * 25000}`, color: "text-success" },
-        ].map((card) => (
-          <div key={card.label} className="bg-surface border border-border rounded-xl p-5 shadow-soft">
-            <p className="text-sm text-muted-foreground">{card.label}</p>
-            <p className={`text-2xl font-bold mt-1 ${card.color}`}>{card.value}</p>
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl p-4 shadow-2xs flex items-center justify-between">
+          <div>
+            <p className="text-xs text-zinc-500 font-medium">Total Expenses Incurred</p>
+            <h3 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mt-0.5">₹{totalExpenseNum.toLocaleString("en-IN")}</h3>
           </div>
-        ))}
+          <div className="p-2.5 bg-rose-50 dark:bg-rose-950/50 text-rose-600 rounded-lg">
+            <Calculator size={20} />
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl p-4 shadow-2xs flex items-center justify-between">
+          <div>
+            <p className="text-xs text-zinc-500 font-medium">Approved & Settled</p>
+            <h3 className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">₹{approvedNum.toLocaleString("en-IN")}</h3>
+          </div>
+          <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 rounded-lg">
+            <CheckCircle2 size={20} />
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl p-4 shadow-2xs flex items-center justify-between">
+          <div>
+            <p className="text-xs text-zinc-500 font-medium">Pending Approval</p>
+            <h3 className="text-xl font-bold text-amber-600 dark:text-amber-400 mt-0.5">{pendingCount} Expenses</h3>
+          </div>
+          <div className="p-2.5 bg-amber-50 dark:bg-amber-950/50 text-amber-600 rounded-lg">
+            <Clock size={20} />
+          </div>
+        </div>
       </div>
 
-      <div className="bg-surface border border-border shadow-soft rounded-xl p-6">
-        <Tabs
-          tabs={[{ id: "all", label: "All" }, { id: "pending", label: "Pending" }, { id: "approved", label: "Approved" }]}
-          activeTab={activeTab}
-          onChange={setActiveTab}
-        />
-        <DataTable columns={columns} data={filteredExpenses} searchKey="title" />
+      {/* ---------------- EXPENSES TABLE ---------------- */}
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl overflow-hidden shadow-2xs">
+        <table className="w-full text-left text-xs">
+          <thead className="bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-200 dark:border-zinc-800 text-zinc-500 uppercase font-semibold text-[11px]">
+            <tr>
+              <th className="py-3 px-4">Ref #</th>
+              <th className="py-3 px-4">Expense Title</th>
+              <th className="py-3 px-4">Category</th>
+              <th className="py-3 px-4">Amount</th>
+              <th className="py-3 px-4">Date</th>
+              <th className="py-3 px-4">Paid By</th>
+              <th className="py-3 px-4">Status</th>
+              <th className="py-3 px-4 text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/80 text-zinc-700 dark:text-zinc-300">
+            {filteredExpenses.length === 0 ? (
+              <tr>
+                <td colSpan={8} className="py-8 text-center text-zinc-400">
+                  No expense records found. Click "+ Add Expense" to log business costs.
+                </td>
+              </tr>
+            ) : (
+              filteredExpenses.map((exp) => {
+                let statusBadge = "bg-zinc-100 text-zinc-700 border-zinc-200"
+                if (exp.status === "Approved") statusBadge = "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
+                if (exp.status === "Pending") statusBadge = "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800"
+                if (exp.status === "Rejected") statusBadge = "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800"
+
+                return (
+                  <tr key={exp.id} className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/50 transition-colors">
+                    <td className="py-3 px-4 font-bold text-blue-600 dark:text-blue-400 font-mono">
+                      {exp.expenseNumber}
+                    </td>
+                    <td className="py-3 px-4 font-semibold text-zinc-900 dark:text-zinc-100">
+                      {exp.title}
+                    </td>
+                    <td className="py-3 px-4 text-zinc-600 dark:text-zinc-400 font-medium">
+                      {exp.category}
+                    </td>
+                    <td className="py-3 px-4 font-bold text-rose-600 dark:text-rose-400">
+                      {exp.amount}
+                    </td>
+                    <td className="py-3 px-4 text-zinc-500 font-mono text-[11px]">{exp.date}</td>
+                    <td className="py-3 px-4 font-medium text-zinc-800 dark:text-zinc-200">{exp.member}</td>
+                    <td className="py-3 px-4">
+                      <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${statusBadge}`}>
+                        {exp.status}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center justify-center gap-1.5">
+                        {canEditExpense && exp.status === "Pending" && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateStatus(exp.id, "Approved")}
+                              className="p-1 rounded text-emerald-600 hover:bg-emerald-50"
+                              title="Approve Expense"
+                            >
+                              <Check size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateStatus(exp.id, "Rejected")}
+                              className="p-1 rounded text-rose-600 hover:bg-rose-50"
+                              title="Reject Expense"
+                            >
+                              <X size={14} />
+                            </button>
+                          </>
+                        )}
+
+                        {canDeleteExpense && (
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(exp.id)}
+                            className="p-1 hover:text-rose-600 text-zinc-400 transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })
+            )}
+          </tbody>
+        </table>
       </div>
+
+      {/* ---------------- ADD EXPENSE MODAL ---------------- */}
+      <AnimatePresence>
+        {isAddModalOpen && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden my-8"
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800">
+                <h3 className="font-bold text-sm text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                  <Calculator size={18} className="text-blue-600" />
+                  <span>Record Operational Expense</span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setIsAddModalOpen(false)}
+                  className="p-1 text-zinc-400 hover:text-zinc-600 rounded-lg"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <form onSubmit={handleAddExpense} className="p-6 space-y-4 text-xs">
+                <div>
+                  <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Expense Title / Item *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. AWS Cloud Hosting Server or Figma Enterprise Subscription"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Category</label>
+                    <select
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden"
+                    >
+                      <option value="Cloud & Server Infrastructure">Cloud & Server Infrastructure</option>
+                      <option value="SaaS & Software Subscriptions">SaaS & Software Subscriptions</option>
+                      <option value="Subcontractor & Freelancer Fees">Subcontractor & Freelancer Fees</option>
+                      <option value="Office & Operational Utilities">Office & Operational Utilities</option>
+                      <option value="Marketing & Lead Acquisition">Marketing & Lead Acquisition</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Amount (₹) *</label>
+                    <input
+                      type="number"
+                      required
+                      placeholder="e.g. 18500"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Paid By / Team Member</label>
+                  <input
+                    type="text"
+                    value={member}
+                    onChange={(e) => setMember(e.target.value)}
+                    className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Receipt / Invoice Link (Optional)</label>
+                  <input
+                    type="url"
+                    placeholder="https://drive.google.com/..."
+                    value={receiptUrl}
+                    onChange={(e) => setReceiptUrl(e.target.value)}
+                    className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddModalOpen(false)}
+                    className="px-3 py-1.5 text-zinc-600 hover:bg-zinc-100 rounded-lg font-semibold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-1.5 font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm"
+                  >
+                    Record Expense
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }
-
-
-
