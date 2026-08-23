@@ -114,15 +114,143 @@ function parseReminderTimestamp(dateStr?: string, timeStr?: string): number {
   return isNaN(d.getTime()) ? Infinity : d.getTime()
 }
 
-const KANBAN_COLUMNS: { id: LeadStatus; title: string; color: string }[] = [
-  { id: "New", title: "New", color: "border-amber-400" },
-  { id: "Qualified", title: "Qualified", color: "border-blue-500" },
-  { id: "Discussion", title: "Discussion", color: "border-cyan-400" },
-  { id: "Negotiation", title: "Negotiation", color: "border-purple-500" },
-  { id: "Store Visit", title: "Store Visit", color: "border-indigo-500" },
-  { id: "Our Office Visit", title: "Our Office Visit", color: "border-orange-500" },
-  { id: "Won", title: "Won", color: "border-emerald-500" },
-  { id: "Lost", title: "Lost", color: "border-rose-500" },
+function getCallerAvatar(
+  lead: Lead,
+  allUsers: { id: string; name: string; avatar?: string }[],
+  currentUser?: { name?: string; avatar?: string } | null
+) {
+  const callerName =
+    (lead.assignedTo && lead.assignedTo !== "None" && lead.assignedTo !== "Unassigned")
+      ? lead.assignedTo
+      : ((lead.caller && lead.caller !== "None" && lead.caller !== "Unassigned")
+        ? lead.caller
+        : ((lead.owner && lead.owner !== "None" && lead.owner !== "Unassigned")
+          ? lead.owner
+          : null))
+
+  if (!callerName) {
+    return { type: "unassigned" as const, name: "Unassigned" }
+  }
+
+  // 1. Direct lead.ownerAvatar if it is a real profile image (not a placeholder svg string or dicebear)
+  if (lead.ownerAvatar && lead.ownerAvatar.trim() && !lead.ownerAvatar.includes("dicebear")) {
+    return { type: "image" as const, src: lead.ownerAvatar, name: callerName }
+  }
+
+  // 2. Current logged in user profile image
+  if (currentUser && currentUser.name && currentUser.name.trim().toLowerCase() === callerName.trim().toLowerCase()) {
+    if (currentUser.avatar && currentUser.avatar.trim() && !currentUser.avatar.includes("dicebear")) {
+      return { type: "image" as const, src: currentUser.avatar, name: callerName }
+    }
+  }
+
+  // 3. Matched user from allUsers database
+  const matchedUser = allUsers.find(
+    (u) => u.name && u.name.trim().toLowerCase() === callerName.trim().toLowerCase()
+  )
+  if (matchedUser && matchedUser.avatar && matchedUser.avatar.trim() && !matchedUser.avatar.includes("dicebear")) {
+    return { type: "image" as const, src: matchedUser.avatar, name: callerName }
+  }
+
+  // 4. If user exists with name, show initials badge
+  const parts = callerName.trim().split(/\s+/)
+  const initials = (parts.length > 1 ? `${parts[0][0]}${parts[1][0]}` : (parts[0] ? parts[0].substring(0, 2) : "")).toUpperCase()
+
+  return { type: "initials" as const, initials, name: callerName }
+}
+
+interface KanbanColumnConfig {
+  id: LeadStatus
+  title: string
+  headerBg: string
+  borderTop: string
+  titleColor: string
+  badgeBg: string
+  badgeText: string
+  columnBorder: string
+}
+
+const KANBAN_COLUMNS: KanbanColumnConfig[] = [
+  {
+    id: "New",
+    title: "New",
+    headerBg: "bg-sky-100/70 dark:bg-sky-950/60",
+    borderTop: "border-t-sky-500",
+    titleColor: "text-sky-900 dark:text-sky-200",
+    badgeBg: "bg-sky-200/80 dark:bg-sky-900/80",
+    badgeText: "text-sky-800 dark:text-sky-200",
+    columnBorder: "border-sky-200/80 dark:border-sky-900/60",
+  },
+  {
+    id: "Qualified",
+    title: "Qualified",
+    headerBg: "bg-teal-100/70 dark:bg-teal-950/60",
+    borderTop: "border-t-teal-500",
+    titleColor: "text-teal-900 dark:text-teal-200",
+    badgeBg: "bg-teal-200/80 dark:bg-teal-900/80",
+    badgeText: "text-teal-800 dark:text-teal-200",
+    columnBorder: "border-teal-200/80 dark:border-teal-900/60",
+  },
+  {
+    id: "Discussion",
+    title: "Discussion",
+    headerBg: "bg-indigo-100/70 dark:bg-indigo-950/60",
+    borderTop: "border-t-indigo-500",
+    titleColor: "text-indigo-900 dark:text-indigo-200",
+    badgeBg: "bg-indigo-200/80 dark:bg-indigo-900/80",
+    badgeText: "text-indigo-800 dark:text-indigo-200",
+    columnBorder: "border-indigo-200/80 dark:border-indigo-900/60",
+  },
+  {
+    id: "Negotiation",
+    title: "Negotiation",
+    headerBg: "bg-purple-100/70 dark:bg-purple-950/60",
+    borderTop: "border-t-purple-500",
+    titleColor: "text-purple-900 dark:text-purple-200",
+    badgeBg: "bg-purple-200/80 dark:bg-purple-900/80",
+    badgeText: "text-purple-800 dark:text-purple-200",
+    columnBorder: "border-purple-200/80 dark:border-purple-900/60",
+  },
+  {
+    id: "Store Visit",
+    title: "Store Visit",
+    headerBg: "bg-amber-100/70 dark:bg-amber-950/60",
+    borderTop: "border-t-amber-500",
+    titleColor: "text-amber-900 dark:text-amber-200",
+    badgeBg: "bg-amber-200/80 dark:bg-amber-900/80",
+    badgeText: "text-amber-800 dark:text-amber-200",
+    columnBorder: "border-amber-200/80 dark:border-amber-900/60",
+  },
+  {
+    id: "Our Office Visit",
+    title: "Our Office Visit",
+    headerBg: "bg-orange-100/70 dark:bg-orange-950/60",
+    borderTop: "border-t-orange-500",
+    titleColor: "text-orange-900 dark:text-orange-200",
+    badgeBg: "bg-orange-200/80 dark:bg-orange-900/80",
+    badgeText: "text-orange-800 dark:text-orange-200",
+    columnBorder: "border-orange-200/80 dark:border-orange-900/60",
+  },
+  {
+    id: "Won",
+    title: "Won",
+    headerBg: "bg-emerald-100/70 dark:bg-emerald-950/60",
+    borderTop: "border-t-emerald-500",
+    titleColor: "text-emerald-900 dark:text-emerald-200",
+    badgeBg: "bg-emerald-200/80 dark:bg-emerald-900/80",
+    badgeText: "text-emerald-800 dark:text-emerald-200",
+    columnBorder: "border-emerald-200/80 dark:border-emerald-900/60",
+  },
+  {
+    id: "Lost",
+    title: "Lost",
+    headerBg: "bg-rose-100/70 dark:bg-rose-950/60",
+    borderTop: "border-t-rose-500",
+    titleColor: "text-rose-900 dark:text-rose-200",
+    badgeBg: "bg-rose-200/80 dark:bg-rose-900/80",
+    badgeText: "text-rose-800 dark:text-rose-200",
+    columnBorder: "border-rose-200/80 dark:border-rose-900/60",
+  },
 ]
 
 export function LeadKanban({
@@ -141,7 +269,7 @@ export function LeadKanban({
   const canAddLead = canPerformAction(user, "Leads", "add")
   const isSuperAdminOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
 
-  const [allUsers, setAllUsers] = React.useState<{ id: string; name: string; role?: string; department?: string; email?: string }[]>([])
+  const [allUsers, setAllUsers] = React.useState<{ id: string; name: string; role?: string; department?: string; email?: string; avatar?: string }[]>([])
   const [selectedMember, setSelectedMember] = React.useState<string>("all")
   const [isMemberDropdownOpen, setIsMemberDropdownOpen] = React.useState(false)
 
@@ -170,7 +298,7 @@ export function LeadKanban({
   const [draggedLeadId, setDraggedLeadId] = React.useState<string | null>(null)
   const [activeContactTarget, setActiveContactTarget] = React.useState<Record<string, "primary" | "secondary">>({})
 
-  // Mouse horizontal drag-to-scroll
+  // Mouse horizontal drag-to-scroll (Initiated from Column Headers only)
   const kanbanTrackRef = React.useRef<HTMLDivElement>(null)
   const isKanbanDraggingRef = React.useRef(false)
   const kanbanStartXRef = React.useRef(0)
@@ -192,7 +320,6 @@ export function LeadKanban({
       if (!isKanbanDraggingRef.current) return
       isKanbanDraggingRef.current = false
       if (kanbanTrackRef.current) {
-        kanbanTrackRef.current.style.cursor = "grab"
         kanbanTrackRef.current.style.removeProperty("user-select")
       }
     }
@@ -205,16 +332,12 @@ export function LeadKanban({
     }
   }, [])
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleHeaderMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.button !== 0 || !kanbanTrackRef.current) return
-    const target = e.target as HTMLElement
-    if (target.closest("input, select, textarea, button, a, [data-lead-card='true']")) return
-
     isKanbanDraggingRef.current = true
     hasKanbanDraggedRef.current = false
     kanbanStartXRef.current = e.pageX - kanbanTrackRef.current.offsetLeft
     kanbanScrollLeftRef.current = kanbanTrackRef.current.scrollLeft
-    kanbanTrackRef.current.style.cursor = "grabbing"
     kanbanTrackRef.current.style.userSelect = "none"
   }
 
@@ -616,9 +739,7 @@ export function LeadKanban({
       {/* ---------------- KANBAN STAGE COLUMNS (Single Horizontal Scroll Track) ---------------- */}
       <div
         ref={kanbanTrackRef}
-        onMouseDown={handleMouseDown}
-        onClickCapture={handleClickCapture}
-        className="flex gap-4 overflow-x-auto pb-6 pt-1 items-start scrollbar-thin max-w-full cursor-grab active:cursor-grabbing select-none"
+        className="flex gap-4 overflow-x-auto pb-6 pt-1 items-start scrollbar-thin max-w-full"
       >
         {KANBAN_COLUMNS.map((col) => {
           const rawColumnLeads = filteredLeads.filter((l) => {
@@ -646,25 +767,42 @@ export function LeadKanban({
               onDragEnter={(e) => e.preventDefault()}
               onDrop={async (e) => {
                 e.preventDefault()
+                e.stopPropagation()
                 const leadId = e.dataTransfer.getData("text/plain") || draggedLeadId
                 if (leadId) {
                   await handleDrop(col.id, leadId)
                 }
               }}
-              className="w-72 min-w-[288px] max-w-[288px] shrink-0 bg-zinc-50/70 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800 rounded-xl flex flex-col min-h-[620px] overflow-hidden shadow-2xs"
+              className={`w-72 min-w-[288px] max-w-[288px] shrink-0 bg-zinc-50/70 dark:bg-zinc-900/60 border ${col.columnBorder} rounded-xl flex flex-col min-h-[620px] overflow-hidden shadow-2xs`}
             >
-              {/* Column Header */}
-              <div className={`p-3 bg-white dark:bg-zinc-900 border-t-2 ${col.color} border-b border-zinc-200/80 dark:border-zinc-800 flex items-center justify-between`}>
-                <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 truncate pr-2">
+              {/* Column Header - Drag here to scroll board horizontally */}
+              <div
+                onMouseDown={handleHeaderMouseDown}
+                className={`p-3 ${col.headerBg} border-t-2 ${col.borderTop} border-b ${col.columnBorder} flex items-center justify-between cursor-grab active:cursor-grabbing select-none transition-colors`}
+                title="Press & drag column header left/right to scroll"
+              >
+                <span className={`text-xs font-bold ${col.titleColor} truncate pr-2 pointer-events-none tracking-tight`}>
                   {col.title}
                 </span>
-                <span className="text-xs font-bold text-zinc-600 dark:text-zinc-400 shrink-0">
+                <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${col.badgeBg} ${col.badgeText} shrink-0 pointer-events-none shadow-2xs`}>
                   {columnLeads.length}
                 </span>
               </div>
 
               {/* Cards Container */}
-              <div className="p-2 space-y-2.5 flex-1 overflow-y-auto max-h-[75vh]">
+              <div
+                onDragOver={handleDragOver}
+                onDragEnter={(e) => e.preventDefault()}
+                onDrop={async (e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  const leadId = e.dataTransfer.getData("text/plain") || draggedLeadId
+                  if (leadId) {
+                    await handleDrop(col.id, leadId)
+                  }
+                }}
+                className="p-2 space-y-2.5 flex-1 overflow-y-auto max-h-[75vh]"
+              >
                 {columnLeads.map((l) => {
                   const isLocked = !!l.isLocked
 
@@ -673,8 +811,25 @@ export function LeadKanban({
                       key={l.id}
                       data-lead-card="true"
                       draggable={!isLocked}
-                      onDragStart={(e) => !isLocked && handleDragStart(e, l.id)}
+                      onDragStart={(e) => {
+                        if (isLocked) {
+                          e.preventDefault()
+                          return
+                        }
+                        e.dataTransfer.setData("text/plain", l.id)
+                        e.dataTransfer.effectAllowed = "move"
+                        setDraggedLeadId(l.id)
+                      }}
                       onDragEnd={() => setDraggedLeadId(null)}
+                      onDragOver={handleDragOver}
+                      onDrop={async (e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        const leadId = e.dataTransfer.getData("text/plain") || draggedLeadId
+                        if (leadId) {
+                          await handleDrop(col.id, leadId)
+                        }
+                      }}
                       className={`border rounded-xl p-3 shadow-2xs transition-all space-y-2 relative group overflow-hidden ${
                         isLocked
                           ? "bg-rose-50/50 dark:bg-rose-950/40 border-rose-400 dark:border-rose-800"
@@ -733,13 +888,14 @@ export function LeadKanban({
                           </span>
                         </div>
 
-                        {/* Line 4: Remainder (Date + Time in Amber/Orange) */}
+                        {/* Line 4: Reminder (Date + Time in Amber/Orange) */}
                         <div className="flex items-center gap-1.5 text-[11px] text-zinc-600 dark:text-zinc-300">
                           <Clock size={12} className="text-amber-500 shrink-0" />
                           <span className="truncate">
                             Reminder:{" "}
                             <strong className="font-semibold text-amber-600 dark:text-amber-400">
-                              {l.reminderDate || "12 Aug 2025"} {l.reminderTime || "11:30 AM"}
+                              {l.reminderDate && l.reminderDate !== "None" ? l.reminderDate : "No Reminder"}
+                              {l.reminderTime && l.reminderTime !== "None" ? ` ${l.reminderTime}` : ""}
                             </strong>
                           </span>
                         </div>
@@ -752,67 +908,101 @@ export function LeadKanban({
                           </span>
                         </div>
 
-                        {/* Line 5: Caller & Avatar + Quick Action Buttons */}
-                        <div className="flex items-center justify-between pt-2 border-t border-zinc-100 dark:border-zinc-700/60 text-[11px] gap-1">
-                          <div className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-300 min-w-0">
+                        {/* Line 5: Caller & Avatar (Prominently displayed above buttons) */}
+                        <div className="flex items-center justify-between pt-1 text-[11px] text-zinc-600 dark:text-zinc-300">
+                          <div className="flex items-center gap-1.5 min-w-0">
                             <UserIcon size={12} className="text-zinc-400 shrink-0" />
                             <span className="truncate">
                               Caller:{" "}
-                              <span className="font-medium text-zinc-700 dark:text-zinc-200">
-                                {l.caller || l.owner}
-                              </span>
+                              <strong className="font-semibold text-zinc-800 dark:text-zinc-200">
+                                {(l.assignedTo && l.assignedTo !== "None" && l.assignedTo !== "Unassigned")
+                                  ? l.assignedTo
+                                  : ((l.caller && l.caller !== "None" && l.caller !== "Unassigned")
+                                    ? l.caller
+                                    : ((l.owner && l.owner !== "None" && l.owner !== "Unassigned")
+                                      ? l.owner
+                                      : "Unassigned"))}
+                              </strong>
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {/* Contact Switcher for Call/WhatsApp if secondary phone exists */}
-                            {l.secondaryPhone && (
-                              <div className="flex items-center bg-zinc-100 dark:bg-zinc-700/70 p-0.5 rounded-md text-[9px] font-bold">
-                                <button
-                                  type="button"
-                                  onMouseDown={(e) => e.stopPropagation()}
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setActiveContactTarget((prev) => ({ ...prev, [l.id]: "primary" }))
-                                  }}
-                                  className={`px-1 py-0.5 rounded transition-all cursor-pointer ${
-                                    (activeContactTarget[l.id] || "primary") === "primary"
-                                      ? "bg-white dark:bg-zinc-800 text-blue-600 dark:text-blue-400 shadow-2xs font-extrabold"
-                                      : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-                                  }`}
-                                  title={`Target Primary: ${l.primaryContact} (${l.phone})`}
+                          {/* Caller Avatar (Real Profile Picture if available, otherwise initials or unassigned icon) */}
+                          {(() => {
+                            const avatarInfo = getCallerAvatar(l, allUsers, user)
+                            if (avatarInfo.type === "image") {
+                              return (
+                                <img
+                                  src={avatarInfo.src}
+                                  alt={avatarInfo.name}
+                                  className="w-5 h-5 rounded-full border border-zinc-200 dark:border-zinc-700 object-cover shrink-0 shadow-2xs"
+                                  title={avatarInfo.name}
+                                />
+                              )
+                            }
+                            if (avatarInfo.type === "initials" && avatarInfo.initials) {
+                              return (
+                                <div
+                                  className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800 text-[9px] font-bold flex items-center justify-center shrink-0 shadow-2xs"
+                                  title={avatarInfo.name}
                                 >
-                                  Primary
-                                </button>
-                                <button
-                                  type="button"
-                                  onMouseDown={(e) => e.stopPropagation()}
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setActiveContactTarget((prev) => ({ ...prev, [l.id]: "secondary" }))
-                                  }}
-                                  className={`px-1 py-0.5 rounded transition-all cursor-pointer ${
-                                    activeContactTarget[l.id] === "secondary"
-                                      ? "bg-white dark:bg-zinc-800 text-purple-600 dark:text-purple-400 shadow-2xs font-extrabold"
-                                      : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-                                  }`}
-                                  title={`Target Manager: ${l.secondaryContact || "Manager"} (${l.secondaryPhone})`}
-                                >
-                                  Mgr
-                                </button>
+                                  {avatarInfo.initials}
+                                </div>
+                              )
+                            }
+                            return (
+                              <div
+                                className="w-5 h-5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-400 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center shrink-0"
+                                title="Unassigned"
+                              >
+                                <UserIcon size={10} />
                               </div>
-                            )}
+                            )
+                          })()}
+                        </div>
 
-                            {/* Caller Avatar */}
-                            <img
-                              src={
-                                l.ownerAvatar ||
-                                (user?.avatar && (l.caller === user.name || l.owner === user.name) ? user.avatar : null) ||
-                                `https://api.dicebear.com/7.x/notionists/svg?seed=${l.caller || l.name}`
-                              }
-                              alt={l.name}
-                              className="w-6 h-6 rounded-full border border-zinc-200 object-cover shrink-0"
-                            />
+                        {/* Line 6: Bottom Action Bar */}
+                        <div className="flex items-center justify-between pt-2 border-t border-zinc-100 dark:border-zinc-700/60 text-[11px] gap-1.5">
+                          {/* Contact Switcher for Call/WhatsApp if secondary phone exists */}
+                          {l.secondaryPhone ? (
+                            <div className="flex items-center bg-zinc-100 dark:bg-zinc-700/70 p-0.5 rounded-md text-[9px] font-bold">
+                              <button
+                                type="button"
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setActiveContactTarget((prev) => ({ ...prev, [l.id]: "primary" }))
+                                }}
+                                className={`px-1.5 py-0.5 rounded transition-all cursor-pointer ${
+                                  (activeContactTarget[l.id] || "primary") === "primary"
+                                    ? "bg-white dark:bg-zinc-800 text-blue-600 dark:text-blue-400 shadow-2xs font-extrabold"
+                                    : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                                }`}
+                                title={`Target Primary: ${l.primaryContact} (${l.phone})`}
+                              >
+                                Primary
+                              </button>
+                              <button
+                                type="button"
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setActiveContactTarget((prev) => ({ ...prev, [l.id]: "secondary" }))
+                                }}
+                                className={`px-1.5 py-0.5 rounded transition-all cursor-pointer ${
+                                  activeContactTarget[l.id] === "secondary"
+                                    ? "bg-white dark:bg-zinc-800 text-purple-600 dark:text-purple-400 shadow-2xs font-extrabold"
+                                    : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                                }`}
+                                title={`Target Manager: ${l.secondaryContact || "Manager"} (${l.secondaryPhone})`}
+                              >
+                                Mgr
+                              </button>
+                            </div>
+                          ) : (
+                            <div />
+                          )}
+
+                          <div className="flex items-center gap-1.5 shrink-0">
 
                             {/* Call Button */}
                             {(() => {
