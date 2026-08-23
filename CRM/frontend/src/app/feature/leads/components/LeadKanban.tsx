@@ -274,6 +274,7 @@ export function LeadKanban({
   const [allUsers, setAllUsers] = React.useState<{ id: string; name: string; role?: string; department?: string; email?: string; avatar?: string }[]>([])
   const [selectedMember, setSelectedMember] = React.useState<string>("all")
   const [isMemberDropdownOpen, setIsMemberDropdownOpen] = React.useState(false)
+  const [memberSearchQuery, setMemberSearchQuery] = React.useState("")
 
   React.useEffect(() => {
     getUsers("all").then((list) => {
@@ -281,18 +282,24 @@ export function LeadKanban({
     })
   }, [])
 
-  const teamMembersList = React.useMemo(() => {
-    const memberNames = new Set<string>()
-    allUsers.forEach((u) => {
-      if (u.name && u.name.trim()) memberNames.add(u.name.trim())
-    })
+  // Only include team members who actually have assigned leads
+  const assignedTeamMembers = React.useMemo(() => {
+    const memberCounts: Record<string, number> = {}
     ;(leads || []).forEach((l) => {
-      if (l.assignedTo && l.assignedTo !== "None" && l.assignedTo !== "Unassigned") memberNames.add(l.assignedTo.trim())
-      if (l.caller && l.caller !== "None" && l.caller !== "Unassigned") memberNames.add(l.caller.trim())
-      if (l.owner && l.owner !== "None" && l.owner !== "Unassigned") memberNames.add(l.owner.trim())
+      const candidates = [l.assignedTo, l.caller, l.owner].filter(
+        (name): name is string => Boolean(name && name.trim() && name !== "None" && name !== "Unassigned")
+      )
+      const uniqueNames = new Set(candidates.map((n) => n.trim()))
+      uniqueNames.forEach((name) => {
+        memberCounts[name] = (memberCounts[name] || 0) + 1
+      })
     })
-    return Array.from(memberNames).sort((a, b) => a.localeCompare(b))
-  }, [allUsers, leads])
+
+    return Object.entries(memberCounts)
+      .filter(([_, count]) => count > 0)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+  }, [leads])
 
   const [activeFilter, setActiveFilter] = React.useState("All leads")
   const [searchQuery, setSearchQuery] = React.useState("")
@@ -616,79 +623,126 @@ export function LeadKanban({
               <>
                 <div
                   className="fixed inset-0 z-20"
-                  onClick={() => setIsMemberDropdownOpen(false)}
+                  onClick={() => {
+                    setIsMemberDropdownOpen(false)
+                    setMemberSearchQuery("")
+                  }}
                 />
-                <div className="absolute left-0 mt-1 w-56 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl z-30 py-1.5 max-h-72 overflow-y-auto">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedMember("all")
-                      setIsMemberDropdownOpen(false)
-                    }}
-                    className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${
-                      selectedMember === "all" ? "font-semibold text-blue-600 bg-blue-50/50 dark:bg-blue-950/30" : "text-zinc-700 dark:text-zinc-300"
-                    }`}
-                  >
-                    <span>All Team Members</span>
-                    {selectedMember === "all" && <span>✓</span>}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedMember("unassigned")
-                      setIsMemberDropdownOpen(false)
-                    }}
-                    className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${
-                      selectedMember === "unassigned" ? "font-semibold text-blue-600 bg-blue-50/50 dark:bg-blue-950/30" : "text-zinc-700 dark:text-zinc-300"
-                    }`}
-                  >
-                    <span className="text-zinc-500 italic">Unassigned Leads</span>
-                    {selectedMember === "unassigned" && <span>✓</span>}
-                  </button>
-
-                  <div className="my-1 border-t border-zinc-100 dark:border-zinc-800" />
-                  <div className="px-3 py-1 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
-                    Team Members
+                <div className="absolute left-0 mt-1 w-64 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl z-30 overflow-hidden flex flex-col max-h-80">
+                  {/* Search inside Member Dropdown */}
+                  <div className="p-2 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/40">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Search member..."
+                        value={memberSearchQuery}
+                        onChange={(e) => setMemberSearchQuery(e.target.value)}
+                        className="w-full pl-7 pr-2 py-1 text-xs bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400"
+                        autoFocus
+                      />
+                      <Search size={12} className="absolute left-2.5 top-2 text-zinc-400 pointer-events-none" />
+                    </div>
                   </div>
 
-                  {teamMembersList.map((member) => {
-                    const leadCount = (leads || []).filter((l) => {
-                      const mNorm = member.toLowerCase().trim()
-                      return (
-                        (l.assignedTo && l.assignedTo.toLowerCase().trim() === mNorm) ||
-                        (l.caller && l.caller.toLowerCase().trim() === mNorm) ||
-                        (l.owner && l.owner.toLowerCase().trim() === mNorm) ||
-                        (l.managers && l.managers.toLowerCase().includes(mNorm))
+                  <div className="py-1 overflow-y-auto flex-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedMember("all")
+                        setIsMemberDropdownOpen(false)
+                        setMemberSearchQuery("")
+                      }}
+                      className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${
+                        selectedMember === "all" ? "font-semibold text-blue-600 bg-blue-50/50 dark:bg-blue-950/30" : "text-zinc-700 dark:text-zinc-300"
+                      }`}
+                    >
+                      <span>All Team Members</span>
+                      {selectedMember === "all" && <span>✓</span>}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedMember("unassigned")
+                        setIsMemberDropdownOpen(false)
+                        setMemberSearchQuery("")
+                      }}
+                      className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${
+                        selectedMember === "unassigned" ? "font-semibold text-blue-600 bg-blue-50/50 dark:bg-blue-950/30" : "text-zinc-700 dark:text-zinc-300"
+                      }`}
+                    >
+                      <span className="text-zinc-500 italic">Unassigned Leads</span>
+                      {selectedMember === "unassigned" && <span>✓</span>}
+                    </button>
+
+                    <div className="my-1 border-t border-zinc-100 dark:border-zinc-800" />
+                    <div className="px-3 py-1 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
+                      Assigned Members ({assignedTeamMembers.length})
+                    </div>
+
+                    {(() => {
+                      const filtered = assignedTeamMembers.filter((m) =>
+                        m.name.toLowerCase().includes(memberSearchQuery.toLowerCase().trim())
                       )
-                    }).length
 
-                    const isSelected = selectedMember === member
-
-                    return (
-                      <button
-                        key={member}
-                        type="button"
-                        onClick={() => {
-                          setSelectedMember(member)
-                          setIsMemberDropdownOpen(false)
-                        }}
-                        className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${
-                          isSelected ? "font-semibold text-blue-600 bg-blue-50/50 dark:bg-blue-950/30" : "text-zinc-700 dark:text-zinc-300"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 truncate">
-                          <div className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 text-[10px] font-bold flex items-center justify-center shrink-0">
-                            {member.charAt(0).toUpperCase()}
+                      if (filtered.length === 0) {
+                        return (
+                          <div className="px-3 py-2 text-xs text-zinc-400 text-center italic">
+                            {memberSearchQuery ? "No matching member" : "No assigned members"}
                           </div>
-                          <span className="truncate">{member}</span>
-                        </div>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-medium">
-                          {leadCount}
-                        </span>
-                      </button>
-                    )
-                  })}
+                        )
+                      }
+
+                      return filtered.map(({ name: member, count: leadCount }) => {
+                        const userObj = allUsers.find(
+                          (u) => u.name && u.name.trim().toLowerCase() === member.trim().toLowerCase()
+                        )
+                        const avatar = userObj?.avatar || (user?.name === member ? user?.avatar : null)
+                        const initials = member
+                          .split(" ")
+                          .map((w) => w[0])
+                          .filter(Boolean)
+                          .slice(0, 2)
+                          .join("")
+                          .toUpperCase()
+
+                        const isSelected = selectedMember.toLowerCase() === member.toLowerCase()
+
+                        return (
+                          <button
+                            key={member}
+                            type="button"
+                            onClick={() => {
+                              setSelectedMember(member)
+                              setIsMemberDropdownOpen(false)
+                              setMemberSearchQuery("")
+                            }}
+                            className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${
+                              isSelected ? "font-semibold text-blue-600 bg-blue-50/50 dark:bg-blue-950/30" : "text-zinc-700 dark:text-zinc-300"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0 pr-2">
+                              {avatar && !avatar.includes("dicebear") ? (
+                                <img
+                                  src={avatar}
+                                  alt={member}
+                                  className="w-5 h-5 rounded-full border border-zinc-200 dark:border-zinc-700 object-cover shrink-0"
+                                />
+                              ) : (
+                                <div className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 text-[10px] font-bold flex items-center justify-center shrink-0">
+                                  {initials}
+                                </div>
+                              )}
+                              <span className="truncate">{member}</span>
+                            </div>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-medium">
+                              {leadCount}
+                            </span>
+                          </button>
+                        )
+                      })
+                    })()}
+                  </div>
                 </div>
               </>
             )}
