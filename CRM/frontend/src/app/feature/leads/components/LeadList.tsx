@@ -43,6 +43,20 @@ interface LeadListProps {
   onLeadUpdated: (updatedLead: Lead) => void
 }
 
+function WhatsAppIcon({ className, size = 13 }: { className?: string; size?: number }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="currentColor"
+      className={className}
+    >
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+    </svg>
+  )
+}
+
 const statusBadgeStyles: Record<string, string> = {
   Discussion: "bg-cyan-100 dark:bg-cyan-950/80 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800",
   Proposal: "bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800",
@@ -73,10 +87,14 @@ export function LeadList({
   const canEditLead = isSuperAdminOrAdmin || canPerformAction(user, "Leads", "edit")
   const canDeleteLead = isSuperAdminOrAdmin || canPerformAction(user, "Leads", "delete")
 
+  const [allUsers, setAllUsers] = React.useState<{ id: string; name: string; role?: string; department?: string; email?: string }[]>([])
   const [usersMap, setUsersMap] = React.useState<Record<string, { department?: string; role?: string; avatarUrl?: string }>>({})
+  const [selectedMember, setSelectedMember] = React.useState<string>("all")
+  const [isMemberDropdownOpen, setIsMemberDropdownOpen] = React.useState(false)
 
   React.useEffect(() => {
     getUsers("all").then((list) => {
+      setAllUsers(list || [])
       const map: Record<string, { department?: string; role?: string; avatarUrl?: string }> = {}
       ;(list || []).forEach((u) => {
         if (u.name) map[u.name.toLowerCase().trim()] = { department: u.department, role: u.role, avatarUrl: u.avatarUrl }
@@ -85,6 +103,19 @@ export function LeadList({
       setUsersMap(map)
     })
   }, [])
+
+  const teamMembersList = React.useMemo(() => {
+    const memberNames = new Set<string>()
+    allUsers.forEach((u) => {
+      if (u.name && u.name.trim()) memberNames.add(u.name.trim())
+    })
+    ;(leads || []).forEach((l) => {
+      if (l.assignedTo && l.assignedTo !== "None" && l.assignedTo !== "Unassigned") memberNames.add(l.assignedTo.trim())
+      if (l.caller && l.caller !== "None" && l.caller !== "Unassigned") memberNames.add(l.caller.trim())
+      if (l.owner && l.owner !== "None" && l.owner !== "Unassigned") memberNames.add(l.owner.trim())
+    })
+    return Array.from(memberNames).sort((a, b) => a.localeCompare(b))
+  }, [allUsers, leads])
 
   const [activeFilter, setActiveFilter] = React.useState("All leads")
   const [searchQuery, setSearchQuery] = React.useState("")
@@ -185,6 +216,25 @@ export function LeadList({
       serviceStr.includes(q) ||
       sourceStr.includes(q)
 
+    // Team member filter
+    if (selectedMember !== "all") {
+      if (selectedMember === "unassigned") {
+        const isAssigned =
+          (l.assignedTo && l.assignedTo !== "None" && l.assignedTo !== "Unassigned") ||
+          (l.caller && l.caller !== "None" && l.caller !== "Unassigned") ||
+          (l.owner && l.owner !== "None" && l.owner !== "Unassigned")
+        if (isAssigned) return false
+      } else {
+        const targetMemberNorm = selectedMember.toLowerCase().trim()
+        const isMatch =
+          (l.assignedTo && l.assignedTo.toLowerCase().trim() === targetMemberNorm) ||
+          (l.caller && l.caller.toLowerCase().trim() === targetMemberNorm) ||
+          (l.owner && l.owner.toLowerCase().trim() === targetMemberNorm) ||
+          (l.managers && l.managers.toLowerCase().includes(targetMemberNorm))
+        if (!isMatch) return false
+      }
+    }
+
     const leadLabels = l.labels || []
     
     if (!activeFilter || activeFilter === "All leads" || activeFilter === "All Leads") {
@@ -213,14 +263,6 @@ export function LeadList({
     const filterClean = activeFilter.toLowerCase().trim()
     if (leadSource === filterClean) {
       return matchesSearch
-    }
-
-    if (activeFilter === "50%") {
-      return matchesSearch && (l.probability === 50 || leadLabels.includes("50%") || leadLabels.includes("50% Probability"))
-    }
-
-    if (activeFilter === "90%") {
-      return matchesSearch && (l.probability === 90 || leadLabels.includes("90%") || leadLabels.includes("90% Probability"))
     }
 
     return matchesSearch && leadLabels.includes(activeFilter)
@@ -610,6 +652,107 @@ export function LeadList({
             />
           </div>
 
+          {/* Team Member Filter Dropdown */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setIsMemberDropdownOpen(!isMemberDropdownOpen)
+                setIsFiltersDropdownOpen(false)
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border rounded-md transition-colors cursor-pointer ${
+                selectedMember !== "all"
+                  ? "bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700"
+                  : "bg-zinc-100/80 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-200/70"
+              }`}
+            >
+              <UserIcon size={13} className={selectedMember !== "all" ? "text-blue-600" : "text-zinc-500"} />
+              <span>{selectedMember === "all" ? "All Team Members" : selectedMember === "unassigned" ? "Unassigned Leads" : selectedMember}</span>
+              <span className="text-[10px] ml-0.5">▼</span>
+            </button>
+
+            {isMemberDropdownOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-20"
+                  onClick={() => setIsMemberDropdownOpen(false)}
+                />
+                <div className="absolute left-0 mt-1 w-56 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl z-30 py-1.5 max-h-72 overflow-y-auto">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedMember("all")
+                      setIsMemberDropdownOpen(false)
+                    }}
+                    className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${
+                      selectedMember === "all" ? "font-semibold text-blue-600 bg-blue-50/50 dark:bg-blue-950/30" : "text-zinc-700 dark:text-zinc-300"
+                    }`}
+                  >
+                    <span>All Team Members</span>
+                    {selectedMember === "all" && <span>✓</span>}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedMember("unassigned")
+                      setIsMemberDropdownOpen(false)
+                    }}
+                    className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${
+                      selectedMember === "unassigned" ? "font-semibold text-blue-600 bg-blue-50/50 dark:bg-blue-950/30" : "text-zinc-700 dark:text-zinc-300"
+                    }`}
+                  >
+                    <span className="text-zinc-500 italic">Unassigned Leads</span>
+                    {selectedMember === "unassigned" && <span>✓</span>}
+                  </button>
+
+                  <div className="my-1 border-t border-zinc-100 dark:border-zinc-800" />
+                  <div className="px-3 py-1 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
+                    Team Members
+                  </div>
+
+                  {teamMembersList.map((member) => {
+                    const leadCount = (leads || []).filter((l) => {
+                      const mNorm = member.toLowerCase().trim()
+                      return (
+                        (l.assignedTo && l.assignedTo.toLowerCase().trim() === mNorm) ||
+                        (l.caller && l.caller.toLowerCase().trim() === mNorm) ||
+                        (l.owner && l.owner.toLowerCase().trim() === mNorm) ||
+                        (l.managers && l.managers.toLowerCase().includes(mNorm))
+                      )
+                    }).length
+
+                    const isSelected = selectedMember === member
+
+                    return (
+                      <button
+                        key={member}
+                        type="button"
+                        onClick={() => {
+                          setSelectedMember(member)
+                          setIsMemberDropdownOpen(false)
+                        }}
+                        className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${
+                          isSelected ? "font-semibold text-blue-600 bg-blue-50/50 dark:bg-blue-950/30" : "text-zinc-700 dark:text-zinc-300"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <div className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 text-[10px] font-bold flex items-center justify-center shrink-0">
+                            {member.charAt(0).toUpperCase()}
+                          </div>
+                          <span className="truncate">{member}</span>
+                        </div>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-medium">
+                          {leadCount}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+
           {/* Plus Quick Button */}
           <button
             type="button"
@@ -781,10 +924,10 @@ export function LeadList({
                               e.stopPropagation()
                               window.open(`tel:${l.phone.replace(/[^0-9+]/g, "")}`)
                             }}
-                            className="p-1 rounded-full bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-400 transition-colors"
+                            className="w-6 h-6 min-w-[24px] min-h-[24px] rounded-md bg-blue-100/80 hover:bg-blue-200 dark:bg-blue-950 dark:hover:bg-blue-900 text-blue-700 dark:text-blue-300 flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-2xs"
                             title={`Call Primary: ${l.primaryContact} (${l.phone})`}
                           >
-                            <Phone size={10} />
+                            <Phone size={12} className="pointer-events-none" />
                           </button>
                           <button
                             type="button"
@@ -792,10 +935,10 @@ export function LeadList({
                               e.stopPropagation()
                               window.open(`https://wa.me/${l.phone.replace(/[^0-9]/g, "")}`)
                             }}
-                            className="p-1 rounded-full bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 text-emerald-600 dark:text-emerald-400 transition-colors"
+                            className="w-6 h-6 min-w-[24px] min-h-[24px] rounded-md bg-emerald-100/80 hover:bg-emerald-200 dark:bg-emerald-950 dark:hover:bg-emerald-900 text-emerald-700 dark:text-emerald-300 flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-2xs"
                             title={`WhatsApp Primary: ${l.primaryContact} (${l.phone})`}
                           >
-                            <MessageSquare size={10} />
+                            <WhatsAppIcon size={13} className="pointer-events-none" />
                           </button>
                         </div>
 
@@ -809,10 +952,10 @@ export function LeadList({
                                 e.stopPropagation()
                                 window.open(`tel:${l.secondaryPhone!.replace(/[^0-9+]/g, "")}`)
                               }}
-                              className="p-0.5 rounded-full bg-purple-100 hover:bg-purple-200 dark:bg-purple-950/60 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 transition-colors"
+                              className="w-5 h-5 rounded bg-purple-100 hover:bg-purple-200 dark:bg-purple-950 dark:hover:bg-purple-900 text-purple-700 dark:text-purple-300 flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95"
                               title={`Call Manager: ${l.secondaryContact || "Manager"} (${l.secondaryPhone})`}
                             >
-                              <Phone size={9} />
+                              <Phone size={10} className="pointer-events-none" />
                             </button>
                             <button
                               type="button"
@@ -820,10 +963,10 @@ export function LeadList({
                                 e.stopPropagation()
                                 window.open(`https://wa.me/${l.secondaryPhone!.replace(/[^0-9]/g, "")}`)
                               }}
-                              className="p-0.5 rounded-full bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 text-emerald-600 dark:text-emerald-400 transition-colors"
+                              className="w-5 h-5 rounded bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950 dark:hover:bg-emerald-900 text-emerald-700 dark:text-emerald-300 flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95"
                               title={`WhatsApp Manager: ${l.secondaryContact || "Manager"} (${l.secondaryPhone})`}
                             >
-                              <MessageSquare size={9} />
+                              <WhatsAppIcon size={11} className="pointer-events-none" />
                             </button>
                           </div>
                         )}

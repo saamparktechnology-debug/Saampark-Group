@@ -26,6 +26,7 @@ import { updateLead } from "../services/leadService"
 import { LabelItem } from "./ManageLabelsModal"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
+import { getUsers } from "@/app/feature/users/services/userService"
 
 interface LeadKanbanProps {
   leads: Lead[]
@@ -37,6 +38,20 @@ interface LeadKanbanProps {
   onLeadUpdated: (updatedLead: Lead) => void
   onOpenManageLabelsModal: () => void
   onToggleLeadLabel: (leadId: string, labelName: string) => void
+}
+
+function WhatsAppIcon({ className, size = 13 }: { className?: string; size?: number }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="currentColor"
+      className={className}
+    >
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+    </svg>
+  )
 }
 
 const MONTH_MAP: Record<string, number> = {
@@ -126,6 +141,29 @@ export function LeadKanban({
   const canAddLead = canPerformAction(user, "Leads", "add")
   const isSuperAdminOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
 
+  const [allUsers, setAllUsers] = React.useState<{ id: string; name: string; role?: string; department?: string; email?: string }[]>([])
+  const [selectedMember, setSelectedMember] = React.useState<string>("all")
+  const [isMemberDropdownOpen, setIsMemberDropdownOpen] = React.useState(false)
+
+  React.useEffect(() => {
+    getUsers("all").then((list) => {
+      setAllUsers(list || [])
+    })
+  }, [])
+
+  const teamMembersList = React.useMemo(() => {
+    const memberNames = new Set<string>()
+    allUsers.forEach((u) => {
+      if (u.name && u.name.trim()) memberNames.add(u.name.trim())
+    })
+    ;(leads || []).forEach((l) => {
+      if (l.assignedTo && l.assignedTo !== "None" && l.assignedTo !== "Unassigned") memberNames.add(l.assignedTo.trim())
+      if (l.caller && l.caller !== "None" && l.caller !== "Unassigned") memberNames.add(l.caller.trim())
+      if (l.owner && l.owner !== "None" && l.owner !== "Unassigned") memberNames.add(l.owner.trim())
+    })
+    return Array.from(memberNames).sort((a, b) => a.localeCompare(b))
+  }, [allUsers, leads])
+
   const [activeFilter, setActiveFilter] = React.useState("All leads")
   const [searchQuery, setSearchQuery] = React.useState("")
   const [isFiltersDropdownOpen, setIsFiltersDropdownOpen] = React.useState(false)
@@ -139,10 +177,38 @@ export function LeadKanban({
   const kanbanScrollLeftRef = React.useRef(0)
   const hasKanbanDraggedRef = React.useRef(false)
 
+  React.useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isKanbanDraggingRef.current || !kanbanTrackRef.current) return
+      const x = e.pageX - kanbanTrackRef.current.offsetLeft
+      const walk = (x - kanbanStartXRef.current) * 1.5
+      if (Math.abs(walk) > 3) {
+        hasKanbanDraggedRef.current = true
+      }
+      kanbanTrackRef.current.scrollLeft = kanbanScrollLeftRef.current - walk
+    }
+
+    const onMouseUp = () => {
+      if (!isKanbanDraggingRef.current) return
+      isKanbanDraggingRef.current = false
+      if (kanbanTrackRef.current) {
+        kanbanTrackRef.current.style.cursor = "grab"
+        kanbanTrackRef.current.style.removeProperty("user-select")
+      }
+    }
+
+    window.addEventListener("mousemove", onMouseMove)
+    window.addEventListener("mouseup", onMouseUp)
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove)
+      window.removeEventListener("mouseup", onMouseUp)
+    }
+  }, [])
+
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.button !== 0 || !kanbanTrackRef.current) return
     const target = e.target as HTMLElement
-    if (target.closest("input, select, textarea, button, a, [draggable='true']")) return
+    if (target.closest("input, select, textarea, button, a, [data-lead-card='true']")) return
 
     isKanbanDraggingRef.current = true
     hasKanbanDraggedRef.current = false
@@ -150,26 +216,6 @@ export function LeadKanban({
     kanbanScrollLeftRef.current = kanbanTrackRef.current.scrollLeft
     kanbanTrackRef.current.style.cursor = "grabbing"
     kanbanTrackRef.current.style.userSelect = "none"
-  }
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isKanbanDraggingRef.current || !kanbanTrackRef.current) return
-    e.preventDefault()
-    const x = e.pageX - kanbanTrackRef.current.offsetLeft
-    const walk = (x - kanbanStartXRef.current) * 1.5
-    if (Math.abs(walk) > 3) {
-      hasKanbanDraggedRef.current = true
-    }
-    kanbanTrackRef.current.scrollLeft = kanbanScrollLeftRef.current - walk
-  }
-
-  const handleMouseUpOrLeave = () => {
-    if (!isKanbanDraggingRef.current) return
-    isKanbanDraggingRef.current = false
-    if (kanbanTrackRef.current) {
-      kanbanTrackRef.current.style.cursor = "grab"
-      kanbanTrackRef.current.style.removeProperty("user-select")
-    }
   }
 
   const handleClickCapture = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -219,6 +265,25 @@ export function LeadKanban({
       serviceStr.includes(q) ||
       sourceStr.includes(q)
 
+    // Team member filter
+    if (selectedMember !== "all") {
+      if (selectedMember === "unassigned") {
+        const isAssigned =
+          (l.assignedTo && l.assignedTo !== "None" && l.assignedTo !== "Unassigned") ||
+          (l.caller && l.caller !== "None" && l.caller !== "Unassigned") ||
+          (l.owner && l.owner !== "None" && l.owner !== "Unassigned")
+        if (isAssigned) return false
+      } else {
+        const targetMemberNorm = selectedMember.toLowerCase().trim()
+        const isMatch =
+          (l.assignedTo && l.assignedTo.toLowerCase().trim() === targetMemberNorm) ||
+          (l.caller && l.caller.toLowerCase().trim() === targetMemberNorm) ||
+          (l.owner && l.owner.toLowerCase().trim() === targetMemberNorm) ||
+          (l.managers && l.managers.toLowerCase().includes(targetMemberNorm))
+        if (!isMatch) return false
+      }
+    }
+
     const leadLabels = l.labels || []
 
     if (!activeFilter || activeFilter === "All leads" || activeFilter === "All Leads") {
@@ -249,37 +314,37 @@ export function LeadKanban({
       return matchesSearch
     }
 
-    if (activeFilter === "50%") {
-      return matchesSearch && (l.probability === 50 || leadLabels.includes("50%") || leadLabels.includes("50% Probability"))
-    }
-
-    if (activeFilter === "100%" || activeFilter === "90%") {
-      return matchesSearch && (l.probability === 90 || leadLabels.includes("90%") || leadLabels.includes("90% Probability"))
-    }
-
     return matchesSearch && leadLabels.includes(activeFilter)
   })
 
   // Drag and drop handling
-  const handleDragStart = (id: string) => {
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    e.dataTransfer.setData("text/plain", id)
+    e.dataTransfer.effectAllowed = "move"
     setDraggedLeadId(id)
   }
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
+    e.dataTransfer.dropEffect = "move"
   }
 
-  const handleDrop = async (newStatus: LeadStatus) => {
-    if (!draggedLeadId) return
-    const targetLead = leads.find((l) => l.id === draggedLeadId)
+  const handleDrop = async (newStatus: LeadStatus, leadIdParam?: string) => {
+    const leadId = leadIdParam || draggedLeadId
+    if (!leadId) return
+    const targetLead = leads.find((l) => l.id === leadId)
     if (targetLead && targetLead.status !== newStatus) {
       if (targetLead.isLocked && !isSuperAdminOrAdmin) {
         alert("🔒 This lead is locked due to missed SLA and cannot be moved.")
         setDraggedLeadId(null)
         return
       }
-      const updated = await updateLead(draggedLeadId, { status: newStatus })
-      onLeadUpdated(updated)
+      try {
+        const updated = await updateLead(leadId, { status: newStatus }, user?.role)
+        onLeadUpdated(updated)
+      } catch (err: any) {
+        console.error("Error moving lead:", err)
+      }
     }
     setDraggedLeadId(null)
   }
@@ -382,6 +447,107 @@ export function LeadKanban({
             />
           </div>
 
+          {/* Team Member Filter Dropdown */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setIsMemberDropdownOpen(!isMemberDropdownOpen)
+                setIsFiltersDropdownOpen(false)
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border rounded-lg transition-colors cursor-pointer ${
+                selectedMember !== "all"
+                  ? "bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700"
+                  : "bg-zinc-50 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100"
+              }`}
+            >
+              <UserIcon size={13} className={selectedMember !== "all" ? "text-blue-600" : "text-zinc-500"} />
+              <span>{selectedMember === "all" ? "All Team Members" : selectedMember === "unassigned" ? "Unassigned Leads" : selectedMember}</span>
+              <span className="text-[10px] ml-0.5 text-zinc-400">▼</span>
+            </button>
+
+            {isMemberDropdownOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-20"
+                  onClick={() => setIsMemberDropdownOpen(false)}
+                />
+                <div className="absolute left-0 mt-1 w-56 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl z-30 py-1.5 max-h-72 overflow-y-auto">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedMember("all")
+                      setIsMemberDropdownOpen(false)
+                    }}
+                    className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${
+                      selectedMember === "all" ? "font-semibold text-blue-600 bg-blue-50/50 dark:bg-blue-950/30" : "text-zinc-700 dark:text-zinc-300"
+                    }`}
+                  >
+                    <span>All Team Members</span>
+                    {selectedMember === "all" && <span>✓</span>}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedMember("unassigned")
+                      setIsMemberDropdownOpen(false)
+                    }}
+                    className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${
+                      selectedMember === "unassigned" ? "font-semibold text-blue-600 bg-blue-50/50 dark:bg-blue-950/30" : "text-zinc-700 dark:text-zinc-300"
+                    }`}
+                  >
+                    <span className="text-zinc-500 italic">Unassigned Leads</span>
+                    {selectedMember === "unassigned" && <span>✓</span>}
+                  </button>
+
+                  <div className="my-1 border-t border-zinc-100 dark:border-zinc-800" />
+                  <div className="px-3 py-1 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
+                    Team Members
+                  </div>
+
+                  {teamMembersList.map((member) => {
+                    const leadCount = (leads || []).filter((l) => {
+                      const mNorm = member.toLowerCase().trim()
+                      return (
+                        (l.assignedTo && l.assignedTo.toLowerCase().trim() === mNorm) ||
+                        (l.caller && l.caller.toLowerCase().trim() === mNorm) ||
+                        (l.owner && l.owner.toLowerCase().trim() === mNorm) ||
+                        (l.managers && l.managers.toLowerCase().includes(mNorm))
+                      )
+                    }).length
+
+                    const isSelected = selectedMember === member
+
+                    return (
+                      <button
+                        key={member}
+                        type="button"
+                        onClick={() => {
+                          setSelectedMember(member)
+                          setIsMemberDropdownOpen(false)
+                        }}
+                        className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${
+                          isSelected ? "font-semibold text-blue-600 bg-blue-50/50 dark:bg-blue-950/30" : "text-zinc-700 dark:text-zinc-300"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <div className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 text-[10px] font-bold flex items-center justify-center shrink-0">
+                            {member.charAt(0).toUpperCase()}
+                          </div>
+                          <span className="truncate">{member}</span>
+                        </div>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-medium">
+                          {leadCount}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+
           {/* Plus Add Filter */}
           {canAddLead && (
             <button
@@ -397,32 +563,12 @@ export function LeadKanban({
           <div className="flex items-center gap-2 text-xs ml-1">
             <button
               type="button"
-              onClick={() => setActiveFilter("50%")}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                activeFilter === "50%"
-                  ? "bg-blue-50 text-blue-600 border border-blue-200"
-                  : "text-zinc-600 hover:bg-zinc-100"
-              }`}
-            >
-              50%
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveFilter("100%")}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                activeFilter === "100%"
-                  ? "bg-blue-50 text-blue-600 border border-blue-200"
-                  : "text-zinc-600 hover:bg-zinc-100"
-              }`}
-            >
-              100%
-            </button>
-
-            <button
-              type="button"
               onClick={() => setActiveFilter("Call this week")}
-              className="p-1.5 rounded-full text-zinc-500 hover:bg-zinc-100 transition-colors"
+              className={`p-1.5 rounded-full transition-colors ${
+                activeFilter === "Call this week"
+                  ? "bg-purple-100 text-purple-700 border border-purple-300"
+                  : "text-zinc-500 hover:bg-zinc-100"
+              }`}
               title="Phone Leads"
             >
               <Phone size={14} />
@@ -431,7 +577,11 @@ export function LeadKanban({
             <button
               type="button"
               onClick={() => setActiveFilter("My leads")}
-              className="p-1.5 rounded-full text-zinc-500 hover:bg-zinc-100 transition-colors"
+              className={`p-1.5 rounded-full transition-colors ${
+                activeFilter === "My leads"
+                  ? "bg-blue-100 text-blue-700 border border-blue-300"
+                  : "text-zinc-500 hover:bg-zinc-100"
+              }`}
               title="Caller Filter"
             >
               <UserIcon size={14} />
@@ -467,9 +617,6 @@ export function LeadKanban({
       <div
         ref={kanbanTrackRef}
         onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUpOrLeave}
-        onMouseLeave={handleMouseUpOrLeave}
         onClickCapture={handleClickCapture}
         className="flex gap-4 overflow-x-auto pb-6 pt-1 items-start scrollbar-thin max-w-full cursor-grab active:cursor-grabbing select-none"
       >
@@ -496,7 +643,14 @@ export function LeadKanban({
             <div
               key={col.id}
               onDragOver={handleDragOver}
-              onDrop={() => handleDrop(col.id)}
+              onDragEnter={(e) => e.preventDefault()}
+              onDrop={async (e) => {
+                e.preventDefault()
+                const leadId = e.dataTransfer.getData("text/plain") || draggedLeadId
+                if (leadId) {
+                  await handleDrop(col.id, leadId)
+                }
+              }}
               className="w-72 min-w-[288px] max-w-[288px] shrink-0 bg-zinc-50/70 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800 rounded-xl flex flex-col min-h-[620px] overflow-hidden shadow-2xs"
             >
               {/* Column Header */}
@@ -517,12 +671,14 @@ export function LeadKanban({
                   return (
                     <div
                       key={l.id}
+                      data-lead-card="true"
                       draggable={!isLocked}
-                      onDragStart={() => !isLocked && handleDragStart(l.id)}
+                      onDragStart={(e) => !isLocked && handleDragStart(e, l.id)}
+                      onDragEnd={() => setDraggedLeadId(null)}
                       className={`border rounded-xl p-3 shadow-2xs transition-all space-y-2 relative group overflow-hidden ${
                         isLocked
                           ? "bg-rose-50/50 dark:bg-rose-950/40 border-rose-400 dark:border-rose-800"
-                          : "bg-white dark:bg-zinc-800 border-zinc-200/90 dark:border-zinc-700/80 hover:shadow-md"
+                          : "bg-white dark:bg-zinc-800 border-zinc-200/90 dark:border-zinc-700/80 hover:shadow-md cursor-grab active:cursor-grabbing"
                       }`}
                     >
                       {/* Blurred Card Content when Locked */}
@@ -597,8 +753,8 @@ export function LeadKanban({
                         </div>
 
                         {/* Line 5: Caller & Avatar + Quick Action Buttons */}
-                        <div className="flex items-center justify-between pt-1.5 border-t border-zinc-100 dark:border-zinc-700/60 text-[11px] gap-1">
-                          <div className="flex items-center gap-1 text-zinc-600 dark:text-zinc-300 min-w-0">
+                        <div className="flex items-center justify-between pt-2 border-t border-zinc-100 dark:border-zinc-700/60 text-[11px] gap-1">
+                          <div className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-300 min-w-0">
                             <UserIcon size={12} className="text-zinc-400 shrink-0" />
                             <span className="truncate">
                               Caller:{" "}
@@ -608,12 +764,13 @@ export function LeadKanban({
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-1 shrink-0">
+                          <div className="flex items-center gap-1.5 shrink-0">
                             {/* Contact Switcher for Call/WhatsApp if secondary phone exists */}
                             {l.secondaryPhone && (
                               <div className="flex items-center bg-zinc-100 dark:bg-zinc-700/70 p-0.5 rounded-md text-[9px] font-bold">
                                 <button
                                   type="button"
+                                  onMouseDown={(e) => e.stopPropagation()}
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     setActiveContactTarget((prev) => ({ ...prev, [l.id]: "primary" }))
@@ -629,6 +786,7 @@ export function LeadKanban({
                                 </button>
                                 <button
                                   type="button"
+                                  onMouseDown={(e) => e.stopPropagation()}
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     setActiveContactTarget((prev) => ({ ...prev, [l.id]: "secondary" }))
@@ -653,7 +811,7 @@ export function LeadKanban({
                                 `https://api.dicebear.com/7.x/notionists/svg?seed=${l.caller || l.name}`
                               }
                               alt={l.name}
-                              className="w-5 h-5 rounded-full border border-zinc-200 object-cover shrink-0"
+                              className="w-6 h-6 rounded-full border border-zinc-200 object-cover shrink-0"
                             />
 
                             {/* Call Button */}
@@ -664,18 +822,19 @@ export function LeadKanban({
                               return (
                                 <button
                                   type="button"
+                                  onMouseDown={(e) => e.stopPropagation()}
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     window.open(`tel:${targetNum.replace(/[^0-9+]/g, "")}`)
                                   }}
-                                  className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors shrink-0 ${
+                                  className={`w-7 h-7 min-w-[28px] min-h-[28px] rounded-lg flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-2xs ${
                                     isSec
-                                      ? "bg-purple-100 hover:bg-purple-200 text-purple-700 dark:bg-purple-950 dark:text-purple-300"
-                                      : "bg-blue-50 hover:bg-blue-100 text-blue-600 dark:bg-blue-950 dark:text-blue-300"
+                                      ? "bg-purple-100 hover:bg-purple-200 text-purple-700 dark:bg-purple-950 dark:hover:bg-purple-900 dark:text-purple-300"
+                                      : "bg-blue-100/80 hover:bg-blue-200 text-blue-700 dark:bg-blue-950 dark:hover:bg-blue-900 dark:text-blue-300"
                                   }`}
                                   title={`Call ${targetLabel}: ${targetNum}`}
                                 >
-                                  <Phone size={10} />
+                                  <Phone size={13} className="pointer-events-none" />
                                 </button>
                               )
                             })()}
@@ -688,14 +847,15 @@ export function LeadKanban({
                               return (
                                 <button
                                   type="button"
+                                  onMouseDown={(e) => e.stopPropagation()}
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     window.open(`https://wa.me/${targetNum.replace(/[^0-9]/g, "")}`)
                                   }}
-                                  className="w-5 h-5 rounded-full bg-emerald-50 hover:bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-300 flex items-center justify-center transition-colors shrink-0"
+                                  className="w-7 h-7 min-w-[28px] min-h-[28px] rounded-lg bg-emerald-100/80 hover:bg-emerald-200 text-emerald-700 dark:bg-emerald-950 dark:hover:bg-emerald-900 dark:text-emerald-300 flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-2xs"
                                   title={`WhatsApp ${targetLabel}: ${targetNum}`}
                                 >
-                                  <MessageSquare size={10} />
+                                  <WhatsAppIcon size={14} className="pointer-events-none" />
                                 </button>
                               )
                             })()}
@@ -704,14 +864,15 @@ export function LeadKanban({
                             {!isLocked && (
                               <button
                                 type="button"
+                                onMouseDown={(e) => e.stopPropagation()}
                                 onClick={(e) => {
                                   e.stopPropagation()
                                   onSelectLeadDetail(l)
                                 }}
-                                className="w-5 h-5 rounded-full bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-700 dark:hover:bg-zinc-600 text-zinc-600 dark:text-zinc-300 flex items-center justify-center transition-colors shrink-0 cursor-pointer"
+                                className="w-7 h-7 min-w-[28px] min-h-[28px] rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-2xs"
                                 title="Edit lead"
                               >
-                                <Pencil size={10} />
+                                <Pencil size={13} className="pointer-events-none" />
                               </button>
                             )}
 
@@ -719,16 +880,17 @@ export function LeadKanban({
                             {isSuperAdminOrAdmin && !isLocked && (
                               <button
                                 type="button"
+                                onMouseDown={(e) => e.stopPropagation()}
                                 onClick={async (e) => {
                                   e.stopPropagation()
                                   const { lockLead } = await import("../services/leadService")
                                   const locked = await lockLead(l.id, "Manually locked by Admin")
                                   onLeadUpdated(locked)
                                 }}
-                                className="p-1 rounded bg-zinc-100 hover:bg-rose-100 text-zinc-500 hover:text-rose-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-rose-950/60 dark:hover:text-rose-300 transition-all duration-300 shrink-0 hover:scale-110 group/kblock cursor-pointer"
+                                className="w-7 h-7 min-w-[28px] min-h-[28px] rounded-lg bg-zinc-100 hover:bg-rose-100 text-zinc-600 hover:text-rose-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-rose-950 dark:hover:text-rose-300 flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-2xs group/kblock"
                                 title="Admin Manual Lock Lead"
                               >
-                                <Unlock size={11} className="group-hover/kblock:rotate-[-18deg] transition-transform duration-300" />
+                                <Unlock size={13} className="group-hover/kblock:rotate-[-18deg] transition-transform duration-300 pointer-events-none" />
                               </button>
                             )}
                           </div>
