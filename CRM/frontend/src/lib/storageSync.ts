@@ -39,14 +39,15 @@ export async function syncGlobalDeletedIds(): Promise<string[]> {
   const local = getLocalDeletedIds()
   try {
     const res = await api.get("/deleted")
-    // Response shape: { status, message, data: string[] }
-    const serverIds: string[] = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : [])
-    if (serverIds.length > 0) {
-      const merged = Array.from(new Set([...local, ...serverIds.map((s) => String(s).toLowerCase().trim())]))
-      if (typeof window !== "undefined") {
-        localStorage.setItem(UNIVERSAL_DELETED_KEY, JSON.stringify(merged))
+    if (res && res.status !== "error" && !res.error && res.data !== undefined && res.data !== null) {
+      const serverIds: string[] = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : [])
+      if (serverIds.length > 0) {
+        const merged = Array.from(new Set([...local, ...serverIds.map((s) => String(s).toLowerCase().trim())]))
+        if (typeof window !== "undefined") {
+          localStorage.setItem(UNIVERSAL_DELETED_KEY, JSON.stringify(merged))
+        }
+        return merged
       }
-      return merged
     }
   } catch (err) {
     console.warn("Backend deleted sync fetch warning:", err)
@@ -77,15 +78,21 @@ export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: 
 
   try {
     const res = await api.get(`/store/${moduleKey}`)
-    // Backend wraps data in { status, message, data }
-    const serverData = res?.data !== undefined ? res.data : null
+    const isError = !res || res.status === "error" || res.error === true
 
-    if (serverData !== null && serverData !== undefined && !(typeof serverData === "object" && !Array.isArray(serverData) && Object.keys(serverData).length === 0)) {
-      // Cache locally too
-      if (typeof window !== "undefined") {
-        try { localStorage.setItem(`saampark_db_${moduleKey}`, JSON.stringify(serverData)) } catch {}
+    if (!isError && res?.data !== undefined && res?.data !== null) {
+      const serverData = res.data
+      if (Array.isArray(serverData)) {
+        if (typeof window !== "undefined") {
+          try { localStorage.setItem(`saampark_db_${moduleKey}`, JSON.stringify(serverData)) } catch {}
+        }
+        return filterGlobalDeletedItems(serverData as any, localDeleted) as any
+      } else if (typeof serverData === "object" && Object.keys(serverData).length > 0) {
+        if (typeof window !== "undefined") {
+          try { localStorage.setItem(`saampark_db_${moduleKey}`, JSON.stringify(serverData)) } catch {}
+        }
+        return serverData as any
       }
-      return filterGlobalDeletedItems(serverData as any, localDeleted) as any
     }
   } catch (err) {
     console.warn(`MySQL fetch warning for module ${moduleKey}:`, err)

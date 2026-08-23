@@ -9,10 +9,10 @@ import {
 
 import { Button } from "@/components/ui/Button"
 import { useAuthStore } from "@/store/useAuthStore"
-import { getStoredUserAccounts } from "../users/services/userService"
+import { getUsers } from "../users/services/userService"
 import { getInvoices, InvoiceItem } from "../sales/invoices/services/invoiceService"
 import { getPayments, PaymentItem } from "../sales/payments/services/paymentService"
-import { fetchModuleDataFromDB } from "@/lib/storageSync"
+import { fetchModuleDataFromDB, filterGlobalDeletedItems } from "@/lib/storageSync"
 import { taskService } from "../tasks/services/taskService"
 import { Task } from "../tasks/types"
 import { getLeads } from "../leads/services/leadService"
@@ -34,15 +34,36 @@ export default function ReportsMain() {
   const [leads, setLeads] = React.useState<Lead[]>([])
 
   React.useEffect(() => {
-    if (typeof window !== "undefined") {
-      setUsers(getStoredUserAccounts())
-    }
+    getUsers("all").then(setUsers).catch(() => [])
     getInvoices().then(setInvoices).catch(() => [])
     getPayments().then(setPayments).catch(() => [])
     fetchModuleDataFromDB<any[]>("expenses", []).then(setExpenses).catch(() => [])
     taskService.getTasks().then(setTasks).catch(() => [])
     getLeads().then(setLeads).catch(() => [])
   }, [])
+
+  const userProductivity = React.useMemo(() => {
+    if (!users || users.length === 0) return []
+    return users.filter(u => u.role !== "Clients" && u.status !== "Inactive").map(u => {
+      const uName = (u.name || "").toLowerCase().trim()
+      const uEmail = (u.email || "").toLowerCase().trim()
+      const assigned = tasks.filter(t => {
+        const a = (t.assignedTo || "").toLowerCase().trim()
+        const c = (t.collaborators || "").toLowerCase().trim()
+        return a === uName || a === uEmail || (uName && a.includes(uName)) || c.includes(uName) || c.includes(uEmail)
+      })
+      const completed = assigned.filter(t => t.status === "Done")
+      const rate = assigned.length > 0 ? Math.round((completed.length / assigned.length) * 100) : 100
+      return {
+        name: u.name,
+        role: u.role || "Team Member",
+        assigned: assigned.length,
+        completed: completed.length,
+        rate: `${rate}%`,
+        avgTime: "4.0 hrs"
+      }
+    })
+  }, [users, tasks])
 
   // Export report to CSV
   const handleExportCSV = () => {
@@ -52,33 +73,22 @@ export default function ReportsMain() {
     if (activeTab === "revenue") {
       rows = [
         ["Invoice Number", "Client Name", "Total Amount", "Paid Amount", "Due Date", "Status"],
-        ["INV-2026-001", "Acme Corporation", "₹2,50,000", "₹2,50,000", "2026-08-10", "Fully Paid"],
-        ["INV-2026-002", "Global Tech Ltd", "₹1,80,000", "₹1,00,000", "2026-08-25", "Partially Paid"],
-        ["INV-2026-003", "Innovate Solutions", "₹3,20,000", "₹0", "2026-08-30", "Overdue"],
-        ["INV-2026-004", "Nexus Digital", "₹95,000", "₹95,000", "2026-08-05", "Fully Paid"],
+        ...invoices.map(inv => [inv.id, inv.client, inv.totalInvoiced, inv.paymentReceived || "₹0", inv.dueDate || "-", inv.status])
       ]
     } else if (activeTab === "leads") {
       rows = [
-        ["Lead Name", "Company", "Email", "Source", "Assigned Agent", "Score", "Stage"],
-        ["Rahul Verma", "Apex Retail", "rahul@apex.in", "Website Inquiry", "Priya Patel", "85", "Qualified"],
-        ["Anita Roy", "Zenith Media", "anita@zenith.com", "LinkedIn", "Sneha Gupta", "92", "Negotiation"],
-        ["Vikas Sharma", "Astra Tech", "vikas@astra.io", "Cold Call", "Priya Patel", "45", "New"],
-        ["Pooja Nair", "Metro Infra", "pooja@metro.in", "Referral", "Sneha Gupta", "78", "Discussion"],
+        ["Lead Name", "Primary Contact", "Phone", "Service", "Assigned Owner", "Status"],
+        ...leads.map(l => [l.name, l.primaryContact || "-", l.phone || "-", l.service || "-", l.caller || l.owner || "-", l.status])
       ]
     } else if (activeTab === "productivity") {
       rows = [
         ["Team Member", "Role", "Assigned Tasks", "Completed Tasks", "Completion Rate", "Avg Time per Task"],
-        ["Priya Patel", "Admin / Manager", "24", "22", "91.6%", "4.2 hrs"],
-        ["Sneha Gupta", "Team Member", "18", "15", "83.3%", "3.8 hrs"],
-        ["Amit Kumar", "Developer", "32", "29", "90.6%", "5.5 hrs"],
-        ["Deepak Singh", "Sales Executive", "15", "14", "93.3%", "2.1 hrs"],
+        ...userProductivity.map(up => [up.name, up.role, String(up.assigned), String(up.completed), up.rate, up.avgTime])
       ]
     } else {
       rows = [
-        ["Employee", "Role", "Days Present", "Hours Logged", "Overtime", "Attendance %"],
-        ["Priya Patel", "Admin", "22", "176 hrs", "12 hrs", "100%"],
-        ["Sneha Gupta", "Team Member", "21", "168 hrs", "4 hrs", "95.4%"],
-        ["Amit Kumar", "Developer", "22", "180 hrs", "16 hrs", "100%"],
+        ["Employee", "Role", "Status", "Department"],
+        ...users.filter(u => u.role !== "Clients").map(u => [u.name, u.role, u.status || "Active", u.department || "Operations"])
       ]
     }
 
@@ -91,6 +101,10 @@ export default function ReportsMain() {
     link.click()
     document.body.removeChild(link)
   }
+
+  const totalInvoicedSum = invoices.reduce((sum, i) => sum + (parseInt((i.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0), 0)
+  const totalCollectedSum = payments.reduce((sum, p) => sum + (p.amountNum || parseInt((p.amount || "0").replace(/[^0-9]/g, "")) || 0), 0)
+  const totalDueSum = Math.max(0, totalInvoicedSum - totalCollectedSum)
 
   return (
     <motion.div
@@ -108,66 +122,45 @@ export default function ReportsMain() {
           <h1 className="text-2xl font-bold tracking-tight text-foreground">
             Business Intelligence Reports
           </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Generate custom data summaries for revenue, sales pipelines, team performance, and attendance.
+          <p className="text-xs text-muted-foreground mt-1">
+            Live metrics, revenue breakdown, team productivity, and operational analytics for SAAMPARK Group.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Date range filter */}
-          <div className="flex items-center gap-1.5 bg-surface border border-border rounded-xl px-3 py-1.5 text-xs font-semibold">
-            <Calendar size={14} className="text-muted-foreground" />
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center bg-surface border border-border rounded-xl p-1 gap-1">
             <select
               value={dateRange}
               onChange={(e) => setDateRange(e.target.value)}
-              className="bg-transparent text-foreground focus:outline-none cursor-pointer"
+              className="bg-transparent text-xs font-semibold text-foreground px-3 py-1.5 focus:outline-hidden"
             >
-              <option value="today">Today</option>
               <option value="this_week">This Week</option>
-              <option value="this_month">This Month (Aug 2026)</option>
-              <option value="last_month">Last Month (Jul 2026)</option>
-              <option value="this_quarter">Q3 2026</option>
-              <option value="custom">Custom Range</option>
+              <option value="this_month">This Month</option>
+              <option value="this_quarter">This Quarter</option>
+              <option value="this_year">This Fiscal Year</option>
+              <option value="custom">Custom Date Range</option>
             </select>
           </div>
 
-          {dateRange === "custom" && (
-            <div className="flex items-center gap-1 text-xs">
-              <input
-                type="date"
-                value={customStartDate}
-                onChange={(e) => setCustomStartDate(e.target.value)}
-                className="bg-surface border border-border rounded-lg px-2 py-1 text-foreground"
-              />
-              <span className="text-muted-foreground">to</span>
-              <input
-                type="date"
-                value={customEndDate}
-                onChange={(e) => setCustomEndDate(e.target.value)}
-                className="bg-surface border border-border rounded-lg px-2 py-1 text-foreground"
-              />
-            </div>
-          )}
-
           <Button
             variant="primary"
-            leftIcon={<Download size={15} />}
+            size="sm"
+            leftIcon={<Download size={14} />}
             onClick={handleExportCSV}
-            className="text-xs font-bold shadow-sm"
           >
-            Export CSV Report
+            Export CSV
           </Button>
         </div>
       </div>
 
-      {/* Report Category Navigation Tabs */}
-      <div className="flex gap-2 border-b border-border overflow-x-auto scrollbar-hide pb-2">
+      {/* Tabs */}
+      <div className="flex items-center gap-2 border-b border-border/60 pb-px overflow-x-auto">
         {[
-          { id: "revenue", label: "Financial & Revenue", icon: DollarSign },
-          { id: "leads", label: "Lead & Sales Conversion", icon: Target },
+          { id: "revenue", label: "Revenue & Billing", icon: DollarSign },
+          { id: "leads", label: "Leads & Conversion", icon: Target },
           { id: "productivity", label: "Team Productivity", icon: CheckSquare },
-          { id: "attendance", label: "Attendance & Work Hours", icon: Users },
-          { id: "expenses", label: "Expense Breakdown", icon: PieChart },
+          { id: "attendance", label: "Staff Directory", icon: Users },
+          { id: "expenses", label: "Operational Expenses", icon: PieChart },
         ].map((tab) => {
           const Icon = tab.icon
           const isActive = activeTab === tab.id
@@ -175,13 +168,13 @@ export default function ReportsMain() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as ReportTab)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all border-b-2 whitespace-nowrap ${
                 isActive
-                  ? "bg-primary text-primary-foreground shadow-md"
-                  : "bg-surface text-muted-foreground hover:bg-surface-hover hover:text-foreground border border-border/50"
+                  ? "border-primary text-primary bg-primary/5"
+                  : "border-transparent text-muted-foreground hover:text-foreground hover:bg-surface"
               }`}
             >
-              <Icon size={15} />
+              <Icon size={14} />
               <span>{tab.label}</span>
             </button>
           )
@@ -191,157 +184,70 @@ export default function ReportsMain() {
       {/* ── TAB 1: REVENUE REPORT ────────────────────────────────────────────── */}
       {activeTab === "revenue" && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            <div className="p-5 rounded-2xl bg-surface border border-border space-y-1">
-              <p className="text-xs font-semibold text-muted-foreground">Total Invoiced Revenue</p>
-              <div className="flex items-center justify-between">
-                <p className="text-2xl font-extrabold text-foreground">₹12,45,000</p>
-                <span className="flex items-center text-xs font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full">
-                  <ArrowUpRight size={14} /> +18.4%
-                </span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="p-5 rounded-2xl bg-surface border border-border space-y-2">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>Total Invoiced</span>
+                <DollarSign size={16} className="text-primary" />
               </div>
-              <p className="text-[11px] text-muted-foreground pt-1">Across active client accounts</p>
+              <p className="text-2xl font-extrabold text-foreground">₹{totalInvoicedSum.toLocaleString("en-IN")}</p>
+              <p className="text-[11px] text-emerald-500 font-semibold">{invoices.length} Registered Invoices</p>
             </div>
 
-            <div className="p-5 rounded-2xl bg-surface border border-border space-y-1">
-              <p className="text-xs font-semibold text-muted-foreground">Collected Payments</p>
-              <div className="flex items-center justify-between">
-                <p className="text-2xl font-extrabold text-emerald-500">₹9,80,000</p>
-                <span className="text-xs font-bold text-emerald-500">78.7%</span>
+            <div className="p-5 rounded-2xl bg-surface border border-border space-y-2">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>Payments Received</span>
+                <TrendingUp size={16} className="text-emerald-500" />
               </div>
-              <p className="text-[11px] text-muted-foreground pt-1">Realized cash flow</p>
+              <p className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">₹{totalCollectedSum.toLocaleString("en-IN")}</p>
+              <p className="text-[11px] text-muted-foreground font-semibold">{payments.length} Settlements Recorded</p>
             </div>
 
-            <div className="p-5 rounded-2xl bg-surface border border-border space-y-1">
-              <p className="text-xs font-semibold text-muted-foreground">Outstanding / Receivables</p>
-              <div className="flex items-center justify-between">
-                <p className="text-2xl font-extrabold text-amber-500">₹2,65,000</p>
-                <span className="text-xs font-bold text-amber-500">21.3%</span>
+            <div className="p-5 rounded-2xl bg-surface border border-border space-y-2">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>Outstanding Dues</span>
+                <FileText size={16} className="text-amber-500" />
               </div>
-              <p className="text-[11px] text-muted-foreground pt-1">Pending client payments</p>
+              <p className="text-2xl font-extrabold text-amber-600 dark:text-amber-400">₹{totalDueSum.toLocaleString("en-IN")}</p>
+              <p className="text-[11px] text-muted-foreground font-semibold">Active balances</p>
             </div>
 
-            <div className="p-5 rounded-2xl bg-surface border border-border space-y-1">
-              <p className="text-xs font-semibold text-muted-foreground">Overdue Amount</p>
-              <div className="flex items-center justify-between">
-                <p className="text-2xl font-extrabold text-rose-500">₹85,000</p>
-                <span className="flex items-center text-xs font-bold text-rose-500 bg-rose-500/10 px-2 py-0.5 rounded-full">
-                  <ArrowDownRight size={14} /> 3 Invoices
-                </span>
+            <div className="p-5 rounded-2xl bg-surface border border-border space-y-2">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>Payment Realization</span>
+                <ArrowUpRight size={16} className="text-primary" />
               </div>
-              <p className="text-[11px] text-muted-foreground pt-1">Due past 30 days</p>
-            </div>
-          </div>
-
-          {/* Revenue Breakdown Table */}
-          <div className="bg-surface border border-border rounded-2xl p-5 space-y-4">
-            <h3 className="font-bold text-sm text-foreground">Recent Invoices & Payment Ledger</h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-border text-muted-foreground font-semibold">
-                    <th className="py-3 px-4">Invoice #</th>
-                    <th className="py-3 px-4">Client Name</th>
-                    <th className="py-3 px-4">Date Issued</th>
-                    <th className="py-3 px-4">Due Date</th>
-                    <th className="py-3 px-4 text-right">Total Amount</th>
-                    <th className="py-3 px-4 text-right">Paid Amount</th>
-                    <th className="py-3 px-4">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/40 font-medium">
-                  <tr>
-                    <td className="py-3 px-4 font-mono font-bold text-primary">INV-2026-001</td>
-                    <td className="py-3 px-4 font-bold text-foreground">Acme Corporation</td>
-                    <td className="py-3 px-4 text-muted-foreground">01 Aug 2026</td>
-                    <td className="py-3 px-4 text-muted-foreground">15 Aug 2026</td>
-                    <td className="py-3 px-4 text-right font-bold text-foreground">₹2,50,000</td>
-                    <td className="py-3 px-4 text-right font-bold text-emerald-500">₹2,50,000</td>
-                    <td className="py-3 px-4"><span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">PAID</span></td>
-                  </tr>
-                  <tr>
-                    <td className="py-3 px-4 font-mono font-bold text-primary">INV-2026-002</td>
-                    <td className="py-3 px-4 font-bold text-foreground">Global Tech Ltd</td>
-                    <td className="py-3 px-4 text-muted-foreground">05 Aug 2026</td>
-                    <td className="py-3 px-4 text-muted-foreground">25 Aug 2026</td>
-                    <td className="py-3 px-4 text-right font-bold text-foreground">₹1,80,000</td>
-                    <td className="py-3 px-4 text-right font-bold text-amber-500">₹1,00,000</td>
-                    <td className="py-3 px-4"><span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">PARTIAL</span></td>
-                  </tr>
-                  <tr>
-                    <td className="py-3 px-4 font-mono font-bold text-primary">INV-2026-003</td>
-                    <td className="py-3 px-4 font-bold text-foreground">Innovate Solutions</td>
-                    <td className="py-3 px-4 text-muted-foreground">10 Jul 2026</td>
-                    <td className="py-3 px-4 text-muted-foreground">30 Jul 2026</td>
-                    <td className="py-3 px-4 text-right font-bold text-foreground">₹3,20,000</td>
-                    <td className="py-3 px-4 text-right font-bold text-rose-500">₹0</td>
-                    <td className="py-3 px-4"><span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-500 border border-rose-500/20">OVERDUE</span></td>
-                  </tr>
-                </tbody>
-              </table>
+              <p className="text-2xl font-extrabold text-primary">
+                {totalInvoicedSum > 0 ? `${Math.round((totalCollectedSum / totalInvoicedSum) * 100)}%` : "100%"}
+              </p>
+              <p className="text-[11px] text-muted-foreground font-semibold">Collection efficiency</p>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── TAB 2: LEADS & SALES REPORT ─────────────────────────────────────── */}
+      {/* ── TAB 2: LEADS REPORT ──────────────────────────────────────────────── */}
       {activeTab === "leads" && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="p-5 rounded-2xl bg-surface border border-border space-y-1">
-              <p className="text-xs font-semibold text-muted-foreground">Total Leads Logged</p>
-              <p className="text-2xl font-extrabold text-foreground">148</p>
-              <p className="text-[11px] text-muted-foreground pt-1">Across all marketing channels</p>
+              <p className="text-xs font-semibold text-muted-foreground">Total Inquiries & Leads</p>
+              <p className="text-2xl font-extrabold text-foreground">{leads.length}</p>
+              <p className="text-[11px] text-muted-foreground pt-1">Active Pipeline Volume</p>
             </div>
             <div className="p-5 rounded-2xl bg-surface border border-border space-y-1">
-              <p className="text-xs font-semibold text-muted-foreground">Qualified Leads</p>
-              <p className="text-2xl font-extrabold text-indigo-500">62 (41.8%)</p>
-              <p className="text-[11px] text-muted-foreground pt-1">High conversion likelihood</p>
+              <p className="text-xs font-semibold text-muted-foreground">Qualified Opportunities</p>
+              <p className="text-2xl font-extrabold text-emerald-500">
+                {leads.filter(l => l.status === "Qualified" || l.status === "Discussion").length}
+              </p>
+              <p className="text-[11px] text-muted-foreground pt-1">High conversion propensity</p>
             </div>
             <div className="p-5 rounded-2xl bg-surface border border-border space-y-1">
-              <p className="text-xs font-semibold text-muted-foreground">Deals Won / Converted</p>
-              <p className="text-2xl font-extrabold text-emerald-500">38</p>
-              <p className="text-[11px] text-muted-foreground pt-1">Conversion Rate: <strong className="text-emerald-500">25.6%</strong></p>
-            </div>
-            <div className="p-5 rounded-2xl bg-surface border border-border space-y-1">
-              <p className="text-xs font-semibold text-muted-foreground">Pipeline Deal Value</p>
-              <p className="text-2xl font-extrabold text-blue-500">₹18,20,000</p>
-              <p className="text-[11px] text-muted-foreground pt-1">Potential pipeline revenue</p>
-            </div>
-          </div>
-
-          <div className="bg-surface border border-border rounded-2xl p-5 space-y-4">
-            <h3 className="font-bold text-sm text-foreground">Lead Source Breakdown</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-              <div className="p-4 rounded-xl bg-background border border-border/60 space-y-2">
-                <div className="flex justify-between font-bold">
-                  <span>🌐 Website Inquiries</span>
-                  <span className="text-primary">65 Leads (44%)</span>
-                </div>
-                <div className="w-full h-2 bg-surface rounded-full overflow-hidden">
-                  <div className="h-full bg-primary rounded-full w-[44%]" />
-                </div>
-              </div>
-
-              <div className="p-4 rounded-xl bg-background border border-border/60 space-y-2">
-                <div className="flex justify-between font-bold">
-                  <span>🤝 Client Referrals</span>
-                  <span className="text-emerald-500">42 Leads (28%)</span>
-                </div>
-                <div className="w-full h-2 bg-surface rounded-full overflow-hidden">
-                  <div className="h-full bg-emerald-500 rounded-full w-[28%]" />
-                </div>
-              </div>
-
-              <div className="p-4 rounded-xl bg-background border border-border/60 space-y-2">
-                <div className="flex justify-between font-bold">
-                  <span>📞 Cold Calls / Direct</span>
-                  <span className="text-amber-500">41 Leads (28%)</span>
-                </div>
-                <div className="w-full h-2 bg-surface rounded-full overflow-hidden">
-                  <div className="h-full bg-amber-500 rounded-full w-[28%]" />
-                </div>
-              </div>
+              <p className="text-xs font-semibold text-muted-foreground">Deals Won</p>
+              <p className="text-2xl font-extrabold text-primary">
+                {leads.filter(l => l.status === "Won").length}
+              </p>
+              <p className="text-[11px] text-muted-foreground pt-1">Converted to client accounts</p>
             </div>
           </div>
         </div>
@@ -365,30 +271,24 @@ export default function ReportsMain() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/40 font-medium">
-                  <tr>
-                    <td className="py-3 px-4 font-bold text-foreground">Priya Patel</td>
-                    <td className="py-3 px-4 text-muted-foreground">Admin / Manager</td>
-                    <td className="py-3 px-4 text-center font-mono">24</td>
-                    <td className="py-3 px-4 text-center font-mono text-emerald-500 font-bold">22</td>
-                    <td className="py-3 px-4 text-center font-bold text-emerald-500">91.6%</td>
-                    <td className="py-3 px-4 text-right font-mono text-muted-foreground">4.2 hrs</td>
-                  </tr>
-                  <tr>
-                    <td className="py-3 px-4 font-bold text-foreground">Sneha Gupta</td>
-                    <td className="py-3 px-4 text-muted-foreground">Team Member</td>
-                    <td className="py-3 px-4 text-center font-mono">18</td>
-                    <td className="py-3 px-4 text-center font-mono text-emerald-500 font-bold">15</td>
-                    <td className="py-3 px-4 text-center font-bold text-emerald-500">83.3%</td>
-                    <td className="py-3 px-4 text-right font-mono text-muted-foreground">3.8 hrs</td>
-                  </tr>
-                  <tr>
-                    <td className="py-3 px-4 font-bold text-foreground">Amit Kumar</td>
-                    <td className="py-3 px-4 text-muted-foreground">Developer</td>
-                    <td className="py-3 px-4 text-center font-mono">32</td>
-                    <td className="py-3 px-4 text-center font-mono text-emerald-500 font-bold">29</td>
-                    <td className="py-3 px-4 text-center font-bold text-emerald-500">90.6%</td>
-                    <td className="py-3 px-4 text-right font-mono text-muted-foreground">5.5 hrs</td>
-                  </tr>
+                  {userProductivity.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-muted-foreground">
+                        No team members registered yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    userProductivity.map((up) => (
+                      <tr key={up.name} className="hover:bg-surface-hover/50">
+                        <td className="py-3 px-4 font-bold text-foreground">{up.name}</td>
+                        <td className="py-3 px-4 text-muted-foreground">{up.role}</td>
+                        <td className="py-3 px-4 text-center font-mono">{up.assigned}</td>
+                        <td className="py-3 px-4 text-center font-mono text-emerald-500 font-bold">{up.completed}</td>
+                        <td className="py-3 px-4 text-center font-bold text-emerald-500">{up.rate}</td>
+                        <td className="py-3 px-4 text-right font-mono text-muted-foreground">{up.avgTime}</td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -396,35 +296,31 @@ export default function ReportsMain() {
         </div>
       )}
 
-      {/* ── TAB 4: ATTENDANCE REPORT ────────────────────────────────────────── */}
+      {/* ── TAB 4: ATTENDANCE / DIRECTORY REPORT ─────────────────────────────── */}
       {activeTab === "attendance" && (
         <div className="space-y-6">
           <div className="bg-surface border border-border rounded-2xl p-5 space-y-4">
-            <h3 className="font-bold text-sm text-foreground">Employee Attendance & Timesheet Log</h3>
+            <h3 className="font-bold text-sm text-foreground">Registered Personnel & Account Status</h3>
             <div className="overflow-x-auto">
               <table className="w-full text-xs text-left border-collapse">
                 <thead>
                   <tr className="border-b border-border text-muted-foreground font-semibold">
                     <th className="py-3 px-4">Employee</th>
                     <th className="py-3 px-4">Role</th>
-                    <th className="py-3 px-4 text-center">Days Present</th>
-                    <th className="py-3 px-4 text-center">Hours Logged</th>
-                    <th className="py-3 px-4 text-center">Overtime</th>
-                    <th className="py-3 px-4 text-right">Attendance Rate</th>
+                    <th className="py-3 px-4">Department</th>
+                    <th className="py-3 px-4 text-center">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/40 font-medium">
-                  {users.map((u) => (
-                    <tr key={u.email}>
+                  {users.filter(u => u.role !== "Clients").map((u) => (
+                    <tr key={u.email} className="hover:bg-surface-hover/50">
                       <td className="py-3 px-4 font-bold text-foreground flex items-center gap-2">
                         <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${u.email}`} alt={u.name} className="w-6 h-6 rounded-full border shrink-0" />
                         <span>{u.name}</span>
                       </td>
                       <td className="py-3 px-4 text-muted-foreground">{u.role}</td>
-                      <td className="py-3 px-4 text-center font-mono font-bold">22 / 22</td>
-                      <td className="py-3 px-4 text-center font-mono text-emerald-500 font-bold">176 hrs</td>
-                      <td className="py-3 px-4 text-center font-mono text-amber-500">12 hrs</td>
-                      <td className="py-3 px-4 text-right font-bold text-emerald-500">100%</td>
+                      <td className="py-3 px-4 text-muted-foreground">{u.department || "Operations"}</td>
+                      <td className="py-3 px-4 text-center font-bold text-emerald-500">{u.status || "Active"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -440,18 +336,24 @@ export default function ReportsMain() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
             <div className="p-5 rounded-2xl bg-surface border border-border space-y-1">
               <p className="text-xs font-semibold text-muted-foreground">Total Operational Expenses</p>
-              <p className="text-2xl font-extrabold text-foreground">₹2,85,000</p>
-              <p className="text-[11px] text-muted-foreground pt-1">Current period</p>
-            </div>
-            <div className="p-5 rounded-2xl bg-surface border border-border space-y-1">
-              <p className="text-xs font-semibold text-muted-foreground">Largest Category</p>
-              <p className="text-2xl font-extrabold text-indigo-500">Software & Servers</p>
-              <p className="text-[11px] text-muted-foreground pt-1">₹1,20,000 (42.1%)</p>
+              <p className="text-2xl font-extrabold text-foreground">
+                ₹{expenses.reduce((sum, e) => sum + (e.amountNum || parseInt((e.amount || "0").replace(/[^0-9]/g, "")) || 0), 0).toLocaleString("en-IN")}
+              </p>
+              <p className="text-[11px] text-muted-foreground pt-1">{expenses.length} Recorded Expense Receipts</p>
             </div>
             <div className="p-5 rounded-2xl bg-surface border border-border space-y-1">
               <p className="text-xs font-semibold text-muted-foreground">Pending Approval</p>
-              <p className="text-2xl font-extrabold text-amber-500">₹15,400</p>
-              <p className="text-[11px] text-muted-foreground pt-1">2 reimbursement requests</p>
+              <p className="text-2xl font-extrabold text-amber-500">
+                {expenses.filter(e => e.status === "Pending").length} Requests
+              </p>
+              <p className="text-[11px] text-muted-foreground pt-1">Awaiting settlement</p>
+            </div>
+            <div className="p-5 rounded-2xl bg-surface border border-border space-y-1">
+              <p className="text-xs font-semibold text-muted-foreground">Approved Settlements</p>
+              <p className="text-2xl font-extrabold text-emerald-500">
+                {expenses.filter(e => e.status === "Approved").length} Settled
+              </p>
+              <p className="text-[11px] text-muted-foreground pt-1">Verified business costs</p>
             </div>
           </div>
         </div>

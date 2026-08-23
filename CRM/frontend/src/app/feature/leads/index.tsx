@@ -40,7 +40,9 @@ export default function LeadsMain() {
       if (showLoading) setIsLoading(true)
       try {
         const data = await getLeads()
-        setLeads(data)
+        if (Array.isArray(data)) {
+          setLeads(data)
+        }
       } catch (err) {
         console.warn("Error loading leads:", err)
       } finally {

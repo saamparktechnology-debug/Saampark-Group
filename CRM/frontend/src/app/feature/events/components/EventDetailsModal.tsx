@@ -87,15 +87,15 @@ export function EventDetailsModal({
 
           {/* User Creator Avatar Badge */}
           <div className="flex items-center gap-3 pt-1">
-            <div className="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden flex items-center justify-center text-sm font-semibold text-slate-600 dark:text-slate-200 shrink-0">
+            <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/40 overflow-hidden flex items-center justify-center text-xs font-semibold text-blue-600 dark:text-blue-300 shrink-0">
               <img
-                src="https://api.dicebear.com/7.x/notionists/svg?seed=JohnDoe"
-                alt="John Doe"
+                src={`https://api.dicebear.com/7.x/notionists/svg?seed=${(event as any).created_by || "User"}`}
+                alt={(event as any).created_by || "User"}
                 className="w-full h-full object-cover"
               />
             </div>
-            <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
-              John Doe
+            <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+              {(event as any).created_by || "Admin Organizer"}
             </span>
           </div>
 

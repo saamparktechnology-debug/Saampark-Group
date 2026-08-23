@@ -11,6 +11,8 @@ import { addPayment } from "@/app/feature/sales/payments/services/paymentService
 import { taskService } from "@/app/feature/tasks/services/taskService"
 import { saveStoredClient, getStoredClients } from "../services/clientService"
 
+import { useAuthStore } from "@/store/useAuthStore"
+
 interface AddClientProjectModalProps {
   isOpen: boolean
   client: ClientItem | null
@@ -26,9 +28,11 @@ export function AddClientProjectModal({
   onProjectCreated,
   onInvoiceCreated,
 }: AddClientProjectModalProps) {
+  const { user } = useAuthStore()
+
   const [projectTitle, setProjectTitle] = React.useState("")
   const [category, setCategory] = React.useState("Website Development")
-  const [billedByAdmin, setBilledByAdmin] = React.useState("")
+  const [billedByAdmin, setBilledByAdmin] = React.useState(user?.name || "Admin")
   const [assignedMembers, setAssignedMembers] = React.useState<string[]>([])
   const [startDate, setStartDate] = React.useState(new Date().toISOString().split("T")[0])
   const [deadline, setDeadline] = React.useState(() => {
@@ -48,22 +52,34 @@ export function AddClientProjectModal({
 
   React.useEffect(() => {
     if (isOpen) {
+      if (user?.name) {
+        setBilledByAdmin(user.name)
+      }
       getUsers("all").then((users) => {
-        const admins = users.filter(u => u.role === "Super Admin" || u.role === "Admin").map(u => ({ id: u.id, name: u.name }))
-        const teams = users.filter(u => u.role === "Teams").map(u => ({ id: u.id, name: u.name, role: u.role }))
+        let admins = users
+          .filter(u => (u.role === "Super Admin" || u.role === "Admin") && u.status !== "Inactive")
+          .map(u => ({ id: u.id, name: u.name }))
+        
+        if (user?.name && !admins.some(a => a.name.toLowerCase().trim() === user.name.toLowerCase().trim())) {
+          admins.unshift({ id: String(user.id || 'curr'), name: user.name })
+        }
+
+        const teams = users
+          .filter(u => (u.role === "Teams" || u.role === "Admin" || u.role === "Super Admin") && u.status !== "Inactive")
+          .map(u => ({ id: u.id, name: u.name, role: u.role }))
         
         setAdminsList(admins)
         setTeamsList(teams)
 
-        if (admins.length > 0) {
-          setBilledByAdmin(admins[0].name)
+        if (!billedByAdmin && admins.length > 0) {
+          setBilledByAdmin(user?.name || admins[0].name)
         }
-        if (teams.length > 0) {
+        if (assignedMembers.length === 0 && teams.length > 0) {
           setAssignedMembers([teams[0].name])
         }
       })
     }
-  }, [isOpen])
+  }, [isOpen, user])
 
   if (!isOpen || !client) return null
 

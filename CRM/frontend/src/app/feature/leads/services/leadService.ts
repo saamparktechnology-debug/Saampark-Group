@@ -165,8 +165,11 @@ export async function checkAndAutoConvertLeadToClient(lead: Lead): Promise<void>
 
 export const addLead = async (leadData: Omit<Lead, "id">): Promise<Lead> => {
   const current = await fetchModuleDataFromDB<Lead[]>("leads", [])
-  const maxNum = Math.max(100, ...current.map((l) => parseInt(l.id) || 0))
-  const newId = (maxNum > 0 ? maxNum + 1 : Date.now()).toString()
+  
+  // Unique collision-free ID generation
+  const timestamp = Date.now()
+  const randomSuffix = Math.random().toString(36).substring(2, 6)
+  const newId = `lead_${timestamp}_${randomSuffix}`
   
   const tomorrow = new Date()
   tomorrow.setDate(tomorrow.getDate() + 1)
@@ -183,7 +186,7 @@ export const addLead = async (leadData: Omit<Lead, "id">): Promise<Lead> => {
     caller: leadData.caller || leadData.owner || "Team",
     isLocked: false,
   }
-  const updated = [newLead, ...current]
+  const updated = [newLead, ...current.filter((l) => l.id !== newId)]
   await saveModuleDataToDB("leads", updated)
   syncLeadReminderTask(newLead)
   checkAndAutoConvertLeadToClient(newLead)
