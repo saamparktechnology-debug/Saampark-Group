@@ -35,15 +35,15 @@ interface LeadKanbanProps {
   onToggleLeadLabel: (leadId: string, labelName: string) => void
 }
 
-const KANBAN_COLUMNS: { id: LeadStatus; title: string; count: number; color: string }[] = [
-  { id: "New", title: "New", count: 18, color: "border-amber-400" },
-  { id: "Qualified", title: "Qualified", count: 11, color: "border-blue-500" },
-  { id: "Discussion", title: "Discussion", count: 22, color: "border-cyan-400" },
-  { id: "Negotiation", title: "Negotiation", count: 17, color: "border-purple-500" },
-  { id: "Store Visit", title: "Store Visit", count: 8, color: "border-indigo-500" },
-  { id: "They come to our office", title: "They come to our office", count: 6, color: "border-orange-500" },
-  { id: "Won", title: "Won", count: 14, color: "border-emerald-500" },
-  { id: "Lost", title: "Lost", count: 4, color: "border-rose-500" },
+const KANBAN_COLUMNS: { id: LeadStatus; title: string; color: string }[] = [
+  { id: "New", title: "New", color: "border-amber-400" },
+  { id: "Qualified", title: "Qualified", color: "border-blue-500" },
+  { id: "Discussion", title: "Discussion", color: "border-cyan-400" },
+  { id: "Negotiation", title: "Negotiation", color: "border-purple-500" },
+  { id: "Store Visit", title: "Store Visit", color: "border-indigo-500" },
+  { id: "They come to our office", title: "They come to our office", color: "border-orange-500" },
+  { id: "Won", title: "Won", color: "border-emerald-500" },
+  { id: "Lost", title: "Lost", color: "border-rose-500" },
 ]
 
 export function LeadKanban({
@@ -336,7 +336,7 @@ export function LeadKanban({
                   {col.title}
                 </span>
                 <span className="text-xs font-bold text-zinc-600 dark:text-zinc-400 shrink-0">
-                  {columnLeads.length || col.count}
+                  {columnLeads.length}
                 </span>
               </div>
 
@@ -388,7 +388,7 @@ export function LeadKanban({
                             <span className="truncate">
                               Service:{" "}
                               <strong className="font-semibold text-zinc-700 dark:text-zinc-200">
-                                {l.service || "Website Devlopment"}
+                                {l.service || "-"}
                               </strong>
                             </span>
                           </div>

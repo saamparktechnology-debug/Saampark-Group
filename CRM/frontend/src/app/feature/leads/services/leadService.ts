@@ -179,10 +179,10 @@ export const addLead = async (leadData: Omit<Lead, "id">): Promise<Lead> => {
     ...leadData,
     id: newId,
     createdAt: leadData.createdAt || `${new Date().toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' })}`,
-    service: leadData.service || "Website Development",
+    service: leadData.service !== undefined ? leadData.service : "",
     source: leadData.source || "Social Media",
-    reminderDate: leadData.reminderDate || defaultFutureReminderDate,
-    reminderNotes: leadData.reminderNotes || "Follow up call scheduled",
+    reminderDate: leadData.reminderDate || "None",
+    reminderNotes: leadData.reminderNotes || "",
     caller: leadData.caller || leadData.owner || "Team",
     isLocked: false,
   }

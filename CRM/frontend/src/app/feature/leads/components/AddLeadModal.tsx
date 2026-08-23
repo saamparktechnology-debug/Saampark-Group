@@ -83,9 +83,9 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
   const [companyName, setCompanyName] = React.useState("")
   const [primaryContact, setPrimaryContact] = React.useState("")
   const [status, setStatus] = React.useState<LeadStatus>("New")
-  const [selectedServices, setSelectedServices] = React.useState<string[]>(["Website Devlopment"])
+  const [selectedServices, setSelectedServices] = React.useState<string[]>([])
   const [customService, setCustomService] = React.useState("")
-  const [isNoReminder, setIsNoReminder] = React.useState(false)
+  const [isNoReminder, setIsNoReminder] = React.useState(true)
   const [reminderDate, setReminderDate] = React.useState(() => {
     const tomorrow = new Date()
     tomorrow.setDate(tomorrow.getDate() + 1)
@@ -119,6 +119,9 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
 
   React.useEffect(() => {
     if (isOpen) {
+      setSelectedServices([])
+      setCustomService("")
+      setIsNoReminder(true)
       getUsers("all").then((list) => {
         const teamOnly = (list || []).filter((u) => {
           const r = (u.role || "").toLowerCase().trim()
@@ -153,7 +156,7 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
     }
 
     const activeSvcs = selectedServices.map((s) => (s === "Others" ? (customService.trim() || "Custom Service") : s)).filter(Boolean)
-    const finalService = activeSvcs.length > 0 ? activeSvcs.join(", ") : "Website Devlopment"
+    const finalService = activeSvcs.length > 0 ? activeSvcs.join(", ") : ""
     const finalSource = source === "Others" ? (customSource.trim() || "Custom Source") : source
     const effectiveCaller = caller || user?.name || "Team"
     const effectiveOwner = owner || user?.name || "Team"

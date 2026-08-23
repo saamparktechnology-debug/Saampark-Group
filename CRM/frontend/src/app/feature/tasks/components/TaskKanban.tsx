@@ -22,11 +22,11 @@ interface TaskKanbanProps {
   onTaskUpdated: (updatedTask: Task) => void
 }
 
-const KANBAN_COLUMNS: { id: TaskStatus; title: string; count: number; color: string }[] = [
-  { id: "To do", title: "To Do", count: 20, color: "border-amber-400" },
-  { id: "In progress", title: "In progress", count: 13, color: "border-blue-500" },
-  { id: "Review", title: "Review", count: 13, color: "border-purple-500" },
-  { id: "Done", title: "Done", count: 45, color: "border-emerald-500" },
+const KANBAN_COLUMNS: { id: TaskStatus; title: string; color: string }[] = [
+  { id: "To do", title: "To Do", color: "border-amber-400" },
+  { id: "In progress", title: "In progress", color: "border-blue-500" },
+  { id: "Review", title: "Review", color: "border-purple-500" },
+  { id: "Done", title: "Done", color: "border-emerald-500" },
 ]
 
 const labelBadgeStyles: Record<string, string> = {
@@ -333,7 +333,7 @@ export function TaskKanban({
                   {col.title}
                 </span>
                 <span className="text-xs font-bold text-zinc-600 dark:text-zinc-400">
-                  {columnTasks.length || col.count}
+                  {columnTasks.length}
                 </span>
               </div>
 

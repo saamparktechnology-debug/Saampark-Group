@@ -390,7 +390,7 @@ export function LeadList({
                     {/* Service */}
                     <td className={`py-3.5 px-4 ${isLocked ? "blur-[1px] opacity-60" : ""}`}>
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800/60">
-                        {l.service || "Website Devlopment"}
+                        {l.service || "-"}
                       </span>
                     </td>
 
