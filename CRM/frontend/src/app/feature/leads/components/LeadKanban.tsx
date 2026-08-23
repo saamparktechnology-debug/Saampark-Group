@@ -15,6 +15,8 @@ import {
   MessageSquare,
   Heart,
   MapPin,
+  Lock,
+  Unlock,
 } from "lucide-react"
 import { Lead, LeadStatus } from "../types"
 import { LeadFiltersDropdown } from "./LeadFiltersDropdown"
@@ -62,7 +64,7 @@ export function LeadKanban({
   const canAddLead = canPerformAction(user, "Leads", "add")
   const isSuperAdminOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
 
-  const [activeFilter, setActiveFilter] = React.useState("All Leads")
+  const [activeFilter, setActiveFilter] = React.useState("All leads")
   const [searchQuery, setSearchQuery] = React.useState("")
   const [isFiltersDropdownOpen, setIsFiltersDropdownOpen] = React.useState(false)
   const [draggedLeadId, setDraggedLeadId] = React.useState<string | null>(null)
@@ -98,8 +100,25 @@ export function LeadKanban({
 
     const leadLabels = l.labels || []
 
-    if (!activeFilter || activeFilter === "My leads" || activeFilter === "All leads" || activeFilter === "All Leads") {
+    if (!activeFilter || activeFilter === "All leads" || activeFilter === "All Leads") {
       return matchesSearch
+    }
+
+    if (activeFilter === "My leads") {
+      const currentUserName = (user?.name || "").toLowerCase().trim()
+      const currentUserEmail = (user?.email || "").toLowerCase().trim()
+      const isMyLead =
+        (currentUserName && (
+          (l.createdBy || "").toLowerCase().includes(currentUserName) ||
+          (l.caller || "").toLowerCase() === currentUserName ||
+          (l.assignedTo || "").toLowerCase() === currentUserName ||
+          (l.owner || "").toLowerCase() === currentUserName
+        )) ||
+        (currentUserEmail && (
+          (l.createdBy || "").toLowerCase().includes(currentUserEmail) ||
+          (l.owner || "").toLowerCase() === currentUserEmail
+        ))
+      return matchesSearch && Boolean(isMyLead)
     }
 
     if (activeFilter === "50%") {
@@ -546,10 +565,10 @@ export function LeadKanban({
                                   const locked = await lockLead(l.id, "Manually locked by Admin")
                                   onLeadUpdated(locked)
                                 }}
-                                className="px-1.5 py-0.5 rounded bg-rose-100 hover:bg-rose-200 text-rose-700 font-bold text-[9.5px] transition-colors shrink-0"
-                                title="Admin Manual Lock"
+                                className="p-1 rounded bg-zinc-100 hover:bg-rose-100 text-zinc-500 hover:text-rose-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-rose-950/60 dark:hover:text-rose-300 transition-all duration-300 shrink-0 hover:scale-110 group/kblock cursor-pointer"
+                                title="Admin Manual Lock Lead"
                               >
-                                🔒
+                                <Unlock size={11} className="group-hover/kblock:rotate-[-18deg] transition-transform duration-300" />
                               </button>
                             )}
                           </div>
@@ -558,9 +577,10 @@ export function LeadKanban({
 
                       {/* Prominent Overlay Badge for Locked Cards */}
                       {isLocked && (
-                        <div className="absolute inset-0 z-20 bg-rose-950/20 backdrop-blur-[2px] rounded-xl flex flex-col items-center justify-center p-2 text-center border-2 border-rose-500/80 shadow-md">
-                          <div className="bg-rose-600 text-white font-extrabold text-xs px-3 py-1 rounded-lg shadow-sm flex items-center gap-1 mb-1">
-                            🔒 LEAD IS LOCKED
+                        <div className="absolute inset-0 z-20 bg-rose-950/25 backdrop-blur-[2px] rounded-xl flex flex-col items-center justify-center p-2 text-center border-2 border-rose-500/80 shadow-md">
+                          <div className="bg-rose-600 text-white font-extrabold text-xs px-3 py-1 rounded-lg shadow-sm flex items-center gap-1.5 mb-1">
+                            <Lock size={12} className="animate-pulse" />
+                            <span>LEAD IS LOCKED</span>
                           </div>
                           <p className="text-[10px] text-rose-900 dark:text-rose-100 font-semibold px-2">
                             {l.lockedReason || "SLA Missed - Untouchable by telecaller"}
@@ -576,9 +596,10 @@ export function LeadKanban({
                                 const unlocked = await unlockLead(l.id)
                                 onLeadUpdated(unlocked)
                               }}
-                              className="mt-2 bg-white text-rose-700 hover:bg-rose-100 font-bold text-xs px-3 py-1 rounded-lg transition-all shadow-md flex items-center gap-1"
+                              className="group/kunlock mt-2 bg-white text-rose-700 hover:bg-rose-50 font-bold text-xs px-3 py-1.5 rounded-lg transition-all shadow-md flex items-center gap-1.5 cursor-pointer hover:scale-105"
                             >
-                              🔓 Admin Unlock Lead
+                              <Unlock size={12} className="group-hover/kunlock:rotate-[-18deg] transition-transform duration-300" />
+                              <span>Admin Unlock Lead</span>
                             </button>
                           )}
                         </div>

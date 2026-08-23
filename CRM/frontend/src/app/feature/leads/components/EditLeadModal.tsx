@@ -6,33 +6,60 @@ import { Lead, LeadStatus, LeadType } from "../types"
 import { updateLead, unlockLead } from "../services/leadService"
 import { useAuthStore } from "@/store/useAuthStore"
 
-// Helper to convert date string "12 Aug 2025" or ISO "YYYY-MM-DD" to "YYYY-MM-DD" for input[type="date"]
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+// Helper to convert date string "12 Aug 2025" to "YYYY-MM-DD" for input[type="date"] (Zero UTC Timezone Shift)
 function formatDateForInput(dateStr?: string): string {
-  if (!dateStr) return new Date().toISOString().split("T")[0]
+  if (!dateStr || dateStr.toLowerCase() === "none" || dateStr.startsWith("00")) {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+  }
   if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr
+
+  const parts = dateStr.trim().split(/[\s\-\/\,\.]+/)
+  if (parts.length === 3) {
+    const monthIdx = MONTH_NAMES.findIndex(m => m.toLowerCase() === parts[1].toLowerCase())
+    if (monthIdx !== -1) {
+      const day = String(parseInt(parts[0], 10)).padStart(2, "0")
+      const month = String(monthIdx + 1).padStart(2, "0")
+      const year = parts[2]
+      return `${year}-${month}-${day}`
+    }
+    if (!isNaN(Number(parts[0])) && !isNaN(Number(parts[1])) && !isNaN(Number(parts[2]))) {
+      if (parts[2].length === 4) {
+        return `${parts[2]}-${String(parts[1]).padStart(2, "0")}-${String(parts[0]).padStart(2, "0")}`
+      }
+    }
+  }
+
   const parsed = new Date(dateStr)
   if (!isNaN(parsed.getTime())) {
-    return parsed.toISOString().split("T")[0]
+    return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`
   }
-  return new Date().toISOString().split("T")[0]
+
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
 }
 
 // Helper to convert "YYYY-MM-DD" to "12 Aug 2025"
 function formatDateForDisplay(yyyyMmDd: string): string {
-  if (!yyyyMmDd) return "12 Aug 2025"
-  const [y, m, d] = yyyyMmDd.split("-").map(Number)
-  if (!y || !m || !d) return yyyyMmDd
-  const dateObj = new Date(y, m - 1, d)
-  return dateObj.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+  if (!yyyyMmDd || yyyyMmDd.toLowerCase() === "none") return "None"
+  if (/^\d{4}-\d{2}-\d{2}$/.test(yyyyMmDd)) {
+    const [y, m, d] = yyyyMmDd.split("-").map(Number)
+    const monthName = MONTH_NAMES[m - 1] || "Aug"
+    const dayStr = String(d).padStart(2, "0")
+    return `${dayStr} ${monthName} ${y}`
+  }
+  return yyyyMmDd
 }
 
 // Helper to convert time string "11:30 AM" or "14:30" to "HH:MM" for input[type="time"]
 function formatTimeForInput(timeStr?: string): string {
-  if (!timeStr) return "11:30"
+  if (!timeStr || timeStr.toLowerCase() === "none") return "11:30"
   if (/^\d{2}:\d{2}$/.test(timeStr)) return timeStr
-  const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i)
+  const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i)
   if (match) {
-    let hours = parseInt(match[1])
+    let hours = parseInt(match[1], 10)
     const minutes = match[2]
     const ampm = match[3]?.toUpperCase()
     if (ampm === "PM" && hours < 12) hours += 12
@@ -42,14 +69,14 @@ function formatTimeForInput(timeStr?: string): string {
   return "11:30"
 }
 
-// Helper to convert "HH:MM" (e.g. "14:30") to "11:30 AM"
+// Helper to convert "HH:MM" (e.g. "14:30") to "02:30 PM"
 function formatTimeForDisplay(hhMm: string): string {
-  if (!hhMm) return "11:30 AM"
+  if (!hhMm || hhMm.toLowerCase() === "none") return "11:30 AM"
   const [h, m] = hhMm.split(":").map(Number)
   if (isNaN(h) || isNaN(m)) return hhMm
   const ampm = h >= 12 ? "PM" : "AM"
   const h12 = h % 12 || 12
-  return `${h12.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")} ${ampm}`
+  return `${h12.toString().padStart(2, "0")}:${String(m).padStart(2, "0")} ${ampm}`
 }
 
 interface EditLeadModalProps {
@@ -95,8 +122,7 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
   const [customService, setCustomService] = React.useState("")
   const [isNoReminder, setIsNoReminder] = React.useState(false)
   const [reminderDate, setReminderDate] = React.useState("12 Aug 2026")
-  const [reminderTimeVal, setReminderTimeVal] = React.useState("11:30")
-  const [timeAmPm, setTimeAmPm] = React.useState<"AM" | "PM">("AM")
+  const [reminderTime, setReminderTime] = React.useState("11:30 AM")
   const [reminderNotes, setReminderNotes] = React.useState("")
   const [caller, setCaller] = React.useState("")
   const [owner, setOwner] = React.useState("")
@@ -178,15 +204,8 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
         setReminderDate(rawDate)
       }
 
-      // Reminder Time initialization (12h format)
-      const rawTime = lead.reminderTime || "11:30 AM"
-      if (rawTime.toUpperCase().includes("PM")) {
-        setTimeAmPm("PM")
-        setReminderTimeVal(rawTime.replace(/PM/i, "").trim() || "11:30")
-      } else {
-        setTimeAmPm("AM")
-        setReminderTimeVal(rawTime.replace(/AM/i, "").trim() || "11:30")
-      }
+      // Reminder Time initialization
+      setReminderTime(lead.reminderTime || "11:30 AM")
 
       setReminderNotes(lead.reminderNotes || "")
       setCaller(lead.caller || lead.owner || "John Doe")
@@ -227,7 +246,7 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
     const finalService = activeSvcs.length > 0 ? activeSvcs.join(", ") : ""
     const finalSource = source === "Others" ? (customSource.trim() || "Custom Source") : source
     const finalReminderDate = isNoReminder ? "None" : (reminderDate || "None")
-    const finalReminderTime = (isNoReminder || finalReminderDate === "None") ? "None" : `${reminderTimeVal} ${timeAmPm}`
+    const finalReminderTime = (isNoReminder || finalReminderDate === "None") ? "None" : (reminderTime || "11:30 AM")
 
     setIsSubmitting(true)
     try {
@@ -460,28 +479,28 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
                     <input
                       type="date"
                       value={formatDateForInput(reminderDate)}
-                      onChange={(e) => setReminderDate(formatDateForDisplay(e.target.value))}
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          setReminderDate(formatDateForDisplay(e.target.value))
+                        }
+                      }}
                       className="w-full pl-8 pr-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-amber-600 dark:text-amber-400 font-semibold cursor-pointer text-xs"
                     />
                     <Calendar size={14} className="absolute left-2.5 text-amber-500 pointer-events-none" />
                   </div>
 
-                  <div className="flex items-center gap-1 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md px-2 py-1">
+                  <div className="relative flex items-center">
                     <input
-                      type="text"
-                      placeholder="11:30"
-                      value={reminderTimeVal}
-                      onChange={(e) => setReminderTimeVal(e.target.value)}
-                      className="w-16 text-center font-mono font-semibold text-xs text-amber-600 dark:text-amber-400 bg-transparent focus:outline-none"
+                      type="time"
+                      value={formatTimeForInput(reminderTime)}
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          setReminderTime(formatTimeForDisplay(e.target.value))
+                        }
+                      }}
+                      className="pl-8 pr-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-amber-600 dark:text-amber-400 font-semibold cursor-pointer text-xs font-mono"
                     />
-                    <select
-                      value={timeAmPm}
-                      onChange={(e) => setTimeAmPm(e.target.value as "AM" | "PM")}
-                      className="bg-transparent font-semibold text-xs text-amber-600 dark:text-amber-400 cursor-pointer focus:outline-none border-l border-zinc-200 dark:border-zinc-700 pl-1"
-                    >
-                      <option value="AM">AM</option>
-                      <option value="PM">PM</option>
-                    </select>
+                    <Clock size={14} className="absolute left-2.5 text-amber-500 pointer-events-none" />
                   </div>
                 </div>
               )}
@@ -503,11 +522,11 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
             />
           </div>
 
-          {/* Caller / Assigned Member */}
+          {/* Assigned to / Caller Member */}
           <div className="grid grid-cols-4 items-center gap-4">
             <label className="text-zinc-500 font-medium flex items-center gap-1">
               <UserIcon size={13} className="text-zinc-400" />
-              <span>Caller</span>
+              <span>Assigned to</span>
             </label>
             <select
               value={caller || "None"}

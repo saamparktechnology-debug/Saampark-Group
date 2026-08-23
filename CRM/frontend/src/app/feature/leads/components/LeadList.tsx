@@ -17,6 +17,8 @@ import {
   MessageSquare,
   User as UserIcon,
   MapPin,
+  Lock,
+  Unlock,
 } from "lucide-react"
 import { Lead } from "../types"
 import { LeadFiltersDropdown } from "./LeadFiltersDropdown"
@@ -70,10 +72,16 @@ export function LeadList({
   const canDeleteLead = isSuperAdminOrAdmin || canPerformAction(user, "Leads", "delete")
 
 
-  const [activeFilter, setActiveFilter] = React.useState("My leads")
+  const [activeFilter, setActiveFilter] = React.useState("All leads")
   const [searchQuery, setSearchQuery] = React.useState("")
   const [isFiltersDropdownOpen, setIsFiltersDropdownOpen] = React.useState(false)
   const [activePopoverLeadId, setActivePopoverLeadId] = React.useState<string | null>(null)
+  const [currentPage, setCurrentPage] = React.useState(1)
+  const [pageSize, setPageSize] = React.useState(10)
+
+  React.useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, activeFilter, pageSize])
 
   // Filter logic
   const filteredLeads = (leads || []).filter((l) => {
@@ -105,8 +113,25 @@ export function LeadList({
 
     const leadLabels = l.labels || []
     
-    if (!activeFilter || activeFilter === "My leads" || activeFilter === "All leads") {
+    if (!activeFilter || activeFilter === "All leads" || activeFilter === "All Leads") {
       return matchesSearch
+    }
+
+    if (activeFilter === "My leads") {
+      const currentUserName = (user?.name || "").toLowerCase().trim()
+      const currentUserEmail = (user?.email || "").toLowerCase().trim()
+      const isMyLead =
+        (currentUserName && (
+          (l.createdBy || "").toLowerCase().includes(currentUserName) ||
+          (l.caller || "").toLowerCase() === currentUserName ||
+          (l.assignedTo || "").toLowerCase() === currentUserName ||
+          (l.owner || "").toLowerCase() === currentUserName
+        )) ||
+        (currentUserEmail && (
+          (l.createdBy || "").toLowerCase().includes(currentUserEmail) ||
+          (l.owner || "").toLowerCase() === currentUserEmail
+        ))
+      return matchesSearch && Boolean(isMyLead)
     }
 
     if (activeFilter === "50%") {
@@ -119,6 +144,14 @@ export function LeadList({
 
     return matchesSearch && leadLabels.includes(activeFilter)
   })
+
+  // Pagination calculation
+  const totalItems = filteredLeads.length
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize))
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages)
+  const startIndex = (safeCurrentPage - 1) * pageSize
+  const endIndex = Math.min(startIndex + pageSize, totalItems)
+  const paginatedLeads = filteredLeads.slice(startIndex, endIndex)
 
   // Excel Export
   const handleExportExcel = () => {
@@ -329,7 +362,7 @@ export function LeadList({
                 <th className="py-3 px-4">Service</th>
                 <th className="py-3 px-4">Source</th>
                 <th className="py-3 px-4">City</th>
-                <th className="py-3 px-4">Owner</th>
+                <th className="py-3 px-4">Assigned to</th>
                 <th className="py-3 px-4">Labels</th>
                 <th className="py-3 px-4">Created at</th>
                 <th className="py-3 px-4">
@@ -343,31 +376,25 @@ export function LeadList({
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60 text-zinc-700 dark:text-zinc-300">
-              {filteredLeads.map((l) => {
-                const isLocked = !!l.isLocked
+            <tbody className="divide-y divide-zinc-200/80 dark:divide-zinc-800">
+              {paginatedLeads.map((l) => {
+                const isLocked = l.isLocked === true
 
                 return (
                   <tr
                     key={l.id}
-                    className={`transition-colors group ${
-                      isLocked
-                        ? "bg-rose-50/30 dark:bg-rose-950/20 text-rose-900 dark:text-rose-100"
-                        : "hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40"
-                    }`}
+                    className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/50 transition-colors"
                   >
                     {/* Name */}
-                    <td className={`py-3.5 px-4 ${isLocked ? "blur-[1px] opacity-60 pointer-events-none" : ""}`}>
+                    <td className="py-3.5 px-4 font-medium text-zinc-900 dark:text-zinc-100">
                       <button
                         type="button"
-                        onClick={() => {
-                          if (isLocked && !isSuperAdminOrAdmin) {
-                            alert("🔒 THIS LEAD IS LOCKED!\n\nThis lead is locked and untouchable by telecallers. Only an Admin can unlock it.")
-                            return
-                          }
-                          onSelectLeadDetail(l)
-                        }}
-                        className={`font-medium hover:underline text-left ${isLocked ? "text-rose-700 dark:text-rose-300 line-through" : "text-blue-600 dark:text-blue-400"}`}
+                        onClick={() => onSelectLeadDetail(l)}
+                        className={`text-left hover:underline font-semibold ${
+                          isLocked
+                            ? "text-rose-600 dark:text-rose-400 line-through"
+                            : "text-blue-600 dark:text-blue-400"
+                        }`}
                       >
                         {l.name}
                       </button>
@@ -473,19 +500,44 @@ export function LeadList({
                       </div>
                     </td>
 
-                    {/* Owner / Caller */}
+                    {/* Assigned to (with profile pic) */}
                     <td className={`py-3.5 px-4 ${isLocked ? "blur-[1px] opacity-60" : ""}`}>
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-amber-400 to-amber-600 text-white flex items-center justify-center text-[10px] font-bold">
-                          {((l.caller || l.owner || l.createdBy || "Owner").split(" ").map((n) => n[0]).join("") || "U").slice(0, 2)}
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="text-zinc-700 dark:text-zinc-300 font-semibold">{l.caller || l.owner || "Team Member"}</span>
-                          {l.createdBy && l.createdBy !== (l.caller || l.owner) && (
-                            <span className="text-[10px] text-zinc-400">Added by: {l.createdBy}</span>
-                          )}
-                        </div>
-                      </div>
+                      {(() => {
+                        const rawAssigned = (l.assignedTo && l.assignedTo !== "None")
+                          ? l.assignedTo
+                          : ((l.caller && l.caller !== "None")
+                            ? l.caller
+                            : ((l.owner && l.owner !== "None") ? l.owner : "Unassigned"))
+                        const isUnassigned = rawAssigned === "Unassigned" || rawAssigned === "None"
+                        const assignedPerson = isUnassigned ? "Unassigned" : rawAssigned
+                        const avatarSrc = !isUnassigned
+                          ? (l.ownerAvatar || (user?.avatar && (assignedPerson === user.name || assignedPerson === user.email) ? user.avatar : null) || `https://api.dicebear.com/7.x/notionists/svg?seed=${encodeURIComponent(assignedPerson)}`)
+                          : null
+
+                        return (
+                          <div className="flex items-center gap-2">
+                            {avatarSrc ? (
+                              <img
+                                src={avatarSrc}
+                                alt={assignedPerson}
+                                className="w-6 h-6 rounded-full border border-zinc-200 dark:border-zinc-700 object-cover shrink-0"
+                              />
+                            ) : (
+                              <div className="w-6 h-6 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 border border-dashed border-zinc-300 dark:border-zinc-700 flex items-center justify-center text-[10px] shrink-0">
+                                <UserIcon size={12} />
+                              </div>
+                            )}
+                            <div className="flex flex-col min-w-0">
+                              <span className={`font-semibold text-xs ${isUnassigned ? "text-zinc-400 dark:text-zinc-500 italic" : "text-zinc-800 dark:text-zinc-200"}`}>
+                                {assignedPerson}
+                              </span>
+                              {l.createdBy && l.createdBy !== assignedPerson && (
+                                <span className="text-[10px] text-zinc-400 truncate">Added by: {l.createdBy}</span>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })()}
                     </td>
 
                     {/* Labels */}
@@ -577,14 +629,24 @@ export function LeadList({
                                 onLeadUpdated(locked)
                               }
                             }}
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors shadow-2xs ${
+                            className={`group/lock px-2 py-0.5 rounded text-[11px] font-semibold transition-all duration-200 shadow-2xs flex items-center gap-1 cursor-pointer ${
                               isLocked
-                                ? "bg-white text-rose-700 hover:bg-rose-100 border border-rose-300"
-                                : "bg-rose-100 text-rose-700 hover:bg-rose-200"
+                                ? "bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-300 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800"
+                                : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 hover:text-zinc-900 border border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700"
                             }`}
-                            title={isLocked ? "Admin Unlock Lead" : "Admin Manual Lock"}
+                            title={isLocked ? "Lead is Locked. Click to Unlock" : "Lead is Unlocked. Click to Lock"}
                           >
-                            {isLocked ? "🔓 Unlock" : "🔒 Lock"}
+                            {isLocked ? (
+                              <>
+                                <Lock size={12} className="text-rose-600 dark:text-rose-400 group-hover/lock:scale-110 transition-transform duration-300" />
+                                <span className="text-rose-600 dark:text-rose-400 font-bold">Lock</span>
+                              </>
+                            ) : (
+                              <>
+                                <Unlock size={12} className="text-zinc-500 group-hover/lock:rotate-[-18deg] group-hover/lock:scale-110 transition-transform duration-300" />
+                                <span>Unlock</span>
+                              </>
+                            )}
                           </button>
                         )}
 
@@ -647,19 +709,77 @@ export function LeadList({
         {/* Footer Pagination */}
         <div className="p-3 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between text-xs text-zinc-500 bg-zinc-50/50 dark:bg-zinc-800/30">
           <div className="flex items-center gap-2">
-            <select className="px-2 py-1 border border-zinc-200 dark:border-zinc-700 rounded bg-white dark:bg-zinc-800 text-xs">
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value))
+                setCurrentPage(1)
+              }}
+              className="px-2 py-1 border border-zinc-200 dark:border-zinc-700 rounded bg-white dark:bg-zinc-800 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-700 dark:text-zinc-300 font-medium cursor-pointer"
+            >
               <option value="10">10</option>
               <option value="25">25</option>
               <option value="50">50</option>
+              <option value="100">100</option>
             </select>
-            <span>1-10 / {leads.length}</span>
+            <span className="font-medium">
+              {totalItems === 0 ? "0 / 0" : `${startIndex + 1}-${endIndex} / ${totalItems}`}
+            </span>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button type="button" className="hover:text-zinc-900 disabled:opacity-30">&lt;</button>
-            <span className="px-2 py-0.5 bg-blue-600 text-white rounded font-medium">1</span>
-            <button type="button" className="hover:text-zinc-900">2</button>
-            <button type="button" className="hover:text-zinc-900">&gt;</button>
+          <div className="flex items-center gap-1.5">
+            {/* Previous Page Button */}
+            <button
+              type="button"
+              disabled={safeCurrentPage <= 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              className="px-2.5 py-1 rounded border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30 disabled:pointer-events-none transition-colors font-semibold"
+              title="Previous page"
+            >
+              &lt;
+            </button>
+
+            {/* Page number buttons */}
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => {
+              if (
+                totalPages > 7 &&
+                pageNum !== 1 &&
+                pageNum !== totalPages &&
+                Math.abs(pageNum - safeCurrentPage) > 1
+              ) {
+                if (pageNum === 2 || pageNum === totalPages - 1) {
+                  return <span key={pageNum} className="px-1 text-zinc-400">...</span>
+                }
+                return null
+              }
+
+              const isActive = pageNum === safeCurrentPage
+              return (
+                <button
+                  key={pageNum}
+                  type="button"
+                  onClick={() => setCurrentPage(pageNum)}
+                  className={`min-w-[28px] px-2 py-1 rounded text-xs font-semibold transition-all cursor-pointer ${
+                    isActive
+                      ? "bg-blue-600 text-white shadow-2xs"
+                      : "border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              )
+            })}
+
+            {/* Next Page Button */}
+            <button
+              type="button"
+              disabled={safeCurrentPage >= totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              className="px-2.5 py-1 rounded border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30 disabled:pointer-events-none transition-colors font-semibold"
+              title="Next page"
+            >
+              &gt;
+            </button>
           </div>
         </div>
 

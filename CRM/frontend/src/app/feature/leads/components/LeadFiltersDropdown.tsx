@@ -42,8 +42,8 @@ export function LeadFiltersDropdown({
 
   // Combine standard filters with all labels dynamically
   const baseOptions = [
-    { id: "My leads", label: "My leads" },
     { id: "All leads", label: "All leads" },
+    { id: "My leads", label: "My leads" },
   ]
 
   const labelOptions = (availableLabels || []).map((lbl) => ({
