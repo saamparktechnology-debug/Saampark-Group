@@ -18,6 +18,7 @@ import {
   Lock,
   Unlock,
   Building2,
+  Pencil,
 } from "lucide-react"
 import { Lead, LeadStatus } from "../types"
 import { LeadFiltersDropdown } from "./LeadFiltersDropdown"
@@ -431,17 +432,10 @@ export function LeadKanban({
                       key={l.id}
                       draggable={!isLocked}
                       onDragStart={() => !isLocked && handleDragStart(l.id)}
-                      onClick={() => {
-                        if (isLocked && !isSuperAdminOrAdmin) {
-                          alert("🔒 THIS LEAD IS LOCKED!\n\nThis lead is locked and untouchable by telecallers. Only an Admin can unlock it.")
-                          return
-                        }
-                        onSelectLeadDetail(l)
-                      }}
                       className={`border rounded-xl p-3 shadow-2xs transition-all space-y-2 relative group overflow-hidden ${
                         isLocked
                           ? "bg-rose-50/50 dark:bg-rose-950/40 border-rose-400 dark:border-rose-800"
-                          : "bg-white dark:bg-zinc-800 border-zinc-200/90 dark:border-zinc-700/80 hover:shadow-md cursor-pointer"
+                          : "bg-white dark:bg-zinc-800 border-zinc-200/90 dark:border-zinc-700/80 hover:shadow-md"
                       }`}
                     >
                       {/* Blurred Card Content when Locked */}
@@ -618,6 +612,21 @@ export function LeadKanban({
                                 </button>
                               )
                             })()}
+
+                            {/* Edit Lead Button (Only via Pencil Icon) */}
+                            {!isLocked && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onSelectLeadDetail(l)
+                                }}
+                                className="w-5 h-5 rounded-full bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-700 dark:hover:bg-zinc-600 text-zinc-600 dark:text-zinc-300 flex items-center justify-center transition-colors shrink-0 cursor-pointer"
+                                title="Edit lead"
+                              >
+                                <Pencil size={10} />
+                              </button>
+                            )}
 
                             {/* Admin Manual Lock Button (Shown for Unlocked Cards) */}
                             {isSuperAdminOrAdmin && !isLocked && (

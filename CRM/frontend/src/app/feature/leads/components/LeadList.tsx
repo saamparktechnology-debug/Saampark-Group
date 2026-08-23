@@ -468,17 +468,15 @@ export function LeadList({
                         <div className="w-6 h-6 rounded-md bg-blue-50 dark:bg-blue-950/70 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900 flex items-center justify-center shrink-0">
                           <Building2 size={13} />
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => onSelectLeadDetail(l)}
-                          className={`text-left hover:underline font-semibold ${
+                        <span
+                          className={`font-semibold ${
                             isLocked
                               ? "text-rose-600 dark:text-rose-400 line-through"
-                              : "text-blue-600 dark:text-blue-400"
+                              : "text-zinc-900 dark:text-zinc-100"
                           }`}
                         >
                           {l.name}
-                        </button>
+                        </span>
                       </div>
                     </td>
 
@@ -756,20 +754,11 @@ export function LeadList({
 
                         {!isLocked && (
                           <>
-                            <button
-                              type="button"
-                              onClick={() => onSelectLeadDetail(l)}
-                              className="p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded transition-colors"
-                              title="View lead details"
-                            >
-                              <Layout size={14} />
-                            </button>
-
                             {canEditLead && (
                               <button
                                 type="button"
                                 onClick={() => onOpenEditModal(l)}
-                                className="p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded transition-colors"
+                                className="p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded transition-colors cursor-pointer"
                                 title="Edit lead"
                               >
                                 <Pencil size={14} />
