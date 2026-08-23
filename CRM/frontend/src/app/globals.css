@@ -132,15 +132,15 @@
   --shadow-float: var(--shadow-float);
   --shadow-glow: var(--shadow-glow);
   
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
 }
 
 * {
   box-sizing: border-box;
 }
 
-body, input, textarea, select, button {
+body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), sans-serif;

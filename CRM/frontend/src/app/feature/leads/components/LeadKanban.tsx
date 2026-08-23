@@ -71,6 +71,54 @@ export function LeadKanban({
   const [draggedLeadId, setDraggedLeadId] = React.useState<string | null>(null)
   const [activeContactTarget, setActiveContactTarget] = React.useState<Record<string, "primary" | "secondary">>({})
 
+  // Mouse horizontal drag-to-scroll
+  const kanbanTrackRef = React.useRef<HTMLDivElement>(null)
+  const isKanbanDraggingRef = React.useRef(false)
+  const kanbanStartXRef = React.useRef(0)
+  const kanbanScrollLeftRef = React.useRef(0)
+  const hasKanbanDraggedRef = React.useRef(false)
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0 || !kanbanTrackRef.current) return
+    const target = e.target as HTMLElement
+    if (target.closest("input, select, textarea, button, a, [draggable='true']")) return
+
+    isKanbanDraggingRef.current = true
+    hasKanbanDraggedRef.current = false
+    kanbanStartXRef.current = e.pageX - kanbanTrackRef.current.offsetLeft
+    kanbanScrollLeftRef.current = kanbanTrackRef.current.scrollLeft
+    kanbanTrackRef.current.style.cursor = "grabbing"
+    kanbanTrackRef.current.style.userSelect = "none"
+  }
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isKanbanDraggingRef.current || !kanbanTrackRef.current) return
+    e.preventDefault()
+    const x = e.pageX - kanbanTrackRef.current.offsetLeft
+    const walk = (x - kanbanStartXRef.current) * 1.5
+    if (Math.abs(walk) > 3) {
+      hasKanbanDraggedRef.current = true
+    }
+    kanbanTrackRef.current.scrollLeft = kanbanScrollLeftRef.current - walk
+  }
+
+  const handleMouseUpOrLeave = () => {
+    if (!isKanbanDraggingRef.current) return
+    isKanbanDraggingRef.current = false
+    if (kanbanTrackRef.current) {
+      kanbanTrackRef.current.style.cursor = "grab"
+      kanbanTrackRef.current.style.removeProperty("user-select")
+    }
+  }
+
+  const handleClickCapture = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (hasKanbanDraggedRef.current) {
+      e.stopPropagation()
+      e.preventDefault()
+      hasKanbanDraggedRef.current = false
+    }
+  }
+
   // Filter leads
   const filteredLeads = (leads || []).filter((l) => {
     if (!l) return false
@@ -344,7 +392,15 @@ export function LeadKanban({
       </div>
 
       {/* ---------------- KANBAN STAGE COLUMNS (Single Horizontal Scroll Track) ---------------- */}
-      <div className="flex gap-4 overflow-x-auto pb-6 pt-1 items-start scrollbar-thin max-w-full">
+      <div
+        ref={kanbanTrackRef}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUpOrLeave}
+        onMouseLeave={handleMouseUpOrLeave}
+        onClickCapture={handleClickCapture}
+        className="flex gap-4 overflow-x-auto pb-6 pt-1 items-start scrollbar-thin max-w-full cursor-grab active:cursor-grabbing select-none"
+      >
         {KANBAN_COLUMNS.map((col) => {
           const columnLeads = filteredLeads.filter((l) => l.status === col.id)
 

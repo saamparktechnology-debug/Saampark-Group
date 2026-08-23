@@ -93,6 +93,55 @@ export function LeadList({
   const [currentPage, setCurrentPage] = React.useState(1)
   const [pageSize, setPageSize] = React.useState(10)
 
+  // Mouse horizontal drag-to-scroll
+  const tableContainerRef = React.useRef<HTMLDivElement>(null)
+  const isDraggingRef = React.useRef(false)
+  const startXRef = React.useRef(0)
+  const scrollLeftRef = React.useRef(0)
+  const hasDraggedRef = React.useRef(false)
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0 || !tableContainerRef.current) return
+    const target = e.target as HTMLElement
+    // Ignore interactive elements so users can click/select normally
+    if (target.closest("input, select, textarea, button, a")) return
+
+    isDraggingRef.current = true
+    hasDraggedRef.current = false
+    startXRef.current = e.pageX - tableContainerRef.current.offsetLeft
+    scrollLeftRef.current = tableContainerRef.current.scrollLeft
+    tableContainerRef.current.style.cursor = "grabbing"
+    tableContainerRef.current.style.userSelect = "none"
+  }
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDraggingRef.current || !tableContainerRef.current) return
+    e.preventDefault()
+    const x = e.pageX - tableContainerRef.current.offsetLeft
+    const walk = (x - startXRef.current) * 1.5
+    if (Math.abs(walk) > 3) {
+      hasDraggedRef.current = true
+    }
+    tableContainerRef.current.scrollLeft = scrollLeftRef.current - walk
+  }
+
+  const handleMouseUpOrLeave = () => {
+    if (!isDraggingRef.current) return
+    isDraggingRef.current = false
+    if (tableContainerRef.current) {
+      tableContainerRef.current.style.cursor = "grab"
+      tableContainerRef.current.style.removeProperty("user-select")
+    }
+  }
+
+  const handleClickCapture = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (hasDraggedRef.current) {
+      e.stopPropagation()
+      e.preventDefault()
+      hasDraggedRef.current = false
+    }
+  }
+
   React.useEffect(() => {
     setCurrentPage(1)
   }, [searchQuery, activeFilter, pageSize])
@@ -372,7 +421,15 @@ export function LeadList({
 
       {/* ---------------- DATA TABLE (Image 1 & Screenshot 1) ---------------- */}
       <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl overflow-hidden shadow-2xs">
-        <div className="overflow-x-auto">
+        <div
+          ref={tableContainerRef}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUpOrLeave}
+          onMouseLeave={handleMouseUpOrLeave}
+          onClickCapture={handleClickCapture}
+          className="overflow-x-auto select-none cursor-grab active:cursor-grabbing scrollbar-thin"
+        >
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="border-b border-zinc-200/80 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 font-semibold bg-zinc-50/50 dark:bg-zinc-800/40">
