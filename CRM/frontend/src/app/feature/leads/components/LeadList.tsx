@@ -88,58 +88,8 @@ export function LeadList({
 
   const [activeFilter, setActiveFilter] = React.useState("All leads")
   const [searchQuery, setSearchQuery] = React.useState("")
-  const [activePopoverLeadId, setActivePopoverLeadId] = React.useState<string | null>(null)
   const [isFiltersDropdownOpen, setIsFiltersDropdownOpen] = React.useState(false)
-
-  // Mouse horizontal click-and-drag scrolling
-  const tableScrollRef = React.useRef<HTMLDivElement>(null)
-  const isDraggingTableRef = React.useRef(false)
-  const [isDraggingTable, setIsDraggingTable] = React.useState(false)
-  const startXRef = React.useRef(0)
-  const scrollLeftRef = React.useRef(0)
-
-  const handleTableMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return
-    const target = e.target as HTMLElement
-    // Ignore interactive controls so users can click buttons, icons, links, inputs
-    if (
-      target.closest("button") ||
-      target.closest("input") ||
-      target.closest("select") ||
-      target.closest("a") ||
-      target.closest("label") ||
-      target.closest("[role='button']")
-    ) {
-      return
-    }
-
-    const container = tableScrollRef.current
-    if (!container) return
-
-    isDraggingTableRef.current = true
-    setIsDraggingTable(true)
-    startXRef.current = e.pageX - container.offsetLeft
-    scrollLeftRef.current = container.scrollLeft
-  }
-
-  const handleTableMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isDraggingTableRef.current) return
-    const container = tableScrollRef.current
-    if (!container) return
-
-    e.preventDefault()
-    const x = e.pageX - container.offsetLeft
-    const walk = (x - startXRef.current) * 1.5
-    container.scrollLeft = scrollLeftRef.current - walk
-  }
-
-  const handleTableMouseUpOrLeave = () => {
-    if (isDraggingTableRef.current) {
-      isDraggingTableRef.current = false
-      setIsDraggingTable(false)
-    }
-  }
-
+  const [activePopoverLeadId, setActivePopoverLeadId] = React.useState<string | null>(null)
   const [currentPage, setCurrentPage] = React.useState(1)
   const [pageSize, setPageSize] = React.useState(10)
 
@@ -422,18 +372,8 @@ export function LeadList({
 
       {/* ---------------- DATA TABLE (Image 1 & Screenshot 1) ---------------- */}
       <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl overflow-hidden shadow-2xs">
-        <div
-          ref={tableScrollRef}
-          onMouseDown={handleTableMouseDown}
-          onMouseMove={handleTableMouseMove}
-          onMouseUp={handleTableMouseUpOrLeave}
-          onMouseLeave={handleTableMouseUpOrLeave}
-          className={`overflow-x-auto select-none ${
-            isDraggingTable ? "cursor-grabbing active:cursor-grabbing" : "cursor-grab"
-          }`}
-          style={{ scrollBehavior: isDraggingTable ? "auto" : "smooth" }}
-        >
-          <table className="w-full text-left text-xs min-w-[1050px]">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
             <thead>
               <tr className="border-b border-zinc-200/80 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 font-semibold bg-zinc-50/50 dark:bg-zinc-800/40">
                 <th className="py-3 px-4">Name</th>
