@@ -66,6 +66,7 @@ export function LeadKanban({
   const [searchQuery, setSearchQuery] = React.useState("")
   const [isFiltersDropdownOpen, setIsFiltersDropdownOpen] = React.useState(false)
   const [draggedLeadId, setDraggedLeadId] = React.useState<string | null>(null)
+  const [activeContactTarget, setActiveContactTarget] = React.useState<Record<string, "primary" | "secondary">>({})
 
   // Filter leads
   const filteredLeads = (leads || []).filter((l) => {
@@ -375,10 +376,25 @@ export function LeadKanban({
                           </span>
                         </div>
 
-                        {/* Line 2: Phone */}
-                        <div className="flex items-center gap-1.5 text-[11px] text-zinc-600 dark:text-zinc-300 font-mono">
-                          <Phone size={12} className="text-zinc-400 shrink-0" />
-                          <span>{l.phone}</span>
+                        {/* Line 2: Phone & Secondary Contact */}
+                        <div className="space-y-1 text-[11px] font-mono">
+                          <div className="flex items-center justify-between text-zinc-600 dark:text-zinc-300">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <Phone size={12} className="text-blue-500 shrink-0" />
+                              <span className="truncate">{l.phone}</span>
+                            </div>
+                            {l.secondaryPhone && (
+                              <span className="text-[9.5px] font-sans font-medium px-1.5 py-0.2 rounded bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shrink-0">
+                                2 Contacts
+                              </span>
+                            )}
+                          </div>
+                          {l.secondaryPhone && (
+                            <div className="flex items-center gap-1 text-zinc-500 dark:text-zinc-400 text-[10px]">
+                              <UserIcon size={10} className="text-purple-400 shrink-0" />
+                              <span className="truncate">Mgr: {l.secondaryContact ? `${l.secondaryContact} • ` : ""}{l.secondaryPhone}</span>
+                            </div>
+                          )}
                         </div>
 
                         {/* Line 3: Service & Source */}
@@ -417,10 +433,10 @@ export function LeadKanban({
                         </div>
 
                         {/* Line 5: Caller & Avatar + Quick Action Buttons */}
-                        <div className="flex items-center justify-between pt-1.5 border-t border-zinc-100 dark:border-zinc-700/60 text-[11px]">
-                          <div className="flex items-center gap-1 text-zinc-600 dark:text-zinc-300">
+                        <div className="flex items-center justify-between pt-1.5 border-t border-zinc-100 dark:border-zinc-700/60 text-[11px] gap-1">
+                          <div className="flex items-center gap-1 text-zinc-600 dark:text-zinc-300 min-w-0">
                             <UserIcon size={12} className="text-zinc-400 shrink-0" />
-                            <span>
+                            <span className="truncate">
                               Caller:{" "}
                               <span className="font-medium text-zinc-700 dark:text-zinc-200">
                                 {l.caller || l.owner}
@@ -428,7 +444,43 @@ export function LeadKanban({
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1 shrink-0">
+                            {/* Contact Switcher for Call/WhatsApp if secondary phone exists */}
+                            {l.secondaryPhone && (
+                              <div className="flex items-center bg-zinc-100 dark:bg-zinc-700/70 p-0.5 rounded-md text-[9px] font-bold">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setActiveContactTarget((prev) => ({ ...prev, [l.id]: "primary" }))
+                                  }}
+                                  className={`px-1 py-0.5 rounded transition-all cursor-pointer ${
+                                    (activeContactTarget[l.id] || "primary") === "primary"
+                                      ? "bg-white dark:bg-zinc-800 text-blue-600 dark:text-blue-400 shadow-2xs font-extrabold"
+                                      : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                                  }`}
+                                  title={`Target Primary: ${l.primaryContact} (${l.phone})`}
+                                >
+                                  Primary
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setActiveContactTarget((prev) => ({ ...prev, [l.id]: "secondary" }))
+                                  }}
+                                  className={`px-1 py-0.5 rounded transition-all cursor-pointer ${
+                                    activeContactTarget[l.id] === "secondary"
+                                      ? "bg-white dark:bg-zinc-800 text-purple-600 dark:text-purple-400 shadow-2xs font-extrabold"
+                                      : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                                  }`}
+                                  title={`Target Manager: ${l.secondaryContact || "Manager"} (${l.secondaryPhone})`}
+                                >
+                                  Mgr
+                                </button>
+                              </div>
+                            )}
+
                             {/* Caller Avatar */}
                             <img
                               src={
@@ -437,36 +489,52 @@ export function LeadKanban({
                                 `https://api.dicebear.com/7.x/notionists/svg?seed=${l.caller || l.name}`
                               }
                               alt={l.name}
-                              className="w-6 h-6 rounded-full border border-zinc-200 object-cover shrink-0"
+                              className="w-5 h-5 rounded-full border border-zinc-200 object-cover shrink-0"
                             />
 
                             {/* Call Button */}
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                window.open(`tel:${l.phone.replace(/[^0-9+]/g, "")}`)
-                              }}
-                              className="w-6 h-6 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-600 flex items-center justify-center transition-colors shrink-0"
-                              title="Call lead"
-                            >
-                              <Phone size={11} />
-                            </button>
+                            {(() => {
+                              const isSec = activeContactTarget[l.id] === "secondary" && !!l.secondaryPhone
+                              const targetNum = isSec ? l.secondaryPhone! : l.phone
+                              const targetLabel = isSec ? `Manager (${l.secondaryContact || "Manager"})` : `Primary (${l.primaryContact})`
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    window.open(`tel:${targetNum.replace(/[^0-9+]/g, "")}`)
+                                  }}
+                                  className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors shrink-0 ${
+                                    isSec
+                                      ? "bg-purple-100 hover:bg-purple-200 text-purple-700 dark:bg-purple-950 dark:text-purple-300"
+                                      : "bg-blue-50 hover:bg-blue-100 text-blue-600 dark:bg-blue-950 dark:text-blue-300"
+                                  }`}
+                                  title={`Call ${targetLabel}: ${targetNum}`}
+                                >
+                                  <Phone size={10} />
+                                </button>
+                              )
+                            })()}
 
                             {/* WhatsApp Button */}
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                window.open(
-                                  `https://wa.me/${l.phone.replace(/[^0-9]/g, "")}`
-                                )
-                              }}
-                              className="w-6 h-6 rounded-full bg-emerald-50 hover:bg-emerald-100 text-emerald-600 flex items-center justify-center transition-colors shrink-0"
-                              title="WhatsApp lead"
-                            >
-                              <MessageSquare size={11} />
-                            </button>
+                            {(() => {
+                              const isSec = activeContactTarget[l.id] === "secondary" && !!l.secondaryPhone
+                              const targetNum = isSec ? l.secondaryPhone! : l.phone
+                              const targetLabel = isSec ? `Manager (${l.secondaryContact || "Manager"})` : `Primary (${l.primaryContact})`
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    window.open(`https://wa.me/${targetNum.replace(/[^0-9]/g, "")}`)
+                                  }}
+                                  className="w-5 h-5 rounded-full bg-emerald-50 hover:bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-300 flex items-center justify-center transition-colors shrink-0"
+                                  title={`WhatsApp ${targetLabel}: ${targetNum}`}
+                                >
+                                  <MessageSquare size={10} />
+                                </button>
+                              )
+                            })()}
 
                             {/* Admin Manual Lock Button (Shown for Unlocked Cards) */}
                             {isSuperAdminOrAdmin && !isLocked && (
@@ -481,7 +549,7 @@ export function LeadKanban({
                                 className="px-1.5 py-0.5 rounded bg-rose-100 hover:bg-rose-200 text-rose-700 font-bold text-[9.5px] transition-colors shrink-0"
                                 title="Admin Manual Lock"
                               >
-                                🔒 Lock
+                                🔒
                               </button>
                             )}
                           </div>

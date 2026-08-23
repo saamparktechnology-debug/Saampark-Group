@@ -14,6 +14,7 @@ import {
   Trash2,
   X,
   Phone,
+  MessageSquare,
   User as UserIcon,
   MapPin,
 } from "lucide-react"
@@ -372,19 +373,82 @@ export function LeadList({
                       </button>
                     </td>
 
-                    {/* Primary contact */}
+                    {/* Primary contact & Secondary manager */}
                     <td className={`py-3.5 px-4 ${isLocked ? "blur-[1px] opacity-60" : ""}`}>
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-zinc-200 dark:bg-zinc-700 text-zinc-500 flex items-center justify-center text-[10px]">
-                          <UserIcon size={12} />
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full bg-zinc-200 dark:bg-zinc-700 text-zinc-500 flex items-center justify-center text-[10px] shrink-0">
+                            <UserIcon size={12} />
+                          </div>
+                          <span className="text-blue-600 dark:text-blue-400 font-medium">{l.primaryContact}</span>
                         </div>
-                        <span className="text-blue-600 dark:text-blue-400 font-medium">{l.primaryContact}</span>
+                        {l.secondaryContact && (
+                          <span className="text-[10px] text-purple-600 dark:text-purple-400 pl-8 font-normal">
+                            Mgr: {l.secondaryContact}
+                          </span>
+                        )}
                       </div>
                     </td>
 
-                    {/* Phone */}
-                    <td className={`py-3.5 px-4 font-mono text-[11px] text-zinc-500 whitespace-pre-line leading-relaxed ${isLocked ? "blur-[1px] opacity-60" : ""}`}>
-                      {l.phone}
+                    {/* Phone & Secondary Phone with Instant Call & WhatsApp */}
+                    <td className={`py-3.5 px-4 font-mono text-[11px] whitespace-pre-line leading-relaxed ${isLocked ? "blur-[1px] opacity-60" : ""}`}>
+                      <div className="flex flex-col gap-1.5">
+                        {/* Primary Phone */}
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-zinc-700 dark:text-zinc-300 font-medium">{l.phone}</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              window.open(`tel:${l.phone.replace(/[^0-9+]/g, "")}`)
+                            }}
+                            className="p-1 rounded-full bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-400 transition-colors"
+                            title={`Call Primary: ${l.primaryContact} (${l.phone})`}
+                          >
+                            <Phone size={10} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              window.open(`https://wa.me/${l.phone.replace(/[^0-9]/g, "")}`)
+                            }}
+                            className="p-1 rounded-full bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 text-emerald-600 dark:text-emerald-400 transition-colors"
+                            title={`WhatsApp Primary: ${l.primaryContact} (${l.phone})`}
+                          >
+                            <MessageSquare size={10} />
+                          </button>
+                        </div>
+
+                        {/* Secondary Phone */}
+                        {l.secondaryPhone && (
+                          <div className="flex items-center gap-1.5 text-[10px]">
+                            <span className="text-purple-600 dark:text-purple-400 font-medium">Mgr: {l.secondaryPhone}</span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                window.open(`tel:${l.secondaryPhone!.replace(/[^0-9+]/g, "")}`)
+                              }}
+                              className="p-0.5 rounded-full bg-purple-100 hover:bg-purple-200 dark:bg-purple-950/60 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 transition-colors"
+                              title={`Call Manager: ${l.secondaryContact || "Manager"} (${l.secondaryPhone})`}
+                            >
+                              <Phone size={9} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                window.open(`https://wa.me/${l.secondaryPhone!.replace(/[^0-9]/g, "")}`)
+                              }}
+                              className="p-0.5 rounded-full bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 text-emerald-600 dark:text-emerald-400 transition-colors"
+                              title={`WhatsApp Manager: ${l.secondaryContact || "Manager"} (${l.secondaryPhone})`}
+                            >
+                              <MessageSquare size={9} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </td>
 
                     {/* Service */}
