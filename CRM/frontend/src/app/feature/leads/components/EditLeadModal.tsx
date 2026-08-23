@@ -492,52 +492,84 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
                     <Calendar size={14} className="absolute left-2.5 text-amber-500 pointer-events-none" />
                   </div>
 
-                  <div className="flex items-center bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md overflow-hidden">
-                    <div className="relative flex items-center">
-                      <input
-                        type="time"
-                        value={formatTimeForInput(reminderTime)}
-                        onChange={(e) => {
-                          if (e.target.value) {
-                            setReminderTime(formatTimeForDisplay(e.target.value))
-                          }
-                        }}
-                        className="pl-8 pr-2 py-2 bg-transparent focus:outline-none text-amber-600 dark:text-amber-400 font-semibold cursor-pointer text-xs"
-                      />
-                      <Clock size={14} className="absolute left-2.5 text-amber-500 pointer-events-none" />
-                    </div>
+                  {(() => {
+                    const match = (reminderTime || "11:30 AM").trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i)
+                    let hStr = "11"
+                    let mStr = "30"
+                    let ampmStr = "AM"
+                    if (match) {
+                      const rawH = parseInt(match[1], 10)
+                      ampmStr = (match[3] || (rawH >= 12 ? "PM" : "AM")).toUpperCase()
+                      const h12 = rawH > 12 ? rawH - 12 : (rawH === 0 ? 12 : rawH)
+                      hStr = String(h12).padStart(2, "0")
+                      mStr = match[2]
+                    }
 
-                    <div className="flex items-center border-l border-zinc-200 dark:border-zinc-700 bg-zinc-100/80 dark:bg-zinc-700/50 p-0.5 text-[10px] font-bold">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const raw = reminderTime || "11:30 AM"
-                          setReminderTime(raw.replace(/PM/i, "AM"))
-                        }}
-                        className={`px-1.5 py-1 rounded transition-colors cursor-pointer ${
-                          reminderTime.includes("AM")
-                            ? "bg-amber-500 text-white font-extrabold shadow-2xs"
-                            : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-                        }`}
-                      >
-                        AM
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const raw = reminderTime || "11:30 AM"
-                          setReminderTime(raw.replace(/AM/i, "PM"))
-                        }}
-                        className={`px-1.5 py-1 rounded transition-colors cursor-pointer ${
-                          reminderTime.includes("PM")
-                            ? "bg-amber-500 text-white font-extrabold shadow-2xs"
-                            : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-                        }`}
-                      >
-                        PM
-                      </button>
-                    </div>
-                  </div>
+                    const updateTime = (newH: string, newM: string, newAmpm: string) => {
+                      setReminderTime(`${newH}:${newM} ${newAmpm}`)
+                    }
+
+                    return (
+                      <div className="flex items-center bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md overflow-hidden p-1 gap-1 text-xs">
+                        <Clock size={14} className="text-amber-500 shrink-0 ml-1" />
+                        {/* Hour Selector */}
+                        <select
+                          value={hStr}
+                          onChange={(e) => updateTime(e.target.value, mStr, ampmStr)}
+                          className="bg-transparent text-amber-600 dark:text-amber-400 font-bold focus:outline-none cursor-pointer py-1 text-xs"
+                        >
+                          {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0")).map((h) => (
+                            <option key={h} value={h} className="bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200">
+                              {h}
+                            </option>
+                          ))}
+                        </select>
+                        <span className="font-bold text-amber-600 dark:text-amber-400">:</span>
+                        {/* Minute Selector */}
+                        <select
+                          value={mStr}
+                          onChange={(e) => updateTime(hStr, e.target.value, ampmStr)}
+                          className="bg-transparent text-amber-600 dark:text-amber-400 font-bold focus:outline-none cursor-pointer py-1 text-xs"
+                        >
+                          {["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"].map((m) => (
+                            <option key={m} value={m} className="bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200">
+                              {m}
+                            </option>
+                          ))}
+                          {!["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"].includes(mStr) && (
+                            <option value={mStr} className="bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200">
+                              {mStr}
+                            </option>
+                          )}
+                        </select>
+                        {/* AM / PM Segmented Button */}
+                        <div className="flex items-center border-l border-zinc-200 dark:border-zinc-700 ml-1 pl-1 bg-zinc-100/80 dark:bg-zinc-700/50 p-0.5 rounded text-[10px] font-bold">
+                          <button
+                            type="button"
+                            onClick={() => updateTime(hStr, mStr, "AM")}
+                            className={`px-2 py-0.5 rounded transition-all cursor-pointer ${
+                              ampmStr === "AM"
+                                ? "bg-amber-500 text-white font-extrabold shadow-2xs"
+                                : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                            }`}
+                          >
+                            AM
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateTime(hStr, mStr, "PM")}
+                            className={`px-2 py-0.5 rounded transition-all cursor-pointer ${
+                              ampmStr === "PM"
+                                ? "bg-amber-500 text-white font-extrabold shadow-2xs"
+                                : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                            }`}
+                          >
+                            PM
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })()}
                 </div>
               )}
             </div>

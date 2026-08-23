@@ -19,6 +19,8 @@ import {
   Unlock,
   Building2,
   Pencil,
+  CheckCircle2,
+  X,
 } from "lucide-react"
 import { Lead, LeadStatus } from "../types"
 import { LeadFiltersDropdown } from "./LeadFiltersDropdown"
@@ -297,6 +299,20 @@ export function LeadKanban({
   const [isFiltersDropdownOpen, setIsFiltersDropdownOpen] = React.useState(false)
   const [draggedLeadId, setDraggedLeadId] = React.useState<string | null>(null)
   const [activeContactTarget, setActiveContactTarget] = React.useState<Record<string, "primary" | "secondary">>({})
+  const [moveToast, setMoveToast] = React.useState<{
+    visible: boolean
+    leadName: string
+    fromStatus?: string
+    toStatus: string
+  } | null>(null)
+
+  React.useEffect(() => {
+    if (!moveToast?.visible) return
+    const timer = setTimeout(() => {
+      setMoveToast(null)
+    }, 3800)
+    return () => clearTimeout(timer)
+  }, [moveToast])
 
   // Mouse horizontal drag-to-scroll (Initiated from Column Headers only)
   const kanbanTrackRef = React.useRef<HTMLDivElement>(null)
@@ -462,9 +478,16 @@ export function LeadKanban({
         setDraggedLeadId(null)
         return
       }
+      const previousStatus = targetLead.status
       try {
         const updated = await updateLead(leadId, { status: newStatus }, user?.role)
         onLeadUpdated(updated)
+        setMoveToast({
+          visible: true,
+          leadName: targetLead.name,
+          fromStatus: previousStatus,
+          toStatus: newStatus,
+        })
       } catch (err: any) {
         console.error("Error moving lead:", err)
       }
@@ -909,7 +932,7 @@ export function LeadKanban({
                         </div>
 
                         {/* Line 5: Caller & Avatar (Prominently displayed above buttons) */}
-                        <div className="flex items-center justify-between pt-1 text-[11px] text-zinc-600 dark:text-zinc-300">
+                        <div className="flex items-center justify-between text-[11px] text-zinc-600 dark:text-zinc-300">
                           <div className="flex items-center gap-1.5 min-w-0">
                             <UserIcon size={12} className="text-zinc-400 shrink-0" />
                             <span className="truncate">
@@ -960,10 +983,10 @@ export function LeadKanban({
                           })()}
                         </div>
 
-                        {/* Line 6: Bottom Action Bar */}
-                        <div className="flex items-center justify-between pt-2 border-t border-zinc-100 dark:border-zinc-700/60 text-[11px] gap-1.5">
+                        {/* Line 6: Bottom Action Bar - Centered */}
+                        <div className="flex flex-col items-center justify-center pt-2 border-t border-zinc-100 dark:border-zinc-700/60 text-[11px] gap-1.5">
                           {/* Contact Switcher for Call/WhatsApp if secondary phone exists */}
-                          {l.secondaryPhone ? (
+                          {l.secondaryPhone && (
                             <div className="flex items-center bg-zinc-100 dark:bg-zinc-700/70 p-0.5 rounded-md text-[9px] font-bold">
                               <button
                                 type="button"
@@ -972,7 +995,7 @@ export function LeadKanban({
                                   e.stopPropagation()
                                   setActiveContactTarget((prev) => ({ ...prev, [l.id]: "primary" }))
                                 }}
-                                className={`px-1.5 py-0.5 rounded transition-all cursor-pointer ${
+                                className={`px-2 py-0.5 rounded transition-all cursor-pointer ${
                                   (activeContactTarget[l.id] || "primary") === "primary"
                                     ? "bg-white dark:bg-zinc-800 text-blue-600 dark:text-blue-400 shadow-2xs font-extrabold"
                                     : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
@@ -988,7 +1011,7 @@ export function LeadKanban({
                                   e.stopPropagation()
                                   setActiveContactTarget((prev) => ({ ...prev, [l.id]: "secondary" }))
                                 }}
-                                className={`px-1.5 py-0.5 rounded transition-all cursor-pointer ${
+                                className={`px-2 py-0.5 rounded transition-all cursor-pointer ${
                                   activeContactTarget[l.id] === "secondary"
                                     ? "bg-white dark:bg-zinc-800 text-purple-600 dark:text-purple-400 shadow-2xs font-extrabold"
                                     : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
@@ -998,11 +1021,10 @@ export function LeadKanban({
                                 Mgr
                               </button>
                             </div>
-                          ) : (
-                            <div />
                           )}
 
-                          <div className="flex items-center gap-1.5 shrink-0">
+                          {/* Action Buttons Centered */}
+                          <div className="flex items-center justify-center gap-2 w-full">
 
                             {/* Call Button */}
                             {(() => {
@@ -1131,6 +1153,37 @@ export function LeadKanban({
           )
         })}
       </div>
+
+      {/* Stage Movement Popup / Toast Notification */}
+      {moveToast && moveToast.visible && (
+        <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-5 duration-300">
+          <div className="bg-white dark:bg-zinc-900 border-2 border-emerald-500/80 shadow-2xl rounded-2xl p-4 max-w-sm flex items-start gap-3 backdrop-blur-md">
+            <div className="w-9 h-9 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 shadow-xs">
+              <CheckCircle2 size={20} />
+            </div>
+            <div className="flex-1 min-w-0 pr-1">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-bold text-zinc-900 dark:text-white">
+                  Lead Stage Moved!
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setMoveToast(null)}
+                  className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 cursor-pointer p-0.5"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <p className="text-xs text-zinc-600 dark:text-zinc-300 mt-1 leading-snug">
+                <strong className="text-zinc-900 dark:text-zinc-100 font-semibold">{moveToast.leadName}</strong> has been moved to{" "}
+                <span className="inline-block font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md text-[11px] border border-emerald-200 dark:border-emerald-800">
+                  {moveToast.toStatus}
+                </span>
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   )
