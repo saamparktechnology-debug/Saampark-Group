@@ -170,20 +170,21 @@ export default function LeadsMain() {
       const assignedTo = (l.assignedTo || (l as any).assigned_to || "").toString().toLowerCase().trim()
       const managers = (l.managers || "").toLowerCase().trim()
 
-      const checkMatch = (val: string) => {
-        if (!val) return false
-        if (val === "team" || val === "teams" || val === "all" || val === "none" || val === "unassigned") return true
+      const checkExplicitMatch = (val: string) => {
+        if (!val || val === "none" || val === "unassigned" || val === "team" || val === "teams" || val === "all") {
+          return false
+        }
 
         const targets = val.split(/[,;]+/).map((s) => s.trim()).filter(Boolean)
         if (targets.length === 0) targets.push(val)
 
         return targets.some((t) => {
-          if (t === "team" || t === "teams" || t === "all") return true
+          if (!t || t === "none" || t === "unassigned" || t === "team" || t === "teams" || t === "all") return false
           if (uEmail && t === uEmail) return true
           if (uName && t === uName) return true
           if (uId && t === uId) return true
-          if (uName && (t.includes(uName) || uName.includes(t))) return true
-          if (uEmail && (t.includes(uEmail) || uEmail.includes(t))) return true
+          if (uName && (t === uName || t.includes(uName) || uName.includes(t))) return true
+          if (uEmail && (t === uEmail || t.includes(uEmail) || uEmail.includes(t))) return true
           if (uName) {
             const parts = uName.split(/\s+/).filter((p: string) => p.length > 2)
             if (parts.some((p: string) => t.includes(p))) return true
@@ -192,12 +193,16 @@ export default function LeadsMain() {
         })
       }
 
+      // Check if created specifically by this user (not generic "Team")
+      const isCreator = (createdBy && createdBy !== "team" && createdBy !== "teams" && createdBy !== "admin") && 
+        (createdBy === uEmail || createdBy === uName || (uEmail && createdBy.includes(uEmail)) || (uName && createdBy.includes(uName)))
+
       return (
-        checkMatch(caller) ||
-        checkMatch(owner) ||
-        checkMatch(createdBy) ||
-        checkMatch(assignedTo) ||
-        checkMatch(managers)
+        checkExplicitMatch(assignedTo) ||
+        checkExplicitMatch(caller) ||
+        checkExplicitMatch(owner) ||
+        checkExplicitMatch(managers) ||
+        isCreator
       )
     })
   }, [leads, user, isSuperOrAdmin])
