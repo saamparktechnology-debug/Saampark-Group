@@ -2,11 +2,20 @@
 
 import { ClientItem, ContactItem, ClientLabelItem } from "../types"
 import { filterGlobalDeletedItems, markGlobalItemDeleted, fetchModuleDataFromDB, saveModuleDataToDB } from "@/lib/storageSync"
-import { markUserAsDeleted } from "@/app/feature/users/services/userService"
+import { markUserAsDeleted, recordUserAccount } from "@/app/feature/users/services/userService"
 
 const CLIENTS_STORAGE_KEY = "saampark_stored_clients"
 const CONTACTS_STORAGE_KEY = "saampark_stored_contacts"
 const CLIENT_LABELS_STORAGE_KEY = "saampark_stored_client_labels"
+
+export function getClientTimestamp(c: ClientItem): number {
+  if (typeof c.createdAt === "number") return c.createdAt
+  if (typeof c.createdAt === "string" && !isNaN(Number(c.createdAt))) return Number(c.createdAt)
+  if (typeof c.createdAt === "string" && !isNaN(Date.parse(c.createdAt))) return Date.parse(c.createdAt)
+  const match = (c.id || "").match(/(\d{10,14})/)
+  if (match) return Number(match[1])
+  return 0
+}
 
 export function getStoredClients(): ClientItem[] {
   if (typeof window === "undefined") return []
@@ -18,7 +27,8 @@ export function getStoredClients(): ClientItem[] {
         try { localStorage.setItem(CLIENTS_STORAGE_KEY, JSON.stringify(dbData)) } catch {}
       }
     }).catch(() => {})
-    return filterGlobalDeletedItems(local)
+    const filtered = filterGlobalDeletedItems<ClientItem>(local)
+    return filtered.sort((a, b) => getClientTimestamp(b) - getClientTimestamp(a))
   } catch (err) {
     console.error("Error reading stored clients:", err)
     return []
@@ -28,21 +38,45 @@ export function getStoredClients(): ClientItem[] {
 export function saveStoredClient(client: ClientItem): ClientItem[] {
   if (typeof window === "undefined") return []
   try {
+    const enrichedClient: ClientItem = {
+      ...client,
+      createdAt: client.createdAt || Date.now(),
+    }
     const current = getStoredClients()
-    const updated = [client, ...current.filter((c) => c.id !== client.id && c.email?.toLowerCase().trim() !== client.email?.toLowerCase().trim())]
+    const updated = [enrichedClient, ...current.filter((c) => c.id !== enrichedClient.id && c.email?.toLowerCase().trim() !== enrichedClient.email?.toLowerCase().trim())]
     localStorage.setItem(CLIENTS_STORAGE_KEY, JSON.stringify(updated))
     saveModuleDataToDB("clients", updated)
 
+    const clientEmailNorm = (enrichedClient.email || `${enrichedClient.name.toLowerCase().replace(/[^a-z0-9]/g, "")}@saampark-client.com`).toLowerCase().trim()
+
     // Automatically sync contact entry for this client
     saveStoredContact({
-      id: `cnt_${client.id}`,
-      name: client.primaryContact || client.name,
-      clientName: client.name,
+      id: `cnt_${enrichedClient.id}`,
+      name: enrichedClient.primaryContact || enrichedClient.name,
+      clientName: enrichedClient.name,
       jobTitle: "Primary Contact",
-      email: client.email || `${client.name.toLowerCase().replace(/[^a-z0-9]/g, "")}@saampark-client.com`,
-      phone: client.phone || "N/A",
-      avatarSeed: client.primaryContact || client.name,
+      email: clientEmailNorm,
+      phone: enrichedClient.phone || "N/A",
+      avatarSeed: enrichedClient.primaryContact || enrichedClient.name,
     })
+
+    // Automatically record client user account for login and Users directory
+    try {
+      recordUserAccount({
+        id: `usr_cli_${enrichedClient.id}`,
+        name: enrichedClient.primaryContact || enrichedClient.name,
+        email: clientEmailNorm,
+        role: "Clients",
+        companyId: "tech",
+        companyName: enrichedClient.name,
+        phone: enrichedClient.phone || "",
+        password: "Password123",
+        status: "Active",
+        department: "Clients",
+      }, true)
+    } catch (uErr) {
+      console.warn("Client user sync error:", uErr)
+    }
 
     return updated
   } catch (err) {

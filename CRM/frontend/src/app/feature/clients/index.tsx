@@ -23,6 +23,7 @@ import {
   getStoredClientLabels,
   saveStoredClientLabel,
   deleteStoredClientLabel,
+  getClientTimestamp,
 } from "./services/clientService"
 import { getUsers } from "@/app/feature/users/services/userService"
 
@@ -100,7 +101,9 @@ export default function ClientsMain() {
         }
       })
 
-      const mergedClients = Array.from(new Set(userClientsMap.values()))
+      const mergedClients = Array.from(new Set(userClientsMap.values())).sort(
+        (a, b) => getClientTimestamp(b) - getClientTimestamp(a)
+      )
       setClients(mergedClients)
 
       // Convert registered client users into ContactItem format

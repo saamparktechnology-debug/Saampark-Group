@@ -347,7 +347,40 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
     console.warn("Live API /users read warning:", err);
   }
 
-  // 3. Filter out deleted user emails and hidden master admin account
+  // 3. Sync all stored Clients from clients module so every client account shows up in Users
+  try {
+    const rawClients = typeof window !== "undefined" ? localStorage.getItem("saampark_stored_clients") : null;
+    if (rawClients) {
+      const clientList: any[] = JSON.parse(rawClients);
+      if (Array.isArray(clientList)) {
+        clientList.forEach((c) => {
+          const clientEmail = (c.email || `${(c.name || "client").toLowerCase().replace(/[^a-z0-9]/g, "")}@saampark-client.com`).toLowerCase().trim();
+          const clientId = `usr_cli_${c.id}`;
+          const exists = dbUsers.some((u) => u.email.toLowerCase().trim() === clientEmail || u.id === clientId || u.id === c.id);
+          if (!exists) {
+            dbUsers.push({
+              id: clientId,
+              name: c.primaryContact || c.name || "Client Account",
+              email: clientEmail,
+              role: "Clients",
+              companyId: "tech",
+              companyName: c.name || "Client",
+              status: "Active",
+              department: "Clients",
+              phone: c.phone || "",
+              password: "Password123",
+              lastLogin: "Active session",
+              joinedDate: typeof c.createdAt === "number" ? new Date(c.createdAt).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
+            });
+          }
+        });
+      }
+    }
+  } catch (err) {
+    console.warn("Client sync to users warning:", err);
+  }
+
+  // 4. Filter out deleted user emails and hidden master admin account
   const deletedEmails = getDeletedUserEmails().map((e) => e.toLowerCase().trim());
   const cleanUsers = dbUsers.filter((u) => {
     const emailNorm = (u.email || "").toLowerCase().trim();

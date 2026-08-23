@@ -116,7 +116,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, ModuleName[]> = {
     'Expenses', 'Reports', 'Settings'
   ],
   'Clients': [
-    'Dashboard', 'Knowledge base', 'Files', 'Tickets', 'Projects', 'Sales', 'Estimates', 'Proposals', 'Messages', 'Notes'
+    'Dashboard', 'Sales', 'Projects', 'Messages', 'Tickets', 'Settings'
   ]
 }
 
@@ -285,6 +285,24 @@ export const usePermissionStore = create<PermissionState>()(
 
         if (userMatrix && userMatrix[moduleName]) {
           return userMatrix[moduleName]
+        }
+
+        if (normRole === 'Clients') {
+          if (moduleName === 'Projects') {
+            return { view: true, add: true, edit: true, delete: false }
+          }
+          if (moduleName === 'Sales') {
+            return { view: true, add: true, edit: true, delete: false }
+          }
+          if (moduleName === 'Messages') {
+            return { view: true, add: true, edit: false, delete: true }
+          }
+          if (moduleName === 'Tickets') {
+            return { view: true, add: true, edit: true, delete: false }
+          }
+          if (moduleName === 'Settings') {
+            return { view: true, add: false, edit: true, delete: false }
+          }
         }
 
         const isAllowed = get().isModuleAllowed(user, moduleName)

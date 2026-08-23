@@ -59,7 +59,7 @@ export function AddClientModal({
     if (!companyName.trim()) return
 
     onSave({
-      id: initialData ? initialData.id : `${Math.floor(100 + Math.random() * 900)}`,
+      id: initialData ? initialData.id : `cli_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       name: companyName.trim(),
       primaryContact: companyName.trim(),
       phone: phone.trim(),
@@ -72,6 +72,7 @@ export function AddClientModal({
       due: "₹0.00",
       type,
       website,
+      createdAt: initialData?.createdAt || Date.now(),
     })
 
     onClose()

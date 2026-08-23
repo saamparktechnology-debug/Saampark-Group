@@ -22,6 +22,7 @@ export interface ClientItem {
   email?: string;
   website?: string;
   status?: string;
+  createdAt?: number | string;
 }
 
 export type Client = ClientItem;
