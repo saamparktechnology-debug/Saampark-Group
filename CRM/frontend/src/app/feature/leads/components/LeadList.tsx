@@ -120,11 +120,18 @@ export function LeadList({
       })
     })
 
-    return Object.entries(memberCounts)
+    const allMembers = Object.entries(memberCounts)
       .filter(([_, count]) => count > 0)
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
-  }, [leads])
+
+    if (!isSuperAdminOrAdmin && user?.name) {
+      const myNorm = user.name.toLowerCase().trim()
+      return allMembers.filter(m => m.name.toLowerCase().trim() === myNorm || m.name.toLowerCase().includes(myNorm) || myNorm.includes(m.name.toLowerCase().trim()))
+    }
+
+    return allMembers
+  }, [leads, isSuperAdminOrAdmin, user?.name])
 
   // Compute breakdown of stages for each assigned member
   const memberStageBreakdown = React.useMemo(() => {
@@ -676,7 +683,9 @@ export function LeadList({
             >
               <UserIcon size={13} className={selectedMember !== "all" ? "text-blue-600" : "text-zinc-500"} />
               <span>
-                {selectedMember === "all"
+                {!isSuperAdminOrAdmin && selectedMember === "all"
+                  ? (user?.name || "My Leads") + (selectedMemberStage !== "all" ? ` • ${selectedMemberStage}` : "")
+                  : selectedMember === "all"
                   ? "All Team Members"
                   : selectedMember === "unassigned"
                   ? "Unassigned Leads"
@@ -713,39 +722,41 @@ export function LeadList({
                   </div>
 
                   <div className="py-1 overflow-y-auto flex-1 divide-y divide-zinc-100 dark:divide-zinc-800/60">
-                    <div className="py-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedMember("all")
-                          setSelectedMemberStage("all")
-                          setIsMemberDropdownOpen(false)
-                          setMemberSearchQuery("")
-                        }}
-                        className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${
-                          selectedMember === "all" ? "font-semibold text-blue-600 bg-blue-50/50 dark:bg-blue-950/30" : "text-zinc-700 dark:text-zinc-300"
-                        }`}
-                      >
-                        <span>All Team Members</span>
-                        {selectedMember === "all" && <span>✓</span>}
-                      </button>
+                    {isSuperAdminOrAdmin && (
+                      <div className="py-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedMember("all")
+                            setSelectedMemberStage("all")
+                            setIsMemberDropdownOpen(false)
+                            setMemberSearchQuery("")
+                          }}
+                          className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${
+                            selectedMember === "all" ? "font-semibold text-blue-600 bg-blue-50/50 dark:bg-blue-950/30" : "text-zinc-700 dark:text-zinc-300"
+                          }`}
+                        >
+                          <span>All Team Members</span>
+                          {selectedMember === "all" && <span>✓</span>}
+                        </button>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedMember("unassigned")
-                          setSelectedMemberStage("all")
-                          setIsMemberDropdownOpen(false)
-                          setMemberSearchQuery("")
-                        }}
-                        className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${
-                          selectedMember === "unassigned" ? "font-semibold text-blue-600 bg-blue-50/50 dark:bg-blue-950/30" : "text-zinc-700 dark:text-zinc-300"
-                        }`}
-                      >
-                        <span className="text-zinc-500 italic">Unassigned Leads</span>
-                        {selectedMember === "unassigned" && <span>✓</span>}
-                      </button>
-                    </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedMember("unassigned")
+                            setSelectedMemberStage("all")
+                            setIsMemberDropdownOpen(false)
+                            setMemberSearchQuery("")
+                          }}
+                          className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${
+                            selectedMember === "unassigned" ? "font-semibold text-blue-600 bg-blue-50/50 dark:bg-blue-950/30" : "text-zinc-700 dark:text-zinc-300"
+                          }`}
+                        >
+                          <span className="text-zinc-500 italic">Unassigned Leads</span>
+                          {selectedMember === "unassigned" && <span>✓</span>}
+                        </button>
+                      </div>
+                    )}
 
                     <div className="py-1">
                       <div className="px-3 py-1 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">

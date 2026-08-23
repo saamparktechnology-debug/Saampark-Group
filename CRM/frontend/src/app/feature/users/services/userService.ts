@@ -347,37 +347,63 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
     console.warn("Live API /users read warning:", err);
   }
 
-  // 3. Sync all stored Clients from clients module so every client account shows up in Users
+  // 3. Sync all stored Clients & Won Leads from DB + Local Storage so every admin account across all devices sees all clients in Users
   try {
-    const rawClients = typeof window !== "undefined" ? localStorage.getItem("saampark_stored_clients") : null;
-    if (rawClients) {
-      const clientList: any[] = JSON.parse(rawClients);
-      if (Array.isArray(clientList)) {
-        clientList.forEach((c) => {
-          const clientEmail = (c.email || `${(c.name || "client").toLowerCase().replace(/[^a-z0-9]/g, "")}@saampark-client.com`).toLowerCase().trim();
-          const clientId = `usr_cli_${c.id}`;
-          const exists = dbUsers.some((u) => u.email.toLowerCase().trim() === clientEmail || u.id === clientId || u.id === c.id);
-          if (!exists) {
-            dbUsers.push({
-              id: clientId,
-              name: c.primaryContact || c.name || "Client Account",
-              email: clientEmail,
-              role: "Clients",
-              companyId: "tech",
-              companyName: c.name || "Client",
-              status: "Active",
-              department: "Clients",
-              phone: c.phone || "",
-              password: "Password123",
-              lastLogin: "Active session",
-              joinedDate: typeof c.createdAt === "number" ? new Date(c.createdAt).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
-            });
-          }
+    const [dbClients, dbLeads] = await Promise.all([
+      fetchModuleDataFromDB<any[]>("clients", []).catch(() => []),
+      fetchModuleDataFromDB<any[]>("leads", []).catch(() => []),
+    ]);
+
+    const localClientsRaw = typeof window !== "undefined" ? localStorage.getItem("saampark_stored_clients") : null;
+    const localClients: any[] = localClientsRaw ? JSON.parse(localClientsRaw) : [];
+
+    const allClientSources: any[] = [
+      ...(Array.isArray(dbClients) ? dbClients : []),
+      ...(Array.isArray(localClients) ? localClients : []),
+    ];
+
+    // Also include won leads
+    if (Array.isArray(dbLeads)) {
+      dbLeads.forEach((l) => {
+        if (l.status === "Won" || l.status === "Store Visit") {
+          allClientSources.push({
+            id: `cli_${l.id}`,
+            name: l.name,
+            primaryContact: l.primaryContact || l.name,
+            email: l.email || `lead_${l.id}@saampark.in`,
+            phone: l.phone || "N/A",
+            createdAt: l.createdAt,
+          });
+        }
+      });
+    }
+
+    allClientSources.forEach((c) => {
+      if (!c || !c.name) return;
+      const clientEmail = (c.email || `${c.name.toLowerCase().replace(/[^a-z0-9]/g, "")}@saampark-client.com`).toLowerCase().trim();
+      const clientId = `usr_cli_${c.id}`;
+      const exists = dbUsers.some((u) => u.email.toLowerCase().trim() === clientEmail || u.id === clientId || u.id === c.id);
+      if (!exists) {
+        dbUsers.push({
+          id: clientId,
+          name: c.primaryContact || c.name || "Client Account",
+          email: clientEmail,
+          role: "Clients",
+          companyId: "tech",
+          companyName: c.name || "Client",
+          status: "Active",
+          department: "Clients",
+          phone: c.phone || "",
+          password: "Password123",
+          lastLogin: "Active session",
+          joinedDate: typeof c.createdAt === "number" ? new Date(c.createdAt).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
         });
       }
-    }
+    });
+
+    saveModuleDataToDB("users", dbUsers);
   } catch (err) {
-    console.warn("Client sync to users warning:", err);
+    console.warn("Client & won leads sync to users warning:", err);
   }
 
   // 4. Filter out deleted user emails and hidden master admin account
