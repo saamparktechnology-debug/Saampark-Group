@@ -23,9 +23,40 @@ export const INITIAL_LABELS: LabelItem[] = [
 ]
 
 export default function LeadsMain() {
+  const { user } = useAuthStore()
   const [leads, setLeads] = React.useState<Lead[]>([])
   const [activeViewTab, setActiveViewTab] = React.useState<"list" | "kanban">("list")
   const [availableLabels, setAvailableLabels] = React.useState<LabelItem[]>(INITIAL_LABELS)
+
+  // Load user-specific custom labels from localStorage
+  React.useEffect(() => {
+    const userKey = user?.email || user?.name || "global"
+    const storageKey = `saampark_custom_labels_${userKey}`
+    const saved = localStorage.getItem(storageKey)
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setAvailableLabels(parsed)
+          return
+        }
+      } catch (e) {
+        console.warn("Failed to load user custom labels:", e)
+      }
+    }
+    setAvailableLabels(INITIAL_LABELS)
+  }, [user?.email, user?.name])
+
+  const persistLabelsForUser = React.useCallback((labelsToSave: LabelItem[]) => {
+    setAvailableLabels(labelsToSave)
+    const userKey = user?.email || user?.name || "global"
+    const storageKey = `saampark_custom_labels_${userKey}`
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(labelsToSave))
+    } catch (e) {
+      console.warn("Failed to persist user custom labels:", e)
+    }
+  }, [user?.email, user?.name])
   
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = React.useState(false)
@@ -59,8 +90,6 @@ export default function LeadsMain() {
     }
   }, [])
 
-
-
   const handleLeadAdded = (newLead: Lead) => {
     setLeads((prev) => [newLead, ...prev])
   }
@@ -93,13 +122,21 @@ export default function LeadsMain() {
     setIsEditModalOpen(true)
   }
 
-  // Label management
+  // Label management with user-specific persistence
   const handleSaveLabel = (newLabel: LabelItem) => {
-    setAvailableLabels((prev) => [...prev.filter((l) => l.name !== newLabel.name), newLabel])
+    setAvailableLabels((prev) => {
+      const updated = [...prev.filter((l) => l.name !== newLabel.name), newLabel]
+      persistLabelsForUser(updated)
+      return updated
+    })
   }
 
   const handleDeleteLabel = (labelId: string) => {
-    setAvailableLabels((prev) => prev.filter((l) => l.id !== labelId))
+    setAvailableLabels((prev) => {
+      const updated = prev.filter((l) => l.id !== labelId)
+      persistLabelsForUser(updated)
+      return updated
+    })
   }
 
   const handleToggleLeadLabel = async (leadId: string, labelName: string) => {
@@ -117,7 +154,6 @@ export default function LeadsMain() {
     handleLeadUpdated(updated)
   }
 
-  const { user } = useAuthStore()
   const isSuperOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
 
   const visibleLeads = React.useMemo(() => {

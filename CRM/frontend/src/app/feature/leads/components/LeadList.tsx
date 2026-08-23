@@ -19,6 +19,7 @@ import {
   MapPin,
   Lock,
   Unlock,
+  Building2,
 } from "lucide-react"
 import { Lead } from "../types"
 import { LeadFiltersDropdown } from "./LeadFiltersDropdown"
@@ -26,6 +27,7 @@ import { LabelItem } from "./ManageLabelsModal"
 import { LabelSelectorPopover } from "./LabelSelectorPopover"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
+import { getUsers } from "@/app/feature/users/services/userService"
 
 interface LeadListProps {
   leads: Lead[]
@@ -43,10 +45,10 @@ interface LeadListProps {
 
 const statusBadgeStyles: Record<string, string> = {
   Discussion: "bg-cyan-100 dark:bg-cyan-950/80 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800",
-  Negotiation: "bg-fuchsia-100 dark:bg-fuchsia-950/80 text-fuchsia-700 dark:text-fuchsia-300 border border-fuchsia-200 dark:border-fuchsia-800",
-  Qualified: "bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800",
-  New: "bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800",
+  Proposal: "bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800",
   Won: "bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800",
+  "Follow Up": "bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800",
+  New: "bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800",
   Lost: "bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800",
 }
 
@@ -71,11 +73,73 @@ export function LeadList({
   const canEditLead = isSuperAdminOrAdmin || canPerformAction(user, "Leads", "edit")
   const canDeleteLead = isSuperAdminOrAdmin || canPerformAction(user, "Leads", "delete")
 
+  const [usersMap, setUsersMap] = React.useState<Record<string, { department?: string; role?: string; avatarUrl?: string }>>({})
+
+  React.useEffect(() => {
+    getUsers("all").then((list) => {
+      const map: Record<string, { department?: string; role?: string; avatarUrl?: string }> = {}
+      ;(list || []).forEach((u) => {
+        if (u.name) map[u.name.toLowerCase().trim()] = { department: u.department, role: u.role, avatarUrl: u.avatarUrl }
+        if (u.email) map[u.email.toLowerCase().trim()] = { department: u.department, role: u.role, avatarUrl: u.avatarUrl }
+      })
+      setUsersMap(map)
+    })
+  }, [])
 
   const [activeFilter, setActiveFilter] = React.useState("All leads")
   const [searchQuery, setSearchQuery] = React.useState("")
-  const [isFiltersDropdownOpen, setIsFiltersDropdownOpen] = React.useState(false)
   const [activePopoverLeadId, setActivePopoverLeadId] = React.useState<string | null>(null)
+  const [isFiltersDropdownOpen, setIsFiltersDropdownOpen] = React.useState(false)
+
+  // Mouse horizontal click-and-drag scrolling
+  const tableScrollRef = React.useRef<HTMLDivElement>(null)
+  const isDraggingTableRef = React.useRef(false)
+  const [isDraggingTable, setIsDraggingTable] = React.useState(false)
+  const startXRef = React.useRef(0)
+  const scrollLeftRef = React.useRef(0)
+
+  const handleTableMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return
+    const target = e.target as HTMLElement
+    // Ignore interactive controls so users can click buttons, icons, links, inputs
+    if (
+      target.closest("button") ||
+      target.closest("input") ||
+      target.closest("select") ||
+      target.closest("a") ||
+      target.closest("label") ||
+      target.closest("[role='button']")
+    ) {
+      return
+    }
+
+    const container = tableScrollRef.current
+    if (!container) return
+
+    isDraggingTableRef.current = true
+    setIsDraggingTable(true)
+    startXRef.current = e.pageX - container.offsetLeft
+    scrollLeftRef.current = container.scrollLeft
+  }
+
+  const handleTableMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDraggingTableRef.current) return
+    const container = tableScrollRef.current
+    if (!container) return
+
+    e.preventDefault()
+    const x = e.pageX - container.offsetLeft
+    const walk = (x - startXRef.current) * 1.5
+    container.scrollLeft = scrollLeftRef.current - walk
+  }
+
+  const handleTableMouseUpOrLeave = () => {
+    if (isDraggingTableRef.current) {
+      isDraggingTableRef.current = false
+      setIsDraggingTable(false)
+    }
+  }
+
   const [currentPage, setCurrentPage] = React.useState(1)
   const [pageSize, setPageSize] = React.useState(10)
 
@@ -134,6 +198,13 @@ export function LeadList({
       return matchesSearch && Boolean(isMyLead)
     }
 
+    // Check if activeFilter matches a source (e.g. Social Media, Meta Ads, Google Ads, Local Market)
+    const leadSource = (l.source || "").toLowerCase().trim()
+    const filterClean = activeFilter.toLowerCase().trim()
+    if (leadSource === filterClean) {
+      return matchesSearch
+    }
+
     if (activeFilter === "50%") {
       return matchesSearch && (l.probability === 50 || leadLabels.includes("50%") || leadLabels.includes("50% Probability"))
     }
@@ -173,52 +244,50 @@ export function LeadList({
   return (
     <div className="space-y-4">
       
-      {/* ---------------- TOP VIEW TABS & HEADER ACTIONS ---------------- */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* ---------------- TOP HEADER BAR ---------------- */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         {/* Navigation Tabs */}
-        <div className="flex items-center gap-6 text-sm font-semibold border-b border-transparent">
+        <div className="flex items-center gap-6 border-b border-zinc-200 dark:border-zinc-800">
           <button
             type="button"
             onClick={() => onChangeViewTab("list")}
-            className={`py-1 transition-colors ${
+            className={`pb-2 text-sm font-semibold transition-colors relative cursor-pointer ${
               activeViewTab === "list"
-                ? "text-zinc-900 dark:text-zinc-100 border-b-2 border-zinc-800 dark:border-zinc-200"
-                : "text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+                ? "text-zinc-900 dark:text-white"
+                : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
             }`}
           >
             Leads
+            {activeViewTab === "list" && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-zinc-900 dark:bg-white rounded-full" />
+            )}
           </button>
+
           <button
             type="button"
             onClick={() => onChangeViewTab("kanban")}
-            className={`py-1 transition-colors ${
+            className={`pb-2 text-sm font-medium transition-colors relative cursor-pointer ${
               activeViewTab === "kanban"
-                ? "text-zinc-900 dark:text-zinc-100 border-b-2 border-zinc-800 dark:border-zinc-200"
-                : "text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+                ? "text-zinc-900 dark:text-white"
+                : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
             }`}
           >
             Kanban
+            {activeViewTab === "kanban" && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-zinc-900 dark:bg-white rounded-full" />
+            )}
           </button>
         </div>
 
-        {/* Top Right Action Buttons */}
+        {/* Action Buttons */}
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={onOpenManageLabelsModal}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700/50 transition-colors shadow-2xs"
           >
-            <Tag size={13} className="text-zinc-500" />
+            <Tag size={14} className="text-zinc-500" />
             <span>Manage labels</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => alert("Import leads clicked")}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700/50 transition-colors shadow-2xs"
-          >
-            <Upload size={13} className="text-zinc-500" />
-            <span>Import leads</span>
           </button>
 
           {canAddLead && (
@@ -252,7 +321,7 @@ export function LeadList({
             <button
               type="button"
               onClick={() => setIsFiltersDropdownOpen(!isFiltersDropdownOpen)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-zinc-100/80 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md hover:bg-zinc-200/70 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-zinc-100/80 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md hover:bg-zinc-200/70 transition-colors cursor-pointer"
             >
               <Filter size={13} className="text-zinc-500" />
               <span>{activeFilter || "Filters"}</span>
@@ -266,6 +335,7 @@ export function LeadList({
               onSelectFilter={setActiveFilter}
               onClearFilters={() => setActiveFilter("All leads")}
               availableLabels={availableLabels}
+              onOpenManageLabelsModal={onOpenManageLabelsModal}
             />
           </div>
 
@@ -352,8 +422,18 @@ export function LeadList({
 
       {/* ---------------- DATA TABLE (Image 1 & Screenshot 1) ---------------- */}
       <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl overflow-hidden shadow-2xs">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+        <div
+          ref={tableScrollRef}
+          onMouseDown={handleTableMouseDown}
+          onMouseMove={handleTableMouseMove}
+          onMouseUp={handleTableMouseUpOrLeave}
+          onMouseLeave={handleTableMouseUpOrLeave}
+          className={`overflow-x-auto select-none ${
+            isDraggingTable ? "cursor-grabbing active:cursor-grabbing" : "cursor-grab"
+          }`}
+          style={{ scrollBehavior: isDraggingTable ? "auto" : "smooth" }}
+        >
+          <table className="w-full text-left text-xs min-w-[1050px]">
             <thead>
               <tr className="border-b border-zinc-200/80 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 font-semibold bg-zinc-50/50 dark:bg-zinc-800/40">
                 <th className="py-3 px-4">Name</th>
@@ -385,19 +465,24 @@ export function LeadList({
                     key={l.id}
                     className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/50 transition-colors"
                   >
-                    {/* Name */}
+                    {/* Name (Business with Building Icon) */}
                     <td className="py-3.5 px-4 font-medium text-zinc-900 dark:text-zinc-100">
-                      <button
-                        type="button"
-                        onClick={() => onSelectLeadDetail(l)}
-                        className={`text-left hover:underline font-semibold ${
-                          isLocked
-                            ? "text-rose-600 dark:text-rose-400 line-through"
-                            : "text-blue-600 dark:text-blue-400"
-                        }`}
-                      >
-                        {l.name}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-md bg-blue-50 dark:bg-blue-950/70 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900 flex items-center justify-center shrink-0">
+                          <Building2 size={13} />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onSelectLeadDetail(l)}
+                          className={`text-left hover:underline font-semibold ${
+                            isLocked
+                              ? "text-rose-600 dark:text-rose-400 line-through"
+                              : "text-blue-600 dark:text-blue-400"
+                          }`}
+                        >
+                          {l.name}
+                        </button>
+                      </div>
                     </td>
 
                     {/* Primary contact & Secondary manager */}
@@ -500,18 +585,38 @@ export function LeadList({
                       </div>
                     </td>
 
-                    {/* Assigned to (with profile pic) */}
+                    {/* Assigned to (with profile pic and department) */}
                     <td className={`py-3.5 px-4 ${isLocked ? "blur-[1px] opacity-60" : ""}`}>
                       {(() => {
-                        const rawAssigned = (l.assignedTo && l.assignedTo !== "None")
+                        const rawAssigned = (l.assignedTo && l.assignedTo !== "None" && l.assignedTo !== "Unassigned")
                           ? l.assignedTo
-                          : ((l.caller && l.caller !== "None")
+                          : ((l.caller && l.caller !== "None" && l.caller !== "Unassigned")
                             ? l.caller
-                            : ((l.owner && l.owner !== "None") ? l.owner : "Unassigned"))
-                        const isUnassigned = rawAssigned === "Unassigned" || rawAssigned === "None"
+                            : ((l.owner && l.owner !== "None" && l.owner !== "Unassigned")
+                              ? l.owner
+                              : "Unassigned"))
+                        const isUnassigned = !rawAssigned || rawAssigned === "Unassigned" || rawAssigned === "None"
                         const assignedPerson = isUnassigned ? "Unassigned" : rawAssigned
+
+                        const userMeta = !isUnassigned
+                          ? (usersMap[assignedPerson.toLowerCase().trim()] ||
+                              (user && (assignedPerson === user.name || assignedPerson === user.email)
+                                ? { role: user.role, avatarUrl: user.avatar }
+                                : null))
+                          : null
+
+                        const deptOrRole =
+                          userMeta?.department ||
+                          userMeta?.role ||
+                          (assignedPerson.toLowerCase().includes("admin") ? "Administration" : "Telecaller / Sales")
+
                         const avatarSrc = !isUnassigned
-                          ? (l.ownerAvatar || (user?.avatar && (assignedPerson === user.name || assignedPerson === user.email) ? user.avatar : null) || `https://api.dicebear.com/7.x/notionists/svg?seed=${encodeURIComponent(assignedPerson)}`)
+                          ? (l.ownerAvatar ||
+                              userMeta?.avatarUrl ||
+                              (user?.avatar && (assignedPerson === user.name || assignedPerson === user.email)
+                                ? user.avatar
+                                : null) ||
+                              `https://api.dicebear.com/7.x/notionists/svg?seed=${encodeURIComponent(assignedPerson)}`)
                           : null
 
                         return (
@@ -531,8 +636,10 @@ export function LeadList({
                               <span className={`font-semibold text-xs ${isUnassigned ? "text-zinc-400 dark:text-zinc-500 italic" : "text-zinc-800 dark:text-zinc-200"}`}>
                                 {assignedPerson}
                               </span>
-                              {l.createdBy && l.createdBy !== assignedPerson && (
-                                <span className="text-[10px] text-zinc-400 truncate">Added by: {l.createdBy}</span>
+                              {!isUnassigned && (
+                                <span className="text-[10px] text-zinc-400 font-medium truncate">
+                                  {deptOrRole}
+                                </span>
                               )}
                             </div>
                           </div>

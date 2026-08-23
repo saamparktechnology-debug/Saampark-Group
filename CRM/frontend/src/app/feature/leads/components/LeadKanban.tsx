@@ -17,6 +17,7 @@ import {
   MapPin,
   Lock,
   Unlock,
+  Building2,
 } from "lucide-react"
 import { Lead, LeadStatus } from "../types"
 import { LeadFiltersDropdown } from "./LeadFiltersDropdown"
@@ -121,6 +122,13 @@ export function LeadKanban({
       return matchesSearch && Boolean(isMyLead)
     }
 
+    // Check if activeFilter matches a source (e.g. Social Media, Meta Ads, Google Ads, Local Market)
+    const leadSource = (l.source || "").toLowerCase().trim()
+    const filterClean = activeFilter.toLowerCase().trim()
+    if (leadSource === filterClean) {
+      return matchesSearch
+    }
+
     if (activeFilter === "50%") {
       return matchesSearch && (l.probability === 50 || leadLabels.includes("50%") || leadLabels.includes("50% Probability"))
     }
@@ -158,78 +166,74 @@ export function LeadKanban({
 
   return (
     <div className="space-y-4">
-      
       {/* ---------------- TOP VIEW TABS & HEADER ACTIONS ---------------- */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-100 dark:border-zinc-800 pb-3">
-        {/* Left View Tabs */}
-        <div className="flex items-center gap-6 text-sm font-medium">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {/* Navigation Tabs */}
+        <div className="flex items-center gap-6 border-b border-zinc-200 dark:border-zinc-800">
           <button
             type="button"
             onClick={() => onChangeViewTab("list")}
-            className={`pb-1 transition-colors ${
+            className={`pb-2 text-sm font-medium transition-colors relative cursor-pointer ${
               activeViewTab === "list"
-                ? "text-blue-600 dark:text-blue-400 font-semibold border-b-2 border-blue-600"
-                : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                ? "text-zinc-900 dark:text-white"
+                : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
             }`}
           >
             Leads
+            {activeViewTab === "list" && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-zinc-900 dark:bg-white rounded-full" />
+            )}
           </button>
+
           <button
             type="button"
             onClick={() => onChangeViewTab("kanban")}
-            className={`pb-1 transition-colors ${
+            className={`pb-2 text-sm font-semibold transition-colors relative cursor-pointer ${
               activeViewTab === "kanban"
-                ? "text-blue-600 dark:text-blue-400 font-semibold border-b-2 border-blue-600"
-                : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                ? "text-zinc-900 dark:text-white"
+                : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
             }`}
           >
             Kanban
+            {activeViewTab === "kanban" && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-zinc-900 dark:bg-white rounded-full" />
+            )}
           </button>
         </div>
 
-        {/* Right Header Action Buttons */}
+        {/* Top Right Action Buttons */}
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={onOpenManageLabelsModal}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700/50 transition-colors shadow-2xs"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700/50 transition-colors shadow-2xs cursor-pointer"
           >
-            <Heart size={13} className="text-zinc-500" />
+            <Tag size={14} className="text-zinc-500" />
             <span>Manage labels</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => alert("Import leads clicked")}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700/50 transition-colors shadow-2xs"
-          >
-            <Upload size={13} className="text-zinc-500" />
-            <span>Import leads</span>
           </button>
 
           {canAddLead && (
             <button
               type="button"
               onClick={onOpenAddModal}
-              className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700/50 transition-colors shadow-2xs cursor-pointer"
             >
-              <Plus size={14} />
+              <Plus size={14} className="text-zinc-500" />
               <span>Add lead</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* ---------------- SECOND CONTROL TOOLBAR ---------------- */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl p-2.5 shadow-2xs">
-        
-        {/* Left Toolbar Controls */}
+      {/* ---------------- SUB-HEADER TOOLBAR (Search & Filters) ---------------- */}
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+        {/* Left Side Controls */}
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Refresh Button */}
+          {/* Refresh Kanban */}
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="p-1.5 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 border border-zinc-200 dark:border-zinc-700 rounded-lg bg-zinc-50/50 dark:bg-zinc-800/50"
+            className="p-1.5 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 border border-zinc-200 dark:border-zinc-700 rounded-lg bg-zinc-50/50 dark:bg-zinc-800/50 cursor-pointer"
             title="Refresh"
           >
             <RotateCw size={14} />
@@ -240,7 +244,7 @@ export function LeadKanban({
             <button
               type="button"
               onClick={() => setIsFiltersDropdownOpen(!isFiltersDropdownOpen)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-100 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-100 transition-colors cursor-pointer"
             >
               <Filter size={13} className="text-zinc-500" />
               <span>{activeFilter || "All Leads"}</span>
@@ -252,8 +256,9 @@ export function LeadKanban({
               onClose={() => setIsFiltersDropdownOpen(false)}
               activeFilter={activeFilter}
               onSelectFilter={setActiveFilter}
-              onClearFilters={() => setActiveFilter("All Leads")}
+              onClearFilters={() => setActiveFilter("All leads")}
               availableLabels={availableLabels}
+              onOpenManageLabelsModal={onOpenManageLabelsModal}
             />
           </div>
 
@@ -385,18 +390,21 @@ export function LeadKanban({
                     >
                       {/* Blurred Card Content when Locked */}
                       <div className={`space-y-2 transition-all ${isLocked ? "blur-[1.5px] opacity-40 select-none pointer-events-none" : ""}`}>
-                        {/* Line 1: Lead Title & Date */}
+                        {/* Line 1: Business Lead Title & Date */}
                         <div className="flex items-center justify-between gap-2">
-                          <span className={`font-semibold text-xs truncate ${isLocked ? "text-rose-700 dark:text-rose-300 line-through" : "text-blue-600 dark:text-blue-400 hover:underline"}`}>
-                            {l.name}
-                          </span>
-                          <span className="text-[11px] text-zinc-400 font-mono shrink-0">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <Building2 size={13} className="text-blue-500 shrink-0" />
+                            <span className={`font-semibold text-xs truncate ${isLocked ? "text-rose-700 dark:text-rose-300 line-through" : "text-blue-600 dark:text-blue-400 hover:underline"}`}>
+                              {l.name}
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-zinc-400 shrink-0">
                             {l.createdAt || "06 Aug 2025"}
                           </span>
                         </div>
 
                         {/* Line 2: Phone & Secondary Contact */}
-                        <div className="space-y-1 text-[11px] font-mono">
+                        <div className="space-y-1 text-[11px]">
                           <div className="flex items-center justify-between text-zinc-600 dark:text-zinc-300">
                             <div className="flex items-center gap-1.5 min-w-0">
                               <Phone size={12} className="text-blue-500 shrink-0" />

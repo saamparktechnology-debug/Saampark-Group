@@ -196,16 +196,8 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
         const members = (teamOnly.length > 0 ? teamOnly : (list || []).filter(u => u.role !== "Clients")).map((u) => ({ id: u.id, name: u.name, role: u.role }))
         setTeamMembers(members)
 
-        const defaultUserName = user?.name || user?.email || ""
-        const hasLoggedUser = members.some((m) => m.name === defaultUserName)
-
-        if (defaultUserName && (hasLoggedUser || user?.role === "Teams")) {
-          setCaller(defaultUserName)
-          setOwner(defaultUserName)
-        } else {
-          setCaller("None")
-          setOwner("None")
-        }
+        setCaller("None")
+        setOwner("None")
       })
     }
   }, [isOpen, user, resetForm])
@@ -221,8 +213,8 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
     const activeSvcs = selectedServices.map((s) => (s === "Others" ? (customService.trim() || "Custom Service") : s)).filter(Boolean)
     const finalService = activeSvcs.length > 0 ? activeSvcs.join(", ") : ""
     const finalSource = source === "Others" ? (customSource.trim() || "Custom Source") : source
-    const effectiveCaller = (caller && caller !== "None") ? caller : "None"
-    const effectiveOwner = (owner && owner !== "None") ? owner : (effectiveCaller !== "None" ? effectiveCaller : (user?.name || "Team"))
+    const effectiveCaller = (caller && caller !== "None" && caller !== "Unassigned") ? caller : "None"
+    const effectiveOwner = effectiveCaller !== "None" ? effectiveCaller : "None"
     const effectiveAssignedTo = effectiveCaller !== "None" ? effectiveCaller : "None"
     const finalReminderDate = isNoReminder ? "None" : (reminderDate || "None")
     const finalReminderTime = (isNoReminder || finalReminderDate === "None") ? "None" : (reminderTime || "11:30 AM")
@@ -406,7 +398,7 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
                     onChange={(e) => setIsNoReminder(e.target.checked)}
                     className="rounded text-amber-500 focus:ring-amber-500"
                   />
-                  <span className="text-amber-600 dark:text-amber-400 font-mono">None / 00,00,0000 (No Auto-Lock)</span>
+                  <span className="text-amber-600 dark:text-amber-400 font-medium">None / 00,00,0000 (No Auto-Lock)</span>
                 </label>
               </div>
 
@@ -435,7 +427,7 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
                           setReminderTime(formatTimeForDisplay(e.target.value))
                         }
                       }}
-                      className="pl-8 pr-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-amber-600 dark:text-amber-400 font-semibold cursor-pointer text-xs font-mono"
+                      className="pl-8 pr-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-amber-600 dark:text-amber-400 font-semibold cursor-pointer text-xs"
                     />
                     <Clock size={14} className="absolute left-2.5 text-amber-500 pointer-events-none" />
                   </div>
@@ -484,7 +476,7 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
             <label className="text-zinc-500 font-medium">Primary contact</label>
             <input
               type="text"
-              placeholder="Primary contact name"
+              placeholder="e.g. John Doe"
               value={primaryContact}
               onChange={(e) => setPrimaryContact(e.target.value)}
               className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400"
@@ -501,7 +493,7 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
                 placeholder="+91 XXXXXXXX"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                className="w-full px-3 py-2 bg-transparent focus:outline-none text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 font-mono text-xs"
+                className="w-full px-3 py-2 bg-transparent focus:outline-none text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 text-xs"
               />
             </div>
           </div>
@@ -563,7 +555,7 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
                     placeholder="+91 XXXXXXXX"
                     value={secondaryPhone}
                     onChange={(e) => setSecondaryPhone(e.target.value)}
-                    className="w-full px-3 py-2 bg-transparent focus:outline-none text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 font-mono text-xs"
+                    className="w-full px-3 py-2 bg-transparent focus:outline-none text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 text-xs"
                   />
                 </div>
               </div>
