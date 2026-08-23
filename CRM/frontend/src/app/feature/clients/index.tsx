@@ -6,7 +6,7 @@ import { Tag, Upload, Plus } from "lucide-react"
 
 import { ClientTabMode, ClientItem, ContactItem, ClientLabelItem } from "./types"
 import { OverviewView } from "./components/OverviewView"
-import { ClientsTableView } from "./components/ClientsTableView"
+import { ClientsTableView } from "./components/ClientsTableView" // Updated without ID column
 import { ContactsTableView } from "./components/ContactsTableView"
 import { AddClientModal } from "./components/AddClientModal"
 import { ManageClientLabelsModal } from "./components/ManageClientLabelsModal"
