@@ -4,6 +4,7 @@ export type LeadStatus =
   | "Discussion"
   | "Negotiation"
   | "Store Visit"
+  | "Our Office Visit"
   | "They come to our office"
   | "Won"
   | "Lost"

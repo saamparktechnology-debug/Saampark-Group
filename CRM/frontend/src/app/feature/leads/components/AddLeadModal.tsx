@@ -88,7 +88,7 @@ const STANDARD_SERVICES = [
   "Website Devlopment",
   "E-commers Web",
   "Web Software",
-  "Android/Ios app",
+  "Android/iOS App",
   "Digital merketing",
 ]
 
@@ -377,7 +377,7 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
               <option value="Discussion">Discussion</option>
               <option value="Negotiation">Negotiation</option>
               <option value="Store Visit">Store Visit</option>
-              <option value="They come to our office">They come to our office</option>
+              <option value="Our Office Visit">Our Office Visit</option>
               <option value="Won">Won</option>
               <option value="Lost">Lost</option>
             </select>
@@ -398,7 +398,7 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
                     onChange={(e) => setIsNoReminder(e.target.checked)}
                     className="rounded text-amber-500 focus:ring-amber-500"
                   />
-                  <span className="text-amber-600 dark:text-amber-400 font-medium">None / 00,00,0000 (No Auto-Lock)</span>
+                  <span className="text-amber-600 dark:text-amber-400 font-medium">No Reminder (No Auto-Lock)</span>
                 </label>
               </div>
 
@@ -418,18 +418,51 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
                     <Calendar size={14} className="absolute left-2.5 text-amber-500 pointer-events-none" />
                   </div>
 
-                  <div className="relative flex items-center">
-                    <input
-                      type="time"
-                      value={formatTimeForInput(reminderTime)}
-                      onChange={(e) => {
-                        if (e.target.value) {
-                          setReminderTime(formatTimeForDisplay(e.target.value))
-                        }
-                      }}
-                      className="pl-8 pr-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-amber-600 dark:text-amber-400 font-semibold cursor-pointer text-xs"
-                    />
-                    <Clock size={14} className="absolute left-2.5 text-amber-500 pointer-events-none" />
+                  <div className="flex items-center bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md overflow-hidden">
+                    <div className="relative flex items-center">
+                      <input
+                        type="time"
+                        value={formatTimeForInput(reminderTime)}
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            setReminderTime(formatTimeForDisplay(e.target.value))
+                          }
+                        }}
+                        className="pl-8 pr-2 py-2 bg-transparent focus:outline-none text-amber-600 dark:text-amber-400 font-semibold cursor-pointer text-xs"
+                      />
+                      <Clock size={14} className="absolute left-2.5 text-amber-500 pointer-events-none" />
+                    </div>
+
+                    <div className="flex items-center border-l border-zinc-200 dark:border-zinc-700 bg-zinc-100/80 dark:bg-zinc-700/50 p-0.5 text-[10px] font-bold">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const raw = reminderTime || "11:30 AM"
+                          setReminderTime(raw.replace(/PM/i, "AM"))
+                        }}
+                        className={`px-1.5 py-1 rounded transition-colors cursor-pointer ${
+                          reminderTime.includes("AM")
+                            ? "bg-amber-500 text-white font-extrabold shadow-2xs"
+                            : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                        }`}
+                      >
+                        AM
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const raw = reminderTime || "11:30 AM"
+                          setReminderTime(raw.replace(/AM/i, "PM"))
+                        }}
+                        className={`px-1.5 py-1 rounded transition-colors cursor-pointer ${
+                          reminderTime.includes("PM")
+                            ? "bg-amber-500 text-white font-extrabold shadow-2xs"
+                            : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                        }`}
+                      >
+                        PM
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}

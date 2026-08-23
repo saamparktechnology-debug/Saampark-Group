@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Search, FileSpreadsheet, Printer, LayoutGrid, ChevronDown, X, User, ChevronLeft, ChevronRight } from "lucide-react"
 import { ContactItem } from "../types"
+import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 
 interface ContactsTableViewProps {
   contacts: ContactItem[]
@@ -24,7 +25,7 @@ export function ContactsTableView({
         c.clientName.toLowerCase().includes(q) ||
         c.jobTitle.toLowerCase().includes(q) ||
         c.email.toLowerCase().includes(q) ||
-        c.phone.includes(q)
+        c.phone.toLowerCase().includes(q)
       )
     })
   }, [contacts, searchText])
@@ -61,13 +62,44 @@ export function ContactsTableView({
         <div className="flex items-center gap-2">
           <button
             type="button"
-            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1.5"
+            onClick={() => {
+              exportToExcel({
+                filename: "SAAMPARK_Contacts",
+                title: "Client Contacts Directory",
+                subtitle: "All Contacts",
+                headers: ["#", "Name", "Client / Company", "Job Title", "Email", "Phone"],
+                rows: filteredContacts.map((c, idx) => [
+                  idx + 1,
+                  c.name,
+                  c.clientName,
+                  c.jobTitle || "-",
+                  c.email,
+                  c.phone,
+                ]),
+              })
+            }}
+            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer"
           >
             <FileSpreadsheet size={14} className="text-emerald-600" /> Excel
           </button>
           <button
             type="button"
-            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1.5"
+            onClick={() => {
+              printPDFReport({
+                title: "Client Contacts Report",
+                subtitle: "All Contacts",
+                headers: ["#", "Name", "Company", "Job Title", "Email", "Phone"],
+                rows: filteredContacts.map((c, idx) => [
+                  idx + 1,
+                  c.name,
+                  c.clientName,
+                  c.jobTitle || "-",
+                  c.email,
+                  c.phone,
+                ]),
+              })
+            }}
+            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer"
           >
             <Printer size={14} className="text-slate-500" /> Print
           </button>

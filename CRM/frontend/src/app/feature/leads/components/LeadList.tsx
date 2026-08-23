@@ -154,11 +154,17 @@ export function LeadList({
 
     const nameStr = (l.name || "").toLowerCase()
     const contactStr = (l.primaryContact || "").toLowerCase()
+    const secondaryContactStr = (l.secondaryContact || "").toLowerCase()
     const cityStr = (l.city || "").toLowerCase()
     const phoneStr = (l.phone || "").toLowerCase()
     const phoneDigits = (l.phone || "").replace(/\D/g, "")
+    const secondaryPhoneStr = (l.secondaryPhone || "").toLowerCase()
+    const secondaryPhoneDigits = (l.secondaryPhone || "").replace(/\D/g, "")
+    const assignedToStr = (l.assignedTo || "").toLowerCase()
     const ownerStr = (l.owner || "").toLowerCase()
     const callerStr = (l.caller || "").toLowerCase()
+    const managersStr = (l.managers || "").toLowerCase()
+    const createdByStr = (l.createdBy || "").toLowerCase()
     const serviceStr = (l.service || "").toLowerCase()
     const sourceStr = (l.source || "").toLowerCase()
 
@@ -166,11 +172,16 @@ export function LeadList({
       !q ||
       nameStr.includes(q) ||
       contactStr.includes(q) ||
+      secondaryContactStr.includes(q) ||
       cityStr.includes(q) ||
       phoneStr.includes(q) ||
-      (cleanQueryDigits.length >= 3 && phoneDigits.includes(cleanQueryDigits)) ||
+      secondaryPhoneStr.includes(q) ||
+      (cleanQueryDigits.length >= 3 && (phoneDigits.includes(cleanQueryDigits) || secondaryPhoneDigits.includes(cleanQueryDigits))) ||
+      assignedToStr.includes(q) ||
       ownerStr.includes(q) ||
       callerStr.includes(q) ||
+      managersStr.includes(q) ||
+      createdByStr.includes(q) ||
       serviceStr.includes(q) ||
       sourceStr.includes(q)
 
@@ -223,21 +234,282 @@ export function LeadList({
   const endIndex = Math.min(startIndex + pageSize, totalItems)
   const paginatedLeads = filteredLeads.slice(startIndex, endIndex)
 
-  // Excel Export
+  // Premium Styled Excel Export
   const handleExportExcel = () => {
-    const headers = ["ID,Name,Primary Contact,Phone,Service,Source,City,Owner,Labels,Created At,Status"]
-    const rows = filteredLeads.map(
-      (l) =>
-        `${l.id},"${l.name}","${l.primaryContact}","${l.phone.replace(/\n/g, " ")}","${l.service || ""}","${l.source || ""}","${l.city || "Mumbai"}","${l.owner}","${l.labels.join(";")}",${l.createdAt},${l.status}`
-    )
-    const csvContent = "data:text/csv;charset=utf-8," + [headers, ...rows].join("\n")
-    const encodedUri = encodeURI(csvContent)
+    const filterTitle = activeFilter || "All Leads"
+    const timestamp = new Date().toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    })
+
+    const rowsHtml = filteredLeads
+      .map((l, index) => {
+        const isEven = index % 2 === 0
+        const rowBg = isEven ? "#FFFFFF" : "#F8FAFC"
+        const statusColors: Record<string, { bg: string; color: string }> = {
+          Won: { bg: "#DCFCE7", color: "#166534" },
+          Lost: { bg: "#FEE2E2", color: "#991B1B" },
+          Contacted: { bg: "#DBEAFE", color: "#1E40AF" },
+          New: { bg: "#F1F5F9", color: "#334155" },
+          Negotiation: { bg: "#F3E8FF", color: "#6B21A8" },
+          "Store Visit": { bg: "#E0E7FF", color: "#3730A3" },
+          "Our Office Visit": { bg: "#FFEDD5", color: "#9A3412" },
+          "They come to our office": { bg: "#FFEDD5", color: "#9A3412" },
+        }
+        const sColor = statusColors[l.status] || { bg: "#F1F5F9", color: "#334155" }
+
+        const assignedPerson = (l.assignedTo && l.assignedTo !== "None" && l.assignedTo !== "Unassigned")
+          ? l.assignedTo
+          : ((l.caller && l.caller !== "None" && l.caller !== "Unassigned")
+            ? l.caller
+            : ((l.owner && l.owner !== "None" && l.owner !== "Unassigned")
+              ? l.owner
+              : "Unassigned"))
+
+        const phoneVal = l.secondaryPhone ? `${l.phone} (Mgr: ${l.secondaryPhone})` : l.phone
+        const contactVal = l.secondaryContact ? `${l.primaryContact} (Mgr: ${l.secondaryContact})` : l.primaryContact
+        const reminderVal = l.reminderDate && l.reminderDate !== "None" ? `${l.reminderDate} ${l.reminderTime || ""}` : "No Reminder"
+
+        return `
+          <tr style="background-color: ${rowBg};">
+            <td style="padding: 8px 12px; border: 1px solid #E2E8F0; text-align: center;">${index + 1}</td>
+            <td style="padding: 8px 12px; border: 1px solid #E2E8F0; font-weight: bold; color: #0F172A;">${l.name}</td>
+            <td style="padding: 8px 12px; border: 1px solid #E2E8F0; color: #334155;">${contactVal}</td>
+            <td style="padding: 8px 12px; border: 1px solid #E2E8F0; mso-number-format:'\\@'; color: #0284C7;">${phoneVal}</td>
+            <td style="padding: 8px 12px; border: 1px solid #E2E8F0; color: #475569;">${l.service || "-"}</td>
+            <td style="padding: 8px 12px; border: 1px solid #E2E8F0; color: #475569;">${l.source || "-"}</td>
+            <td style="padding: 8px 12px; border: 1px solid #E2E8F0; color: #475569;">${l.city || "Mumbai"}</td>
+            <td style="padding: 8px 12px; border: 1px solid #E2E8F0; color: #334155;">${assignedPerson}</td>
+            <td style="padding: 8px 12px; border: 1px solid #E2E8F0; color: #D97706;">${reminderVal}</td>
+            <td style="padding: 8px 12px; border: 1px solid #E2E8F0; text-align: center;">
+              <span style="background-color: ${sColor.bg}; color: ${sColor.color}; padding: 4px 10px; border-radius: 4px; font-weight: bold; font-size: 11px;">
+                ${l.status}
+              </span>
+            </td>
+            <td style="padding: 8px 12px; border: 1px solid #E2E8F0; text-align: center; color: #64748B;">${l.createdAt || "-"}</td>
+          </tr>
+        `
+      })
+      .join("")
+
+    const excelTemplate = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Leads</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+        <meta http-equiv="content-type" content="text/plain; charset=UTF-8"/>
+        <style>
+          body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; }
+          table { border-collapse: collapse; width: 100%; }
+          th { background-color: #1E3A8A; color: #FFFFFF; font-weight: bold; padding: 10px 12px; border: 1px solid #1E40AF; text-align: left; }
+        </style>
+      </head>
+      <body>
+        <table>
+          <tr>
+            <td colspan="11" style="background-color: #1E3A8A; color: #FFFFFF; font-size: 16px; font-weight: bold; padding: 14px; text-align: center;">
+              SAAMPARK GROUP • LEADS REPORT
+            </td>
+          </tr>
+          <tr>
+            <td colspan="11" style="background-color: #F1F5F9; color: #475569; font-size: 11px; padding: 8px 12px; border-bottom: 2px solid #CBD5E1;">
+              <strong>Filter:</strong> ${filterTitle} &nbsp;|&nbsp; <strong>Total Leads:</strong> ${filteredLeads.length} &nbsp;|&nbsp; <strong>Generated Date:</strong> ${timestamp}
+            </td>
+          </tr>
+          <tr>
+            <th style="text-align: center; width: 50px;">#</th>
+            <th>Business / Lead Name</th>
+            <th>Primary Contact</th>
+            <th>Phone</th>
+            <th>Service</th>
+            <th>Source</th>
+            <th>City</th>
+            <th>Assigned To</th>
+            <th>Reminder</th>
+            <th style="text-align: center;">Status</th>
+            <th style="text-align: center;">Created Date</th>
+          </tr>
+          ${rowsHtml}
+        </table>
+      </body>
+      </html>
+    `
+
+    const blob = new Blob([excelTemplate], { type: "application/vnd.ms-excel;charset=utf-8" })
     const link = document.createElement("a")
-    link.setAttribute("href", encodedUri)
-    link.setAttribute("download", `leads_export_${Date.now()}.csv`)
+    const url = URL.createObjectURL(blob)
+    link.href = url
+    link.download = `SAAMPARK_Leads_${filterTitle.replace(/\s+/g, "_")}_${Date.now()}.xls`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
+  // PDF Print Generator
+  const handlePrintPDF = () => {
+    const filterTitle = activeFilter || "All Leads"
+    const timestamp = new Date().toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    })
+
+    const printWindow = window.open("", "_blank", "width=1100,height=850")
+    if (!printWindow) {
+      window.print()
+      return
+    }
+
+    const rowsHtml = filteredLeads
+      .map((l, index) => {
+        const assignedPerson = (l.assignedTo && l.assignedTo !== "None" && l.assignedTo !== "Unassigned")
+          ? l.assignedTo
+          : ((l.caller && l.caller !== "None" && l.caller !== "Unassigned")
+            ? l.caller
+            : ((l.owner && l.owner !== "None" && l.owner !== "Unassigned")
+              ? l.owner
+              : "Unassigned"))
+
+        const phoneVal = l.secondaryPhone ? `${l.phone}<br/><span style="color:#7C3AED;font-size:10px;">Mgr: ${l.secondaryPhone}</span>` : l.phone
+        const reminderVal = l.reminderDate && l.reminderDate !== "None" ? `${l.reminderDate}<br/><span style="color:#D97706;font-size:10px;">${l.reminderTime || ""}</span>` : "-"
+
+        return `
+          <tr>
+            <td style="text-align: center; color: #64748B;">${index + 1}</td>
+            <td style="font-weight: 600; color: #0F172A;">${l.name}</td>
+            <td>${l.primaryContact || "-"}</td>
+            <td>${phoneVal}</td>
+            <td>${l.service || "-"}</td>
+            <td><span class="badge badge-source">${l.source || "-"}</span></td>
+            <td>${l.city || "Mumbai"}</td>
+            <td>${assignedPerson}</td>
+            <td>${reminderVal}</td>
+            <td style="text-align: center;">
+              <span class="badge badge-status">${l.status}</span>
+            </td>
+            <td style="text-align: center; color: #64748B;">${l.createdAt || "-"}</td>
+          </tr>
+        `
+      })
+      .join("")
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>SAAMPARK Leads Report - ${filterTitle}</title>
+        <style>
+          @page { size: A4 landscape; margin: 12mm; }
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            margin: 0;
+            padding: 16px;
+            color: #0F172A;
+            background: #FFF;
+            font-size: 11px;
+          }
+          .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #0F172A;
+            padding-bottom: 12px;
+            margin-bottom: 14px;
+          }
+          .title { font-size: 20px; font-weight: 800; color: #0F172A; letter-spacing: -0.5px; }
+          .subtitle { font-size: 11px; color: #64748B; margin-top: 2px; }
+          .meta { font-size: 11px; color: #334155; text-align: right; }
+          table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+          th {
+            background-color: #0F172A;
+            color: #FFF;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 10px;
+            letter-spacing: 0.5px;
+            padding: 8px 10px;
+            text-align: left;
+          }
+          td {
+            padding: 7px 10px;
+            border-bottom: 1px solid #E2E8F0;
+            vertical-align: middle;
+          }
+          tr:nth-child(even) { background-color: #F8FAFC; }
+          .badge {
+            display: inline-block;
+            padding: 2px 7px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+          }
+          .badge-status { background: #E2E8F0; color: #1E293B; }
+          .badge-source { background: #EFF6FF; color: #1D4ED8; }
+          .footer {
+            margin-top: 20px;
+            padding-top: 10px;
+            border-top: 1px solid #E2E8F0;
+            display: flex;
+            justify-content: space-between;
+            color: #94A3B8;
+            font-size: 10px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <div class="title">SAAMPARK GROUP</div>
+            <div class="subtitle">Enterprise CRM • Leads Report</div>
+          </div>
+          <div class="meta">
+            <div><strong>Filter:</strong> ${filterTitle}</div>
+            <div><strong>Total Records:</strong> ${filteredLeads.length}</div>
+            <div><strong>Date:</strong> ${timestamp}</div>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="text-align: center; width: 30px;">#</th>
+              <th>Business Name</th>
+              <th>Primary Contact</th>
+              <th>Phone</th>
+              <th>Service</th>
+              <th>Source</th>
+              <th>City</th>
+              <th>Assigned To</th>
+              <th>Reminder</th>
+              <th style="text-align: center;">Status</th>
+              <th style="text-align: center;">Created</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+
+        <div class="footer">
+          <span>Generated by SAAMPARK CRM Platform</span>
+          <span>Confidential • Internal Use Only</span>
+        </div>
+
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+            }, 300);
+          };
+        </script>
+      </body>
+      </html>
+    `
+
+    printWindow.document.open()
+    printWindow.document.write(htmlContent)
+    printWindow.document.close()
   }
 
   return (
@@ -398,8 +670,8 @@ export function LeadList({
 
           <button
             type="button"
-            onClick={() => window.print()}
-            className="px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            onClick={handlePrintPDF}
+            className="px-2.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
           >
             Print
           </button>
@@ -408,7 +680,7 @@ export function LeadList({
           <div className="relative">
             <input
               type="text"
-              placeholder="Search name, city, phone..."
+              placeholder="Search name, assigned user, phone, city..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-44 sm:w-60 pl-3 pr-8 py-1.5 text-xs bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400"

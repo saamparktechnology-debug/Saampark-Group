@@ -6,6 +6,7 @@ import { ClientItem } from "../types"
 
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
+import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 
 interface ClientsTableViewProps {
   clients: ClientItem[]
@@ -160,13 +161,50 @@ export function ClientsTableView({
         <div className="flex items-center gap-2">
           <button
             type="button"
-            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1.5"
+            onClick={() => {
+              exportToExcel({
+                filename: "SAAMPARK_Clients",
+                title: "Clients Directory",
+                subtitle: activeFilter || "All Clients",
+                headers: ["#", "Company / Name", "Primary Contact", "Email", "Phone", "Projects", "Total Invoiced", "Payment Received", "Due"],
+                rows: filteredClients.map((c, idx) => [
+                  idx + 1,
+                  c.name,
+                  c.primaryContact,
+                  c.email || "-",
+                  c.phone,
+                  c.projectsCount,
+                  c.totalInvoiced,
+                  c.paymentReceived,
+                  c.due,
+                ]),
+              })
+            }}
+            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer"
           >
             <FileSpreadsheet size={14} className="text-emerald-600" /> Excel
           </button>
           <button
             type="button"
-            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1.5"
+            onClick={() => {
+              printPDFReport({
+                title: "Clients Directory Report",
+                subtitle: activeFilter || "All Clients",
+                headers: ["#", "Company / Name", "Primary Contact", "Email", "Phone", "Projects", "Total Invoiced", "Received", "Due"],
+                rows: filteredClients.map((c, idx) => [
+                  idx + 1,
+                  c.name,
+                  c.primaryContact,
+                  c.email || "-",
+                  c.phone,
+                  c.projectsCount,
+                  c.totalInvoiced,
+                  c.paymentReceived,
+                  c.due,
+                ]),
+              })
+            }}
+            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer"
           >
             <Printer size={14} className="text-slate-500" /> Print
           </button>

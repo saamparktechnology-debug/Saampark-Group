@@ -9,6 +9,7 @@ import {
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { fetchModuleDataFromDB, saveModuleDataToDB, filterGlobalDeletedItems, markGlobalItemDeleted } from "@/lib/storageSync"
+import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 
 export interface ExpenseItem {
   id: string
@@ -172,8 +173,50 @@ export default function ExpensesMain() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => window.print()}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 shadow-2xs"
+            onClick={() => {
+              exportToExcel({
+                filename: "SAAMPARK_Operational_Expenses",
+                title: "Operational Expenses Report",
+                subtitle: selectedCategory === "all" ? "All Expenses" : selectedCategory,
+                headers: ["#", "Expense #", "Title", "Category", "Amount (₹)", "Date", "Recorded By", "Status"],
+                rows: filteredExpenses.map((exp, idx) => [
+                  idx + 1,
+                  exp.expenseNumber,
+                  exp.title,
+                  exp.category,
+                  `₹${exp.amountNum.toLocaleString("en-IN")}`,
+                  exp.date,
+                  exp.member,
+                  exp.status,
+                ]),
+              })
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700 shadow-2xs cursor-pointer"
+          >
+            <Download size={13} className="text-emerald-600" />
+            <span>Excel</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              printPDFReport({
+                title: "Operational Expenses Report",
+                subtitle: selectedCategory === "all" ? "All Expenses" : selectedCategory,
+                headers: ["#", "Expense #", "Title", "Category", "Amount", "Date", "Recorded By", "Status"],
+                rows: filteredExpenses.map((exp, idx) => [
+                  idx + 1,
+                  exp.expenseNumber,
+                  exp.title,
+                  exp.category,
+                  `₹${exp.amountNum.toLocaleString("en-IN")}`,
+                  exp.date,
+                  exp.member,
+                  exp.status,
+                ]),
+              })
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700 shadow-2xs cursor-pointer"
           >
             <Printer size={13} className="text-zinc-500" />
             <span>Print</span>

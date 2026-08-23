@@ -13,6 +13,7 @@ import { getStoredClients } from "@/app/feature/clients/services/clientService"
 import { addProject } from "@/app/feature/projects/services/projectService"
 import { addInvoice } from "@/app/feature/sales/invoices/services/invoiceService"
 import { addOrder } from "@/app/feature/sales/orders/services/orderService"
+import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 
 export interface ProposalItem {
   id: string
@@ -279,8 +280,50 @@ export default function ProposalsMain() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => window.print()}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 shadow-2xs"
+            onClick={() => {
+              exportToExcel({
+                filename: "SAAMPARK_Proposals",
+                title: "Business Proposals Report",
+                subtitle: selectedStatus === "all" ? "All Proposals" : selectedStatus,
+                headers: ["#", "Proposal #", "Title", "Client", "Amount (₹)", "Proposal Date", "Valid Until", "Status"],
+                rows: filteredProposals.map((p, idx) => [
+                  idx + 1,
+                  p.proposalNumber,
+                  p.title,
+                  p.client,
+                  `₹${p.amountNum.toLocaleString("en-IN")}`,
+                  p.proposalDate,
+                  p.validUntil,
+                  p.status,
+                ]),
+              })
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700 shadow-2xs cursor-pointer"
+          >
+            <Download size={13} className="text-emerald-600" />
+            <span>Excel</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              printPDFReport({
+                title: "Business Proposals Report",
+                subtitle: selectedStatus === "all" ? "All Proposals" : selectedStatus,
+                headers: ["#", "Proposal #", "Title", "Client", "Amount", "Date", "Valid Until", "Status"],
+                rows: filteredProposals.map((p, idx) => [
+                  idx + 1,
+                  p.proposalNumber,
+                  p.title,
+                  p.client,
+                  `₹${p.amountNum.toLocaleString("en-IN")}`,
+                  p.proposalDate,
+                  p.validUntil,
+                  p.status,
+                ]),
+              })
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700 shadow-2xs cursor-pointer"
           >
             <Printer size={13} className="text-zinc-500" />
             <span>Print</span>

@@ -20,6 +20,7 @@ import {
 import { Task, TaskStatus } from "../types"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
+import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 
 interface TaskListProps {
   tasks: Task[]
@@ -328,16 +329,51 @@ export function TaskList({
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => alert("Export to Excel")}
-            className="px-2.5 py-1 text-xs text-zinc-600 hover:bg-zinc-100 rounded-md transition-colors"
+            onClick={() => {
+              exportToExcel({
+                filename: "SAAMPARK_Tasks",
+                title: "Tasks Report",
+                subtitle: activeFilterPill || "All Tasks",
+                headers: ["#", "Task ID", "Title", "Related To", "Assigned To", "Start Date", "Deadline", "Priority", "Status"],
+                rows: filteredTasks.map((t, idx) => [
+                  idx + 1,
+                  t.id,
+                  t.title,
+                  t.relatedTo || "-",
+                  t.assignedTo,
+                  t.startDate,
+                  t.deadline,
+                  t.priority,
+                  t.status,
+                ]),
+              })
+            }}
+            className="px-2.5 py-1 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md transition-colors cursor-pointer"
           >
             Excel
           </button>
 
           <button
             type="button"
-            onClick={() => window.print()}
-            className="px-2.5 py-1 text-xs text-zinc-600 hover:bg-zinc-100 rounded-md transition-colors"
+            onClick={() => {
+              printPDFReport({
+                title: "Tasks Report",
+                subtitle: activeFilterPill || "All Tasks",
+                headers: ["#", "Task ID", "Title", "Related To", "Assigned To", "Start Date", "Deadline", "Priority", "Status"],
+                rows: filteredTasks.map((t, idx) => [
+                  idx + 1,
+                  t.id,
+                  t.title,
+                  t.relatedTo || "-",
+                  t.assignedTo,
+                  t.startDate,
+                  t.deadline,
+                  t.priority,
+                  t.status,
+                ]),
+              })
+            }}
+            className="px-2.5 py-1 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md transition-colors cursor-pointer"
           >
             Print
           </button>

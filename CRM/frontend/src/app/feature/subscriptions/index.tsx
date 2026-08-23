@@ -11,6 +11,7 @@ import { Subscription } from "./types"
 import { getSubscriptions, addSubscription, deleteSubscription } from "./services/subscriptionService"
 import { SubscriptionList } from "./components/SubscriptionList"
 import { getStoredClients } from "@/app/feature/clients/services/clientService"
+import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 
 export default function SubscriptionsMain() {
   const { activeCompanyId, user } = useAuthStore()

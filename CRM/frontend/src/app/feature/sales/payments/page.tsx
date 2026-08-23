@@ -28,6 +28,7 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { getPayments, addPayment, deletePayment, PaymentItem } from "./services/paymentService"
 import { getInvoices, InvoiceItem } from "../invoices/services/invoiceService"
 import { getStoredClients } from "@/app/feature/clients/services/clientService"
+import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 
 export default function PaymentsPage() {
   const { user } = useAuthStore()
@@ -271,8 +272,52 @@ export default function PaymentsPage() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => window.print()}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 transition-colors shadow-2xs"
+            onClick={() => {
+              exportToExcel({
+                filename: "SAAMPARK_Payment_Receipts",
+                title: "Payments Received Report",
+                subtitle: "Settlement Ledger",
+                headers: ["#", "Payment ID", "Invoice #", "Client Name", "Amount", "Payment Method", "Payment Date", "Transaction Ref", "Status"],
+                rows: payments.map((p, idx) => [
+                  idx + 1,
+                  p.id,
+                  p.invoiceId,
+                  p.client,
+                  p.amount,
+                  p.paymentMethod,
+                  p.paymentDate,
+                  p.transactionRef || "-",
+                  p.status,
+                ]),
+              })
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors shadow-2xs cursor-pointer"
+          >
+            <Download size={13} className="text-emerald-600" />
+            <span>Excel</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              printPDFReport({
+                title: "Payments Received Report",
+                subtitle: "Settlement Ledger",
+                headers: ["#", "Payment ID", "Invoice #", "Client Name", "Amount", "Method", "Date", "Transaction Ref", "Status"],
+                rows: payments.map((p, idx) => [
+                  idx + 1,
+                  p.id,
+                  p.invoiceId,
+                  p.client,
+                  p.amount,
+                  p.paymentMethod,
+                  p.paymentDate,
+                  p.transactionRef || "-",
+                  p.status,
+                ]),
+              })
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors shadow-2xs cursor-pointer"
           >
             <Printer size={13} className="text-zinc-500" />
             <span>Print</span>

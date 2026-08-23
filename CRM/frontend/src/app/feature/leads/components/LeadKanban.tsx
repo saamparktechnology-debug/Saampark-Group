@@ -39,13 +39,73 @@ interface LeadKanbanProps {
   onToggleLeadLabel: (leadId: string, labelName: string) => void
 }
 
+const MONTH_MAP: Record<string, number> = {
+  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+  jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+}
+
+function parseReminderTimestamp(dateStr?: string, timeStr?: string): number {
+  if (!dateStr || dateStr === "None" || dateStr === "-" || dateStr.toLowerCase().includes("no reminder") || dateStr.includes("00")) {
+    return Infinity // Leads with no reminder appear at the bottom
+  }
+
+  let year = new Date().getFullYear()
+  let month = new Date().getMonth()
+  let day = new Date().getDate()
+
+  const trimmed = dateStr.trim()
+  const textMatch = trimmed.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/)
+  if (textMatch) {
+    day = parseInt(textMatch[1], 10)
+    const mStr = textMatch[2].substring(0, 3).toLowerCase()
+    month = MONTH_MAP[mStr] !== undefined ? MONTH_MAP[mStr] : month
+    year = parseInt(textMatch[3], 10)
+  } else if (trimmed.includes("-") || trimmed.includes("/") || trimmed.includes(",")) {
+    const parts = trimmed.split(/[-/, ]+/).filter(Boolean)
+    if (parts.length === 3) {
+      if (parts[0].length === 4) {
+        year = parseInt(parts[0], 10)
+        month = parseInt(parts[1], 10) - 1
+        day = parseInt(parts[2], 10)
+      } else {
+        day = parseInt(parts[0], 10)
+        month = parseInt(parts[1], 10) - 1
+        year = parseInt(parts[2], 10)
+      }
+    }
+  } else {
+    const parsed = Date.parse(trimmed)
+    if (!isNaN(parsed)) return parsed
+  }
+
+  let hours = 0
+  let minutes = 0
+
+  if (timeStr && timeStr !== "None") {
+    const isPM = /pm/i.test(timeStr)
+    const isAM = /am/i.test(timeStr)
+    const cleanTime = timeStr.replace(/[^0-9:]/g, "").trim()
+    const [hRaw, mRaw] = cleanTime.split(":").map((v) => parseInt(v, 10))
+    if (!isNaN(hRaw)) {
+      let h = hRaw
+      if (isPM && h < 12) h += 12
+      if (isAM && h === 12) h = 0
+      hours = h
+    }
+    if (!isNaN(mRaw)) minutes = mRaw
+  }
+
+  const d = new Date(year, month, day, hours, minutes)
+  return isNaN(d.getTime()) ? Infinity : d.getTime()
+}
+
 const KANBAN_COLUMNS: { id: LeadStatus; title: string; color: string }[] = [
   { id: "New", title: "New", color: "border-amber-400" },
   { id: "Qualified", title: "Qualified", color: "border-blue-500" },
   { id: "Discussion", title: "Discussion", color: "border-cyan-400" },
   { id: "Negotiation", title: "Negotiation", color: "border-purple-500" },
   { id: "Store Visit", title: "Store Visit", color: "border-indigo-500" },
-  { id: "They come to our office", title: "They come to our office", color: "border-orange-500" },
+  { id: "Our Office Visit", title: "Our Office Visit", color: "border-orange-500" },
   { id: "Won", title: "Won", color: "border-emerald-500" },
   { id: "Lost", title: "Lost", color: "border-rose-500" },
 ]
@@ -128,11 +188,17 @@ export function LeadKanban({
 
     const nameStr = (l.name || "").toLowerCase()
     const contactStr = (l.primaryContact || "").toLowerCase()
+    const secondaryContactStr = (l.secondaryContact || "").toLowerCase()
     const cityStr = (l.city || "").toLowerCase()
     const phoneStr = (l.phone || "").toLowerCase()
     const phoneDigits = (l.phone || "").replace(/\D/g, "")
+    const secondaryPhoneStr = (l.secondaryPhone || "").toLowerCase()
+    const secondaryPhoneDigits = (l.secondaryPhone || "").replace(/\D/g, "")
+    const assignedToStr = (l.assignedTo || "").toLowerCase()
     const ownerStr = (l.owner || "").toLowerCase()
     const callerStr = (l.caller || "").toLowerCase()
+    const managersStr = (l.managers || "").toLowerCase()
+    const createdByStr = (l.createdBy || "").toLowerCase()
     const serviceStr = (l.service || "").toLowerCase()
     const sourceStr = (l.source || "").toLowerCase()
 
@@ -140,11 +206,16 @@ export function LeadKanban({
       !q ||
       nameStr.includes(q) ||
       contactStr.includes(q) ||
+      secondaryContactStr.includes(q) ||
       cityStr.includes(q) ||
       phoneStr.includes(q) ||
-      (cleanQueryDigits.length >= 3 && phoneDigits.includes(cleanQueryDigits)) ||
+      secondaryPhoneStr.includes(q) ||
+      (cleanQueryDigits.length >= 3 && (phoneDigits.includes(cleanQueryDigits) || secondaryPhoneDigits.includes(cleanQueryDigits))) ||
+      assignedToStr.includes(q) ||
       ownerStr.includes(q) ||
       callerStr.includes(q) ||
+      managersStr.includes(q) ||
+      createdByStr.includes(q) ||
       serviceStr.includes(q) ||
       sourceStr.includes(q)
 
@@ -381,7 +452,7 @@ export function LeadKanban({
           <div className="relative">
             <input
               type="text"
-              placeholder="Search name, city, phone..."
+              placeholder="Search name, assigned user, phone, city..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-48 sm:w-64 pl-3 pr-8 py-1.5 text-xs bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 rounded-full focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400"
@@ -403,7 +474,23 @@ export function LeadKanban({
         className="flex gap-4 overflow-x-auto pb-6 pt-1 items-start scrollbar-thin max-w-full cursor-grab active:cursor-grabbing select-none"
       >
         {KANBAN_COLUMNS.map((col) => {
-          const columnLeads = filteredLeads.filter((l) => l.status === col.id)
+          const rawColumnLeads = filteredLeads.filter((l) => {
+            if (col.id === "Our Office Visit") {
+              return l.status === "Our Office Visit" || l.status === "They come to our office"
+            }
+            return l.status === col.id
+          })
+
+          // Follow-up columns sorted chronologically by reminder date (earliest / tomorrow on top)
+          // "New" column remains unorganized as added
+          const columnLeads =
+            col.id === "New"
+              ? rawColumnLeads
+              : [...rawColumnLeads].sort((a, b) => {
+                  const timeA = parseReminderTimestamp(a.reminderDate, a.reminderTime)
+                  const timeB = parseReminderTimestamp(b.reminderDate, b.reminderTime)
+                  return timeA - timeB
+                })
 
           return (
             <div

@@ -30,6 +30,7 @@ import { addInvoice } from "../invoices/services/invoiceService"
 import { addPayment, sendPaymentReminderNotification } from "../payments/services/paymentService"
 import { getStoredClients } from "@/app/feature/clients/services/clientService"
 import { getProjects } from "@/app/feature/projects/services/projectService"
+import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 
 type OrderStatus = "Pending" | "Processing" | "Completed" | "Cancelled"
 type PaymentStatus = "Paid" | "Partially paid" | "Unpaid"
@@ -312,17 +313,52 @@ export default function OrderListPage() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={handleExportCSV}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 transition-colors shadow-2xs"
+            onClick={() => {
+              exportToExcel({
+                filename: "SAAMPARK_Sales_Orders",
+                title: "Sales Orders Report",
+                subtitle: activeTab === "all" ? "All Orders" : activeTab,
+                headers: ["#", "Order #", "Client", "Project", "Total Amount", "Order Date", "Delivery Date", "Payment Status", "Order Status"],
+                rows: displayedOrders.map((o, idx) => [
+                  idx + 1,
+                  o.orderNumber,
+                  o.client,
+                  o.project,
+                  o.totalAmount,
+                  o.orderDate,
+                  o.deliveryDate,
+                  o.paymentStatus,
+                  o.status,
+                ]),
+              })
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors shadow-2xs cursor-pointer"
           >
-            <Download size={13} className="text-zinc-500" />
-            <span>Export CSV</span>
+            <Download size={13} className="text-emerald-600" />
+            <span>Excel</span>
           </button>
 
           <button
             type="button"
-            onClick={() => window.print()}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 transition-colors shadow-2xs"
+            onClick={() => {
+              printPDFReport({
+                title: "Sales Orders Report",
+                subtitle: activeTab === "all" ? "All Orders" : activeTab,
+                headers: ["#", "Order #", "Client", "Project", "Total Amount", "Order Date", "Delivery Date", "Payment Status", "Status"],
+                rows: displayedOrders.map((o, idx) => [
+                  idx + 1,
+                  o.orderNumber,
+                  o.client,
+                  o.project,
+                  o.totalAmount,
+                  o.orderDate,
+                  o.deliveryDate,
+                  o.paymentStatus,
+                  o.status,
+                ]),
+              })
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors shadow-2xs cursor-pointer"
           >
             <Printer size={13} className="text-zinc-500" />
             <span>Print</span>

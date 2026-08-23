@@ -24,6 +24,7 @@ import { ColumnDef } from "@tanstack/react-table"
 import { DataTable } from "@/components/ui/DataTable"
 import { Button } from "@/components/ui/Button"
 import { Tabs } from "@/components/ui/Tabs"
+import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 import { 
   getInvoices, 
   addInvoice, 
@@ -374,8 +375,48 @@ export default function InvoicesPage() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => window.print()}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 transition-colors shadow-2xs"
+            onClick={() => {
+              exportToExcel({
+                filename: "SAAMPARK_Tax_Invoices",
+                title: "Tax Invoices Report",
+                subtitle: "Official Billing",
+                headers: ["#", "Invoice #", "Client Name", "Total Invoiced", "Bill Date", "Due Date", "Status"],
+                rows: invoices.map((inv, idx) => [
+                  idx + 1,
+                  inv.id,
+                  inv.client,
+                  inv.totalInvoiced,
+                  inv.billDate,
+                  inv.dueDate,
+                  inv.status,
+                ]),
+              })
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors shadow-2xs cursor-pointer"
+          >
+            <Download size={13} className="text-emerald-600" />
+            <span>Excel</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              printPDFReport({
+                title: "Tax Invoices Summary Report",
+                subtitle: "Official Invoices",
+                headers: ["#", "Invoice #", "Client Name", "Total Invoiced", "Bill Date", "Due Date", "Status"],
+                rows: invoices.map((inv, idx) => [
+                  idx + 1,
+                  inv.id,
+                  inv.client,
+                  inv.totalInvoiced,
+                  inv.billDate,
+                  inv.dueDate,
+                  inv.status,
+                ]),
+              })
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors shadow-2xs cursor-pointer"
           >
             <Printer size={13} className="text-zinc-500" />
             <span>Print</span>
@@ -385,7 +426,7 @@ export default function InvoicesPage() {
             <button
               type="button"
               onClick={() => setIsAddModalOpen(true)}
-              className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm"
+              className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm cursor-pointer"
             >
               <Plus size={14} />
               <span>Create Invoice</span>

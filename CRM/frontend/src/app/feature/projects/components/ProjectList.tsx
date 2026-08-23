@@ -18,6 +18,7 @@ import { Project } from "../types"
 import { ProjectFiltersDropdown } from "./ProjectFiltersDropdown"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
+import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 
 interface ProjectListProps {
   projects: Project[]
@@ -62,23 +63,43 @@ export function ProjectList({
 
   // Excel Export
   const handleExportExcel = () => {
-    const headers = ["ID,Title,Client,Price,Start Date,Deadline,Progress,Status"]
-    const rows = filteredProjects.map(
-      (p) => `${p.id},"${p.title}","${p.client}",${p.price},${p.startDate},${p.deadline},${p.progress}%,${p.status}`
-    )
-    const csvContent = "data:text/csv;charset=utf-8," + [headers, ...rows].join("\n")
-    const encodedUri = encodeURI(csvContent)
-    const link = document.createElement("a")
-    link.setAttribute("href", encodedUri)
-    link.setAttribute("download", `projects_export_${Date.now()}.csv`)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    exportToExcel({
+      filename: "SAAMPARK_Projects",
+      title: "Projects Report",
+      subtitle: activeFilter || "All Projects",
+      headers: ["#", "Project ID", "Title", "Client", "Price", "Start Date", "Deadline", "Progress", "Status"],
+      rows: filteredProjects.map((p, idx) => [
+        idx + 1,
+        p.id,
+        p.title,
+        p.client,
+        p.price,
+        p.startDate,
+        p.deadline,
+        `${p.progress}%`,
+        p.status,
+      ]),
+    })
   }
 
-  // Print Action
+  // Print Action (PDF Report)
   const handlePrint = () => {
-    window.print()
+    printPDFReport({
+      title: "Projects Report",
+      subtitle: activeFilter || "All Projects",
+      headers: ["#", "Project ID", "Title", "Client", "Price", "Start Date", "Deadline", "Progress", "Status"],
+      rows: filteredProjects.map((p, idx) => [
+        idx + 1,
+        p.id,
+        p.title,
+        p.client,
+        p.price,
+        p.startDate,
+        p.deadline,
+        `${p.progress}%`,
+        p.status,
+      ]),
+    })
   }
 
   return (
