@@ -20,6 +20,7 @@ import {
   Lock,
   Unlock,
   Building2,
+  RotateCw,
 } from "lucide-react"
 import { Lead } from "../types"
 import { LeadFiltersDropdown } from "./LeadFiltersDropdown"
@@ -90,6 +91,7 @@ export function LeadList({
   const [allUsers, setAllUsers] = React.useState<{ id: string; name: string; role?: string; department?: string; email?: string; avatar?: string; avatarUrl?: string }[]>([])
   const [usersMap, setUsersMap] = React.useState<Record<string, { department?: string; role?: string; avatarUrl?: string }>>({})
   const [selectedMember, setSelectedMember] = React.useState<string>("all")
+  const [selectedMemberStage, setSelectedMemberStage] = React.useState<string>("all")
   const [isMemberDropdownOpen, setIsMemberDropdownOpen] = React.useState(false)
   const [memberSearchQuery, setMemberSearchQuery] = React.useState("")
 
@@ -122,6 +124,24 @@ export function LeadList({
       .filter(([_, count]) => count > 0)
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+  }, [leads])
+
+  // Compute breakdown of stages for each assigned member
+  const memberStageBreakdown = React.useMemo(() => {
+    const breakdown: Record<string, Record<string, number>> = {}
+    ;(leads || []).forEach((l) => {
+      const candidates = [l.assignedTo, l.caller, l.owner].filter(
+        (name): name is string => Boolean(name && name.trim() && name !== "None" && name !== "Unassigned")
+      )
+      const uniqueNames = new Set(candidates.map((n) => n.trim()))
+      const rawStatus = l.status || "New"
+      const status = rawStatus === "They come to our office" ? "Our Office Visit" : rawStatus
+      uniqueNames.forEach((name) => {
+        if (!breakdown[name]) breakdown[name] = {}
+        breakdown[name][status] = (breakdown[name][status] || 0) + 1
+      })
+    })
+    return breakdown
   }, [leads])
 
   const [activeFilter, setActiveFilter] = React.useState("All leads")
@@ -239,6 +259,13 @@ export function LeadList({
           (l.owner && l.owner.toLowerCase().trim() === targetMemberNorm) ||
           (l.managers && l.managers.toLowerCase().includes(targetMemberNorm))
         if (!isMatch) return false
+
+        // Stage sub-filter for assigned member
+        if (selectedMemberStage && selectedMemberStage !== "all") {
+          const leadStatus = l.status === "They come to our office" ? "Our Office Visit" : (l.status || "New")
+          const targetStage = selectedMemberStage === "They come to our office" ? "Our Office Visit" : selectedMemberStage
+          if (leadStatus !== targetStage) return false
+        }
       }
     }
 
@@ -285,7 +312,15 @@ export function LeadList({
 
   // Premium Styled Excel Export
   const handleExportExcel = () => {
-    const filterTitle = activeFilter || "All Leads"
+    let filterTitle = activeFilter || "All Leads"
+    if (selectedMember === "unassigned") {
+      filterTitle += ` - Unassigned Leads`
+    } else if (selectedMember !== "all") {
+      filterTitle += ` - Member: ${selectedMember}`
+      if (selectedMemberStage !== "all") {
+        filterTitle += ` (${selectedMemberStage})`
+      }
+    }
     const timestamp = new Date().toLocaleDateString("en-GB", {
       day: "2-digit",
       month: "short",
@@ -328,7 +363,7 @@ export function LeadList({
             <td style="padding: 8px 12px; border: 1px solid #E2E8F0; mso-number-format:'\\@'; color: #0284C7;">${phoneVal}</td>
             <td style="padding: 8px 12px; border: 1px solid #E2E8F0; color: #475569;">${l.service || "-"}</td>
             <td style="padding: 8px 12px; border: 1px solid #E2E8F0; color: #475569;">${l.source || "-"}</td>
-            <td style="padding: 8px 12px; border: 1px solid #E2E8F0; color: #475569;">${l.city || "Mumbai"}</td>
+            <td style="padding: 8px 12px; border: 1px solid #E2E8F0; color: #475569;">${l.city?.trim() || l.address?.trim() || l.state?.trim() || "-"}</td>
             <td style="padding: 8px 12px; border: 1px solid #E2E8F0; color: #334155;">${assignedPerson}</td>
             <td style="padding: 8px 12px; border: 1px solid #E2E8F0; color: #D97706;">${reminderVal}</td>
             <td style="padding: 8px 12px; border: 1px solid #E2E8F0; text-align: center;">
@@ -397,7 +432,15 @@ export function LeadList({
 
   // PDF Print Generator
   const handlePrintPDF = () => {
-    const filterTitle = activeFilter || "All Leads"
+    let filterTitle = activeFilter || "All Leads"
+    if (selectedMember === "unassigned") {
+      filterTitle += ` - Unassigned Leads`
+    } else if (selectedMember !== "all") {
+      filterTitle += ` - Member: ${selectedMember}`
+      if (selectedMemberStage !== "all") {
+        filterTitle += ` (${selectedMemberStage})`
+      }
+    }
     const timestamp = new Date().toLocaleDateString("en-GB", {
       day: "2-digit",
       month: "short",
@@ -431,7 +474,7 @@ export function LeadList({
             <td>${phoneVal}</td>
             <td>${l.service || "-"}</td>
             <td><span class="badge badge-source">${l.source || "-"}</span></td>
-            <td>${l.city || "Mumbai"}</td>
+            <td>${l.city?.trim() || l.address?.trim() || l.state?.trim() || "-"}</td>
             <td>${assignedPerson}</td>
             <td>${reminderVal}</td>
             <td style="text-align: center;">
@@ -449,82 +492,41 @@ export function LeadList({
       <head>
         <title>SAAMPARK Leads Report - ${filterTitle}</title>
         <style>
-          @page { size: A4 landscape; margin: 12mm; }
-          body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-            margin: 0;
-            padding: 16px;
-            color: #0F172A;
-            background: #FFF;
-            font-size: 11px;
-          }
-          .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 2px solid #0F172A;
-            padding-bottom: 12px;
-            margin-bottom: 14px;
-          }
-          .title { font-size: 20px; font-weight: 800; color: #0F172A; letter-spacing: -0.5px; }
-          .subtitle { font-size: 11px; color: #64748B; margin-top: 2px; }
-          .meta { font-size: 11px; color: #334155; text-align: right; }
-          table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-          th {
-            background-color: #0F172A;
-            color: #FFF;
-            font-weight: 700;
-            text-transform: uppercase;
-            font-size: 10px;
-            letter-spacing: 0.5px;
-            padding: 8px 10px;
-            text-align: left;
-          }
-          td {
-            padding: 7px 10px;
-            border-bottom: 1px solid #E2E8F0;
-            vertical-align: middle;
-          }
+          @page { size: A4 landscape; margin: 12mm 10mm; }
+          body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; color: #1E293B; margin: 0; padding: 0; }
+          .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1E3A8A; padding-bottom: 12px; margin-bottom: 14px; }
+          .logo-area h1 { margin: 0; font-size: 18px; color: #1E3A8A; font-weight: 800; }
+          .logo-area p { margin: 2px 0 0 0; font-size: 10px; color: #64748B; font-weight: 500; }
+          .meta-info { text-align: right; font-size: 10px; color: #475569; }
+          .meta-info strong { color: #0F172A; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+          th { background-color: #F8FAFC; color: #334155; font-weight: 700; text-transform: uppercase; font-size: 9.5px; letter-spacing: 0.5px; border: 1px solid #E2E8F0; padding: 7px 8px; text-align: left; }
+          td { border: 1px solid #E2E8F0; padding: 6px 8px; font-size: 10px; }
           tr:nth-child(even) { background-color: #F8FAFC; }
-          .badge {
-            display: inline-block;
-            padding: 2px 7px;
-            border-radius: 4px;
-            font-size: 10px;
-            font-weight: 600;
-          }
-          .badge-status { background: #E2E8F0; color: #1E293B; }
-          .badge-source { background: #EFF6FF; color: #1D4ED8; }
-          .footer {
-            margin-top: 20px;
-            padding-top: 10px;
-            border-top: 1px solid #E2E8F0;
-            display: flex;
-            justify-content: space-between;
-            color: #94A3B8;
-            font-size: 10px;
-          }
+          .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 700; text-align: center; }
+          .badge-status { background-color: #E0E7FF; color: #3730A3; }
+          .badge-source { background-color: #F1F5F9; color: #475569; }
+          .footer { display: flex; justify-content: space-between; font-size: 9px; color: #94A3B8; border-top: 1px solid #E2E8F0; padding-top: 8px; }
         </style>
       </head>
       <body>
         <div class="header">
-          <div>
-            <div class="title">SAAMPARK GROUP</div>
-            <div class="subtitle">Enterprise CRM • Leads Report</div>
+          <div class="logo-area">
+            <h1>SAAMPARK GROUP</h1>
+            <p>Leads & Opportunities Comprehensive Registry</p>
           </div>
-          <div class="meta">
-            <div><strong>Filter:</strong> ${filterTitle}</div>
-            <div><strong>Total Records:</strong> ${filteredLeads.length}</div>
-            <div><strong>Date:</strong> ${timestamp}</div>
+          <div class="meta-info">
+            <div><strong>Active Filter:</strong> ${filterTitle}</div>
+            <div><strong>Total Leads:</strong> ${filteredLeads.length} &nbsp;|&nbsp; <strong>Printed:</strong> ${timestamp}</div>
           </div>
         </div>
 
         <table>
           <thead>
             <tr>
-              <th style="text-align: center; width: 30px;">#</th>
-              <th>Business Name</th>
-              <th>Primary Contact</th>
+              <th style="text-align: center; width: 35px;">#</th>
+              <th>Business / Lead Name</th>
+              <th>Contact Person</th>
               <th>Phone</th>
               <th>Service</th>
               <th>Source</th>
@@ -532,7 +534,7 @@ export function LeadList({
               <th>Assigned To</th>
               <th>Reminder</th>
               <th style="text-align: center;">Status</th>
-              <th style="text-align: center;">Created</th>
+              <th style="text-align: center;">Created Date</th>
             </tr>
           </thead>
           <tbody>
@@ -541,8 +543,8 @@ export function LeadList({
         </table>
 
         <div class="footer">
-          <span>Generated by SAAMPARK CRM Platform</span>
-          <span>Confidential • Internal Use Only</span>
+          <span>Saampark CRM System • Confidential & Proprietary</span>
+          <span>Page 1 of 1</span>
         </div>
 
         <script>
@@ -550,7 +552,7 @@ export function LeadList({
             setTimeout(function() {
               window.print();
             }, 300);
-          };
+          }
         </script>
       </body>
       </html>
@@ -563,8 +565,7 @@ export function LeadList({
 
   return (
     <div className="space-y-4">
-      
-      {/* ---------------- TOP HEADER BAR ---------------- */}
+      {/* ---------------- TOP VIEW TABS & HEADER ACTIONS ---------------- */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         {/* Navigation Tabs */}
         <div className="flex items-center gap-6 border-b border-zinc-200 dark:border-zinc-800">
@@ -577,12 +578,11 @@ export function LeadList({
                 : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
             }`}
           >
-            Leads
+            List
             {activeViewTab === "list" && (
               <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-zinc-900 dark:bg-white rounded-full" />
             )}
           </button>
-
           <button
             type="button"
             onClick={() => onChangeViewTab("kanban")}
@@ -599,12 +599,12 @@ export function LeadList({
           </button>
         </div>
 
-        {/* Action Buttons */}
+        {/* Top Right Action Buttons */}
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={onOpenManageLabelsModal}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700/50 transition-colors shadow-2xs"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700/50 transition-colors shadow-2xs cursor-pointer"
           >
             <Tag size={14} className="text-zinc-500" />
             <span>Manage labels</span>
@@ -614,7 +614,7 @@ export function LeadList({
             <button
               type="button"
               onClick={onOpenAddModal}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700/50 transition-colors shadow-2xs"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700/50 transition-colors shadow-2xs cursor-pointer"
             >
               <Plus size={14} className="text-zinc-500" />
               <span>Add lead</span>
@@ -623,20 +623,21 @@ export function LeadList({
         </div>
       </div>
 
-      {/* ---------------- SUB-HEADER TOOLBAR ---------------- */}
+      {/* ---------------- SUB-HEADER TOOLBAR (Search & Filters) ---------------- */}
       <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
-        
         {/* Left Side Controls */}
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Layout Toggle Icon */}
+          {/* Refresh Kanban */}
           <button
             type="button"
-            className="p-1.5 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 border border-zinc-200 dark:border-zinc-700 rounded-md bg-zinc-50/50 dark:bg-zinc-800/50"
+            onClick={() => window.location.reload()}
+            className="p-1.5 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 border border-zinc-200 dark:border-zinc-700 rounded-lg bg-zinc-50/50 dark:bg-zinc-800/50 cursor-pointer"
+            title="Refresh"
           >
-            <Layout size={15} />
+            <RotateCw size={14} />
           </button>
 
-          {/* Filters Dropdown Trigger */}
+          {/* All Leads Filter Dropdown Trigger */}
           <div className="relative">
             <button
               type="button"
@@ -674,7 +675,15 @@ export function LeadList({
               }`}
             >
               <UserIcon size={13} className={selectedMember !== "all" ? "text-blue-600" : "text-zinc-500"} />
-              <span>{selectedMember === "all" ? "All Team Members" : selectedMember === "unassigned" ? "Unassigned Leads" : selectedMember}</span>
+              <span>
+                {selectedMember === "all"
+                  ? "All Team Members"
+                  : selectedMember === "unassigned"
+                  ? "Unassigned Leads"
+                  : selectedMemberStage !== "all"
+                  ? `${selectedMember} • ${selectedMemberStage}`
+                  : selectedMember}
+              </span>
               <span className="text-[10px] ml-0.5">▼</span>
             </button>
 
@@ -687,7 +696,7 @@ export function LeadList({
                     setMemberSearchQuery("")
                   }}
                 />
-                <div className="absolute left-0 mt-1 w-64 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl z-30 overflow-hidden flex flex-col max-h-80">
+                <div className="absolute left-0 mt-1 w-72 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl z-30 overflow-hidden flex flex-col max-h-96">
                   {/* Search inside Member Dropdown */}
                   <div className="p-2 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/40">
                     <div className="relative">
@@ -703,104 +712,163 @@ export function LeadList({
                     </div>
                   </div>
 
-                  <div className="py-1 overflow-y-auto flex-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedMember("all")
-                        setIsMemberDropdownOpen(false)
-                        setMemberSearchQuery("")
-                      }}
-                      className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${
-                        selectedMember === "all" ? "font-semibold text-blue-600 bg-blue-50/50 dark:bg-blue-950/30" : "text-zinc-700 dark:text-zinc-300"
-                      }`}
-                    >
-                      <span>All Team Members</span>
-                      {selectedMember === "all" && <span>✓</span>}
-                    </button>
+                  <div className="py-1 overflow-y-auto flex-1 divide-y divide-zinc-100 dark:divide-zinc-800/60">
+                    <div className="py-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedMember("all")
+                          setSelectedMemberStage("all")
+                          setIsMemberDropdownOpen(false)
+                          setMemberSearchQuery("")
+                        }}
+                        className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${
+                          selectedMember === "all" ? "font-semibold text-blue-600 bg-blue-50/50 dark:bg-blue-950/30" : "text-zinc-700 dark:text-zinc-300"
+                        }`}
+                      >
+                        <span>All Team Members</span>
+                        {selectedMember === "all" && <span>✓</span>}
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedMember("unassigned")
-                        setIsMemberDropdownOpen(false)
-                        setMemberSearchQuery("")
-                      }}
-                      className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${
-                        selectedMember === "unassigned" ? "font-semibold text-blue-600 bg-blue-50/50 dark:bg-blue-950/30" : "text-zinc-700 dark:text-zinc-300"
-                      }`}
-                    >
-                      <span className="text-zinc-500 italic">Unassigned Leads</span>
-                      {selectedMember === "unassigned" && <span>✓</span>}
-                    </button>
-
-                    <div className="my-1 border-t border-zinc-100 dark:border-zinc-800" />
-                    <div className="px-3 py-1 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
-                      Assigned Members ({assignedTeamMembers.length})
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedMember("unassigned")
+                          setSelectedMemberStage("all")
+                          setIsMemberDropdownOpen(false)
+                          setMemberSearchQuery("")
+                        }}
+                        className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${
+                          selectedMember === "unassigned" ? "font-semibold text-blue-600 bg-blue-50/50 dark:bg-blue-950/30" : "text-zinc-700 dark:text-zinc-300"
+                        }`}
+                      >
+                        <span className="text-zinc-500 italic">Unassigned Leads</span>
+                        {selectedMember === "unassigned" && <span>✓</span>}
+                      </button>
                     </div>
 
-                    {(() => {
-                      const filtered = assignedTeamMembers.filter((m) =>
-                        m.name.toLowerCase().includes(memberSearchQuery.toLowerCase().trim())
-                      )
+                    <div className="py-1">
+                      <div className="px-3 py-1 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
+                        Assigned Members ({assignedTeamMembers.length})
+                      </div>
 
-                      if (filtered.length === 0) {
-                        return (
-                          <div className="px-3 py-2 text-xs text-zinc-400 text-center italic">
-                            {memberSearchQuery ? "No matching member" : "No assigned members"}
-                          </div>
+                      {(() => {
+                        const filtered = assignedTeamMembers.filter((m) =>
+                          m.name.toLowerCase().includes(memberSearchQuery.toLowerCase().trim())
                         )
-                      }
 
-                      return filtered.map(({ name: member, count: leadCount }) => {
-                        const userObj = allUsers.find(
-                          (u) => u.name && u.name.trim().toLowerCase() === member.trim().toLowerCase()
-                        )
-                        const avatar = userObj?.avatar || (user?.name === member ? user?.avatar : null)
-                        const initials = member
-                          .split(" ")
-                          .map((w) => w[0])
-                          .filter(Boolean)
-                          .slice(0, 2)
-                          .join("")
-                          .toUpperCase()
+                        if (filtered.length === 0) {
+                          return (
+                            <div className="px-3 py-2 text-xs text-zinc-400 text-center italic">
+                              {memberSearchQuery ? "No matching member" : "No assigned members"}
+                            </div>
+                          )
+                        }
 
-                        const isSelected = selectedMember.toLowerCase() === member.toLowerCase()
+                        return filtered.map(({ name: member, count: leadCount }) => {
+                          const userObj = allUsers.find(
+                            (u) => u.name && u.name.trim().toLowerCase() === member.trim().toLowerCase()
+                          )
+                          const avatar = userObj?.avatar || userObj?.avatarUrl || (user?.name === member ? user?.avatar : null)
+                          const initials = member
+                            .split(" ")
+                            .map((w) => w[0])
+                            .filter(Boolean)
+                            .slice(0, 2)
+                            .join("")
+                            .toUpperCase()
 
-                        return (
-                          <button
-                            key={member}
-                            type="button"
-                            onClick={() => {
-                              setSelectedMember(member)
-                              setIsMemberDropdownOpen(false)
-                              setMemberSearchQuery("")
-                            }}
-                            className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${
-                              isSelected ? "font-semibold text-blue-600 bg-blue-50/50 dark:bg-blue-950/30" : "text-zinc-700 dark:text-zinc-300"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2 min-w-0 pr-2">
-                              {avatar && !avatar.includes("dicebear") ? (
-                                <img
-                                  src={avatar}
-                                  alt={member}
-                                  className="w-5 h-5 rounded-full border border-zinc-200 dark:border-zinc-700 object-cover shrink-0"
-                                />
-                              ) : (
-                                <div className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 text-[10px] font-bold flex items-center justify-center shrink-0">
-                                  {initials}
+                          const isMemberSelected = selectedMember.toLowerCase() === member.toLowerCase()
+                          const stagesForMember = Object.entries(memberStageBreakdown[member] || {}).sort((a, b) => b[1] - a[1])
+
+                          return (
+                            <div
+                              key={member}
+                              className={`px-3 py-2 text-xs flex flex-col gap-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-colors ${
+                                isMemberSelected ? "bg-blue-50/40 dark:bg-blue-950/20" : ""
+                              }`}
+                            >
+                              {/* Member Title Row */}
+                              <div
+                                onClick={() => {
+                                  setSelectedMember(member)
+                                  setSelectedMemberStage("all")
+                                  setIsMemberDropdownOpen(false)
+                                  setMemberSearchQuery("")
+                                }}
+                                className="flex items-center justify-between cursor-pointer group/mem"
+                              >
+                                <div className="flex items-center gap-2 min-w-0 pr-2">
+                                  {avatar && !avatar.includes("dicebear") ? (
+                                    <img
+                                      src={avatar}
+                                      alt={member}
+                                      className="w-5 h-5 rounded-full border border-zinc-200 dark:border-zinc-700 object-cover shrink-0"
+                                    />
+                                  ) : (
+                                    <div className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 text-[10px] font-bold flex items-center justify-center shrink-0">
+                                      {initials}
+                                    </div>
+                                  )}
+                                  <span className={`truncate font-medium group-hover/mem:text-blue-600 ${isMemberSelected ? "text-blue-600 font-semibold" : "text-zinc-800 dark:text-zinc-200"}`}>
+                                    {member}
+                                  </span>
+                                </div>
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 font-bold shrink-0">
+                                  {leadCount} Leads
+                                </span>
+                              </div>
+
+                              {/* Stage Sub-filters for this member */}
+                              {stagesForMember.length > 0 && (
+                                <div className="flex items-center gap-1 flex-wrap pl-7">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setSelectedMember(member)
+                                      setSelectedMemberStage("all")
+                                      setIsMemberDropdownOpen(false)
+                                      setMemberSearchQuery("")
+                                    }}
+                                    className={`px-1.5 py-0.5 rounded text-[9.5px] font-medium transition-all cursor-pointer ${
+                                      isMemberSelected && selectedMemberStage === "all"
+                                        ? "bg-blue-600 text-white font-bold shadow-2xs"
+                                        : "bg-zinc-100/90 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                                    }`}
+                                  >
+                                    All ({leadCount})
+                                  </button>
+                                  {stagesForMember.map(([stageName, sCount]) => {
+                                    const isStageActive = isMemberSelected && selectedMemberStage === stageName
+                                    return (
+                                      <button
+                                        key={stageName}
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          setSelectedMember(member)
+                                          setSelectedMemberStage(stageName)
+                                          setIsMemberDropdownOpen(false)
+                                          setMemberSearchQuery("")
+                                        }}
+                                        className={`px-1.5 py-0.5 rounded text-[9.5px] font-medium transition-all cursor-pointer ${
+                                          isStageActive
+                                            ? "bg-blue-600 text-white font-bold shadow-2xs"
+                                            : "bg-zinc-100/90 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-zinc-700"
+                                        }`}
+                                      >
+                                        {stageName} ({sCount})
+                                      </button>
+                                    )
+                                  })}
                                 </div>
                               )}
-                              <span className="truncate">{member}</span>
                             </div>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-medium">
-                              {leadCount}
-                            </span>
-                          </button>
-                        )
-                      })
-                    })()}
+                          )
+                        })
+                      })()}
+                    </div>
                   </div>
                 </div>
               </>
@@ -1045,7 +1113,7 @@ export function LeadList({
                     <td className={`py-3.5 px-4 ${isLocked ? "blur-[1px] opacity-60" : ""}`}>
                       <div className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-300 font-medium">
                         <MapPin size={12} className="text-rose-500 shrink-0" />
-                        <span>{l.city || "Mumbai"}</span>
+                        <span>{l.city?.trim() || l.address?.trim() || l.state?.trim() || "-"}</span>
                       </div>
                     </td>
 
