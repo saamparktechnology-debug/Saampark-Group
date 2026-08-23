@@ -136,7 +136,7 @@ export default function LeadsMain() {
 
       const checkMatch = (val: string) => {
         if (!val) return false
-        if (val === "team" || val === "teams" || val === "all") return true
+        if (val === "team" || val === "teams" || val === "all" || val === "none" || val === "unassigned") return true
 
         const targets = val.split(/[,;]+/).map((s) => s.trim()).filter(Boolean)
         if (targets.length === 0) targets.push(val)

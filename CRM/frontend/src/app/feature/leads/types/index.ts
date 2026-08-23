@@ -15,6 +15,7 @@ export interface Lead {
   type: LeadType
   name: string
   primaryContact: string
+  secondaryContact?: string
   phone: string
   email?: string
   owner: string

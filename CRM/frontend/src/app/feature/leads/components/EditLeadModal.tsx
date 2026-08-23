@@ -85,6 +85,8 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
   const [type, setType] = React.useState<LeadType>("Organization")
   const [companyName, setCompanyName] = React.useState("")
   const [primaryContact, setPrimaryContact] = React.useState("")
+  const [secondaryContact, setSecondaryContact] = React.useState("")
+  const [email, setEmail] = React.useState("")
   const [status, setStatus] = React.useState<LeadStatus>("New")
   const [selectedServices, setSelectedServices] = React.useState<string[]>(["Website Devlopment"])
   const [customService, setCustomService] = React.useState("")
@@ -134,6 +136,8 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
       setType(lead.type || "Organization")
       setCompanyName(lead.name || "")
       setPrimaryContact(lead.primaryContact || "")
+      setSecondaryContact(lead.secondaryContact || lead.managers || "")
+      setEmail(lead.email || "")
       setStatus(lead.status || "New")
 
       // Multi-service initialization
@@ -215,10 +219,10 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
     }
 
     const activeSvcs = selectedServices.map((s) => (s === "Others" ? (customService.trim() || "Custom Service") : s)).filter(Boolean)
-    const finalService = activeSvcs.length > 0 ? activeSvcs.join(", ") : "Website Devlopment"
+    const finalService = activeSvcs.length > 0 ? activeSvcs.join(", ") : ""
     const finalSource = source === "Others" ? (customSource.trim() || "Custom Source") : source
-    const finalReminderDate = isNoReminder ? "None" : reminderDate
-    const finalReminderTime = isNoReminder ? "" : `${reminderTimeVal} ${timeAmPm}`
+    const finalReminderDate = isNoReminder ? "None" : (reminderDate || "None")
+    const finalReminderTime = (isNoReminder || finalReminderDate === "None") ? "None" : `${reminderTimeVal} ${timeAmPm}`
 
     setIsSubmitting(true)
     try {
@@ -226,6 +230,8 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
         type,
         name: companyName,
         primaryContact,
+        secondaryContact: secondaryContact || undefined,
+        email: email || undefined,
         status,
         service: finalService,
         reminderDate: finalReminderDate,
@@ -234,7 +240,7 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
         caller: caller || owner,
         owner: caller || owner,
         assignedTo: caller || owner,
-        managers,
+        managers: secondaryContact || managers,
         source: finalSource,
         address,
         city,
@@ -498,19 +504,16 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
               <span>Caller</span>
             </label>
             <select
-              value={caller}
+              value={caller || "None"}
               onChange={(e) => setCaller(e.target.value)}
               className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-semibold"
             >
-              {teamMembers.length === 0 ? (
-                <option value="">No team members available</option>
-              ) : (
-                teamMembers.map((m) => (
-                  <option key={m.id || m.name} value={m.name}>
-                    {m.name} {m.role ? `(${m.role})` : ""}
-                  </option>
-                ))
-              )}
+              <option value="None">None (Unassigned)</option>
+              {teamMembers.map((m) => (
+                <option key={m.id || m.name} value={m.name}>
+                  {m.name} {m.role ? `(${m.role})` : ""}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -525,6 +528,21 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
             />
           </div>
 
+          {/* Secondary contact / Manager (optional) */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <label className="text-zinc-500 font-medium">
+              <span>Secondary contact</span>
+              <span className="block text-[10px] text-zinc-400 font-normal">Manager (optional)</span>
+            </label>
+            <input
+              type="text"
+              placeholder="Secondary contact or manager name (optional)"
+              value={secondaryContact}
+              onChange={(e) => setSecondaryContact(e.target.value)}
+              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400"
+            />
+          </div>
+
           {/* Phone with India Flag */}
           <div className="grid grid-cols-4 items-center gap-4">
             <label className="text-zinc-500 font-medium">Phone</label>
@@ -532,11 +550,24 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
               <span className="px-2.5 py-2 text-base border-r border-zinc-200 dark:border-zinc-700 flex items-center gap-1">🇮🇳</span>
               <input
                 type="text"
+                placeholder="+91 XXXXXXXX"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                className="w-full px-3 py-2 bg-transparent focus:outline-none text-zinc-800 dark:text-zinc-200 font-mono text-xs"
+                className="w-full px-3 py-2 bg-transparent focus:outline-none text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 font-mono text-xs"
               />
             </div>
+          </div>
+
+          {/* Email */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <label className="text-zinc-500 font-medium">Email</label>
+            <input
+              type="email"
+              placeholder="example@company.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400"
+            />
           </div>
 
           {/* Source Selector with Others option */}

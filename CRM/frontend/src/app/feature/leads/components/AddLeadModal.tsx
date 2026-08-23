@@ -82,6 +82,8 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
   const [type, setType] = React.useState<LeadType>("Organization")
   const [companyName, setCompanyName] = React.useState("")
   const [primaryContact, setPrimaryContact] = React.useState("")
+  const [secondaryContact, setSecondaryContact] = React.useState("")
+  const [email, setEmail] = React.useState("")
   const [status, setStatus] = React.useState<LeadStatus>("New")
   const [selectedServices, setSelectedServices] = React.useState<string[]>([])
   const [customService, setCustomService] = React.useState("")
@@ -111,6 +113,37 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
   const [currency, setCurrency] = React.useState("Keep it blank to use the default (INR - ₹)")
   const [isSubmitting, setIsSubmitting] = React.useState(false)
 
+  const resetForm = React.useCallback(() => {
+    setType("Organization")
+    setCompanyName("")
+    setPrimaryContact("")
+    setSecondaryContact("")
+    setEmail("")
+    setStatus("New")
+    setSelectedServices([])
+    setCustomService("")
+    setIsNoReminder(true)
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    setReminderDate(tomorrow.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }))
+    setReminderTimeVal("11:30")
+    setTimeAmPm("AM")
+    setReminderNotes("")
+    setManagers("")
+    setSource("Social Media")
+    setCustomSource("")
+    setAddress("")
+    setCity("")
+    setState("")
+    setZip("")
+    setCountry("")
+    setPhone("")
+    setWebsite("")
+    setVatNumber("")
+    setGstNumber("")
+    setCurrency("Keep it blank to use the default (INR - ₹)")
+  }, [])
+
   const toggleService = (svc: string) => {
     setSelectedServices((prev) =>
       prev.includes(svc) ? prev.filter((s) => s !== svc) : [...prev, svc]
@@ -119,9 +152,7 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
 
   React.useEffect(() => {
     if (isOpen) {
-      setSelectedServices([])
-      setCustomService("")
-      setIsNoReminder(true)
+      resetForm()
       getUsers("all").then((list) => {
         const teamOnly = (list || []).filter((u) => {
           const r = (u.role || "").toLowerCase().trim()
@@ -136,16 +167,13 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
         if (defaultUserName && (hasLoggedUser || user?.role === "Teams")) {
           setCaller(defaultUserName)
           setOwner(defaultUserName)
-        } else if (members.length > 0) {
-          setCaller(members[0].name)
-          setOwner(members[0].name)
         } else {
-          setCaller(defaultUserName || "Team")
-          setOwner(defaultUserName || "Team")
+          setCaller("None")
+          setOwner("None")
         }
       })
     }
-  }, [isOpen, user])
+  }, [isOpen, user, resetForm])
 
   if (!isOpen) return null
 
@@ -158,10 +186,11 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
     const activeSvcs = selectedServices.map((s) => (s === "Others" ? (customService.trim() || "Custom Service") : s)).filter(Boolean)
     const finalService = activeSvcs.length > 0 ? activeSvcs.join(", ") : ""
     const finalSource = source === "Others" ? (customSource.trim() || "Custom Source") : source
-    const effectiveCaller = caller || user?.name || "Team"
-    const effectiveOwner = owner || user?.name || "Team"
-    const finalReminderDate = isNoReminder ? "None" : reminderDate
-    const finalReminderTime = isNoReminder ? "" : `${reminderTimeVal} ${timeAmPm}`
+    const effectiveCaller = (caller && caller !== "None") ? caller : "None"
+    const effectiveOwner = (owner && owner !== "None") ? owner : (effectiveCaller !== "None" ? effectiveCaller : (user?.name || "Team"))
+    const effectiveAssignedTo = effectiveCaller !== "None" ? effectiveCaller : "None"
+    const finalReminderDate = isNoReminder ? "None" : (reminderDate || "None")
+    const finalReminderTime = (isNoReminder || finalReminderDate === "None") ? "None" : `${reminderTimeVal} ${timeAmPm}`
 
     setIsSubmitting(true)
     try {
@@ -169,6 +198,8 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
         type,
         name: companyName,
         primaryContact: primaryContact || companyName,
+        secondaryContact: secondaryContact || undefined,
+        email: email || undefined,
         status,
         service: finalService,
         reminderDate: finalReminderDate,
@@ -176,17 +207,17 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
         reminderNotes,
         caller: effectiveCaller,
         owner: effectiveOwner,
-        assignedTo: effectiveCaller || effectiveOwner,
-        createdBy: user?.name || user?.email || effectiveCaller,
+        assignedTo: effectiveAssignedTo,
+        createdBy: user?.name || user?.email || "Team",
         ownerAvatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${companyName}`,
-        managers,
+        managers: secondaryContact || managers,
         source: finalSource,
         address,
         city,
         state,
         zip,
         country: country || "India",
-        phone: phone || "+91 98765-43210",
+        phone: phone || "+91 XXXXXXXX",
         website,
         vatNumber,
         gstNumber,
@@ -403,15 +434,12 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
               onChange={(e) => setCaller(e.target.value)}
               className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-semibold"
             >
-              {teamMembers.length === 0 ? (
-                <option value="">No team members available</option>
-              ) : (
-                teamMembers.map((m) => (
-                  <option key={m.id || m.name} value={m.name}>
-                    {m.name} {m.role ? `(${m.role})` : ""}
-                  </option>
-                ))
-              )}
+              <option value="None">None (Unassigned)</option>
+              {teamMembers.map((m) => (
+                <option key={m.id || m.name} value={m.name}>
+                  {m.name} {m.role ? `(${m.role})` : ""}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -427,6 +455,21 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
             />
           </div>
 
+          {/* Secondary contact / Manager (optional) */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <label className="text-zinc-500 font-medium">
+              <span>Secondary contact</span>
+              <span className="block text-[10px] text-zinc-400 font-normal">Manager (optional)</span>
+            </label>
+            <input
+              type="text"
+              placeholder="Secondary contact or manager name (optional)"
+              value={secondaryContact}
+              onChange={(e) => setSecondaryContact(e.target.value)}
+              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400"
+            />
+          </div>
+
           {/* Phone with India Flag & +91 */}
           <div className="grid grid-cols-4 items-center gap-4">
             <label className="text-zinc-500 font-medium">Phone</label>
@@ -434,12 +477,24 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
               <span className="px-2.5 py-2 text-base border-r border-zinc-200 dark:border-zinc-700 flex items-center gap-1">🇮🇳</span>
               <input
                 type="text"
-                placeholder="+91 98765-43210"
+                placeholder="+91 XXXXXXXX"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 className="w-full px-3 py-2 bg-transparent focus:outline-none text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 font-mono text-xs"
               />
             </div>
+          </div>
+
+          {/* Email */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <label className="text-zinc-500 font-medium">Email</label>
+            <input
+              type="email"
+              placeholder="example@company.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400"
+            />
           </div>
 
           {/* Source Selector with Others option */}
