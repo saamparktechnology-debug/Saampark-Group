@@ -228,7 +228,6 @@ export function ClientsTableView({
         <table className="w-full text-left text-xs">
           <thead className="bg-slate-50/70 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-100 dark:border-slate-800">
             <tr>
-              <th className="py-3 px-3">ID ↑</th>
               <th className="py-3 px-3">Name</th>
               <th className="py-3 px-3">Primary Contact</th>
               <th className="py-3 px-3">Phone</th>
@@ -244,14 +243,13 @@ export function ClientsTableView({
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 text-slate-700 dark:text-slate-200">
             {filteredClients.length === 0 ? (
               <tr>
-                <td colSpan={11} className="py-8 text-center text-slate-400 text-sm">
+                <td colSpan={10} className="py-8 text-center text-slate-400 text-sm">
                   No clients found.
                 </td>
               </tr>
             ) : (
               filteredClients.map((client) => (
                 <tr key={client.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-                  <td className="py-3 px-3 font-medium text-slate-500">{client.id}</td>
                   <td className="py-3 px-3 font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer">
                     {client.name}
                   </td>
