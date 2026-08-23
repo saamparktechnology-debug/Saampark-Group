@@ -17,6 +17,7 @@ export interface Lead {
   primaryContact: string
   secondaryContact?: string
   phone: string
+  secondaryPhone?: string
   email?: string
   owner: string
   caller?: string

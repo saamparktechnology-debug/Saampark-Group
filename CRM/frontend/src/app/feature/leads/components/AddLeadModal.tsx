@@ -83,6 +83,8 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
   const [companyName, setCompanyName] = React.useState("")
   const [primaryContact, setPrimaryContact] = React.useState("")
   const [secondaryContact, setSecondaryContact] = React.useState("")
+  const [phone, setPhone] = React.useState("")
+  const [secondaryPhone, setSecondaryPhone] = React.useState("")
   const [email, setEmail] = React.useState("")
   const [status, setStatus] = React.useState<LeadStatus>("New")
   const [selectedServices, setSelectedServices] = React.useState<string[]>([])
@@ -106,7 +108,6 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
   const [state, setState] = React.useState("")
   const [zip, setZip] = React.useState("")
   const [country, setCountry] = React.useState("")
-  const [phone, setPhone] = React.useState("")
   const [website, setWebsite] = React.useState("")
   const [vatNumber, setVatNumber] = React.useState("")
   const [gstNumber, setGstNumber] = React.useState("")
@@ -118,6 +119,8 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
     setCompanyName("")
     setPrimaryContact("")
     setSecondaryContact("")
+    setPhone("")
+    setSecondaryPhone("")
     setEmail("")
     setStatus("New")
     setSelectedServices([])
@@ -137,7 +140,6 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
     setState("")
     setZip("")
     setCountry("")
-    setPhone("")
     setWebsite("")
     setVatNumber("")
     setGstNumber("")
@@ -199,6 +201,8 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
         name: companyName,
         primaryContact: primaryContact || companyName,
         secondaryContact: secondaryContact || undefined,
+        phone: phone || "+91 XXXXXXXX",
+        secondaryPhone: secondaryPhone || undefined,
         email: email || undefined,
         status,
         service: finalService,
@@ -217,7 +221,6 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
         state,
         zip,
         country: country || "India",
-        phone: phone || "+91 XXXXXXXX",
         website,
         vatNumber,
         gstNumber,
@@ -480,6 +483,24 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
                 placeholder="+91 XXXXXXXX"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
+                className="w-full px-3 py-2 bg-transparent focus:outline-none text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 font-mono text-xs"
+              />
+            </div>
+          </div>
+
+          {/* Secondary Phone (Optional) */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <label className="text-zinc-500 font-medium">
+              <span>Secondary phone</span>
+              <span className="block text-[10px] text-zinc-400 font-normal">(optional)</span>
+            </label>
+            <div className="col-span-3 flex items-center bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md overflow-hidden">
+              <span className="px-2.5 py-2 text-base border-r border-zinc-200 dark:border-zinc-700 flex items-center gap-1">🇮🇳</span>
+              <input
+                type="text"
+                placeholder="+91 XXXXXXXX"
+                value={secondaryPhone}
+                onChange={(e) => setSecondaryPhone(e.target.value)}
                 className="w-full px-3 py-2 bg-transparent focus:outline-none text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 font-mono text-xs"
               />
             </div>
