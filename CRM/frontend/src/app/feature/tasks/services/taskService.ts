@@ -26,9 +26,9 @@ function savePersistedTasks(tasks: Task[]): void {
 }
 
 export const taskService = {
-  getTasks: async (): Promise<Task[]> => {
+  getTasks: async (companyId?: string): Promise<Task[]> => {
     // Fetch persisted data from MySQL app_data store with deleted items filtered out
-    const dbData = await fetchModuleDataFromDB<Task[]>("tasks", [])
+    const dbData = await fetchModuleDataFromDB<Task[]>("tasks", [], companyId)
     if (!Array.isArray(dbData)) return []
     const filtered = filterGlobalDeletedItems(dbData)
     // Guarantee uniqueness by task ID
@@ -42,8 +42,8 @@ export const taskService = {
     })
   },
 
-  addTask: async (taskData: Omit<Task, "id"> & { id?: string }): Promise<Task> => {
-    const current = await taskService.getTasks()
+  addTask: async (taskData: Omit<Task, "id"> & { id?: string }, companyId?: string): Promise<Task> => {
+    const current = await taskService.getTasks(companyId)
     let nextId = taskData.id
     if (!nextId) {
       const maxIdNum = current.reduce((max, t) => {
@@ -54,13 +54,13 @@ export const taskService = {
     }
     const newTask: Task = { ...taskData, id: nextId }
     const updated = [newTask, ...current.filter(t => String(t.id).toLowerCase().trim() !== String(nextId).toLowerCase().trim())]
-    await saveModuleDataToDB("tasks", updated)
+    await saveModuleDataToDB("tasks", updated, companyId)
     return newTask
   },
 
-  addTasks: async (taskDataList: (Omit<Task, "id"> & { id?: string })[]): Promise<Task[]> => {
+  addTasks: async (taskDataList: (Omit<Task, "id"> & { id?: string })[], companyId?: string): Promise<Task[]> => {
     if (!taskDataList || taskDataList.length === 0) return []
-    const current = await taskService.getTasks()
+    const current = await taskService.getTasks(companyId)
     let maxIdNum = current.reduce((max, t) => {
       const n = parseInt(String(t.id).replace(/[^0-9]/g, "")) || 0
       return Math.max(max, n)
@@ -76,33 +76,19 @@ export const taskService = {
     })
     const newIds = new Set(newTasks.map(t => String(t.id).toLowerCase().trim()))
     const updated = [...newTasks, ...current.filter(t => !newIds.has(String(t.id).toLowerCase().trim()))]
-    await saveModuleDataToDB("tasks", updated)
+    await saveModuleDataToDB("tasks", updated, companyId)
     return newTasks
   },
 
-  updateTask: async (id: string, updates: Partial<Task>): Promise<Task> => {
+  updateTask: async (id: string, updates: Partial<Task>, companyId?: string): Promise<Task> => {
     const strId = String(id).toLowerCase().trim()
-    const current = await fetchModuleDataFromDB<Task[]>("tasks", [])
+    const current = await fetchModuleDataFromDB<Task[]>("tasks", [], companyId)
     const idx = current.findIndex((t) => String(t.id).toLowerCase().trim() === strId)
     
     if (idx !== -1) {
       current[idx] = { ...current[idx], ...updates }
-      await saveModuleDataToDB("tasks", current)
+      await saveModuleDataToDB("tasks", current, companyId)
       return { ...current[idx] }
-    }
-
-    // Fallback: check localStorage directly
-    let localList: Task[] = []
-    try {
-      const raw = localStorage.getItem("saampark_db_tasks") || localStorage.getItem(TASKS_STORAGE_KEY)
-      if (raw) localList = JSON.parse(raw)
-    } catch {}
-
-    const localIdx = localList.findIndex((t) => String(t.id).toLowerCase().trim() === strId)
-    if (localIdx !== -1) {
-      localList[localIdx] = { ...localList[localIdx], ...updates }
-      await saveModuleDataToDB("tasks", localList)
-      return { ...localList[localIdx] }
     }
 
     // Fallback: create or return updated placeholder if task not found
@@ -116,31 +102,16 @@ export const taskService = {
       ...updates,
     } as Task
     const combined = [fallbackTask, ...current]
-    await saveModuleDataToDB("tasks", combined)
+    await saveModuleDataToDB("tasks", combined, companyId)
     return fallbackTask
   },
 
-  deleteTask: async (id: string): Promise<void> => {
+  deleteTask: async (id: string, companyId?: string): Promise<void> => {
     const strId = String(id).toLowerCase().trim()
     await markGlobalItemDeleted(strId, "tasks")
 
-    // Clear from local storage keys immediately
-    if (typeof window !== "undefined") {
-      try {
-        const raw = localStorage.getItem("saampark_db_tasks") || localStorage.getItem(TASKS_STORAGE_KEY)
-        if (raw) {
-          const parsed = JSON.parse(raw)
-          if (Array.isArray(parsed)) {
-            const filteredLocal = parsed.filter((t) => String(t.id).toLowerCase().trim() !== strId)
-            localStorage.setItem("saampark_db_tasks", JSON.stringify(filteredLocal))
-            localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(filteredLocal))
-          }
-        }
-      } catch {}
-    }
-
-    const current = await fetchModuleDataFromDB<Task[]>("tasks", [])
+    const current = await fetchModuleDataFromDB<Task[]>("tasks", [], companyId)
     const filtered = current.filter((t) => String(t.id).toLowerCase().trim() !== strId)
-    await saveModuleDataToDB("tasks", filtered)
+    await saveModuleDataToDB("tasks", filtered, companyId)
   },
 }

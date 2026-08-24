@@ -7,8 +7,9 @@ export interface UserItem {
   name: string;
   email: string;
   role: UserRole;
-  companyId: string; // e.g. "tech", "digital", "all"
-  companyName: string; // e.g. "SAAMPARK Technology"
+  companyId: string; // Primary/initial company e.g. "tech", "digital"
+  companyIds?: string[]; // Multiple assigned companies e.g. ["tech", "digital"]
+  companyName: string; // Display company name
   status: UserStatus;
   avatarUrl?: string;
   department?: string;

@@ -11,7 +11,7 @@ import { ProjectDetailView } from "./components/ProjectDetailView"
 import { useAuthStore } from "@/store/useAuthStore"
 
 export default function ProjectsMain() {
-  const { user } = useAuthStore()
+  const { user, activeCompanyId } = useAuthStore()
   const isSuperOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
 
   const [projects, setProjects] = React.useState<Project[]>([])
@@ -24,22 +24,28 @@ export default function ProjectsMain() {
   const [editingProject, setEditingProject] = React.useState<Project | null>(null)
 
   React.useEffect(() => {
+    const targetComp = activeCompanyId || user?.companyId || "tech"
     const fetchFreshProjects = () => {
-      getProjects().then((data) => {
+      getProjects(targetComp).then((data) => {
         setProjects(data)
         if (data.length > 0 && !selectedProject) {
           setSelectedProject(data[0])
+        } else if (data.length === 0) {
+          setSelectedProject(null)
         }
       })
     }
     fetchFreshProjects()
-    const interval = setInterval(fetchFreshProjects, 2500)
-    window.addEventListener("storage", fetchFreshProjects)
+    const interval = setInterval(fetchFreshProjects, 3000)
+    const handleReload = () => fetchFreshProjects()
+    window.addEventListener("storage", handleReload)
+    window.addEventListener("saampark_company_switched", handleReload)
     return () => {
       clearInterval(interval)
-      window.removeEventListener("storage", fetchFreshProjects)
+      window.removeEventListener("storage", handleReload)
+      window.removeEventListener("saampark_company_switched", handleReload)
     }
-  }, [selectedProject])
+  }, [activeCompanyId, user?.companyId, selectedProject])
 
   const visibleProjects = React.useMemo(() => {
     if (!user || isSuperOrAdmin) return projects

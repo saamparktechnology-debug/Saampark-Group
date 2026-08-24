@@ -17,6 +17,7 @@ export default function TasksMain() {
   const [activeViewTab, setActiveViewTab] = React.useState<"list" | "kanban" | "gantt">("list")
   const [isAddModalOpen, setIsAddModalOpen] = React.useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false)
+  const { user, activeCompanyId } = useAuthStore()
   const [selectedTask, setSelectedTask] = React.useState<Task | null>(null)
   const [isManageLabelsOpen, setIsManageLabelsOpen] = React.useState(false)
   const [isLoading, setIsLoading] = React.useState(true)
@@ -24,22 +25,26 @@ export default function TasksMain() {
   const loadTasks = React.useCallback(async (showLoading = false) => {
     if (showLoading) setIsLoading(true)
     try {
-      const data = await taskService.getTasks()
+      const targetComp = activeCompanyId || user?.companyId || "tech"
+      const data = await taskService.getTasks(targetComp)
       setTasks(data)
     } catch (err) {
       console.error("Error loading tasks:", err)
     } finally {
       if (showLoading) setIsLoading(false)
     }
-  }, [])
+  }, [activeCompanyId, user?.companyId])
 
   React.useEffect(() => {
     loadTasks(true)                              // first load: show spinner
-    const interval = setInterval(() => loadTasks(false), 5000)  // background polls: silent
-    window.addEventListener("storage", () => loadTasks(false))
+    const interval = setInterval(() => loadTasks(false), 3000)  // background polls: silent
+    const handleReload = () => loadTasks(false)
+    window.addEventListener("storage", handleReload)
+    window.addEventListener("saampark_company_switched", handleReload)
     return () => {
       clearInterval(interval)
-      window.removeEventListener("storage", () => loadTasks(false))
+      window.removeEventListener("storage", handleReload)
+      window.removeEventListener("saampark_company_switched", handleReload)
     }
   }, [loadTasks])
 
@@ -101,7 +106,6 @@ export default function TasksMain() {
     setIsEditModalOpen(true)
   }
 
-  const { user } = useAuthStore()
   const isSuperOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
 
   const visibleTasks = React.useMemo(() => {

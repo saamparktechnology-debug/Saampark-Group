@@ -40,15 +40,26 @@ export function EditTaskModal({ isOpen, task, onClose, onTaskUpdated, onDeleteTa
   React.useEffect(() => {
     if (isOpen) {
       getUsers("all").then((list) => {
-        const teamOnly = (list || []).filter((u) => {
+        const isSuperAdmin = user?.role === "Super Admin"
+        const userCompIds = user?.companyIds || (user?.companyId ? [user?.companyId] : ["tech"])
+
+        const filteredByCompany = isSuperAdmin
+          ? (list || [])
+          : (list || []).filter((u) => {
+              if (u.role === "Super Admin") return false
+              const uComps = u.companyIds || (u.companyId ? [u.companyId] : [])
+              return uComps.some((c) => userCompIds.includes(c))
+            })
+
+        const teamOnly = filteredByCompany.filter((u) => {
           const r = (u.role || "").toLowerCase().trim()
           return (r === "teams" || r === "team" || r.includes("team")) && !r.includes("admin") && !r.includes("client")
         })
-        const members = (teamOnly.length > 0 ? teamOnly : (list || []).filter(u => u.role !== "Clients")).map((u) => ({ id: u.id, name: u.name, role: u.role }))
+        const members = (teamOnly.length > 0 ? teamOnly : filteredByCompany.filter(u => u.role !== "Clients")).map((u) => ({ id: u.id, name: u.name, role: u.role }))
         setTeamMembers(members)
       })
     }
-  }, [isOpen])
+  }, [isOpen, user])
 
   React.useEffect(() => {
     if (task) {

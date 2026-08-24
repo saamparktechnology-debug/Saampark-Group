@@ -129,12 +129,26 @@ export default function SettingsMain() {
         loginAs(user.role, updatedUserData)
       }
 
+      // Sync to MySQL users table
+      try {
+        const { api } = await import("@/lib/api")
+        await api.put(`/users/${user?.id || email}`, {
+          full_name: name,
+          email,
+          phone,
+          department,
+        }).catch((err) => console.warn("Backend profile update warning:", err))
+      } catch {}
+
       // Save to database users list
       recordUserAccount({
         id: String(user?.id || Date.now()),
         name,
         email,
         phone,
+        department,
+        companyIds: user?.companyIds || (user?.companyId ? [user.companyId] : ["tech"]),
+        companyId: user?.companyId || "tech",
         role: (user?.role as any) || "Admin",
         status: "Active",
       })
@@ -142,7 +156,11 @@ export default function SettingsMain() {
       // Persist profile data to settings
       await saveModuleDataToDB(`user_profile_${(email || "").toLowerCase().trim()}`, updatedUserData)
 
-      setSuccessMsg("✅ Complete profile & avatar updated successfully! Live synced across Leads Kanban, Tasks, and Team.")
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("storage"))
+      }
+
+      setSuccessMsg("✅ Complete profile & avatar updated successfully! Live synced across Dashboard, Leads, Tasks, and Team.")
       setTimeout(() => setSuccessMsg(""), 4000)
     } catch (err: any) {
       setErrorMsg(`Error updating profile: ${err.message}`)

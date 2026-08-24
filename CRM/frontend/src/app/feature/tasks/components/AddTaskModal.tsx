@@ -7,6 +7,8 @@ import { taskService } from "../services/taskService"
 
 import { getUsers } from "@/app/feature/users/services/userService"
 
+import { useAuthStore } from "@/store/useAuthStore"
+
 interface AddTaskModalProps {
   isOpen: boolean
   onClose: () => void
@@ -14,6 +16,7 @@ interface AddTaskModalProps {
 }
 
 export function AddTaskModal({ isOpen, onClose, onTaskAdded }: AddTaskModalProps) {
+  const { user } = useAuthStore()
   const [teamMembers, setTeamMembers] = React.useState<{ id: string; name: string; role?: string }[]>([])
   const [title, setTitle] = React.useState("")
   const [description, setDescription] = React.useState("")
@@ -32,11 +35,22 @@ export function AddTaskModal({ isOpen, onClose, onTaskAdded }: AddTaskModalProps
   React.useEffect(() => {
     if (isOpen) {
       getUsers("all").then((list) => {
-        const teamOnly = (list || []).filter((u) => {
+        const isSuperAdmin = user?.role === "Super Admin"
+        const userCompIds = user?.companyIds || (user?.companyId ? [user?.companyId] : ["tech"])
+
+        const filteredByCompany = isSuperAdmin
+          ? (list || [])
+          : (list || []).filter((u) => {
+              if (u.role === "Super Admin") return false
+              const uComps = u.companyIds || (u.companyId ? [u.companyId] : [])
+              return uComps.some((c) => userCompIds.includes(c))
+            })
+
+        const teamOnly = filteredByCompany.filter((u) => {
           const r = (u.role || "").toLowerCase().trim()
           return (r === "teams" || r === "team" || r.includes("team")) && !r.includes("admin") && !r.includes("client")
         })
-        const members = (teamOnly.length > 0 ? teamOnly : (list || []).filter(u => u.role !== "Clients")).map((u) => ({ id: u.id, name: u.name, role: u.role }))
+        const members = (teamOnly.length > 0 ? teamOnly : filteredByCompany.filter(u => u.role !== "Clients")).map((u) => ({ id: u.id, name: u.name, role: u.role }))
         setTeamMembers(members)
         if (members.length > 0) {
           setAssignedTo((prev) => (prev && members.some(m => m.name === prev) ? prev : members[0].name))
@@ -45,7 +59,7 @@ export function AddTaskModal({ isOpen, onClose, onTaskAdded }: AddTaskModalProps
         }
       })
     }
-  }, [isOpen])
+  }, [isOpen, user])
 
   if (!isOpen) return null
 

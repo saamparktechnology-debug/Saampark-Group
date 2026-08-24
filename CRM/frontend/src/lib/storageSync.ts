@@ -70,27 +70,30 @@ export function filterGlobalDeletedItems<T extends { id: string | number }>(item
 }
 
 /**
- * Fetch module data from MySQL DB.
+ * Fetch module data from MySQL DB with company isolation.
  * Response shape from backend: { status: "success", message: "...", data: <payload> }
  */
-export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: T): Promise<T> {
+export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: T, companyId?: string): Promise<T> {
   const localDeleted = await syncGlobalDeletedIds()
+  let targetCompany = companyId
 
   try {
-    const res = await api.get(`/store/${moduleKey}`)
+    if (!targetCompany && typeof window !== "undefined") {
+      try {
+        const { useAuthStore } = require("@/store/useAuthStore")
+        targetCompany = useAuthStore.getState().activeCompanyId || undefined
+      } catch {}
+    }
+
+    const queryStr = targetCompany && targetCompany !== "all" ? `?company_id=${encodeURIComponent(targetCompany)}` : ""
+    const res = await api.get(`/store/${moduleKey}${queryStr}`)
     const isError = !res || res.status === "error" || res.error === true
 
     if (!isError && res?.data !== undefined && res?.data !== null) {
       const serverData = res.data
       if (Array.isArray(serverData)) {
-        if (typeof window !== "undefined") {
-          try { localStorage.setItem(`saampark_db_${moduleKey}`, JSON.stringify(serverData)) } catch {}
-        }
         return filterGlobalDeletedItems(serverData as any, localDeleted) as any
       } else if (typeof serverData === "object" && Object.keys(serverData).length > 0) {
-        if (typeof window !== "undefined") {
-          try { localStorage.setItem(`saampark_db_${moduleKey}`, JSON.stringify(serverData)) } catch {}
-        }
         return serverData as any
       }
     }
@@ -98,34 +101,31 @@ export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: 
     console.warn(`MySQL fetch warning for module ${moduleKey}:`, err)
   }
 
-  // Fallback: try local DB cache (NOT localStorage module store, which is per-device)
-  if (typeof window !== "undefined") {
-    try {
-      const local = localStorage.getItem(`saampark_db_${moduleKey}`)
-      if (local) {
-        const parsed = JSON.parse(local)
-        return filterGlobalDeletedItems(parsed, localDeleted) as any
-      }
-    } catch {}
+  // If fetching for a specific non-default company, return empty array rather than leaking default fallback
+  if (targetCompany && targetCompany !== "tech" && targetCompany !== "all") {
+    return [] as any
   }
 
   return filterGlobalDeletedItems(fallbackData as any, localDeleted) as any
 }
 
 /**
- * Save module data to MySQL DB and local cache.
+ * Save module data to MySQL DB.
  */
-export async function saveModuleDataToDB<T>(moduleKey: string, data: T): Promise<void> {
-  // Cache locally
-  if (typeof window !== "undefined") {
-    try {
-      localStorage.setItem(`saampark_db_${moduleKey}`, JSON.stringify(data))
-    } catch {}
-  }
-
-  // Persist to MySQL
+export async function saveModuleDataToDB<T>(moduleKey: string, data: T, companyId?: string): Promise<void> {
   try {
-    await api.post(`/store/${moduleKey}`, { data })
+    let targetCompany = companyId
+    if (!targetCompany && typeof window !== "undefined") {
+      try {
+        const { useAuthStore } = require("@/store/useAuthStore")
+        targetCompany = useAuthStore.getState().activeCompanyId || undefined
+      } catch {}
+    }
+
+    await api.post(`/store/${moduleKey}`, { 
+      data, 
+      company_id: targetCompany && targetCompany !== "all" ? targetCompany : undefined 
+    })
   } catch (err) {
     console.warn(`MySQL save warning for module ${moduleKey}:`, err)
   }

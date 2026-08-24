@@ -145,31 +145,46 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
 
                       {/* Role */}
                       <td className="py-3.5 px-4">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${ROLE_COLORS[u.role]}`}>
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${ROLE_COLORS[u.role] || ROLE_COLORS.Teams}`}>
                           <Shield size={12} />
                           {u.role}
                         </span>
                       </td>
 
-                      {/* Account Module Access Pill */}
+                      {/* Account Module Access */}
                       <td className="py-3.5 px-4">
-                        <button
-                          type="button"
-                          onClick={() => onEdit(u)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 transition-colors shadow-2xs"
-                          title="Click to customize module permissions for this account"
-                        >
-                          <Lock size={12} />
-                          <span>{allowedMods.length} Module{allowedMods.length === 1 ? "" : "s"} Allowed</span>
-                        </button>
+                        {u.role === "Super Admin" ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-purple-500/10 text-purple-400 border border-purple-500/30">
+                            👑 Full Master Access
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => onEdit(u)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 transition-colors shadow-2xs cursor-pointer"
+                            title="Click to customize module permissions for this account"
+                          >
+                            <Lock size={12} />
+                            <span>{allowedMods.length} Module{allowedMods.length === 1 ? "" : "s"} Allowed</span>
+                          </button>
+                        )}
                       </td>
 
                       {/* Company & Dept */}
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-1.5 text-xs text-foreground font-medium">
-                          <Building2 size={13} className="text-muted-foreground" />
-                          {u.companyName}
+                          <Building2 size={13} className="text-muted-foreground shrink-0" />
+                          <span className="truncate max-w-[180px]">{u.companyName || (u.companyId === 'digital' ? 'SAAMPARK Digital' : 'SAAMPARK Tech')}</span>
                         </div>
+                        {u.companyIds && u.companyIds.length > 1 && (
+                          <div className="flex items-center gap-1 mt-1 flex-wrap">
+                            {u.companyIds.map(cId => (
+                              <span key={cId} className="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase bg-surface-pressed border border-border text-muted-foreground">
+                                {cId}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                         <div className="text-xs text-muted-foreground mt-0.5">{u.department || "General"}</div>
                       </td>
 
@@ -177,7 +192,7 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
                       <td className="py-3.5 px-4">
                         <button
                           onClick={() => onToggleStatus(u.id)}
-                          className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg border border-border hover:bg-surface-hover transition-colors"
+                          className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg border border-border hover:bg-surface-hover transition-colors cursor-pointer"
                         >
                           {STATUS_ICONS[u.status]}
                           <span>{u.status}</span>
@@ -190,21 +205,23 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
                           <button
                             onClick={() => onEdit(u)}
                             title="Edit User Account & Module Access"
-                            className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                            className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
                           >
                             <Edit2 size={16} />
                           </button>
-                          <button
-                            onClick={() => {
-                              if (confirm(`Are you sure you want to delete user "${u.name}" (${u.email})?\n\nThis account will be permanently deleted and will no longer be able to log in.`)) {
-                                onDelete(u.id)
-                              }
-                            }}
-                            title="Delete User"
-                            className="p-1.5 rounded-lg text-muted-foreground hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                          {u.role !== "Super Admin" && (
+                            <button
+                              onClick={() => {
+                                if (confirm(`Are you sure you want to delete user "${u.name}" (${u.email})?\n\nThis account will be permanently deleted and will no longer be able to log in.`)) {
+                                  onDelete(u.id)
+                                }
+                              }}
+                              title="Delete User"
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

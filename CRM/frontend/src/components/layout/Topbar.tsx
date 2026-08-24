@@ -3,7 +3,7 @@
 import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
-  Menu, CheckSquare, LayoutGrid, Briefcase, Monitor, Calendar, Command, CheckCircle,
+  Menu, CheckSquare, LayoutGrid, Briefcase, Monitor, Calendar, Command, CheckCircle, Check,
   Search, Plus, Clock, Bell, Mail,
   Settings, LogOut, User, Sun, Moon, X, Building2, CreditCard
 } from "lucide-react"
@@ -27,12 +27,17 @@ const QUICK_ADD_OPTIONS = [
 export function Topbar() {
   const { theme, setTheme } = useTheme()
   const { isSidebarCollapsed, toggleSidebar, openModal } = useUIStore()
-  const { user, activeCompanyId, switchCompany, logout } = useAuthStore()
+  const { user, activeCompanyId, switchCompany, logout, companies, fetchCompanies } = useAuthStore()
   
   const [showProfileMenu, setShowProfileMenu] = React.useState(false)
   const [showQuickAdd, setShowQuickAdd] = React.useState(false)
   const [showNotifications, setShowNotifications] = React.useState(false)
+  const [showCompanyMenu, setShowCompanyMenu] = React.useState(false)
   const [notifications, setNotifications] = React.useState<any[]>([])
+
+  React.useEffect(() => {
+    fetchCompanies()
+  }, [fetchCompanies])
 
   React.useEffect(() => {
     if (!user) return
@@ -60,6 +65,7 @@ export function Topbar() {
       setShowProfileMenu(false)
       setShowQuickAdd(false)
       setShowNotifications(false)
+      setShowCompanyMenu(false)
     }
     window.addEventListener("click", handler)
     return () => window.removeEventListener("click", handler)
@@ -78,7 +84,23 @@ export function Topbar() {
 
   if (!user) return null
 
-  const activeCompany = COMPANIES.find(c => c.id === activeCompanyId)
+  // Companies this specific user has access to
+  const allowedCompanies = React.useMemo(() => {
+    if (user.role === 'Super Admin') return companies
+    const userCompIds = user.companyIds && user.companyIds.length > 0
+      ? user.companyIds
+      : (user.companyId ? [user.companyId] : ['tech'])
+    return companies.filter(c => {
+      const cId = String(c.id).toLowerCase().trim()
+      const cSlug = String(c.slug || '').toLowerCase().trim()
+      return userCompIds.some(id => {
+        const norm = String(id).toLowerCase().trim()
+        return norm === cId || norm === cSlug
+      })
+    })
+  }, [user.companyIds, user.companyId, user.role, companies])
+
+  const activeCompany = companies.find(c => c.id === activeCompanyId || c.slug === activeCompanyId) || allowedCompanies[0] || companies[0]
 
   return (
     <header
@@ -124,11 +146,66 @@ export function Topbar() {
           </div>
         )}
 
-        {/* Display Current Company Badge for Super Admin/Admin */}
+        {/* Display Current Company Badge & Switcher */}
         {activeCompany && (
-          <div className="hidden xl:flex items-center gap-2 ml-4 px-3 py-1 bg-surface-pressed border border-border rounded-full text-xs font-medium text-muted-foreground">
-            <span className="text-sm">{activeCompany.logo}</span>
-            <span>{activeCompany.name}</span>
+          <div className="relative ml-2 sm:ml-4">
+            {allowedCompanies.length > 1 ? (
+              <button
+                type="button"
+                onClick={(e) => { stop(e); setShowCompanyMenu(v => !v); setShowProfileMenu(false); setShowQuickAdd(false); setShowNotifications(false) }}
+                className="flex items-center gap-2 px-3 py-1.5 bg-surface-pressed border border-primary/30 hover:border-primary/60 rounded-full text-xs font-semibold text-foreground transition-all cursor-pointer shadow-2xs"
+                title="Click to switch active company workspace"
+              >
+                <span className="text-sm">{activeCompany.logo || "🏢"}</span>
+                <span className="truncate max-w-[140px] sm:max-w-[200px]">{activeCompany.name}</span>
+                <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-bold">Switch ▾</span>
+              </button>
+            ) : (
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-surface-pressed border border-border rounded-full text-xs font-medium text-muted-foreground">
+                <span className="text-sm">{activeCompany.logo || "🏢"}</span>
+                <span className="truncate max-w-[180px]">{activeCompany.name}</span>
+              </div>
+            )}
+
+            {/* Company Dropdown Menu */}
+            <AnimatePresence>
+              {showCompanyMenu && allowedCompanies.length > 1 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                  transition={{ duration: 0.13 }}
+                  className="absolute left-0 top-full mt-2 w-72 bg-surface border border-border shadow-2xl rounded-2xl overflow-hidden z-50 py-2"
+                >
+                  <p className="px-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1.5">
+                    Select Active Company
+                  </p>
+                  <div className="space-y-1 px-2">
+                    {allowedCompanies.map((comp) => {
+                      const isActive = activeCompanyId === comp.id || activeCompanyId === comp.slug
+                      return (
+                        <button
+                          key={comp.id}
+                          type="button"
+                          onClick={() => { switchCompany(comp.id); setShowCompanyMenu(false) }}
+                          className={`w-full flex items-center justify-between px-3 py-2.5 text-xs rounded-xl transition-all cursor-pointer ${
+                            isActive
+                              ? "bg-primary text-primary-foreground font-bold shadow-xs"
+                              : "text-muted-foreground hover:bg-surface-hover hover:text-foreground"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 truncate">
+                            <span className="text-base">{comp.logo || "🏢"}</span>
+                            <span className="truncate">{comp.name}</span>
+                          </div>
+                          {isActive && <Check size={14} className="shrink-0" />}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         )}
       </div>
@@ -153,7 +230,7 @@ export function Topbar() {
           <div className="relative">
             <Button
               variant="ghost" size="icon"
-              onClick={() => { setShowQuickAdd(v => !v); setShowNotifications(false); setShowProfileMenu(false) }}
+              onClick={() => { setShowQuickAdd(v => !v); setShowNotifications(false); setShowProfileMenu(false); setShowCompanyMenu(false) }}
               className="text-muted-foreground hover:text-foreground"
               title="Quick Add"
             >
@@ -200,7 +277,7 @@ export function Topbar() {
         <div className="relative">
           <Button
             variant="ghost" size="icon"
-            onClick={() => { setShowNotifications(v => !v); setShowQuickAdd(false); setShowProfileMenu(false) }}
+            onClick={() => { setShowNotifications(v => !v); setShowQuickAdd(false); setShowProfileMenu(false); setShowCompanyMenu(false) }}
             className="text-muted-foreground hover:text-foreground relative"
             title="Notifications"
           >
@@ -280,7 +357,7 @@ export function Topbar() {
         <div className="relative">
           <motion.div
             whileHover={{ scale: 1.02 }}
-            onClick={() => { setShowProfileMenu(v => !v); setShowQuickAdd(false); setShowNotifications(false) }}
+            onClick={() => { setShowProfileMenu(v => !v); setShowQuickAdd(false); setShowNotifications(false); setShowCompanyMenu(false) }}
             className="flex items-center gap-2 cursor-pointer p-1 rounded-full hover:bg-surface-hover/50 transition-colors pr-2 sm:pr-3 select-none"
           >
             <div className="w-8 h-8 rounded-full bg-border overflow-hidden shrink-0 border border-border">
@@ -328,21 +405,24 @@ export function Topbar() {
                   )}
                 </div>
 
-                {/* Company Switcher for Super Admin */}
-                {user.role === 'Super Admin' && (
+                {/* Company Switcher for Multi-Company Users */}
+                {allowedCompanies.length > 1 && (
                   <div className="border-t border-border/50 py-2 shrink-0">
                     <p className="px-4 text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Switch Company</p>
                     <div className="max-h-40 overflow-y-auto hide-scrollbar space-y-0.5 px-2">
-                      {COMPANIES.map(comp => (
+                      {allowedCompanies.map(comp => (
                         <button
                           key={comp.id}
-                          onClick={() => { switchCompany(comp.id as any); setShowProfileMenu(false) }}
-                          className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg transition-colors text-left cursor-pointer ${
-                            activeCompanyId === comp.id ? "bg-primary/10 text-primary font-bold" : "text-muted-foreground hover:bg-surface-hover hover:text-foreground"
+                          onClick={() => { switchCompany(comp.id); setShowProfileMenu(false) }}
+                          className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-lg transition-colors text-left cursor-pointer ${
+                            activeCompanyId === comp.id || activeCompanyId === comp.slug ? "bg-primary/10 text-primary font-bold" : "text-muted-foreground hover:bg-surface-hover hover:text-foreground"
                           }`}
                         >
-                          <span className="text-lg">{comp.logo}</span>
-                          <span className="truncate">{comp.name}</span>
+                          <div className="flex items-center gap-2.5 truncate">
+                            <span className="text-base">{comp.logo || "🏢"}</span>
+                            <span className="truncate">{comp.name}</span>
+                          </div>
+                          {(activeCompanyId === comp.id || activeCompanyId === comp.slug) && <Check size={12} />}
                         </button>
                       ))}
                     </div>

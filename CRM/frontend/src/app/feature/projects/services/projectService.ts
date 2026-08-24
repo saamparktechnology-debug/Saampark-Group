@@ -3,13 +3,13 @@ import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted, filte
 
 export const initialProjects: Project[] = []
 
-export const getProjects = async (): Promise<Project[]> => {
-  const data = await fetchModuleDataFromDB<Project[]>("projects", [])
+export const getProjects = async (companyId?: string): Promise<Project[]> => {
+  const data = await fetchModuleDataFromDB<Project[]>("projects", [], companyId)
   return Array.isArray(data) ? filterGlobalDeletedItems(data) : []
 }
 
-export const addProject = async (project: Omit<Project, "id">): Promise<Project> => {
-  const current = await fetchModuleDataFromDB<Project[]>("projects", [])
+export const addProject = async (project: Omit<Project, "id">, companyId?: string): Promise<Project> => {
+  const current = await fetchModuleDataFromDB<Project[]>("projects", [], companyId)
   const newId = (Math.max(...current.map(p => parseInt(p.id) || 0), 0) + 1).toString()
   
   const newProject: Project = {
@@ -31,63 +31,30 @@ export const addProject = async (project: Omit<Project, "id">): Promise<Project>
     ]
   }
   const updated = [newProject, ...current]
-  await saveModuleDataToDB("projects", updated)
-  
-  if (typeof window !== "undefined") {
-    try {
-      localStorage.setItem("saampark_db_projects", JSON.stringify(updated))
-      localStorage.setItem("saampark_projects_updated", String(Date.now()))
-      window.dispatchEvent(new Event("storage"))
-    } catch {}
-  }
-  
+  await saveModuleDataToDB("projects", updated, companyId)
   return newProject
 }
 
-export const updateProject = async (id: string, updates: Partial<Project>): Promise<Project> => {
+export const updateProject = async (id: string, updates: Partial<Project>, companyId?: string): Promise<Project> => {
   const strId = String(id).toLowerCase().trim()
-  const current = await fetchModuleDataFromDB<Project[]>("projects", [])
+  const current = await fetchModuleDataFromDB<Project[]>("projects", [], companyId)
   const idx = current.findIndex(p => String(p.id).toLowerCase().trim() === strId)
   if (idx === -1) {
     const updatedProj = { id: String(id), title: "Project", ...updates } as Project
     const nextList = [updatedProj, ...current]
-    await saveModuleDataToDB("projects", nextList)
-    if (typeof window !== "undefined") {
-      try {
-        localStorage.setItem("saampark_db_projects", JSON.stringify(nextList))
-        localStorage.setItem("saampark_projects_updated", String(Date.now()))
-        window.dispatchEvent(new Event("storage"))
-      } catch {}
-    }
+    await saveModuleDataToDB("projects", nextList, companyId)
     return updatedProj
   }
   current[idx] = { ...current[idx], ...updates }
-  await saveModuleDataToDB("projects", current)
-  
-  if (typeof window !== "undefined") {
-    try {
-      localStorage.setItem("saampark_db_projects", JSON.stringify(current))
-      localStorage.setItem("saampark_projects_updated", String(Date.now()))
-      window.dispatchEvent(new Event("storage"))
-    } catch {}
-  }
-  
+  await saveModuleDataToDB("projects", current, companyId)
   return { ...current[idx] }
 }
 
-export const deleteProject = async (id: string): Promise<boolean> => {
+export const deleteProject = async (id: string, companyId?: string): Promise<boolean> => {
   const strId = String(id).toLowerCase().trim()
   await markGlobalItemDeleted(strId, "projects")
-  const current = await fetchModuleDataFromDB<Project[]>("projects", [])
+  const current = await fetchModuleDataFromDB<Project[]>("projects", [], companyId)
   const filtered = current.filter(p => String(p.id).toLowerCase().trim() !== strId)
-  await saveModuleDataToDB("projects", filtered)
-
-  if (typeof window !== "undefined") {
-    try {
-      localStorage.setItem("saampark_db_projects", JSON.stringify(filtered))
-      localStorage.setItem("saampark_projects_updated", String(Date.now()))
-      window.dispatchEvent(new Event("storage"))
-    } catch {}
-  }
+  await saveModuleDataToDB("projects", filtered, companyId)
   return true
 }

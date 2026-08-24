@@ -44,7 +44,13 @@ export function ModulePermissionsModal({ isOpen, onClose }: ModulePermissionsMod
     }
   }, [activeRoleTab, rolePermissions, isOpen])
 
-  if (!isOpen) return null
+  const isCurrentSuperAdmin = user?.role === "Super Admin"
+
+  // If Admin, only display modules that the Admin can access
+  const allowedConfigurableModules = React.useMemo(() => {
+    if (isCurrentSuperAdmin) return ALL_MODULE_NAMES
+    return ALL_MODULE_NAMES.filter((m) => usePermissionStore.getState().isModuleAllowed(user, m))
+  }, [isCurrentSuperAdmin, user])
 
   const handleToggleModule = (modName: ModuleName) => {
     if (currentSelectedModules.includes(modName)) {
@@ -55,7 +61,7 @@ export function ModulePermissionsModal({ isOpen, onClose }: ModulePermissionsMod
   }
 
   const handleSelectAll = () => {
-    setCurrentSelectedModules([...ALL_MODULE_NAMES])
+    setCurrentSelectedModules([...allowedConfigurableModules])
   }
 
   const handleDeselectAll = () => {
@@ -67,6 +73,8 @@ export function ModulePermissionsModal({ isOpen, onClose }: ModulePermissionsMod
     alert(`Module access permissions updated successfully for role "${activeRoleTab}"!`)
     onClose()
   }
+
+  if (!isOpen) return null
 
   return (
     <AnimatePresence>
@@ -151,10 +159,10 @@ export function ModulePermissionsModal({ isOpen, onClose }: ModulePermissionsMod
             </div>
           </div>
 
-          {/* 20-Module Checkbox Grid */}
+          {/* Configurable Modules Checkbox Grid */}
           <div className="overflow-y-auto flex-1 pr-1">
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {ALL_MODULE_NAMES.map((mod) => {
+              {allowedConfigurableModules.map((mod) => {
                 const isChecked = currentSelectedModules.includes(mod)
                 return (
                   <div

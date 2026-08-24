@@ -12,12 +12,36 @@ import { saveModuleDataToDB } from "@/lib/storageSync"
 import { UserList } from "./components/UserList"
 import { UserModal } from "./components/UserModal"
 import { ModulePermissionsModal } from "./components/ModulePermissionsModal"
+import { CompanyModal } from "./components/CompanyModal"
 
 export default function UsersMain() {
   const { activeCompanyId, user } = useAuthStore()
+
+  // ── Access Guard: Only Super Admin and Admin can access User Management ──
+  if (user && user.role !== "Super Admin" && user.role !== "Admin") {
+    return (
+      <div className="max-w-4xl mx-auto p-8 text-center mt-12">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="glass-panel p-10 rounded-3xl border border-border shadow-xl space-y-4"
+        >
+          <div className="w-16 h-16 rounded-2xl bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto">
+            <Lock size={32} />
+          </div>
+          <h2 className="text-2xl font-bold text-foreground">Access Restricted</h2>
+          <p className="text-sm text-muted-foreground max-w-md mx-auto">
+            User Management is only accessible to Administrators and Super Admins. Please contact your administrator if you require changes to your account.
+          </p>
+          <p className="text-xs text-muted-foreground/60">Your role: <strong className="text-primary">{user.role}</strong></p>
+        </motion.div>
+      </div>
+    )
+  }
   const [users, setUsers] = React.useState<UserItem[]>([])
   const [isModalOpen, setIsModalOpen] = React.useState(false)
   const [isPermissionsModalOpen, setIsPermissionsModalOpen] = React.useState(false)
+  const [isCompanyModalOpen, setIsCompanyModalOpen] = React.useState(false)
   const [editingUser, setEditingUser] = React.useState<UserItem | null>(null)
 
   const loadUsers = React.useCallback(async () => {
@@ -33,10 +57,12 @@ export default function UsersMain() {
     }
 
     window.addEventListener("storage", handleStorageChange)
+    window.addEventListener("saampark_company_switched", handleStorageChange)
     const interval = setInterval(loadUsers, 2500)
 
     return () => {
       window.removeEventListener("storage", handleStorageChange)
+      window.removeEventListener("saampark_company_switched", handleStorageChange)
       clearInterval(interval)
     }
   }, [loadUsers])
@@ -81,7 +107,8 @@ export default function UsersMain() {
           password: userData.password || "Password123",
           role_id,
           role: userData.role,
-          company_id: userData.companyId || "tech",
+          company_id: userData.companyId || (userData.companyIds && userData.companyIds[0]) || "tech",
+          company_ids: userData.companyIds || (userData.companyId ? [userData.companyId] : ["tech"]),
           department: userData.department || "General",
           phone: userData.phone || "",
           permissions: (userData as any).permissions,
@@ -100,6 +127,8 @@ export default function UsersMain() {
           phone: userData.phone,
           status: userData.status?.toLowerCase(),
           role_id,
+          company_id: userData.companyId || (userData.companyIds && userData.companyIds[0]),
+          company_ids: userData.companyIds,
           department: userData.department,
           permissions: (userData as any).permissions,
         }).catch((err) => console.warn("Backend user update warning:", err))
@@ -112,12 +141,27 @@ export default function UsersMain() {
       {
         ...userData,
         id: realId || userData.id,
+        companyIds: userData.companyIds || (userData.companyId ? [userData.companyId] : ["tech"]),
         permissions: (userData as any).permissions,
       },
       isNew
     )
 
     if (!saved) return
+
+    // If the currently logged-in user's name or companies were updated, update auth store immediately
+    const currentUser = useAuthStore.getState().user
+    if (currentUser && (currentUser.email.toLowerCase().trim() === saved.email.toLowerCase().trim() || String(currentUser.id) === String(saved.id))) {
+      useAuthStore.setState({
+        user: {
+          ...currentUser,
+          name: saved.name,
+          companyIds: saved.companyIds,
+          companyId: (saved.companyIds && saved.companyIds[0]) || saved.companyId || currentUser.companyId,
+          phone: saved.phone || currentUser.phone,
+        }
+      })
+    }
 
     setUsers((prev) => {
       let nextList: UserItem[] = []
@@ -133,9 +177,15 @@ export default function UsersMain() {
       saveModuleDataToDB("users", nextList)
       if (typeof window !== "undefined") {
         try { localStorage.setItem("saampark_registered_accounts", JSON.stringify(nextList)); } catch {}
+        window.dispatchEvent(new Event("storage"))
       }
       return nextList
     })
+
+    // Immediate re-fetch from database to ensure newly created user displays cleanly
+    setTimeout(() => {
+      loadUsers()
+    }, 100)
   }
 
   const handleToggleStatus = async (id: string) => {
@@ -180,22 +230,33 @@ export default function UsersMain() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {user?.role === "Super Admin" && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsCompanyModalOpen(true)}
+              className="gap-2 border-purple-500/40 text-purple-400 hover:bg-purple-500/10 cursor-pointer"
+            >
+              🏢 Create Company
+            </Button>
+          )}
+
           {canConfigureModulePermissions && (
             <Button
               variant="outline"
               size="sm"
               onClick={() => setIsPermissionsModalOpen(true)}
-              className="gap-2 border-primary/40 text-primary hover:bg-primary/10"
+              className="gap-2 border-primary/40 text-primary hover:bg-primary/10 cursor-pointer"
             >
               <Lock size={16} /> Module Permissions
             </Button>
           )}
 
-          <Button variant="outline" size="sm" className="gap-2">
+          <Button variant="outline" size="sm" className="gap-2 cursor-pointer">
             <Download size={16} /> Export CSV
           </Button>
 
-          <Button variant="primary" size="sm" onClick={handleOpenCreateModal} className="gap-2">
+          <Button variant="primary" size="sm" onClick={handleOpenCreateModal} className="gap-2 cursor-pointer">
             <UserPlus size={16} /> Add New User
           </Button>
         </div>
@@ -268,6 +329,12 @@ export default function UsersMain() {
       <ModulePermissionsModal
         isOpen={isPermissionsModalOpen}
         onClose={() => setIsPermissionsModalOpen(false)}
+      />
+
+      {/* Super Admin Create Company Modal */}
+      <CompanyModal
+        isOpen={isCompanyModalOpen}
+        onClose={() => setIsCompanyModalOpen(false)}
       />
     </motion.div>
   )

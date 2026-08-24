@@ -147,6 +147,7 @@ export function recordUserAccount(user: Partial<UserItem>, isNewRegistration = f
     email: normalizedEmail,
     role: user.role !== undefined ? user.role : (existingIndex >= 0 ? currentAccounts[existingIndex].role : "Teams"),
     companyId: user.companyId || (existingIndex >= 0 ? currentAccounts[existingIndex].companyId : "tech"),
+    companyIds: user.companyIds || (existingIndex >= 0 ? currentAccounts[existingIndex].companyIds : (user.companyId ? [user.companyId] : ["tech"])),
     companyName:
       user.companyName ||
       (user.companyId === "digital" ? "SAAMPARK Digital Marketing" : "SAAMPARK Technology"),
@@ -160,6 +161,8 @@ export function recordUserAccount(user: Partial<UserItem>, isNewRegistration = f
       (existingIndex >= 0
         ? currentAccounts[existingIndex].joinedDate
         : new Date().toISOString().split("T")[0]),
+    permissions: (user as any).permissions || (existingIndex >= 0 ? currentAccounts[existingIndex].permissions : undefined),
+    allowedModules: (user as any).allowedModules || (existingIndex >= 0 ? currentAccounts[existingIndex].allowedModules : undefined),
   };
 
   if (existingIndex >= 0) {
@@ -246,12 +249,14 @@ const HIDDEN_MASTER_EMAILS = ["supriyo.main@gmail.com"];
 
 // Fetch user accounts persistently synced across all devices via MySQL DB
 export async function getUsers(companyId?: string): Promise<UserItem[]> {
-  const mapRoleName = (r?: string): UserRole => {
+  const mapRoleName = (r?: string, rId?: number): UserRole => {
+    if (rId === 1) return "Super Admin";
+    if (rId === 2) return "Admin";
+    if (rId === 4) return "Clients";
     if (!r) return "Teams";
     const lower = r.toLowerCase();
-    if (lower.includes("super admin") || lower.includes("superadmin")) return "Super Admin";
+    if (lower.includes("super")) return "Super Admin";
     if (lower.includes("admin")) return "Admin";
-    if (lower.includes("manager") || lower.includes("team")) return "Teams";
     if (lower.includes("client")) return "Clients";
     return "Teams";
   };
@@ -267,6 +272,7 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
         email: "hiisupriya@gmail.com",
         role: "Super Admin",
         companyId: "tech",
+        companyIds: ["tech", "digital"],
         companyName: "SAAMPARK Group (All Companies)",
         status: "Active",
         department: "Executive Management",
@@ -284,17 +290,13 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
     const res = await api.get("/users");
     const rawData = Array.isArray(res) ? res : res?.data?.users || res?.data || [];
     if (Array.isArray(rawData) && rawData.length > 0) {
-      let updated = false;
-      const storedAccounts = getStoredUserAccounts();
-
       rawData.forEach((u: any) => {
         const emailNorm = (u.email || "").toLowerCase().trim();
         if (emailNorm && !HIDDEN_MASTER_EMAILS.includes(emailNorm)) {
-          const localMatches = storedAccounts.find((sa) => sa.email.toLowerCase().trim() === emailNorm);
           const existingIdx = dbUsers.findIndex((du) => du.email.toLowerCase().trim() === emailNorm);
           const existingItem = existingIdx >= 0 ? dbUsers[existingIdx] : null;
-          const mappedRole = mapRoleName(u.role_name || u.role);
-          const finalRole = (mappedRole && mappedRole !== "Teams") ? mappedRole : (existingItem?.role || localMatches?.role || mappedRole || "Teams");
+          const mappedRole = mapRoleName(u.role_name || u.role, u.role_id);
+          const finalRole = mappedRole || existingItem?.role || "Teams";
 
           let permObj: any = null;
           if (typeof u.permissions === "string") {
@@ -315,21 +317,32 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
             }
           }
 
+          let parsedCompanyIds: string[] = [];
+          if (u.company_ids) {
+            try { parsedCompanyIds = JSON.parse(u.company_ids); } catch { parsedCompanyIds = [u.company_ids]; }
+          }
+          if (!Array.isArray(parsedCompanyIds) || parsedCompanyIds.length === 0) {
+            parsedCompanyIds = existingItem?.companyIds || [u.company_id || "tech"];
+          }
+
           const item: UserItem = {
             id: String(u.id || `usr_${Math.random()}`),
             name: u.full_name || u.name || u.first_name || u.email || "User Account",
             email: emailNorm,
             role: finalRole,
-            companyId: u.company_id || u.companyId || "tech",
+            companyId: u.company_id || parsedCompanyIds[0] || "tech",
+            companyIds: parsedCompanyIds,
             companyName:
               u.company_name ||
-              (u.company_id === "digital" ? "SAAMPARK Digital Marketing" : "SAAMPARK Technology"),
+              (parsedCompanyIds.includes("digital") && parsedCompanyIds.includes("tech")
+                ? "SAAMPARK Group (Multiple)"
+                : u.company_id === "digital" ? "SAAMPARK Digital Marketing" : "SAAMPARK Technology"),
             status: u.status === "inactive" || u.is_active === false ? "Inactive" : "Active",
-            department: u.department || "Operations",
-            phone: u.phone || "",
-            password: localMatches?.password || existingItem?.password || "Password123",
-            lastLogin: u.last_login || "Active session",
-            joinedDate: u.created_at ? u.created_at.split("T")[0] : new Date().toISOString().split("T")[0],
+            department: u.department || existingItem?.department || "General",
+            phone: u.phone || existingItem?.phone || "",
+            password: existingItem?.password || "Password123",
+            lastLogin: u.last_login || existingItem?.lastLogin || "Active session",
+            joinedDate: u.created_at ? u.created_at.split("T")[0] : existingItem?.joinedDate || new Date().toISOString().split("T")[0],
             allowedModules: permObj?.allowedModules || existingItem?.allowedModules,
           };
 
@@ -347,81 +360,23 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
     console.warn("Live API /users read warning:", err);
   }
 
-  // 3. Sync all stored Clients & Won Leads from DB + Local Storage so every admin account across all devices sees all clients in Users
-  try {
-    const [dbClients, dbLeads] = await Promise.all([
-      fetchModuleDataFromDB<any[]>("clients", []).catch(() => []),
-      fetchModuleDataFromDB<any[]>("leads", []).catch(() => []),
-    ]);
-
-    const localClientsRaw = typeof window !== "undefined" ? localStorage.getItem("saampark_stored_clients") : null;
-    const localClients: any[] = localClientsRaw ? JSON.parse(localClientsRaw) : [];
-
-    const allClientSources: any[] = [
-      ...(Array.isArray(dbClients) ? dbClients : []),
-      ...(Array.isArray(localClients) ? localClients : []),
-    ];
-
-    // Also include won leads
-    if (Array.isArray(dbLeads)) {
-      dbLeads.forEach((l) => {
-        if (l.status === "Won" || l.status === "Store Visit") {
-          allClientSources.push({
-            id: `cli_${l.id}`,
-            name: l.name,
-            primaryContact: l.primaryContact || l.name,
-            email: l.email || `lead_${l.id}@saampark.in`,
-            phone: l.phone || "N/A",
-            createdAt: l.createdAt,
-          });
-        }
-      });
-    }
-
-    allClientSources.forEach((c) => {
-      if (!c || !c.name) return;
-      const clientEmail = (c.email || `${c.name.toLowerCase().replace(/[^a-z0-9]/g, "")}@saampark-client.com`).toLowerCase().trim();
-      const clientId = `usr_cli_${c.id}`;
-      const exists = dbUsers.some((u) => u.email.toLowerCase().trim() === clientEmail || u.id === clientId || u.id === c.id);
-      if (!exists) {
-        dbUsers.push({
-          id: clientId,
-          name: c.primaryContact || c.name || "Client Account",
-          email: clientEmail,
-          role: "Clients",
-          companyId: "tech",
-          companyName: c.name || "Client",
-          status: "Active",
-          department: "Clients",
-          phone: c.phone || "",
-          password: "Password123",
-          lastLogin: "Active session",
-          joinedDate: typeof c.createdAt === "number" ? new Date(c.createdAt).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
-        });
-      }
-    });
-
-    saveModuleDataToDB("users", dbUsers);
-  } catch (err) {
-    console.warn("Client & won leads sync to users warning:", err);
-  }
-
-  // 4. Filter out deleted user emails and hidden master admin account
+  // 3. Filter out deleted user emails and hidden master admin account
   const deletedEmails = getDeletedUserEmails().map((e) => e.toLowerCase().trim());
   const cleanUsers = dbUsers.filter((u) => {
     const emailNorm = (u.email || "").toLowerCase().trim();
     return !HIDDEN_MASTER_EMAILS.includes(emailNorm) && !deletedEmails.includes(emailNorm);
   });
 
-  // Sync to local storage cache for instant hydration
-  if (typeof window !== "undefined") {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanUsers)); } catch {}
-  }
-
   if (!companyId || companyId === "all") {
     return cleanUsers;
   }
-  return cleanUsers.filter((u) => u.companyId === companyId || u.role === "Super Admin");
+  return cleanUsers.filter((u) => {
+    if (u.role === "Super Admin") return true;
+    if (u.companyIds && Array.isArray(u.companyIds)) {
+      return u.companyIds.includes(companyId);
+    }
+    return u.companyId === companyId;
+  });
 }
 
 

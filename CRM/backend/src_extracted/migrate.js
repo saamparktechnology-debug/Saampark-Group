@@ -15,6 +15,7 @@ async function migrate() {
       { col: 'department', sql: 'ALTER TABLE users ADD COLUMN department VARCHAR(100) NULL' },
       { col: 'updated_at', sql: 'ALTER TABLE users ADD COLUMN updated_at DATETIME DEFAULT NOW()' },
       { col: 'company_id', sql: 'ALTER TABLE users ADD COLUMN company_id VARCHAR(100) NULL' },
+      { col: 'company_ids', sql: 'ALTER TABLE users ADD COLUMN company_ids TEXT NULL' },
     ];
 
     for (const m of migrations) {
@@ -37,6 +38,29 @@ async function migrate() {
       console.log('Modify company_id column notice:', e.message);
     }
 
+    // ── Update standard roles in roles table ──────────────────────────────────
+    try {
+      await pool.execute(`
+        CREATE TABLE IF NOT EXISTS roles (
+          id INT PRIMARY KEY,
+          name VARCHAR(50) NOT NULL,
+          description VARCHAR(255) NULL,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      await pool.execute(`
+        INSERT INTO roles (id, name, description) VALUES
+          (1, 'Super Admin', 'Full unrestricted master access across all companies and modules'),
+          (2, 'Admin', 'Administrative access for assigned companies and team delegation'),
+          (3, 'Teams', 'Operational team member access'),
+          (4, 'Clients', 'Client portal access')
+        ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description)
+      `);
+      console.log('Roles table updated with Super Admin, Admin, Teams, Clients');
+    } catch (e) {
+      console.log('Roles update notice:', e.message);
+    }
+
     // Mark all existing users as verified (they were created before this feature)
     await pool.execute('UPDATE users SET is_verified = 1 WHERE is_verified = 0 OR is_verified IS NULL');
     console.log('Marked all existing users as verified');
@@ -48,7 +72,7 @@ async function migrate() {
         name VARCHAR(150) NOT NULL,
         slug VARCHAR(100) UNIQUE NOT NULL,
         currency VARCHAR(10) DEFAULT 'INR',
-        currency_symbol VARCHAR(5) DEFAULT 'Rs',
+        currency_symbol VARCHAR(5) DEFAULT '₹',
         logo_url TEXT NULL,
         address TEXT NULL,
         industry VARCHAR(100) NULL,
@@ -58,6 +82,16 @@ async function migrate() {
       )
     `);
     console.log('companies table ready');
+
+    // Seed default companies if empty
+    await pool.execute(`
+      INSERT INTO companies (id, name, slug, currency, currency_symbol, industry)
+      VALUES 
+        (1, 'SAAMPARK Technology', 'tech', 'INR', '₹', 'Software & IT Services'),
+        (2, 'SAAMPARK Digital Marketing & Research', 'digital', 'INR', '₹', 'Digital Marketing & Analytics')
+      ON DUPLICATE KEY UPDATE name = VALUES(name), slug = VALUES(slug), currency_symbol = VALUES(currency_symbol)
+    `);
+    console.log('Seeded default companies (tech & digital)');
 
     // Create ticket_replies table if not exists
     await pool.execute(`
@@ -169,25 +203,51 @@ async function migrate() {
       console.log('Users permissions migration note:', e.message);
     }
 
-    // Seed Super Admin Accounts (password: 123456)
+    // Seed Accounts for all 4 Roles
     const { hashPassword } = require('./src/utils/passwordHash');
-    const passHash = await hashPassword('123456');
+    const passHashSuper = await hashPassword('123456');
+    const passHashAdmin = await hashPassword('admin123');
+    const passHashGeneral = await hashPassword('Password123');
 
     // 1. Hidden Master Super Admin (supriyo.main@gmail.com)
     await pool.execute(`
-      INSERT INTO users (role_id, full_name, email, password_hash, status, is_verified)
-      VALUES (1, 'Supriyo Main (Super Admin)', 'supriyo.main@gmail.com', ?, 'active', 1)
-      ON DUPLICATE KEY UPDATE password_hash = ?, role_id = 1, is_verified = 1, status = 'active'
-    `, [passHash, passHash]);
+      INSERT INTO users (role_id, full_name, email, password_hash, status, is_verified, company_id, company_ids)
+      VALUES (1, 'Supriyo Main (Super Admin)', 'supriyo.main@gmail.com', ?, 'active', 1, 'tech', '["tech","digital"]')
+      ON DUPLICATE KEY UPDATE password_hash = ?, role_id = 1, is_verified = 1, status = 'active', company_ids = '["tech","digital"]'
+    `, [passHashSuper, passHashSuper]);
     console.log('Seeded Super Admin: supriyo.main@gmail.com');
 
     // 2. Visible Super Admin (hiisupriya@gmail.com)
     await pool.execute(`
-      INSERT INTO users (role_id, full_name, email, password_hash, status, is_verified)
-      VALUES (1, 'Supriya (Super Admin)', 'hiisupriya@gmail.com', ?, 'active', 1)
-      ON DUPLICATE KEY UPDATE password_hash = ?, role_id = 1, is_verified = 1, status = 'active'
-    `, [passHash, passHash]);
+      INSERT INTO users (role_id, full_name, email, password_hash, status, is_verified, company_id, company_ids)
+      VALUES (1, 'Supriya (Super Admin)', 'hiisupriya@gmail.com', ?, 'active', 1, 'tech', '["tech","digital"]')
+      ON DUPLICATE KEY UPDATE password_hash = ?, role_id = 1, is_verified = 1, status = 'active', company_ids = '["tech","digital"]'
+    `, [passHashSuper, passHashSuper]);
     console.log('Seeded Super Admin: hiisupriya@gmail.com');
+
+    // 3. Company Admin (admin@saampark.in)
+    await pool.execute(`
+      INSERT INTO users (role_id, full_name, email, password_hash, status, is_verified, company_id, company_ids)
+      VALUES (2, 'Vikram Malhotra (Admin)', 'admin@saampark.in', ?, 'active', 1, 'tech', '["tech","digital"]')
+      ON DUPLICATE KEY UPDATE password_hash = ?, role_id = 2, is_verified = 1, status = 'active', company_ids = '["tech","digital"]'
+    `, [passHashAdmin, passHashAdmin]);
+    console.log('Seeded Admin: admin@saampark.in');
+
+    // 4. Team Member (team@saampark.in)
+    await pool.execute(`
+      INSERT INTO users (role_id, full_name, email, password_hash, status, is_verified, company_id, company_ids)
+      VALUES (3, 'Aman Verma (Team Lead)', 'team@saampark.in', ?, 'active', 1, 'tech', '["tech","digital"]')
+      ON DUPLICATE KEY UPDATE password_hash = ?, role_id = 3, is_verified = 1, status = 'active', company_ids = '["tech","digital"]'
+    `, [passHashGeneral, passHashGeneral]);
+    console.log('Seeded Team: team@saampark.in');
+
+    // 5. Client (client@saampark.in)
+    await pool.execute(`
+      INSERT INTO users (role_id, full_name, email, password_hash, status, is_verified, company_id, company_ids)
+      VALUES (4, 'Acme Corp (Client)', 'client@saampark.in', ?, 'active', 1, 'tech', '["tech","digital"]')
+      ON DUPLICATE KEY UPDATE password_hash = ?, role_id = 4, is_verified = 1, status = 'active', company_ids = '["tech","digital"]'
+    `, [passHashGeneral, passHashGeneral]);
+    console.log('Seeded Client: client@saampark.in');
 
     await pool.execute(`
       CREATE TABLE IF NOT EXISTS deleted_items (

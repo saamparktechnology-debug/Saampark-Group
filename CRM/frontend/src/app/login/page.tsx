@@ -260,23 +260,42 @@ export default function LoginPage() {
       }
 
       // ── SUCCESS ──────────────────────────────────────────────────────────────
-      const displayName = matchedAccount.full_name || matchedAccount.name || normalizedEmail
+      const displayName = matchedAccount.full_name || matchedAccount.name || localAccount?.name || normalizedEmail
       recordUserAccount({ ...matchedAccount, name: displayName, lastLogin: "Just now" })
       setSuccessMessage(`Welcome back, ${displayName}! 👋`)
       setSuccess(true)
+
+      let parsedCompanyIds: string[] = []
+      const rawCompIds = matchedAccount.company_ids || matchedAccount.companyIds || localAccount?.companyIds || (localAccount as any)?.company_ids || backendUser?.company_ids
+      if (typeof rawCompIds === "string") {
+        try { parsedCompanyIds = JSON.parse(rawCompIds) } catch { parsedCompanyIds = [rawCompIds] }
+      } else if (Array.isArray(rawCompIds)) {
+        parsedCompanyIds = rawCompIds
+      }
+      if (!Array.isArray(parsedCompanyIds) || parsedCompanyIds.length === 0) {
+        const fallbackSingle = matchedAccount.companyId || matchedAccount.company_id || localAccount?.companyId || backendUser?.company_id || "tech"
+        parsedCompanyIds = matchedRole === "Super Admin" ? ["tech", "digital"] : [fallbackSingle]
+      }
 
       loginAs(matchedRole, {
         id: String(matchedAccount.id || matchedAccount.email),
         name: displayName,
         email: normalizedEmail,
         role: matchedRole,
-        companyId: (matchedAccount.companyId || matchedAccount.company_id || "tech") as any,
+        companyId: (parsedCompanyIds[0] || "tech") as any,
+        companyIds: parsedCompanyIds,
         avatar: matchedAccount.avatarUrl || matchedAccount.avatar_url || `https://api.dicebear.com/7.x/notionists/svg?seed=${normalizedEmail}`,
-        phone: matchedAccount.phone,
+        phone: matchedAccount.phone || localAccount?.phone,
       })
 
       setTimeout(() => {
-        router.push(matchedRole === "Clients" ? "/feature/dashboard" : "/feature/dashboard")
+        if (matchedRole === "Clients") {
+          router.push("/feature/projects")
+        } else if (matchedRole === "Teams") {
+          router.push("/feature/tasks")
+        } else {
+          router.push("/feature/dashboard")
+        }
       }, 900)
 
     } catch (err: any) {
@@ -425,8 +444,12 @@ export default function LoginPage() {
                 <motion.button
                   whileHover={{ scale: 1.02, y: -4 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => handleSelectRole("Teams")}
-                  className="group relative p-8 rounded-3xl bg-surface/70 border border-border hover:border-primary/50 hover:bg-surface text-left shadow-xl transition-all flex flex-col justify-between overflow-hidden"
+                  onClick={() => {
+                    handleSelectRole("Teams")
+                    setEmail("team@saampark.in")
+                    setPassword("Password123")
+                  }}
+                  className="group relative p-8 rounded-3xl bg-surface/70 border border-border hover:border-primary/50 hover:bg-surface text-left shadow-xl transition-all flex flex-col justify-between overflow-hidden cursor-pointer"
                 >
                   <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
                     <Users size={120} className="text-primary" />
@@ -447,8 +470,12 @@ export default function LoginPage() {
                 <motion.button
                   whileHover={{ scale: 1.02, y: -4 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => handleSelectRole("Clients")}
-                  className="group relative p-8 rounded-3xl bg-surface/70 border border-border hover:border-emerald-500/50 hover:bg-surface text-left shadow-xl transition-all flex flex-col justify-between overflow-hidden"
+                  onClick={() => {
+                    handleSelectRole("Clients")
+                    setEmail("client@saampark.in")
+                    setPassword("Password123")
+                  }}
+                  className="group relative p-8 rounded-3xl bg-surface/70 border border-border hover:border-emerald-500/50 hover:bg-surface text-left shadow-xl transition-all flex flex-col justify-between overflow-hidden cursor-pointer"
                 >
                   <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
                     <Briefcase size={120} className="text-emerald-500" />
@@ -457,7 +484,7 @@ export default function LoginPage() {
                     <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center text-2xl mb-5 group-hover:scale-110 transition-transform">🤝</div>
                     <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-500 uppercase tracking-wider mb-2">Client Portal</span>
                     <h2 className="text-2xl font-bold text-foreground group-hover:text-emerald-500 transition-colors">Client Access</h2>
-                    <p className="text-xs text-muted-foreground mt-2 leading-relaxed">External clients, organization representatives and accounts.</p>
+                    <p className="text-xs text-muted-foreground mt-2 leading-relaxed">External clients, organization representatives and client accounts.</p>
                   </div>
                   <div className="mt-8 flex items-center gap-2 text-sm font-semibold text-emerald-500">
                     <span>Login as Client</span>
@@ -466,15 +493,19 @@ export default function LoginPage() {
                 </motion.button>
               </div>
 
-              {/* Hidden Admin Link */}
+              {/* Subtle Admin Link at bottom */}
               <div className="pt-4">
                 <button
                   type="button"
-                  onClick={() => handleSelectRole("Admin")}
-                  className="text-xs text-muted-foreground hover:text-foreground hover:underline inline-flex items-center gap-1.5 transition-colors"
+                  onClick={() => {
+                    handleSelectRole("Admin")
+                    setEmail("hiisupriya@gmail.com")
+                    setPassword("123456")
+                  }}
+                  className="text-xs text-muted-foreground hover:text-foreground hover:underline inline-flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <Shield size={14} className="text-amber-500" />
-                  <span>System Administrator? Click to access Admin Login</span>
+                  <span>System Administrator? Click to access Admin & Super Admin Login</span>
                 </button>
               </div>
             </motion.div>
@@ -491,24 +522,65 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => { setSelectedRoleChoice(null); setError("") }}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground mb-6 transition-colors"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground mb-6 transition-colors cursor-pointer"
               >
                 <ArrowLeft size={14} />
-                <span>Choose different role</span>
+                <span>Choose different portal</span>
               </button>
 
               <div className="mb-6">
-                <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-2 ${
-                  selectedRoleChoice === "Clients" ? "bg-emerald-500/10 text-emerald-500"
-                  : selectedRoleChoice === "Admin" ? "bg-amber-500/10 text-amber-500"
-                  : "bg-indigo-500/10 text-indigo-500"
-                }`}>
-                  {selectedRoleChoice === "Clients" ? "🤝 Client Portal" : selectedRoleChoice === "Admin" ? "👑 System Admin" : "👥 Team Member"}
-                </span>
-                <h2 className="text-3xl font-extrabold tracking-tight">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                    selectedRoleChoice === "Clients" ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/30"
+                    : selectedRoleChoice === "Admin" ? "bg-purple-500/10 text-purple-400 border border-purple-500/30"
+                    : "bg-indigo-500/10 text-indigo-400 border border-indigo-500/30"
+                  }`}>
+                    {selectedRoleChoice === "Clients" ? "🤝 Client Portal" : selectedRoleChoice === "Admin" ? "👑 Administrator Access" : "👥 Team Member"}
+                  </span>
+                </div>
+                <h2 className="text-2xl font-extrabold tracking-tight">
                   {selectedRoleChoice === "Clients" ? "Client Sign In" : selectedRoleChoice === "Admin" ? "Admin Sign In" : "Team Member Sign In"}
                 </h2>
                 <p className="text-xs text-muted-foreground mt-1">Enter your registered email and password.</p>
+              </div>
+
+              {/* Quick Fill Test Account Bar */}
+              <div className="p-3 mb-4 rounded-2xl bg-surface-pressed/50 border border-border flex items-center justify-between gap-1 flex-wrap text-[11px]">
+                <span className="text-muted-foreground font-medium">Quick Fill:</span>
+                {selectedRoleChoice === "Admin" ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => { setEmail("hiisupriya@gmail.com"); setPassword("123456") }}
+                      className="px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 font-semibold cursor-pointer"
+                    >
+                      👑 Super Admin
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setEmail("admin@saampark.in"); setPassword("admin123") }}
+                      className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 font-semibold cursor-pointer"
+                    >
+                      🛡️ Admin
+                    </button>
+                  </>
+                ) : selectedRoleChoice === "Clients" ? (
+                  <button
+                    type="button"
+                    onClick={() => { setEmail("client@saampark.in"); setPassword("Password123") }}
+                    className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 font-semibold cursor-pointer"
+                  >
+                    🤝 Client Demo
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => { setEmail("team@saampark.in"); setPassword("Password123") }}
+                    className="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 font-semibold cursor-pointer"
+                  >
+                    👥 Team Member Demo
+                  </button>
+                )}
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4 relative">
@@ -539,7 +611,7 @@ export default function LoginPage() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       className="pl-10 h-11 bg-surface"
-                      placeholder={selectedRoleChoice === "Clients" ? "client@acme.com" : "team@saampark.in"}
+                      placeholder="e.g. user@saampark.in"
                       required
                     />
                   </div>
@@ -552,7 +624,7 @@ export default function LoginPage() {
                     <button
                       type="button"
                       onClick={openForgotModal}
-                      className="text-xs font-medium text-primary hover:underline"
+                      className="text-xs font-medium text-primary hover:underline cursor-pointer"
                     >
                       Forgot password?
                     </button>
@@ -571,7 +643,7 @@ export default function LoginPage() {
                     <button
                       type="button"
                       onClick={() => setShowPassword((v) => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
                     >
                       {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
@@ -587,7 +659,7 @@ export default function LoginPage() {
                 <Button
                   type="submit"
                   variant="primary"
-                  className="w-full h-11 text-sm font-bold shadow-md mt-2"
+                  className="w-full h-11 text-sm font-bold shadow-md mt-2 cursor-pointer"
                   disabled={isLoading || success}
                 >
                   {isLoading ? (

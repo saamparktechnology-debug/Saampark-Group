@@ -5,7 +5,8 @@ const { successResponse, errorResponse } = require('../utils/apiResponse');
 const getAllUsers = async (req, res, next) => {
   try {
     const [users] = await pool.execute(
-      `SELECT u.id, u.full_name, u.email, u.phone, u.status, u.permissions, u.last_login, u.created_at,
+      `SELECT u.id, u.full_name, u.email, u.phone, u.department, u.status, u.permissions, u.last_login, u.created_at,
+              u.company_id, u.company_ids,
               r.name as role_name, r.id as role_id
        FROM users u
        JOIN roles r ON u.role_id = r.id
@@ -23,7 +24,8 @@ const getUserById = async (req, res, next) => {
   try {
     const { id } = req.params;
     const [users] = await pool.execute(
-      `SELECT u.id, u.full_name, u.email, u.phone, u.status, u.permissions, r.name as role_name, r.id as role_id
+      `SELECT u.id, u.full_name, u.email, u.phone, u.department, u.status, u.permissions, u.company_id, u.company_ids,
+              r.name as role_name, r.id as role_id
        FROM users u
        JOIN roles r ON u.role_id = r.id
        WHERE (u.id = ? OR u.email = ?) AND u.deleted_at IS NULL`,
@@ -41,11 +43,10 @@ const getUserById = async (req, res, next) => {
 };
 
 // ─── UPDATE USER ──────────────────────────────────────────────────────────────
-// FIX C-1, C-2: Now correctly updates role_id in DB
 const updateUser = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { full_name, name, email, phone, role_id, status, permissions, department } = req.body;
+    const { full_name, name, email, phone, role_id, status, permissions, department, company_id, company_ids, companyIds } = req.body;
 
     const displayName = full_name || name || null;
     const phoneVal = phone !== undefined ? (phone || null) : null;
@@ -53,12 +54,25 @@ const updateUser = async (req, res, next) => {
     let roleIdVal = role_id ? parseInt(role_id, 10) : null;
     if (!roleIdVal && req.body.role) {
       const rLower = String(req.body.role).toLowerCase();
-      if (rLower.includes('super admin')) roleIdVal = 1;
+      if (rLower.includes('super')) roleIdVal = 1;
       else if (rLower.includes('admin')) roleIdVal = 2;
       else if (rLower.includes('client')) roleIdVal = 4;
       else roleIdVal = 3;
     }
+
+    // RBAC Hierarchy Enforcement:
+    // Only a Super Admin can promote/assign Super Admin (1) or Admin (2)
+    if (roleIdVal === 1 || roleIdVal === 2) {
+      if (req.user && req.user.role_id !== 1) {
+        return errorResponse(res, 403, 'Only a Super Admin can assign Super Admin or Admin roles.');
+      }
+    }
+
     const targetEmail = (email || id || '').toLowerCase().trim();
+
+    // Multi-company serialization
+    const compList = company_ids || companyIds || (company_id ? [company_id] : null);
+    const compIdsStr = Array.isArray(compList) ? JSON.stringify(compList) : (typeof compList === 'string' ? compList : null);
 
     // Build dynamic SET clause
     const setClauses = [];
@@ -68,6 +82,8 @@ const updateUser = async (req, res, next) => {
     if (phoneVal !== null || phone === '') { setClauses.push('phone = ?'); params.push(phoneVal); }
     if (statusVal) { setClauses.push('status = ?'); params.push(statusVal); }
     if (roleIdVal) { setClauses.push('role_id = ?'); params.push(roleIdVal); }
+    if (company_id) { setClauses.push('company_id = ?'); params.push(company_id); }
+    if (compIdsStr) { setClauses.push('company_ids = ?'); params.push(compIdsStr); }
     if (department !== undefined) { setClauses.push('department = ?'); params.push(department || null); }
     if (permissions !== undefined && permissions !== null) {
       const permStr = typeof permissions === 'string' ? permissions : JSON.stringify(permissions);
@@ -80,12 +96,21 @@ const updateUser = async (req, res, next) => {
     }
 
     setClauses.push('updated_at = NOW()');
-    params.push(id, id, targetEmail);
-
-    await pool.execute(
-      `UPDATE users SET ${setClauses.join(', ')} WHERE id = ? OR email = ? OR email = ?`,
-      params
-    );
+    const isNumericId = !isNaN(parseInt(id, 10)) && Number(id) > 0;
+    
+    if (isNumericId) {
+      params.push(id, targetEmail);
+      await pool.execute(
+        `UPDATE users SET ${setClauses.join(', ')} WHERE id = ? OR email = ?`,
+        params
+      );
+    } else {
+      params.push(targetEmail || id);
+      await pool.execute(
+        `UPDATE users SET ${setClauses.join(', ')} WHERE email = ?`,
+        params
+      );
+    }
 
     // Also sync updated user record & permissions into app_data JSON store
     try {
@@ -96,7 +121,10 @@ const updateUser = async (req, res, next) => {
       }
       if (!Array.isArray(currentUsers)) currentUsers = [];
 
-      const [updatedUserRows] = await pool.execute('SELECT u.*, r.name as role_name FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id = ? OR u.email = ? OR u.email = ?', [id, id, targetEmail]);
+      const [updatedUserRows] = await pool.execute(
+        'SELECT u.*, r.name as role_name FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id = ? OR u.email = ?',
+        [id, targetEmail]
+      );
       if (updatedUserRows.length > 0) {
         const u = updatedUserRows[0];
         const emailNorm = (u.email || '').toLowerCase().trim();
@@ -107,12 +135,21 @@ const updateUser = async (req, res, next) => {
           permObj = u.permissions;
         }
 
+        let parsedCompanyIds = [];
+        if (u.company_ids) {
+          try { parsedCompanyIds = JSON.parse(u.company_ids); } catch { parsedCompanyIds = [u.company_ids]; }
+        }
+        if (!Array.isArray(parsedCompanyIds) || parsedCompanyIds.length === 0) {
+          parsedCompanyIds = [u.company_id || 'tech'];
+        }
+
         const updatedItem = {
           id: String(u.id),
           name: u.full_name || u.email,
           email: emailNorm,
-          role: u.role_name || 'Teams',
+          role: u.role_name || (u.role_id === 1 ? 'Super Admin' : u.role_id === 2 ? 'Admin' : u.role_id === 4 ? 'Clients' : 'Teams'),
           companyId: u.company_id || 'tech',
+          companyIds: parsedCompanyIds,
           companyName: u.company_name || 'SAAMPARK Technology',
           status: u.status === 'inactive' ? 'Inactive' : 'Active',
           department: u.department || 'General',
@@ -145,7 +182,6 @@ const updateUser = async (req, res, next) => {
 };
 
 // ─── TOGGLE USER STATUS ────────────────────────────────────────────────────────
-// FIX C-6: Backend status toggle
 const toggleUserStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -162,7 +198,6 @@ const toggleUserStatus = async (req, res, next) => {
 };
 
 // ─── DELETE USER (SOFT DELETE) ─────────────────────────────────────────────────
-// FIX C-3: Soft delete — marks deleted_at instead of hard DELETE
 const deleteUser = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -194,11 +229,10 @@ const deleteUser = async (req, res, next) => {
   }
 };
 
-
 // ─── CREATE USER (ADMIN CREATED - BYPASSES OTP) ─────────────────────────────
 const createUser = async (req, res, next) => {
   try {
-    const { full_name, name, email, password, phone, role_id, role, company_id, companyName, department, permissions } = req.body;
+    const { full_name, name, email, password, phone, role_id, role, company_id, company_ids, companyIds, companyName, department, permissions } = req.body;
     const displayName = full_name || name;
 
     if (!displayName || !email || !password) {
@@ -213,9 +247,6 @@ const createUser = async (req, res, next) => {
       return errorResponse(res, 400, 'An account with this email address already exists.');
     }
 
-    const { hashPassword } = require('../utils/passwordHash');
-    const hashedPassword = await hashPassword(password);
-
     // Map role string to ID if needed
     let targetRoleId = 3;
     if (role_id) {
@@ -228,29 +259,50 @@ const createUser = async (req, res, next) => {
       else targetRoleId = 3;
     }
 
+    // RBAC Hierarchy Enforcement:
+    // 1. Super Admin role can ONLY be created/assigned by a Super Admin
+    if (targetRoleId === 1) {
+      if (req.user && req.user.role_id !== 1) {
+        return errorResponse(res, 403, 'Access denied: Only an existing Super Admin can create Super Admin accounts.');
+      }
+    }
+    // 2. Admin role can ONLY be created/assigned by a Super Admin
+    if (targetRoleId === 2) {
+      if (req.user && req.user.role_id !== 1) {
+        return errorResponse(res, 403, 'Access denied: Only a Super Admin can create or assign Admin accounts.');
+      }
+    }
+
+    const { hashPassword } = require('../utils/passwordHash');
+    const hashedPassword = await hashPassword(password);
+
     const roleName = targetRoleId === 1 ? 'Super Admin' : targetRoleId === 2 ? 'Admin' : targetRoleId === 4 ? 'Clients' : 'Teams';
     const permStr = permissions ? (typeof permissions === 'string' ? permissions : JSON.stringify(permissions)) : null;
 
-    let userId = null;
+    // Multi-company handling
+    const compList = company_ids || companyIds || (company_id ? [company_id] : ['tech']);
+    const parsedCompList = Array.isArray(compList) ? compList : [compList];
+    const compVal = parsedCompList[0] || company_id || 'tech';
+    const compIdsStr = JSON.stringify(parsedCompList);
 
-    const compVal = company_id ? String(company_id) : 'tech';
+    let userId = null;
 
     if (existing.length > 0 && existing[0].deleted_at) {
       // Re-activate soft deleted account
       userId = existing[0].id;
       await pool.execute(
         `UPDATE users 
-         SET full_name = ?, password_hash = ?, phone = ?, department = ?, company_id = ?, role_id = ?, permissions = ?, is_verified = 1, status = 'active', deleted_at = NULL, updated_at = NOW() 
+         SET full_name = ?, password_hash = ?, phone = ?, department = ?, company_id = ?, company_ids = ?, role_id = ?, permissions = ?, is_verified = 1, status = 'active', deleted_at = NULL, updated_at = NOW() 
          WHERE id = ?`,
-        [displayName, hashedPassword, phone || null, department || null, compVal, targetRoleId, permStr, userId]
+        [displayName, hashedPassword, phone || null, department || null, compVal, compIdsStr, targetRoleId, permStr, userId]
       );
       // Remove from deleted_items tracking
       await pool.execute('DELETE FROM deleted_items WHERE item_id = ? AND module_name = "users"', [normEmail]);
     } else {
       // Admin created users are marked is_verified = 1 automatically!
       const [result] = await pool.execute(
-        'INSERT INTO users (role_id, full_name, email, password_hash, phone, department, company_id, permissions, is_verified, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)',
-        [targetRoleId, displayName, normEmail, hashedPassword, phone || null, department || null, compVal, permStr, 'active']
+        'INSERT INTO users (role_id, full_name, email, password_hash, phone, department, company_id, company_ids, permissions, is_verified, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)',
+        [targetRoleId, displayName, normEmail, hashedPassword, phone || null, department || null, compVal, compIdsStr, permStr, 'active']
       );
       userId = result.insertId;
     }
@@ -269,8 +321,9 @@ const createUser = async (req, res, next) => {
         name: displayName,
         email: normEmail,
         role: roleName,
-        companyId: company_id || 'tech',
-        companyName: companyName || (company_id === 'digital' ? 'SAAMPARK Digital Marketing' : 'SAAMPARK Technology'),
+        companyId: compVal,
+        companyIds: parsedCompList,
+        companyName: companyName || (compVal === 'digital' ? 'SAAMPARK Digital Marketing' : 'SAAMPARK Technology'),
         status: 'Active',
         department: department || 'General',
         phone: phone || '',

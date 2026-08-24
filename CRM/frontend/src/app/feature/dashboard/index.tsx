@@ -199,106 +199,208 @@ export default function DashboardMain() {
   // 1. CLIENT DASHBOARD VIEW (Rendered for Clients)
   // =========================================================================
   if (normRole === 'Clients') {
+    const clientProjects = liveProjects.filter((p) => {
+      const clientName = (p.client || "").toLowerCase().trim()
+      const userName = (user.name || "").toLowerCase().trim()
+      const userEmail = (user.email || "").toLowerCase().trim()
+      return clientName === userName || clientName.includes(userName) || (userEmail && clientName.includes(userEmail))
+    })
+
+    const completedProjects = clientProjects.filter(p => (p.completion || 0) >= 100 || p.status === "Completed")
+    const activeProjects = clientProjects.filter(p => (p.completion || 0) < 100 && p.status !== "Completed")
+
     return (
       <div className="space-y-6 pb-12 bg-background/50 min-h-screen p-4 sm:px-8 sm:py-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-4">
+        {/* ── HEADER ──────────────────────────────────────────────────────── */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-5">
           <div>
             <div className="flex items-center gap-2 text-primary font-semibold text-xs mb-1">
-              <Briefcase size={14} /> Client Portal
+              <Briefcase size={14} /> Client Portal Dashboard
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">
-              Welcome back, {user.name}!
+              Welcome back, {user.name}! 👋
             </h1>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Track your active projects, financial payments, support tickets, and team progress.
+            <p className="text-xs text-muted-foreground mt-1">
+              Your projects, invoices, support tickets, and team communications — all in one place.
             </p>
           </div>
-          <Button variant="primary" leftIcon={<Plus size={16} />} onClick={() => alert("New Ticket Request")}>
-            Raise Support Ticket
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <a href="/feature/tickets">
+              <Button variant="outline" size="sm" leftIcon={<AlertCircle size={14} />}>
+                My Tickets
+              </Button>
+            </a>
+            <a href="/feature/messages">
+              <Button variant="primary" size="sm" leftIcon={<Bell size={14} />}>
+                Message Team
+              </Button>
+            </a>
+          </div>
         </div>
 
-        {/* Client KPI Summary */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          <KPICard icon={Grid} colorClass="bg-blue-500" value="2 Active" label="Subscribed Projects" />
-          <KPICard icon={DollarSign} colorClass="bg-emerald-500" value="₹4,50,000" label="Total Invoiced" />
-          <KPICard icon={CheckCircle2} colorClass="bg-indigo-500" value="₹3,20,000" label="Amount Paid" />
-          <KPICard icon={AlertCircle} colorClass="bg-amber-500" value="₹1,30,000" label="Pending Balance" />
+        {/* ── KPI CARDS ───────────────────────────────────────────────────── */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <KPICard icon={Grid} colorClass="bg-blue-500" value={`${clientProjects.length} Projects`} label="My Active Projects" />
+          <KPICard icon={CheckCircle2} colorClass="bg-emerald-500" value={`${completedProjects.length} Done`} label="Completed Milestones" />
+          <KPICard icon={AlertCircle} colorClass="bg-amber-500" value="Open" label="Support Tickets" />
+          <KPICard icon={FileText} colorClass="bg-indigo-500" value="Invoices" label="View Billing History" />
         </div>
 
-        {/* Client Projects Progress & Payments Breakdown */}
+        {/* ── PROJECTS + QUICK ACTIONS ────────────────────────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Active Projects Widget */}
+          {/* Active Projects List */}
           <Widget title="My Projects & Progress" icon={Grid} className="lg:col-span-2">
-            <div className="space-y-6 pt-2">
-              <div className="p-4 bg-surface border border-border/80 rounded-xl space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-bold text-sm text-foreground">Virtual Reality Experience Design</h3>
-                    <p className="text-xs text-muted-foreground">Manager: <strong className="text-foreground">John Doe</strong> | Target Release: 20-08-2026</p>
-                  </div>
-                  <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
-                    In Progress (72%)
-                  </span>
+            <div className="space-y-4 pt-2">
+              {clientProjects.length === 0 ? (
+                <div className="py-10 text-center text-muted-foreground text-xs">
+                  <Grid size={32} className="mx-auto mb-3 text-muted-foreground/30" />
+                  <p>No projects are currently assigned to your account.</p>
+                  <p className="mt-1">Contact your project manager to get started.</p>
                 </div>
-                <div className="h-2 w-full bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-600 rounded-full w-[72%]" />
-                </div>
-                <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
-                  <span>Assigned Team: John Doe, Michael Lee</span>
-                  <button className="text-blue-600 hover:underline flex items-center gap-1 font-medium">
-                    View Project Details <ExternalLink size={12} />
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-4 bg-surface border border-border/80 rounded-xl space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-bold text-sm text-foreground">Business Card and Stationery Design</h3>
-                    <p className="text-xs text-muted-foreground">Manager: <strong className="text-foreground">John Doe</strong> | Target Release: 30-06-2026</p>
-                  </div>
-                  <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-                    Milestone Completed (100%)
-                  </span>
-                </div>
-                <div className="h-2 w-full bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-emerald-600 rounded-full w-[100%]" />
-                </div>
-                <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
-                  <span>Assigned Team: Mark Smith</span>
-                  <button className="text-blue-600 hover:underline flex items-center gap-1 font-medium">
-                    View Project Details <ExternalLink size={12} />
-                  </button>
-                </div>
-              </div>
+              ) : (
+                clientProjects.slice(0, 5).map((p, i) => {
+                  const pct = Math.min(100, Math.max(0, p.completion || 0))
+                  const statusColor = pct >= 100 ? "bg-emerald-600" : pct >= 60 ? "bg-blue-600" : "bg-amber-500"
+                  const badgeColor = pct >= 100 ? "bg-emerald-100 text-emerald-700" : pct >= 60 ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
+                  return (
+                    <motion.div key={p.id || i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
+                      className="p-4 bg-surface border border-border/80 rounded-xl space-y-3 hover:border-primary/30 transition-colors">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-bold text-sm text-foreground truncate">{p.name}</h3>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {p.manager && <span>PM: <strong className="text-foreground">{p.manager}</strong> · </span>}
+                            {p.deadline && <span>Due: {p.deadline}</span>}
+                          </p>
+                        </div>
+                        <span className={`px-2.5 py-1 text-[10px] font-bold rounded-full shrink-0 ${badgeColor}`}>
+                          {pct >= 100 ? "Completed" : `${pct}% Done`}
+                        </span>
+                      </div>
+                      <div className="h-2 w-full bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                        <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.8, delay: i * 0.1 }}
+                          className={`h-full rounded-full ${statusColor}`} />
+                      </div>
+                      {p.members && p.members.length > 0 && (
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                          <span>Team: {p.members.map((m: any) => m.name || m).slice(0, 3).join(", ")}</span>
+                          <a href="/feature/projects" className="text-blue-600 hover:underline flex items-center gap-1 font-medium">
+                            View Details <ExternalLink size={10} />
+                          </a>
+                        </div>
+                      )}
+                    </motion.div>
+                  )
+                })
+              )}
+              {clientProjects.length > 5 && (
+                <a href="/feature/projects" className="block text-center text-xs text-primary hover:underline pt-1">
+                  View all {clientProjects.length} projects →
+                </a>
+              )}
             </div>
           </Widget>
 
-          {/* Payment Receipts & Invoices Widget */}
-          <Widget title="Billing & Payment Receipts" icon={FileText}>
-            <div className="space-y-3 pt-1 text-xs">
-              <div className="flex items-center justify-between p-3 bg-surface border border-border rounded-xl">
-                <div>
-                  <p className="font-bold text-foreground">INV-2026-004</p>
-                  <p className="text-muted-foreground">15 Aug 2026 • ₹2,50,000</p>
-                </div>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">PAID</span>
+          {/* Quick Actions + Support Widget */}
+          <div className="space-y-4">
+            {/* Quick Actions */}
+            <Widget title="Quick Actions" icon={TrendingUp}>
+              <div className="space-y-2 pt-1">
+                {[
+                  { label: "View My Projects", href: "/feature/projects", color: "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-200/50 dark:border-blue-900/50", icon: Grid },
+                  { label: "My Support Tickets", href: "/feature/tickets", color: "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-200/50 dark:border-amber-900/50", icon: AlertCircle },
+                  { label: "Message My Team", href: "/feature/messages", color: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-200/50 dark:border-indigo-900/50", icon: Bell },
+                  { label: "View Sales & Invoices", href: "/feature/sales", color: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-200/50 dark:border-emerald-900/50", icon: DollarSign },
+                  { label: "Knowledge Base", href: "/feature/knowledge-base", color: "bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-200/50 dark:border-purple-900/50", icon: FileText },
+                ].map(({ label, href, color, icon: Icon }) => (
+                  <a key={href} href={href}
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border text-xs font-semibold transition-all hover:scale-[1.01] cursor-pointer ${color}`}>
+                    <Icon size={14} />
+                    {label}
+                  </a>
+                ))}
               </div>
+            </Widget>
 
-              <div className="flex items-center justify-between p-3 bg-surface border border-border rounded-xl">
-                <div>
-                  <p className="font-bold text-foreground">INV-2026-009</p>
-                  <p className="text-muted-foreground">01 Aug 2026 • ₹1,30,000</p>
+            {/* My Account Info */}
+            <Widget title="My Account" icon={UserCheck}>
+              <div className="space-y-3 pt-1 text-xs">
+                <div className="flex items-center gap-3 p-3 bg-surface rounded-xl border border-border">
+                  <img
+                    src={user.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${user.email}`}
+                    alt={user.name}
+                    className="w-10 h-10 rounded-full border border-border object-cover"
+                  />
+                  <div className="min-w-0">
+                    <p className="font-bold text-foreground truncate">{user.name}</p>
+                    <p className="text-muted-foreground truncate">{user.email}</p>
+                    <span className="inline-block mt-1 px-2 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 uppercase">Client</span>
+                  </div>
                 </div>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700">PENDING</span>
+                <a href="/feature/settings" className="flex items-center justify-center gap-2 p-2 rounded-xl border border-border text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors cursor-pointer">
+                  <Edit2 size={12} /> Edit Profile & Settings
+                </a>
               </div>
+            </Widget>
+          </div>
+        </div>
+
+        {/* ── ANNOUNCEMENTS + TASKS + EVENTS ──────────────────────────────── */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* My Tasks */}
+          <Widget title="My Assigned Tasks" icon={CheckSquare} className="lg:col-span-2">
+            <div className="space-y-2 pt-1 text-xs">
+              {liveTasks.filter(t => {
+                const assigned = (t.assignedTo || "").toLowerCase()
+                const uName = (user.name || "").toLowerCase()
+                const uEmail = (user.email || "").toLowerCase()
+                return assigned.includes(uName) || assigned.includes(uEmail)
+              }).slice(0, 5).map((t, i) => (
+                <div key={t.id || i} className="flex items-center justify-between p-3 bg-surface border border-border rounded-xl">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-foreground truncate">{t.title}</p>
+                    <p className="text-muted-foreground mt-0.5">
+                      {t.relatedTo && <span>{t.relatedTo} · </span>}
+                      {t.deadline && <span>Due: {t.deadline}</span>}
+                    </p>
+                  </div>
+                  <span className={`ml-3 px-2.5 py-1 rounded text-[10px] font-bold shrink-0 ${
+                    t.status === "Done" ? "bg-emerald-100 text-emerald-700" :
+                    t.priority === "Urgent" || t.priority === "High" ? "bg-rose-100 text-rose-700" :
+                    "bg-blue-100 text-blue-700"
+                  }`}>{t.status || "In Progress"}</span>
+                </div>
+              ))}
+              {liveTasks.filter(t => {
+                const assigned = (t.assignedTo || "").toLowerCase()
+                return assigned.includes((user.name || "").toLowerCase()) || assigned.includes((user.email || "").toLowerCase())
+              }).length === 0 && (
+                <div className="py-8 text-center text-muted-foreground">
+                  <CheckSquare size={28} className="mx-auto mb-2 opacity-30" />
+                  <p>No tasks assigned to you yet.</p>
+                </div>
+              )}
+              <a href="/feature/tasks" className="block text-center text-xs text-primary hover:underline pt-1">View all tasks →</a>
             </div>
-            <div className="pt-4 mt-4 border-t border-border">
-              <Button variant="outline" size="sm" className="w-full">
-                Download Statement of Account (PDF)
-              </Button>
+          </Widget>
+
+          {/* Upcoming Events */}
+          <Widget title="Upcoming Meetings & Events" icon={Calendar}>
+            <div className="space-y-2 pt-1 text-xs">
+              {[
+                { title: "Project Review Call", date: "Today · 3:00 PM", color: "bg-blue-500" },
+                { title: "Design Handoff Meeting", date: "Tomorrow · 11:00 AM", color: "bg-indigo-500" },
+                { title: "Monthly Progress Report", date: "28 Aug · 10:00 AM", color: "bg-amber-500" },
+              ].map((ev, i) => (
+                <div key={i} className="flex items-start gap-3 p-3 bg-surface border border-border rounded-xl">
+                  <div className={`w-2 h-full rounded-full ${ev.color} mt-1.5 shrink-0`} style={{ minHeight: 24 }} />
+                  <div>
+                    <p className="font-semibold text-foreground">{ev.title}</p>
+                    <p className="text-muted-foreground mt-0.5">{ev.date}</p>
+                  </div>
+                </div>
+              ))}
+              <a href="/feature/events" className="block text-center text-xs text-primary hover:underline pt-1">View all events →</a>
             </div>
           </Widget>
         </div>
@@ -329,6 +431,10 @@ export default function DashboardMain() {
     return myTasks.filter((t) => t.priority === "Urgent" || t.priority === "High")
   }, [myTasks])
 
+  const myDoneTasks = React.useMemo(() => {
+    return myTasks.filter((t) => t.status === "Done")
+  }, [myTasks])
+
   const myCallReminders = React.useMemo(() => {
     return liveLeads.filter((l) => {
       const caller = (l.caller || l.owner || "").toLowerCase().trim()
@@ -343,111 +449,233 @@ export default function DashboardMain() {
     })
   }, [liveLeads, normName, normEmail])
 
+  const myProjects = React.useMemo(() => {
+    return liveProjects.filter((p) => {
+      const members = p.members || []
+      return members.some((m: any) => {
+        const mName = (m.name || "").toLowerCase().trim()
+        const mEmail = (m.email || "").toLowerCase().trim()
+        return mName === normName || mEmail === normEmail || (normName && mName.includes(normName))
+      })
+    })
+  }, [liveProjects, normName, normEmail])
+
   // =========================================================================
-  // 2. STAFF / TEAM MEMBER DASHBOARD VIEW (Rendered for Teams & User)
+  // 2. STAFF / TEAM MEMBER DASHBOARD VIEW (Rendered for Teams)
   // =========================================================================
   if (normRole === 'Teams') {
+    const todayStr = new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })
+
     return (
       <div className="space-y-6 pb-12 bg-background/50 min-h-screen p-4 sm:px-8 sm:py-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-4">
+        {/* ── HEADER ──────────────────────────────────────────────────────── */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-5">
           <div>
             <div className="flex items-center gap-2 text-primary font-semibold text-xs mb-1">
-              <UserCheck size={14} /> Staff Daily Workbench
+              <UserCheck size={14} /> Staff Workbench · {todayStr}
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">
-              Hello, {user.name}!
+              Hello, {user.name}! 👋
             </h1>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Manage your shift clock, assigned tasks, telecaller call reminders, and work log.
+            <p className="text-xs text-muted-foreground mt-1">
+              Your tasks, shift tracker, call reminders, and project updates — everything in one place.
             </p>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <a href="/feature/tasks">
+              <Button variant="outline" size="sm" leftIcon={<CheckSquare size={14} />}>My Tasks</Button>
+            </a>
+            <a href="/feature/messages">
+              <Button variant="primary" size="sm" leftIcon={<Bell size={14} />}>Messages</Button>
+            </a>
           </div>
         </div>
 
-        {/* Staff Shift Punch Box & KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        {/* ── KPI CARDS + SHIFT CLOCK ─────────────────────────────────────── */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Shift Time Clock */}
-          <div className="bg-surface border border-border rounded-xl p-5 shadow-2xs flex flex-col justify-between">
+          <div className="bg-surface border border-border rounded-xl p-5 shadow-2xs flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-muted-foreground">Shift Attendance</span>
               <span className={`w-2.5 h-2.5 rounded-full ${isClockedIn ? "bg-emerald-500 animate-pulse" : "bg-zinc-400"}`} />
             </div>
-            
-            <div className="my-2">
-              <button
-                type="button"
-                onClick={() => (isClockedIn ? clockOut() : clockIn())}
-                className={`w-full py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
-                  isClockedIn
-                    ? "bg-rose-600 hover:bg-rose-700 text-white shadow-sm"
-                    : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
-                }`}
-              >
-                <Monitor size={15} />
-                <span>{isClockedIn ? "Clock Out Now" : "Clock In Shift"}</span>
-              </button>
-            </div>
-
+            <button
+              type="button"
+              onClick={() => (isClockedIn ? clockOut() : clockIn())}
+              className={`w-full py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                isClockedIn
+                  ? "bg-rose-600 hover:bg-rose-700 text-white shadow-sm"
+                  : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+              }`}
+            >
+              <Monitor size={14} />
+              <span>{isClockedIn ? "Clock Out Now" : "Clock In Shift"}</span>
+            </button>
             <div className="text-xs font-mono text-center pt-1 border-t border-border/50">
               {isClockedIn ? (
-                <span className="text-emerald-600 font-bold">Elapsed: {formatTime(secondsElapsed)}</span>
+                <span className="text-emerald-600 font-bold">{formatTime(secondsElapsed)} elapsed</span>
               ) : (
                 <span className="text-muted-foreground">Not clocked in</span>
               )}
             </div>
           </div>
 
-          <KPICard icon={Grid} colorClass="bg-blue-500" value={`${myTasks.length} Tasks`} label="My Assigned Tasks" />
-          <KPICard icon={AlertCircle} colorClass="bg-rose-500" value={`${myUrgentTasks.length} Urgent`} label="High Priority" />
-          <KPICard icon={PhoneCall} colorClass="bg-amber-500" value={`${myCallReminders.length} Calls`} label="Telecaller Follow-ups Due" />
+          <KPICard icon={CheckSquare} colorClass="bg-blue-500" value={`${myTasks.length}`} label="Assigned Tasks" />
+          <KPICard icon={AlertCircle} colorClass="bg-rose-500" value={`${myUrgentTasks.length}`} label="High Priority" />
+          <KPICard icon={PhoneCall} colorClass="bg-amber-500" value={`${myCallReminders.length}`} label="Call Follow-ups" />
         </div>
 
-        {/* Staff Tasks & Telecaller Reminders */}
+        {/* ── TASKS + CALL REMINDERS ──────────────────────────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* My Assigned Tasks List */}
+          {/* My Assigned Tasks */}
           <Widget title="My Assigned Tasks" icon={CheckSquare} className="lg:col-span-2">
-            <div className="space-y-3 pt-1 text-xs">
+            <div className="space-y-2 pt-1 text-xs">
               {myTasks.length === 0 ? (
-                <div className="p-4 text-center text-muted-foreground">No tasks currently assigned to you.</div>
+                <div className="py-10 text-center text-muted-foreground">
+                  <CheckSquare size={32} className="mx-auto mb-3 opacity-30" />
+                  <p>No tasks currently assigned to you.</p>
+                  <p className="text-[11px] mt-1">Your admin will assign tasks shortly.</p>
+                </div>
               ) : (
-                myTasks.slice(0, 6).map((t) => (
-                  <div key={t.id} className="flex items-center justify-between p-3 bg-surface border border-border rounded-xl">
-                    <div>
-                      <p className="font-bold text-foreground">#{t.id}. {t.title}</p>
-                      <p className="text-muted-foreground">{t.relatedTo || "General Task"} • Deadline: {t.deadline}</p>
-                    </div>
-                    <span className="px-2.5 py-1 rounded text-[11px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
-                      {t.status}
-                    </span>
-                  </div>
-                ))
+                myTasks.slice(0, 7).map((t, i) => {
+                  const statusColor = t.status === "Done" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                    : t.priority === "Urgent" || t.priority === "High" ? "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300"
+                    : "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
+                  return (
+                    <motion.div key={t.id || i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.04 }}
+                      className="flex items-start justify-between p-3 bg-surface border border-border rounded-xl gap-3 hover:border-primary/30 transition-colors">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-foreground truncate">{t.title}</p>
+                        <p className="text-muted-foreground mt-0.5 truncate">
+                          {t.relatedTo || "General"} {t.deadline && `· Due: ${t.deadline}`}
+                        </p>
+                        {(t.priority === "Urgent" || t.priority === "High") && (
+                          <span className="inline-flex items-center gap-1 mt-1 text-[10px] text-rose-600 font-bold">
+                            <AlertCircle size={10} /> Urgent
+                          </span>
+                        )}
+                      </div>
+                      <span className={`px-2.5 py-1 rounded text-[10px] font-bold shrink-0 ${statusColor}`}>{t.status || "Pending"}</span>
+                    </motion.div>
+                  )
+                })
+              )}
+              {myTasks.length > 7 && (
+                <a href="/feature/tasks" className="block text-center text-xs text-primary hover:underline pt-1">+{myTasks.length - 7} more tasks →</a>
               )}
             </div>
           </Widget>
 
-          {/* Today's Call Follow-ups Desk */}
-          <Widget title="Today's Telecaller Call Desk" icon={PhoneCall}>
-            <div className="space-y-3 pt-1 text-xs">
-              {myCallReminders.length === 0 ? (
-                <div className="p-4 text-center text-muted-foreground">No follow-up calls scheduled.</div>
-              ) : (
-                myCallReminders.slice(0, 6).map((l) => (
-                  <div key={l.id} className="p-3 bg-surface border border-border rounded-xl space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-foreground">{l.name}</span>
-                      <span className="text-amber-600 font-semibold font-mono">{l.reminderTime || "11:30 AM"}</span>
-                    </div>
-                    <p className="text-muted-foreground">{l.phone || "+91 98765 43210"} • {l.service || "Services"}</p>
-                    <p className="text-[11px] text-amber-600 font-medium pt-1">{l.reminderNotes || "Follow up call scheduled"}</p>
+          {/* Right Column: Call Reminders + Quick Links */}
+          <div className="space-y-4">
+            <Widget title="Today's Telecaller Call Desk" icon={PhoneCall}>
+              <div className="space-y-2 pt-1 text-xs">
+                {myCallReminders.length === 0 ? (
+                  <div className="py-6 text-center text-muted-foreground">
+                    <PhoneCall size={24} className="mx-auto mb-2 opacity-30" />
+                    <p>No follow-up calls scheduled.</p>
                   </div>
-                ))
+                ) : (
+                  myCallReminders.slice(0, 5).map((l, i) => (
+                    <div key={l.id || i} className="p-3 bg-surface border border-border rounded-xl space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-foreground truncate">{l.name}</span>
+                        <span className="text-amber-600 font-semibold font-mono text-[10px]">{l.reminderTime || "—"}</span>
+                      </div>
+                      <p className="text-muted-foreground">{l.phone || "—"} · {l.service || "Service"}</p>
+                      {l.reminderNotes && <p className="text-[11px] text-amber-600 font-medium">{l.reminderNotes}</p>}
+                    </div>
+                  ))
+                )}
+              </div>
+            </Widget>
+
+            {/* Quick Navigation */}
+            <Widget title="Quick Links" icon={TrendingUp}>
+              <div className="space-y-1.5 pt-1">
+                {[
+                  { label: "My Tasks", href: "/feature/tasks", color: "text-blue-600" },
+                  { label: "My Projects", href: "/feature/projects", color: "text-indigo-600" },
+                  { label: "Messages", href: "/feature/messages", color: "text-emerald-600" },
+                  { label: "Calendar & Events", href: "/feature/events", color: "text-purple-600" },
+                  { label: "Leads Pipeline", href: "/feature/leads", color: "text-amber-600" },
+                  { label: "My Timecards", href: "/feature/team/timecards", color: "text-rose-600" },
+                  { label: "My Profile", href: "/feature/settings", color: "text-zinc-600" },
+                ].map(({ label, href, color }) => (
+                  <a key={href} href={href}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl border border-border text-xs font-medium hover:bg-surface-hover hover:border-primary/30 transition-all ${color} cursor-pointer`}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                    {label}
+                  </a>
+                ))}
+              </div>
+            </Widget>
+          </div>
+        </div>
+
+        {/* ── PROJECTS + STATS ────────────────────────────────────────────── */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* My Projects */}
+          <Widget title="My Projects" icon={Grid} className="lg:col-span-2">
+            <div className="space-y-3 pt-1 text-xs">
+              {myProjects.length === 0 ? (
+                <div className="py-8 text-center text-muted-foreground">
+                  <Grid size={28} className="mx-auto mb-2 opacity-30" />
+                  <p>You haven't been assigned to any projects yet.</p>
+                </div>
+              ) : (
+                myProjects.slice(0, 4).map((p, i) => {
+                  const pct = Math.min(100, Math.max(0, p.completion || 0))
+                  return (
+                    <motion.div key={p.id || i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.07 }}
+                      className="p-3 bg-surface border border-border rounded-xl space-y-2 hover:border-primary/30 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-foreground truncate">{p.name}</span>
+                        <span className="text-[10px] font-bold text-muted-foreground ml-2">{pct}%</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                        <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.8 }}
+                          className={`h-full rounded-full ${pct >= 100 ? "bg-emerald-500" : "bg-blue-500"}`} />
+                      </div>
+                      {p.deadline && <p className="text-muted-foreground text-[11px]">Deadline: {p.deadline}</p>}
+                    </motion.div>
+                  )
+                })
               )}
+              <a href="/feature/projects" className="block text-center text-xs text-primary hover:underline pt-1">View all projects →</a>
+            </div>
+          </Widget>
+
+          {/* Performance Summary */}
+          <Widget title="My Performance Summary" icon={TrendingUp}>
+            <div className="space-y-4 pt-2 text-xs">
+              {[
+                { label: "Tasks Completed", value: myDoneTasks.length, total: myTasks.length, color: "bg-emerald-500" },
+                { label: "Urgent / High Priority", value: myUrgentTasks.length, total: myTasks.length, color: "bg-rose-500" },
+                { label: "Projects Involved", value: myProjects.length, total: liveProjects.length, color: "bg-blue-500" },
+                { label: "Call Follow-ups Due", value: myCallReminders.length, total: liveLeads.length, color: "bg-amber-500" },
+              ].map(({ label, value, total, color }) => {
+                const pct = total > 0 ? Math.round((value / total) * 100) : 0
+                return (
+                  <div key={label} className="space-y-1.5">
+                    <div className="flex items-center justify-between text-muted-foreground">
+                      <span>{label}</span>
+                      <span className="font-bold text-foreground">{value}<span className="font-normal text-muted-foreground">/{total}</span></span>
+                    </div>
+                    <div className="h-1.5 w-full bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                      <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.7 }}
+                        className={`h-full rounded-full ${color}`} />
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </Widget>
         </div>
       </div>
     )
   }
+
 
   // =========================================================================
   // 3. COMPANY ADMIN / SUPER ADMIN DASHBOARD VIEW (FULL ORIGINAL RICH LAYOUT + REAL DATA ATTENDANCE)

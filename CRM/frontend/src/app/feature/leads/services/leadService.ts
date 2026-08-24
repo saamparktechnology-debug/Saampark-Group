@@ -84,8 +84,8 @@ export async function syncLeadReminderTask(lead: Lead): Promise<void> {
   }
 }
 
-export const getLeads = async (): Promise<Lead[]> => {
-  const dbData = await fetchModuleDataFromDB<Lead[]>("leads", [])
+export const getLeads = async (companyId?: string): Promise<Lead[]> => {
+  const dbData = await fetchModuleDataFromDB<Lead[]>("leads", [], companyId)
   const list = Array.isArray(dbData) ? filterGlobalDeletedItems(dbData) : []
 
   // Auto-lock leads if daily update or reminder date was missed (overdue)
@@ -108,13 +108,13 @@ export const getLeads = async (): Promise<Lead[]> => {
   })
 
   if (hasChanges) {
-    saveModuleDataToDB("leads", processed)
+    saveModuleDataToDB("leads", processed, companyId)
   }
 
   return processed
 }
 
-export async function checkAndAutoConvertLeadToClient(lead: Lead): Promise<void> {
+export async function checkAndAutoConvertLeadToClient(lead: Lead, companyId?: string): Promise<void> {
   if (!lead || lead.status !== "Won") return
 
   try {
@@ -151,7 +151,7 @@ export async function checkAndAutoConvertLeadToClient(lead: Lead): Promise<void>
         name: lead.primaryContact || lead.name,
         email: emailNorm,
         role: "Clients",
-        companyId: "tech",
+        companyId: companyId || "tech",
         companyName: clientName,
         phone: lead.phone,
         password: "Password123",
@@ -163,18 +163,14 @@ export async function checkAndAutoConvertLeadToClient(lead: Lead): Promise<void>
   }
 }
 
-export const addLead = async (leadData: Omit<Lead, "id">): Promise<Lead> => {
-  const current = await fetchModuleDataFromDB<Lead[]>("leads", [])
+export const addLead = async (leadData: Omit<Lead, "id">, companyId?: string): Promise<Lead> => {
+  const current = await fetchModuleDataFromDB<Lead[]>("leads", [], companyId)
   
   // Unique collision-free ID generation
   const timestamp = Date.now()
   const randomSuffix = Math.random().toString(36).substring(2, 6)
   const newId = `lead_${timestamp}_${randomSuffix}`
   
-  const tomorrow = new Date()
-  tomorrow.setDate(tomorrow.getDate() + 1)
-  const defaultFutureReminderDate = tomorrow.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' })
-
   const newLead: Lead = {
     ...leadData,
     id: newId,
@@ -187,14 +183,14 @@ export const addLead = async (leadData: Omit<Lead, "id">): Promise<Lead> => {
     isLocked: false,
   }
   const updated = [newLead, ...current.filter((l) => l.id !== newId)]
-  await saveModuleDataToDB("leads", updated)
+  await saveModuleDataToDB("leads", updated, companyId)
   syncLeadReminderTask(newLead)
-  checkAndAutoConvertLeadToClient(newLead)
+  checkAndAutoConvertLeadToClient(newLead, companyId)
   return newLead
 }
 
-export const updateLead = async (id: string, updates: Partial<Lead>, userRole?: string): Promise<Lead> => {
-  const current = await fetchModuleDataFromDB<Lead[]>("leads", [])
+export const updateLead = async (id: string, updates: Partial<Lead>, userRole?: string, companyId?: string): Promise<Lead> => {
+  const current = await fetchModuleDataFromDB<Lead[]>("leads", [], companyId)
   const idx = current.findIndex((l) => l.id === id)
   if (idx === -1) throw new Error("Lead not found")
 
@@ -222,21 +218,21 @@ export const updateLead = async (id: string, updates: Partial<Lead>, userRole?: 
     lockedReason: nextReason,
   }
 
-  await saveModuleDataToDB("leads", current)
+  await saveModuleDataToDB("leads", current, companyId)
   syncLeadReminderTask(current[idx])
-  checkAndAutoConvertLeadToClient(current[idx])
+  checkAndAutoConvertLeadToClient(current[idx], companyId)
   return { ...current[idx] }
 }
 
-export const deleteLead = async (id: string): Promise<boolean> => {
+export const deleteLead = async (id: string, companyId?: string): Promise<boolean> => {
   await markGlobalItemDeleted(id, "leads")
-  const current = await fetchModuleDataFromDB<Lead[]>("leads", [])
+  const current = await fetchModuleDataFromDB<Lead[]>("leads", [], companyId)
   const filtered = current.filter((l) => l.id !== id)
-  await saveModuleDataToDB("leads", filtered)
+  await saveModuleDataToDB("leads", filtered, companyId)
   return true
 }
 
-export const unlockLead = async (id: string): Promise<Lead> => {
+export const unlockLead = async (id: string, companyId?: string): Promise<Lead> => {
   const tomorrow = new Date()
   tomorrow.setDate(tomorrow.getDate() + 1)
   const formattedTomorrow = tomorrow.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' })
@@ -248,10 +244,11 @@ export const unlockLead = async (id: string): Promise<Lead> => {
       lockedReason: undefined,
       reminderDate: formattedTomorrow,
     },
-    "Super Admin"
+    "Super Admin",
+    companyId
   )
 }
 
-export const lockLead = async (id: string, reason?: string): Promise<Lead> => {
-  return updateLead(id, { isLocked: true, lockedReason: reason || "Manually locked by Admin" }, "Super Admin")
+export const lockLead = async (id: string, reason?: string, companyId?: string): Promise<Lead> => {
+  return updateLead(id, { isLocked: true, lockedReason: reason || "Manually locked by Admin" }, "Super Admin", companyId)
 }

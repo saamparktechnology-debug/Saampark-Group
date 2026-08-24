@@ -211,7 +211,8 @@ export const usePermissionStore = create<PermissionState>()(
         if (moduleName === 'Dashboard') return true
 
         const normRole = normalizeRole(user.role)
-        if (normRole === 'Super Admin' || normRole === 'Admin') return true
+        // Super Admin ALWAYS has master access to all modules
+        if (normRole === 'Super Admin') return true
 
         const state = get()
         const userIdStr = String(user.id)
@@ -239,7 +240,8 @@ export const usePermissionStore = create<PermissionState>()(
         if (!user) return ['Dashboard']
         
         const normRole = normalizeRole(user.role)
-        if (normRole === 'Super Admin' || normRole === 'Admin') return [...ALL_NAV_MODULES]
+        // Super Admin has all 20 modules
+        if (normRole === 'Super Admin') return [...ALL_NAV_MODULES]
 
         const state = get()
         const userIdStr = String(user.id)
@@ -273,7 +275,8 @@ export const usePermissionStore = create<PermissionState>()(
         if (moduleName === 'Dashboard') return { view: true, add: false, edit: false, delete: false }
 
         const normRole = normalizeRole(user.role)
-        if (normRole === 'Super Admin' || normRole === 'Admin') return { ...DEFAULT_FULL_ACTIONS }
+        // Super Admin ALWAYS has full action rights
+        if (normRole === 'Super Admin') return { ...DEFAULT_FULL_ACTIONS }
 
         const state = get()
         const userIdStr = String(user.id)

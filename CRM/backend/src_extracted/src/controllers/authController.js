@@ -44,6 +44,11 @@ const register = async (req, res, next) => {
       else targetRoleId = 3;
     }
 
+    // Guard: Public registration cannot create Super Admin (1) or Admin (2)
+    if (targetRoleId === 1 || targetRoleId === 2) {
+      targetRoleId = 3; // Default to Teams
+    }
+
     // Hash password
     const hashedPassword = await hashPassword(password);
 

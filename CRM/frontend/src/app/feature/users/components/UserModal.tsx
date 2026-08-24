@@ -2,9 +2,10 @@
 
 import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, User, Mail, Shield, Building, Phone, Lock, UserCheck, ShieldCheck, Check, Info } from "lucide-react"
+import { X, User, Mail, Shield, Building, Phone, Lock, UserCheck, ShieldCheck, Check, Info, Crown } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { UserItem as UserType, UserRole, UserStatus } from "../types"
+import { useAuthStore } from "@/store/useAuthStore"
 import { 
   usePermissionStore, 
   CONFIGURABLE_MODULES, 
@@ -25,12 +26,43 @@ interface UserModalProps {
 }
 
 export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalProps) {
-  const { userActionPermissions, userPermissions, setUserPermissions, setUserAllModuleActions } = usePermissionStore()
+  const { 
+    userActionPermissions, 
+    userPermissions, 
+    setUserPermissions, 
+    setUserAllModuleActions,
+    isModuleAllowed,
+    canPerformAction,
+    getUserModuleActions 
+  } = usePermissionStore()
+  const { companies, user: currentUser, activeCompanyId, fetchCompanies } = useAuthStore()
+  
+  const isCurrentSuperAdmin = currentUser?.role === "Super Admin"
+  const isCurrentAdmin = currentUser?.role === "Admin"
+
+  // Filter allowed roles based on current user's role:
+  // Super Admin can assign: Super Admin, Admin, Teams, Clients
+  // Admin can ONLY assign: Teams, Clients
+  const availableRoles: UserRole[] = React.useMemo(() => {
+    if (isCurrentSuperAdmin) {
+      return ["Super Admin", "Admin", "Teams", "Clients"]
+    }
+    return ["Teams", "Clients"]
+  }, [isCurrentSuperAdmin])
+
+  // Filter available companies based on current user's assigned companies:
+  // Super Admin can assign any company
+  // Admin can only assign companies the Admin is assigned to
+  const availableCompanies = React.useMemo(() => {
+    if (isCurrentSuperAdmin) return companies
+    const adminCompanyIds = currentUser?.companyIds || (currentUser?.companyId ? [currentUser.companyId] : ["tech"])
+    return companies.filter((c) => adminCompanyIds.includes(c.id) || adminCompanyIds.includes(c.slug || ""))
+  }, [isCurrentSuperAdmin, companies, currentUser])
 
   const [name, setName] = React.useState("")
   const [email, setEmail] = React.useState("")
   const [role, setRole] = React.useState<UserRole>("Teams")
-  const [companyId, setCompanyId] = React.useState<string>("tech")
+  const [selectedCompanyIds, setSelectedCompanyIds] = React.useState<string[]>(["tech"])
   const [department, setDepartment] = React.useState("")
   const [phone, setPhone] = React.useState("")
   const [password, setPassword] = React.useState("Password123")
@@ -41,11 +73,21 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
   const [allowedModules, setAllowedModules] = React.useState<ModuleName[]>([])
 
   React.useEffect(() => {
+    fetchCompanies()
+  }, [fetchCompanies, isOpen])
+
+  React.useEffect(() => {
     if (editingUser) {
       setName(editingUser.name || "")
       setEmail(editingUser.email || "")
-      setRole(editingUser.role || "Teams")
-      setCompanyId(editingUser.companyId || "tech")
+      const userRole = editingUser.role || "Teams"
+      setRole(userRole)
+      
+      const compIds = editingUser.companyIds && editingUser.companyIds.length > 0 
+        ? editingUser.companyIds 
+        : [editingUser.companyId || "tech"]
+      setSelectedCompanyIds(compIds)
+
       setDepartment(editingUser.department || "")
       setPhone(editingUser.phone || "")
       setStatus(editingUser.status || "Active")
@@ -87,7 +129,10 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
       setName("")
       setEmail("")
       setRole("Teams")
-      setCompanyId("tech")
+      const defaultComp = (activeCompanyId && availableCompanies.some(c => c.id === activeCompanyId || c.slug === activeCompanyId))
+        ? activeCompanyId
+        : (availableCompanies[0]?.id || "tech")
+      setSelectedCompanyIds([defaultComp])
       setDepartment("Software Engineering")
       setPhone("+91 98765 43210")
       setStatus("Active")
@@ -100,9 +145,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
       })
       setActionMatrix(init)
     }
-  }, [editingUser?.id, isOpen])
-
-  if (!isOpen) return null
+  }, [editingUser?.id, isOpen, availableCompanies])
 
   const handleRoleChange = (newRole: UserRole) => {
     setRole(newRole)
@@ -118,6 +161,16 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
         : { view: false, add: false, edit: false, delete: false }
     })
     setActionMatrix(init)
+  }
+
+  const handleToggleCompany = (compId: string) => {
+    if (selectedCompanyIds.includes(compId)) {
+      if (selectedCompanyIds.length > 1) {
+        setSelectedCompanyIds(selectedCompanyIds.filter(id => id !== compId))
+      }
+    } else {
+      setSelectedCompanyIds([...selectedCompanyIds, compId])
+    }
   }
 
   const handleCheckboxChange = (mod: ModuleName, actionKey: keyof ModuleActionFlags, checked: boolean) => {
@@ -139,13 +192,16 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
     const config = MODULE_ACTION_CONFIG[mod] || { hasAdd: true, hasEdit: true, hasDelete: true }
     const allOn = current.view && (!config.hasAdd || current.add) && (!config.hasEdit || current.edit) && (!config.hasDelete || current.delete)
     
+    // Check ceiling for Admin delegation
+    const adminFlags = isCurrentSuperAdmin ? DEFAULT_FULL_ACTIONS : getUserModuleActions(currentUser, mod)
+
     const nextFlags = allOn
       ? { view: false, add: false, edit: false, delete: false }
       : { 
-          view: true, 
-          add: config.hasAdd !== false, 
-          edit: config.hasEdit !== false, 
-          delete: config.hasDelete !== false 
+          view: adminFlags.view, 
+          add: config.hasAdd !== false && adminFlags.add, 
+          edit: config.hasEdit !== false && adminFlags.edit, 
+          delete: config.hasDelete !== false && adminFlags.delete 
         }
     
     setActionMatrix({ ...actionMatrix, [mod]: nextFlags })
@@ -160,15 +216,22 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
     const nextMatrix: Record<string, ModuleActionFlags> = {}
     CONFIGURABLE_MODULES.forEach((m) => {
       const config = MODULE_ACTION_CONFIG[m] || { hasAdd: true, hasEdit: true, hasDelete: true }
+      const adminFlags = isCurrentSuperAdmin ? DEFAULT_FULL_ACTIONS : getUserModuleActions(currentUser, m)
+
       if (template === "full") {
         nextMatrix[m] = { 
-          view: true, 
-          add: config.hasAdd !== false, 
-          edit: config.hasEdit !== false, 
-          delete: config.hasDelete !== false 
+          view: adminFlags.view, 
+          add: config.hasAdd !== false && adminFlags.add, 
+          edit: config.hasEdit !== false && adminFlags.edit, 
+          delete: config.hasDelete !== false && adminFlags.delete 
         }
       } else if (template === "view") {
-        nextMatrix[m] = { ...DEFAULT_VIEW_ONLY_ACTIONS }
+        nextMatrix[m] = { 
+          view: adminFlags.view, 
+          add: false, 
+          edit: false, 
+          delete: false 
+        }
       } else {
         nextMatrix[m] = { view: false, add: false, edit: false, delete: false }
       }
@@ -183,12 +246,19 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+
+    const primaryCompanyId = selectedCompanyIds[0] || "tech"
+    const companyNamesList = companies
+      .filter((c) => selectedCompanyIds.includes(c.id) || selectedCompanyIds.includes(c.slug || ""))
+      .map((c) => c.name)
+
     const payload: Partial<UserType> = {
       name,
       email,
       role,
-      companyId,
-      companyName: companyId === "all" ? "SAAMPARK Group (All)" : companyId === "tech" ? "SAAMPARK Technology" : "SAAMPARK Digital Marketing",
+      companyId: primaryCompanyId,
+      companyIds: selectedCompanyIds,
+      companyName: companyNamesList.length > 1 ? "SAAMPARK Group (Multiple)" : companyNamesList[0] || "SAAMPARK Technology",
       department,
       phone,
       password: password || "Password123",
@@ -206,7 +276,6 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
     setUserPermissions(emailNorm, allowedModules)
     setUserAllModuleActions(emailNorm, actionMatrix)
 
-    // Sync permissions locally and pass to onSave
     const permissions = { actionMatrix, allowedModules }
 
     onSave({
@@ -215,6 +284,15 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
     } as any)
     onClose()
   }
+
+  // Filter modules visible in the modal:
+  // If configuring as Admin, only modules that the Admin has access to can be delegated
+  const displayableModules = React.useMemo(() => {
+    if (isCurrentSuperAdmin) return CONFIGURABLE_MODULES
+    return CONFIGURABLE_MODULES.filter((m) => isModuleAllowed(currentUser, m))
+  }, [isCurrentSuperAdmin, currentUser, isModuleAllowed])
+
+  if (!isOpen) return null
 
   return (
     <AnimatePresence>
@@ -226,19 +304,21 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
           className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden max-h-[92vh] flex flex-col"
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/40">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/40 shrink-0">
             <div className="flex items-center gap-2">
               <ShieldCheck className="text-blue-600" size={22} />
               <div>
                 <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
-                  {editingUser ? "Edit User Account & Granular Permissions" : "Add New User Account & Assign Permissions"}
+                  {editingUser ? "Edit User Account & Permissions" : "Add New User Account & Assign Multi-Company Access"}
                 </h2>
                 <p className="text-xs text-zinc-500">
-                  Configure explicit module permissions: 👁️ View, ➕ Add, ✏️ Edit, and 🗑️ Delete.
+                  {isCurrentSuperAdmin 
+                    ? "Full administrative control: Assign roles, multiple companies, and custom action permissions."
+                    : "Delegate team member access within your assigned companies and permission scope."}
                 </p>
               </div>
             </div>
-            <button onClick={onClose} className="p-1 text-zinc-400 hover:text-zinc-600 rounded-lg">
+            <button onClick={onClose} className="p-1 text-zinc-400 hover:text-zinc-600 rounded-lg cursor-pointer">
               <X size={18} />
             </button>
           </div>
@@ -285,26 +365,42 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
                   onChange={(e) => handleRoleChange(e.target.value as UserRole)}
                   className="w-full px-3 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs focus:outline-hidden font-bold"
                 >
-                  <option value="Super Admin">Super Admin</option>
-                  <option value="Admin">Admin</option>
-                  <option value="Teams">Teams</option>
-                  <option value="Clients">Clients</option>
+                  {availableRoles.map((r) => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
                 </select>
+                {!isCurrentSuperAdmin && (
+                  <p className="text-[10px] text-zinc-400 mt-1">
+                    Admins can only create or assign Teams and Clients roles.
+                  </p>
+                )}
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5 flex items-center gap-1.5">
-                  <Building size={14} /> Assigned Workspace Company *
+                  <Building size={14} /> Assign to Companies * ({selectedCompanyIds.length} Selected)
                 </label>
-                <select
-                  value={companyId}
-                  onChange={(e) => setCompanyId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs focus:outline-hidden"
-                >
-                  <option value="tech">SAAMPARK Technology</option>
-                  <option value="digital">SAAMPARK Digital Marketing</option>
-                  <option value="all">All Companies (Super Admin)</option>
-                </select>
+                <div className="p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex flex-wrap gap-2">
+                  {availableCompanies.map((c) => {
+                    const isChecked = selectedCompanyIds.includes(c.id) || selectedCompanyIds.includes(c.slug || "")
+                    return (
+                      <button
+                        type="button"
+                        key={c.id}
+                        onClick={() => handleToggleCompany(c.id)}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
+                          isChecked
+                            ? "bg-blue-600 text-white border-blue-600 shadow-2xs"
+                            : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:border-zinc-400"
+                        }`}
+                      >
+                        <span>{c.logo || "🏢"}</span>
+                        <span>{c.name}</span>
+                        {isChecked && <Check size={12} />}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             </div>
 
@@ -374,133 +470,153 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
             </div>
 
             {/* Granular Module Action Checkboxes Section */}
-            <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-zinc-800">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            {role === "Super Admin" ? (
+              /* Super Admin Master Access Banner - Exemption */
+              <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/30 flex items-center gap-3 text-purple-600 dark:text-purple-300">
+                <Crown size={24} className="shrink-0 text-purple-500" />
                 <div>
-                  <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
-                    <ShieldCheck size={16} className="text-blue-600" />
-                    <span>Module Access & Action Permissions ({CONFIGURABLE_MODULES.length} Functional Modules)</span>
-                  </label>
-                  <p className="text-[11px] text-zinc-500">
-                    Dashboard is globally enabled. Select exact action rights (View, Add, Edit, Delete) per module.
+                  <div className="font-bold text-xs">👑 Super Admin Master Access Exemption</div>
+                  <p className="text-[11px] opacity-90">
+                    Super Admins possess unconstrained global master access across all 20 CRM modules, system configurations, and multi-tenant databases. Module restrictions cannot be applied to Super Admin accounts.
                   </p>
                 </div>
-
-                <div className="flex items-center gap-2 text-[11px] flex-wrap">
-                  <button
-                    type="button"
-                    onClick={() => handleSetGlobalTemplate("full")}
-                    className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 font-bold hover:underline cursor-pointer"
-                  >
-                    Grant Full Access (All)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSetGlobalTemplate("view")}
-                    className="px-2.5 py-1 rounded-lg bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 font-semibold hover:underline cursor-pointer"
-                  >
-                    View Only All (👁️)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSetGlobalTemplate("none")}
-                    className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 font-semibold hover:underline cursor-pointer"
-                  >
-                    Revoke All
-                  </button>
-                </div>
               </div>
+            ) : (
+              <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                      <ShieldCheck size={16} className="text-blue-600" />
+                      <span>Module Access & Action Permissions ({displayableModules.length} Available Modules)</span>
+                    </label>
+                    <p className="text-[11px] text-zinc-500">
+                      {isCurrentSuperAdmin 
+                        ? "Select exact action rights (View, Add, Edit, Delete) for this account."
+                        : "You can delegate permissions up to the maximum rights granted to your Admin account."}
+                    </p>
+                  </div>
 
-              {/* Module Action Cards Grid with Checkboxes */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-80 overflow-y-auto p-3 bg-zinc-50/50 dark:bg-zinc-800/40 rounded-2xl border border-zinc-200/80 dark:border-zinc-700/60">
-                {CONFIGURABLE_MODULES.map((mod) => {
-                  const flags = actionMatrix[mod] || { ...DEFAULT_FULL_ACTIONS }
-                  const config = MODULE_ACTION_CONFIG[mod] || { hasAdd: true, hasEdit: true, hasDelete: true, description: "" }
-
-                  return (
-                    <div
-                      key={mod}
-                      className="p-3 rounded-xl border bg-white dark:bg-zinc-900 border-zinc-200/80 dark:border-zinc-800 shadow-2xs space-y-2"
+                  <div className="flex items-center gap-2 text-[11px] flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => handleSetGlobalTemplate("full")}
+                      className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 font-bold hover:underline cursor-pointer"
                     >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <span className="font-bold text-xs text-zinc-900 dark:text-zinc-100">{mod}</span>
-                          {config.description && (
-                            <p className="text-[10px] text-zinc-400 leading-tight">{config.description}</p>
+                      Grant Full Access
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSetGlobalTemplate("view")}
+                      className="px-2.5 py-1 rounded-lg bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 font-semibold hover:underline cursor-pointer"
+                    >
+                      View Only All (👁️)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSetGlobalTemplate("none")}
+                      className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 font-semibold hover:underline cursor-pointer"
+                    >
+                      Revoke All
+                    </button>
+                  </div>
+                </div>
+
+                {/* Module Action Cards Grid with Checkboxes */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-80 overflow-y-auto p-3 bg-zinc-50/50 dark:bg-zinc-800/40 rounded-2xl border border-zinc-200/80 dark:border-zinc-700/60">
+                  {displayableModules.map((mod) => {
+                    const flags = actionMatrix[mod] || { ...DEFAULT_FULL_ACTIONS }
+                    const config = MODULE_ACTION_CONFIG[mod] || { hasAdd: true, hasEdit: true, hasDelete: true, description: "" }
+                    const adminFlags = isCurrentSuperAdmin ? DEFAULT_FULL_ACTIONS : getUserModuleActions(currentUser, mod)
+
+                    return (
+                      <div
+                        key={mod}
+                        className="p-3 rounded-xl border bg-white dark:bg-zinc-900 border-zinc-200/80 dark:border-zinc-800 shadow-2xs space-y-2"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="font-bold text-xs text-zinc-900 dark:text-zinc-100">{mod}</span>
+                            {config.description && (
+                              <p className="text-[10px] text-zinc-400 leading-tight">{config.description}</p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleModuleAll(mod)}
+                            className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 hover:underline shrink-0 cursor-pointer"
+                          >
+                            {flags.view && (!config.hasAdd || flags.add) && (!config.hasEdit || flags.edit) && (!config.hasDelete || flags.delete) ? "Deselect" : "Select All"}
+                          </button>
+                        </div>
+
+                        {/* Action Checkboxes with Cascading Enforcement */}
+                        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                          {/* View Action */}
+                          <label className={`flex items-center gap-1.5 text-[11px] select-none ${adminFlags.view ? "cursor-pointer" : "opacity-40 cursor-not-allowed"}`}>
+                            <input
+                              type="checkbox"
+                              checked={flags.view}
+                              disabled={!adminFlags.view}
+                              onChange={(e) => handleCheckboxChange(mod, "view", e.target.checked)}
+                              className="rounded text-blue-600 focus:ring-blue-500 h-3.5 w-3.5"
+                            />
+                            <span className="text-zinc-700 dark:text-zinc-300 font-semibold">👁️ View</span>
+                          </label>
+
+                          {/* Add Action */}
+                          {config.hasAdd !== false && (
+                            <label className={`flex items-center gap-1.5 text-[11px] select-none ${adminFlags.add ? "cursor-pointer" : "opacity-40 cursor-not-allowed"}`}>
+                              <input
+                                type="checkbox"
+                                checked={flags.add}
+                                disabled={!adminFlags.add}
+                                onChange={(e) => handleCheckboxChange(mod, "add", e.target.checked)}
+                                className="rounded text-blue-600 focus:ring-blue-500 h-3.5 w-3.5"
+                              />
+                              <span className="text-zinc-700 dark:text-zinc-300 font-semibold">➕ Add</span>
+                            </label>
+                          )}
+
+                          {/* Edit Action */}
+                          {config.hasEdit !== false && (
+                            <label className={`flex items-center gap-1.5 text-[11px] select-none ${adminFlags.edit ? "cursor-pointer" : "opacity-40 cursor-not-allowed"}`}>
+                              <input
+                                type="checkbox"
+                                checked={flags.edit}
+                                disabled={!adminFlags.edit}
+                                onChange={(e) => handleCheckboxChange(mod, "edit", e.target.checked)}
+                                className="rounded text-blue-600 focus:ring-blue-500 h-3.5 w-3.5"
+                              />
+                              <span className="text-zinc-700 dark:text-zinc-300 font-semibold">✏️ Edit</span>
+                            </label>
+                          )}
+
+                          {/* Delete Action */}
+                          {config.hasDelete !== false && (
+                            <label className={`flex items-center gap-1.5 text-[11px] select-none ${adminFlags.delete ? "cursor-pointer" : "opacity-40 cursor-not-allowed"}`}>
+                              <input
+                                type="checkbox"
+                                checked={flags.delete}
+                                disabled={!adminFlags.delete}
+                                onChange={(e) => handleCheckboxChange(mod, "delete", e.target.checked)}
+                                className="rounded text-rose-600 focus:ring-rose-500 h-3.5 w-3.5"
+                              />
+                              <span className="text-rose-600 dark:text-rose-400 font-semibold">🗑️ Delete</span>
+                            </label>
                           )}
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => handleToggleModuleAll(mod)}
-                          className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 hover:underline shrink-0 cursor-pointer"
-                        >
-                          {flags.view && (!config.hasAdd || flags.add) && (!config.hasEdit || flags.edit) && (!config.hasDelete || flags.delete) ? "Deselect" : "Select All"}
-                        </button>
                       </div>
-
-                      {/* Action Checkboxes */}
-                      <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-zinc-100 dark:border-zinc-800">
-                        {/* View Action */}
-                        <label className="flex items-center gap-1.5 cursor-pointer text-[11px] select-none">
-                          <input
-                            type="checkbox"
-                            checked={flags.view}
-                            onChange={(e) => handleCheckboxChange(mod, "view", e.target.checked)}
-                            className="rounded text-blue-600 focus:ring-blue-500 h-3.5 w-3.5 cursor-pointer"
-                          />
-                          <span className="text-zinc-700 dark:text-zinc-300 font-semibold">👁️ View</span>
-                        </label>
-
-                        {/* Add Action */}
-                        {config.hasAdd !== false && (
-                          <label className="flex items-center gap-1.5 cursor-pointer text-[11px] select-none">
-                            <input
-                              type="checkbox"
-                              checked={flags.add}
-                              onChange={(e) => handleCheckboxChange(mod, "add", e.target.checked)}
-                              className="rounded text-blue-600 focus:ring-blue-500 h-3.5 w-3.5 cursor-pointer"
-                            />
-                            <span className="text-zinc-700 dark:text-zinc-300 font-semibold">➕ Add</span>
-                          </label>
-                        )}
-
-                        {/* Edit Action */}
-                        {config.hasEdit !== false && (
-                          <label className="flex items-center gap-1.5 cursor-pointer text-[11px] select-none">
-                            <input
-                              type="checkbox"
-                              checked={flags.edit}
-                              onChange={(e) => handleCheckboxChange(mod, "edit", e.target.checked)}
-                              className="rounded text-blue-600 focus:ring-blue-500 h-3.5 w-3.5 cursor-pointer"
-                            />
-                            <span className="text-zinc-700 dark:text-zinc-300 font-semibold">✏️ Edit</span>
-                          </label>
-                        )}
-
-                        {/* Delete Action */}
-                        {config.hasDelete !== false && (
-                          <label className="flex items-center gap-1.5 cursor-pointer text-[11px] select-none">
-                            <input
-                              type="checkbox"
-                              checked={flags.delete}
-                              onChange={(e) => handleCheckboxChange(mod, "delete", e.target.checked)}
-                              className="rounded text-rose-600 focus:ring-rose-500 h-3.5 w-3.5 cursor-pointer"
-                            />
-                            <span className="text-rose-600 dark:text-rose-400 font-semibold">🗑️ Delete</span>
-                          </label>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
+                    )
+                  })}
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="flex items-center justify-end gap-2 pt-4 border-t border-zinc-100 dark:border-zinc-800 shrink-0">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
               >
                 Cancel
               </button>

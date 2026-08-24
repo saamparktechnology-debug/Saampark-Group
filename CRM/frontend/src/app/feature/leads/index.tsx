@@ -23,7 +23,7 @@ export const INITIAL_LABELS: LabelItem[] = [
 ]
 
 export default function LeadsMain() {
-  const { user } = useAuthStore()
+  const { user, activeCompanyId } = useAuthStore()
   const [leads, setLeads] = React.useState<Lead[]>([])
   const [activeViewTab, setActiveViewTab] = React.useState<"list" | "kanban">("list")
   const [availableLabels, setAvailableLabels] = React.useState<LabelItem[]>(INITIAL_LABELS)
@@ -67,10 +67,11 @@ export default function LeadsMain() {
   const [isLoading, setIsLoading] = React.useState(true)
 
   React.useEffect(() => {
+    const targetComp = activeCompanyId || user?.companyId || "tech"
     const fetchFreshLeads = async (showLoading = false) => {
       if (showLoading) setIsLoading(true)
       try {
-        const data = await getLeads()
+        const data = await getLeads(targetComp)
         if (Array.isArray(data)) {
           setLeads(data)
         }
@@ -81,14 +82,16 @@ export default function LeadsMain() {
       }
     }
     fetchFreshLeads(true)                              // first load: show spinner
-    const interval = setInterval(() => fetchFreshLeads(false), 5000)  // background: silent
+    const interval = setInterval(() => fetchFreshLeads(false), 3000)  // background: silent
     const storageHandler = () => fetchFreshLeads(false)
     window.addEventListener("storage", storageHandler)
+    window.addEventListener("saampark_company_switched", storageHandler)
     return () => {
       clearInterval(interval)
       window.removeEventListener("storage", storageHandler)
+      window.removeEventListener("saampark_company_switched", storageHandler)
     }
-  }, [])
+  }, [activeCompanyId, user?.companyId])
 
   const handleLeadAdded = (newLead: Lead) => {
     setLeads((prev) => [newLead, ...prev])

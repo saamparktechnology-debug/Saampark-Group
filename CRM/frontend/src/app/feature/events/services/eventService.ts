@@ -20,18 +20,18 @@ export function getStoredEvents(): CalendarEvent[] {
   }
 }
 
-export async function getStoredEventsAsync(): Promise<CalendarEvent[]> {
-  const data = await fetchModuleDataFromDB<CalendarEvent[]>("events", getStoredEvents())
+export async function getStoredEventsAsync(companyId?: string): Promise<CalendarEvent[]> {
+  const data = await fetchModuleDataFromDB<CalendarEvent[]>("events", [], companyId)
   return filterGlobalDeletedItems(data)
 }
 
-export function saveStoredEvent(evt: CalendarEvent): CalendarEvent[] {
+export function saveStoredEvent(evt: CalendarEvent, companyId?: string): CalendarEvent[] {
   if (typeof window === "undefined") return []
   try {
     const current = getStoredEvents()
     const updated = [evt, ...current.filter((e) => e.id !== evt.id)]
     localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(updated))
-    saveModuleDataToDB("events", updated).catch(() => {})
+    saveModuleDataToDB("events", updated, companyId).catch(() => {})
     return updated
   } catch (err) {
     console.error("Error saving event:", err)
@@ -39,14 +39,14 @@ export function saveStoredEvent(evt: CalendarEvent): CalendarEvent[] {
   }
 }
 
-export function deleteStoredEvent(id: string): CalendarEvent[] {
+export function deleteStoredEvent(id: string, companyId?: string): CalendarEvent[] {
   if (typeof window === "undefined") return []
   try {
     markGlobalItemDeleted(id, "events")
     const current = getStoredEvents()
     const updated = current.filter((e) => e.id !== id)
     localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(updated))
-    saveModuleDataToDB("events", updated).catch(() => {})
+    saveModuleDataToDB("events", updated, companyId).catch(() => {})
     return updated
   } catch (err) {
     console.error("Error deleting event:", err)
