@@ -151,11 +151,17 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
     setRole(newRole)
     const norm = normalizeRole(newRole)
     const roleMods = DEFAULT_ROLE_PERMISSIONS[norm] || [...CONFIGURABLE_MODULES]
-    setAllowedModules(roleMods)
+
+    // Admin can ONLY grant modules that the Admin himself is allowed to access
+    const safeRoleMods = isCurrentSuperAdmin
+      ? roleMods
+      : roleMods.filter((m) => displayableModules.includes(m as any))
+
+    setAllowedModules(safeRoleMods)
 
     const init: Record<string, ModuleActionFlags> = {}
     CONFIGURABLE_MODULES.forEach((m) => {
-      const isAllowed = roleMods.includes(m as ModuleName)
+      const isAllowed = safeRoleMods.includes(m as ModuleName)
       const adminFlags = isCurrentSuperAdmin ? DEFAULT_FULL_ACTIONS : getUserModuleActions(currentUser, m)
 
       init[m] = isAllowed
@@ -225,14 +231,14 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
       const config = MODULE_ACTION_CONFIG[m] || { hasAdd: true, hasEdit: true, hasDelete: true }
       const adminFlags = isCurrentSuperAdmin ? DEFAULT_FULL_ACTIONS : getUserModuleActions(currentUser, m)
 
-      if (template === "full") {
+      if (displayableModules.includes(m as any) && template === "full") {
         nextMatrix[m] = { 
           view: adminFlags.view, 
           add: config.hasAdd !== false && adminFlags.add, 
           edit: config.hasEdit !== false && adminFlags.edit, 
           delete: config.hasDelete !== false && adminFlags.delete 
         }
-      } else if (template === "view") {
+      } else if (displayableModules.includes(m as any) && template === "view") {
         nextMatrix[m] = { 
           view: adminFlags.view, 
           add: false, 
@@ -247,7 +253,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
     if (template === "none") {
       setAllowedModules([])
     } else {
-      setAllowedModules([...CONFIGURABLE_MODULES])
+      setAllowedModules([...displayableModules])
     }
   }
 
@@ -261,29 +267,46 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
 
     const payload: Partial<UserType> = {
       name,
-      email,
+      email: email.toLowerCase().trim(),
       role,
       companyId: primaryCompanyId,
       companyIds: selectedCompanyIds,
-      companyName: companyNamesList.length > 1 ? "SAAMPARK Group (Multiple)" : companyNamesList[0] || "SAAMPARK Technology",
-      department,
+      companyName: companyNamesList.join(", ") || (primaryCompanyId === "digital" ? "SAAMPARK Digital Marketing" : "SAAMPARK Technology"),
+      department: department || "General",
       phone,
-      password: password || "Password123",
+      password,
       status,
     }
 
-    const targetId = editingUser ? editingUser.id : email.toLowerCase().trim()
-    const userIdStr = String(targetId)
+    if (editingUser) {
+      payload.id = editingUser.id
+    }
+
+    // Filter allowedModules & actionMatrix so an Admin can NEVER grant permissions for modules the Admin doesn't possess
+    const finalAllowedModules = isCurrentSuperAdmin
+      ? allowedModules
+      : allowedModules.filter((m) => displayableModules.includes(m as any))
+
+    const finalActionMatrix: Record<string, ModuleActionFlags> = {}
+    CONFIGURABLE_MODULES.forEach((m) => {
+      if (isCurrentSuperAdmin || displayableModules.includes(m as any)) {
+        finalActionMatrix[m] = actionMatrix[m] || { view: false, add: false, edit: false, delete: false }
+      } else {
+        finalActionMatrix[m] = { view: false, add: false, edit: false, delete: false }
+      }
+    })
+
+    const userIdStr = String(editingUser?.id || payload.id || `usr_${Date.now()}`)
     const emailNorm = email.toLowerCase().trim()
 
-    setUserPermissions(userIdStr, allowedModules)
-    setUserAllModuleActions(userIdStr, actionMatrix)
+    setUserPermissions(userIdStr, finalAllowedModules)
+    setUserAllModuleActions(userIdStr, finalActionMatrix)
 
     // Sync to email key as well
-    setUserPermissions(emailNorm, allowedModules)
-    setUserAllModuleActions(emailNorm, actionMatrix)
+    setUserPermissions(emailNorm, finalAllowedModules)
+    setUserAllModuleActions(emailNorm, finalActionMatrix)
 
-    const permissions = { actionMatrix, allowedModules }
+    const permissions = { actionMatrix: finalActionMatrix, allowedModules: finalAllowedModules }
 
     onSave({
       ...payload,
