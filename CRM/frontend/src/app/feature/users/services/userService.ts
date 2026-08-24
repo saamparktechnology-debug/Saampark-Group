@@ -102,9 +102,9 @@ export function getStoredUserAccounts(): UserItem[] {
   return DEFAULT_SYSTEM_ACCOUNTS;
 }
 
-// Helper: save user accounts to MySQL only
+// Helper: save user accounts to MySQL only (master 'all' company scope)
 export async function saveUserAccounts(accounts: UserItem[]): Promise<void> {
-  await saveModuleDataToDB("users", accounts);
+  await saveModuleDataToDB("users", accounts, "all");
 }
 
 // Helper: check if an email is already registered
@@ -170,49 +170,52 @@ export function recordUserAccount(user: Partial<UserItem>, isNewRegistration = f
   return updatedAccount;
 }
 
-
-
-
 // Delete user permanently
 export async function deleteUser(id: string, email?: string): Promise<boolean> {
-  // Call backend REST API to mark deleted_at in MySQL database
+  const normEmail = email ? email.toLowerCase().trim() : (id.includes("@") ? id.toLowerCase().trim() : "");
+
+  // 1. Mark as deleted in MySQL deleted_items table & local cache
+  await markGlobalItemDeleted(id, "users");
+  if (normEmail) {
+    await markGlobalItemDeleted(normEmail, "users");
+    markUserAsDeleted(normEmail);
+  }
+
+  // 2. Call backend REST API delete endpoint
   try {
-    await api.delete(`/users/${id}`)
+    await api.delete(`/users/${encodeURIComponent(id)}`);
+    if (normEmail && normEmail !== id) {
+      await api.delete(`/users/${encodeURIComponent(normEmail)}`);
+    }
   } catch (err) {
-    console.warn("Backend user delete API call error:", err)
+    console.warn("Backend user delete API call warning:", err);
   }
 
-  await markGlobalItemDeleted(id, "users")
-  if (email) await markGlobalItemDeleted(email, "users")
-
+  // 3. Remove user from app_data master list under 'all' company scope
   const currentAccounts = await getStoredUserAccountsAsync();
-  const targetUser = currentAccounts.find(
-    (u) => u.id === id || (email && u.email.toLowerCase().trim() === email.toLowerCase().trim())
-  );
-  const targetEmail = (targetUser?.email || email || (id.includes("@") ? id : "")).toLowerCase().trim();
+  const filtered = currentAccounts.filter((acc) => {
+    const accEmail = (acc.email || "").toLowerCase().trim();
+    const accId = String(acc.id || "").toLowerCase().trim();
+    const targetId = String(id).toLowerCase().trim();
+    return accId !== targetId && (!normEmail || accEmail !== normEmail);
+  });
 
-  if (targetEmail) {
-    markUserAsDeleted(targetEmail);
-    await markGlobalItemDeleted(targetEmail, "users");
-  }
-
-  const filtered = currentAccounts.filter(
-    (acc) =>
-      acc.id !== id &&
-      acc.email.toLowerCase().trim() !== targetEmail
-  );
-  await saveUserAccounts(filtered);
+  await saveModuleDataToDB("users", filtered, "all");
 
   if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem("saampark_registered_accounts", JSON.stringify(filtered));
+    } catch {}
     window.dispatchEvent(new Event("storage"));
-    // Instantly log out if current tab belongs to the deleted user
+
+    // Instantly log out if current tab belongs to deleted user
     try {
       const { useAuthStore } = require("@/store/useAuthStore");
       const state = useAuthStore.getState();
       if (
         state.user &&
         (String(state.user.id) === String(id) ||
-          (state.user.email && state.user.email.toLowerCase().trim() === targetEmail))
+          (state.user.email && state.user.email.toLowerCase().trim() === normEmail))
       ) {
         state.logout();
       }

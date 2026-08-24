@@ -221,12 +221,14 @@ export default function UsersMain() {
 
   const handleDeleteUser = async (id: string) => {
     const targetUser = users.find((u) => u.id === id)
-    if (targetUser) {
-      await deleteUser(id, targetUser.email)
-    } else {
-      await deleteUser(id)
-    }
-    setUsers((prev) => prev.filter((u) => u.id !== id))
+    const targetEmail = targetUser?.email
+
+    setUsers((prev) => prev.filter((u) => u.id !== id && (!targetEmail || u.email.toLowerCase().trim() !== targetEmail.toLowerCase().trim())))
+
+    await deleteUser(id, targetEmail)
+    setTimeout(() => {
+      loadUsers()
+    }, 150)
   }
 
   return (
