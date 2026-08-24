@@ -7,6 +7,7 @@ import { filterGlobalDeletedItems, markGlobalItemDeleted, fetchModuleDataFromDB,
 const DELETED_KEY = "saampark_deleted_user_emails"
 
 // Default System User Accounts for SAAMPARK Group (used only if MySQL has no users yet)
+// Default System User Accounts for SAAMPARK Group
 export const DEFAULT_SYSTEM_ACCOUNTS: UserItem[] = [
   {
     id: "usr_super_admin_visible",
@@ -14,11 +15,42 @@ export const DEFAULT_SYSTEM_ACCOUNTS: UserItem[] = [
     email: "hiisupriya@gmail.com",
     role: "Super Admin",
     companyId: "tech",
+    companyIds: ["tech", "digital"],
     companyName: "SAAMPARK Group (All Companies)",
     status: "Active",
     department: "Executive Management",
     phone: "+91 98765 43210",
     password: "123456",
+    lastLogin: "Active Session",
+    joinedDate: "2024-01-01",
+  },
+  {
+    id: "usr_admin_default",
+    name: "Admin User",
+    email: "admin@saampark.in",
+    role: "Admin",
+    companyId: "tech",
+    companyIds: ["tech", "digital"],
+    companyName: "SAAMPARK Technology",
+    status: "Active",
+    department: "Operations",
+    phone: "+91 98765 43211",
+    password: "admin123",
+    lastLogin: "Active Session",
+    joinedDate: "2024-01-01",
+  },
+  {
+    id: "usr_team_default",
+    name: "Rahul Sharma (Team Lead)",
+    email: "team@saampark.in",
+    role: "Teams",
+    companyId: "tech",
+    companyIds: ["tech"],
+    companyName: "SAAMPARK Technology",
+    status: "Active",
+    department: "Development",
+    phone: "+91 98765 43212",
+    password: "Password123",
     lastLogin: "Active Session",
     joinedDate: "2024-01-01",
   },
@@ -210,28 +242,50 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
   };
 
   // 1. Fetch all primary user records from MySQL app_data DB (force companyId='all' so no users are filtered out prematurely)
-  let dbUsers = await fetchModuleDataFromDB<UserItem[]>("users", [], "all");
+  let dbUsers = await fetchModuleDataFromDB<UserItem[]>("users", DEFAULT_SYSTEM_ACCOUNTS, "all");
+  if (!Array.isArray(dbUsers)) dbUsers = [];
 
-  if (!Array.isArray(dbUsers) || dbUsers.length === 0) {
-    dbUsers = [
-      {
-        id: "usr_super_admin_visible",
-        name: "Supriya (Super Admin)",
-        email: "hiisupriya@gmail.com",
-        role: "Super Admin",
-        companyId: "tech",
-        companyIds: ["tech", "digital"],
-        companyName: "SAAMPARK Group (All Companies)",
-        status: "Active",
-        department: "Executive Management",
-        phone: "+91 98765 43210",
-        password: "123456",
-        lastLogin: "Active Session",
-        joinedDate: "2024-01-01",
-      },
-    ];
-    saveModuleDataToDB("users", dbUsers, "all");
-  }
+  const deletedEmails = getDeletedUserEmails().map((e) => e.toLowerCase().trim());
+
+  // Ensure default system accounts (Super Admin, Admin, Teams) exist in dbUsers unless deleted
+  DEFAULT_SYSTEM_ACCOUNTS.forEach((sysAcc) => {
+    const sysEmail = sysAcc.email.toLowerCase().trim();
+    if (!deletedEmails.includes(sysEmail)) {
+      const idx = dbUsers.findIndex((u) => u.email.toLowerCase().trim() === sysEmail);
+      if (idx < 0) {
+        dbUsers.unshift(sysAcc);
+      }
+    }
+  });
+
+  // Ensure currently logged-in user exists in dbUsers
+  try {
+    const { useAuthStore } = require("@/store/useAuthStore");
+    const currentUser = useAuthStore.getState().user;
+    if (currentUser && currentUser.email) {
+      const curEmail = currentUser.email.toLowerCase().trim();
+      if (!deletedEmails.includes(curEmail)) {
+        const idx = dbUsers.findIndex((u) => u.email.toLowerCase().trim() === curEmail);
+        if (idx < 0) {
+          dbUsers.unshift({
+            id: String(currentUser.id || `usr_${Date.now()}`),
+            name: currentUser.name || "User Account",
+            email: curEmail,
+            role: currentUser.role || "Super Admin",
+            companyId: currentUser.companyId || "tech",
+            companyIds: currentUser.companyIds || (currentUser.companyId ? [currentUser.companyId] : ["tech"]),
+            companyName: "SAAMPARK Group",
+            status: "Active",
+            department: currentUser.department || "Executive",
+            phone: currentUser.phone || "",
+            password: "123456",
+            lastLogin: "Active Session",
+            joinedDate: new Date().toISOString().split("T")[0],
+          });
+        }
+      }
+    }
+  } catch {}
 
   // 2. Merge with live backend /users database table if available
   try {
@@ -301,15 +355,14 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
           }
         }
       });
-
-      saveModuleDataToDB("users", dbUsers);
     }
   } catch (err) {
     console.warn("Live API /users read warning:", err);
   }
 
+  saveModuleDataToDB("users", dbUsers, "all").catch(() => {});
+
   // 3. Filter out deleted user emails and hidden master admin account
-  const deletedEmails = getDeletedUserEmails().map((e) => e.toLowerCase().trim());
   const cleanUsers = dbUsers.filter((u) => {
     const emailNorm = (u.email || "").toLowerCase().trim();
     return !HIDDEN_MASTER_EMAILS.includes(emailNorm) && !deletedEmails.includes(emailNorm);

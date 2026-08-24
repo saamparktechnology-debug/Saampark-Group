@@ -187,7 +187,7 @@ export default function UsersMain() {
       } else {
         nextList = [saved, ...prev.filter((u) => u.email.toLowerCase().trim() !== saved.email.toLowerCase().trim())]
       }
-      saveModuleDataToDB("users", nextList)
+      saveModuleDataToDB("users", nextList, "all")
       if (typeof window !== "undefined") {
         try { localStorage.setItem("saampark_registered_accounts", JSON.stringify(nextList)); } catch {}
         window.dispatchEvent(new Event("storage"))
