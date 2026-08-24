@@ -49,10 +49,12 @@ export default function UsersMain() {
   const [isCompanyModalOpen, setIsCompanyModalOpen] = React.useState(false)
   const [editingUser, setEditingUser] = React.useState<UserItem | null>(null)
 
+  const isSuperAdminLoggedIn = user?.role === "Super Admin"
+
   const loadUsers = React.useCallback(async () => {
-    const list = await getUsers(activeCompanyId || "all")
+    const list = await getUsers(isSuperAdminLoggedIn ? "all" : (activeCompanyId || "all"))
     setUsers(list)
-  }, [activeCompanyId])
+  }, [activeCompanyId, isSuperAdminLoggedIn])
 
   React.useEffect(() => {
     loadUsers()
@@ -71,8 +73,6 @@ export default function UsersMain() {
       clearInterval(interval)
     }
   }, [loadUsers])
-
-  const isSuperAdminLoggedIn = user?.role === "Super Admin"
 
   // Super Admin users are only visible when logged in as Super Admin
   const visibleUsers = React.useMemo(() => {

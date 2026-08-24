@@ -318,12 +318,23 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
   if (!companyId || companyId === "all") {
     return cleanUsers;
   }
+
+  const targetComp = String(companyId).toLowerCase().trim();
+
   return cleanUsers.filter((u) => {
     if (u.role === "Super Admin") return true;
+
+    const uCompId = String(u.companyId || "").toLowerCase().trim();
+    if (!uCompId || uCompId === "1" || uCompId === "all" || uCompId === targetComp) return true;
+
     if (u.companyIds && Array.isArray(u.companyIds)) {
-      return u.companyIds.includes(companyId);
+      return u.companyIds.some((c) => {
+        const cNorm = String(c).toLowerCase().trim();
+        return !cNorm || cNorm === "1" || cNorm === "all" || cNorm === targetComp;
+      });
     }
-    return u.companyId === companyId;
+
+    return false;
   });
 }
 

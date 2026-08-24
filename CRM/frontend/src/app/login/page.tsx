@@ -446,8 +446,8 @@ export default function LoginPage() {
                   whileTap={{ scale: 0.98 }}
                   onClick={() => {
                     handleSelectRole("Teams")
-                    setEmail("team@saampark.in")
-                    setPassword("Password123")
+                    setEmail("")
+                    setPassword("")
                   }}
                   className="group relative p-8 rounded-3xl bg-surface/70 border border-border hover:border-primary/50 hover:bg-surface text-left shadow-xl transition-all flex flex-col justify-between overflow-hidden cursor-pointer"
                 >
@@ -472,8 +472,8 @@ export default function LoginPage() {
                   whileTap={{ scale: 0.98 }}
                   onClick={() => {
                     handleSelectRole("Clients")
-                    setEmail("client@saampark.in")
-                    setPassword("Password123")
+                    setEmail("")
+                    setPassword("")
                   }}
                   className="group relative p-8 rounded-3xl bg-surface/70 border border-border hover:border-emerald-500/50 hover:bg-surface text-left shadow-xl transition-all flex flex-col justify-between overflow-hidden cursor-pointer"
                 >
@@ -499,8 +499,8 @@ export default function LoginPage() {
                   type="button"
                   onClick={() => {
                     handleSelectRole("Admin")
-                    setEmail("hiisupriya@gmail.com")
-                    setPassword("123456")
+                    setEmail("")
+                    setPassword("")
                   }}
                   className="text-xs text-muted-foreground hover:text-foreground hover:underline inline-flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
@@ -542,45 +542,6 @@ export default function LoginPage() {
                   {selectedRoleChoice === "Clients" ? "Client Sign In" : selectedRoleChoice === "Admin" ? "Admin Sign In" : "Team Member Sign In"}
                 </h2>
                 <p className="text-xs text-muted-foreground mt-1">Enter your registered email and password.</p>
-              </div>
-
-              {/* Quick Fill Test Account Bar */}
-              <div className="p-3 mb-4 rounded-2xl bg-surface-pressed/50 border border-border flex items-center justify-between gap-1 flex-wrap text-[11px]">
-                <span className="text-muted-foreground font-medium">Quick Fill:</span>
-                {selectedRoleChoice === "Admin" ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => { setEmail("hiisupriya@gmail.com"); setPassword("123456") }}
-                      className="px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 font-semibold cursor-pointer"
-                    >
-                      👑 Super Admin
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setEmail("admin@saampark.in"); setPassword("admin123") }}
-                      className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 font-semibold cursor-pointer"
-                    >
-                      🛡️ Admin
-                    </button>
-                  </>
-                ) : selectedRoleChoice === "Clients" ? (
-                  <button
-                    type="button"
-                    onClick={() => { setEmail("client@saampark.in"); setPassword("Password123") }}
-                    className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 font-semibold cursor-pointer"
-                  >
-                    🤝 Client Demo
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => { setEmail("team@saampark.in"); setPassword("Password123") }}
-                    className="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 font-semibold cursor-pointer"
-                  >
-                    👥 Team Member Demo
-                  </button>
-                )}
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4 relative">
