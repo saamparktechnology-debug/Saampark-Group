@@ -83,10 +83,11 @@ export function LeadList({
   const { user } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
   
+  const isSuperAdmin = user?.role === "Super Admin"
   const isSuperAdminOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
-  const canAddLead = isSuperAdminOrAdmin || canPerformAction(user, "Leads", "add")
-  const canEditLead = isSuperAdminOrAdmin || canPerformAction(user, "Leads", "edit")
-  const canDeleteLead = isSuperAdminOrAdmin || canPerformAction(user, "Leads", "delete")
+  const canAddLead = isSuperAdmin || canPerformAction(user, "Leads", "add")
+  const canEditLead = isSuperAdmin || canPerformAction(user, "Leads", "edit")
+  const canDeleteLead = isSuperAdmin || canPerformAction(user, "Leads", "delete")
 
   const [allUsers, setAllUsers] = React.useState<{ id: string; name: string; role?: string; department?: string; email?: string; avatar?: string; avatarUrl?: string }[]>([])
   const [usersMap, setUsersMap] = React.useState<Record<string, { department?: string; role?: string; avatarUrl?: string }>>({})

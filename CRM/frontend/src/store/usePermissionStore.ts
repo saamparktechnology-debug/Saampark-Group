@@ -319,7 +319,8 @@ export const usePermissionStore = create<PermissionState>()(
         if (moduleName === 'Dashboard') return action === 'view'
 
         const normRole = normalizeRole(user.role)
-        if (normRole === 'Super Admin' || normRole === 'Admin') return true
+        // Super Admin ALWAYS has master access to all actions across all modules
+        if (normRole === 'Super Admin') return true
 
         const flags = get().getUserModuleActions(user, moduleName)
         return Boolean(flags && flags[action])
