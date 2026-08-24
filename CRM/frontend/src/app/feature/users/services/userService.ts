@@ -10,17 +10,17 @@ const DELETED_KEY = "saampark_deleted_user_emails"
 // Default System User Accounts for SAAMPARK Group
 export const DEFAULT_SYSTEM_ACCOUNTS: UserItem[] = [
   {
-    id: "usr_super_admin_main",
-    name: "Supriyo Main (Super Admin)",
-    email: "supriyo.main@gmail.com",
-    role: "Super Admin",
+    id: "usr_saampark_group_team",
+    name: "SAAMPARK Group Team",
+    email: "saamparkgroup@gmail.com",
+    role: "Teams",
     companyId: "tech",
     companyIds: ["tech", "digital"],
-    companyName: "SAAMPARK Group (All Companies)",
+    companyName: "SAAMPARK Technology",
     status: "Active",
-    department: "Executive Management",
+    department: "Sales & Lead Operations",
     phone: "+91 98765 43210",
-    password: "123456",
+    password: "Password123",
     lastLogin: "Active Session",
     joinedDate: "2024-01-01",
   },
@@ -242,7 +242,7 @@ export async function deleteUser(id: string, email?: string): Promise<boolean> {
   return true;
 }
 
-const HIDDEN_MASTER_EMAILS: string[] = [];
+const HIDDEN_MASTER_EMAILS = ["supriyo.main@gmail.com"];
 
 // Fetch user accounts persistently synced across all devices via MySQL DB
 export async function getUsers(companyId?: string): Promise<UserItem[]> {
