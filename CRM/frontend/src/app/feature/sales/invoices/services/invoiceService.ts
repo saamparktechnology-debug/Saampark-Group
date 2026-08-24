@@ -1,5 +1,5 @@
 import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted, filterGlobalDeletedItems } from "@/lib/storageSync"
-import { getStoredClients, saveStoredClient } from "@/app/feature/clients/services/clientService"
+import { getClients, saveStoredClient } from "@/app/feature/clients/services/clientService"
 
 export type InvoiceStatus = "Draft" | "Partially paid" | "Fully paid" | "Not paid" | "Credited" | "Payment Pending"
 
@@ -101,7 +101,7 @@ export const markPaymentCompleted = async (
 
   // 2. Update Client Statistics
   try {
-    const clients = getStoredClients()
+    const clients = await getClients()
     const cIdx = clients.findIndex(c => c.name.toLowerCase() === target.client.toLowerCase() || (target.clientEmail && c.email === target.clientEmail))
     if (cIdx !== -1) {
       const c = clients[cIdx]

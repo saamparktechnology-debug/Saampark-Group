@@ -1,6 +1,6 @@
 import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted, filterGlobalDeletedItems } from "@/lib/storageSync"
 import { getInvoices, updateInvoiceStatus, InvoiceItem } from "@/app/feature/sales/invoices/services/invoiceService"
-import { getStoredClients, saveStoredClient } from "@/app/feature/clients/services/clientService"
+import { getClients, saveStoredClient } from "@/app/feature/clients/services/clientService"
 
 export interface PaymentItem {
   id: string

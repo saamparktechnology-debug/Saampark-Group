@@ -67,11 +67,19 @@ export default function UsersMain() {
     }
   }, [loadUsers])
 
-  // Metric counts
-  const totalUsers = users.length
-  const totalAdmins = users.filter((u) => u.role === "Super Admin" || u.role === "Admin").length
-  const totalTeams = users.filter((u) => u.role === "Teams").length
-  const totalClients = users.filter((u) => u.role === "Clients").length
+  const isSuperAdminLoggedIn = user?.role === "Super Admin"
+
+  // Super Admin users are only visible when logged in as Super Admin
+  const visibleUsers = React.useMemo(() => {
+    if (isSuperAdminLoggedIn) return users
+    return users.filter((u) => u.role !== "Super Admin")
+  }, [users, isSuperAdminLoggedIn])
+
+  // Metric counts based on visible users
+  const totalUsers = visibleUsers.length
+  const totalAdmins = visibleUsers.filter((u) => u.role === "Super Admin" || u.role === "Admin").length
+  const totalTeams = visibleUsers.filter((u) => u.role === "Teams").length
+  const totalClients = visibleUsers.filter((u) => u.role === "Clients").length
 
   const canConfigureModulePermissions = user?.role === "Super Admin" || user?.role === "Admin"
 
@@ -311,7 +319,7 @@ export default function UsersMain() {
 
       {/* Users Table Component */}
       <UserList
-        users={users}
+        users={visibleUsers}
         onEdit={handleOpenEditModal}
         onToggleStatus={handleToggleStatus}
         onDelete={handleDeleteUser}

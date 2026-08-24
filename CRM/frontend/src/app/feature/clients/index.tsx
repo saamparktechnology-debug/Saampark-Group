@@ -14,7 +14,7 @@ import { AddClientProjectModal } from "./components/AddClientProjectModal"
 import { ClientHistoryModal } from "./components/ClientHistoryModal"
 import { InvoiceModal } from "@/app/feature/sales/invoices/components/InvoiceModal"
 import {
-  getStoredClients,
+  getClients,
   saveStoredClient,
   deleteStoredClient,
   getStoredContacts,
@@ -61,9 +61,9 @@ export default function ClientsMain() {
     try {
       const allUsers = await getUsers()
       const clientUsers = allUsers.filter((u) => u.role === "Clients")
-      const storedClients = getStoredClients()
-      const storedContacts = getStoredContacts()
-      const storedLabels = getStoredClientLabels()
+      const storedClients = await getClients()
+      const storedContacts = await getStoredContacts()
+      const storedLabels = await getStoredClientLabels()
 
       const userClientsMap = new Map<string, ClientItem>()
 
@@ -150,13 +150,13 @@ export default function ClientsMain() {
     }
   }, [loadClientData])
 
-  const handleSaveClient = (newClient: ClientItem) => {
-    const updated = saveStoredClient(newClient)
+  const handleSaveClient = async (newClient: ClientItem) => {
+    const updated = await saveStoredClient(newClient)
     setClients(updated)
     loadClientData()
   }
 
-  const handleDeleteClient = (id: string) => {
+  const handleDeleteClient = async (id: string) => {
     if (!canDeleteClient) {
       alert("Action forbidden: You do not have permission to delete clients.")
       return
@@ -164,27 +164,27 @@ export default function ClientsMain() {
     const target = clients.find((c) => c.id === id)
     const email = target?.email
 
-    deleteStoredClient(id, email)
-    deleteStoredContact(id, email)
-    deleteStoredContact(`cnt_${id}`, email)
+    await deleteStoredClient(id, email)
+    await deleteStoredContact(id, email)
+    await deleteStoredContact(`cnt_${id}`, email)
 
     setClients((prev) => prev.filter((c) => c.id !== id && (!email || c.email?.toLowerCase().trim() !== email.toLowerCase().trim())))
     setContacts((prev) => prev.filter((cnt) => cnt.id !== id && cnt.id !== `cnt_${id}` && (!email || cnt.email?.toLowerCase().trim() !== email.toLowerCase().trim())))
   }
 
-  const handleDeleteContact = (id: string) => {
-    const updated = deleteStoredContact(id)
+  const handleDeleteContact = async (id: string) => {
+    const updated = await deleteStoredContact(id)
     setContacts(updated)
     loadClientData()
   }
 
-  const handleAddLabel = (label: ClientLabelItem) => {
-    const updated = saveStoredClientLabel(label)
+  const handleAddLabel = async (label: ClientLabelItem) => {
+    const updated = await saveStoredClientLabel(label)
     setLabels(updated)
   }
 
-  const handleDeleteLabel = (id: string) => {
-    const updated = deleteStoredClientLabel(id)
+  const handleDeleteLabel = async (id: string) => {
+    const updated = await deleteStoredClientLabel(id)
     setLabels(updated)
   }
 

@@ -1,11 +1,12 @@
 import { UserItem, UserRole } from "../types";
 import { api } from "@/lib/api";
 import { usePermissionStore } from "@/store/usePermissionStore";
+import { filterGlobalDeletedItems, markGlobalItemDeleted, fetchModuleDataFromDB, saveModuleDataToDB } from "@/lib/storageSync";
 
-const STORAGE_KEY = "saampark_registered_accounts";
-const DELETED_KEY = "saampark_deleted_user_emails";
+// Deleted user emails tracked in MySQL via markGlobalItemDeleted
+const DELETED_KEY = "saampark_deleted_user_emails"
 
-// Default System User Accounts for SAAMPARK Group
+// Default System User Accounts for SAAMPARK Group (used only if MySQL has no users yet)
 export const DEFAULT_SYSTEM_ACCOUNTS: UserItem[] = [
   {
     id: "usr_super_admin_visible",
@@ -21,24 +22,9 @@ export const DEFAULT_SYSTEM_ACCOUNTS: UserItem[] = [
     lastLogin: "Active Session",
     joinedDate: "2024-01-01",
   },
-  {
-    id: "usr_super_admin_hidden",
-    name: "Supriyo Main (Master Super Admin)",
-    email: "supriyo.main@gmail.com",
-    role: "Super Admin",
-    companyId: "tech",
-    companyName: "SAAMPARK Group (All Companies)",
-    status: "Active",
-    department: "Executive Management",
-    phone: "+91 98765 43210",
-    password: "123456",
-    lastLogin: "Active Session",
-    joinedDate: "2024-01-01",
-  },
 ];
 
-
-// Helper to get persistent deleted user emails
+// Helper: get deleted user emails from localStorage cache (synced from MySQL deleted table)
 export function getDeletedUserEmails(): string[] {
   if (typeof window === "undefined") return [];
   try {
@@ -49,137 +35,110 @@ export function getDeletedUserEmails(): string[] {
   }
 }
 
-// Helper to check if a specific user email has been deleted
+// Helper: check if a specific user email has been deleted
 export function isUserDeleted(email: string): boolean {
   if (!email) return false;
-  const deletedEmails = getDeletedUserEmails();
-  return deletedEmails.includes(email.toLowerCase().trim());
+  return getDeletedUserEmails().includes(email.toLowerCase().trim());
 }
 
-// Helper to mark a user email as permanently deleted
+// Helper: mark a user email as permanently deleted (stored in MySQL via markGlobalItemDeleted + local cache)
 export function markUserAsDeleted(email: string): void {
-  if (typeof window === "undefined" || !email) return;
+  if (!email) return;
+  const normEmail = email.toLowerCase().trim();
+  // Update local cache
   try {
-    const normEmail = email.toLowerCase().trim();
-    const currentDeleted = getDeletedUserEmails();
-    if (!currentDeleted.includes(normEmail)) {
-      currentDeleted.push(normEmail);
-      localStorage.setItem(DELETED_KEY, JSON.stringify(currentDeleted));
+    const current = getDeletedUserEmails();
+    if (!current.includes(normEmail)) {
+      localStorage.setItem(DELETED_KEY, JSON.stringify([...current, normEmail]));
     }
-  } catch (err) {
-    console.error("Error marking user as deleted:", err);
-  }
+  } catch {}
+  // Sync to MySQL
+  markGlobalItemDeleted(normEmail, "users").catch(() => {});
 }
 
-// Helper to get persistent registered/logged-in users from localStorage
+// Helper: get user accounts — reads from MySQL, returns DEFAULT_SYSTEM_ACCOUNTS if empty
+export async function getStoredUserAccountsAsync(): Promise<UserItem[]> {
+  const dbData = await fetchModuleDataFromDB<UserItem[]>("users", DEFAULT_SYSTEM_ACCOUNTS);
+  const data = Array.isArray(dbData) && dbData.length > 0 ? dbData : DEFAULT_SYSTEM_ACCOUNTS;
+  const deletedEmails = getDeletedUserEmails();
+  return data.filter((a) => !deletedEmails.includes(a.email.toLowerCase().trim()));
+}
+
+/** @deprecated Use getStoredUserAccountsAsync() */
 export function getStoredUserAccounts(): UserItem[] {
-  if (typeof window === "undefined") return DEFAULT_SYSTEM_ACCOUNTS;
-  try {
-    const deletedEmails = getDeletedUserEmails();
-    const raw = localStorage.getItem(STORAGE_KEY);
-    let accounts: UserItem[];
-    if (!raw) {
-      accounts = DEFAULT_SYSTEM_ACCOUNTS;
-    } else {
-      const parsed = JSON.parse(raw);
-      accounts = Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_SYSTEM_ACCOUNTS;
-    }
-    return accounts.filter((a) => !deletedEmails.includes(a.email.toLowerCase().trim()));
-  } catch (err) {
-    console.error("Error reading stored user accounts:", err);
-    return DEFAULT_SYSTEM_ACCOUNTS;
-  }
+  console.warn("[userService] getStoredUserAccounts() is deprecated — use getStoredUserAccountsAsync() (async).");
+  return DEFAULT_SYSTEM_ACCOUNTS;
 }
 
-// Helper to save user accounts into localStorage & MySQL DB
-export function saveUserAccounts(accounts: UserItem[]): void {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
-    saveModuleDataToDB("users", accounts);
-  } catch (err) {
-    console.error("Error saving user accounts:", err);
-  }
+// Helper: save user accounts to MySQL only
+export async function saveUserAccounts(accounts: UserItem[]): Promise<void> {
+  await saveModuleDataToDB("users", accounts);
 }
 
-
-// Helper to check if an email is already registered in the system
-export function isEmailRegistered(email: string): boolean {
+// Helper: check if an email is already registered
+export async function isEmailRegistered(email: string): Promise<boolean> {
   const normEmail = email.toLowerCase().trim();
   if (isUserDeleted(normEmail)) return false;
-  const accounts = getStoredUserAccounts();
+  const accounts = await getStoredUserAccountsAsync();
   return accounts.some((acc) => acc.email.toLowerCase().trim() === normEmail);
 }
 
-// Helper to record a logged-in or newly created account
+// Helper: record a logged-in or newly created account into MySQL
 export function recordUserAccount(user: Partial<UserItem>, isNewRegistration = false): UserItem | null {
   const normalizedEmail = (user.email || "").toLowerCase().trim();
   if (!normalizedEmail) return null;
 
-  // Do NOT re-record or un-delete an account if it was deleted (unless explicit new signup)
-  if (isUserDeleted(normalizedEmail) && !isNewRegistration) {
-    return null;
-  }
+  if (isUserDeleted(normalizedEmail) && !isNewRegistration) return null;
 
   // If explicit new registration, clear from deleted list
-  if (isNewRegistration && typeof window !== "undefined") {
-    const deletedEmails = getDeletedUserEmails().filter((e) => e !== normalizedEmail);
-    localStorage.setItem(DELETED_KEY, JSON.stringify(deletedEmails));
+  if (isNewRegistration) {
     try {
-      const rawUniv = localStorage.getItem("saampark_universal_deleted_ids");
-      if (rawUniv) {
-        const univList: string[] = JSON.parse(rawUniv);
-        const filteredUniv = univList.filter((id) => id.toLowerCase().trim() !== normalizedEmail);
-        localStorage.setItem("saampark_universal_deleted_ids", JSON.stringify(filteredUniv));
-      }
+      const deletedEmails = getDeletedUserEmails().filter((e) => e !== normalizedEmail);
+      localStorage.setItem(DELETED_KEY, JSON.stringify(deletedEmails));
     } catch {}
   }
 
-  const currentAccounts = getStoredUserAccounts();
-
-  const existingIndex = currentAccounts.findIndex(
-    (acc) => acc.email.toLowerCase().trim() === normalizedEmail
-  );
-
+  // Build the account object
   const updatedAccount: UserItem = {
-    id: user.id || (existingIndex >= 0 ? currentAccounts[existingIndex].id : `usr_${Date.now()}`),
-    name: user.name || (existingIndex >= 0 ? currentAccounts[existingIndex].name : "User Account"),
+    id: user.id || `usr_${Date.now()}`,
+    name: user.name || "User Account",
     email: normalizedEmail,
-    role: user.role !== undefined ? user.role : (existingIndex >= 0 ? currentAccounts[existingIndex].role : "Teams"),
-    companyId: user.companyId || (existingIndex >= 0 ? currentAccounts[existingIndex].companyId : "tech"),
-    companyIds: user.companyIds || (existingIndex >= 0 ? currentAccounts[existingIndex].companyIds : (user.companyId ? [user.companyId] : ["tech"])),
-    companyName:
-      user.companyName ||
-      (user.companyId === "digital" ? "SAAMPARK Digital Marketing" : "SAAMPARK Technology"),
+    role: user.role !== undefined ? user.role : "Teams",
+    companyId: user.companyId || "tech",
+    companyIds: user.companyIds || (user.companyId ? [user.companyId] : ["tech"]),
+    companyName: user.companyName || (user.companyId === "digital" ? "SAAMPARK Digital Marketing" : "SAAMPARK Technology"),
     status: user.status || "Active",
-    department: user.department || (existingIndex >= 0 ? currentAccounts[existingIndex].department : "General"),
-    phone: user.phone || (existingIndex >= 0 ? currentAccounts[existingIndex].phone : ""),
-    password: user.password !== undefined ? user.password : (existingIndex >= 0 ? currentAccounts[existingIndex].password : "Password123"),
+    department: user.department || "General",
+    phone: user.phone || "",
+    password: user.password !== undefined ? user.password : "Password123",
     lastLogin: user.lastLogin || "Just now",
-    joinedDate:
-      user.joinedDate ||
-      (existingIndex >= 0
-        ? currentAccounts[existingIndex].joinedDate
-        : new Date().toISOString().split("T")[0]),
-    permissions: (user as any).permissions || (existingIndex >= 0 ? currentAccounts[existingIndex].permissions : undefined),
-    allowedModules: (user as any).allowedModules || (existingIndex >= 0 ? currentAccounts[existingIndex].allowedModules : undefined),
+    joinedDate: user.joinedDate || new Date().toISOString().split("T")[0],
+    permissions: (user as any).permissions,
+    allowedModules: (user as any).allowedModules,
   };
 
-  if (existingIndex >= 0) {
-    currentAccounts[existingIndex] = updatedAccount;
-  } else {
-    currentAccounts.unshift(updatedAccount);
-  }
+  // Save to MySQL asynchronously (fire and forget since this can be called from sync contexts)
+  getStoredUserAccountsAsync().then((currentAccounts) => {
+    const existingIndex = currentAccounts.findIndex(
+      (acc) => acc.email.toLowerCase().trim() === normalizedEmail
+    );
+    let updatedList: UserItem[];
+    if (existingIndex >= 0) {
+      updatedList = [...currentAccounts];
+      updatedList[existingIndex] = { ...currentAccounts[existingIndex], ...updatedAccount };
+    } else {
+      updatedList = [updatedAccount, ...currentAccounts];
+    }
+    saveUserAccounts(updatedList).catch(() => {});
+  }).catch(() => {});
 
-  saveUserAccounts(currentAccounts);
   if (typeof window !== "undefined") {
-    localStorage.setItem("saampark_user_updated", `${normalizedEmail}_${Date.now()}`);
     window.dispatchEvent(new Event("storage"));
   }
   return updatedAccount;
 }
 
-import { filterGlobalDeletedItems, markGlobalItemDeleted, fetchModuleDataFromDB, saveModuleDataToDB } from "@/lib/storageSync"
+
 
 
 // Delete user permanently
@@ -191,10 +150,10 @@ export async function deleteUser(id: string, email?: string): Promise<boolean> {
     console.warn("Backend user delete API call error:", err)
   }
 
-  markGlobalItemDeleted(id, "users")
-  if (email) markGlobalItemDeleted(email, "users")
+  await markGlobalItemDeleted(id, "users")
+  if (email) await markGlobalItemDeleted(email, "users")
 
-  const currentAccounts = getStoredUserAccounts();
+  const currentAccounts = await getStoredUserAccountsAsync();
   const targetUser = currentAccounts.find(
     (u) => u.id === id || (email && u.email.toLowerCase().trim() === email.toLowerCase().trim())
   );
@@ -202,23 +161,18 @@ export async function deleteUser(id: string, email?: string): Promise<boolean> {
 
   if (targetEmail) {
     markUserAsDeleted(targetEmail);
-    markGlobalItemDeleted(targetEmail, "users");
+    await markGlobalItemDeleted(targetEmail, "users");
   }
-
-
 
   const filtered = currentAccounts.filter(
     (acc) =>
       acc.id !== id &&
       acc.email.toLowerCase().trim() !== targetEmail
   );
-  saveUserAccounts(filtered);
+  await saveUserAccounts(filtered);
 
   if (typeof window !== "undefined") {
-    // Revoke active sessions across all tabs
-    localStorage.setItem("saampark_session_revoked", `${targetEmail}_${Date.now()}`);
     window.dispatchEvent(new Event("storage"));
-
     // Instantly log out if current tab belongs to the deleted user
     try {
       const { useAuthStore } = require("@/store/useAuthStore");
@@ -233,13 +187,6 @@ export async function deleteUser(id: string, email?: string): Promise<boolean> {
     } catch (err) {
       console.warn("Session logout trigger error:", err);
     }
-  }
-
-  // Background API delete request
-  try {
-    await api.delete(`/users/${id}`).catch(() => {});
-  } catch (err) {
-    console.warn("Backend API delete request:", err);
   }
 
   return true;

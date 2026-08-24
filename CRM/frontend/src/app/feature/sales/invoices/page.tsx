@@ -36,7 +36,7 @@ import {
 } from "./services/invoiceService"
 import { useAuthStore } from "@/store/useAuthStore"
 import { InvoiceModal } from "./components/InvoiceModal"
-import { getStoredClients } from "@/app/feature/clients/services/clientService"
+import { getClients } from "@/app/feature/clients/services/clientService"
 import { getProjects } from "@/app/feature/projects/services/projectService"
 
 export default function InvoicesPage() {
@@ -87,12 +87,13 @@ export default function InvoicesPage() {
 
   React.useEffect(() => {
     if (isAddModalOpen) {
-      const clients = getStoredClients()
-      setAvailableClients(clients.map(c => ({ name: c.name, email: c.email || "" })))
-      if (clients.length > 0) {
-        setClientName(clients[0].name)
-        setClientEmail(clients[0].email || "")
-      }
+      getClients().then((clients) => {
+        setAvailableClients(clients.map(c => ({ name: c.name, email: c.email || "" })))
+        if (clients.length > 0) {
+          setClientName(clients[0].name)
+          setClientEmail(clients[0].email || "")
+        }
+      }).catch(() => {})
 
       getProjects().then(projs => {
         setAvailableProjects(projs.map(p => ({ title: p.title, client: p.client })))

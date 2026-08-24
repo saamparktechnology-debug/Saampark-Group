@@ -27,7 +27,7 @@ import { Tabs } from "@/components/ui/Tabs"
 import { useAuthStore } from "@/store/useAuthStore"
 import { getPayments, addPayment, deletePayment, PaymentItem } from "./services/paymentService"
 import { getInvoices, InvoiceItem } from "../invoices/services/invoiceService"
-import { getStoredClients } from "@/app/feature/clients/services/clientService"
+
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 
 export default function PaymentsPage() {

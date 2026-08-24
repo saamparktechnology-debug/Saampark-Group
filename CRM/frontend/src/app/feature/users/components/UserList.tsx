@@ -5,6 +5,7 @@ import { motion } from "framer-motion"
 import { Search, Filter, Shield, Edit2, Trash2, CheckCircle2, XCircle, Clock, Building2, Mail, Phone, Lock } from "lucide-react"
 import { UserItem, UserRole, UserStatus } from "../types"
 import { usePermissionStore } from "@/store/usePermissionStore"
+import { useAuthStore } from "@/store/useAuthStore"
 
 interface UserListProps {
   users: UserItem[]
@@ -28,6 +29,8 @@ const STATUS_ICONS: Record<UserStatus, React.ReactNode> = {
 }
 
 export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUserModules }: UserListProps) {
+  const { user: currentUser } = useAuthStore()
+  const isSuperAdmin = currentUser?.role === "Super Admin"
   const [searchTerm, setSearchTerm] = React.useState("")
   const [selectedRole, setSelectedRole] = React.useState<string>("All")
   const [selectedStatus, setSelectedStatus] = React.useState<string>("All")
@@ -72,10 +75,9 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
               className="px-3 py-1.5 rounded-lg bg-surface border border-border text-xs focus:outline-none focus:ring-2 focus:ring-primary/50"
             >
               <option value="All">All Roles</option>
-              <option value="Super Admin">Super Admin</option>
+              {isSuperAdmin && <option value="Super Admin">Super Admin</option>}
               <option value="Admin">Admin</option>
               <option value="Teams">Teams</option>
-              <option value="User">User</option>
               <option value="Clients">Clients</option>
             </select>
           </div>

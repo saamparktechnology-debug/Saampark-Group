@@ -10,7 +10,7 @@ import { usePermissionStore } from "@/store/usePermissionStore"
 import { Subscription } from "./types"
 import { getSubscriptions, addSubscription, deleteSubscription } from "./services/subscriptionService"
 import { SubscriptionList } from "./components/SubscriptionList"
-import { getStoredClients } from "@/app/feature/clients/services/clientService"
+import { getClients } from "@/app/feature/clients/services/clientService"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 
 export default function SubscriptionsMain() {
@@ -50,11 +50,12 @@ export default function SubscriptionsMain() {
 
   React.useEffect(() => {
     if (isAddModalOpen) {
-      const cList = getStoredClients()
-      setAvailableClients(cList.map(c => ({ name: c.name, email: c.email || "" })))
-      if (cList.length > 0 && !clientName) {
-        setClientName(cList[0].name)
-      }
+      getClients().then((cList) => {
+        setAvailableClients(cList.map(c => ({ name: c.name, email: c.email || "" })))
+        if (cList.length > 0 && !clientName) {
+          setClientName(cList[0].name)
+        }
+      }).catch(() => {})
     }
   }, [isAddModalOpen, clientName])
 

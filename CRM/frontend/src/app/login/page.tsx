@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { useAuthStore, DEMO_USERS, Role } from "@/store/useAuthStore"
-import { recordUserAccount, getStoredUserAccounts, isUserDeleted } from "@/app/feature/users/services/userService"
+import { recordUserAccount, getStoredUserAccountsAsync, isUserDeleted } from "@/app/feature/users/services/userService"
 import { normalizeRole } from "@/store/usePermissionStore"
 import { AuthService } from "@/services/apiServices"
 
@@ -187,7 +187,7 @@ export default function LoginPage() {
       }
 
       // Fallback or override check from registered user accounts database
-      const registeredAccounts = getStoredUserAccounts()
+      const registeredAccounts = await getStoredUserAccountsAsync()
       const localAccount = registeredAccounts.find(
         (acc) => acc.email.toLowerCase().trim() === normalizedEmail
       )

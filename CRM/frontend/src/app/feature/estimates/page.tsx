@@ -10,7 +10,7 @@ import {
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { getEstimates, addEstimate, updateEstimateStatus, deleteEstimate, EstimateItem, EstimateServiceItem, EstimateStatus } from "./services/estimateService"
-import { getStoredClients } from "@/app/feature/clients/services/clientService"
+import { getClients } from "@/app/feature/clients/services/clientService"
 import { addProject } from "@/app/feature/projects/services/projectService"
 import { addInvoice } from "@/app/feature/sales/invoices/services/invoiceService"
 import { addOrder } from "@/app/feature/sales/orders/services/orderService"
@@ -68,12 +68,13 @@ export default function EstimatesPage() {
 
   React.useEffect(() => {
     if (isCreateModalOpen) {
-      const cList = getStoredClients()
-      setAvailableClients(cList.map(c => ({ name: c.name, email: c.email || "" })))
-      if (cList.length > 0) {
-        setClient(cList[0].name)
-        setClientEmail(cList[0].email || "")
-      }
+      getClients().then((cList) => {
+        setAvailableClients(cList.map(c => ({ name: c.name, email: c.email || "" })))
+        if (cList.length > 0) {
+          setClient(cList[0].name)
+          setClientEmail(cList[0].email || "")
+        }
+      }).catch(() => {})
     }
   }, [isCreateModalOpen])
 

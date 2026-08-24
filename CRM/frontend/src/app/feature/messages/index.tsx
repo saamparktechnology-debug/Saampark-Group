@@ -9,7 +9,7 @@ import {
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { getUsers } from "@/app/feature/users/services/userService"
-import { getStoredClients } from "@/app/feature/clients/services/clientService"
+import { getClients } from "@/app/feature/clients/services/clientService"
 import { getLeads } from "@/app/feature/leads/services/leadService"
 import { getProjects } from "@/app/feature/projects/services/projectService"
 import { fetchModuleDataFromDB, saveModuleDataToDB, filterGlobalDeletedItems, markGlobalItemDeleted } from "@/lib/storageSync"
@@ -66,7 +66,7 @@ export default function MessagesMain() {
         const targetComp = activeCompanyId || user.companyId || "tech"
         const [userList, clientList, leadList, projectList] = await Promise.all([
           getUsers(currentUserRole === "Super Admin" ? "all" : targetComp).catch(() => []),
-          Promise.resolve(getStoredClients()),
+          getClients(currentUserRole === "Super Admin" ? undefined : targetComp).catch(() => []),
           getLeads(targetComp).catch(() => []),
           getProjects(targetComp).catch(() => []),
         ])

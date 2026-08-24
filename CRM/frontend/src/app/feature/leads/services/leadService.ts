@@ -2,7 +2,7 @@ import { Lead } from "../types"
 import { api } from "@/lib/api"
 import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted, filterGlobalDeletedItems } from "@/lib/storageSync"
 import { taskService } from "../../tasks/services/taskService"
-import { saveStoredClient, getStoredClients } from "../../clients/services/clientService"
+import { saveStoredClient, getClients } from "../../clients/services/clientService"
 import { recordUserAccount } from "../../users/services/userService"
 
 export const initialLeads: Lead[] = []
@@ -118,7 +118,7 @@ export async function checkAndAutoConvertLeadToClient(lead: Lead, companyId?: st
   if (!lead || lead.status !== "Won") return
 
   try {
-    const storedClients = getStoredClients()
+    const storedClients = await getClients()
     const emailNorm = (lead.email || `lead_${lead.id}@saampark.in`).toLowerCase().trim()
     const clientName = lead.name || "Won Client"
 

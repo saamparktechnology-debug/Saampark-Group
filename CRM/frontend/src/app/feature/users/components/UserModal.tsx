@@ -47,7 +47,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
     if (isCurrentSuperAdmin) {
       return ["Super Admin", "Admin", "Teams", "Clients"]
     }
-    return ["Teams", "Clients"]
+    return ["Admin", "Teams", "Clients"]
   }, [isCurrentSuperAdmin])
 
   // Filter available companies based on current user's assigned companies:

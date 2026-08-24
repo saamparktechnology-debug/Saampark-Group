@@ -4,27 +4,6 @@ import { filterGlobalDeletedItems, markGlobalItemDeleted, fetchModuleDataFromDB,
 
 export const initialTasks: Task[] = []
 
-const TASKS_STORAGE_KEY = "saampark_tasks_store"
-
-function getPersistedTasks(): Task[] {
-  if (typeof window === "undefined") return []
-  try {
-    const raw = localStorage.getItem(TASKS_STORAGE_KEY)
-    const list: Task[] = raw ? JSON.parse(raw) : []
-    return Array.isArray(list) ? filterGlobalDeletedItems(list) : []
-  } catch {
-    return []
-  }
-}
-
-function savePersistedTasks(tasks: Task[]): void {
-  if (typeof window === "undefined") return
-  try {
-    localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks))
-    saveModuleDataToDB("tasks", tasks)
-  } catch {}
-}
-
 export const taskService = {
   getTasks: async (companyId?: string): Promise<Task[]> => {
     // Fetch persisted data from MySQL app_data store with deleted items filtered out

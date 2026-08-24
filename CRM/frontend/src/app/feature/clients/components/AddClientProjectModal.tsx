@@ -9,7 +9,7 @@ import { addInvoice } from "@/app/feature/sales/invoices/services/invoiceService
 import { addOrder } from "@/app/feature/sales/orders/services/orderService"
 import { addPayment } from "@/app/feature/sales/payments/services/paymentService"
 import { taskService } from "@/app/feature/tasks/services/taskService"
-import { saveStoredClient, getStoredClients } from "../services/clientService"
+import { saveStoredClient, getClients } from "../services/clientService"
 
 import { useAuthStore } from "@/store/useAuthStore"
 
@@ -185,7 +185,7 @@ export function AddClientProjectModal({
       }
 
       // 5. Update Client Stats
-      const storedClients = getStoredClients()
+      const storedClients = await getClients()
       const existingIdx = storedClients.findIndex(c => c.id === client.id || c.email === client.email)
       const currentInvoicedNum = parseInt((client.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
       const currentDueNum = parseInt((client.due || "0").replace(/[^0-9]/g, "")) || 0

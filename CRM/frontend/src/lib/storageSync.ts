@@ -71,6 +71,7 @@ export function filterGlobalDeletedItems<T extends { id: string | number }>(item
 
 /**
  * Fetch module data from MySQL DB with company isolation.
+ * MySQL is the single source of truth — no localStorage fallback for business data.
  * Response shape from backend: { status: "success", message: "...", data: <payload> }
  */
 export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: T, companyId?: string): Promise<T> {
@@ -101,16 +102,16 @@ export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: 
     console.warn(`MySQL fetch warning for module ${moduleKey}:`, err)
   }
 
-  // If fetching for a specific non-default company, return empty array rather than leaking default fallback
-  if (targetCompany && targetCompany !== "tech" && targetCompany !== "all") {
+  // MySQL is the source of truth — return empty array if no data found
+  // Only use fallbackData if explicitly provided as non-empty (e.g., seed default labels)
+  if (Array.isArray(fallbackData) && (fallbackData as any[]).length === 0) {
     return [] as any
   }
-
-  return filterGlobalDeletedItems(fallbackData as any, localDeleted) as any
+  return fallbackData
 }
 
 /**
- * Save module data to MySQL DB.
+ * Save module data to MySQL DB — single source of truth, no localStorage writes.
  */
 export async function saveModuleDataToDB<T>(moduleKey: string, data: T, companyId?: string): Promise<void> {
   try {
@@ -130,3 +131,4 @@ export async function saveModuleDataToDB<T>(moduleKey: string, data: T, companyI
     console.warn(`MySQL save warning for module ${moduleKey}:`, err)
   }
 }
+

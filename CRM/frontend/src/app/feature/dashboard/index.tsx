@@ -16,7 +16,7 @@ import { KPICard } from "./components/KPICard"
 import { DonutChart } from "./components/DonutChart"
 import { BarChartMockup } from "./components/BarChartMockup"
 import { DATA } from "./services/dashboardService"
-import { getStoredUserAccounts, getUsers } from "../users/services/userService"
+import { getStoredUserAccountsAsync, getUsers } from "../users/services/userService"
 import { taskService } from "../tasks/services/taskService"
 import { getProjects } from "../projects/services/projectService"
 import { Task } from "../tasks/types"
@@ -106,13 +106,12 @@ export default function DashboardMain() {
 
   React.useEffect(() => {
     if (typeof window !== "undefined") {
-
-      const accounts = getStoredUserAccounts()
-      setRealUsers(accounts)
-      if (accounts.length > 0 && !selectedUserEmail) {
-        setSelectedUserEmail(accounts[0].email)
-      }
-
+      getStoredUserAccountsAsync().then((accounts) => {
+        setRealUsers(accounts)
+        if (accounts.length > 0 && !selectedUserEmail) {
+          setSelectedUserEmail(accounts[0].email)
+        }
+      }).catch(() => {})
       // Load active tasks count dynamically
       const loadTaskCount = async () => {
         const tasks = await taskService.getTasks()
@@ -206,8 +205,8 @@ export default function DashboardMain() {
       return clientName === userName || clientName.includes(userName) || (userEmail && clientName.includes(userEmail))
     })
 
-    const completedProjects = clientProjects.filter(p => (p.completion || 0) >= 100 || p.status === "Completed")
-    const activeProjects = clientProjects.filter(p => (p.completion || 0) < 100 && p.status !== "Completed")
+    const completedProjects = clientProjects.filter(p => (p.progress || 0) >= 100 || p.status === "Completed")
+    const activeProjects = clientProjects.filter(p => (p.progress || 0) < 100 && p.status !== "Completed")
 
     return (
       <div className="space-y-6 pb-12 bg-background/50 min-h-screen p-4 sm:px-8 sm:py-6">
@@ -259,7 +258,7 @@ export default function DashboardMain() {
                 </div>
               ) : (
                 clientProjects.slice(0, 5).map((p, i) => {
-                  const pct = Math.min(100, Math.max(0, p.completion || 0))
+                  const pct = Math.min(100, Math.max(0, p.progress || 0))
                   const statusColor = pct >= 100 ? "bg-emerald-600" : pct >= 60 ? "bg-blue-600" : "bg-amber-500"
                   const badgeColor = pct >= 100 ? "bg-emerald-100 text-emerald-700" : pct >= 60 ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
                   return (
@@ -267,9 +266,9 @@ export default function DashboardMain() {
                       className="p-4 bg-surface border border-border/80 rounded-xl space-y-3 hover:border-primary/30 transition-colors">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-bold text-sm text-foreground truncate">{p.name}</h3>
+                          <h3 className="font-bold text-sm text-foreground truncate">{p.title}</h3>
                           <p className="text-xs text-muted-foreground mt-0.5">
-                            {p.manager && <span>PM: <strong className="text-foreground">{p.manager}</strong> · </span>}
+                            {p.client && <span>Client: <strong className="text-foreground">{p.client}</strong> · </span>}
                             {p.deadline && <span>Due: {p.deadline}</span>}
                           </p>
                         </div>
@@ -625,12 +624,12 @@ export default function DashboardMain() {
                 </div>
               ) : (
                 myProjects.slice(0, 4).map((p, i) => {
-                  const pct = Math.min(100, Math.max(0, p.completion || 0))
+                  const pct = Math.min(100, Math.max(0, p.progress || 0))
                   return (
                     <motion.div key={p.id || i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.07 }}
                       className="p-3 bg-surface border border-border rounded-xl space-y-2 hover:border-primary/30 transition-colors">
                       <div className="flex items-center justify-between">
-                        <span className="font-semibold text-foreground truncate">{p.name}</span>
+                        <span className="font-semibold text-foreground truncate">{p.title}</span>
                         <span className="text-[10px] font-bold text-muted-foreground ml-2">{pct}%</span>
                       </div>
                       <div className="h-1.5 w-full bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">

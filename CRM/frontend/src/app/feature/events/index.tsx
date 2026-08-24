@@ -10,7 +10,7 @@ import { ManageLabelsModal } from "./components/ManageLabelsModal"
 import { AddEventModal } from "./components/AddEventModal"
 import { EventDetailsModal } from "./components/EventDetailsModal"
 import {
-  getStoredEvents,
+  getEvents,
   saveStoredEvent,
   deleteStoredEvent,
   getStoredEventLabels,
@@ -35,10 +35,10 @@ export default function EventsMain() {
   const [isDetailsModalOpen, setIsDetailsModalOpen] = React.useState(false)
   const [selectedEventDetails, setSelectedEventDetails] = React.useState<CalendarEvent | null>(null)
 
-  // Load stored persistent events on mount
+  // Load events and labels from MySQL on mount
   React.useEffect(() => {
-    setEvents(getStoredEvents())
-    setLabels(getStoredEventLabels())
+    getEvents().then(setEvents).catch(() => {})
+    getStoredEventLabels().then(setLabels).catch(() => {})
   }, [])
 
   // Date Cell Click Handler -> Opens Add Event Modal with clicked date pre-filled
@@ -53,23 +53,23 @@ export default function EventsMain() {
     setIsDetailsModalOpen(true)
   }
 
-  const handleAddLabel = (newLabel: EventLabel) => {
-    const updated = saveStoredEventLabel(newLabel)
+  const handleAddLabel = async (newLabel: EventLabel) => {
+    const updated = await saveStoredEventLabel(newLabel)
     setLabels(updated)
   }
 
-  const handleDeleteLabel = (id: string) => {
-    const updated = deleteStoredEventLabel(id)
+  const handleDeleteLabel = async (id: string) => {
+    const updated = await deleteStoredEventLabel(id)
     setLabels(updated)
   }
 
-  const handleSaveEvent = (newEvent: Partial<CalendarEvent>) => {
-    const updated = saveStoredEvent(newEvent as CalendarEvent)
+  const handleSaveEvent = async (newEvent: Partial<CalendarEvent>) => {
+    const updated = await saveStoredEvent(newEvent as CalendarEvent)
     setEvents(updated)
   }
 
-  const handleDeleteEvent = (id: string) => {
-    const updated = deleteStoredEvent(id)
+  const handleDeleteEvent = async (id: string) => {
+    const updated = await deleteStoredEvent(id)
     setEvents(updated)
   }
 
