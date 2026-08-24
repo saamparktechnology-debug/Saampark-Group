@@ -110,22 +110,32 @@ export default function TasksMain() {
 
   const visibleTasks = React.useMemo(() => {
     if (!user || isSuperOrAdmin) return tasks
-    const normName = (user.name || "").toLowerCase().trim()
+
+    const normName = (user.name || (user as any).full_name || "").toLowerCase().trim()
     const normEmail = (user.email || "").toLowerCase().trim()
+    const normId = String(user.id || "").toLowerCase().trim()
+
     return tasks.filter((t) => {
-      const assigned = (t.assignedTo || "").toLowerCase().trim()
-      const collab = (t.collaborators || "").toLowerCase().trim()
-      if (!assigned) return false
-      return (
-        assigned === normName ||
-        assigned === normEmail ||
-        (normName && (assigned.includes(normName) || normName.includes(assigned))) ||
-        (normEmail && assigned.includes(normEmail)) ||
-        (collab && normName && collab.includes(normName)) ||
-        (collab && normEmail && collab.includes(normEmail))
-      )
+      if (!t) return false
+
+      const assigned = (t.assignedTo || (t as any).assigned_to || (t as any).assignee || "").toLowerCase().trim()
+      const collab = (t.collaborators || (t as any).members || "").toLowerCase().trim()
+      const createdBy = ((t as any).createdBy || (t as any).created_by || "").toLowerCase().trim()
+
+      const checkMatch = (fieldStr: string) => {
+        if (!fieldStr || fieldStr === "unassigned" || fieldStr === "none") return false
+        return (
+          fieldStr === normName ||
+          fieldStr === normEmail ||
+          fieldStr === normId ||
+          (normName && (fieldStr.includes(normName) || normName.includes(fieldStr))) ||
+          (normEmail && fieldStr.includes(normEmail))
+        )
+      }
+
+      return checkMatch(assigned) || checkMatch(collab) || checkMatch(createdBy)
     })
-  }, [tasks, user, isSuperOrAdmin])
+  }, [tasks, user])
 
   return (
     <div className="p-4 sm:p-6 max-w-[1600px] mx-auto space-y-6">
