@@ -171,8 +171,13 @@ export function recordUserAccount(user: Partial<UserItem>, isNewRegistration = f
     );
     let updatedList: UserItem[];
     if (existingIndex >= 0) {
+      const prevName = currentAccounts[existingIndex].name;
       updatedList = [...currentAccounts];
       updatedList[existingIndex] = { ...currentAccounts[existingIndex], ...updatedAccount };
+
+      if (prevName && prevName.trim() !== updatedAccount.name.trim()) {
+        cascadeUserNameChange(prevName, normalizedEmail, updatedAccount.name).catch(() => {});
+      }
     } else {
       updatedList = [updatedAccount, ...currentAccounts];
     }
@@ -183,6 +188,108 @@ export function recordUserAccount(user: Partial<UserItem>, isNewRegistration = f
     window.dispatchEvent(new Event("storage"));
   }
   return updatedAccount;
+}
+
+// Cascade user name change across assigned Tasks, Leads, and Clients
+export async function cascadeUserNameChange(oldName: string, email: string, newName: string): Promise<void> {
+  if (!oldName || !newName || oldName.trim().toLowerCase() === newName.trim().toLowerCase()) return;
+  const oNameNorm = oldName.trim().toLowerCase();
+  const emailNorm = email.toLowerCase().trim();
+
+  // 1. Tasks
+  try {
+    const tasks = await fetchModuleDataFromDB<any[]>("tasks", [], "all");
+    let changed = false;
+    const updated = tasks.map((t) => {
+      let tChanged = false;
+      let assignedTo = t.assignedTo || "";
+      let collaborators = t.collaborators || "";
+
+      if (assignedTo.toLowerCase().trim() === oNameNorm || assignedTo.toLowerCase().trim() === emailNorm) {
+        assignedTo = newName;
+        tChanged = true;
+      }
+      if (collaborators && (collaborators.toLowerCase().includes(oNameNorm) || collaborators.toLowerCase().includes(emailNorm))) {
+        collaborators = collaborators.replace(new RegExp(oldName, "gi"), newName);
+        tChanged = true;
+      }
+      if (tChanged) {
+        changed = true;
+        return { ...t, assignedTo, collaborators };
+      }
+      return t;
+    });
+    if (changed) {
+      await saveModuleDataToDB("tasks", updated, "all");
+    }
+  } catch (err) {
+    console.warn("Cascade tasks update warning:", err);
+  }
+
+  // 2. Leads
+  try {
+    const leads = await fetchModuleDataFromDB<any[]>("leads", [], "all");
+    let changed = false;
+    const updated = leads.map((l) => {
+      let lChanged = false;
+      let assignedTo = l.assignedTo || "";
+      let caller = l.caller || "";
+      let owner = l.owner || "";
+
+      if (assignedTo.toLowerCase().trim() === oNameNorm || assignedTo.toLowerCase().trim() === emailNorm) {
+        assignedTo = newName;
+        lChanged = true;
+      }
+      if (caller.toLowerCase().trim() === oNameNorm || caller.toLowerCase().trim() === emailNorm) {
+        caller = newName;
+        lChanged = true;
+      }
+      if (owner.toLowerCase().trim() === oNameNorm || owner.toLowerCase().trim() === emailNorm) {
+        owner = newName;
+        lChanged = true;
+      }
+      if (lChanged) {
+        changed = true;
+        return { ...l, assignedTo, caller, owner };
+      }
+      return l;
+    });
+    if (changed) {
+      await saveModuleDataToDB("leads", updated, "all");
+    }
+  } catch (err) {
+    console.warn("Cascade leads update warning:", err);
+  }
+
+  // 3. Clients
+  try {
+    const clients = await fetchModuleDataFromDB<any[]>("clients", [], "all");
+    let changed = false;
+    const updated = clients.map((c) => {
+      let cChanged = false;
+      let owner = c.owner || "";
+      let primaryContact = c.primaryContact || "";
+
+      if (owner.toLowerCase().trim() === oNameNorm || owner.toLowerCase().trim() === emailNorm) {
+        owner = newName;
+        cChanged = true;
+      }
+      if (primaryContact.toLowerCase().trim() === oNameNorm || primaryContact.toLowerCase().trim() === emailNorm) {
+        primaryContact = newName;
+        cChanged = true;
+      }
+      if (cChanged) {
+        changed = true;
+        return { ...c, owner, primaryContact };
+      }
+      return c;
+    });
+    if (changed) {
+      await saveModuleDataToDB("clients", updated, "all");
+    }
+  } catch (err) {
+    console.warn("Cascade clients update warning:", err);
+  }
 }
 
 // Delete user permanently

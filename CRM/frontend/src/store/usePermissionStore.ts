@@ -309,7 +309,15 @@ export const usePermissionStore = create<PermissionState>()(
         }
 
         const isAllowed = get().isModuleAllowed(user, moduleName)
-        return isAllowed ? { ...DEFAULT_FULL_ACTIONS } : { view: false, add: false, edit: false, delete: false }
+        if (!isAllowed) return { view: false, add: false, edit: false, delete: false }
+
+        if (normRole === 'Teams') {
+          return { view: true, add: true, edit: true, delete: false }
+        }
+        if (normRole === 'Clients') {
+          return { view: true, add: false, edit: false, delete: false }
+        }
+        return { ...DEFAULT_FULL_ACTIONS }
       },
 
       canPerformAction: (user: User | null, moduleName: string, action: keyof ModuleActionFlags): boolean => {
