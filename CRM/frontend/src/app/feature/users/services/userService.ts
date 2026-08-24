@@ -199,6 +199,7 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
   const mapRoleName = (r?: string, rId?: number): UserRole => {
     if (rId === 1) return "Super Admin";
     if (rId === 2) return "Admin";
+    if (rId === 3) return "Teams";
     if (rId === 4) return "Clients";
     if (!r) return "Teams";
     const lower = r.toLowerCase();
@@ -208,8 +209,8 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
     return "Teams";
   };
 
-  // 1. Always fetch primary list from MySQL app_data DB
-  let dbUsers = await fetchModuleDataFromDB<UserItem[]>("users", []);
+  // 1. Fetch all primary user records from MySQL app_data DB (force companyId='all' so no users are filtered out prematurely)
+  let dbUsers = await fetchModuleDataFromDB<UserItem[]>("users", [], "all");
 
   if (!Array.isArray(dbUsers) || dbUsers.length === 0) {
     dbUsers = [
@@ -229,7 +230,7 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
         joinedDate: "2024-01-01",
       },
     ];
-    saveModuleDataToDB("users", dbUsers);
+    saveModuleDataToDB("users", dbUsers, "all");
   }
 
   // 2. Merge with live backend /users database table if available

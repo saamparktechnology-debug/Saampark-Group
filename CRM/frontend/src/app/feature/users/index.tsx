@@ -14,8 +14,13 @@ import { UserModal } from "./components/UserModal"
 import { ModulePermissionsModal } from "./components/ModulePermissionsModal"
 import { CompanyModal } from "./components/CompanyModal"
 
+import { usePermissionStore } from "@/store/usePermissionStore"
+
 export default function UsersMain() {
   const { activeCompanyId, user } = useAuthStore()
+  const { canPerformAction } = usePermissionStore()
+
+  const canAddUser = user?.role === "Super Admin" || canPerformAction(user, "Users", "add")
 
   // ── Access Guard: Only Super Admin and Admin can access User Management ──
   if (user && user.role !== "Super Admin" && user.role !== "Admin") {
@@ -264,9 +269,11 @@ export default function UsersMain() {
             <Download size={16} /> Export CSV
           </Button>
 
-          <Button variant="primary" size="sm" onClick={handleOpenCreateModal} className="gap-2 cursor-pointer">
-            <UserPlus size={16} /> Add New User
-          </Button>
+          {canAddUser && (
+            <Button variant="primary" size="sm" onClick={handleOpenCreateModal} className="gap-2 cursor-pointer">
+              <UserPlus size={16} /> Add New User
+            </Button>
+          )}
         </div>
       </div>
 

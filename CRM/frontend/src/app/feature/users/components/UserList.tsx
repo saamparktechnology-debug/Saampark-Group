@@ -30,11 +30,15 @@ const STATUS_ICONS: Record<UserStatus, React.ReactNode> = {
 
 export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUserModules }: UserListProps) {
   const { user: currentUser } = useAuthStore()
+  const { getModulesForUser, canPerformAction } = usePermissionStore()
+
   const isSuperAdmin = currentUser?.role === "Super Admin"
+  const canEditUsers = isSuperAdmin || canPerformAction(currentUser, "Users", "edit")
+  const canDeleteUsers = isSuperAdmin || canPerformAction(currentUser, "Users", "delete")
+
   const [searchTerm, setSearchTerm] = React.useState("")
   const [selectedRole, setSelectedRole] = React.useState<string>("All")
   const [selectedStatus, setSelectedStatus] = React.useState<string>("All")
-  const { getModulesForUser } = usePermissionStore()
 
   const filteredUsers = React.useMemo(() => {
     return users.filter((u) => {
@@ -159,7 +163,7 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
                           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-purple-500/10 text-purple-400 border border-purple-500/30">
                             👑 Full Master Access
                           </span>
-                        ) : (
+                        ) : canEditUsers ? (
                           <button
                             type="button"
                             onClick={() => onEdit(u)}
@@ -169,6 +173,11 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
                             <Lock size={12} />
                             <span>{allowedMods.length} Module{allowedMods.length === 1 ? "" : "s"} Allowed</span>
                           </button>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-surface border border-border text-muted-foreground">
+                            <Lock size={12} />
+                            <span>{allowedMods.length} Module{allowedMods.length === 1 ? "" : "s"} Allowed</span>
+                          </span>
                         )}
                       </td>
 
@@ -193,8 +202,9 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
                       {/* Status */}
                       <td className="py-3.5 px-4">
                         <button
-                          onClick={() => onToggleStatus(u.id)}
-                          className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg border border-border hover:bg-surface-hover transition-colors cursor-pointer"
+                          onClick={() => canEditUsers && onToggleStatus(u.id)}
+                          disabled={!canEditUsers}
+                          className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg border border-border transition-colors ${canEditUsers ? "hover:bg-surface-hover cursor-pointer" : "opacity-70 cursor-not-allowed"}`}
                         >
                           {STATUS_ICONS[u.status]}
                           <span>{u.status}</span>
@@ -204,14 +214,16 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
                       {/* Actions */}
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => onEdit(u)}
-                            title="Edit User Account & Module Access"
-                            className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
-                          >
-                            <Edit2 size={16} />
-                          </button>
-                          {u.role !== "Super Admin" && (
+                          {canEditUsers && (
+                            <button
+                              onClick={() => onEdit(u)}
+                              title="Edit User Account & Module Access"
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                            >
+                              <Edit2 size={16} />
+                            </button>
+                          )}
+                          {canDeleteUsers && u.role !== "Super Admin" && (
                             <button
                               onClick={() => {
                                 if (confirm(`Are you sure you want to delete user "${u.name}" (${u.email})?\n\nThis account will be permanently deleted and will no longer be able to log in.`)) {

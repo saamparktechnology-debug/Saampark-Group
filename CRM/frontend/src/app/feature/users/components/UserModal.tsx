@@ -156,8 +156,15 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
     const init: Record<string, ModuleActionFlags> = {}
     CONFIGURABLE_MODULES.forEach((m) => {
       const isAllowed = roleMods.includes(m as ModuleName)
+      const adminFlags = isCurrentSuperAdmin ? DEFAULT_FULL_ACTIONS : getUserModuleActions(currentUser, m)
+
       init[m] = isAllowed
-        ? { ...DEFAULT_FULL_ACTIONS }
+        ? {
+            view: adminFlags.view,
+            add: adminFlags.add,
+            edit: adminFlags.edit,
+            delete: adminFlags.delete,
+          }
         : { view: false, add: false, edit: false, delete: false }
     })
     setActionMatrix(init)

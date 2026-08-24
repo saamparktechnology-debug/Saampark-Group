@@ -9,7 +9,7 @@ const getAllUsers = async (req, res, next) => {
               u.company_id, u.company_ids,
               r.name as role_name, r.id as role_id
        FROM users u
-       JOIN roles r ON u.role_id = r.id
+       LEFT JOIN roles r ON u.role_id = r.id
        WHERE u.deleted_at IS NULL
        ORDER BY u.id DESC`
     );
@@ -27,7 +27,7 @@ const getUserById = async (req, res, next) => {
       `SELECT u.id, u.full_name, u.email, u.phone, u.department, u.status, u.permissions, u.company_id, u.company_ids,
               r.name as role_name, r.id as role_id
        FROM users u
-       JOIN roles r ON u.role_id = r.id
+       LEFT JOIN roles r ON u.role_id = r.id
        WHERE (u.id = ? OR u.email = ?) AND u.deleted_at IS NULL`,
       [id, id]
     );
