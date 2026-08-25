@@ -25,6 +25,8 @@ export interface User {
   companyIds?: string[] // Assigned companies list
   avatar: string
   phone?: string
+  allowedModules?: string[]
+  permissions?: any
 }
 
 export const DEFAULT_COMPANIES: Company[] = [
@@ -129,6 +131,15 @@ export const useAuthStore = create<AuthState>()(
 
         const assignedCompanyIds = customUser?.companyIds || (normalizedRole === 'Super Admin' ? ['tech', 'digital'] : [customUser?.companyId || 'tech'])
 
+        let parsedPerms: any = customUser?.permissions
+        if (typeof parsedPerms === 'string') {
+          try { parsedPerms = JSON.parse(parsedPerms) } catch {}
+        }
+
+        const userAllowedMods =
+          customUser?.allowedModules ||
+          (parsedPerms && Array.isArray(parsedPerms.allowedModules) ? parsedPerms.allowedModules : undefined)
+
         const user: User = {
           id: customUser?.id || `u_${Date.now()}`,
           name: customUser?.name || `${normalizedRole} User`,
@@ -138,6 +149,8 @@ export const useAuthStore = create<AuthState>()(
           companyIds: assignedCompanyIds,
           avatar: customUser?.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${customUser?.email || normalizedRole}`,
           phone: customUser?.phone,
+          allowedModules: userAllowedMods,
+          permissions: parsedPerms || customUser?.permissions,
         }
 
         const activeCompanyId = user.companyId || 'tech'
@@ -177,6 +190,15 @@ export const useAuthStore = create<AuthState>()(
               parsedCompanyIds = [res.user?.company_id || 'tech']
             }
 
+            let resPerms: any = res.user?.permissions
+            if (typeof resPerms === 'string') {
+              try { resPerms = JSON.parse(resPerms) } catch {}
+            }
+
+            const userAllowedMods =
+              res.user?.allowedModules ||
+              (resPerms && Array.isArray(resPerms.allowedModules) ? resPerms.allowedModules : undefined)
+
             const userObj: User = {
               id: res.user?.id || 'u_live',
               name: res.user?.full_name || res.user?.name || res.user?.email || 'User',
@@ -186,6 +208,8 @@ export const useAuthStore = create<AuthState>()(
               companyIds: parsedCompanyIds,
               avatar: res.user?.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${res.user?.email || 'user'}`,
               phone: res.user?.phone,
+              allowedModules: userAllowedMods,
+              permissions: resPerms || res.user?.permissions,
             }
 
             set({

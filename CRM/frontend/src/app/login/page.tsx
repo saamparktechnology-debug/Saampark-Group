@@ -286,6 +286,8 @@ export default function LoginPage() {
         companyIds: parsedCompanyIds,
         avatar: matchedAccount.avatarUrl || matchedAccount.avatar_url || `https://api.dicebear.com/7.x/notionists/svg?seed=${normalizedEmail}`,
         phone: matchedAccount.phone || localAccount?.phone,
+        allowedModules: matchedAccount.allowedModules || localAccount?.allowedModules || (matchedAccount as any)?.permissions?.allowedModules,
+        permissions: matchedAccount.permissions || localAccount?.permissions,
       })
 
       setTimeout(() => {
