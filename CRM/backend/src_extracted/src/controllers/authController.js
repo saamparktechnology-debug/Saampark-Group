@@ -22,8 +22,18 @@ const register = async (req, res, next) => {
     const normEmail = email.toLowerCase().trim();
 
     // Check if user already exists
-    const [existingUsers] = await pool.execute('SELECT id, is_verified FROM users WHERE email = ?', [normEmail]);
+    const [existingUsers] = await pool.execute('SELECT id, is_verified, deleted_at FROM users WHERE email = ?', [normEmail]);
     if (existingUsers.length > 0) {
+      if (existingUsers[0].deleted_at) {
+        // Re-activate soft-deleted user
+        const hashedPassword = await hashPassword(password);
+        await pool.execute(
+          'UPDATE users SET full_name = ?, password_hash = ?, phone = ?, is_verified = 1, status = "active", deleted_at = NULL, updated_at = NOW() WHERE id = ?',
+          [displayName, hashedPassword, phone || null, existingUsers[0].id]
+        );
+        await pool.execute('DELETE FROM deleted_items WHERE item_id = ? AND module_name = "users"', [normEmail]);
+        return successResponse(res, 200, 'Account successfully restored and updated! You can now log in.', { email: normEmail, userId: existingUsers[0].id });
+      }
       if (!existingUsers[0].is_verified) {
         // Resend verification OTP
         await sendEmailVerificationOTP(normEmail, displayName);
@@ -118,26 +128,44 @@ const login = async (req, res, next) => {
       return errorResponse(res, 400, 'Email and password are required.');
     }
 
-    const [users] = await pool.execute(
+    let [users] = await pool.execute(
       `SELECT u.*, COALESCE(r.name, 'Teams') as role_name 
        FROM users u 
        LEFT JOIN roles r ON u.role_id = r.id 
-       WHERE LOWER(u.email) = ? AND u.deleted_at IS NULL AND (LOWER(u.status) = 'active' OR u.status IS NULL)`,
+       WHERE LOWER(u.email) = ? AND u.deleted_at IS NULL`,
       [email.toLowerCase().trim()]
     );
 
     if (users.length === 0) {
-      // Fallback check: check if account exists but deleted/inactive to give helpful error
-      const [allUserCheck] = await pool.execute('SELECT status, deleted_at FROM users WHERE LOWER(email) = ?', [email.toLowerCase().trim()]);
-      if (allUserCheck.length > 0) {
-        if (allUserCheck[0].deleted_at) {
-          return errorResponse(res, 401, 'Account has been deleted. Please contact your System Administrator.');
+      // Check if user exists in database but has deleted_at set (re-created or reactivated)
+      const [softDeleted] = await pool.execute(
+        `SELECT u.*, COALESCE(r.name, 'Teams') as role_name 
+         FROM users u 
+         LEFT JOIN roles r ON u.role_id = r.id 
+         WHERE LOWER(u.email) = ?`,
+        [email.toLowerCase().trim()]
+      );
+
+      if (softDeleted.length > 0) {
+        const candidate = softDeleted[0];
+        // Verify password first before auto-restoring
+        const pwdMatch = await comparePassword(password, candidate.password_hash);
+        if (pwdMatch) {
+          // Auto-restore this user account in MySQL
+          await pool.execute(
+            'UPDATE users SET deleted_at = NULL, status = "active", is_verified = 1, updated_at = NOW() WHERE id = ?',
+            [candidate.id]
+          );
+          await pool.execute('DELETE FROM deleted_items WHERE item_id = ? AND module_name = "users"', [email.toLowerCase().trim()]);
+          candidate.deleted_at = null;
+          candidate.status = 'active';
+          users = [candidate];
+        } else {
+          return errorResponse(res, 401, 'Invalid password. Please try again.');
         }
-        if (allUserCheck[0].status && allUserCheck[0].status.toLowerCase() === 'inactive') {
-          return errorResponse(res, 403, 'Your account is currently deactivated. Please contact your administrator.');
-        }
+      } else {
+        return errorResponse(res, 401, 'Account does not exist. Please check your email or contact your administrator.');
       }
-      return errorResponse(res, 401, 'Account does not exist. Please check your email or contact your administrator.');
     }
 
     const user = users[0];
