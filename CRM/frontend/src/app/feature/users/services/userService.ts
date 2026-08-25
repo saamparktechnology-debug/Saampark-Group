@@ -105,8 +105,29 @@ export function markUserAsDeleted(email: string): void {
 
 // Helper: get user accounts — reads from MySQL, returns DEFAULT_SYSTEM_ACCOUNTS if empty
 export async function getStoredUserAccountsAsync(): Promise<UserItem[]> {
-  const dbData = await fetchModuleDataFromDB<UserItem[]>("users", DEFAULT_SYSTEM_ACCOUNTS);
-  const data = Array.isArray(dbData) && dbData.length > 0 ? dbData : DEFAULT_SYSTEM_ACCOUNTS;
+  let dbData = await fetchModuleDataFromDB<UserItem[]>("users", DEFAULT_SYSTEM_ACCOUNTS, "all");
+  let data = Array.isArray(dbData) && dbData.length > 0 ? dbData : [...DEFAULT_SYSTEM_ACCOUNTS];
+
+  if (typeof window !== "undefined") {
+    try {
+      const rawLocal = localStorage.getItem("saampark_registered_accounts");
+      if (rawLocal) {
+        const localList: UserItem[] = JSON.parse(rawLocal);
+        if (Array.isArray(localList)) {
+          localList.forEach((lu) => {
+            const emailNorm = (lu.email || "").toLowerCase().trim();
+            if (emailNorm) {
+              const idx = data.findIndex((u) => u.email.toLowerCase().trim() === emailNorm);
+              if (idx < 0) {
+                data.push(lu);
+              }
+            }
+          });
+        }
+      }
+    } catch {}
+  }
+
   const deletedEmails = getDeletedUserEmails();
   return data.filter((a) => !deletedEmails.includes(a.email.toLowerCase().trim()));
 }
@@ -411,6 +432,31 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
       }
     }
   } catch {}
+
+  // Merge locally stored registered accounts from browser localStorage if available
+  if (typeof window !== "undefined") {
+    try {
+      const rawLocal = localStorage.getItem("saampark_registered_accounts");
+      if (rawLocal) {
+        const localList: UserItem[] = JSON.parse(rawLocal);
+        if (Array.isArray(localList)) {
+          localList.forEach((lu) => {
+            const emailNorm = (lu.email || "").toLowerCase().trim();
+            if (emailNorm && !deletedEmails.includes(emailNorm)) {
+              const idx = dbUsers.findIndex((u) => u.email.toLowerCase().trim() === emailNorm);
+              if (idx < 0) {
+                dbUsers.push(lu);
+              } else {
+                dbUsers[idx] = { ...lu, ...dbUsers[idx] };
+              }
+            }
+          });
+        }
+      }
+    } catch (err) {
+      console.warn("Local registered accounts merge warning:", err);
+    }
+  }
 
   // 2. Merge with live backend /users database table if available
   try {
