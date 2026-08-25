@@ -236,6 +236,8 @@ export function LeadKanban({
   const { user } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
   const canAddLead = canPerformAction(user, "Leads", "add")
+  const canEditLead = canPerformAction(user, "Leads", "edit")
+  const canDeleteLead = canPerformAction(user, "Leads", "delete")
   const isSuperAdminOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
 
   const [allUsers, setAllUsers] = React.useState<{ id: string; name: string; role?: string; department?: string; email?: string; avatar?: string }[]>([])
@@ -944,6 +946,7 @@ export function LeadKanban({
                 onDrop={async (e) => {
                   e.preventDefault()
                   e.stopPropagation()
+                  if (!canEditLead) return
                   const leadId = e.dataTransfer.getData("text/plain") || draggedLeadId
                   if (leadId) {
                     await handleDrop(col.id, leadId)
@@ -958,9 +961,9 @@ export function LeadKanban({
                     <div
                       key={l.id}
                       data-lead-card="true"
-                      draggable={!isLocked}
+                      draggable={!isLocked && canEditLead}
                       onDragStart={(e) => {
-                        if (isLocked) {
+                        if (isLocked || !canEditLead) {
                           e.preventDefault()
                           return
                         }
@@ -973,6 +976,7 @@ export function LeadKanban({
                       onDrop={async (e) => {
                         e.preventDefault()
                         e.stopPropagation()
+                        if (!canEditLead) return
                         const leadId = e.dataTransfer.getData("text/plain") || draggedLeadId
                         if (leadId) {
                           await handleDrop(col.id, leadId)
@@ -1197,8 +1201,8 @@ export function LeadKanban({
                               )
                             })()}
 
-                            {/* Edit Lead Button (Only via Pencil Icon) */}
-                            {!isLocked && (
+                            {/* Edit Lead Button (Only via Pencil Icon when edit permission is granted) */}
+                            {!isLocked && canEditLead && (
                               <button
                                 type="button"
                                 onMouseDown={(e) => e.stopPropagation()}
