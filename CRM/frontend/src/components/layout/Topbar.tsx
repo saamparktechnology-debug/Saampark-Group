@@ -13,31 +13,109 @@ import Link from "next/link"
 import { Button } from "../ui/Button"
 import { useUIStore } from "@/store/useUIStore"
 import { useAuthStore, COMPANIES } from "@/store/useAuthStore"
+import { usePermissionStore } from "@/store/usePermissionStore"
 
-// Quick-Add Dropdown options
+// Quick-Add Dropdown options with module keys
 const QUICK_ADD_OPTIONS = [
-  { label: "New Client", modal: "isAddClientModalOpen" },
-  { label: "New Project", modal: "isAddProjectModalOpen" },
-  { label: "New Task", modal: "isAddTaskModalOpen" },
-  { label: "New Lead", modal: "isAddLeadModalOpen" },
-  { label: "New Ticket", modal: "isAddTicketModalOpen" },
-  { label: "New Expense", modal: "isAddExpenseModalOpen" },
-]
+  { label: "New Client", modal: "isAddClientModalOpen", module: "Clients" },
+  { label: "New Project", modal: "isAddProjectModalOpen", module: "Projects" },
+  { label: "New Task", modal: "isAddTaskModalOpen", module: "Tasks" },
+  { label: "New Lead", modal: "isAddLeadModalOpen", module: "Leads" },
+  { label: "New Ticket", modal: "isAddTicketModalOpen", module: "Tickets" },
+  { label: "New Expense", modal: "isAddExpenseModalOpen", module: "Expenses" },
+] as const
 
 export function Topbar() {
   const { theme, setTheme } = useTheme()
   const { isSidebarCollapsed, toggleSidebar, openModal } = useUIStore()
   const { user, activeCompanyId, switchCompany, logout, companies, fetchCompanies } = useAuthStore()
-  
+  const { canPerformAction } = usePermissionStore()
+
   const [showProfileMenu, setShowProfileMenu] = React.useState(false)
   const [showQuickAdd, setShowQuickAdd] = React.useState(false)
   const [showNotifications, setShowNotifications] = React.useState(false)
   const [showCompanyMenu, setShowCompanyMenu] = React.useState(false)
   const [notifications, setNotifications] = React.useState<any[]>([])
 
+  const visibleQuickAddOptions = React.useMemo(() => {
+    if (!user) return []
+    if (user.role === "Super Admin") return QUICK_ADD_OPTIONS
+    return QUICK_ADD_OPTIONS.filter((opt) => canPerformAction(user, opt.module, "add"))
+  }, [user, canPerformAction])
+
   React.useEffect(() => {
     fetchCompanies()
   }, [fetchCompanies])
+
+  // Real-time synchronization of current user session with latest database record
+  React.useEffect(() => {
+    if (!user || !user.email) return
+
+    const syncUserSession = async () => {
+      try {
+        const { getStoredUserAccountsAsync } = await import("@/app/feature/users/services/userService")
+        const { usePermissionStore } = await import("@/store/usePermissionStore")
+        
+        const accounts = await getStoredUserAccountsAsync()
+        const myEmailNorm = user.email.toLowerCase().trim()
+        const dbRecord = accounts.find((a) => a.email.toLowerCase().trim() === myEmailNorm)
+
+        if (dbRecord) {
+          const freshCompanyIds = dbRecord.companyIds && dbRecord.companyIds.length > 0
+            ? dbRecord.companyIds
+            : [dbRecord.companyId || "tech"]
+
+          // If current active company is not in the assigned companies list, auto-switch to primary company
+          const currentActive = useAuthStore.getState().activeCompanyId
+          const nextActive = freshCompanyIds.includes(currentActive || "")
+            ? currentActive
+            : freshCompanyIds[0]
+
+          let freshPerms = dbRecord.permissions
+          if (typeof freshPerms === "string") {
+            try { freshPerms = JSON.parse(freshPerms) } catch {}
+          }
+
+          const freshAllowedMods = dbRecord.allowedModules || (freshPerms && Array.isArray(freshPerms.allowedModules) ? freshPerms.allowedModules : undefined)
+
+          // Update usePermissionStore in real-time
+          if (freshAllowedMods) {
+            usePermissionStore.getState().setUserPermissions(String(dbRecord.id), freshAllowedMods)
+            usePermissionStore.getState().setUserPermissions(myEmailNorm, freshAllowedMods)
+          }
+          if (freshPerms?.actionMatrix) {
+            usePermissionStore.getState().setUserAllModuleActions(String(dbRecord.id), freshPerms.actionMatrix)
+            usePermissionStore.getState().setUserAllModuleActions(myEmailNorm, freshPerms.actionMatrix)
+          }
+
+          useAuthStore.setState({
+            user: {
+              ...user,
+              name: dbRecord.name,
+              role: dbRecord.role,
+              companyId: nextActive || "tech",
+              companyIds: freshCompanyIds,
+              department: dbRecord.department,
+              phone: dbRecord.phone,
+              allowedModules: freshAllowedMods,
+              permissions: freshPerms,
+            },
+            activeCompanyId: nextActive || "tech",
+          })
+        }
+      } catch (err) {
+        console.warn("Session sync warning:", err)
+      }
+    }
+
+    syncUserSession()
+    window.addEventListener("focus", syncUserSession)
+    window.addEventListener("storage", syncUserSession)
+    return () => {
+      window.removeEventListener("focus", syncUserSession)
+      window.removeEventListener("storage", syncUserSession)
+    }
+  }, [user?.email])
 
   React.useEffect(() => {
     if (!user) return
@@ -246,7 +324,7 @@ export function Topbar() {
                   className="absolute right-0 top-full mt-2 w-48 bg-surface border border-border shadow-lg rounded-xl overflow-hidden z-50 py-1"
                 >
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-4 pt-2 pb-1">Quick Add</p>
-                  {QUICK_ADD_OPTIONS.map((opt) => (
+                  {visibleQuickAddOptions.map((opt) => (
                     <button
                       key={opt.modal}
                       onClick={() => { openModal(opt.modal); setShowQuickAdd(false) }}

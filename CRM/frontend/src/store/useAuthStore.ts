@@ -25,6 +25,7 @@ export interface User {
   companyIds?: string[] // Assigned companies list
   avatar: string
   phone?: string
+  department?: string
   allowedModules?: string[]
   permissions?: any
 }
