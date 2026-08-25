@@ -151,6 +151,8 @@ const updateUser = async (req, res, next) => {
           companyId: u.company_id || 'tech',
           companyIds: parsedCompanyIds,
           companyName: u.company_name || 'SAAMPARK Technology',
+          branchId: req.body.branch_id || req.body.branchId || undefined,
+          branchName: req.body.branch_name || req.body.branchName || undefined,
           status: u.status === 'inactive' ? 'Inactive' : 'Active',
           department: u.department || 'General',
           phone: u.phone || '',

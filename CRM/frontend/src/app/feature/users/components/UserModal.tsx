@@ -69,10 +69,26 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
   const [password, setPassword] = React.useState("Password123")
   const [status, setStatus] = React.useState<UserStatus>("Active")
 
-  // Available branches for selected companies
+  // Available branches for selected companies (with robust slug/id normalization)
   const availableBranches = React.useMemo(() => {
-    return branches.filter((b) => selectedCompanyIds.includes(b.companyId))
-  }, [branches, selectedCompanyIds])
+    if (!branches || branches.length === 0) return []
+    if (selectedCompanyIds.length === 0) return branches
+    return branches.filter((b) => {
+      const bComp = String(b.companyId || "").toLowerCase().trim()
+      return selectedCompanyIds.some((cId) => {
+        const norm = String(cId || "").toLowerCase().trim()
+        if (norm === bComp) return true
+        const matchedComp = companies.find(
+          (c) => String(c.id).toLowerCase() === norm || String(c.slug || "").toLowerCase() === norm
+        )
+        return (
+          matchedComp &&
+          (String(matchedComp.id).toLowerCase() === bComp ||
+            String(matchedComp.slug || "").toLowerCase() === bComp)
+        )
+      })
+    })
+  }, [branches, selectedCompanyIds, companies])
 
   // Matrix of active module checkboxes per user
   const [actionMatrix, setActionMatrix] = React.useState<Record<string, ModuleActionFlags>>({})
@@ -273,7 +289,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
       .filter((c) => selectedCompanyIds.includes(c.id) || selectedCompanyIds.includes(c.slug || ""))
       .map((c) => c.name)
 
-    const matchedBranch = branches.find((b) => b.id === selectedBranchId)
+    const matchedBranch = branches.find((b) => String(b.id).toLowerCase() === String(selectedBranchId).toLowerCase())
 
     const payload: Partial<UserType> = {
       name,
@@ -282,8 +298,8 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
       companyId: primaryCompanyId,
       companyIds: selectedCompanyIds,
       companyName: companyNamesList.join(", ") || (primaryCompanyId === "digital" ? "SAAMPARK Digital Marketing" : "SAAMPARK Technology"),
-      branchId: selectedBranchId || undefined,
-      branchName: matchedBranch?.name || undefined,
+      branchId: selectedBranchId ? selectedBranchId : undefined,
+      branchName: matchedBranch?.name || (selectedBranchId ? selectedBranchId : undefined),
       department: department || "General",
       phone,
       password,
@@ -475,7 +491,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
                 </button>
 
                 {availableBranches.map((b) => {
-                  const isSelected = selectedBranchId === b.id
+                  const isSelected = String(selectedBranchId || "").toLowerCase() === String(b.id || "").toLowerCase()
                   return (
                     <button
                       key={b.id}

@@ -120,6 +120,7 @@ export default function UsersMain() {
           role: userData.role,
           company_id: userData.companyId || (userData.companyIds && userData.companyIds[0]) || "tech",
           company_ids: userData.companyIds || (userData.companyId ? [userData.companyId] : ["tech"]),
+          branch_id: userData.branchId || null,
           department: userData.department || "General",
           phone: userData.phone || "",
           permissions: (userData as any).permissions,
@@ -140,6 +141,7 @@ export default function UsersMain() {
           role_id,
           company_id: userData.companyId || (userData.companyIds && userData.companyIds[0]),
           company_ids: userData.companyIds,
+          branch_id: userData.branchId || null,
           department: userData.department,
           permissions: (userData as any).permissions,
         }).catch((err) => console.warn("Backend user update warning:", err))
@@ -179,7 +181,14 @@ export default function UsersMain() {
       if (editingUser) {
         nextList = prev.map((u) =>
           u.id === editingUser.id || u.email.toLowerCase().trim() === saved.email.toLowerCase().trim()
-            ? ({ ...u, ...saved, role: userData.role || saved.role, permissions: (userData as any).permissions } as UserItem)
+            ? ({ 
+                ...u, 
+                ...saved, 
+                branchId: saved.branchId, 
+                branchName: saved.branchName, 
+                role: userData.role || saved.role, 
+                permissions: (userData as any).permissions 
+              } as UserItem)
             : u
         )
       } else {

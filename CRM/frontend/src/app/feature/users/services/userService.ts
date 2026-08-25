@@ -150,6 +150,9 @@ export function recordUserAccount(user: Partial<UserItem>, isNewRegistration = f
     companyId: user.companyId || "tech",
     companyIds: user.companyIds || (user.companyId ? [user.companyId] : ["tech"]),
     companyName: user.companyName || (user.companyId === "digital" ? "SAAMPARK Digital Marketing" : "SAAMPARK Technology"),
+    branchId: user.branchId || (user as any).branch_id || undefined,
+    branchIds: user.branchIds || (user.branchId ? [user.branchId] : undefined),
+    branchName: user.branchName || (user as any).branch_name || undefined,
     status: user.status || "Active",
     department: user.department || "General",
     phone: user.phone || "",
@@ -487,6 +490,9 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
               (parsedCompanyIds.includes("digital") && parsedCompanyIds.includes("tech")
                 ? "SAAMPARK Group (Multiple)"
                 : u.company_id === "digital" ? "SAAMPARK Digital Marketing" : "SAAMPARK Technology"),
+            branchId: u.branch_id || u.branchId || existingItem?.branchId || undefined,
+            branchIds: u.branch_ids ? (() => { try { return JSON.parse(u.branch_ids) } catch { return [u.branch_ids] } })() : existingItem?.branchIds,
+            branchName: u.branch_name || u.branchName || existingItem?.branchName || undefined,
             status: u.status === "inactive" || u.is_active === false ? "Inactive" : "Active",
             department: u.department || existingItem?.department || "General",
             phone: u.phone || existingItem?.phone || "",
@@ -508,6 +514,9 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
                 ((existingItem.companyIds || parsedCompanyIds).includes("digital") && (existingItem.companyIds || parsedCompanyIds).includes("tech"))
                   ? "SAAMPARK Group (Multiple)"
                   : ((existingItem.companyIds || parsedCompanyIds)[0] === "digital" ? "SAAMPARK Digital Marketing" : "SAAMPARK Technology"),
+              branchId: existingItem.branchId !== undefined ? existingItem.branchId : item.branchId,
+              branchIds: existingItem.branchIds !== undefined ? existingItem.branchIds : item.branchIds,
+              branchName: existingItem.branchName !== undefined ? existingItem.branchName : item.branchName,
               department: existingItem.department || item.department,
               role: existingItem.role || item.role,
               status: existingItem.status || item.status,
