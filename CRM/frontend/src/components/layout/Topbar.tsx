@@ -28,7 +28,18 @@ const QUICK_ADD_OPTIONS = [
 export function Topbar() {
   const { theme, setTheme } = useTheme()
   const { isSidebarCollapsed, toggleSidebar, openModal } = useUIStore()
-  const { user, activeCompanyId, switchCompany, logout, companies, fetchCompanies } = useAuthStore()
+  const { 
+    user, 
+    activeCompanyId, 
+    activeBranchId, 
+    switchCompany, 
+    switchBranch, 
+    logout, 
+    companies, 
+    branches, 
+    fetchCompanies, 
+    fetchBranches 
+  } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
 
   const [showProfileMenu, setShowProfileMenu] = React.useState(false)
@@ -45,7 +56,8 @@ export function Topbar() {
 
   React.useEffect(() => {
     fetchCompanies()
-  }, [fetchCompanies])
+    fetchBranches()
+  }, [fetchCompanies, fetchBranches])
 
   // Real-time synchronization of current user session with latest database record
   React.useEffect(() => {
@@ -227,25 +239,45 @@ export function Topbar() {
         {/* Display Current Company Badge & Switcher */}
         {activeCompany && (
           <div className="relative ml-2 sm:ml-4">
-            {allowedCompanies.length > 1 ? (
-              <button
-                type="button"
-                onClick={(e) => { stop(e); setShowCompanyMenu(v => !v); setShowProfileMenu(false); setShowQuickAdd(false); setShowNotifications(false) }}
-                className="flex items-center gap-2 px-3 py-1.5 bg-surface-pressed border border-primary/30 hover:border-primary/60 rounded-full text-xs font-semibold text-foreground transition-all cursor-pointer shadow-2xs"
-                title="Click to switch active company workspace"
-              >
-                <span className="text-sm">{activeCompany.logo || "🏢"}</span>
-                <span className="truncate max-w-[140px] sm:max-w-[200px]">{activeCompany.name}</span>
-                <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-bold">Switch ▾</span>
-              </button>
-            ) : (
-              <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-surface-pressed border border-border rounded-full text-xs font-medium text-muted-foreground">
-                <span className="text-sm">{activeCompany.logo || "🏢"}</span>
-                <span className="truncate max-w-[180px]">{activeCompany.name}</span>
-              </div>
-            )}
+            <div className="flex items-center gap-1.5">
+              {allowedCompanies.length > 1 ? (
+                <button
+                  type="button"
+                  onClick={(e) => { stop(e); setShowCompanyMenu(v => !v); setShowProfileMenu(false); setShowQuickAdd(false); setShowNotifications(false) }}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-surface-pressed border border-primary/30 hover:border-primary/60 rounded-full text-xs font-semibold text-foreground transition-all cursor-pointer shadow-2xs"
+                  title="Click to switch active company workspace"
+                >
+                  <span className="text-sm">{activeCompany.logo || "🏢"}</span>
+                  <span className="truncate max-w-[140px] sm:max-w-[180px]">{activeCompany.name}</span>
+                  <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-bold">Switch ▾</span>
+                </button>
+              ) : (
+                <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-surface-pressed border border-border rounded-full text-xs font-medium text-muted-foreground">
+                  <span className="text-sm">{activeCompany.logo || "🏢"}</span>
+                  <span className="truncate max-w-[160px]">{activeCompany.name}</span>
+                </div>
+              )}
 
-            {/* Company Dropdown Menu */}
+              {/* Active Branch Badge */}
+              {activeBranchId && (
+                <div className="hidden md:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                  <span>📍</span>
+                  <span className="truncate max-w-[120px]">
+                    {branches.find(b => b.id === activeBranchId)?.name || 'Branch'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => { stop(e); switchBranch(null) }}
+                    className="hover:text-rose-500 ml-0.5 cursor-pointer"
+                    title="Clear branch filter (view all branches)"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Company & Branch Dropdown Menu */}
             <AnimatePresence>
               {showCompanyMenu && allowedCompanies.length > 1 && (
                 <motion.div
@@ -253,31 +285,69 @@ export function Topbar() {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 8, scale: 0.95 }}
                   transition={{ duration: 0.13 }}
-                  className="absolute left-0 top-full mt-2 w-72 bg-surface border border-border shadow-2xl rounded-2xl overflow-hidden z-50 py-2"
+                  className="absolute left-0 top-full mt-2 w-80 bg-surface border border-border shadow-2xl rounded-3xl overflow-hidden z-50 py-2.5"
                 >
                   <p className="px-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1.5">
                     Select Active Company
                   </p>
-                  <div className="space-y-1 px-2">
+                  <div className="space-y-1 px-2 max-h-72 overflow-y-auto">
                     {allowedCompanies.map((comp) => {
                       const isActive = activeCompanyId === comp.id || activeCompanyId === comp.slug
+                      const compBranches = branches.filter(b => b.companyId === comp.id || b.companyId === comp.slug)
+
                       return (
-                        <button
-                          key={comp.id}
-                          type="button"
-                          onClick={() => { switchCompany(comp.id); setShowCompanyMenu(false) }}
-                          className={`w-full flex items-center justify-between px-3 py-2.5 text-xs rounded-xl transition-all cursor-pointer ${
-                            isActive
-                              ? "bg-primary text-primary-foreground font-bold shadow-xs"
-                              : "text-muted-foreground hover:bg-surface-hover hover:text-foreground"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5 truncate">
-                            <span className="text-base">{comp.logo || "🏢"}</span>
-                            <span className="truncate">{comp.name}</span>
-                          </div>
-                          {isActive && <Check size={14} className="shrink-0" />}
-                        </button>
+                        <div key={comp.id} className="space-y-1">
+                          <button
+                            type="button"
+                            onClick={() => { switchCompany(comp.id); switchBranch(null); setShowCompanyMenu(false) }}
+                            className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-xl transition-all cursor-pointer ${
+                              isActive
+                                ? "bg-primary text-primary-foreground font-bold shadow-xs"
+                                : "text-muted-foreground hover:bg-surface-hover hover:text-foreground"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 truncate">
+                              <span className="text-base">{comp.logo || "🏢"}</span>
+                              <span className="truncate">{comp.name}</span>
+                            </div>
+                            {isActive && <Check size={14} className="shrink-0" />}
+                          </button>
+
+                          {/* Sub-branches for this company */}
+                          {isActive && compBranches.length > 0 && (
+                            <div className="pl-6 pr-2 py-1 space-y-1 border-l-2 border-primary/20 ml-4 my-1">
+                              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                                Sub-Branches
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => { switchBranch(null); setShowCompanyMenu(false) }}
+                                className={`w-full text-left px-2 py-1 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
+                                  !activeBranchId
+                                    ? "bg-primary/10 text-primary font-bold"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-surface-hover"
+                                }`}
+                              >
+                                🏢 All Branches / HQ
+                              </button>
+                              {compBranches.map(b => (
+                                <button
+                                  key={b.id}
+                                  type="button"
+                                  onClick={() => { switchBranch(b.id); setShowCompanyMenu(false) }}
+                                  className={`w-full flex items-center justify-between px-2 py-1 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
+                                    activeBranchId === b.id
+                                      ? "bg-primary/10 text-primary font-bold"
+                                      : "text-muted-foreground hover:text-foreground hover:bg-surface-hover"
+                                  }`}
+                                >
+                                  <span className="truncate">📍 {b.name}</span>
+                                  {activeBranchId === b.id && <Check size={12} className="shrink-0" />}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       )
                     })}
                   </div>

@@ -22,6 +22,10 @@ export interface ClientItem {
   email?: string;
   website?: string;
   status?: string;
+  companyId?: string;
+  companyName?: string;
+  branchId?: string;
+  branchName?: string;
   createdAt?: number | string;
 }
 

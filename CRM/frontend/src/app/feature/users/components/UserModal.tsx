@@ -35,7 +35,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
     canPerformAction,
     getUserModuleActions 
   } = usePermissionStore()
-  const { companies, user: currentUser, activeCompanyId, fetchCompanies } = useAuthStore()
+  const { companies, branches, user: currentUser, activeCompanyId, fetchCompanies, fetchBranches } = useAuthStore()
   
   const isCurrentSuperAdmin = currentUser?.role === "Super Admin"
   const isCurrentAdmin = currentUser?.role === "Admin"
@@ -63,10 +63,16 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
   const [email, setEmail] = React.useState("")
   const [role, setRole] = React.useState<UserRole>("Teams")
   const [selectedCompanyIds, setSelectedCompanyIds] = React.useState<string[]>(["tech"])
+  const [selectedBranchId, setSelectedBranchId] = React.useState<string>("")
   const [department, setDepartment] = React.useState("")
   const [phone, setPhone] = React.useState("")
   const [password, setPassword] = React.useState("Password123")
   const [status, setStatus] = React.useState<UserStatus>("Active")
+
+  // Available branches for selected companies
+  const availableBranches = React.useMemo(() => {
+    return branches.filter((b) => selectedCompanyIds.includes(b.companyId))
+  }, [branches, selectedCompanyIds])
 
   // Matrix of active module checkboxes per user
   const [actionMatrix, setActionMatrix] = React.useState<Record<string, ModuleActionFlags>>({})
@@ -74,7 +80,8 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
 
   React.useEffect(() => {
     fetchCompanies()
-  }, [fetchCompanies, isOpen])
+    fetchBranches()
+  }, [fetchCompanies, fetchBranches, isOpen])
 
   React.useEffect(() => {
     if (editingUser) {
@@ -87,6 +94,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
         ? editingUser.companyIds 
         : [editingUser.companyId || "tech"]
       setSelectedCompanyIds(compIds)
+      setSelectedBranchId(editingUser.branchId || (editingUser as any).branch_id || "")
 
       setDepartment(editingUser.department || "")
       setPhone(editingUser.phone || "")
@@ -265,6 +273,8 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
       .filter((c) => selectedCompanyIds.includes(c.id) || selectedCompanyIds.includes(c.slug || ""))
       .map((c) => c.name)
 
+    const matchedBranch = branches.find((b) => b.id === selectedBranchId)
+
     const payload: Partial<UserType> = {
       name,
       email: email.toLowerCase().trim(),
@@ -272,6 +282,8 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
       companyId: primaryCompanyId,
       companyIds: selectedCompanyIds,
       companyName: companyNamesList.join(", ") || (primaryCompanyId === "digital" ? "SAAMPARK Digital Marketing" : "SAAMPARK Technology"),
+      branchId: selectedBranchId || undefined,
+      branchName: matchedBranch?.name || undefined,
       department: department || "General",
       phone,
       password,
@@ -432,6 +444,57 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
                     )
                   })}
                 </div>
+              </div>
+            </div>
+
+            {/* Sub-Branch Selector */}
+            <div>
+              <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <span>📍</span> Assigned Sub-Branch / Location
+                </span>
+                <span className="text-[10px] text-zinc-400 font-normal">
+                  {availableBranches.length} branches available
+                </span>
+              </label>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedBranchId("")}
+                  className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
+                    !selectedBranchId
+                      ? "bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border-blue-400 dark:border-blue-700 shadow-2xs font-bold"
+                      : "bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:border-zinc-400"
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <span>🏢</span> All Branches / Main Headquarters
+                  </span>
+                  {!selectedBranchId && <Check size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />}
+                </button>
+
+                {availableBranches.map((b) => {
+                  const isSelected = selectedBranchId === b.id
+                  return (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => setSelectedBranchId(b.id)}
+                      className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
+                        isSelected
+                          ? "bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border-blue-400 dark:border-blue-700 shadow-2xs font-bold"
+                          : "bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:border-zinc-400"
+                      }`}
+                    >
+                      <div className="text-left truncate mr-1">
+                        <span className="font-semibold text-zinc-800 dark:text-zinc-200">{b.name}</span>
+                        {b.city && <span className="text-[10px] text-zinc-400 ml-1.5 font-normal">({b.city})</span>}
+                      </div>
+                      {isSelected && <Check size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />}
+                    </button>
+                  )
+                })}
               </div>
             </div>
 

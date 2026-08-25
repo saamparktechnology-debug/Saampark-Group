@@ -181,22 +181,24 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
                         )}
                       </td>
 
-                      {/* Company & Dept */}
+                      {/* Company & Branch Badges */}
                       <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-1.5 text-xs text-foreground font-medium">
-                          <Building2 size={13} className="text-muted-foreground shrink-0" />
-                          <span className="truncate max-w-[180px]">{u.companyName || (u.companyId === 'digital' ? 'SAAMPARK Digital' : 'SAAMPARK Tech')}</span>
-                        </div>
-                        {u.companyIds && u.companyIds.length > 1 && (
-                          <div className="flex items-center gap-1 mt-1 flex-wrap">
-                            {u.companyIds.map(cId => (
-                              <span key={cId} className="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase bg-surface-pressed border border-border text-muted-foreground">
-                                {cId}
-                              </span>
-                            ))}
+                        <div className="flex flex-col gap-1">
+                          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-xs font-semibold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 w-fit">
+                            <Building2 size={11} className="shrink-0" />
+                            <span className="truncate max-w-[160px]">{u.companyName || (u.companyId === 'digital' ? 'SAAMPARK Digital' : 'SAAMPARK Technology')}</span>
                           </div>
-                        )}
-                        <div className="text-xs text-muted-foreground mt-0.5">{u.department || "General"}</div>
+                          
+                          {/* Branch Badge */}
+                          <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 w-fit">
+                            <span>📍</span>
+                            <span>{u.branchName || (u.branchId ? `Branch (${u.branchId})` : 'All Branches / HQ')}</span>
+                          </div>
+
+                          {u.department && (
+                            <span className="text-[10px] text-muted-foreground ml-0.5">{u.department}</span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Status */}

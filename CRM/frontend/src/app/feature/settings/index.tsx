@@ -14,8 +14,9 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { useTheme } from "next-themes"
 import { fetchModuleDataFromDB, saveModuleDataToDB } from "@/lib/storageSync"
 import { getUsers, recordUserAccount } from "@/app/feature/users/services/userService"
+import { CompanyBranchSettings } from "./components/CompanyBranchSettings"
 
-type SettingsTab = "profile" | "company" | "smtp" | "theme"
+type SettingsTab = "profile" | "organization" | "company" | "smtp" | "theme"
 
 export default function SettingsMain() {
   const { user, loginAs } = useAuthStore()
@@ -225,7 +226,8 @@ export default function SettingsMain() {
       <div className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-2 overflow-x-auto">
         {[
           { id: "profile", label: "Complete Profile & Avatar", icon: User },
-          { id: "company", label: "Company Profile", icon: Building2 },
+          { id: "organization", label: "🏢 Companies & Sub-Branches", icon: Building2 },
+          { id: "company", label: "Workspace Branding", icon: Settings },
           { id: "smtp", label: "Email / SMTP Setup", icon: Mail },
           { id: "theme", label: "Display & Theme", icon: Sun },
         ].map((tab) => {
@@ -236,7 +238,7 @@ export default function SettingsMain() {
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
                 isActive
                   ? "bg-blue-600 text-white shadow-xs"
                   : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
@@ -248,6 +250,11 @@ export default function SettingsMain() {
           )
         })}
       </div>
+
+      {/* ── TAB: COMPANIES & SUB-BRANCHES ORGANIZATION ────────────────────── */}
+      {activeTab === "organization" && (
+        <CompanyBranchSettings />
+      )}
 
       {/* ── TAB 1: COMPLETE USER PROFILE & PHOTO UPLOAD ─────────────────────── */}
       {activeTab === "profile" && (

@@ -10,6 +10,9 @@ export interface UserItem {
   companyId: string; // Primary/initial company e.g. "tech", "digital"
   companyIds?: string[]; // Multiple assigned companies e.g. ["tech", "digital"]
   companyName: string; // Display company name
+  branchId?: string; // Assigned specific branch
+  branchIds?: string[]; // Multiple assigned branches
+  branchName?: string; // Display branch name
   status: UserStatus;
   avatarUrl?: string;
   department?: string;
