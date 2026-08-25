@@ -233,23 +233,34 @@ export default function LoginPage() {
         return
       }
 
-      // ── PORTAL ISOLATION CHECK ───────────────────────────────────────────────
-      if (selectedRoleChoice === "Clients" && matchedRole !== "Clients") {
-        setIsLoading(false)
-        setError(matchedRole === "Teams" || matchedRole === "Admin" || matchedRole === "Super Admin"
-          ? "Access Denied: Your account is not registered as a Client."
-          : "Access Denied: Wrong portal selected.")
-        return
+      // ── STRICT PORTAL ISOLATION CHECK ───────────────────────────────────────
+      if (selectedRoleChoice === "Teams") {
+        if (matchedRole === "Super Admin" || matchedRole === "Admin") {
+          setIsLoading(false)
+          setError("Access Denied: This account is an Administrator. Please use the Administrator Login portal.")
+          return
+        }
+        if (matchedRole === "Clients") {
+          setIsLoading(false)
+          setError("Access Denied: Client accounts must log in via the Client Portal.")
+          return
+        }
       }
-      if (selectedRoleChoice === "Teams" && matchedRole === "Clients") {
-        setIsLoading(false)
-        setError("Access Denied: Client accounts must log in via the Client Portal.")
-        return
+
+      if (selectedRoleChoice === "Clients") {
+        if (matchedRole !== "Clients") {
+          setIsLoading(false)
+          setError("Access Denied: This portal is for Clients only. Please use the Team or Administrator login portal.")
+          return
+        }
       }
-      if (selectedRoleChoice === "Admin" && matchedRole !== "Super Admin" && matchedRole !== "Admin") {
-        setIsLoading(false)
-        setError("Access Denied: System Administrator privileges required.")
-        return
+
+      if (selectedRoleChoice === "Admin") {
+        if (matchedRole !== "Super Admin" && matchedRole !== "Admin") {
+          setIsLoading(false)
+          setError("Access Denied: Administrator privileges required. Please log in via the Team Member portal.")
+          return
+        }
       }
 
       // ── SUCCESS ──────────────────────────────────────────────────────────────
@@ -434,7 +445,33 @@ export default function LoginPage() {
                 </p>
               </div>
 
-              <div className="grid md:grid-cols-2 gap-6 w-full max-w-2xl">
+              <div className="grid md:grid-cols-3 gap-5 w-full max-w-4xl">
+                {/* Admin & Leadership Card */}
+                <motion.button
+                  whileHover={{ scale: 1.02, y: -4 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => {
+                    handleSelectRole("Admin")
+                    setEmail("")
+                    setPassword("")
+                  }}
+                  className="group relative p-6 rounded-3xl bg-surface/80 border border-border hover:border-amber-500/50 hover:bg-surface text-left shadow-xl transition-all flex flex-col justify-between overflow-hidden cursor-pointer"
+                >
+                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                    <Shield size={100} className="text-amber-500" />
+                  </div>
+                  <div>
+                    <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center text-xl mb-4 group-hover:scale-110 transition-transform">👑</div>
+                    <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-500 uppercase tracking-wider mb-1.5">Executive & Admin</span>
+                    <h2 className="text-xl font-bold text-foreground group-hover:text-amber-500 transition-colors">Administrator</h2>
+                    <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">Super Admin and System Administrators with full system access.</p>
+                  </div>
+                  <div className="mt-6 flex items-center gap-1.5 text-xs font-bold text-amber-500">
+                    <span>Admin Login</span>
+                    <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                  </div>
+                </motion.button>
+
                 {/* Team Member Card */}
                 <motion.button
                   whileHover={{ scale: 1.02, y: -4 }}
@@ -444,20 +481,20 @@ export default function LoginPage() {
                     setEmail("")
                     setPassword("")
                   }}
-                  className="group relative p-8 rounded-3xl bg-surface/70 border border-border hover:border-primary/50 hover:bg-surface text-left shadow-xl transition-all flex flex-col justify-between overflow-hidden cursor-pointer"
+                  className="group relative p-6 rounded-3xl bg-surface/80 border border-border hover:border-primary/50 hover:bg-surface text-left shadow-xl transition-all flex flex-col justify-between overflow-hidden cursor-pointer"
                 >
-                  <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
-                    <Users size={120} className="text-primary" />
+                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                    <Users size={100} className="text-primary" />
                   </div>
                   <div>
-                    <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center text-2xl mb-5 group-hover:scale-110 transition-transform">👥</div>
-                    <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-bold bg-indigo-500/10 text-indigo-500 uppercase tracking-wider mb-2">Internal Staff</span>
-                    <h2 className="text-2xl font-bold text-foreground group-hover:text-primary transition-colors">Team Member</h2>
-                    <p className="text-xs text-muted-foreground mt-2 leading-relaxed">Employees, project leads, department staff and team members.</p>
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center text-xl mb-4 group-hover:scale-110 transition-transform">👥</div>
+                    <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-500 uppercase tracking-wider mb-1.5">Internal Staff</span>
+                    <h2 className="text-xl font-bold text-foreground group-hover:text-primary transition-colors">Team Member</h2>
+                    <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">Employees, department staff, telecallers and sales representatives.</p>
                   </div>
-                  <div className="mt-8 flex items-center gap-2 text-sm font-semibold text-primary">
-                    <span>Login as Team Member</span>
-                    <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                  <div className="mt-6 flex items-center gap-1.5 text-xs font-bold text-primary">
+                    <span>Team Login</span>
+                    <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
                   </div>
                 </motion.button>
 
@@ -470,38 +507,22 @@ export default function LoginPage() {
                     setEmail("")
                     setPassword("")
                   }}
-                  className="group relative p-8 rounded-3xl bg-surface/70 border border-border hover:border-emerald-500/50 hover:bg-surface text-left shadow-xl transition-all flex flex-col justify-between overflow-hidden cursor-pointer"
+                  className="group relative p-6 rounded-3xl bg-surface/80 border border-border hover:border-emerald-500/50 hover:bg-surface text-left shadow-xl transition-all flex flex-col justify-between overflow-hidden cursor-pointer"
                 >
-                  <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
-                    <Briefcase size={120} className="text-emerald-500" />
+                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                    <Briefcase size={100} className="text-emerald-500" />
                   </div>
                   <div>
-                    <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center text-2xl mb-5 group-hover:scale-110 transition-transform">🤝</div>
-                    <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-500 uppercase tracking-wider mb-2">Client Portal</span>
-                    <h2 className="text-2xl font-bold text-foreground group-hover:text-emerald-500 transition-colors">Client Access</h2>
-                    <p className="text-xs text-muted-foreground mt-2 leading-relaxed">External clients, organization representatives and client accounts.</p>
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center text-xl mb-4 group-hover:scale-110 transition-transform">🤝</div>
+                    <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-500 uppercase tracking-wider mb-1.5">Client Portal</span>
+                    <h2 className="text-xl font-bold text-foreground group-hover:text-emerald-500 transition-colors">Client Access</h2>
+                    <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">External clients, business owners and client portal users.</p>
                   </div>
-                  <div className="mt-8 flex items-center gap-2 text-sm font-semibold text-emerald-500">
-                    <span>Login as Client</span>
-                    <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                  <div className="mt-6 flex items-center gap-1.5 text-xs font-bold text-emerald-500">
+                    <span>Client Login</span>
+                    <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
                   </div>
                 </motion.button>
-              </div>
-
-              {/* Subtle Admin Link at bottom */}
-              <div className="pt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleSelectRole("Admin")
-                    setEmail("")
-                    setPassword("")
-                  }}
-                  className="text-xs text-muted-foreground hover:text-foreground hover:underline inline-flex items-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  <Shield size={14} className="text-amber-500" />
-                  <span>System Administrator? Click to access Admin & Super Admin Login</span>
-                </button>
               </div>
             </motion.div>
 
