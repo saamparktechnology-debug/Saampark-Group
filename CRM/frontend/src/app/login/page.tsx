@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { useAuthStore, DEMO_USERS, Role } from "@/store/useAuthStore"
-import { recordUserAccount, getStoredUserAccountsAsync, isUserDeleted } from "@/app/feature/users/services/userService"
+import { recordUserAccount, getStoredUserAccountsAsync, isUserDeleted, unmarkUserAsDeleted } from "@/app/feature/users/services/userService"
 import { normalizeRole } from "@/store/usePermissionStore"
 import { AuthService } from "@/services/apiServices"
 
@@ -125,33 +125,28 @@ export default function LoginPage() {
 
     const normalizedEmail = email.toLowerCase().trim()
 
-    if (isUserDeleted(normalizedEmail)) {
-      setIsLoading(false)
-      setError("Account does not exist. Please contact your System Administrator.")
-      return
-    }
-
     try {
-      // ── ATTEMPT REAL BACKEND LOGIN ───────────────────────────────────────────
+      // 1. Fetch active registered user accounts from MySQL database
+      const registeredAccounts = await getStoredUserAccountsAsync()
+      const dbAccount = registeredAccounts.find(
+        (acc) => acc.email.toLowerCase().trim() === normalizedEmail
+      )
+
+      // If user is actively registered in MySQL accounts, unmark from deleted cache immediately
+      if (dbAccount) {
+        unmarkUserAsDeleted(normalizedEmail)
+      } else if (isUserDeleted(normalizedEmail)) {
+        setIsLoading(false)
+        setError("Account does not exist. Please contact your System Administrator.")
+        return
+      }
+
       let backendUser: any = null
       let backendRole: Role | null = null
 
+      // 2. Attempt backend API authentication
       try {
         const backendRes: any = await AuthService.login({ email: normalizedEmail, password })
-        
-        if (backendRes?.status === "error" || (backendRes && !backendRes.data?.user && !backendRes.user && backendRes.message)) {
-          const msg: string = backendRes.message || ""
-          if (msg.toLowerCase().includes("not verified")) {
-            setVerifyEmail(normalizedEmail)
-            setVerifyEmailModal(true)
-            setIsLoading(false)
-            return
-          }
-          setIsLoading(false)
-          setError(msg || "Invalid email or password. Please check your credentials.")
-          return
-        }
-
         if (backendRes?.data?.user || backendRes?.user) {
           backendUser = backendRes.data?.user || backendRes.user
           backendRole = normalizeRole(backendUser.role_name || backendUser.role || "")
@@ -159,6 +154,15 @@ export default function LoginPage() {
           if (token && typeof window !== "undefined") {
             localStorage.setItem("saampark_token", token)
           }
+        } else if (backendRes?.status === "error" || (backendRes && backendRes.message)) {
+          const msg: string = backendRes.message || ""
+          if (msg.toLowerCase().includes("not verified")) {
+            setVerifyEmail(normalizedEmail)
+            setVerifyEmailModal(true)
+            setIsLoading(false)
+            return
+          }
+          console.warn("Backend auth attempt failed, checking database account store:", msg)
         }
       } catch (backendErr: any) {
         const msg: string = backendErr?.response?.data?.message || backendErr?.message || ""
@@ -168,11 +172,8 @@ export default function LoginPage() {
           setIsLoading(false)
           return
         }
-        setIsLoading(false)
-        setError(msg || "Invalid email or password. Please check your credentials.")
-        return
+        console.warn("Backend auth attempt failed, checking database account store:", msg)
       }
-
 
       // ── DETERMINE MATCHED ROLE & ACCOUNT ────────────────────────────────────
       let matchedRole: Role | null = backendRole
@@ -186,22 +187,14 @@ export default function LoginPage() {
         else if (rid === 4) matchedRole = "Clients"
       }
 
-      // Fallback or override check from registered user accounts database
-      const registeredAccounts = await getStoredUserAccountsAsync()
-      const localAccount = registeredAccounts.find(
-        (acc) => acc.email.toLowerCase().trim() === normalizedEmail
-      )
+      if (dbAccount) {
+        const normDbRole = normalizeRole(dbAccount.role)
+        matchedRole = normDbRole || matchedRole || "Teams"
+        matchedAccount = { ...dbAccount, ...matchedAccount }
 
-      if (localAccount) {
-        const normLocalRole = normalizeRole(localAccount.role)
-        if (!matchedRole || normLocalRole === "Super Admin" || normLocalRole === "Admin") {
-          matchedRole = normLocalRole
-          matchedAccount = { ...localAccount, ...matchedAccount }
-        }
-
-        // Validate password against stored password if login was local
+        // If backend auth didn't succeed, verify password with stored database password
         if (!backendUser) {
-          const expectedPassword = localAccount.password || (matchedRole === "Super Admin" ? "123456" : matchedRole === "Admin" ? "admin123" : "Password123")
+          const expectedPassword = dbAccount.password || (matchedRole === "Super Admin" ? "123456" : matchedRole === "Admin" ? "admin123" : "Password123")
           if (password !== expectedPassword) {
             setIsLoading(false)
             setError("Invalid password. Please check and try again.")
@@ -260,20 +253,20 @@ export default function LoginPage() {
       }
 
       // ── SUCCESS ──────────────────────────────────────────────────────────────
-      const displayName = matchedAccount.full_name || matchedAccount.name || localAccount?.name || normalizedEmail
+      const displayName = matchedAccount.full_name || matchedAccount.name || dbAccount?.name || normalizedEmail
       recordUserAccount({ ...matchedAccount, name: displayName, lastLogin: "Just now" })
       setSuccessMessage(`Welcome back, ${displayName}! 👋`)
       setSuccess(true)
 
       let parsedCompanyIds: string[] = []
-      const rawCompIds = matchedAccount.company_ids || matchedAccount.companyIds || localAccount?.companyIds || (localAccount as any)?.company_ids || backendUser?.company_ids
+      const rawCompIds = matchedAccount.company_ids || matchedAccount.companyIds || dbAccount?.companyIds || (dbAccount as any)?.company_ids || backendUser?.company_ids
       if (typeof rawCompIds === "string") {
         try { parsedCompanyIds = JSON.parse(rawCompIds) } catch { parsedCompanyIds = [rawCompIds] }
       } else if (Array.isArray(rawCompIds)) {
         parsedCompanyIds = rawCompIds
       }
       if (!Array.isArray(parsedCompanyIds) || parsedCompanyIds.length === 0) {
-        const fallbackSingle = matchedAccount.companyId || matchedAccount.company_id || localAccount?.companyId || backendUser?.company_id || "tech"
+        const fallbackSingle = matchedAccount.companyId || matchedAccount.company_id || dbAccount?.companyId || backendUser?.company_id || "tech"
         parsedCompanyIds = matchedRole === "Super Admin" ? ["tech", "digital"] : [fallbackSingle]
       }
 
@@ -285,9 +278,9 @@ export default function LoginPage() {
         companyId: (parsedCompanyIds[0] || "tech") as any,
         companyIds: parsedCompanyIds,
         avatar: matchedAccount.avatarUrl || matchedAccount.avatar_url || `https://api.dicebear.com/7.x/notionists/svg?seed=${normalizedEmail}`,
-        phone: matchedAccount.phone || localAccount?.phone,
-        allowedModules: matchedAccount.allowedModules || localAccount?.allowedModules || (matchedAccount as any)?.permissions?.allowedModules,
-        permissions: matchedAccount.permissions || localAccount?.permissions,
+        phone: matchedAccount.phone || dbAccount?.phone,
+        allowedModules: matchedAccount.allowedModules || dbAccount?.allowedModules || (matchedAccount as any)?.permissions?.allowedModules,
+        permissions: matchedAccount.permissions || dbAccount?.permissions,
       })
 
       setTimeout(() => {
