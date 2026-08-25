@@ -466,11 +466,13 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
           }
 
           let parsedCompanyIds: string[] = [];
-          if (u.company_ids) {
+          if (existingItem?.companyIds && existingItem.companyIds.length > 0) {
+            parsedCompanyIds = existingItem.companyIds;
+          } else if (u.company_ids) {
             try { parsedCompanyIds = JSON.parse(u.company_ids); } catch { parsedCompanyIds = [u.company_ids]; }
           }
           if (!Array.isArray(parsedCompanyIds) || parsedCompanyIds.length === 0) {
-            parsedCompanyIds = existingItem?.companyIds || [u.company_id || "tech"];
+            parsedCompanyIds = [u.company_id || "tech"];
           }
 
           const item: UserItem = {
@@ -500,6 +502,12 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
               ...existingItem,
               id: String(u.id || existingItem.id),
               name: existingItem.name || item.name,
+              companyIds: (existingItem.companyIds && existingItem.companyIds.length > 0) ? existingItem.companyIds : parsedCompanyIds,
+              companyId: (existingItem.companyIds && existingItem.companyIds[0]) || existingItem.companyId || item.companyId,
+              companyName:
+                ((existingItem.companyIds || parsedCompanyIds).includes("digital") && (existingItem.companyIds || parsedCompanyIds).includes("tech"))
+                  ? "SAAMPARK Group (Multiple)"
+                  : ((existingItem.companyIds || parsedCompanyIds)[0] === "digital" ? "SAAMPARK Digital Marketing" : "SAAMPARK Technology"),
               department: existingItem.department || item.department,
               role: existingItem.role || item.role,
               status: existingItem.status || item.status,

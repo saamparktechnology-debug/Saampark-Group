@@ -282,11 +282,6 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
       payload.id = editingUser.id
     }
 
-    // Filter allowedModules & actionMatrix so an Admin can NEVER grant permissions for modules the Admin doesn't possess
-    const finalAllowedModules = isCurrentSuperAdmin
-      ? allowedModules
-      : allowedModules.filter((m) => displayableModules.includes(m as any))
-
     const finalActionMatrix: Record<string, ModuleActionFlags> = {}
     CONFIGURABLE_MODULES.forEach((m) => {
       if (isCurrentSuperAdmin || displayableModules.includes(m as any)) {
@@ -294,6 +289,12 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
       } else {
         finalActionMatrix[m] = { view: false, add: false, edit: false, delete: false }
       }
+    })
+
+    // Accurately compute finalAllowedModules directly from finalActionMatrix (every module with at least one active flag)
+    const finalAllowedModules = CONFIGURABLE_MODULES.filter((m) => {
+      const flags = finalActionMatrix[m]
+      return Boolean(flags && (flags.view || flags.add || flags.edit || flags.delete))
     })
 
     const userIdStr = String(editingUser?.id || payload.id || `usr_${Date.now()}`)
