@@ -85,7 +85,23 @@ export function getDeletedUserEmails(): string[] {
 // Helper: check if a specific user email has been deleted
 export function isUserDeleted(email: string): boolean {
   if (!email) return false;
-  return getDeletedUserEmails().includes(email.toLowerCase().trim());
+  const normEmail = email.toLowerCase().trim();
+
+  // If the account has been re-created or exists in local active accounts, it is NOT deleted!
+  if (typeof window !== "undefined") {
+    try {
+      const rawLocal = localStorage.getItem("saampark_registered_accounts");
+      if (rawLocal) {
+        const localList: UserItem[] = JSON.parse(rawLocal);
+        if (Array.isArray(localList) && localList.some((u) => u.email.toLowerCase().trim() === normEmail)) {
+          unmarkUserAsDeleted(normEmail);
+          return false;
+        }
+      }
+    } catch {}
+  }
+
+  return getDeletedUserEmails().includes(normEmail);
 }
 
 // Helper: mark a user email as permanently deleted (stored in MySQL via markGlobalItemDeleted + local cache)
@@ -101,6 +117,17 @@ export function markUserAsDeleted(email: string): void {
   } catch {}
   // Sync to MySQL
   markGlobalItemDeleted(normEmail, "users").catch(() => {});
+}
+
+// Helper: unmark a user email as deleted (clears from local cache)
+export function unmarkUserAsDeleted(email: string): void {
+  if (!email) return;
+  const normEmail = email.toLowerCase().trim();
+  try {
+    const current = getDeletedUserEmails();
+    const filtered = current.filter((e) => e !== normEmail);
+    localStorage.setItem(DELETED_KEY, JSON.stringify(filtered));
+  } catch {}
 }
 
 // Helper: get user accounts — reads from MySQL, returns DEFAULT_SYSTEM_ACCOUNTS if empty
@@ -156,15 +183,8 @@ export function recordUserAccount(user: Partial<UserItem>, isNewRegistration = f
   const normalizedEmail = (user.email || "").toLowerCase().trim();
   if (!normalizedEmail) return null;
 
-  if (isUserDeleted(normalizedEmail) && !isNewRegistration) return null;
-
-  // If explicit new registration, clear from deleted list
-  if (isNewRegistration) {
-    try {
-      const deletedEmails = getDeletedUserEmails().filter((e) => e !== normalizedEmail);
-      localStorage.setItem(DELETED_KEY, JSON.stringify(deletedEmails));
-    } catch {}
-  }
+  // Unmark email as deleted when recording/saving an active account
+  unmarkUserAsDeleted(normalizedEmail);
 
   // Build the account object
   const updatedAccount: UserItem = {
