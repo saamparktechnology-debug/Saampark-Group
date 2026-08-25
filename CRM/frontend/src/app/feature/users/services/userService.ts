@@ -7,23 +7,8 @@ import { filterGlobalDeletedItems, markGlobalItemDeleted, fetchModuleDataFromDB,
 const DELETED_KEY = "saampark_deleted_user_emails"
 
 // Default System User Accounts for SAAMPARK Group (used only if MySQL has no users yet)
-// Default System User Accounts for SAAMPARK Group
+// Default System User Accounts for SAAMPARK Group (used only for initial DB bootstrap)
 export const DEFAULT_SYSTEM_ACCOUNTS: UserItem[] = [
-  {
-    id: "usr_saampark_group_team",
-    name: "SAAMPARK Group Team",
-    email: "saamparkgroup@gmail.com",
-    role: "Teams",
-    companyId: "tech",
-    companyIds: ["tech", "digital"],
-    companyName: "SAAMPARK Technology",
-    status: "Active",
-    department: "Sales & Lead Operations",
-    phone: "+91 98765 43210",
-    password: "Password123",
-    lastLogin: "Active Session",
-    joinedDate: "2024-01-01",
-  },
   {
     id: "usr_super_admin_visible",
     name: "Supriya (Super Admin)",
@@ -36,36 +21,6 @@ export const DEFAULT_SYSTEM_ACCOUNTS: UserItem[] = [
     department: "Executive Management",
     phone: "+91 98765 43210",
     password: "123456",
-    lastLogin: "Active Session",
-    joinedDate: "2024-01-01",
-  },
-  {
-    id: "usr_admin_default",
-    name: "Admin User",
-    email: "admin@saampark.in",
-    role: "Admin",
-    companyId: "tech",
-    companyIds: ["tech", "digital"],
-    companyName: "SAAMPARK Technology",
-    status: "Active",
-    department: "Operations",
-    phone: "+91 98765 43211",
-    password: "admin123",
-    lastLogin: "Active Session",
-    joinedDate: "2024-01-01",
-  },
-  {
-    id: "usr_team_default",
-    name: "Rahul Sharma (Team Lead)",
-    email: "team@saampark.in",
-    role: "Teams",
-    companyId: "tech",
-    companyIds: ["tech"],
-    companyName: "SAAMPARK Technology",
-    status: "Active",
-    department: "Development",
-    phone: "+91 98765 43212",
-    password: "Password123",
     lastLogin: "Active Session",
     joinedDate: "2024-01-01",
   },
@@ -539,8 +494,19 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
             allowedModules: permObj?.allowedModules || existingItem?.allowedModules,
           };
 
-          if (existingIdx >= 0) {
-            dbUsers[existingIdx] = { ...existingItem, ...item };
+          if (existingIdx >= 0 && existingItem) {
+            dbUsers[existingIdx] = {
+              ...item,
+              ...existingItem,
+              id: String(u.id || existingItem.id),
+              name: existingItem.name || item.name,
+              department: existingItem.department || item.department,
+              role: existingItem.role || item.role,
+              status: existingItem.status || item.status,
+              phone: existingItem.phone !== undefined ? existingItem.phone : item.phone,
+              permissions: existingItem.permissions !== undefined ? existingItem.permissions : (permObj || item.permissions),
+              allowedModules: existingItem.allowedModules || permObj?.allowedModules || item.allowedModules,
+            };
           } else {
             dbUsers.push(item);
           }
@@ -550,6 +516,27 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
   } catch (err) {
     console.warn("Live API /users read warning:", err);
   }
+
+  // Keep usePermissionStore synchronized with all dbUsers permissions
+  dbUsers.forEach((u) => {
+    const userIdStr = String(u.id);
+    const emailNorm = (u.email || "").toLowerCase().trim();
+    let permObj: any = u.permissions;
+    if (typeof permObj === "string") {
+      try { permObj = JSON.parse(permObj); } catch {}
+    }
+    const allowed = u.allowedModules || (permObj && Array.isArray(permObj.allowedModules) ? permObj.allowedModules : undefined);
+    const actions = (permObj && permObj.actionMatrix) || undefined;
+
+    if (allowed && Array.isArray(allowed)) {
+      usePermissionStore.getState().setUserPermissions(userIdStr, allowed);
+      if (emailNorm) usePermissionStore.getState().setUserPermissions(emailNorm, allowed);
+    }
+    if (actions && typeof actions === "object") {
+      usePermissionStore.getState().setUserAllModuleActions(userIdStr, actions);
+      if (emailNorm) usePermissionStore.getState().setUserAllModuleActions(emailNorm, actions);
+    }
+  });
 
   saveModuleDataToDB("users", dbUsers, "all").catch(() => {});
 

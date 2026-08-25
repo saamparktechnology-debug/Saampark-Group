@@ -65,12 +65,10 @@ export default function UsersMain() {
 
     window.addEventListener("storage", handleStorageChange)
     window.addEventListener("saampark_company_switched", handleStorageChange)
-    const interval = setInterval(loadUsers, 2500)
 
     return () => {
       window.removeEventListener("storage", handleStorageChange)
       window.removeEventListener("saampark_company_switched", handleStorageChange)
-      clearInterval(interval)
     }
   }, [loadUsers])
 
