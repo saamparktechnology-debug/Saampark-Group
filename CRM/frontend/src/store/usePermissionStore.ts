@@ -120,13 +120,43 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, ModuleName[]> = {
   ]
 }
 
+export const DEFAULT_ROLE_ACTION_PERMISSIONS: Record<Role, Record<string, ModuleActionFlags>> = {
+  'Super Admin': (() => {
+    const init: Record<string, ModuleActionFlags> = {}
+    CONFIGURABLE_MODULES.forEach((m) => { init[m] = { ...DEFAULT_FULL_ACTIONS } })
+    return init
+  })(),
+  'Admin': (() => {
+    const init: Record<string, ModuleActionFlags> = {}
+    CONFIGURABLE_MODULES.forEach((m) => { init[m] = { ...DEFAULT_FULL_ACTIONS } })
+    return init
+  })(),
+  'Teams': (() => {
+    const init: Record<string, ModuleActionFlags> = {}
+    CONFIGURABLE_MODULES.forEach((m) => {
+      init[m] = { view: true, add: true, edit: true, delete: false }
+    })
+    return init
+  })(),
+  'Clients': (() => {
+    const init: Record<string, ModuleActionFlags> = {}
+    CONFIGURABLE_MODULES.forEach((m) => {
+      const isClientMod = ['Sales', 'Projects', 'Messages', 'Tickets', 'Settings'].includes(m)
+      init[m] = { view: isClientMod, add: false, edit: false, delete: false }
+    })
+    return init
+  })(),
+}
+
 interface PermissionState {
   rolePermissions: Record<Role, ModuleName[]>
+  roleActionPermissions: Record<Role, Record<string, ModuleActionFlags>>
   userPermissions: Record<string, ModuleName[]>
   userActionPermissions: Record<string, Record<string, ModuleActionFlags>>
   
   // Actions
   setRolePermissions: (role: Role, modules: ModuleName[]) => void
+  setRoleAllModuleActions: (role: Role, matrix: Record<string, ModuleActionFlags>) => void
   setUserPermissions: (userId: string, modules: ModuleName[]) => void
   setUserModuleAction: (userId: string, moduleName: ModuleName, action: keyof ModuleActionFlags, value: boolean) => void
   setUserAllModuleActions: (userId: string, matrix: Record<string, ModuleActionFlags>) => void
@@ -143,6 +173,7 @@ export const usePermissionStore = create<PermissionState>()(
   persist(
     (set, get) => ({
       rolePermissions: DEFAULT_ROLE_PERMISSIONS,
+      roleActionPermissions: DEFAULT_ROLE_ACTION_PERMISSIONS,
       userPermissions: {},
       userActionPermissions: {},
 
@@ -152,6 +183,16 @@ export const usePermissionStore = create<PermissionState>()(
           rolePermissions: {
             ...state.rolePermissions,
             [norm]: modules,
+          },
+        }))
+      },
+
+      setRoleAllModuleActions: (role: Role, matrix: Record<string, ModuleActionFlags>) => {
+        const norm = normalizeRole(role)
+        set((state) => ({
+          roleActionPermissions: {
+            ...(state.roleActionPermissions || DEFAULT_ROLE_ACTION_PERMISSIONS),
+            [norm]: matrix,
           },
         }))
       },
@@ -353,6 +394,11 @@ export const usePermissionStore = create<PermissionState>()(
 
         if (userMatrix && userMatrix[moduleName]) {
           return userMatrix[moduleName]
+        }
+
+        const roleActionMatrix = (state.roleActionPermissions && state.roleActionPermissions[normRole]) || (DEFAULT_ROLE_ACTION_PERMISSIONS[normRole])
+        if (roleActionMatrix && roleActionMatrix[moduleName]) {
+          return roleActionMatrix[moduleName]
         }
 
         if (normRole === 'Teams') {
