@@ -3,54 +3,21 @@
 import * as React from "react"
 import { X, Plus, Check, Calendar, Clock, Wrench, FileText, User as UserIcon, Trash2 } from "lucide-react"
 import { Lead, LeadStatus, LeadType } from "../types"
-import { updateLead, unlockLead } from "../services/leadService"
+import { updateLead, unlockLead, parseLeadDate, formatLeadReminderDate, MONTH_NAMES_SHORT } from "../services/leadService"
 import { useAuthStore } from "@/store/useAuthStore"
 
-const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-
-// Helper to convert date string "12 Aug 2025" to "YYYY-MM-DD" for input[type="date"] (Zero UTC Timezone Shift)
+// Helper to convert date string to "YYYY-MM-DD" for input[type="date"] (Zero UTC Timezone Shift)
 function formatDateForInput(dateStr?: string): string {
-  if (!dateStr || dateStr.toLowerCase() === "none" || dateStr.startsWith("00")) {
-    const d = new Date()
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
-  }
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr
-
-  const parts = dateStr.trim().split(/[\s\-\/\,\.]+/)
-  if (parts.length === 3) {
-    const monthIdx = MONTH_NAMES.findIndex(m => m.toLowerCase() === parts[1].toLowerCase())
-    if (monthIdx !== -1) {
-      const day = String(parseInt(parts[0], 10)).padStart(2, "0")
-      const month = String(monthIdx + 1).padStart(2, "0")
-      const year = parts[2]
-      return `${year}-${month}-${day}`
-    }
-    if (!isNaN(Number(parts[0])) && !isNaN(Number(parts[1])) && !isNaN(Number(parts[2]))) {
-      if (parts[2].length === 4) {
-        return `${parts[2]}-${String(parts[1]).padStart(2, "0")}-${String(parts[0]).padStart(2, "0")}`
-      }
-    }
-  }
-
-  const parsed = new Date(dateStr)
-  if (!isNaN(parsed.getTime())) {
-    return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`
-  }
-
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+  const parsed = parseLeadDate(dateStr) || new Date()
+  const y = parsed.getFullYear()
+  const m = String(parsed.getMonth() + 1).padStart(2, "0")
+  const d = String(parsed.getDate()).padStart(2, "0")
+  return `${y}-${m}-${d}`
 }
 
-// Helper to convert "YYYY-MM-DD" to "12 Aug 2025"
+// Helper to convert "YYYY-MM-DD" to "25 Aug 2026"
 function formatDateForDisplay(yyyyMmDd: string): string {
-  if (!yyyyMmDd || yyyyMmDd.toLowerCase() === "none") return "None"
-  if (/^\d{4}-\d{2}-\d{2}$/.test(yyyyMmDd)) {
-    const [y, m, d] = yyyyMmDd.split("-").map(Number)
-    const monthName = MONTH_NAMES[m - 1] || "Aug"
-    const dayStr = String(d).padStart(2, "0")
-    return `${dayStr} ${monthName} ${y}`
-  }
-  return yyyyMmDd
+  return formatLeadReminderDate(yyyyMmDd)
 }
 
 // Helper to convert time string "11:30 AM" or "14:30" to "HH:MM" for input[type="time"]
@@ -121,7 +88,13 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
   const [selectedServices, setSelectedServices] = React.useState<string[]>(["Website Devlopment"])
   const [customService, setCustomService] = React.useState("")
   const [isNoReminder, setIsNoReminder] = React.useState(false)
-  const [reminderDate, setReminderDate] = React.useState("12 Aug 2026")
+  const [reminderDate, setReminderDate] = React.useState(() => {
+    const today = new Date()
+    const d = String(today.getDate()).padStart(2, "0")
+    const m = MONTH_NAMES_SHORT[today.getMonth()]
+    const y = today.getFullYear()
+    return `${d} ${m} ${y}`
+  })
   const [reminderTime, setReminderTime] = React.useState("11:30 AM")
   const [reminderNotes, setReminderNotes] = React.useState("")
   const [caller, setCaller] = React.useState("")
@@ -206,13 +179,17 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
 
       // Reminder Date initialization
       const rawDate = lead.reminderDate || ""
-      const lowerDate = rawDate.toString().toLowerCase().trim()
-      if (!rawDate || lowerDate === "none" || lowerDate === "00,00,0000" || lowerDate === "00-00-0000" || lowerDate === "00/00/0000") {
+      const parsedLeadDate = parseLeadDate(rawDate)
+      if (!rawDate || !parsedLeadDate) {
         setIsNoReminder(true)
-        setReminderDate("12 Aug 2026")
+        const today = new Date()
+        const d = String(today.getDate()).padStart(2, "0")
+        const m = MONTH_NAMES_SHORT[today.getMonth()]
+        const y = today.getFullYear()
+        setReminderDate(`${d} ${m} ${y}`)
       } else {
         setIsNoReminder(false)
-        setReminderDate(rawDate)
+        setReminderDate(formatLeadReminderDate(rawDate))
       }
 
       // Reminder Time initialization

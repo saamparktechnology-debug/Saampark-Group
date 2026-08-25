@@ -7,20 +7,84 @@ import { recordUserAccount } from "../../users/services/userService"
 
 export const initialLeads: Lead[] = []
 
+export const MONTH_NAMES_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+export function parseLeadDate(dateStr?: string): Date | null {
+  if (!dateStr || typeof dateStr !== "string") return null
+  const clean = dateStr.trim().toLowerCase()
+  if (
+    clean === "none" ||
+    clean === "-" ||
+    clean === "" ||
+    clean.includes("no reminder") ||
+    clean.startsWith("00")
+  ) {
+    return null
+  }
+
+  // 1. ISO or YYYY-MM-DD format (e.g. "2026-08-25")
+  if (/^\d{4}-\d{2}-\d{2}/.test(clean)) {
+    const [y, m, d] = clean.split("T")[0].split("-").map(Number)
+    if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+      return new Date(y, m - 1, d, 0, 0, 0, 0)
+    }
+  }
+
+  // 2. Delimited formats (e.g. "25,08,2026", "25-08-2026", "25/08/2026", "25.08.2026", "25 Aug 2026")
+  const parts = clean.split(/[\s\-\/\,\.]+/)
+  if (parts.length === 3) {
+    // Check if middle part is month name (e.g. "25 Aug 2026")
+    const monthIdx = MONTH_NAMES_SHORT.findIndex((m) => m.toLowerCase() === parts[1].toLowerCase())
+    if (monthIdx !== -1) {
+      const day = parseInt(parts[0], 10)
+      const year = parseInt(parts[2], 10)
+      if (!isNaN(day) && !isNaN(year)) {
+        return new Date(year, monthIdx, day, 0, 0, 0, 0)
+      }
+    }
+
+    // Check if all parts are numeric (e.g. "25,08,2026" or "2026,08,25")
+    const p0 = parseInt(parts[0], 10)
+    const p1 = parseInt(parts[1], 10)
+    const p2 = parseInt(parts[2], 10)
+
+    if (!isNaN(p0) && !isNaN(p1) && !isNaN(p2)) {
+      if (parts[2].length === 4) {
+        // "DD-MM-YYYY" (e.g. 25,08,2026)
+        return new Date(p2, p1 - 1, p0, 0, 0, 0, 0)
+      } else if (parts[0].length === 4) {
+        // "YYYY-MM-DD"
+        return new Date(p0, p1 - 1, p2, 0, 0, 0, 0)
+      }
+    }
+  }
+
+  // 3. Fallback standard JavaScript Date parse
+  const parsed = new Date(dateStr)
+  if (!isNaN(parsed.getTime())) {
+    return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 0, 0, 0, 0)
+  }
+
+  return null
+}
+
+export function formatLeadReminderDate(dateStr?: string): string {
+  if (!dateStr) return "No Reminder"
+  const parsed = parseLeadDate(dateStr)
+  if (!parsed) return "No Reminder"
+  const day = String(parsed.getDate()).padStart(2, "0")
+  const month = MONTH_NAMES_SHORT[parsed.getMonth()]
+  const year = parsed.getFullYear()
+  return `${day} ${month} ${year}`
+}
+
 export function isReminderDateOverdue(dateStr?: string): boolean {
-  if (!dateStr || dateStr === "None" || dateStr === "-" || dateStr.toLowerCase().includes("no reminder") || dateStr === "00,00,0000" || dateStr === "00-00-0000" || dateStr === "00/00/0000") {
-    return false
-  }
-  try {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const parsed = new Date(dateStr)
-    if (isNaN(parsed.getTime())) return false
-    parsed.setHours(0, 0, 0, 0)
-    return parsed.getTime() < today.getTime()
-  } catch {
-    return false
-  }
+  const parsed = parseLeadDate(dateStr)
+  if (!parsed) return false
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  // If reminder date is before today's 12:00 AM midnight, it is expired/overdue and must be locked
+  return parsed.getTime() < today.getTime()
 }
 
 export async function syncLeadReminderTask(lead: Lead): Promise<void> {

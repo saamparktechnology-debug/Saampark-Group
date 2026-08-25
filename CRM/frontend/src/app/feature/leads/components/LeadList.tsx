@@ -24,6 +24,7 @@ import {
 } from "lucide-react"
 import { Lead } from "../types"
 import { LeadFiltersDropdown } from "./LeadFiltersDropdown"
+import { formatLeadReminderDate } from "../services/leadService"
 import { LabelItem } from "./ManageLabelsModal"
 import { LabelSelectorPopover } from "./LabelSelectorPopover"
 import { useAuthStore } from "@/store/useAuthStore"
@@ -361,7 +362,9 @@ export function LeadList({
 
         const phoneVal = l.secondaryPhone ? `${l.phone} (Mgr: ${l.secondaryPhone})` : l.phone
         const contactVal = l.secondaryContact ? `${l.primaryContact} (Mgr: ${l.secondaryContact})` : l.primaryContact
-        const reminderVal = l.reminderDate && l.reminderDate !== "None" ? `${l.reminderDate} ${l.reminderTime || ""}` : "No Reminder"
+        const reminderVal = l.reminderDate && l.reminderDate !== "None" && formatLeadReminderDate(l.reminderDate) !== "No Reminder"
+          ? `${formatLeadReminderDate(l.reminderDate)}${l.reminderTime && l.reminderTime !== "None" ? ` (${l.reminderTime})` : ""}`
+          : "No Reminder"
 
         return `
           <tr style="background-color: ${rowBg};">
@@ -472,7 +475,8 @@ export function LeadList({
               : "Unassigned"))
 
         const phoneVal = l.secondaryPhone ? `${l.phone}<br/><span style="color:#7C3AED;font-size:10px;">Mgr: ${l.secondaryPhone}</span>` : l.phone
-        const reminderVal = l.reminderDate && l.reminderDate !== "None" ? `${l.reminderDate}<br/><span style="color:#D97706;font-size:10px;">${l.reminderTime || ""}</span>` : "-"
+        const formattedRem = formatLeadReminderDate(l.reminderDate)
+        const reminderVal = formattedRem !== "No Reminder" ? `${formattedRem}<br/><span style="color:#D97706;font-size:10px;">${l.reminderTime || ""}</span>` : "-"
 
         return `
           <tr>

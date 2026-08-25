@@ -24,7 +24,7 @@ import {
 } from "lucide-react"
 import { Lead, LeadStatus } from "../types"
 import { LeadFiltersDropdown } from "./LeadFiltersDropdown"
-import { updateLead } from "../services/leadService"
+import { updateLead, parseLeadDate, formatLeadReminderDate } from "../services/leadService"
 import { LabelItem } from "./ManageLabelsModal"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
@@ -56,43 +56,10 @@ function WhatsAppIcon({ className, size = 13 }: { className?: string; size?: num
   )
 }
 
-const MONTH_MAP: Record<string, number> = {
-  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-  jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
-}
-
 function parseReminderTimestamp(dateStr?: string, timeStr?: string): number {
-  if (!dateStr || dateStr === "None" || dateStr === "-" || dateStr.toLowerCase().includes("no reminder") || dateStr.includes("00")) {
+  const parsedDate = parseLeadDate(dateStr)
+  if (!parsedDate) {
     return Infinity // Leads with no reminder appear at the bottom
-  }
-
-  let year = new Date().getFullYear()
-  let month = new Date().getMonth()
-  let day = new Date().getDate()
-
-  const trimmed = dateStr.trim()
-  const textMatch = trimmed.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/)
-  if (textMatch) {
-    day = parseInt(textMatch[1], 10)
-    const mStr = textMatch[2].substring(0, 3).toLowerCase()
-    month = MONTH_MAP[mStr] !== undefined ? MONTH_MAP[mStr] : month
-    year = parseInt(textMatch[3], 10)
-  } else if (trimmed.includes("-") || trimmed.includes("/") || trimmed.includes(",")) {
-    const parts = trimmed.split(/[-/, ]+/).filter(Boolean)
-    if (parts.length === 3) {
-      if (parts[0].length === 4) {
-        year = parseInt(parts[0], 10)
-        month = parseInt(parts[1], 10) - 1
-        day = parseInt(parts[2], 10)
-      } else {
-        day = parseInt(parts[0], 10)
-        month = parseInt(parts[1], 10) - 1
-        year = parseInt(parts[2], 10)
-      }
-    }
-  } else {
-    const parsed = Date.parse(trimmed)
-    if (!isNaN(parsed)) return parsed
   }
 
   let hours = 0
@@ -112,7 +79,7 @@ function parseReminderTimestamp(dateStr?: string, timeStr?: string): number {
     if (!isNaN(mRaw)) minutes = mRaw
   }
 
-  const d = new Date(year, month, day, hours, minutes)
+  const d = new Date(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate(), hours, minutes)
   return isNaN(d.getTime()) ? Infinity : d.getTime()
 }
 
@@ -1075,8 +1042,8 @@ export function LeadKanban({
                           <span className="truncate">
                             Reminder:{" "}
                             <strong className="font-semibold text-amber-600 dark:text-amber-400">
-                              {l.reminderDate && l.reminderDate !== "None" ? l.reminderDate : "No Reminder"}
-                              {l.reminderTime && l.reminderTime !== "None" ? ` ${l.reminderTime}` : ""}
+                              {formatLeadReminderDate(l.reminderDate)}
+                              {l.reminderTime && l.reminderTime !== "None" && formatLeadReminderDate(l.reminderDate) !== "No Reminder" ? ` ${l.reminderTime}` : ""}
                             </strong>
                           </span>
                         </div>
