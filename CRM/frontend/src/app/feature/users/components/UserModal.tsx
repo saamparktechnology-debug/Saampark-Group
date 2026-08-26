@@ -474,44 +474,50 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
                 </span>
               </label>
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedBranchId("")}
-                  className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
-                    !selectedBranchId
-                      ? "bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border-blue-400 dark:border-blue-700 shadow-2xs font-bold"
-                      : "bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:border-zinc-400"
-                  }`}
-                >
-                  <span className="flex items-center gap-1.5">
-                    <span>🏢</span> All Branches / Main Headquarters
-                  </span>
-                  {!selectedBranchId && <Check size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />}
-                </button>
+              {availableBranches.length === 0 ? (
+                <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-dashed border-zinc-200 dark:border-zinc-700 text-center">
+                  <p className="text-xs text-zinc-400">No sub-branches created for this company yet.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedBranchId("")}
+                    className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
+                      !selectedBranchId
+                        ? "bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border-blue-400 dark:border-blue-700 shadow-2xs font-bold"
+                        : "bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:border-zinc-400"
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <span>🏢</span> All Branches / Main Headquarters
+                    </span>
+                    {!selectedBranchId && <Check size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />}
+                  </button>
 
-                {availableBranches.map((b) => {
-                  const isSelected = String(selectedBranchId || "").toLowerCase() === String(b.id || "").toLowerCase()
-                  return (
-                    <button
-                      key={b.id}
-                      type="button"
-                      onClick={() => setSelectedBranchId(b.id)}
-                      className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
-                        isSelected
-                          ? "bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border-blue-400 dark:border-blue-700 shadow-2xs font-bold"
-                          : "bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:border-zinc-400"
-                      }`}
-                    >
-                      <div className="text-left truncate mr-1">
-                        <span className="font-semibold text-zinc-800 dark:text-zinc-200">{b.name}</span>
-                        {b.city && <span className="text-[10px] text-zinc-400 ml-1.5 font-normal">({b.city})</span>}
-                      </div>
-                      {isSelected && <Check size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />}
-                    </button>
-                  )
-                })}
-              </div>
+                  {availableBranches.map((b) => {
+                    const isSelected = String(selectedBranchId || "").toLowerCase() === String(b.id || "").toLowerCase()
+                    return (
+                      <button
+                        key={b.id}
+                        type="button"
+                        onClick={() => setSelectedBranchId(b.id)}
+                        className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
+                          isSelected
+                            ? "bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border-blue-400 dark:border-blue-700 shadow-2xs font-bold"
+                            : "bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:border-zinc-400"
+                        }`}
+                      >
+                        <div className="text-left truncate mr-1">
+                          <span className="font-semibold text-zinc-800 dark:text-zinc-200">{b.name}</span>
+                          {b.city && <span className="text-[10px] text-zinc-400 ml-1.5 font-normal">({b.city})</span>}
+                        </div>
+                        {isSelected && <Check size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

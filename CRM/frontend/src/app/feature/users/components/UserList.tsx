@@ -189,11 +189,13 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
                             <span className="truncate max-w-[160px]">{u.companyName || (u.companyId === 'digital' ? 'SAAMPARK Digital' : 'SAAMPARK Technology')}</span>
                           </div>
                           
-                          {/* Branch Badge */}
-                          <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 w-fit">
-                            <span>📍</span>
-                            <span>{u.branchName || (u.branchId ? `Branch (${u.branchId})` : 'All Branches / HQ')}</span>
-                          </div>
+                          {/* Branch Badge (only shown when assigned to a specific branch) */}
+                          {(u.branchName || u.branchId) && (
+                            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 w-fit">
+                              <span>📍</span>
+                              <span>{u.branchName || `Branch (${u.branchId})`}</span>
+                            </div>
+                          )}
 
                           {u.department && (
                             <span className="text-[10px] text-muted-foreground ml-0.5">{u.department}</span>

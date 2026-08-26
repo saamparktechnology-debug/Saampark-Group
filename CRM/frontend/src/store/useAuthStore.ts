@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { AuthService } from '@/services/apiServices'
 import { api, setAuthToken } from '@/lib/api'
+import { fetchModuleDataFromDB, saveModuleDataToDB } from '@/lib/storageSync'
 
 export type Role = 'Super Admin' | 'Admin' | 'Clients' | 'Teams'
 export type CompanyId = string
@@ -52,12 +53,7 @@ export const DEFAULT_COMPANIES: Company[] = [
   { id: 'digital', name: 'SAAMPARK Digital Marketing & Research', logo: '📈', slug: 'digital', currency_symbol: '₹' },
 ]
 
-export const DEFAULT_BRANCHES: Branch[] = [
-  { id: 'tech-hq', companyId: 'tech', name: 'Tech HQ - Sector V', code: 'TECH-01', city: 'Kolkata', status: 'Active', createdAt: '2026-01-01' },
-  { id: 'tech-north', companyId: 'tech', name: 'North Hub - Dum Dum', code: 'TECH-02', city: 'Kolkata', status: 'Active', createdAt: '2026-01-01' },
-  { id: 'digital-main', companyId: 'digital', name: 'Digital HQ - South Kolkata', code: 'DIG-01', city: 'Kolkata', status: 'Active', createdAt: '2026-01-01' },
-  { id: 'digital-mumbai', companyId: 'digital', name: 'Western Hub - Andheri', code: 'DIG-02', city: 'Mumbai', status: 'Active', createdAt: '2026-01-01' },
-]
+export const DEFAULT_BRANCHES: Branch[] = []
 
 export const COMPANIES = DEFAULT_COMPANIES
 
@@ -128,13 +124,16 @@ export const useAuthStore = create<AuthState>()(
 
       fetchBranches: async () => {
         try {
+          const dbBranches = await fetchModuleDataFromDB<Branch[]>('branches', [], 'all').catch(() => null)
+          if (Array.isArray(dbBranches)) {
+            set({ branches: dbBranches })
+            return dbBranches
+          }
           const res: any = await api.get('/branches').catch(() => null)
           if (res && (Array.isArray(res.data) || Array.isArray(res))) {
             const list = Array.isArray(res.data) ? res.data : res
-            if (list.length > 0) {
-              set({ branches: list })
-              return list
-            }
+            set({ branches: list })
+            return list
           }
         } catch {}
         return get().branches
@@ -185,10 +184,12 @@ export const useAuthStore = create<AuthState>()(
           await api.delete(`/companies/${companyId}`).catch(() => {})
         } catch {}
 
+        const remainingBranches = branches.filter(b => b.companyId !== companyId)
         set({
           companies: companies.filter(c => c.id !== companyId && c.slug !== companyId),
-          branches: branches.filter(b => b.companyId !== companyId),
+          branches: remainingBranches,
         })
+        saveModuleDataToDB('branches', remainingBranches, 'all').catch(() => {})
 
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new Event('storage'))
@@ -203,7 +204,7 @@ export const useAuthStore = create<AuthState>()(
           companyId: branchData.companyId || 'tech',
           name: branchData.name || 'New Sub-Branch',
           code: branchData.code || `BR-${Math.floor(100 + Math.random() * 900)}`,
-          city: branchData.city || 'Kolkata',
+          city: branchData.city || '',
           address: branchData.address || '',
           phone: branchData.phone || '',
           email: branchData.email || '',
@@ -216,7 +217,10 @@ export const useAuthStore = create<AuthState>()(
           await api.post(`/companies/${newBranch.companyId}/branches`, newBranch).catch(() => {})
         } catch {}
 
-        set({ branches: [...branches.filter(b => b.id !== newBranch.id), newBranch] })
+        const updated = [...branches.filter(b => b.id !== newBranch.id), newBranch]
+        set({ branches: updated })
+        saveModuleDataToDB('branches', updated, 'all').catch(() => {})
+
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new Event('storage'))
         }
@@ -229,9 +233,10 @@ export const useAuthStore = create<AuthState>()(
           await api.put(`/branches/${branchId}`, updates).catch(() => {})
         } catch {}
 
-        set({
-          branches: branches.map(b => b.id === branchId ? { ...b, ...updates } : b)
-        })
+        const updated = branches.map(b => b.id === branchId ? { ...b, ...updates } : b)
+        set({ branches: updated })
+        saveModuleDataToDB('branches', updated, 'all').catch(() => {})
+
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new Event('storage'))
         }
@@ -243,9 +248,10 @@ export const useAuthStore = create<AuthState>()(
           await api.delete(`/branches/${branchId}`).catch(() => {})
         } catch {}
 
-        set({
-          branches: branches.filter(b => b.id !== branchId)
-        })
+        const updated = branches.filter(b => b.id !== branchId)
+        set({ branches: updated })
+        saveModuleDataToDB('branches', updated, 'all').catch(() => {})
+
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new Event('storage'))
         }
