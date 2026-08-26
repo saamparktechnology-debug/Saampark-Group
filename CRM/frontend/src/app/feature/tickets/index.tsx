@@ -5,14 +5,22 @@ import { motion, AnimatePresence } from "framer-motion"
 import { 
   HeadphonesIcon, Plus, Search, CheckCircle2, AlertCircle, 
   Clock, ShieldAlert, Check, X, ArrowRight, Eye, Trash2,
-  FileText, MessageSquare, Send, User, ExternalLink
+  FileText, MessageSquare, Send, User, ExternalLink, Paperclip,
+  Image as ImageIcon, Loader2, Download
 } from "lucide-react"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { fetchModuleDataFromDB, saveModuleDataToDB, filterGlobalDeletedItems, markGlobalItemDeleted } from "@/lib/storageSync"
+import { uploadToImgBB } from "@/lib/imgbbUpload"
 
 export type TicketPriority = "Low" | "Normal" | "High" | "Critical"
 export type TicketStatus = "New" | "Open" | "In Progress" | "Under Review" | "Resolved" | "Closed"
+
+export interface TicketAttachment {
+  name: string
+  url: string
+  size?: string
+}
 
 export interface DisputeTicket {
   id: string
@@ -22,6 +30,7 @@ export interface DisputeTicket {
   priority: TicketPriority
   status: TicketStatus
   description: string
+  attachments?: TicketAttachment[]
   createdBy: string
   creatorEmail: string
   creatorRole: string
@@ -31,6 +40,7 @@ export interface DisputeTicket {
   assignedTo?: string
   raisedTo?: string
   resolutionNote?: string
+  resolutionAttachments?: TicketAttachment[]
   resolvedAt?: string
   resolvedBy?: string
 }
@@ -62,14 +72,78 @@ export default function TicketsMain() {
   const [category, setCategory] = React.useState("Project Deliverable & Scope")
   const [priority, setPriority] = React.useState<TicketPriority>("High")
   const [description, setDescription] = React.useState("")
+  const [attachments, setAttachments] = React.useState<TicketAttachment[]>([])
+  const [isUploadingFile, setIsUploadingFile] = React.useState(false)
+  const ticketFileInputRef = React.useRef<HTMLInputElement>(null)
 
   // Admin Resolution State
   const [newStatus, setNewStatus] = React.useState<TicketStatus>("In Progress")
   const [resolutionInput, setResolutionInput] = React.useState("")
+  const [resolutionAttachments, setResolutionAttachments] = React.useState<TicketAttachment[]>([])
+  const [isUploadingResFile, setIsUploadingResFile] = React.useState(false)
+  const resFileInputRef = React.useRef<HTMLInputElement>(null)
 
   const showToast = (msg: string) => {
     setToastMessage(msg)
     setTimeout(() => setToastMessage(null), 4000)
+  }
+
+  // Handle ImgBB file upload for Ticket Evidence
+  const handleUploadTicketFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    setIsUploadingFile(true)
+    try {
+      const uploadedList: TicketAttachment[] = []
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        const res = await uploadToImgBB(file, `tkt_doc_${Date.now()}_${file.name}`)
+        if (res.url) {
+          uploadedList.push({
+            name: file.name,
+            url: res.url,
+            size: `${(file.size / (1024 * 1024)).toFixed(2)} MB`,
+          })
+        }
+      }
+      setAttachments((prev) => [...prev, ...uploadedList])
+      showToast(`✅ ${uploadedList.length} file(s) uploaded via ImgBB!`)
+    } catch (err) {
+      alert("Failed to upload file to ImgBB. Please check connection.")
+    } finally {
+      setIsUploadingFile(false)
+      if (ticketFileInputRef.current) ticketFileInputRef.current.value = ""
+    }
+  }
+
+  // Handle ImgBB file upload for Admin Resolution
+  const handleUploadResolutionFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    setIsUploadingResFile(true)
+    try {
+      const uploadedList: TicketAttachment[] = []
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        const res = await uploadToImgBB(file, `res_doc_${Date.now()}_${file.name}`)
+        if (res.url) {
+          uploadedList.push({
+            name: file.name,
+            url: res.url,
+            size: `${(file.size / (1024 * 1024)).toFixed(2)} MB`,
+          })
+        }
+      }
+      setResolutionAttachments((prev) => [...prev, ...uploadedList])
+      showToast(`✅ ${uploadedList.length} resolution attachment(s) uploaded!`)
+    } catch (err) {
+      alert("Failed to upload resolution document to ImgBB.")
+    } finally {
+      setIsUploadingResFile(false)
+      if (resFileInputRef.current) resFileInputRef.current.value = ""
+    }
   }
 
   const loadTickets = React.useCallback(async () => {
@@ -143,6 +217,7 @@ export default function TicketsMain() {
       priority,
       status: "New",
       description,
+      attachments: attachments.length > 0 ? attachments : undefined,
       createdBy: currentUserName,
       creatorEmail: currentUserEmail,
       creatorRole: user?.role || "User",
@@ -156,10 +231,11 @@ export default function TicketsMain() {
     const updated = [newTicket, ...tickets]
     setTickets(updated)
     await saveModuleDataToDB("tickets", updated, targetComp)
-    showToast(`✅ Dispute Ticket ${newTicket.ticketNumber} submitted to Company Admin & Super Admin!`)
+    showToast(`✅ Dispute Ticket ${newTicket.ticketNumber} submitted with ${attachments.length} attachment(s)!`)
     setIsRaiseModalOpen(false)
     setSubject("")
     setDescription("")
+    setAttachments([])
   }
 
   const handleSaveResolution = async () => {
@@ -172,6 +248,7 @@ export default function TicketsMain() {
         ...t,
         status: newStatus,
         resolutionNote: resolutionInput || t.resolutionNote,
+        resolutionAttachments: resolutionAttachments.length > 0 ? resolutionAttachments : t.resolutionAttachments,
         resolvedAt: isResolved ? new Date().toLocaleString("en-IN") : t.resolvedAt,
         resolvedBy: isResolved ? currentUserName : t.resolvedBy,
       }
@@ -182,6 +259,7 @@ export default function TicketsMain() {
     showToast(`✅ Ticket ${selectedTicket.ticketNumber} updated to ${newStatus}! Confirmation recorded.`)
     setSelectedTicket(null)
     setResolutionInput("")
+    setResolutionAttachments([])
   }
 
   const handleDelete = async (id: string) => {
@@ -475,9 +553,47 @@ export default function TicketsMain() {
                   </p>
                 </div>
 
+                {/* Evidence Attachments Display */}
+                {selectedTicket.attachments && selectedTicket.attachments.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                      <Paperclip size={13} className="text-blue-600" />
+                      <span>Attached Evidence & Files ({selectedTicket.attachments.length})</span>
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {selectedTicket.attachments.map((att, idx) => {
+                        const isImage = att.url.match(/\.(jpeg|jpg|gif|png|webp)/i) || att.name.match(/\.(jpeg|jpg|gif|png|webp)/i)
+                        return (
+                          <div key={idx} className="p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-750 bg-zinc-50 dark:bg-zinc-800/50 flex items-center gap-3">
+                            {isImage ? (
+                              <img src={att.url} alt={att.name} className="w-12 h-12 rounded-lg object-cover border border-zinc-300 dark:border-zinc-700 shrink-0" />
+                            ) : (
+                              <div className="w-12 h-12 rounded-lg bg-blue-500/10 text-blue-600 flex items-center justify-center shrink-0">
+                                <FileText size={20} />
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-xs text-zinc-800 dark:text-zinc-200 truncate">{att.name}</p>
+                              {att.size && <span className="text-[10px] text-zinc-400">{att.size}</span>}
+                              <a
+                                href={att.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[11px] text-blue-600 hover:underline flex items-center gap-1 mt-0.5 font-semibold"
+                              >
+                                View in Full <ExternalLink size={10} />
+                              </a>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {/* Resolution confirmation block */}
                 {selectedTicket.resolutionNote && (
-                  <div className="p-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 rounded-xl space-y-1">
+                  <div className="p-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 rounded-xl space-y-2">
                     <div className="flex items-center gap-1.5 font-bold text-emerald-800 dark:text-emerald-300 text-xs">
                       <CheckCircle2 size={14} />
                       <span>Official Resolution & Action Taken Confirmation</span>
@@ -485,6 +601,24 @@ export default function TicketsMain() {
                     <p className="text-emerald-900 dark:text-emerald-200 text-xs leading-relaxed">
                       {selectedTicket.resolutionNote}
                     </p>
+                    {selectedTicket.resolutionAttachments && selectedTicket.resolutionAttachments.length > 0 && (
+                      <div className="pt-2 border-t border-emerald-200/60 dark:border-emerald-800/40">
+                        <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 uppercase">Resolution Documents:</span>
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          {selectedTicket.resolutionAttachments.map((rAtt, rIdx) => (
+                            <a
+                              key={rIdx}
+                              href={rAtt.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-2.5 py-1 rounded-lg bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-200 text-[11px] font-semibold flex items-center gap-1 hover:underline"
+                            >
+                              <Paperclip size={11} /> {rAtt.name}
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <div className="text-[10px] text-emerald-700 dark:text-emerald-400 pt-1">
                       Confirmed by: <span className="font-semibold">{selectedTicket.resolvedBy || "Admin"}</span> • {selectedTicket.resolvedAt || "Resolved"}
                     </div>
@@ -527,6 +661,44 @@ export default function TicketsMain() {
                         className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden"
                       />
                     </div>
+
+                    {/* Admin ImgBB Resolution Attachments */}
+                    <div>
+                      <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Attach Proof / Receipt Documents (ImgBB)</label>
+                      <input
+                        type="file"
+                        multiple
+                        ref={resFileInputRef}
+                        onChange={handleUploadResolutionFiles}
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => resFileInputRef.current?.click()}
+                        disabled={isUploadingResFile}
+                        className="px-3 py-1.5 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 flex items-center gap-1.5"
+                      >
+                        {isUploadingResFile ? <Loader2 size={13} className="animate-spin" /> : <Paperclip size={13} />}
+                        <span>{isUploadingResFile ? "Uploading to ImgBB..." : "Attach Resolution Document"}</span>
+                      </button>
+
+                      {resolutionAttachments.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {resolutionAttachments.map((f, fi) => (
+                            <span key={fi} className="px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-[11px] font-semibold flex items-center gap-1.5">
+                              <span>📄 {f.name}</span>
+                              <button
+                                type="button"
+                                onClick={() => setResolutionAttachments(resolutionAttachments.filter((_, idx) => idx !== fi))}
+                                className="text-zinc-400 hover:text-rose-500"
+                              >
+                                <X size={12} />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -556,7 +728,7 @@ export default function TicketsMain() {
         )}
       </AnimatePresence>
 
-      {/* ---------------- RAISE DISPUTE MODAL ---------------- */}
+      {/* ---------------- RAISE DISPUTE MODAL (WITH IMGBB ATTACHMENTS) ---------------- */}
       <AnimatePresence>
         {isRaiseModalOpen && (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
@@ -636,13 +808,72 @@ export default function TicketsMain() {
                   />
                 </div>
 
+                {/* ImgBB File & Screenshot Attachment Field */}
+                <div>
+                  <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Attach Screenshots / Documents (ImgBB Cloud)</label>
+                  <input
+                    type="file"
+                    multiple
+                    ref={ticketFileInputRef}
+                    onChange={handleUploadTicketFiles}
+                    className="hidden"
+                  />
+                  <div
+                    onClick={() => ticketFileInputRef.current?.click()}
+                    className="p-4 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/40 text-center cursor-pointer hover:border-blue-500 transition-colors"
+                  >
+                    {isUploadingFile ? (
+                      <div className="flex items-center justify-center gap-2 text-blue-600 font-semibold py-2">
+                        <Loader2 size={16} className="animate-spin" />
+                        <span>Uploading files to ImgBB Free Cloud...</span>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-center gap-2 text-zinc-600 dark:text-zinc-400 font-semibold">
+                          <Paperclip size={14} className="text-blue-600" />
+                          <span>Click to Upload Screenshots / Files</span>
+                        </div>
+                        <p className="text-[10px] text-zinc-400">Supported: PNG, JPG, WEBP, GIF, PDF</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Attachment Thumbnails & Files List */}
+                  {attachments.length > 0 && (
+                    <div className="space-y-2 mt-2">
+                      <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Attached Files ({attachments.length}):</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {attachments.map((att, idx) => (
+                          <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
+                            <div className="flex items-center gap-2 truncate">
+                              <span className="text-base">📎</span>
+                              <div className="truncate">
+                                <p className="font-semibold text-[11px] text-zinc-800 dark:text-zinc-200 truncate">{att.name}</p>
+                                {att.size && <p className="text-[9px] text-zinc-400">{att.size}</p>}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setAttachments(attachments.filter((_, i) => i !== idx))}
+                              className="text-zinc-400 hover:text-rose-600 p-1"
+                              title="Remove file"
+                            >
+                              <X size={13} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* Confidential Routing Notice */}
                 <div className="p-3 rounded-xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 flex items-start gap-2.5">
                   <span className="text-sm">🛡️</span>
                   <div className="text-[11px] text-blue-900 dark:text-blue-300 leading-snug">
                     <p className="font-bold">Confidential Direct Routing</p>
                     <p className="text-[10px] text-blue-700 dark:text-blue-400 mt-0.5">
-                      This ticket will be routed <strong>strictly to the Company Admin and Super Admin only</strong>. No other team member or client will have access to view or inspect this dispute.
+                      This ticket and uploaded evidence will be routed <strong>strictly to the Company Admin and Super Admin only</strong>.
                     </p>
                   </div>
                 </div>
@@ -657,7 +888,8 @@ export default function TicketsMain() {
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-1.5 font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm flex items-center gap-1"
+                    disabled={isUploadingFile}
+                    className="px-4 py-1.5 font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm flex items-center gap-1 disabled:opacity-50"
                   >
                     <Send size={13} />
                     <span>Submit Dispute Ticket</span>
