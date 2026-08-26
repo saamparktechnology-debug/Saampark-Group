@@ -9,6 +9,17 @@ export interface ProjectMember {
   email?: string
 }
 
+export interface ProjectMilestone {
+  id: string
+  title: string
+  stage: "Frontend" | "Backend" | "Design" | "Testing" | "Deployment" | "Credentials" | "Custom"
+  status: "Completed" | "In Progress" | "Pending" | "Hold"
+  notes?: string
+  credentials?: string
+  updatedBy?: string
+  updatedAt?: string
+}
+
 export interface TaskBreakdown {
   todo: number
   inProgress: number
@@ -46,6 +57,7 @@ export interface Project {
   totalAmount?: number
   billedBy?: string
   members?: ProjectMember[]
+  milestones?: ProjectMilestone[]
   taskBreakdown?: TaskBreakdown
   activityLogs?: ActivityItem[]
 }

@@ -1,4 +1,4 @@
-import { Project } from "../types"
+import { Project, ProjectMilestone, ActivityItem } from "../types"
 import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted, filterGlobalDeletedItems } from "@/lib/storageSync"
 
 export const initialProjects: Project[] = []
@@ -48,6 +48,55 @@ export const updateProject = async (id: string, updates: Partial<Project>, compa
   current[idx] = { ...current[idx], ...updates }
   await saveModuleDataToDB("projects", current, companyId)
   return { ...current[idx] }
+}
+
+export const addOrUpdateProjectMilestone = async (
+  projectId: string,
+  milestone: ProjectMilestone,
+  userName: string = "Developer",
+  companyId?: string
+): Promise<Project> => {
+  const current = await getProjects(companyId)
+  const idx = current.findIndex(p => String(p.id).toLowerCase().trim() === String(projectId).toLowerCase().trim())
+  if (idx === -1) throw new Error("Project not found")
+
+  const target = current[idx]
+  const existingMilestones = target.milestones || []
+  const mIdx = existingMilestones.findIndex(m => m.id === milestone.id)
+
+  let updatedMilestones: ProjectMilestone[] = []
+  if (mIdx !== -1) {
+    updatedMilestones = existingMilestones.map(m => m.id === milestone.id ? milestone : m)
+  } else {
+    updatedMilestones = [...existingMilestones, milestone]
+  }
+
+  // Auto calculate progress percentage
+  const totalM = updatedMilestones.length
+  const completedM = updatedMilestones.filter(m => m.status === "Completed").length
+  const newProgress = totalM > 0 ? Math.round((completedM / totalM) * 100) : target.progress
+  const newStatus = newProgress === 100 ? "Completed" : newProgress > 0 ? "In Progress" : target.status
+
+  const newActivity: ActivityItem = {
+    id: `act_${Date.now()}`,
+    user: userName,
+    timestamp: "Just now",
+    action: milestone.status === "Completed" ? "Completed" : "Updated",
+    title: `${milestone.title} (${milestone.status})${milestone.notes ? `: ${milestone.notes}` : ""}`,
+    badge: milestone.stage,
+  }
+
+  const updatedProj: Project = {
+    ...target,
+    milestones: updatedMilestones,
+    progress: newProgress,
+    status: newStatus as any,
+    activityLogs: [newActivity, ...(target.activityLogs || [])],
+  }
+
+  current[idx] = updatedProj
+  await saveModuleDataToDB("projects", current, companyId)
+  return updatedProj
 }
 
 export const deleteProject = async (id: string, companyId?: string): Promise<boolean> => {

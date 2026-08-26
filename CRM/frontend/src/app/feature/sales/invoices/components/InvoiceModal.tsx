@@ -4,6 +4,8 @@ import * as React from "react"
 import { X, Printer, Send, Edit, CheckCircle2, AlertCircle, Building2, Phone, Mail, Globe, MapPin, ShieldCheck, QrCode } from "lucide-react"
 import { InvoiceItem } from "../services/invoiceService"
 import { getCompanyPaymentSettings, CompanyPaymentSettings, DEFAULT_COMPANY_PAYMENT_SETTINGS } from "@/app/feature/settings/services/companyPaymentService"
+import { getProjects } from "@/app/feature/projects/services/projectService"
+import { Project } from "@/app/feature/projects/types"
 
 interface InvoiceModalProps {
   isOpen: boolean
@@ -23,12 +25,24 @@ export function InvoiceModal({
   const [isSending, setIsSending] = React.useState(false)
   const [sentSuccess, setSentSuccess] = React.useState(false)
   const [paySettings, setPaySettings] = React.useState<CompanyPaymentSettings>(DEFAULT_COMPANY_PAYMENT_SETTINGS)
+  const [linkedProject, setLinkedProject] = React.useState<Project | null>(null)
 
   React.useEffect(() => {
     if (isOpen) {
       getCompanyPaymentSettings().then((res) => {
         if (res) setPaySettings(res)
       }).catch(() => {})
+
+      if (invoice) {
+        getProjects().then((projs) => {
+          const match = projs.find(
+            (p) =>
+              p.title.toLowerCase().trim() === invoice.project.toLowerCase().trim() ||
+              (invoice.client && p.client.toLowerCase().trim() === invoice.client.toLowerCase().trim())
+          )
+          setLinkedProject(match || null)
+        }).catch(() => {})
+      }
     }
   }, [isOpen, invoice])
 
@@ -217,6 +231,16 @@ export function InvoiceModal({
                     <td className="py-4 px-4">
                       <p className="font-bold text-zinc-900 text-sm">{invoice.project}</p>
                       <p className="text-zinc-500 text-xs mt-0.5">Enterprise Technology Solution, Media Setup & Support</p>
+                      {linkedProject?.members && linkedProject.members.length > 0 && (
+                        <div className="flex items-center gap-1.5 mt-2">
+                          <span className="text-[10px] text-zinc-400 font-semibold">Assigned Team:</span>
+                          {linkedProject.members.map((m) => (
+                            <span key={m.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-100 text-zinc-700 text-[10px] font-bold">
+                              👤 {m.name} ({m.role || "Dev"})
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </td>
                     <td className="py-4 px-4 text-right">₹{baseNum.toLocaleString("en-IN")}</td>
                     <td className="py-4 px-4 text-right">{gstRate}%</td>
@@ -226,6 +250,35 @@ export function InvoiceModal({
                 </tbody>
               </table>
             </div>
+
+            {/* Live Developer Delivery Checkpoints */}
+            {linkedProject?.milestones && linkedProject.milestones.length > 0 && (
+              <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200/80 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-[10px] uppercase tracking-wider text-zinc-500">
+                    Live Project Delivery Checkpoints & Milestones:
+                  </span>
+                  <span className="text-[10px] font-bold text-blue-700">
+                    Progress: {linkedProject.progress}%
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {linkedProject.milestones.map((ms) => (
+                    <div key={ms.id} className="p-2 rounded-lg bg-white border border-zinc-200 text-[11px] space-y-0.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-zinc-800">{ms.title}</span>
+                        <span className={`text-[9px] font-extrabold px-1.5 py-0.2 rounded ${
+                          ms.status === "Completed" ? "bg-emerald-100 text-emerald-800" : "bg-blue-100 text-blue-800"
+                        }`}>
+                          {ms.status}
+                        </span>
+                      </div>
+                      {ms.notes && <p className="text-[10px] text-zinc-500 truncate">{ms.notes}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Financial Totals & Bank Details Row */}

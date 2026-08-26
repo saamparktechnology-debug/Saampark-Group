@@ -1,9 +1,12 @@
 "use client"
 
 import * as React from "react"
-import { X, Check } from "lucide-react"
-import { Project, ProjectType } from "../types"
+import { X, Check, Users, Shield, UserCheck } from "lucide-react"
+import { Project, ProjectType, ProjectMember, ProjectMilestone } from "../types"
 import { addProject } from "../services/projectService"
+import { getUsers } from "@/app/feature/users/services/userService"
+import { getClients } from "@/app/feature/clients/services/clientService"
+import { useAuthStore } from "@/store/useAuthStore"
 
 interface AddProjectModalProps {
   isOpen: boolean
@@ -12,6 +15,7 @@ interface AddProjectModalProps {
 }
 
 export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectModalProps) {
+  const { user } = useAuthStore()
   const [title, setTitle] = React.useState("")
   const [projectType, setProjectType] = React.useState<ProjectType>("Client Project")
   const [client, setClient] = React.useState("")
@@ -20,9 +24,37 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
   const [deadline, setDeadline] = React.useState("")
   const [price, setPrice] = React.useState("")
   const [labels, setLabels] = React.useState("")
+  const [selectedMemberIds, setSelectedMemberIds] = React.useState<string[]>([])
   const [isSubmitting, setIsSubmitting] = React.useState(false)
 
+  const [availableClients, setAvailableClients] = React.useState<{ name: string; email: string }[]>([])
+  const [teamMembers, setTeamMembers] = React.useState<any[]>([])
+
+  React.useEffect(() => {
+    if (isOpen) {
+      // 1. Fetch ONLY Team members for assigning
+      getUsers().then((allUsers) => {
+        const onlyTeam = allUsers.filter(
+          (u) => (u.role as string) === "Team" || (u.role as string) === "Employee"
+        )
+        setTeamMembers(onlyTeam)
+      }).catch(() => {})
+
+      // 2. Fetch real clients
+      getClients().then((cls) => {
+        setAvailableClients(cls.map(c => ({ name: c.name, email: c.email || "" })))
+        if (cls.length > 0) setClient(cls[0].name)
+      }).catch(() => {})
+    }
+  }, [isOpen])
+
   if (!isOpen) return null
+
+  const handleToggleMember = (mem: any) => {
+    setSelectedMemberIds((prev) =>
+      prev.includes(mem.id) ? prev.filter((id) => id !== mem.id) : [...prev, mem.id]
+    )
+  }
 
   const handleSave = async (continueAdding = false) => {
     if (!title.trim()) {
@@ -30,19 +62,54 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
       return
     }
 
+    const assignedMembers: ProjectMember[] = teamMembers
+      .filter((m) => selectedMemberIds.includes(m.id))
+      .map((m) => ({
+        id: String(m.id),
+        name: m.name,
+        role: m.department || "Developer",
+        avatar: m.avatar || m.avatarUrl || `https://api.dicebear.com/7.x/notionists/svg?seed=${m.name}`,
+        email: m.email,
+      }))
+
+    // Initial starter milestones for the assigned developer
+    const defaultMilestones: ProjectMilestone[] = [
+      {
+        id: `ms_fe_${Date.now()}`,
+        title: "Frontend Development & UI",
+        stage: "Frontend",
+        status: "Pending",
+        notes: "Next.js UI components and client view",
+        updatedBy: assignedMembers[0]?.name || "Assigned Team",
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        id: `ms_be_${Date.now() + 1}`,
+        title: "Backend API & Database Integration",
+        stage: "Backend",
+        status: "Pending",
+        notes: "Server endpoints, MySQL schema, and sync",
+        updatedBy: assignedMembers[0]?.name || "Assigned Team",
+        updatedAt: new Date().toISOString(),
+      },
+    ]
+
     setIsSubmitting(true)
     try {
       const created = await addProject({
         title,
         projectType,
         client: projectType === "Client Project" ? (client || "-") : "-",
-        price: price ? (price.startsWith("$") || price.startsWith("₹") ? price : `$${price}`) : "-",
+        price: price ? (price.startsWith("$") || price.startsWith("₹") ? price : `₹${price}`) : "-",
         startDate: startDate || new Date().toLocaleDateString("en-GB"),
         deadline: deadline || new Date().toLocaleDateString("en-GB"),
         progress: 0,
         status: "Open",
         labels: labels ? labels.split(",").map(l => l.trim()).filter(Boolean) : [],
         description,
+        billedBy: user?.name || "Admin",
+        members: assignedMembers,
+        milestones: defaultMilestones,
       })
 
       onProjectAdded(created)
@@ -54,6 +121,7 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
         setLabels("")
         setStartDate("")
         setDeadline("")
+        setSelectedMemberIds([])
       } else {
         onClose()
       }
@@ -110,28 +178,89 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
           {/* Client (if Client Project) */}
           {projectType === "Client Project" && (
             <div className="grid grid-cols-4 items-center gap-4">
-              <label className="text-zinc-500 font-medium">Client</label>
-              <select
-                value={client}
-                onChange={(e) => setClient(e.target.value)}
-                className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200"
-              >
-                <option value="">Client</option>
-                <option value="Birdie Erdman">Birdie Erdman</option>
-                <option value="Kevin Johnston">Kevin Johnston</option>
-                <option value="Howard Halvorson">Howard Halvorson</option>
-                <option value="Adrain Ondricka">Adrain Ondricka</option>
-                <option value="Fritsch, Okuneva and Armstrong">Fritsch, Okuneva and Armstrong</option>
-                <option value="Acme Corp">Acme Corp</option>
-              </select>
+              <label className="text-zinc-500 font-medium">Client *</label>
+              {availableClients.length > 0 ? (
+                <select
+                  value={client}
+                  onChange={(e) => setClient(e.target.value)}
+                  className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200"
+                >
+                  {availableClients.map((c) => (
+                    <option key={c.name} value={c.name}>
+                      {c.name} {c.email ? `(${c.email})` : ""}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  placeholder="Enter Client Name"
+                  value={client}
+                  onChange={(e) => setClient(e.target.value)}
+                  className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200"
+                />
+              )}
             </div>
           )}
+
+          {/* Assign Team (Team Members ONLY) */}
+          <div className="grid grid-cols-4 items-start gap-4 pt-1">
+            <div className="text-zinc-500 font-medium pt-1 flex flex-col">
+              <span>Assign Team</span>
+              <span className="text-[10px] text-blue-600 font-normal">Team Members Only</span>
+            </div>
+            <div className="col-span-3 space-y-2">
+              {teamMembers.length === 0 ? (
+                <div className="p-3 rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 text-zinc-400 text-center text-[11px]">
+                  No team members found. (Team members can be added under Users)
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto p-1 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
+                  {teamMembers.map((tm) => {
+                    const isSelected = selectedMemberIds.includes(tm.id)
+                    return (
+                      <button
+                        key={tm.id}
+                        type="button"
+                        onClick={() => handleToggleMember(tm)}
+                        className={`flex items-center gap-2 p-2 rounded-lg text-left transition-all border cursor-pointer ${
+                          isSelected
+                            ? "bg-blue-50 dark:bg-blue-950/60 border-blue-400 dark:border-blue-600 shadow-2xs"
+                            : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:border-zinc-300"
+                        }`}
+                      >
+                        <img
+                          src={tm.avatar || tm.avatarUrl || `https://api.dicebear.com/7.x/notionists/svg?seed=${tm.name}`}
+                          alt={tm.name}
+                          className="w-7 h-7 rounded-full object-cover shrink-0 bg-zinc-200"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-[11px] text-zinc-800 dark:text-zinc-200 truncate">{tm.name}</p>
+                          <p className="text-[10px] text-zinc-400 truncate">{tm.department || "Developer / Team"}</p>
+                        </div>
+                        {isSelected && <UserCheck size={14} className="text-blue-600 shrink-0" />}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Billed By (Admin in charge) */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <label className="text-zinc-500 font-medium">Billed By</label>
+            <div className="col-span-3 px-3 py-2 bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 rounded-md text-zinc-700 dark:text-zinc-300 font-semibold flex items-center justify-between">
+              <span>{user?.name || "Admin"}</span>
+              <span className="text-[10px] text-zinc-400 bg-white dark:bg-zinc-700 px-2 py-0.5 rounded">Admin In Charge</span>
+            </div>
+          </div>
 
           {/* Description */}
           <div className="grid grid-cols-4 items-start gap-4">
             <label className="text-zinc-500 font-medium pt-2">Description</label>
             <textarea
-              rows={4}
+              rows={3}
               placeholder="Description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}

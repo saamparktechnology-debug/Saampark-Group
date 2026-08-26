@@ -1,9 +1,10 @@
 "use client"
 
 import * as React from "react"
-import { X, Check, Bold, Italic, Underline, List, ListOrdered, Table, Link2, Code, Sparkles, Minus, Maximize2 } from "lucide-react"
-import { Project, ProjectStatus, ProjectType } from "../types"
+import { X, Check, Bold, Italic, Underline, List, ListOrdered, Table, Link2, Code, Sparkles, Minus, Maximize2, Users, UserCheck } from "lucide-react"
+import { Project, ProjectMember, ProjectStatus, ProjectType } from "../types"
 import { updateProject } from "../services/projectService"
+import { getUsers } from "@/app/feature/users/services/userService"
 
 interface EditProjectModalProps {
   isOpen: boolean
@@ -28,7 +29,20 @@ export function EditProjectModal({
   const [labelsList, setLabelsList] = React.useState<string[]>([])
   const [newLabelInput, setNewLabelInput] = React.useState("")
   const [status, setStatus] = React.useState<ProjectStatus>("Open")
+  const [selectedMemberIds, setSelectedMemberIds] = React.useState<string[]>([])
+  const [teamMembers, setTeamMembers] = React.useState<any[]>([])
   const [isSubmitting, setIsSubmitting] = React.useState(false)
+
+  React.useEffect(() => {
+    if (isOpen) {
+      getUsers().then((allUsers) => {
+        const onlyTeam = allUsers.filter(
+          (u) => (u.role as string) === "Team" || (u.role as string) === "Employee"
+        )
+        setTeamMembers(onlyTeam)
+      }).catch(() => {})
+    }
+  }, [isOpen])
 
   React.useEffect(() => {
     if (project) {
@@ -41,10 +55,17 @@ export function EditProjectModal({
       setPrice(project.price || "")
       setLabelsList(project.labels || [])
       setStatus(project.status || "Open")
+      setSelectedMemberIds(project.members?.map(m => m.id) || [])
     }
   }, [project])
 
   if (!isOpen || !project) return null
+
+  const handleToggleMember = (mem: any) => {
+    setSelectedMemberIds((prev) =>
+      prev.includes(mem.id) ? prev.filter((id) => id !== mem.id) : [...prev, mem.id]
+    )
+  }
 
   const handleRemoveLabel = (labelToRemove: string) => {
     setLabelsList(labelsList.filter((l) => l !== labelToRemove))
@@ -65,6 +86,16 @@ export function EditProjectModal({
 
     setIsSubmitting(true)
     try {
+      const assignedMembers: ProjectMember[] = teamMembers
+        .filter((m) => selectedMemberIds.includes(m.id))
+        .map((m) => ({
+          id: String(m.id),
+          name: m.name,
+          role: m.department || "Developer",
+          avatar: m.avatar || m.avatarUrl || `https://api.dicebear.com/7.x/notionists/svg?seed=${m.name}`,
+          email: m.email,
+        }))
+
       const updated = await updateProject(project.id, {
         title,
         projectType,
@@ -75,6 +106,7 @@ export function EditProjectModal({
         price,
         labels: labelsList,
         status,
+        members: assignedMembers,
         progress: status === "Completed" ? 100 : project.progress,
       })
 
@@ -111,13 +143,14 @@ export function EditProjectModal({
             <label className="text-zinc-500 font-medium">Title</label>
             <input
               type="text"
+              placeholder="Title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200"
+              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400"
             />
           </div>
 
-          {/* Project type */}
+          {/* Project Type */}
           <div className="grid grid-cols-4 items-center gap-4">
             <label className="text-zinc-500 font-medium">Project type</label>
             <select
@@ -125,8 +158,8 @@ export function EditProjectModal({
               onChange={(e) => setProjectType(e.target.value as ProjectType)}
               className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200"
             >
-              <option value="Internal Project">Internal Project</option>
               <option value="Client Project">Client Project</option>
+              <option value="Internal Project">Internal Project</option>
             </select>
           </div>
 
@@ -136,12 +169,57 @@ export function EditProjectModal({
               <label className="text-zinc-500 font-medium">Client</label>
               <input
                 type="text"
+                placeholder="Client Name"
                 value={client}
                 onChange={(e) => setClient(e.target.value)}
                 className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200"
               />
             </div>
           )}
+
+          {/* Assign Team (Team Members ONLY) */}
+          <div className="grid grid-cols-4 items-start gap-4 pt-1">
+            <div className="text-zinc-500 font-medium pt-1 flex flex-col">
+              <span>Assign Team</span>
+              <span className="text-[10px] text-blue-600 font-normal">Team Members Only</span>
+            </div>
+            <div className="col-span-3 space-y-2">
+              {teamMembers.length === 0 ? (
+                <div className="p-3 rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 text-zinc-400 text-center text-[11px]">
+                  No team members found.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto p-1 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
+                  {teamMembers.map((tm) => {
+                    const isSelected = selectedMemberIds.includes(tm.id)
+                    return (
+                      <button
+                        key={tm.id}
+                        type="button"
+                        onClick={() => handleToggleMember(tm)}
+                        className={`flex items-center gap-2 p-2 rounded-lg text-left transition-all border cursor-pointer ${
+                          isSelected
+                            ? "bg-blue-50 dark:bg-blue-950/60 border-blue-400 dark:border-blue-600 shadow-2xs"
+                            : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:border-zinc-300"
+                        }`}
+                      >
+                        <img
+                          src={tm.avatar || tm.avatarUrl || `https://api.dicebear.com/7.x/notionists/svg?seed=${tm.name}`}
+                          alt={tm.name}
+                          className="w-7 h-7 rounded-full object-cover shrink-0 bg-zinc-200"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-[11px] text-zinc-800 dark:text-zinc-200 truncate">{tm.name}</p>
+                          <p className="text-[10px] text-zinc-400 truncate">{tm.department || "Developer / Team"}</p>
+                        </div>
+                        {isSelected && <UserCheck size={14} className="text-blue-600 shrink-0" />}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* Description with Rich Formatting Toolbar matching Image 4 */}
           <div className="grid grid-cols-4 items-start gap-4">
