@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { X, Check, DollarSign, Calculator, UserCheck, Calendar, Briefcase, FileText, Coins, RefreshCw, Layers, CreditCard } from "lucide-react"
+import { X, Check, DollarSign, Calculator, UserCheck, Calendar, Briefcase, FileText, Coins, RefreshCw, Layers, CreditCard, Building2, Mail, Phone, MapPin } from "lucide-react"
 import { ClientItem } from "../types"
 import { getUsers } from "@/app/feature/users/services/userService"
 import { addProject } from "@/app/feature/projects/services/projectService"
@@ -56,16 +56,30 @@ export function AddClientProjectModal({
   const [description, setDescription] = React.useState("")
   const [isSubmitting, setIsSubmitting] = React.useState(false)
 
+  // Client Details State (Prefilled & Editable)
+  const [clientEmail, setClientEmail] = React.useState(client?.email || "")
+  const [clientPhone, setClientPhone] = React.useState(client?.phone || "")
+  const [clientAddress, setClientAddress] = React.useState(client?.address || "")
+  const [clientCity, setClientCity] = React.useState(client?.city || "")
+  const [clientState, setClientState] = React.useState(client?.state || "")
+  const [clientGst, setClientGst] = React.useState(client?.gstNumber || client?.vatNumber || "")
+
   const [adminsList, setAdminsList] = React.useState<{ id: string; name: string }[]>([])
   const [teamsList, setTeamsList] = React.useState<{ id: string; name: string; role?: string }[]>([])
 
   React.useEffect(() => {
-    if (isOpen) {
+    if (isOpen && client) {
       setCreationMode("project_and_invoice")
       setBaseAmount("")
       setAdvanceAmount("")
       setPartInitialPayment("")
       setPaymentModel("advance")
+      setClientEmail(client.email || "")
+      setClientPhone(client.phone || "")
+      setClientAddress(client.address || "")
+      setClientCity(client.city || "")
+      setClientState(client.state || "")
+      setClientGst(client.gstNumber || client.vatNumber || "")
       if (user?.name) {
         setBilledByAdmin(user.name)
       }
@@ -98,7 +112,7 @@ export function AddClientProjectModal({
         }
       })
     }
-  }, [isOpen, user])
+  }, [isOpen, user, client])
 
   const handleModeChange = (mode: "project_and_invoice" | "invoice_only") => {
     setCreationMode(mode)
@@ -307,20 +321,26 @@ export function AddClientProjectModal({
         })
       }
 
-      // 6. Update Client Stats in Ledger
+      // 6. Update Client Stats and Billing Details in Ledger
       const currentInvoicedNum = parseInt((client.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
       const currentDueNum = parseInt((client.due || "0").replace(/[^0-9]/g, "")) || 0
       const currentPaidNum = parseInt((client.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
 
       const updatedClient: ClientItem = {
         ...client,
+        email: clientEmail.trim() || client.email,
+        phone: clientPhone.trim() || client.phone,
+        address: clientAddress.trim() || client.address,
+        city: clientCity.trim() || client.city,
+        state: clientState.trim() || client.state,
+        gstNumber: clientGst.trim() || client.gstNumber,
         projectsCount: (client.projectsCount || 0) + (creationMode === "project_and_invoice" ? 1 : 0),
         totalInvoiced: `₹${(currentInvoicedNum + totalAmount).toLocaleString("en-IN")}`,
         due: `₹${(currentDueNum + remainingDue).toLocaleString("en-IN")}`,
         paymentReceived: `₹${(currentPaidNum + effectiveAdvance).toLocaleString("en-IN")}`,
       }
 
-      saveStoredClient(updatedClient)
+      await saveStoredClient(updatedClient)
 
       // 7. Automatically create Task(s) in Tasks section if Project & Invoice mode
       if (creationMode === "project_and_invoice") {
@@ -440,6 +460,77 @@ export function AddClientProjectModal({
                 <FileText size={13} />
                 <span>🧾 Only Invoice</span>
               </button>
+            </div>
+          </div>
+
+          {/* Client Profile & Billing Details (Prefilled & Editable) */}
+          <div className="p-3.5 bg-blue-50/40 dark:bg-blue-950/20 rounded-xl border border-blue-100 dark:border-blue-900/40 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Building2 size={14} className="text-blue-600 dark:text-blue-400" />
+                <span className="font-bold text-zinc-900 dark:text-zinc-100">Client & Billing Details</span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300">
+                  {client.group || "VIP Client"}
+                </span>
+              </div>
+              <span className="text-[10px] text-zinc-400 font-medium">Auto-prefilled from profile (Editable)</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+              <div>
+                <label className="block text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 mb-0.5">Email Address</label>
+                <input
+                  type="email"
+                  value={clientEmail}
+                  onChange={(e) => setClientEmail(e.target.value)}
+                  placeholder="client@company.com"
+                  className="w-full px-2.5 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 text-xs focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 mb-0.5">Phone Number</label>
+                <input
+                  type="tel"
+                  value={clientPhone}
+                  onChange={(e) => setClientPhone(e.target.value)}
+                  placeholder="+91 9876543210"
+                  className="w-full px-2.5 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 text-xs focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 mb-0.5">GSTIN / Tax ID</label>
+                <input
+                  type="text"
+                  value={clientGst}
+                  onChange={(e) => setClientGst(e.target.value)}
+                  placeholder="e.g. 19AAAAA0000A1Z5"
+                  className="w-full px-2.5 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 text-xs focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 mb-0.5">Billing Address</label>
+                <input
+                  type="text"
+                  value={clientAddress}
+                  onChange={(e) => setClientAddress(e.target.value)}
+                  placeholder="Street / Office Address"
+                  className="w-full px-2.5 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 text-xs focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 mb-0.5">City / State</label>
+                <input
+                  type="text"
+                  value={clientCity}
+                  onChange={(e) => setClientCity(e.target.value)}
+                  placeholder="City, State"
+                  className="w-full px-2.5 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 text-xs focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
             </div>
           </div>
 

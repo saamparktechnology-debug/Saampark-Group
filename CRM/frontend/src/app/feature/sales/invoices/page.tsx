@@ -42,10 +42,11 @@ import {
 } from "./services/invoiceService"
 import { InvoiceModal } from "./components/InvoiceModal"
 import { getClients, saveStoredClient } from "@/app/feature/clients/services/clientService"
+import { ClientItem } from "@/app/feature/clients/types"
 import { getProjects } from "@/app/feature/projects/services/projectService"
-import { addPayment } from "@/app/feature/sales/payments/services/paymentService"
+import { addPayment } from "../payments/services/paymentService"
 import { addSubscription } from "@/app/feature/subscriptions/services/subscriptionService"
-import { addOrder } from "@/app/feature/sales/orders/services/orderService"
+import { addOrder } from "../orders/services/orderService"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { printPDFReport, exportToExcel } from "@/lib/exportUtils"
@@ -79,9 +80,18 @@ export default function InvoicesPage() {
   const [clientSelectionMode, setClientSelectionMode] = React.useState<"existing" | "custom">("existing")
   const [clientName, setClientName] = React.useState("")
   const [clientEmail, setClientEmail] = React.useState("")
+  const [clientPhone, setClientPhone] = React.useState("")
+  const [clientAddress, setClientAddress] = React.useState("")
+  const [clientCity, setClientCity] = React.useState("")
+  const [clientState, setClientState] = React.useState("")
+  const [clientGst, setClientGst] = React.useState("")
+
   const [customClientName, setCustomClientName] = React.useState("")
   const [customClientEmail, setCustomClientEmail] = React.useState("")
   const [customClientPhone, setCustomClientPhone] = React.useState("")
+  const [customClientAddress, setCustomClientAddress] = React.useState("")
+  const [customClientCity, setCustomClientCity] = React.useState("")
+  const [customClientGst, setCustomClientGst] = React.useState("")
 
   const [projectSelectionMode, setProjectSelectionMode] = React.useState<"existing" | "custom">("existing")
   const [projectName, setProjectName] = React.useState("")
@@ -98,7 +108,7 @@ export default function InvoicesPage() {
   const [billingCycle, setBillingCycle] = React.useState<"Monthly" | "Quarterly">("Monthly")
   const [autoCreateSubscription, setAutoCreateSubscription] = React.useState<boolean>(true)
 
-  const [availableClients, setAvailableClients] = React.useState<{ name: string; email: string }[]>([])
+  const [availableClients, setAvailableClients] = React.useState<ClientItem[]>([])
   const [availableProjects, setAvailableProjects] = React.useState<{ title: string; client: string }[]>([])
 
   const showToast = (msg: string) => {
@@ -133,12 +143,21 @@ export default function InvoicesPage() {
       setCustomClientName("")
       setCustomClientEmail("")
       setCustomClientPhone("")
+      setCustomClientAddress("")
+      setCustomClientCity("")
+      setCustomClientGst("")
       setCustomProjectName("")
       getClients().then((clients) => {
-        setAvailableClients(clients.map(c => ({ name: c.name, email: c.email || "" })))
+        setAvailableClients(clients)
         if (clients.length > 0) {
-          setClientName(clients[0].name)
-          setClientEmail(clients[0].email || "")
+          const first = clients[0]
+          setClientName(first.name)
+          setClientEmail(first.email || "")
+          setClientPhone(first.phone || "")
+          setClientAddress(first.address || "")
+          setClientCity(first.city || "")
+          setClientState(first.state || "")
+          setClientGst(first.gstNumber || first.vatNumber || "")
         } else {
           setClientSelectionMode("custom")
         }
@@ -245,14 +264,17 @@ export default function InvoicesPage() {
     const invoiceId = `INV #${Math.floor(100 + Math.random() * 900)}`
     const calculatedDueDate = dueDate || new Date(Date.now() + 14 * 86400000).toLocaleDateString("en-GB")
 
-    // 1. If custom client, register into Clients database
-    if (clientSelectionMode === "custom") {
-      try {
+    // 1. Save or update client in database with complete billing details
+    try {
+      if (clientSelectionMode === "custom") {
         await saveStoredClient({
           id: `cli_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
           name: finalClientName,
           email: finalClientEmail,
-          phone: customClientPhone || "N/A",
+          phone: customClientPhone.trim() || "N/A",
+          address: customClientAddress.trim(),
+          city: customClientCity.trim(),
+          gstNumber: customClientGst.trim(),
           primaryContact: finalClientName,
           group: "VIP",
           label: "Corporate",
@@ -265,9 +287,22 @@ export default function InvoicesPage() {
           owner: user?.name || "Admin",
           createdAt: Date.now(),
         })
-      } catch (err) {
-        console.warn("Error saving custom client:", err)
+      } else {
+        const matched = availableClients.find(c => c.name === finalClientName)
+        if (matched) {
+          await saveStoredClient({
+            ...matched,
+            email: clientEmail.trim() || matched.email,
+            phone: clientPhone.trim() || matched.phone,
+            address: clientAddress.trim() || matched.address,
+            city: clientCity.trim() || matched.city,
+            state: clientState.trim() || matched.state,
+            gstNumber: clientGst.trim() || matched.gstNumber,
+          })
+        }
       }
+    } catch (err) {
+      console.warn("Error saving client details:", err)
     }
 
     // 2. Add Invoice
@@ -901,19 +936,82 @@ export default function InvoicesPage() {
 
                   {clientSelectionMode === "existing" ? (
                     availableClients.length > 0 ? (
-                      <select
-                        value={clientName}
-                        onChange={(e) => {
-                          setClientName(e.target.value)
-                          const c = availableClients.find(ac => ac.name === e.target.value)
-                          if (c) setClientEmail(c.email)
-                        }}
-                        className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-semibold"
-                      >
-                        {availableClients.map(c => (
-                          <option key={c.name} value={c.name}>{c.name} ({c.email || 'No email'})</option>
-                        ))}
-                      </select>
+                      <div className="space-y-2">
+                        <select
+                          value={clientName}
+                          onChange={(e) => {
+                            setClientName(e.target.value)
+                            const c = availableClients.find(ac => ac.name === e.target.value)
+                            if (c) {
+                              setClientEmail(c.email || "")
+                              setClientPhone(c.phone || "")
+                              setClientAddress(c.address || "")
+                              setClientCity(c.city || "")
+                              setClientState(c.state || "")
+                              setClientGst(c.gstNumber || c.vatNumber || "")
+                            }
+                          }}
+                          className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-semibold"
+                        >
+                          {availableClients.map(c => (
+                            <option key={c.id || c.name} value={c.name}>{c.name} ({c.email || 'No email'})</option>
+                          ))}
+                        </select>
+
+                        {/* Prefilled & Editable Client Billing Details */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                          <div>
+                            <label className="block text-[10px] font-semibold text-zinc-500 mb-0.5">Client Email</label>
+                            <input
+                              type="email"
+                              placeholder="client@email.com"
+                              value={clientEmail}
+                              onChange={(e) => setClientEmail(e.target.value)}
+                              className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 text-xs"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-zinc-500 mb-0.5">Client Phone</label>
+                            <input
+                              type="tel"
+                              placeholder="+91 9876543210"
+                              value={clientPhone}
+                              onChange={(e) => setClientPhone(e.target.value)}
+                              className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 text-xs"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-zinc-500 mb-0.5">Billing Address</label>
+                            <input
+                              type="text"
+                              placeholder="Office / Street Address"
+                              value={clientAddress}
+                              onChange={(e) => setClientAddress(e.target.value)}
+                              className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 text-xs"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-zinc-500 mb-0.5">City / State</label>
+                            <input
+                              type="text"
+                              placeholder="City, State"
+                              value={clientCity}
+                              onChange={(e) => setClientCity(e.target.value)}
+                              className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 text-xs"
+                            />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="block text-[10px] font-semibold text-zinc-500 mb-0.5">GSTIN / Tax ID</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. 19AAAAA0000A1Z5"
+                              value={clientGst}
+                              onChange={(e) => setClientGst(e.target.value)}
+                              className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 text-xs"
+                            />
+                          </div>
+                        </div>
+                      </div>
                     ) : (
                       <p className="text-zinc-400 text-[11px]">No registered clients found. Please type custom name below.</p>
                     )
@@ -942,6 +1040,29 @@ export default function InvoicesPage() {
                           onChange={(e) => setCustomClientPhone(e.target.value)}
                           className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200"
                         />
+                        <input
+                          type="text"
+                          placeholder="Billing Address (Optional)"
+                          value={customClientAddress}
+                          onChange={(e) => setCustomClientAddress(e.target.value)}
+                          className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200"
+                        />
+                        <input
+                          type="text"
+                          placeholder="City / State (Optional)"
+                          value={customClientCity}
+                          onChange={(e) => setCustomClientCity(e.target.value)}
+                          className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200"
+                        />
+                        <div className="sm:col-span-2">
+                          <input
+                            type="text"
+                            placeholder="GSTIN / Tax ID (Optional)"
+                            value={customClientGst}
+                            onChange={(e) => setCustomClientGst(e.target.value)}
+                            className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200"
+                          />
+                        </div>
                       </div>
                     </div>
                   )}

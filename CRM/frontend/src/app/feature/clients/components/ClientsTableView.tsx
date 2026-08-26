@@ -271,8 +271,12 @@ export function ClientsTableView({
               paginatedClients.map((client) => (
                 <tr key={client.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
                   <td className="py-3 px-3">
-                    <div className="font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer">
-                      {client.name}
+                    <div 
+                      onClick={() => onViewClientHistory && onViewClientHistory(client)}
+                      className="font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer flex items-center gap-1.5"
+                      title="View client history and profile"
+                    >
+                      <span>{client.name}</span>
                     </div>
                     <div className="flex items-center gap-1 mt-1 flex-wrap">
                       <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60">
