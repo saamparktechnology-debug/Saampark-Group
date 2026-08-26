@@ -25,24 +25,30 @@ export interface DisputeTicket {
   createdBy: string
   creatorEmail: string
   creatorRole: string
+  companyId?: string
+  branchId?: string
   createdAt: string
   assignedTo?: string
+  raisedTo?: string
   resolutionNote?: string
   resolvedAt?: string
   resolvedBy?: string
 }
 
 export default function TicketsMain() {
-  const { user } = useAuthStore()
+  const { user, activeCompanyId, activeBranchId } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
 
   const canAddTicket = canPerformAction(user, "Tickets", "add")
   const canEditTicket = canPerformAction(user, "Tickets", "edit")
   const canDeleteTicket = canPerformAction(user, "Tickets", "delete")
 
-  const isAdmin = user?.role === "Super Admin" || user?.role === "Admin"
+  const isSuperAdmin = user?.role === "Super Admin"
+  const isCompanyAdmin = user?.role === "Admin"
+  const isAdmin = isSuperAdmin || isCompanyAdmin
   const currentUserEmail = (user?.email || "").toLowerCase().trim()
   const currentUserName = user?.name || "User"
+  const targetComp = activeCompanyId || user?.companyId || "tech"
 
   const [tickets, setTickets] = React.useState<DisputeTicket[]>([])
   const [searchQuery, setSearchQuery] = React.useState("")
@@ -67,25 +73,41 @@ export default function TicketsMain() {
   }
 
   const loadTickets = React.useCallback(async () => {
-    const data = await fetchModuleDataFromDB<DisputeTicket[]>("tickets", [])
+    const data = await fetchModuleDataFromDB<DisputeTicket[]>("tickets", [], targetComp)
     setTickets(Array.isArray(data) ? filterGlobalDeletedItems(data) : [])
-  }, [])
+  }, [targetComp])
 
   React.useEffect(() => {
     loadTickets()
     const interval = setInterval(loadTickets, 4000)
-    return () => clearInterval(interval)
+    window.addEventListener("saampark_company_switched", loadTickets)
+    window.addEventListener("saampark_branch_switched", loadTickets)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener("saampark_company_switched", loadTickets)
+      window.removeEventListener("saampark_branch_switched", loadTickets)
+    }
   }, [loadTickets])
 
-  // Filter accessible tickets (Admin sees all; Client/Team sees their own tickets + global tickets)
+  // Strict Access Control:
+  // 1. Super Admin sees all tickets
+  // 2. Company Admin sees all tickets belonging to their company
+  // 3. Client or Team Member can ONLY see tickets raised by themselves (no other user can see them)
   const accessibleTickets = React.useMemo(() => {
-    if (isAdmin) return tickets
+    if (isSuperAdmin) return tickets
+    if (isCompanyAdmin) {
+      const allowedCompIds = user?.companyIds || (user?.companyId ? [user.companyId] : ["tech"])
+      return tickets.filter(t => {
+        const tComp = t.companyId || "tech"
+        return allowedCompIds.includes(tComp)
+      })
+    }
     return tickets.filter(t => {
       const cEmail = (t.creatorEmail || "").toLowerCase().trim()
       const cName = (t.createdBy || "").toLowerCase().trim()
-      return cEmail === currentUserEmail || cName === currentUserName.toLowerCase().trim()
+      return cEmail === currentUserEmail || (currentUserEmail && cEmail.includes(currentUserEmail)) || cName === currentUserName.toLowerCase().trim()
     })
-  }, [tickets, isAdmin, currentUserEmail, currentUserName])
+  }, [tickets, isSuperAdmin, isCompanyAdmin, user, currentUserEmail, currentUserName])
 
   const filteredTickets = React.useMemo(() => {
     return accessibleTickets.filter(t => {
@@ -124,14 +146,17 @@ export default function TicketsMain() {
       createdBy: currentUserName,
       creatorEmail: currentUserEmail,
       creatorRole: user?.role || "User",
+      companyId: targetComp,
+      branchId: activeBranchId || user?.branchId || undefined,
       createdAt: new Date().toLocaleDateString("en-IN", { dateStyle: "medium", timeStyle: "short" }),
-      assignedTo: "Admin Team",
+      assignedTo: "Company Admin & Super Admin",
+      raisedTo: "Company Admin & Super Admin",
     }
 
     const updated = [newTicket, ...tickets]
     setTickets(updated)
-    await saveModuleDataToDB("tickets", updated)
-    showToast(`✅ Dispute Ticket ${newTicket.ticketNumber} submitted! Support team is analyzing.`)
+    await saveModuleDataToDB("tickets", updated, targetComp)
+    showToast(`✅ Dispute Ticket ${newTicket.ticketNumber} submitted to Company Admin & Super Admin!`)
     setIsRaiseModalOpen(false)
     setSubject("")
     setDescription("")
@@ -153,7 +178,7 @@ export default function TicketsMain() {
     })
 
     setTickets(updated)
-    await saveModuleDataToDB("tickets", updated)
+    await saveModuleDataToDB("tickets", updated, targetComp)
     showToast(`✅ Ticket ${selectedTicket.ticketNumber} updated to ${newStatus}! Confirmation recorded.`)
     setSelectedTicket(null)
     setResolutionInput("")
@@ -164,7 +189,7 @@ export default function TicketsMain() {
       await markGlobalItemDeleted(id, "tickets")
       const updated = tickets.filter(t => t.id !== id)
       setTickets(updated)
-      await saveModuleDataToDB("tickets", updated)
+      await saveModuleDataToDB("tickets", updated, targetComp)
       showToast("Ticket deleted.")
       if (selectedTicket?.id === id) setSelectedTicket(null)
     }
@@ -609,6 +634,17 @@ export default function TicketsMain() {
                     placeholder="Provide full context, affected project/invoice IDs, and expectations..."
                     className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden"
                   />
+                </div>
+
+                {/* Confidential Routing Notice */}
+                <div className="p-3 rounded-xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 flex items-start gap-2.5">
+                  <span className="text-sm">🛡️</span>
+                  <div className="text-[11px] text-blue-900 dark:text-blue-300 leading-snug">
+                    <p className="font-bold">Confidential Direct Routing</p>
+                    <p className="text-[10px] text-blue-700 dark:text-blue-400 mt-0.5">
+                      This ticket will be routed <strong>strictly to the Company Admin and Super Admin only</strong>. No other team member or client will have access to view or inspect this dispute.
+                    </p>
+                  </div>
                 </div>
 
                 <div className="flex justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
