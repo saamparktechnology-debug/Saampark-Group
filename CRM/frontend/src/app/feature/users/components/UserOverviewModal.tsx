@@ -55,6 +55,7 @@ export function UserOverviewModal({
   onUserUpdated,
 }: UserOverviewModalProps) {
   const currentUser = useAuthStore((state) => state.user)
+  const companies = useAuthStore((state) => state.companies)
   const isSuperAdminOrAdmin = currentUser?.role === "Super Admin" || currentUser?.role === "Admin"
 
   const [previewDocUrl, setPreviewDocUrl] = React.useState<string | null>(null)
@@ -189,15 +190,29 @@ export function UserOverviewModal({
               <p className="text-sm font-bold text-foreground">
                 {user.companyName || (user.companyId === "digital" ? "SAAMPARK Digital Marketing" : "SAAMPARK Technology")}
               </p>
-              {user.companyIds && user.companyIds.length > 1 && (
-                <div className="flex items-center gap-1 mt-1 flex-wrap">
-                  {user.companyIds.map((cId) => (
-                    <span key={cId} className="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase bg-surface-pressed border border-border text-muted-foreground">
-                      {cId}
-                    </span>
-                  ))}
-                </div>
-              )}
+              {(() => {
+                const activeCompIds = (user.companyIds && user.companyIds.length > 0 ? user.companyIds : [user.companyId || "tech"])
+                  .filter(cId => {
+                    const norm = String(cId).toLowerCase().trim()
+                    return companies.some(c => String(c.id).toLowerCase().trim() === norm || String(c.slug || "").toLowerCase().trim() === norm)
+                  })
+
+                if (activeCompIds.length > 1) {
+                  return (
+                    <div className="flex items-center gap-1 mt-1 flex-wrap">
+                      {activeCompIds.map((cId) => {
+                        const match = companies.find(c => String(c.id).toLowerCase().trim() === String(cId).toLowerCase().trim() || String(c.slug || "").toLowerCase().trim() === String(cId).toLowerCase().trim())
+                        return (
+                          <span key={cId} className="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase bg-surface-pressed border border-border text-muted-foreground">
+                            {match?.name || cId}
+                          </span>
+                        )
+                      })}
+                    </div>
+                  )
+                }
+                return null
+              })()}
             </div>
 
             <div className="p-3.5 rounded-2xl bg-surface-hover/20 border border-border/60 space-y-1.5">

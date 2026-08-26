@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { AuthService } from '@/services/apiServices'
 import { api, setAuthToken } from '@/lib/api'
-import { fetchModuleDataFromDB, saveModuleDataToDB } from '@/lib/storageSync'
+import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted } from '@/lib/storageSync'
 
 export type Role = 'Super Admin' | 'Admin' | 'Clients' | 'Teams'
 export type CompanyId = string
@@ -177,7 +177,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       deleteCompany: async (companyId: string) => {
-        const { user, companies, branches } = get()
+        const { user, companies, branches, activeCompanyId } = get()
         if (user?.role !== 'Super Admin') {
           throw new Error('Only Super Admin can delete companies.')
         }
@@ -186,15 +186,50 @@ export const useAuthStore = create<AuthState>()(
           await api.delete(`/companies/${companyId}`).catch(() => {})
         } catch {}
 
+        markGlobalItemDeleted(companyId, 'companies')
+
+        const remainingCompanies = companies.filter(c => c.id !== companyId && c.slug !== companyId)
         const remainingBranches = branches.filter(b => b.companyId !== companyId)
+
+        // Clean up deleted company from all users in the database and localStorage
+        try {
+          const currentUsers = await fetchModuleDataFromDB<any[]>('users', [], 'all')
+          if (Array.isArray(currentUsers)) {
+            const updatedUsers = currentUsers.map((u: any) => {
+              const uCompIds: string[] = Array.isArray(u.companyIds) ? u.companyIds : (u.companyId ? [u.companyId] : ['tech'])
+              const cleanedIds = uCompIds.filter((id: string) => id !== companyId && id !== companyId.toLowerCase())
+              const validIds = cleanedIds.length > 0 ? cleanedIds : [remainingCompanies[0]?.id || 'tech']
+              return {
+                ...u,
+                companyIds: validIds,
+                companyId: validIds[0],
+                companyName: (validIds.includes('digital') && validIds.includes('tech')) 
+                  ? 'SAAMPARK Group (Multiple)' 
+                  : (validIds[0] === 'digital' ? 'SAAMPARK Digital Marketing' : 'SAAMPARK Technology'),
+              }
+            })
+            await saveModuleDataToDB('users', updatedUsers, 'all')
+          }
+        } catch (e) {
+          console.warn('Error cleaning up deleted company from users:', e)
+        }
+
+        let newActiveCompany = activeCompanyId
+        if (activeCompanyId === companyId || activeCompanyId === companyId.toLowerCase()) {
+          newActiveCompany = remainingCompanies[0]?.id || 'tech'
+        }
+
         set({
-          companies: companies.filter(c => c.id !== companyId && c.slug !== companyId),
+          companies: remainingCompanies,
           branches: remainingBranches,
+          activeCompanyId: newActiveCompany,
         })
         saveModuleDataToDB('branches', remainingBranches, 'all').catch(() => {})
 
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new Event('storage'))
+          window.dispatchEvent(new CustomEvent('saampark_company_switched', { detail: { companyId: newActiveCompany } }))
+          window.dispatchEvent(new CustomEvent('saampark_data_synced'))
         }
         return true
       },

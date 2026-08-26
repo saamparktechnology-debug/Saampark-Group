@@ -30,7 +30,7 @@ const STATUS_ICONS: Record<UserStatus, React.ReactNode> = {
 }
 
 export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUserModules, onViewOverview }: UserListProps) {
-  const { user: currentUser } = useAuthStore()
+  const { user: currentUser, companies } = useAuthStore()
   const { getModulesForUser, canPerformAction } = usePermissionStore()
 
   const isSuperAdmin = currentUser?.role === "Super Admin"
@@ -215,24 +215,56 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
                       {/* Company & Branch Badges */}
                       <td className="py-3.5 px-4">
                         <div className="flex flex-col gap-1">
-                          {u.companyIds && u.companyIds.length > 1 ? (
-                            <div className="flex flex-wrap gap-1 max-w-[220px]">
-                              {u.companyIds.map((cId) => (
-                                <span
-                                  key={cId}
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60"
-                                >
-                                  <span>{cId === "digital" ? "📈" : "💻"}</span>
-                                  <span>{cId === "digital" ? "Digital" : cId === "tech" ? "Technology" : cId}</span>
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-xs font-semibold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 w-fit">
-                              <Building2 size={11} className="shrink-0" />
-                              <span className="truncate max-w-[160px]">{u.companyName || (u.companyId === 'digital' ? 'SAAMPARK Digital' : 'SAAMPARK Technology')}</span>
-                            </div>
-                          )}
+                          {(() => {
+                            const activeUserCompanyIds = (u.companyIds && u.companyIds.length > 0
+                              ? u.companyIds
+                              : (u.companyId ? [u.companyId] : [])
+                            ).filter(cId => {
+                              const norm = String(cId).toLowerCase().trim()
+                              return companies.some(c => 
+                                String(c.id).toLowerCase().trim() === norm || 
+                                String(c.slug || "").toLowerCase().trim() === norm
+                              )
+                            })
+
+                            if (activeUserCompanyIds.length > 1) {
+                              return (
+                                <div className="flex flex-wrap gap-1 max-w-[220px]">
+                                  {activeUserCompanyIds.map((cId) => {
+                                    const match = companies.find(c => 
+                                      String(c.id).toLowerCase().trim() === String(cId).toLowerCase().trim() ||
+                                      String(c.slug || "").toLowerCase().trim() === String(cId).toLowerCase().trim()
+                                    )
+                                    const codeOrShort = (match as any)?.code || (cId === "digital" ? "Digital" : cId === "tech" ? "Technology" : match?.name || cId)
+                                    const icon = (cId === "digital" || match?.slug === "digital") ? "📈" : "💻"
+                                    return (
+                                      <span
+                                        key={cId}
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60"
+                                      >
+                                        <span>{icon}</span>
+                                        <span>{codeOrShort}</span>
+                                      </span>
+                                    )
+                                  })}
+                                </div>
+                              )
+                            }
+
+                            const primaryId = activeUserCompanyIds[0] || u.companyId || (companies[0]?.id || "tech")
+                            const matchedCompany = companies.find(c => 
+                              String(c.id).toLowerCase().trim() === String(primaryId).toLowerCase().trim() ||
+                              String(c.slug || "").toLowerCase().trim() === String(primaryId).toLowerCase().trim()
+                            )
+                            const displayName = matchedCompany?.name || u.companyName || (primaryId === 'digital' ? 'SAAMPARK Digital' : 'SAAMPARK Technology')
+
+                            return (
+                              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-xs font-semibold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 w-fit">
+                                <Building2 size={11} className="shrink-0" />
+                                <span className="truncate max-w-[160px]">{displayName}</span>
+                              </div>
+                            )
+                          })()}
                           
                           {/* Branch Badge (only shown when assigned to a specific branch) */}
                           {(u.branchName || u.branchId) && (
