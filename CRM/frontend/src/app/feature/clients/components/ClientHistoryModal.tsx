@@ -4,14 +4,16 @@ import * as React from "react"
 import { 
   X, Briefcase, FileText, CheckCircle2, Clock, Calendar, AlertCircle, 
   Eye, FolderPlus, Building2, Mail, Phone, MapPin, CreditCard, ShoppingBag,
-  User, Receipt, Shield, Tag, DollarSign
+  User, Receipt, Shield, Tag, DollarSign, Trash2
 } from "lucide-react"
 import { ClientItem } from "../types"
-import { getProjects } from "@/app/feature/projects/services/projectService"
+import { getProjects, deleteProject } from "@/app/feature/projects/services/projectService"
 import { Project } from "@/app/feature/projects/types"
-import { getInvoices, InvoiceItem } from "@/app/feature/sales/invoices/services/invoiceService"
-import { getPayments, PaymentItem } from "@/app/feature/sales/payments/services/paymentService"
-import { fetchModuleDataFromDB, filterGlobalDeletedItems } from "@/lib/storageSync"
+import { getInvoices, deleteInvoice, InvoiceItem } from "@/app/feature/sales/invoices/services/invoiceService"
+import { getPayments, deletePayment, PaymentItem } from "@/app/feature/sales/payments/services/paymentService"
+import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted, filterGlobalDeletedItems } from "@/lib/storageSync"
+import { useAuthStore } from "@/store/useAuthStore"
+import { usePermissionStore } from "@/store/usePermissionStore"
 
 interface ClientHistoryModalProps {
   isOpen: boolean
@@ -28,6 +30,15 @@ export function ClientHistoryModal({
   onSelectInvoice,
   onAddProjectForClient,
 }: ClientHistoryModalProps) {
+  const { user } = useAuthStore()
+  const { canPerformAction } = usePermissionStore()
+
+  const isSuperAdmin = user?.role === "Super Admin"
+  const canDeleteProjects = isSuperAdmin || (user?.role === "Admin" && canPerformAction(user, "Projects", "delete"))
+  const canDeleteInvoices = isSuperAdmin || (user?.role === "Admin" && (canPerformAction(user, "Sales", "delete") || canPerformAction(user, "Invoices", "delete")))
+  const canDeleteOrders = isSuperAdmin || (user?.role === "Admin" && (canPerformAction(user, "Sales", "delete") || canPerformAction(user, "Orders", "delete")))
+  const canDeletePayments = isSuperAdmin || (user?.role === "Admin" && (canPerformAction(user, "Sales", "delete") || canPerformAction(user, "Payments", "delete")))
+
   const [activeTab, setActiveTab] = React.useState<"projects" | "invoices" | "orders" | "payments">("projects")
   const [clientProjects, setClientProjects] = React.useState<Project[]>([])
   const [clientInvoices, setClientInvoices] = React.useState<InvoiceItem[]>([])
@@ -35,55 +46,95 @@ export function ClientHistoryModal({
   const [clientPayments, setClientPayments] = React.useState<PaymentItem[]>([])
   const [isLoading, setIsLoading] = React.useState(false)
 
-  React.useEffect(() => {
-    if (isOpen && client) {
-      setIsLoading(true)
-      const cName = (client.name || "").toLowerCase().trim()
-      const cEmail = (client.email || "").toLowerCase().trim()
+  const loadHistory = React.useCallback(async () => {
+    if (!client) return
+    setIsLoading(true)
+    const cName = (client.name || "").toLowerCase().trim()
+    const cEmail = (client.email || "").toLowerCase().trim()
 
-      Promise.all([
+    try {
+      const [allProjects, allInvoices, allOrdersRaw, allPayments] = await Promise.all([
         getProjects().catch(() => []),
         getInvoices().catch(() => []),
         fetchModuleDataFromDB<any[]>("orders", []).catch(() => []),
         getPayments().catch(() => []),
-      ]).then(([allProjects, allInvoices, allOrdersRaw, allPayments]) => {
-        const allOrders = Array.isArray(allOrdersRaw) ? filterGlobalDeletedItems(allOrdersRaw) : []
+      ])
+      const allOrders = Array.isArray(allOrdersRaw) ? filterGlobalDeletedItems(allOrdersRaw) : []
 
-        const filteredProj = allProjects.filter((p) => {
-          const pClient = (p.client || "").toLowerCase().trim()
-          return pClient === cName || (cEmail && pClient.includes(cEmail))
-        })
+      const filteredProj = allProjects.filter((p) => {
+        const pClient = (p.client || "").toLowerCase().trim()
+        return pClient === cName || (cEmail && pClient.includes(cEmail))
+      })
 
-        const filteredInv = allInvoices.filter((i) => {
-          const iClient = (i.client || "").toLowerCase().trim()
-          const iEmail = (i.clientEmail || "").toLowerCase().trim()
-          return iClient === cName || (cEmail && iEmail === cEmail)
-        })
+      const filteredInv = allInvoices.filter((i) => {
+        const iClient = (i.client || "").toLowerCase().trim()
+        const iEmail = (i.clientEmail || "").toLowerCase().trim()
+        return iClient === cName || (cEmail && iEmail === cEmail)
+      })
 
-        const filteredOrd = allOrders.filter((o) => {
-          const oClient = (o.client || "").toLowerCase().trim()
-          const oEmail = (o.clientEmail || "").toLowerCase().trim()
-          return oClient === cName || (cEmail && oEmail === cEmail)
-        })
+      const filteredOrd = allOrders.filter((o) => {
+        const oClient = (o.client || "").toLowerCase().trim()
+        const oEmail = (o.clientEmail || "").toLowerCase().trim()
+        return oClient === cName || (cEmail && oEmail === cEmail)
+      })
 
-        const filteredPay = allPayments.filter((pay) => {
-          const payClient = (pay.client || "").toLowerCase().trim()
-          const payEmail = (pay.clientEmail || "").toLowerCase().trim()
-          const payProj = (pay.project || "").toLowerCase().trim()
-          return payClient === cName || 
-            (cEmail && payEmail === cEmail) || 
-            filteredProj.some(p => p.title.toLowerCase().trim() === payProj)
-        })
+      const filteredPay = allPayments.filter((pay) => {
+        const payClient = (pay.client || "").toLowerCase().trim()
+        const payEmail = (pay.clientEmail || "").toLowerCase().trim()
+        const payProj = (pay.project || "").toLowerCase().trim()
+        return payClient === cName || 
+          (cEmail && payEmail === cEmail) || 
+          filteredProj.some(p => p.title.toLowerCase().trim() === payProj)
+      })
 
-        setClientProjects(filteredProj)
-        setClientInvoices(filteredInv)
-        setClientOrders(filteredOrd)
-        setClientPayments(filteredPay)
-      }).finally(() => setIsLoading(false))
+      setClientProjects(filteredProj)
+      setClientInvoices(filteredInv)
+      setClientOrders(filteredOrd)
+      setClientPayments(filteredPay)
+    } finally {
+      setIsLoading(false)
     }
-  }, [isOpen, client])
+  }, [client])
+
+  React.useEffect(() => {
+    if (isOpen && client) {
+      loadHistory()
+    }
+  }, [isOpen, client, loadHistory])
 
   if (!isOpen || !client) return null
+
+  // Delete handlers with permissions
+  const handleDeleteProject = async (projectId: string, projectTitle: string) => {
+    if (confirm(`Are you sure you want to delete project "${projectTitle}"? This will automatically remove associated invoices, orders, and payments.`)) {
+      await deleteProject(projectId)
+      loadHistory()
+    }
+  }
+
+  const handleDeleteInvoice = async (invId: string) => {
+    if (confirm(`Are you sure you want to delete invoice ${invId}?`)) {
+      await deleteInvoice(invId)
+      loadHistory()
+    }
+  }
+
+  const handleDeleteOrder = async (orderId: string) => {
+    if (confirm(`Are you sure you want to delete this order?`)) {
+      await markGlobalItemDeleted(String(orderId), "orders")
+      const currentOrders = await fetchModuleDataFromDB<any[]>("orders", [])
+      const updated = currentOrders.filter(o => String(o.id) !== String(orderId) && String(o.orderNumber) !== String(orderId))
+      await saveModuleDataToDB("orders", updated)
+      loadHistory()
+    }
+  }
+
+  const handleDeletePayment = async (paymentId: string) => {
+    if (confirm(`Are you sure you want to delete this payment record?`)) {
+      await deletePayment(paymentId)
+      loadHistory()
+    }
+  }
 
   // Calculate live financial numbers
   const calculatedInvoiced = clientInvoices.reduce((acc, inv) => {
@@ -307,6 +358,7 @@ export function ClientHistoryModal({
                       <th className="py-3 px-4">Progress</th>
                       <th className="py-3 px-4">Payment</th>
                       <th className="py-3 px-4">Status</th>
+                      {canDeleteProjects && <th className="py-3 px-4 text-right">Action</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60 font-medium text-zinc-800 dark:text-zinc-200">
@@ -347,6 +399,18 @@ export function ClientHistoryModal({
                             {p.status}
                           </span>
                         </td>
+                        {canDeleteProjects && (
+                          <td className="py-3.5 px-4 text-right">
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteProject(p.id, p.title)}
+                              className="p-1.5 rounded-lg text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors"
+                              title="Delete Project & Cascaded Invoices/Orders"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -392,16 +456,29 @@ export function ClientHistoryModal({
                           </span>
                         </td>
                         <td className="py-3.5 px-4 text-right">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (onSelectInvoice) onSelectInvoice(inv)
-                            }}
-                            className="px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 font-bold flex items-center gap-1 text-[11px] ml-auto border border-blue-200/60 cursor-pointer hover:bg-blue-100"
-                          >
-                            <Eye size={13} />
-                            <span>View</span>
-                          </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (onSelectInvoice) onSelectInvoice(inv)
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 font-bold flex items-center gap-1 text-[11px] border border-blue-200/60 cursor-pointer hover:bg-blue-100"
+                              title="View Tax Invoice"
+                            >
+                              <Eye size={13} />
+                              <span>View</span>
+                            </button>
+                            {canDeleteInvoices && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteInvoice(inv.id)}
+                                className="p-1.5 rounded-lg text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors"
+                                title="Delete Invoice"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -424,6 +501,7 @@ export function ClientHistoryModal({
                       <th className="py-3 px-4">Amount</th>
                       <th className="py-3 px-4">Payment</th>
                       <th className="py-3 px-4">Status</th>
+                      {canDeleteOrders && <th className="py-3 px-4 text-right">Action</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60 font-medium text-zinc-800 dark:text-zinc-200">
@@ -448,6 +526,18 @@ export function ClientHistoryModal({
                             {ord.status}
                           </span>
                         </td>
+                        {canDeleteOrders && (
+                          <td className="py-3.5 px-4 text-right">
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteOrder(ord.id || ord.orderNumber)}
+                              className="p-1.5 rounded-lg text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors"
+                              title="Delete Order"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -469,6 +559,7 @@ export function ClientHistoryModal({
                       <th className="py-3 px-4">Transaction Ref</th>
                       <th className="py-3 px-4">Note / Description</th>
                       <th className="py-3 px-4">Status</th>
+                      {canDeletePayments && <th className="py-3 px-4 text-right">Action</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60 font-medium text-zinc-800 dark:text-zinc-200">
@@ -485,6 +576,18 @@ export function ClientHistoryModal({
                             {pay.status}
                           </span>
                         </td>
+                        {canDeletePayments && (
+                          <td className="py-3.5 px-4 text-right">
+                            <button
+                              type="button"
+                              onClick={() => handleDeletePayment(pay.id)}
+                              className="p-1.5 rounded-lg text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors"
+                              title="Delete Payment Record"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>

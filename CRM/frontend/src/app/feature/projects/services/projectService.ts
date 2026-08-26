@@ -139,8 +139,97 @@ export const addOrUpdateProjectMilestone = async (
 export const deleteProject = async (id: string, companyId?: string): Promise<boolean> => {
   const strId = String(id).toLowerCase().trim()
   await markGlobalItemDeleted(strId, "projects")
+
+  // Find target project for cascading cleanup
+  const allProjects = await getProjects()
+  const targetProject = allProjects.find(p => String(p.id).toLowerCase().trim() === strId)
+  const projTitleNorm = targetProject?.title ? targetProject.title.toLowerCase().trim() : ""
+  const clientNameNorm = targetProject?.client ? targetProject.client.toLowerCase().trim() : ""
+
   const current = await fetchModuleDataFromDB<Project[]>("projects", [], companyId)
   const filtered = current.filter(p => String(p.id).toLowerCase().trim() !== strId)
   await saveModuleDataToDB("projects", filtered, companyId)
+
+  // Also remove from master 'all' list
+  const masterList = await fetchModuleDataFromDB<Project[]>("projects", [], "all")
+  const filteredMaster = masterList.filter(p => String(p.id).toLowerCase().trim() !== strId)
+  await saveModuleDataToDB("projects", filteredMaster, "all")
+
+  // Cascading Cleanup of Invoices, Orders, Payments, and Client Totals
+  if (projTitleNorm) {
+    try {
+      // 1. Cascade Invoices
+      const { getInvoices, deleteInvoice } = await import("@/app/feature/sales/invoices/services/invoiceService")
+      const invoices = await getInvoices()
+      const matchingInvoices = invoices.filter(i => 
+        (i.project && i.project.toLowerCase().trim() === projTitleNorm) ||
+        (clientNameNorm && i.client && i.client.toLowerCase().trim() === clientNameNorm && i.project && i.project.toLowerCase().trim().includes(projTitleNorm))
+      )
+      for (const inv of matchingInvoices) {
+        await deleteInvoice(inv.id)
+      }
+
+      // 2. Cascade Orders
+      const orders = await fetchModuleDataFromDB<any[]>("orders", [])
+      const remainingOrders = orders.filter(o => {
+        const oProj = (o.project || "").toLowerCase().trim()
+        const oMatch = oProj === projTitleNorm || matchingInvoices.some(i => i.id === o.invoiceId || i.id === o.orderNumber)
+        if (oMatch) {
+          markGlobalItemDeleted(String(o.id || o.orderNumber), "orders")
+          return false
+        }
+        return true
+      })
+      await saveModuleDataToDB("orders", remainingOrders)
+
+      // 3. Cascade Payments
+      const { getPayments, deletePayment } = await import("@/app/feature/sales/payments/services/paymentService")
+      const payments = await getPayments()
+      const matchingPayments = payments.filter(p => {
+        const pProj = (p.project || "").toLowerCase().trim()
+        const pInv = (p.invoiceId || "").toLowerCase().trim()
+        return pProj === projTitleNorm || matchingInvoices.some(i => i.id.toLowerCase().trim() === pInv)
+      })
+      for (const pay of matchingPayments) {
+        await deletePayment(pay.id)
+      }
+
+      // 4. Adjust Client totals
+      if (clientNameNorm) {
+        const { getClients, saveStoredClient } = await import("@/app/feature/clients/services/clientService")
+        const clients = await getClients()
+        const targetClient = clients.find(c => c.name.toLowerCase().trim() === clientNameNorm)
+        if (targetClient) {
+          const removedInvoiced = matchingInvoices.reduce((sum, inv) => sum + (parseInt((inv.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0), 0)
+          const removedPaid = matchingInvoices.reduce((sum, inv) => sum + (parseInt((inv.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0), 0)
+          const removedDue = matchingInvoices.reduce((sum, inv) => sum + (parseInt((inv.due || "0").replace(/[^0-9]/g, "")) || 0), 0)
+
+          const currInvoiced = parseInt((targetClient.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
+          const currPaid = parseInt((targetClient.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
+          const currDue = parseInt((targetClient.due || "0").replace(/[^0-9]/g, "")) || 0
+          const currProjectsCount = targetClient.projectsCount || 1
+
+          await saveStoredClient({
+            ...targetClient,
+            projectsCount: Math.max(0, currProjectsCount - 1),
+            totalInvoiced: `₹${Math.max(0, currInvoiced - removedInvoiced).toLocaleString("en-IN")}`,
+            paymentReceived: `₹${Math.max(0, currPaid - removedPaid).toLocaleString("en-IN")}`,
+            due: `₹${Math.max(0, currDue - removedDue).toLocaleString("en-IN")}`,
+          })
+        }
+      }
+    } catch (err) {
+      console.warn("Error during cascading project deletion:", err)
+    }
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("storage"))
+    window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+    window.dispatchEvent(new CustomEvent("saampark_projects_updated"))
+    window.dispatchEvent(new CustomEvent("saampark_invoices_updated"))
+    window.dispatchEvent(new CustomEvent("saampark_orders_updated"))
+  }
+
   return true
 }
