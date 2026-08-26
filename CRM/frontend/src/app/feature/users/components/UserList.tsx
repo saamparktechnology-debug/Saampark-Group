@@ -13,6 +13,7 @@ interface UserListProps {
   onToggleStatus: (id: string) => void
   onDelete: (id: string) => void
   onManageUserModules?: (user: UserItem) => void
+  onViewOverview?: (user: UserItem) => void
 }
 
 const ROLE_COLORS: Record<UserRole, string> = {
@@ -28,7 +29,7 @@ const STATUS_ICONS: Record<UserStatus, React.ReactNode> = {
   "Pending": <Clock size={14} className="text-amber-400" />,
 }
 
-export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUserModules }: UserListProps) {
+export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUserModules, onViewOverview }: UserListProps) {
   const { user: currentUser } = useAuthStore()
   const { getModulesForUser, canPerformAction } = usePermissionStore()
 
@@ -136,14 +137,31 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
 
                   return (
                     <tr key={u.id} className="hover:bg-surface-hover/40 transition-colors group">
-                      {/* User */}
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-bold flex items-center justify-center text-sm shadow-sm shrink-0">
-                            {u.name.substring(0, 2).toUpperCase()}
-                          </div>
+                      {/* User (Click to open Overview) */}
+                      <td 
+                        className="py-3.5 px-4 cursor-pointer"
+                        onClick={() => onViewOverview?.(u)}
+                        title="Click to view complete account overview and KYC details"
+                      >
+                        <div className="flex items-center gap-3 group/user">
+                          {u.avatarUrl ? (
+                            <img
+                              src={u.avatarUrl}
+                              alt={u.name}
+                              className="w-9 h-9 rounded-full object-cover border border-border shadow-2xs shrink-0 group-hover/user:ring-2 group-hover/user:ring-primary transition-all"
+                            />
+                          ) : (
+                            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-bold flex items-center justify-center text-sm shadow-sm shrink-0 group-hover/user:ring-2 group-hover/user:ring-primary transition-all">
+                              {u.name.substring(0, 2).toUpperCase()}
+                            </div>
+                          )}
                           <div>
-                            <div className="font-semibold text-foreground">{u.name}</div>
+                            <div className="font-semibold text-foreground group-hover/user:text-primary transition-colors flex items-center gap-1.5">
+                              <span>{u.name}</span>
+                              {u.kycStatus === "Verified" && (
+                                <span className="text-[10px] text-emerald-500 font-bold" title="KYC Verified">✓</span>
+                              )}
+                            </div>
                             <div className="text-xs text-muted-foreground">{u.email}</div>
                           </div>
                         </div>
@@ -151,10 +169,23 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
 
                       {/* Role */}
                       <td className="py-3.5 px-4">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${ROLE_COLORS[u.role] || ROLE_COLORS.Teams}`}>
-                          <Shield size={12} />
-                          {u.role}
-                        </span>
+                        <div className="flex flex-col gap-1 items-start">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${ROLE_COLORS[u.role] || ROLE_COLORS.Teams}`}>
+                            <Shield size={12} />
+                            {u.role}
+                          </span>
+                          {u.kycStatus && u.kycStatus !== "Pending" && (
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${
+                              u.kycStatus === "Verified"
+                                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                                : u.kycStatus === "Processing"
+                                ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20"
+                                : "bg-rose-500/10 text-rose-600 border border-rose-500/20"
+                            }`}>
+                              KYC: {u.kycStatus}
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Account Module Access */}

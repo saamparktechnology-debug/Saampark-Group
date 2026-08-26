@@ -46,6 +46,8 @@ export interface User {
   department?: string
   allowedModules?: string[]
   permissions?: any
+  kycStatus?: "Pending" | "Processing" | "Verified" | "Rejected"
+  kycData?: any
 }
 
 export const DEFAULT_COMPANIES: Company[] = [

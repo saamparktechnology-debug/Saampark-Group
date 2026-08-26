@@ -11,6 +11,7 @@ import { getUsers, recordUserAccount, deleteUser } from "./services/userService"
 import { saveModuleDataToDB } from "@/lib/storageSync"
 import { UserList } from "./components/UserList"
 import { UserModal } from "./components/UserModal"
+import { UserOverviewModal } from "./components/UserOverviewModal"
 import { ModulePermissionsModal } from "./components/ModulePermissionsModal"
 import { CompanyModal } from "./components/CompanyModal"
 
@@ -48,6 +49,8 @@ export default function UsersMain() {
   const [isPermissionsModalOpen, setIsPermissionsModalOpen] = React.useState(false)
   const [isCompanyModalOpen, setIsCompanyModalOpen] = React.useState(false)
   const [editingUser, setEditingUser] = React.useState<UserItem | null>(null)
+  const [selectedUserForOverview, setSelectedUserForOverview] = React.useState<UserItem | null>(null)
+  const [isOverviewModalOpen, setIsOverviewModalOpen] = React.useState(false)
 
   const isSuperAdminLoggedIn = user?.role === "Super Admin"
 
@@ -339,6 +342,29 @@ export default function UsersMain() {
         onEdit={handleOpenEditModal}
         onToggleStatus={handleToggleStatus}
         onDelete={handleDeleteUser}
+        onViewOverview={(targetUser) => {
+          setSelectedUserForOverview(targetUser)
+          setIsOverviewModalOpen(true)
+        }}
+      />
+
+      {/* User Account Overview & KYC Review Modal */}
+      <UserOverviewModal
+        isOpen={isOverviewModalOpen}
+        user={selectedUserForOverview}
+        onClose={() => {
+          setIsOverviewModalOpen(false)
+          setSelectedUserForOverview(null)
+        }}
+        onEdit={(targetUser) => {
+          handleOpenEditModal(targetUser)
+        }}
+        onUserUpdated={(updatedUser) => {
+          setUsers((prev) =>
+            prev.map((u) => (u.id === updatedUser.id ? updatedUser : u))
+          )
+          setSelectedUserForOverview(updatedUser)
+        }}
       />
 
       {/* User Create/Edit Modal with Custom Module Access */}

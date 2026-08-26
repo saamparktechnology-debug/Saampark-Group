@@ -509,7 +509,7 @@ export function Topbar() {
             className="flex items-center gap-2 cursor-pointer p-1 rounded-full hover:bg-surface-hover/50 transition-colors pr-2 sm:pr-3 select-none"
           >
             <div className="w-8 h-8 rounded-full bg-border overflow-hidden shrink-0 border border-border">
-              <img src={user.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${user.name}`} alt={user.name} className="w-full h-full object-cover bg-surface" />
+              <img src={(user as any).avatarUrl || user.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${user.name}`} alt={user.name} className="w-full h-full object-cover bg-surface" />
             </div>
             <span className="text-sm text-foreground/80 hidden sm:block font-medium truncate max-w-[120px]">{user.name}</span>
           </motion.div>

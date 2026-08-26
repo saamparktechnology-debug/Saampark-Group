@@ -153,6 +153,7 @@ export function recordUserAccount(user: Partial<UserItem>, isNewRegistration = f
     branchId: user.branchId || (user as any).branch_id || undefined,
     branchIds: user.branchIds || (user.branchId ? [user.branchId] : undefined),
     branchName: user.branchName || (user as any).branch_name || undefined,
+    avatarUrl: user.avatarUrl || (user as any).avatar || undefined,
     status: user.status || "Active",
     department: user.department || "General",
     phone: user.phone || "",
@@ -161,6 +162,8 @@ export function recordUserAccount(user: Partial<UserItem>, isNewRegistration = f
     joinedDate: user.joinedDate || new Date().toISOString().split("T")[0],
     permissions: (user as any).permissions,
     allowedModules: (user as any).allowedModules,
+    kycStatus: user.kycStatus || (user as any).kyc_status || "Pending",
+    kycData: user.kycData || (user as any).kyc_data || undefined,
   };
 
   // Save to MySQL asynchronously (fire and forget since this can be called from sync contexts)
@@ -493,6 +496,7 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
             branchId: u.branch_id || u.branchId || existingItem?.branchId || undefined,
             branchIds: u.branch_ids ? (() => { try { return JSON.parse(u.branch_ids) } catch { return [u.branch_ids] } })() : existingItem?.branchIds,
             branchName: u.branch_name || u.branchName || existingItem?.branchName || undefined,
+            avatarUrl: u.avatar || u.avatarUrl || u.avatar_url || existingItem?.avatarUrl || undefined,
             status: u.status === "inactive" || u.is_active === false ? "Inactive" : "Active",
             department: u.department || existingItem?.department || "General",
             phone: u.phone || existingItem?.phone || "",
@@ -500,6 +504,8 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
             lastLogin: u.last_login || existingItem?.lastLogin || "Active session",
             joinedDate: u.created_at ? u.created_at.split("T")[0] : existingItem?.joinedDate || new Date().toISOString().split("T")[0],
             allowedModules: permObj?.allowedModules || existingItem?.allowedModules,
+            kycStatus: u.kyc_status || u.kycStatus || existingItem?.kycStatus || "Pending",
+            kycData: u.kyc_data ? (() => { try { return typeof u.kyc_data === 'string' ? JSON.parse(u.kyc_data) : u.kyc_data } catch { return undefined } })() : existingItem?.kycData,
           };
 
           if (existingIdx >= 0 && existingItem) {
@@ -508,6 +514,7 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
               ...existingItem,
               id: String(u.id || existingItem.id),
               name: existingItem.name || item.name,
+              avatarUrl: existingItem.avatarUrl || item.avatarUrl,
               companyIds: (existingItem.companyIds && existingItem.companyIds.length > 0) ? existingItem.companyIds : parsedCompanyIds,
               companyId: (existingItem.companyIds && existingItem.companyIds[0]) || existingItem.companyId || item.companyId,
               companyName:
@@ -523,6 +530,8 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
               phone: existingItem.phone !== undefined ? existingItem.phone : item.phone,
               permissions: existingItem.permissions !== undefined ? existingItem.permissions : (permObj || item.permissions),
               allowedModules: existingItem.allowedModules || permObj?.allowedModules || item.allowedModules,
+              kycStatus: existingItem.kycStatus || item.kycStatus,
+              kycData: existingItem.kycData || item.kycData,
             };
           } else {
             dbUsers.push(item);

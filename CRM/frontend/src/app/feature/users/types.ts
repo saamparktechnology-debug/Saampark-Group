@@ -1,6 +1,24 @@
 export type UserRole = "Super Admin" | "Admin" | "Clients" | "Teams";
-
 export type UserStatus = "Active" | "Inactive" | "Pending";
+
+export type KycStatus = "Pending" | "Processing" | "Verified" | "Rejected";
+
+export interface KycData {
+  fullName: string;
+  docType: "Aadhaar Card" | "PAN Card" | "Passport" | "Voter ID" | "Driving License";
+  docNumber: string;
+  docFrontUrl?: string;
+  docBackUrl?: string;
+  bankName?: string;
+  accountNumber?: string;
+  ifscCode?: string;
+  accountHolderName?: string;
+  upiId?: string;
+  submittedAt?: string;
+  verifiedAt?: string;
+  verifiedBy?: string;
+  rejectionReason?: string;
+}
 
 export interface UserItem {
   id: string;
@@ -22,6 +40,8 @@ export interface UserItem {
   joinedDate: string;
   allowedModules?: string[];
   permissions?: any;
+  kycStatus?: KycStatus;
+  kycData?: KycData;
 }
 
 export type User = UserItem;

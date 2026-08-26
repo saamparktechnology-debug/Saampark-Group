@@ -15,46 +15,71 @@ import { useTheme } from "next-themes"
 import { fetchModuleDataFromDB, saveModuleDataToDB } from "@/lib/storageSync"
 import { getUsers, recordUserAccount } from "@/app/feature/users/services/userService"
 import { CompanyBranchSettings } from "./components/CompanyBranchSettings"
+import { uploadToImgBB } from "@/lib/imgbbUpload"
+import { KycData, KycStatus } from "@/app/feature/users/types"
 
-type SettingsTab = "profile" | "organization" | "company" | "smtp" | "theme"
+type SettingsTab = "profile" | "kyc" | "organization" | "company" | "smtp" | "theme"
 
 export default function SettingsMain() {
   const { user, loginAs } = useAuthStore()
   const { theme, setTheme } = useTheme()
 
+  const isSuperAdmin = user?.role === "Super Admin"
+
   const [activeTab, setActiveTab] = React.useState<SettingsTab>("profile")
   const [successMsg, setSuccessMsg] = React.useState("")
   const [errorMsg, setErrorMsg] = React.useState("")
   const [loading, setLoading] = React.useState(false)
+  const [isUploadingAvatar, setIsUploadingAvatar] = React.useState(false)
 
   // ── Profile Form State ──
   const [name, setName] = React.useState(user?.name || "")
   const [email, setEmail] = React.useState(user?.email || "")
-  const [phone, setPhone] = React.useState(user?.phone || "+91 98765 43210")
-  const [jobTitle, setJobTitle] = React.useState((user as any)?.jobTitle || (user as any)?.role || "Technical Lead")
-  const [department, setDepartment] = React.useState((user as any)?.department || "Software & IT Engineering")
-  const [location, setLocation] = React.useState((user as any)?.location || "Mumbai, India")
-  const [bio, setBio] = React.useState((user as any)?.bio || "Senior CRM engineer & client delivery manager at SAAMPARK Group.")
-  const [skills, setSkills] = React.useState((user as any)?.skills || "Full-Stack Development, React, Next.js, Cloud Architecture, CRM Management")
-  const [avatar, setAvatar] = React.useState(user?.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${user?.name || "Admin"}`)
+  const [phone, setPhone] = React.useState(user?.phone || "")
+  const [jobTitle, setJobTitle] = React.useState((user as any)?.jobTitle || user?.role || "Team Member")
+  const [department, setDepartment] = React.useState(user?.department || "")
+  const [location, setLocation] = React.useState((user as any)?.location || "Kolkata, India")
+  const [bio, setBio] = React.useState((user as any)?.bio || "")
+  const [skills, setSkills] = React.useState((user as any)?.skills || "")
+  const [avatar, setAvatar] = React.useState(user?.avatar || (user as any)?.avatarUrl || `https://api.dicebear.com/7.x/notionists/svg?seed=${user?.name || "User"}`)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
 
   // Password state
+  const [currentPassword, setCurrentPassword] = React.useState("")
   const [newPassword, setNewPassword] = React.useState("")
   const [confirmPassword, setConfirmPassword] = React.useState("")
 
-  // Company Settings Form State
+  // Company Settings Form State (Super Admin)
   const [companyName, setCompanyName] = React.useState("SAAMPARK Technology")
   const [currency, setCurrency] = React.useState("INR")
   const [currencySymbol, setCurrencySymbol] = React.useState("₹")
   const [address, setAddress] = React.useState("Saampark House, Tech Park, India")
   const [industry, setIndustry] = React.useState("Software & IT Services")
 
-  // SMTP Settings Form State
+  // SMTP Settings Form State (Super Admin)
   const [smtpUser, setSmtpUser] = React.useState("supriyogod@gmail.com")
   const [smtpPass, setSmtpPass] = React.useState("vctonocakbbgbvib")
   const [smtpHost, setSmtpHost] = React.useState("smtp.gmail.com")
   const [smtpPort, setSmtpPort] = React.useState("587")
+
+  // ── KYC Form State ──
+  const [kycFullName, setKycFullName] = React.useState(user?.name || "")
+  const [kycDocType, setKycDocType] = React.useState<"Aadhaar Card" | "PAN Card" | "Passport" | "Voter ID" | "Driving License">("Aadhaar Card")
+  const [kycDocNumber, setKycDocNumber] = React.useState("")
+  const [kycDocFrontUrl, setKycDocFrontUrl] = React.useState("")
+  const [kycDocBackUrl, setKycDocBackUrl] = React.useState("")
+  const [kycBankName, setKycBankName] = React.useState("")
+  const [kycAccountNumber, setKycAccountNumber] = React.useState("")
+  const [kycIfscCode, setKycIfscCode] = React.useState("")
+  const [kycAccountHolderName, setKycAccountHolderName] = React.useState("")
+  const [kycUpiId, setKycUpiId] = React.useState("")
+  const [kycStatus, setKycStatus] = React.useState<KycStatus>("Pending")
+  const [kycRejectionReason, setKycRejectionReason] = React.useState("")
+  const [isUploadingFront, setIsUploadingFront] = React.useState(false)
+  const [isUploadingBack, setIsUploadingBack] = React.useState(false)
+
+  const frontDocInputRef = React.useRef<HTMLInputElement>(null)
+  const backDocInputRef = React.useRef<HTMLInputElement>(null)
 
   // Load settings & user profile on mount
   React.useEffect(() => {
@@ -76,53 +101,142 @@ export default function SettingsMain() {
       setName(user.name || "")
       setEmail(user.email || "")
       if (user.phone) setPhone(user.phone)
-      if (user.avatar) setAvatar(user.avatar)
+      if (user.avatar || (user as any).avatarUrl) setAvatar(user.avatar || (user as any).avatarUrl)
+      if (user.department) setDepartment(user.department)
+      if (user.kycStatus) setKycStatus(user.kycStatus)
+
+      if (user.kycData) {
+        const kd = user.kycData
+        if (kd.fullName) setKycFullName(kd.fullName)
+        if (kd.docType) setKycDocType(kd.docType)
+        if (kd.docNumber) setKycDocNumber(kd.docNumber)
+        if (kd.docFrontUrl) setKycDocFrontUrl(kd.docFrontUrl)
+        if (kd.docBackUrl) setKycDocBackUrl(kd.docBackUrl)
+        if (kd.bankName) setKycBankName(kd.bankName)
+        if (kd.accountNumber) setKycAccountNumber(kd.accountNumber)
+        if (kd.ifscCode) setKycIfscCode(kd.ifscCode)
+        if (kd.accountHolderName) setKycAccountHolderName(kd.accountHolderName)
+        if (kd.upiId) setKycUpiId(kd.upiId)
+        if (kd.rejectionReason) setKycRejectionReason(kd.rejectionReason)
+      }
     }
   }, [user])
 
-  // Handle Photo Upload directly from phone or browser
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle Photo Upload directly with permanent ImgBB Cloud Hosting
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
-    if (file.size > 5 * 1024 * 1024) {
-      alert("Image size should be under 5MB.")
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Image size should be under 10MB.")
       return
     }
 
-    const reader = new FileReader()
-    reader.onload = (uploadEvent) => {
-      const dataUrl = uploadEvent.target?.result as string
-      if (dataUrl) {
-        setAvatar(dataUrl)
-        setSuccessMsg("📸 Profile picture uploaded! Click 'Save Complete Profile' to apply everywhere.")
+    setIsUploadingAvatar(true)
+    try {
+      const uploadResult = await uploadToImgBB(file, `${user?.name || "avatar"}_${Date.now()}`)
+      if (uploadResult.url) {
+        setAvatar(uploadResult.url)
+        
+        // Live sync avatar across session immediately
+        if (user) {
+          useAuthStore.setState({
+            user: { ...user, avatar: uploadResult.url, avatarUrl: uploadResult.url } as any
+          })
+          recordUserAccount({
+            ...user,
+            avatarUrl: uploadResult.url,
+            id: String(user.id),
+          })
+        }
+
+        setSuccessMsg("📸 Profile picture uploaded permanently to Cloud! Live synced across CRM.")
         setTimeout(() => setSuccessMsg(""), 4000)
       }
+    } catch (err: any) {
+      setErrorMsg("Failed to upload image. Please try again.")
+    } finally {
+      setIsUploadingAvatar(false)
     }
-    reader.readAsDataURL(file)
   }
 
+  // Handle KYC Document Front Upload (ImgBB)
+  const handleFrontDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setIsUploadingFront(true)
+    try {
+      const res = await uploadToImgBB(file, `kyc_front_${user?.id || "doc"}_${Date.now()}`)
+      if (res.url) {
+        setKycDocFrontUrl(res.url)
+        setSuccessMsg("📄 Front document image uploaded successfully!")
+        setTimeout(() => setSuccessMsg(""), 3000)
+      }
+    } catch {
+      setErrorMsg("Failed to upload document. Please retry.")
+    } finally {
+      setIsUploadingFront(false)
+    }
+  }
+
+  // Handle KYC Document Back Upload (ImgBB)
+  const handleBackDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setIsUploadingBack(true)
+    try {
+      const res = await uploadToImgBB(file, `kyc_back_${user?.id || "doc"}_${Date.now()}`)
+      if (res.url) {
+        setKycDocBackUrl(res.url)
+        setSuccessMsg("📄 Back document image uploaded successfully!")
+        setTimeout(() => setSuccessMsg(""), 3000)
+      }
+    } catch {
+      setErrorMsg("Failed to upload document. Please retry.")
+    } finally {
+      setIsUploadingBack(false)
+    }
+  }
+
+  // Save Complete User Profile
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault()
     setErrorMsg("")
-    if (newPassword && newPassword !== confirmPassword) {
-      setErrorMsg("New passwords do not match.")
-      return
+
+    // If changing password, require current password verification
+    if (newPassword) {
+      if (!currentPassword) {
+        setErrorMsg("⚠️ Please enter your current/previous password to authorize a password change.")
+        return
+      }
+      if (newPassword !== confirmPassword) {
+        setErrorMsg("⚠️ New password and confirmation password do not match.")
+        return
+      }
+      if (newPassword.length < 6) {
+        setErrorMsg("⚠️ New password must be at least 6 characters long.")
+        return
+      }
     }
 
     setLoading(true)
     try {
       const updatedUserData: any = {
         ...(user || {}),
-        name,
-        email,
-        phone,
+        name: isSuperAdmin ? name : (user?.name || name),
+        email: isSuperAdmin ? email : (user?.email || email),
+        phone: isSuperAdmin ? phone : (user?.phone || phone),
+        department: isSuperAdmin ? department : (user?.department || department),
         avatar,
+        avatarUrl: avatar,
         jobTitle,
-        department,
         location,
         bio,
         skills,
+      }
+
+      if (newPassword) {
+        updatedUserData.password = newPassword
       }
 
       // Update Auth Store
@@ -134,34 +248,41 @@ export default function SettingsMain() {
       try {
         const { api } = await import("@/lib/api")
         await api.put(`/users/${user?.id || email}`, {
-          full_name: name,
-          email,
-          phone,
-          department,
+          full_name: updatedUserData.name,
+          email: updatedUserData.email,
+          phone: updatedUserData.phone,
+          department: updatedUserData.department,
+          password: newPassword || undefined,
         }).catch((err) => console.warn("Backend profile update warning:", err))
       } catch {}
 
       // Save to database users list
       recordUserAccount({
         id: String(user?.id || Date.now()),
-        name,
-        email,
-        phone,
-        department,
+        name: updatedUserData.name,
+        email: updatedUserData.email,
+        phone: updatedUserData.phone,
+        department: updatedUserData.department,
+        avatarUrl: avatar,
+        password: newPassword || (user as any)?.password || "Password123",
         companyIds: user?.companyIds || (user?.companyId ? [user.companyId] : ["tech"]),
         companyId: user?.companyId || "tech",
+        branchId: user?.branchId,
+        branchName: user?.branchName,
         role: (user?.role as any) || "Admin",
         status: "Active",
       })
 
-      // Persist profile data to settings
-      await saveModuleDataToDB(`user_profile_${(email || "").toLowerCase().trim()}`, updatedUserData)
+      // Clear password fields
+      setCurrentPassword("")
+      setNewPassword("")
+      setConfirmPassword("")
 
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("storage"))
       }
 
-      setSuccessMsg("✅ Complete profile & avatar updated successfully! Live synced across Dashboard, Leads, Tasks, and Team.")
+      setSuccessMsg("✅ Profile updated successfully! Cloud image & details live-synced across CRM.")
       setTimeout(() => setSuccessMsg(""), 4000)
     } catch (err: any) {
       setErrorMsg(`Error updating profile: ${err.message}`)
@@ -170,8 +291,72 @@ export default function SettingsMain() {
     }
   }
 
+  // Submit KYC Details Form
+  const handleSubmitKyc = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setErrorMsg("")
+
+    if (!kycDocNumber.trim()) {
+      setErrorMsg("Please enter your Document Number.")
+      return
+    }
+
+    if (!kycDocFrontUrl) {
+      setErrorMsg("Please upload at least the Front photo of your ID document.")
+      return
+    }
+
+    setLoading(true)
+    try {
+      const kycPayload: KycData = {
+        fullName: kycFullName.trim() || user?.name || "",
+        docType: kycDocType,
+        docNumber: kycDocNumber.trim(),
+        docFrontUrl: kycDocFrontUrl,
+        docBackUrl: kycDocBackUrl || undefined,
+        bankName: kycBankName.trim() || undefined,
+        accountNumber: kycAccountNumber.trim() || undefined,
+        ifscCode: kycIfscCode.trim().toUpperCase() || undefined,
+        accountHolderName: kycAccountHolderName.trim() || undefined,
+        upiId: kycUpiId.trim() || undefined,
+        submittedAt: new Date().toISOString(),
+        rejectionReason: undefined,
+      }
+
+      const updatedUser: any = {
+        ...(user || {}),
+        kycStatus: "Processing" as KycStatus,
+        kycData: kycPayload,
+      }
+
+      setKycStatus("Processing")
+
+      // Update Auth Store
+      if (user?.role) {
+        loginAs(user.role, updatedUser)
+      }
+
+      // Record in userService & DB
+      recordUserAccount({
+        id: String(user?.id || Date.now()),
+        email: user?.email || email,
+        name: user?.name || name,
+        kycStatus: "Processing",
+        kycData: kycPayload,
+      })
+
+      setSuccessMsg("🎉 KYC Submitted successfully! Your account is now Under Review by Administrator.")
+      setTimeout(() => setSuccessMsg(""), 5000)
+    } catch (err: any) {
+      setErrorMsg(`Error submitting KYC: ${err.message}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleSaveCompany = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!isSuperAdmin) return
     setLoading(true)
     await saveModuleDataToDB("settings", {
       companyName, currency, currencySymbol, address, industry,
@@ -184,6 +369,7 @@ export default function SettingsMain() {
 
   const handleSaveSmtp = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!isSuperAdmin) return
     setLoading(true)
     await saveModuleDataToDB("settings", {
       companyName, currency, currencySymbol, address, industry,
@@ -193,6 +379,23 @@ export default function SettingsMain() {
     setSuccessMsg("SMTP configurations saved to MySQL database successfully!")
     setTimeout(() => setSuccessMsg(""), 3000)
   }
+
+  // Visible Tabs Filter based on user role (Only Super Admin sees Company, Sub-Branches, and SMTP)
+  const tabsList = React.useMemo(() => {
+    const base = [
+      { id: "profile", label: "My Profile & Avatar", icon: User },
+      { id: "kyc", label: "🛡️ KYC Verification & Banking", icon: ShieldCheck },
+    ]
+    if (isSuperAdmin) {
+      base.push(
+        { id: "organization", label: "🏢 Companies & Sub-Branches", icon: Building2 },
+        { id: "company", label: "Workspace Branding", icon: Settings },
+        { id: "smtp", label: "Email / SMTP Setup", icon: Mail }
+      )
+    }
+    base.push({ id: "theme", label: "Display & Theme", icon: Sun })
+    return base
+  }, [isSuperAdmin])
 
   return (
     <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 max-w-[1200px] mx-auto p-4 sm:p-6">
@@ -224,13 +427,7 @@ export default function SettingsMain() {
 
       {/* Tabs */}
       <div className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-2 overflow-x-auto">
-        {[
-          { id: "profile", label: "Complete Profile & Avatar", icon: User },
-          { id: "organization", label: "🏢 Companies & Sub-Branches", icon: Building2 },
-          { id: "company", label: "Workspace Branding", icon: Settings },
-          { id: "smtp", label: "Email / SMTP Setup", icon: Mail },
-          { id: "theme", label: "Display & Theme", icon: Sun },
-        ].map((tab) => {
+        {tabsList.map((tab) => {
           const Icon = tab.icon
           const isActive = activeTab === tab.id
           return (
@@ -251,37 +448,48 @@ export default function SettingsMain() {
         })}
       </div>
 
-      {/* ── TAB: COMPANIES & SUB-BRANCHES ORGANIZATION ────────────────────── */}
-      {activeTab === "organization" && (
+      {/* ── TAB: COMPANIES & SUB-BRANCHES (Super Admin Only) ──────────────── */}
+      {activeTab === "organization" && isSuperAdmin && (
         <CompanyBranchSettings />
       )}
 
-      {/* ── TAB 1: COMPLETE USER PROFILE & PHOTO UPLOAD ─────────────────────── */}
+      {/* ── TAB 1: COMPLETE USER PROFILE & PERMANENT AVATAR ─────────────────── */}
       {activeTab === "profile" && (
-        <form onSubmit={handleSaveProfile} className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-2xl p-6 shadow-2xs space-y-6">
+        <form onSubmit={handleSaveProfile} className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-3xl p-6 shadow-2xs space-y-6">
+          {/* Avatar Upload Card */}
           <div className="flex flex-col sm:flex-row items-center gap-6 p-5 bg-zinc-50 dark:bg-zinc-800/40 rounded-2xl border border-zinc-200/60 dark:border-zinc-700/60">
-            {/* Avatar Preview with Camera Overlay */}
             <div className="relative group shrink-0">
               <img
                 src={avatar}
                 alt={name}
-                className="w-24 h-24 rounded-full object-cover border-4 border-white dark:border-zinc-800 shadow-md bg-zinc-100"
+                className="w-24 h-24 rounded-2xl object-cover border-4 border-white dark:border-zinc-800 shadow-md bg-zinc-100"
               />
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-[10px] font-bold transition-opacity cursor-pointer"
-                title="Change photo"
+                disabled={isUploadingAvatar}
+                className="absolute inset-0 rounded-2xl bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-[10px] font-bold transition-opacity cursor-pointer"
+                title="Upload Profile Picture"
               >
-                <Camera size={20} className="mb-0.5" />
-                <span>Upload</span>
+                {isUploadingAvatar ? <RefreshCw size={20} className="animate-spin" /> : <Camera size={20} className="mb-0.5" />}
+                <span>{isUploadingAvatar ? "Uploading..." : "Change"}</span>
               </button>
             </div>
 
             <div className="space-y-2 text-center sm:text-left">
-              <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">{name || "User Account"}</h3>
-              <p className="text-xs text-zinc-500">
-                Upload your profile photo from your phone or PC. This photo will show on the <span className="font-semibold text-blue-600">Leads Kanban cards</span>, <span className="font-semibold text-blue-600">Tasks assigned icons</span>, and Team directory.
+              <div className="flex items-center justify-center sm:justify-start gap-2 flex-wrap">
+                <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">{name || "User Account"}</h3>
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-primary/10 text-primary border border-primary/20">
+                  {user?.role}
+                </span>
+                {user?.branchName && (
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                    📍 {user.branchName}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-zinc-500 max-w-xl">
+                Upload your profile photo from your device. Your photo is permanently hosted on cloud storage and live-synced across Topbar, Leads, Tasks, and Account Overview.
               </p>
 
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
@@ -295,43 +503,124 @@ export default function SettingsMain() {
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                  disabled={isUploadingAvatar}
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
                 >
                   <Upload size={13} />
-                  <span>Choose Photo (Phone / PC)</span>
+                  <span>{isUploadingAvatar ? "Uploading to Cloud..." : "Upload Profile Photo"}</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setAvatar(`https://api.dicebear.com/7.x/notionists/svg?seed=${name || Date.now()}`)}
-                  className="px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 text-zinc-700 dark:text-zinc-300 rounded-lg text-xs font-semibold transition-colors"
+                  className="px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 text-zinc-700 dark:text-zinc-300 rounded-xl text-xs font-semibold transition-colors"
                 >
-                  Generate Avatar
+                  Random Avatar
                 </button>
               </div>
             </div>
           </div>
 
+          {!isSuperAdmin && (
+            <div className="p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-start gap-2.5 text-xs text-amber-700 dark:text-amber-300">
+              <Lock size={16} className="shrink-0 mt-0.5" />
+              <span>
+                <strong>Organization Policy:</strong> Your core identity details (Name, Email, Phone, Department, Company Address) are managed by Super Admin and cannot be modified here. Contact your administrator if corrections are required.
+              </span>
+            </div>
+          )}
+
           {/* Form Fields Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
             <div>
-              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Full Name *</label>
+              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">
+                Full Name {isSuperAdmin ? "*" : "(Locked)"}
+              </label>
               <input
                 type="text"
                 required
+                disabled={!isSuperAdmin}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden focus:ring-1 focus:ring-blue-500"
+                className={`w-full px-3 py-2 rounded-xl border transition-all ${
+                  isSuperAdmin
+                    ? "bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 focus:ring-1 focus:ring-blue-500"
+                    : "bg-zinc-100 dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-700 text-muted-foreground cursor-not-allowed opacity-80"
+                }`}
               />
             </div>
 
             <div>
-              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Email Address</label>
+              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">
+                Email Address (Locked)
+              </label>
               <input
                 type="email"
                 disabled
                 value={email}
-                className="w-full px-3 py-2 bg-zinc-100 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-xl opacity-70 cursor-not-allowed font-mono"
+                className="w-full px-3 py-2 bg-zinc-100 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-700 rounded-xl text-muted-foreground cursor-not-allowed opacity-80 font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">
+                Phone Number {isSuperAdmin ? "" : "(Locked)"}
+              </label>
+              <input
+                type="text"
+                disabled={!isSuperAdmin}
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="e.g. +91 98765 43210"
+                className={`w-full px-3 py-2 rounded-xl border transition-all ${
+                  isSuperAdmin
+                    ? "bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 focus:ring-1 focus:ring-blue-500"
+                    : "bg-zinc-100 dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-700 text-muted-foreground cursor-not-allowed opacity-80"
+                }`}
+              />
+            </div>
+
+            <div>
+              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">
+                Department {isSuperAdmin ? "" : "(Locked)"}
+              </label>
+              {isSuperAdmin ? (
+                <select
+                  value={department}
+                  onChange={(e) => setDepartment(e.target.value)}
+                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="Software & IT Engineering">Software & IT Engineering</option>
+                  <option value="Digital Marketing & Research">Digital Marketing & Research</option>
+                  <option value="Sales & Business Development">Sales & Business Development</option>
+                  <option value="Client Relationship & Support">Client Relationship & Support</option>
+                  <option value="Operations & Finance">Operations & Finance</option>
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  disabled
+                  value={department || "Assigned by Administrator"}
+                  className="w-full px-3 py-2 bg-zinc-100 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-700 rounded-xl text-muted-foreground cursor-not-allowed opacity-80"
+                />
+              )}
+            </div>
+
+            <div>
+              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">
+                Office Location / City {isSuperAdmin ? "" : "(Locked)"}
+              </label>
+              <input
+                type="text"
+                disabled={!isSuperAdmin}
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="e.g. Kolkata, India"
+                className={`w-full px-3 py-2 rounded-xl border transition-all ${
+                  isSuperAdmin
+                    ? "bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 focus:ring-1 focus:ring-blue-500"
+                    : "bg-zinc-100 dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-700 text-muted-foreground cursor-not-allowed opacity-80"
+                }`}
               />
             </div>
 
@@ -341,44 +630,8 @@ export default function SettingsMain() {
                 type="text"
                 value={jobTitle}
                 onChange={(e) => setJobTitle(e.target.value)}
-                placeholder="e.g. Senior Project Manager / Technical Lead"
-                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Department</label>
-              <select
-                value={department}
-                onChange={(e) => setDepartment(e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="Software & IT Engineering">Software & IT Engineering</option>
-                <option value="Digital Marketing & Research">Digital Marketing & Research</option>
-                <option value="Sales & Business Development">Sales & Business Development</option>
-                <option value="Client Relationship & Support">Client Relationship & Support</option>
-                <option value="Operations & Finance">Operations & Finance</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Phone Number</label>
-              <input
-                type="text"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Location / Office City</label>
-              <input
-                type="text"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="e.g. Mumbai, India"
-                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden focus:ring-1 focus:ring-blue-500"
+                placeholder="e.g. Senior Project Manager"
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:ring-1 focus:ring-blue-500"
               />
             </div>
           </div>
@@ -400,16 +653,59 @@ export default function SettingsMain() {
               rows={3}
               value={bio}
               onChange={(e) => setBio(e.target.value)}
-              placeholder="Tell team members and clients about your background and responsibilities..."
+              placeholder="Tell team members and clients about your responsibilities..."
               className="w-full px-3 py-2 text-xs bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden focus:ring-1 focus:ring-blue-500"
             />
+          </div>
+
+          {/* ── SECURE PASSWORD CHANGE SECTION ── */}
+          <div className="p-4 bg-zinc-50 dark:bg-zinc-800/40 rounded-2xl border border-zinc-200/60 dark:border-zinc-700/60 space-y-3">
+            <div className="flex items-center gap-2 text-foreground font-bold text-xs">
+              <Key size={14} className="text-primary" />
+              <span>Change Password (Requires Previous/Current Password Verification)</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div>
+                <label className="block text-zinc-600 dark:text-zinc-400 font-medium mb-1">Current Password *</label>
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="Enter current password"
+                  className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-zinc-600 dark:text-zinc-400 font-medium mb-1">New Password</label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="At least 6 characters"
+                  className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-zinc-600 dark:text-zinc-400 font-medium mb-1">Confirm New Password</label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Re-enter new password"
+                  className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+            </div>
           </div>
 
           <div className="flex justify-end pt-4 border-t border-zinc-100 dark:border-zinc-800">
             <button
               type="submit"
               disabled={loading}
-              className="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="px-6 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <Save size={14} />
               <span>{loading ? "Saving Profile..." : "Save Complete Profile"}</span>
@@ -418,9 +714,264 @@ export default function SettingsMain() {
         </form>
       )}
 
-      {/* ── TAB 2: COMPANY PROFILE ────────────────────────────────────────── */}
-      {activeTab === "company" && (
-        <form onSubmit={handleSaveCompany} className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-2xl p-6 space-y-4 max-w-2xl text-xs shadow-2xs">
+      {/* ── TAB: KYC VERIFICATION & BANKING ───────────────────────────────── */}
+      {activeTab === "kyc" && (
+        <form onSubmit={handleSubmitKyc} className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-3xl p-6 shadow-2xs space-y-6">
+          {/* Status Banner */}
+          <div className={`p-4 rounded-2xl border flex items-center justify-between gap-4 flex-wrap ${
+            kycStatus === "Verified"
+              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-800 dark:text-emerald-300"
+              : kycStatus === "Processing"
+              ? "bg-blue-500/10 border-blue-500/20 text-blue-800 dark:text-blue-300"
+              : kycStatus === "Rejected"
+              ? "bg-rose-500/10 border-rose-500/20 text-rose-800 dark:text-rose-300"
+              : "bg-amber-500/10 border-amber-500/20 text-amber-800 dark:text-amber-300"
+          }`}>
+            <div className="flex items-center gap-3">
+              <ShieldCheck size={24} className="shrink-0" />
+              <div>
+                <h4 className="font-bold text-sm">
+                  KYC Verification Status: {kycStatus === "Processing" ? "Under Review" : kycStatus === "Verified" ? "Verified & Approved (Done)" : kycStatus}
+                </h4>
+                <p className="text-xs opacity-80 mt-0.5">
+                  {kycStatus === "Verified"
+                    ? "Your identity and bank details have been verified by the administrator."
+                    : kycStatus === "Processing"
+                    ? "Your KYC documents have been submitted and are currently under review by Super Admin / Admin."
+                    : kycStatus === "Rejected"
+                    ? `KYC application was rejected: ${kycRejectionReason || "Please re-upload clear document photos."}`
+                    : "KYC is pending. Please fill in your legal identification, upload documents, and provide payout bank/UPI details."}
+                </p>
+              </div>
+            </div>
+
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-surface border border-border">
+              {kycStatus}
+            </span>
+          </div>
+
+          {/* Section 1: Identification Details */}
+          <div className="space-y-4">
+            <h4 className="text-sm font-bold text-foreground flex items-center gap-2 border-b border-border/50 pb-2">
+              <span>1. Identity Document Information</span>
+            </h4>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+              <div>
+                <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Legal Full Name (as per ID) *</label>
+                <input
+                  type="text"
+                  required
+                  disabled={kycStatus === "Verified"}
+                  value={kycFullName}
+                  onChange={(e) => setKycFullName(e.target.value)}
+                  placeholder="e.g. Rahul Sharma"
+                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:ring-1 focus:ring-blue-500 disabled:opacity-70 disabled:cursor-not-allowed"
+                />
+              </div>
+
+              <div>
+                <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Document Type *</label>
+                <select
+                  disabled={kycStatus === "Verified"}
+                  value={kycDocType}
+                  onChange={(e) => setKycDocType(e.target.value as any)}
+                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:ring-1 focus:ring-blue-500 disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                  <option value="Aadhaar Card">Aadhaar Card</option>
+                  <option value="PAN Card">PAN Card</option>
+                  <option value="Passport">Passport</option>
+                  <option value="Voter ID">Voter ID</option>
+                  <option value="Driving License">Driving License</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Document Number *</label>
+                <input
+                  type="text"
+                  required
+                  disabled={kycStatus === "Verified"}
+                  value={kycDocNumber}
+                  onChange={(e) => setKycDocNumber(e.target.value)}
+                  placeholder="e.g. 1234 5678 9012 or ABCDE1234F"
+                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono focus:ring-1 focus:ring-blue-500 disabled:opacity-70 disabled:cursor-not-allowed"
+                />
+              </div>
+            </div>
+
+            {/* Document Photo Uploads (ImgBB Cloud Hosted) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+              {/* Front Photo */}
+              <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-700 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-foreground">Document Front Photo *</span>
+                  {kycDocFrontUrl && <span className="text-[10px] text-emerald-600 font-bold">Uploaded ✓</span>}
+                </div>
+
+                {kycDocFrontUrl ? (
+                  <div className="relative rounded-xl overflow-hidden border border-border bg-surface h-36">
+                    <img src={kycDocFrontUrl} alt="Front Document" className="w-full h-full object-cover" />
+                  </div>
+                ) : (
+                  <div className="h-36 border-2 border-dashed border-zinc-300 dark:border-zinc-700 rounded-xl flex flex-col items-center justify-center text-zinc-400 text-xs">
+                    <Upload size={24} className="mb-1" />
+                    <span>Upload Front Photo (PNG / JPG)</span>
+                  </div>
+                )}
+
+                {kycStatus !== "Verified" && (
+                  <div>
+                    <input
+                      type="file"
+                      ref={frontDocInputRef}
+                      accept="image/*"
+                      onChange={handleFrontDocUpload}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => frontDocInputRef.current?.click()}
+                      disabled={isUploadingFront}
+                      className="w-full py-2 bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 text-foreground rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      {isUploadingFront ? <RefreshCw size={14} className="animate-spin" /> : <Upload size={14} />}
+                      <span>{isUploadingFront ? "Uploading..." : kycDocFrontUrl ? "Change Front Photo" : "Upload Front Photo"}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Back Photo */}
+              <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-700 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-foreground">Document Back Photo / Address Page</span>
+                  {kycDocBackUrl && <span className="text-[10px] text-emerald-600 font-bold">Uploaded ✓</span>}
+                </div>
+
+                {kycDocBackUrl ? (
+                  <div className="relative rounded-xl overflow-hidden border border-border bg-surface h-36">
+                    <img src={kycDocBackUrl} alt="Back Document" className="w-full h-full object-cover" />
+                  </div>
+                ) : (
+                  <div className="h-36 border-2 border-dashed border-zinc-300 dark:border-zinc-700 rounded-xl flex flex-col items-center justify-center text-zinc-400 text-xs">
+                    <Upload size={24} className="mb-1" />
+                    <span>Upload Back Photo (Optional)</span>
+                  </div>
+                )}
+
+                {kycStatus !== "Verified" && (
+                  <div>
+                    <input
+                      type="file"
+                      ref={backDocInputRef}
+                      accept="image/*"
+                      onChange={handleBackDocUpload}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => backDocInputRef.current?.click()}
+                      disabled={isUploadingBack}
+                      className="w-full py-2 bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 text-foreground rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      {isUploadingBack ? <RefreshCw size={14} className="animate-spin" /> : <Upload size={14} />}
+                      <span>{isUploadingBack ? "Uploading..." : kycDocBackUrl ? "Change Back Photo" : "Upload Back Photo"}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: Bank & UPI Details */}
+          <div className="space-y-4 pt-2">
+            <h4 className="text-sm font-bold text-foreground flex items-center gap-2 border-b border-border/50 pb-2">
+              <span>2. Bank Account & UPI Payout Details</span>
+            </h4>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+              <div>
+                <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Bank Name</label>
+                <input
+                  type="text"
+                  disabled={kycStatus === "Verified"}
+                  value={kycBankName}
+                  onChange={(e) => setKycBankName(e.target.value)}
+                  placeholder="e.g. HDFC Bank / State Bank of India"
+                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:ring-1 focus:ring-blue-500 disabled:opacity-70 disabled:cursor-not-allowed"
+                />
+              </div>
+
+              <div>
+                <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Account Holder Name</label>
+                <input
+                  type="text"
+                  disabled={kycStatus === "Verified"}
+                  value={kycAccountHolderName}
+                  onChange={(e) => setKycAccountHolderName(e.target.value)}
+                  placeholder="e.g. Rahul Sharma"
+                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:ring-1 focus:ring-blue-500 disabled:opacity-70 disabled:cursor-not-allowed"
+                />
+              </div>
+
+              <div>
+                <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Bank Account Number</label>
+                <input
+                  type="text"
+                  disabled={kycStatus === "Verified"}
+                  value={kycAccountNumber}
+                  onChange={(e) => setKycAccountNumber(e.target.value)}
+                  placeholder="e.g. 50100234567890"
+                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono focus:ring-1 focus:ring-blue-500 disabled:opacity-70 disabled:cursor-not-allowed"
+                />
+              </div>
+
+              <div>
+                <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">IFSC Code</label>
+                <input
+                  type="text"
+                  disabled={kycStatus === "Verified"}
+                  value={kycIfscCode}
+                  onChange={(e) => setKycIfscCode(e.target.value.toUpperCase())}
+                  placeholder="e.g. HDFC0001234"
+                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono focus:ring-1 focus:ring-blue-500 disabled:opacity-70 disabled:cursor-not-allowed"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">UPI ID / VPA</label>
+                <input
+                  type="text"
+                  disabled={kycStatus === "Verified"}
+                  value={kycUpiId}
+                  onChange={(e) => setKycUpiId(e.target.value)}
+                  placeholder="e.g. rahul@okaxis or 9876543210@paytm"
+                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono focus:ring-1 focus:ring-blue-500 disabled:opacity-70 disabled:cursor-not-allowed"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Submit Button */}
+          {kycStatus !== "Verified" && (
+            <div className="flex justify-end pt-4 border-t border-zinc-100 dark:border-zinc-800">
+              <button
+                type="submit"
+                disabled={loading}
+                className="px-6 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <ShieldCheck size={16} />
+                <span>{loading ? "Submitting KYC..." : "Submit KYC for Verification"}</span>
+              </button>
+            </div>
+          )}
+        </form>
+      )}
+
+      {/* ── TAB 2: COMPANY PROFILE (Super Admin Only) ───────────────────────── */}
+      {activeTab === "company" && isSuperAdmin && (
+        <form onSubmit={handleSaveCompany} className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-3xl p-6 space-y-4 max-w-2xl text-xs shadow-2xs">
           <h3 className="font-bold text-sm text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
             <Building2 size={16} className="text-blue-600" />
             <span>Company & Organization Details</span>
@@ -480,9 +1031,9 @@ export default function SettingsMain() {
         </form>
       )}
 
-      {/* ── TAB 3: SMTP SETUP ─────────────────────────────────────────────── */}
-      {activeTab === "smtp" && (
-        <form onSubmit={handleSaveSmtp} className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-2xl p-6 space-y-4 max-w-2xl text-xs shadow-2xs">
+      {/* ── TAB 3: SMTP SETUP (Super Admin Only) ────────────────────────────── */}
+      {activeTab === "smtp" && isSuperAdmin && (
+        <form onSubmit={handleSaveSmtp} className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-3xl p-6 space-y-4 max-w-2xl text-xs shadow-2xs">
           <h3 className="font-bold text-sm text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
             <Mail size={16} className="text-blue-600" />
             <span>SMTP Email Dispatch Configurations</span>
@@ -544,7 +1095,7 @@ export default function SettingsMain() {
 
       {/* ── TAB 4: THEME ──────────────────────────────────────────────────── */}
       {activeTab === "theme" && (
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-2xl p-6 space-y-4 max-w-2xl text-xs shadow-2xs">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-3xl p-6 space-y-4 max-w-2xl text-xs shadow-2xs">
           <h3 className="font-bold text-sm text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
             <Globe size={16} className="text-blue-600" />
             <span>Appearance & Theme Preferences</span>
@@ -554,7 +1105,7 @@ export default function SettingsMain() {
             <button
               type="button"
               onClick={() => setTheme("dark")}
-              className={`p-4 rounded-xl border flex items-center gap-3 transition-all ${
+              className={`p-4 rounded-xl border flex items-center gap-3 transition-all cursor-pointer ${
                 theme === "dark" ? "border-blue-600 bg-blue-50/20 text-blue-600 font-bold" : "border-zinc-200 dark:border-zinc-700"
               }`}
             >
@@ -568,7 +1119,7 @@ export default function SettingsMain() {
             <button
               type="button"
               onClick={() => setTheme("light")}
-              className={`p-4 rounded-xl border flex items-center gap-3 transition-all ${
+              className={`p-4 rounded-xl border flex items-center gap-3 transition-all cursor-pointer ${
                 theme === "light" ? "border-blue-600 bg-blue-50/20 text-blue-600 font-bold" : "border-zinc-200 dark:border-zinc-700"
               }`}
             >
