@@ -132,33 +132,34 @@ export function InvoiceModal({
       }
 
   // 2. Financial Computations
-  const parsedTotal = parseInt((invoice.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
   const gstRate = isGstInvoice ? (invoice.gstRate !== undefined && invoice.gstRate > 0 ? invoice.gstRate : 18) : 0
-  
   const setupCharge = typeof invoice.setupCharge === "number" ? invoice.setupCharge : 0
   const discount = typeof invoice.discount === "number" 
     ? invoice.discount 
     : (invoice.discountsList ? invoice.discountsList.reduce((sum, d) => sum + (d.amount || 0), 0) : 0)
   
+  const parsedInvoiced = parseInt((invoice.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
+
   const baseNum = invoice.baseAmount !== undefined && invoice.baseAmount > 0
     ? invoice.baseAmount
-    : (parsedTotal > 0 && isGstInvoice ? Math.round(parsedTotal / (1 + gstRate / 100)) : parsedTotal)
+    : (parsedInvoiced > 0 && isGstInvoice ? Math.round(parsedInvoiced / (1 + gstRate / 100)) : parsedInvoiced)
   
   const taxableBase = Math.max(0, baseNum + setupCharge - discount)
 
-  const gstAmt = isGstInvoice
-    ? (invoice.gstAmount !== undefined && invoice.gstAmount > 0
-        ? invoice.gstAmount
-        : (parsedTotal > 0 ? parsedTotal - taxableBase : Math.round(taxableBase * (gstRate / 100))))
+  // GST must strictly be calculated on the net taxable base after discount
+  const gstAmt = isGstInvoice && taxableBase > 0
+    ? Math.round(taxableBase * (gstRate / 100))
     : 0
 
   const cgstAmt = Math.round(gstAmt / 2)
-  const sgstAmt = Math.round(gstAmt / 2)
-  const totalVal = parsedTotal > 0 ? parsedTotal : (taxableBase + gstAmt)
+  const sgstAmt = gstAmt - cgstAmt
+  const totalVal = taxableBase + gstAmt
 
-  const parsedReceived = parseInt((invoice.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
+  // Received amount can NEVER exceed total value of invoice
+  const rawReceived = parseInt((invoice.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
+  const parsedReceived = Math.min(rawReceived, totalVal)
   const parsedDue = invoice.due !== undefined 
-    ? (parseInt(String(invoice.due).replace(/[^0-9]/g, "")) || 0)
+    ? Math.min(parseInt(String(invoice.due).replace(/[^0-9]/g, "")) || 0, Math.max(0, totalVal - parsedReceived))
     : Math.max(0, totalVal - parsedReceived)
 
   const isFullyPaid = invoice.status === "Fully paid" || invoice.status === "Credited" || (parsedDue === 0 && parsedReceived > 0)
@@ -462,7 +463,7 @@ export function InvoiceModal({
 
           {/* 3. ITEMIZED SERVICES / PROJECT DESCRIPTION TABLE */}
           {(() => {
-            const renderedItems: any[] = (invoice.items && invoice.items.length > 0)
+            const rawItems: any[] = (invoice.items && invoice.items.length > 0)
               ? invoice.items
               : [
                   {
@@ -479,15 +480,39 @@ export function InvoiceModal({
                   }
                 ]
 
-            const totalTableQty = renderedItems.reduce((sum, it) => sum + (it.qty || 1), 0)
-            const totalTableBase = renderedItems.reduce((sum, it) => {
+            const grossSum = rawItems.reduce((sum, it) => {
               const r = typeof it.rate === "number" ? it.rate : 0
               const q = it.qty || 1
               const extra = (it.charges || []).reduce((s: number, c: any) => s + (c.amount || 0), 0)
               return sum + (r * q) + extra
             }, 0)
-            const totalTableGst = renderedItems.reduce((sum, it) => sum + (it.gstAmount || 0), 0)
-            const totalTableGross = renderedItems.reduce((sum, it) => sum + (it.totalAmount || (it.rate + (it.gstAmount || 0))), 0)
+
+            const discountRatio = grossSum > 0 ? taxableBase / grossSum : 1
+
+            const finalRenderedRows = rawItems.map(item => {
+              const itemRate = typeof item.rate === "number" ? item.rate : 0
+              const itemQty = item.qty || 1
+              const itemCharges = (item.charges || []).reduce((sum: number, c: any) => sum + (c.amount || 0), 0)
+              const rowGross = (itemRate * itemQty) + itemCharges
+              const rowTaxable = Math.round(rowGross * discountRatio)
+              const rowTax = item.gstRate > 0 && rowTaxable > 0 ? Math.round(rowTaxable * (item.gstRate / 100)) : 0
+              const rowTotal = rowTaxable + rowTax
+              return {
+                ...item,
+                itemRate,
+                itemQty,
+                itemCharges,
+                rowGross,
+                rowTaxable,
+                rowTax,
+                rowTotal,
+              }
+            })
+
+            const totalTableQty = finalRenderedRows.reduce((sum, it) => sum + it.itemQty, 0)
+            const totalTableBase = finalRenderedRows.reduce((sum, it) => sum + (it.itemRate * it.itemQty) + it.itemCharges, 0)
+            const totalTableGst = finalRenderedRows.reduce((sum, it) => sum + it.rowTax, 0)
+            const totalTableGross = finalRenderedRows.reduce((sum, it) => sum + it.rowTotal, 0)
 
             return (
               <div className="rounded-xl overflow-hidden border border-zinc-200 shadow-2xs">
@@ -504,12 +529,7 @@ export function InvoiceModal({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-200 bg-white font-medium text-zinc-800">
-                    {renderedItems.map((item, idx) => {
-                      const itemRate = typeof item.rate === "number" ? item.rate : 0
-                      const itemCharges = (item.charges || []).reduce((sum: number, c: any) => sum + (c.amount || 0), 0)
-                      const itemTax = item.gstAmount || 0
-                      const itemGross = item.totalAmount || ((itemRate * (item.qty || 1)) + itemCharges + itemTax)
-
+                    {finalRenderedRows.map((item, idx) => {
                       return (
                         <tr key={item.id || idx}>
                           <td className="py-3 px-3 text-center font-bold text-zinc-500">{idx + 1}</td>
@@ -531,15 +551,15 @@ export function InvoiceModal({
                               )}
                             </div>
                           </td>
-                          <td className="py-3 px-3 text-center font-mono text-[11px]">{item.qty || 1}</td>
+                          <td className="py-3 px-3 text-center font-mono text-[11px]">{item.itemQty}</td>
                           <td className="py-3 px-3 text-center text-zinc-600 text-[11px]">{item.unit || "Service"}</td>
                           <td className="py-3 px-3 text-right font-mono font-semibold">
-                            ₹{itemRate.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                            ₹{item.itemRate.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                           </td>
                           <td className="py-3 px-3 text-right font-mono text-zinc-700">
-                            {item.gstRate > 0 ? (
+                            {item.gstRate > 0 && item.rowTax > 0 ? (
                               <div>
-                                <span>₹{itemTax.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                                <span>₹{item.rowTax.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
                                 <span className="text-[9px] text-zinc-500 block">({item.gstRate}%)</span>
                               </div>
                             ) : (
@@ -547,7 +567,7 @@ export function InvoiceModal({
                             )}
                           </td>
                           <td className="py-3 px-3 text-right font-mono font-black text-zinc-900">
-                            ₹{itemGross.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                            ₹{item.rowTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                           </td>
                         </tr>
                       )

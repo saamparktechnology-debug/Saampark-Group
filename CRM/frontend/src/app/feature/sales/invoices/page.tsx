@@ -386,9 +386,24 @@ export default function InvoicesPage() {
 
     const totalServicesBase = itemCalculations.reduce((sum, it) => sum + (it.numRate * it.qty), 0)
     const totalPlatformCharges = itemCalculations.reduce((sum, it) => sum + it.itemCharges, 0)
+    const totalGross = totalServicesBase + totalPlatformCharges
     const totalDiscounts = invoiceDiscounts.reduce((sum, d) => sum + (typeof d.amount === "number" ? d.amount : 0), 0)
-    const taxableBase = Math.max(0, (totalServicesBase + totalPlatformCharges) - totalDiscounts)
-    const totalGstAmount = itemCalculations.reduce((sum, it) => sum + it.itemGst, 0)
+    const taxableBase = Math.max(0, totalGross - totalDiscounts)
+    const discountRatio = totalGross > 0 ? taxableBase / totalGross : 1
+
+    const finalItemCalculations = itemCalculations.map((item) => {
+      const lineTaxable = Math.round(item.itemBase * discountRatio)
+      const lineGst = Math.round(lineTaxable * ((item.gstRate !== undefined ? item.gstRate : 18) / 100))
+      const lineTotal = lineTaxable + lineGst
+      return {
+        ...item,
+        lineTaxable,
+        itemGst: lineGst,
+        itemTotal: lineTotal,
+      }
+    })
+
+    const totalGstAmount = taxableBase > 0 ? finalItemCalculations.reduce((sum, it) => sum + it.itemGst, 0) : 0
     const totalAmount = taxableBase + totalGstAmount
     const formattedTotal = `₹${totalAmount.toLocaleString("en-IN")}`
 
@@ -412,7 +427,7 @@ export default function InvoicesPage() {
     const invoiceId = generateInvoiceNumber(invoices)
     const calculatedDueDate = dueDate || new Date(Date.now() + 14 * 86400000).toLocaleDateString("en-GB")
 
-    const finalInvoiceItems: InvoiceLineItem[] = itemCalculations.map(it => ({
+    const finalInvoiceItems: InvoiceLineItem[] = finalItemCalculations.map(it => ({
       id: it.id,
       serviceName: it.serviceName.trim() || finalProjectName,
       sacCode: it.sacCode || "998313",
@@ -590,9 +605,13 @@ export default function InvoicesPage() {
   }, [invoices, isClientRole, clientEmailNorm, clientNameNorm])
 
   // Summary Metrics based on displayed invoices
-  const totalInvoicedNum = displayedInvoices.reduce((sum, i) => sum + (parseInt(i.totalInvoiced.replace(/[^0-9]/g, "")) || 0), 0)
-  const totalReceivedNum = displayedInvoices.reduce((sum, i) => sum + (parseInt(i.paymentReceived.replace(/[^0-9]/g, "")) || 0), 0)
-  const totalDueNum = displayedInvoices.reduce((sum, i) => sum + (parseInt(i.due.replace(/[^0-9]/g, "")) || 0), 0)
+  const totalInvoicedNum = displayedInvoices.reduce((sum, i) => sum + (parseInt((i.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0), 0)
+  const totalReceivedNum = displayedInvoices.reduce((sum, i) => {
+    const inv = parseInt((i.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
+    const rec = parseInt((i.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
+    return sum + Math.min(rec, inv)
+  }, 0)
+  const totalDueNum = displayedInvoices.reduce((sum, i) => sum + (parseInt((i.due || "0").replace(/[^0-9]/g, "")) || 0), 0)
   const pendingCount = displayedInvoices.filter(i => i.status === "Not paid" || i.status === "Payment Pending" || i.status === "Partially paid").length
 
   const columns: ColumnDef<InvoiceItem>[] = [
@@ -645,7 +664,12 @@ export default function InvoicesPage() {
     {
       accessorKey: "paymentReceived",
       header: "Paid",
-      cell: ({ row }) => <div className="text-emerald-600 dark:text-emerald-400 font-semibold">{row.getValue("paymentReceived")}</div>,
+      cell: ({ row }) => {
+        const inv = parseInt((row.original.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
+        const rec = parseInt((row.original.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
+        const capped = Math.min(rec, inv)
+        return <div className="text-emerald-600 dark:text-emerald-400 font-semibold">₹{capped.toLocaleString("en-IN")}</div>
+      },
     },
     {
       accessorKey: "due",

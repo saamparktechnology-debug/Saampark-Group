@@ -285,9 +285,24 @@ export function AddClientProjectModal({
 
   const totalServicesBase = itemCalculations.reduce((sum, it) => sum + (it.numRate * it.qty), 0)
   const totalPlatformCharges = itemCalculations.reduce((sum, it) => sum + it.itemCharges, 0)
+  const totalGross = totalServicesBase + totalPlatformCharges
   const totalDiscounts = discountsList.reduce((sum, d) => sum + (typeof d.amount === "number" ? d.amount : 0), 0)
-  const taxableBase = Math.max(0, (totalServicesBase + totalPlatformCharges) - totalDiscounts)
-  const totalGstAmount = itemCalculations.reduce((sum, it) => sum + it.itemGst, 0)
+  const taxableBase = Math.max(0, totalGross - totalDiscounts)
+  const discountRatio = totalGross > 0 ? taxableBase / totalGross : 1
+
+  const finalItemCalculations = itemCalculations.map((item) => {
+    const lineTaxable = Math.round(item.itemBase * discountRatio)
+    const lineGst = Math.round(lineTaxable * (item.gstRate / 100))
+    const lineTotal = lineTaxable + lineGst
+    return {
+      ...item,
+      lineTaxable,
+      itemGst: lineGst,
+      itemTotal: lineTotal,
+    }
+  })
+
+  const totalGstAmount = taxableBase > 0 ? finalItemCalculations.reduce((sum, it) => sum + it.itemGst, 0) : 0
   const totalAmount = taxableBase + totalGstAmount
 
   const numAdvance = typeof advanceAmount === "number" ? advanceAmount : 0
