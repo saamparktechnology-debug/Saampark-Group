@@ -1,5 +1,3 @@
-"use client"
-
 import * as React from "react"
 import {
   Tag,
@@ -21,10 +19,14 @@ import {
   Unlock,
   Building2,
   RotateCw,
+  Send,
+  CheckSquare,
+  Square,
+  Check,
 } from "lucide-react"
 import { Lead } from "../types"
 import { LeadFiltersDropdown } from "./LeadFiltersDropdown"
-import { formatLeadReminderDate } from "../services/leadService"
+import { formatLeadReminderDate, transferLeadsToBranch } from "../services/leadService"
 import { LabelItem } from "./ManageLabelsModal"
 import { LabelSelectorPopover } from "./LabelSelectorPopover"
 import { useAuthStore } from "@/store/useAuthStore"
@@ -81,7 +83,7 @@ export function LeadList({
   onToggleLeadLabel,
   onLeadUpdated,
 }: LeadListProps) {
-  const { user } = useAuthStore()
+  const { user, branches, activeCompanyId } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
   
   const isSuperAdmin = user?.role === "Super Admin"
@@ -89,6 +91,22 @@ export function LeadList({
   const canAddLead = isSuperAdmin || canPerformAction(user, "Leads", "add")
   const canEditLead = isSuperAdmin || canPerformAction(user, "Leads", "edit")
   const canDeleteLead = isSuperAdmin || canPerformAction(user, "Leads", "delete")
+
+  // Branches belonging to current active company (cleanly handle empty branches)
+  const activeBranches = React.useMemo(() => {
+    if (!branches || !Array.isArray(branches)) return []
+    if (activeCompanyId && activeCompanyId !== "all") {
+      return branches.filter((b) => b.companyId === activeCompanyId)
+    }
+    return branches
+  }, [branches, activeCompanyId])
+
+  // Bulk and Individual Lead Selection state
+  const [selectedLeadIds, setSelectedLeadIds] = React.useState<string[]>([])
+  const [isTransferModalOpen, setIsTransferModalOpen] = React.useState(false)
+  const [selectedTargetBranchId, setSelectedTargetBranchId] = React.useState<string>("")
+  const [selectedBranchFilter, setSelectedBranchFilter] = React.useState<string>("all")
+  const [isTransferring, setIsTransferring] = React.useState(false)
 
   const [allUsers, setAllUsers] = React.useState<{ id: string; name: string; role?: string; department?: string; email?: string; avatar?: string; avatarUrl?: string }[]>([])
   const [usersMap, setUsersMap] = React.useState<Record<string, { department?: string; role?: string; avatarUrl?: string }>>({})
@@ -309,6 +327,20 @@ export function LeadList({
 
     // Check if activeFilter matches a source (e.g. Social Media, Meta Ads, Google Ads, Local Market)
     const leadSource = (l.source || "").toLowerCase().trim()
+    // Branch Filter
+    if (selectedBranchFilter !== "all") {
+      if (selectedBranchFilter === "unassigned") {
+        if (l.branchId || l.assignedBranchId || l.branchName || l.assignedBranchName) return false
+      } else {
+        const bMatch =
+          l.branchId === selectedBranchFilter ||
+          l.assignedBranchId === selectedBranchFilter ||
+          (l.branchName && l.branchName.toLowerCase() === selectedBranchFilter.toLowerCase()) ||
+          (l.assignedBranchName && l.assignedBranchName.toLowerCase() === selectedBranchFilter.toLowerCase())
+        if (!bMatch) return false
+      }
+    }
+
     const filterClean = activeFilter.toLowerCase().trim()
     if (leadSource === filterClean) {
       return matchesSearch
@@ -324,6 +356,62 @@ export function LeadList({
   const startIndex = (safeCurrentPage - 1) * pageSize
   const endIndex = Math.min(startIndex + pageSize, totalItems)
   const paginatedLeads = filteredLeads.slice(startIndex, endIndex)
+
+  // Selection handlers
+  const isAllVisibleSelected =
+    paginatedLeads.length > 0 && paginatedLeads.every((l) => selectedLeadIds.includes(l.id))
+  const isSomeVisibleSelected =
+    paginatedLeads.some((l) => selectedLeadIds.includes(l.id)) && !isAllVisibleSelected
+
+  const handleToggleSelectAll = () => {
+    if (isAllVisibleSelected) {
+      const visibleIds = new Set(paginatedLeads.map((l) => l.id))
+      setSelectedLeadIds((prev) => prev.filter((id) => !visibleIds.has(id)))
+    } else {
+      const next = new Set([...selectedLeadIds, ...paginatedLeads.map((l) => l.id)])
+      setSelectedLeadIds(Array.from(next))
+    }
+  }
+
+  const handleToggleSelectLead = (id: string) => {
+    setSelectedLeadIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    )
+  }
+
+  const handleExecuteTransfer = async () => {
+    if (!selectedTargetBranchId) {
+      alert("Please select a destination branch.")
+      return
+    }
+    const targetBranch = activeBranches.find((b) => b.id === selectedTargetBranchId)
+    if (!targetBranch) {
+      alert("Selected branch could not be found.")
+      return
+    }
+
+    setIsTransferring(true)
+    try {
+      const updated = await transferLeadsToBranch(
+        selectedLeadIds,
+        targetBranch.id,
+        targetBranch.name,
+        user?.name || "Admin",
+        user?.role || "Admin",
+        activeCompanyId || undefined
+      )
+      setSelectedLeadIds([])
+      setIsTransferModalOpen(false)
+      if (updated.length > 0 && onLeadUpdated) {
+        onLeadUpdated(updated[0])
+      }
+    } catch (err) {
+      console.error("Error transferring leads to branch:", err)
+      alert("Failed to transfer leads to branch.")
+    } finally {
+      setIsTransferring(false)
+    }
+  }
 
   // Premium Styled Excel Export
   const handleExportExcel = () => {
@@ -1211,17 +1299,20 @@ export function LeadList({
 
                     {/* Labels */}
                     <td className={`py-3.5 px-4 relative ${isLocked ? "blur-[1px] opacity-60" : ""}`}>
-                      <div className="flex items-center gap-1 flex-wrap">
-                        {(l.labels || []).map((lbl) => {
-                          const labelObj = (availableLabels || []).find((al) => al.name === lbl)
-                          const colorHex = labelObj?.color || "#a855f7"
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {l.labels.map((lbl) => {
+                          const found = availableLabels.find(
+                            (a) => a.name.toLowerCase() === lbl.toLowerCase()
+                          )
+                          const colorHex = found ? found.color : "#64748b"
 
                           return (
                             <button
                               key={lbl}
                               type="button"
                               onClick={() =>
-                                !isLocked && setActivePopoverLeadId(
+                                !isLocked &&
+                                setActivePopoverLeadId(
                                   activePopoverLeadId === l.id ? null : l.id
                                 )
                               }
@@ -1237,7 +1328,8 @@ export function LeadList({
                           <button
                             type="button"
                             onClick={() =>
-                              !isLocked && setActivePopoverLeadId(
+                              !isLocked &&
+                              setActivePopoverLeadId(
                                 activePopoverLeadId === l.id ? null : l.id
                               )
                             }
@@ -1283,6 +1375,22 @@ export function LeadList({
                     {/* Actions */}
                     <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
+                        {/* Send to Branch Single Action */}
+                        {isSuperAdminOrAdmin && activeBranches.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedLeadIds([l.id])
+                              setSelectedTargetBranchId(activeBranches[0].id)
+                              setIsTransferModalOpen(true)
+                            }}
+                            className="p-1.5 text-zinc-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/50 rounded-lg transition-colors cursor-pointer"
+                            title="Send / Assign to Branch"
+                          >
+                            <MapPin size={13} />
+                          </button>
+                        )}
+
                         {/* Lock / Unlock Toggle Button for Admin */}
                         {isSuperAdminOrAdmin && (
                           <button
@@ -1340,13 +1448,12 @@ export function LeadList({
                                     onDeleteLead(l.id)
                                   }
                                 }}
-                                className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-md transition-colors"
+                                className="p-1 text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded transition-colors cursor-pointer"
                                 title="Delete lead"
                               >
                                 <Trash2 size={14} />
                               </button>
                             )}
-
                           </>
                         )}
                       </div>
@@ -1357,7 +1464,7 @@ export function LeadList({
 
               {filteredLeads.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="py-12 text-center text-zinc-400">
+                  <td colSpan={12} className="py-12 text-center text-zinc-400">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <div className="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 text-zinc-400 flex items-center justify-center text-xl shadow-xs">
                         📋
@@ -1460,6 +1567,92 @@ export function LeadList({
         </div>
 
       </div>
+
+      {/* ---------------- BRANCH TRANSFER MODAL ---------------- */}
+      {isTransferModalOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
+              <div className="flex items-center gap-2">
+                <MapPin size={18} className="text-blue-600" />
+                <h3 className="font-bold text-sm text-zinc-900 dark:text-zinc-100">
+                  Assign Leads to Branch
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsTransferModalOpen(false)}
+                className="text-zinc-400 hover:text-zinc-600 cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {activeBranches.length === 0 ? (
+              <div className="py-6 text-center space-y-2">
+                <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+                  No Branches Available
+                </p>
+                <p className="text-xs text-zinc-500">
+                  There are no branches configured for this active company. Please create a branch in Settings first.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4 text-xs">
+                <p className="text-zinc-600 dark:text-zinc-400">
+                  Select destination branch to transfer{" "}
+                  <strong className="text-blue-600 dark:text-blue-400">
+                    {selectedLeadIds.length} lead(s)
+                  </strong>
+                  . Users in that branch will immediately see these assigned leads.
+                </p>
+
+                <div>
+                  <label className="block font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                    Destination Branch *
+                  </label>
+                  <select
+                    value={selectedTargetBranchId}
+                    onChange={(e) => setSelectedTargetBranchId(e.target.value)}
+                    className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-800 dark:text-zinc-200 font-semibold focus:ring-2 focus:ring-blue-500"
+                  >
+                    {activeBranches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name} ({b.city || b.code || "Branch"})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/40 text-[11px] text-blue-700 dark:text-blue-300">
+                  <span>ℹ️ Transferred leads will display a <strong>"Sent by {user?.name || 'Admin'}"</strong> badge on that branch.</span>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setIsTransferModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
+              >
+                Cancel
+              </button>
+              {activeBranches.length > 0 && (
+                <button
+                  type="button"
+                  disabled={isTransferring || !selectedTargetBranchId}
+                  onClick={handleExecuteTransfer}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20 disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check size={14} />
+                  <span>{isTransferring ? "Transferring..." : `Confirm Transfer (${selectedLeadIds.length})`}</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   )

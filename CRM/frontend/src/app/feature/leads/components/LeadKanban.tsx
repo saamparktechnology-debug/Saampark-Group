@@ -233,13 +233,24 @@ export function LeadKanban({
   onOpenManageLabelsModal,
   onToggleLeadLabel,
 }: LeadKanbanProps) {
-  const { user } = useAuthStore()
+  const { user, branches, activeCompanyId } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
+
   const canAddLead = canPerformAction(user, "Leads", "add")
   const canEditLead = canPerformAction(user, "Leads", "edit")
   const canDeleteLead = canPerformAction(user, "Leads", "delete")
   const isSuperAdminOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
 
+  // Branches belonging to current active company
+  const activeBranches = React.useMemo(() => {
+    if (!branches || !Array.isArray(branches)) return []
+    if (activeCompanyId && activeCompanyId !== "all") {
+      return branches.filter((b) => b.companyId === activeCompanyId)
+    }
+    return branches
+  }, [branches, activeCompanyId])
+
+  const [selectedBranchFilter, setSelectedBranchFilter] = React.useState<string>("all")
   const [allUsers, setAllUsers] = React.useState<{ id: string; name: string; role?: string; department?: string; email?: string; avatar?: string }[]>([])
   const [selectedMember, setSelectedMember] = React.useState<string>("all")
   const [selectedMemberStage, setSelectedMemberStage] = React.useState<string>("all")
@@ -429,6 +440,20 @@ export function LeadKanban({
           const targetStage = selectedMemberStage === "They come to our office" ? "Our Office Visit" : selectedMemberStage
           if (leadStatus !== targetStage) return false
         }
+      }
+    }
+
+    // Branch Filter
+    if (selectedBranchFilter !== "all") {
+      if (selectedBranchFilter === "unassigned") {
+        if (l.branchId || l.assignedBranchId || l.branchName || l.assignedBranchName) return false
+      } else {
+        const bMatch =
+          l.branchId === selectedBranchFilter ||
+          l.assignedBranchId === selectedBranchFilter ||
+          (l.branchName && l.branchName.toLowerCase() === selectedBranchFilter.toLowerCase()) ||
+          (l.assignedBranchName && l.assignedBranchName.toLowerCase() === selectedBranchFilter.toLowerCase())
+        if (!bMatch) return false
       }
     }
 
@@ -827,6 +852,25 @@ export function LeadKanban({
             )}
           </div>
 
+          {/* Branch Filter (Only rendered if company has branches) */}
+          {activeBranches.length > 0 && (
+            <div className="relative">
+              <select
+                value={selectedBranchFilter}
+                onChange={(e) => setSelectedBranchFilter(e.target.value)}
+                className="px-2.5 py-1.5 text-xs font-semibold rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-100/80 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 focus:ring-1 focus:ring-blue-500 cursor-pointer"
+              >
+                <option value="all">📍 All Branches ({activeBranches.length})</option>
+                <option value="unassigned">📍 Unassigned to Branch</option>
+                {activeBranches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name} ({b.city || b.code || "Branch"})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* Plus Add Filter */}
           {canAddLead && (
             <button
@@ -1009,13 +1053,28 @@ export function LeadKanban({
                           </span>
                         </div>
 
-                        {/* Creator Badge if added by a Team member */}
-                        {(l.createdByName || (l.createdBy && l.createdBy !== "Admin" && l.createdBy !== "Super Admin" && l.createdBy !== "Team" && l.createdBy !== "User")) && (
-                          <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-500/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 text-[10px] font-semibold">
-                            <UserIcon size={10} />
-                            <span>Added by: {l.createdByName || l.createdBy}</span>
-                          </div>
-                        )}
+                        {/* Badges: Added By Creator, Branch, and Sent by Admin */}
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {(l.createdByName || l.createdBy) && (
+                            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/70 text-[9px] font-semibold">
+                              <UserIcon size={9} />
+                              <span>Added by: {l.createdByName || l.createdBy} {l.createdByRole ? `(${l.createdByRole})` : ""}</span>
+                            </div>
+                          )}
+
+                          {(l.branchName || l.assignedBranchName) && (
+                            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/70 text-[9px] font-semibold">
+                              <MapPin size={9} />
+                              <span>Branch: {l.branchName || l.assignedBranchName}</span>
+                            </div>
+                          )}
+
+                          {l.transferredBy && (
+                            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/70 text-[9px] font-semibold">
+                              <span>🚀 Sent by: {l.transferredBy}</span>
+                            </div>
+                          )}
+                        </div>
 
                         {/* Line 2: Phone & Secondary Contact */}
                         <div className="space-y-1 text-[11px]">

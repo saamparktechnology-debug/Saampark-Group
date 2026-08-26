@@ -53,4 +53,13 @@ export interface Lead {
   createdByEmail?: string
   createdByRole?: string
   isClientPrivate?: boolean
+  companyId?: string
+  companyName?: string
+  branchId?: string
+  branchName?: string
+  assignedBranchId?: string
+  assignedBranchName?: string
+  transferredBy?: string
+  transferredByRole?: string
+  transferredAt?: string
 }

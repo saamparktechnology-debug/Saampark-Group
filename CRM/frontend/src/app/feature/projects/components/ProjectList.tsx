@@ -1,5 +1,3 @@
-"use client"
-
 import * as React from "react"
 import {
   Tag,
@@ -13,6 +11,8 @@ import {
   Layout,
   Pencil,
   X,
+  User,
+  MapPin,
 } from "lucide-react"
 import { Project } from "../types"
 import { ProjectFiltersDropdown } from "./ProjectFiltersDropdown"
@@ -281,13 +281,30 @@ export function ProjectList({
                         <button
                           type="button"
                           onClick={() => onSelectProjectDetail(p)}
-                          className="font-medium text-blue-600 dark:text-blue-400 hover:underline text-left"
+                          className="font-semibold text-blue-600 dark:text-blue-400 hover:underline text-left text-xs"
                         >
                           {p.title}
                         </button>
-                        {p.labels.length > 0 && (
-                          <div className="flex items-center gap-1 flex-wrap">
-                            {p.labels.map((lbl) => (
+                        
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {/* Added by Creator Badge */}
+                          {((p as any).createdByName || (p as any).createdBy || (p as any).billedBy) && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/70 text-[9.5px] font-semibold">
+                              <User size={9} />
+                              <span>Added by: {(p as any).createdByName || (p as any).createdBy || (p as any).billedBy}</span>
+                            </span>
+                          )}
+
+                          {/* Branch Badge (Only if non-empty) */}
+                          {(p as any).branchName && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/70 text-[9.5px] font-semibold">
+                              <MapPin size={9} />
+                              <span>Branch: {(p as any).branchName}</span>
+                            </span>
+                          )}
+
+                          {p.labels.length > 0 &&
+                            p.labels.map((lbl) => (
                               <span
                                 key={lbl}
                                 className={`px-2 py-0.5 rounded text-[10px] font-medium ${
@@ -299,8 +316,7 @@ export function ProjectList({
                                 {lbl}
                               </span>
                             ))}
-                          </div>
-                        )}
+                        </div>
                       </div>
                     </td>
 

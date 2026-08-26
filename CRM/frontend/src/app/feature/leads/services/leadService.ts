@@ -316,3 +316,61 @@ export const unlockLead = async (id: string, companyId?: string): Promise<Lead> 
 export const lockLead = async (id: string, reason?: string, companyId?: string): Promise<Lead> => {
   return updateLead(id, { isLocked: true, lockedReason: reason || "Manually locked by Admin" }, "Super Admin", companyId)
 }
+
+export const transferLeadsToBranch = async (
+  leadIds: string[],
+  branchId: string,
+  branchName: string,
+  transferredBy: string,
+  transferredByRole: string = "Admin",
+  companyId?: string
+): Promise<Lead[]> => {
+  const current = await fetchModuleDataFromDB<Lead[]>("leads", [], companyId)
+  const idSet = new Set(leadIds.map(id => String(id)))
+  const nowFormatted = new Date().toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' })
+
+  const updated = current.map(lead => {
+    if (idSet.has(String(lead.id))) {
+      return {
+        ...lead,
+        branchId,
+        branchName,
+        assignedBranchId: branchId,
+        assignedBranchName: branchName,
+        transferredBy,
+        transferredByRole,
+        transferredAt: nowFormatted,
+      }
+    }
+    return lead
+  })
+
+  await saveModuleDataToDB("leads", updated, companyId)
+
+  // Also sync in master 'all' scope
+  const master = await fetchModuleDataFromDB<Lead[]>("leads", [], "all")
+  const masterUpdated = master.map(lead => {
+    if (idSet.has(String(lead.id))) {
+      return {
+        ...lead,
+        branchId,
+        branchName,
+        assignedBranchId: branchId,
+        assignedBranchName: branchName,
+        transferredBy,
+        transferredByRole,
+        transferredAt: nowFormatted,
+      }
+    }
+    return lead
+  })
+  await saveModuleDataToDB("leads", masterUpdated, "all")
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("storage"))
+    window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+    window.dispatchEvent(new CustomEvent("saampark_leads_updated"))
+  }
+
+  return updated.filter(l => idSet.has(String(l.id)))
+}
