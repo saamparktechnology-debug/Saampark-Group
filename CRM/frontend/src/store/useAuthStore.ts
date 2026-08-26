@@ -200,17 +200,26 @@ export const useAuthStore = create<AuthState>()(
       },
 
       addBranch: async (branchData: Partial<Branch>) => {
-        const { branches } = get()
+        const { user, branches } = get()
+        
+        let targetCompanyId = branchData.companyId || 'tech'
+        if (user && user.role !== 'Super Admin') {
+          const allowedCompIds = user.companyIds || (user.companyId ? [user.companyId] : ['tech'])
+          if (!allowedCompIds.includes(targetCompanyId)) {
+            targetCompanyId = allowedCompIds[0] || 'tech'
+          }
+        }
+
         const newBranch: Branch = {
           id: branchData.id || `branch_${Date.now()}`,
-          companyId: branchData.companyId || 'tech',
+          companyId: targetCompanyId,
           name: branchData.name || 'New Sub-Branch',
           code: branchData.code || `BR-${Math.floor(100 + Math.random() * 900)}`,
           city: branchData.city || '',
           address: branchData.address || '',
           phone: branchData.phone || '',
           email: branchData.email || '',
-          managerName: branchData.managerName || '',
+          managerName: branchData.managerName || user?.name || '',
           status: branchData.status || 'Active',
           createdAt: new Date().toISOString().split('T')[0],
         }

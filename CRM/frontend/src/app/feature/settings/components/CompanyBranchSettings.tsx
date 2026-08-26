@@ -148,8 +148,17 @@ export function CompanyBranchSettings() {
     e.preventDefault()
     if (!branchName.trim()) return
 
+    let finalCompanyId = targetCompanyIdForBranch
+    if (!isSuperAdmin) {
+      const allowedIds = visibleCompanies.map(c => c.id)
+      if (!allowedIds.includes(finalCompanyId)) {
+        finalCompanyId = visibleCompanies[0]?.id || "tech"
+      }
+    }
+
     if (editingBranch) {
       await updateBranch(editingBranch.id, {
+        companyId: finalCompanyId,
         name: branchName.trim(),
         code: branchCode.trim(),
         city: branchCity.trim(),
@@ -161,7 +170,7 @@ export function CompanyBranchSettings() {
       })
     } else {
       await addBranch({
-        companyId: targetCompanyIdForBranch,
+        companyId: finalCompanyId,
         name: branchName.trim(),
         code: branchCode.trim(),
         city: branchCity.trim(),
@@ -510,6 +519,53 @@ export function CompanyBranchSettings() {
               </div>
 
               <form onSubmit={handleSaveBranch} className="space-y-3.5 text-xs">
+                {/* Company Selection Field */}
+                <div>
+                  <label className="block font-semibold text-foreground mb-1">
+                    {isSuperAdmin ? "Target Company *" : "Assigned Company"}
+                  </label>
+                  {isSuperAdmin ? (
+                    <select
+                      value={targetCompanyIdForBranch}
+                      onChange={(e) => setTargetCompanyIdForBranch(e.target.value)}
+                      className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden focus:border-primary font-semibold text-foreground"
+                    >
+                      {companies.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.logo || "🏢"} {c.name} ({c.slug || c.id})
+                        </option>
+                      ))}
+                    </select>
+                  ) : visibleCompanies.length > 1 ? (
+                    <select
+                      value={targetCompanyIdForBranch}
+                      onChange={(e) => setTargetCompanyIdForBranch(e.target.value)}
+                      className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden focus:border-primary font-semibold text-foreground"
+                    >
+                      {visibleCompanies.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.logo || "🏢"} {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="flex items-center justify-between px-3.5 py-2 rounded-xl bg-surface-pressed/30 border border-border text-xs font-semibold text-foreground">
+                      <div className="flex items-center gap-2">
+                        <span>{visibleCompanies[0]?.logo || "🏢"}</span>
+                        <span>{visibleCompanies[0]?.name || "Assigned Company"}</span>
+                      </div>
+                      <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded font-bold">
+                        Assigned
+                      </span>
+                    </div>
+                  )}
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {isSuperAdmin
+                      ? "Super Admin can create a sub-branch under any registered company."
+                      : "Branches created by this Admin are automatically scoped under your assigned company."}
+                  </p>
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <div className="col-span-2 sm:col-span-1">
                     <label className="block font-semibold text-foreground mb-1">Branch Name *</label>
