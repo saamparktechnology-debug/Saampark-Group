@@ -17,7 +17,12 @@ import {
   X, 
   Check, 
   BellRing,
-  Building2
+  Building2,
+  Coins,
+  RefreshCw,
+  UserPlus,
+  FolderPlus,
+  Calculator
 } from "lucide-react"
 import { ColumnDef } from "@tanstack/react-table"
 
@@ -36,8 +41,11 @@ import {
   sendPaymentReminder 
 } from "./services/invoiceService"
 import { InvoiceModal } from "./components/InvoiceModal"
-import { getClients } from "@/app/feature/clients/services/clientService"
+import { getClients, saveStoredClient } from "@/app/feature/clients/services/clientService"
 import { getProjects } from "@/app/feature/projects/services/projectService"
+import { addPayment } from "@/app/feature/sales/payments/services/paymentService"
+import { addSubscription } from "@/app/feature/subscriptions/services/subscriptionService"
+import { addOrder } from "@/app/feature/sales/orders/services/orderService"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { printPDFReport, exportToExcel } from "@/lib/exportUtils"
@@ -68,15 +76,27 @@ export default function InvoicesPage() {
   const [customPartPaymentAmount, setCustomPartPaymentAmount] = React.useState<number>(0)
 
   // Add Invoice Form state
+  const [clientSelectionMode, setClientSelectionMode] = React.useState<"existing" | "custom">("existing")
   const [clientName, setClientName] = React.useState("")
   const [clientEmail, setClientEmail] = React.useState("")
+  const [customClientName, setCustomClientName] = React.useState("")
+  const [customClientEmail, setCustomClientEmail] = React.useState("")
+  const [customClientPhone, setCustomClientPhone] = React.useState("")
+
+  const [projectSelectionMode, setProjectSelectionMode] = React.useState<"existing" | "custom">("existing")
   const [projectName, setProjectName] = React.useState("")
+  const [customProjectName, setCustomProjectName] = React.useState("")
+
   const [baseAmount, setBaseAmount] = React.useState<number>(50000)
   const [gstRate, setGstRate] = React.useState<number>(18)
   const [dueDate, setDueDate] = React.useState("")
   const [status, setStatus] = React.useState<InvoiceStatus>("Not paid")
-  const [paymentPlanMode, setPaymentPlanMode] = React.useState<"full" | "advance" | "part">("full")
-  const [advanceAmountInput, setAdvanceAmountInput] = React.useState<number>(0)
+  const [paymentPlanMode, setPaymentPlanMode] = React.useState<"advance" | "part" | "full">("advance")
+  const [advanceAmountInput, setAdvanceAmountInput] = React.useState<number>(20000)
+  const [partInitialPayment, setPartInitialPayment] = React.useState<number>(0)
+  const [installmentsCount, setInstallmentsCount] = React.useState<number>(3)
+  const [billingCycle, setBillingCycle] = React.useState<"Monthly" | "Quarterly">("Monthly")
+  const [autoCreateSubscription, setAutoCreateSubscription] = React.useState<boolean>(true)
 
   const [availableClients, setAvailableClients] = React.useState<{ name: string; email: string }[]>([])
   const [availableProjects, setAvailableProjects] = React.useState<{ title: string; client: string }[]>([])
@@ -95,10 +115,12 @@ export default function InvoicesPage() {
     loadInvoices()
     const interval = setInterval(loadInvoices, 4000)
     window.addEventListener("storage", loadInvoices)
+    window.addEventListener("saampark_data_synced", loadInvoices)
 
     return () => {
       clearInterval(interval)
       window.removeEventListener("storage", loadInvoices)
+      window.removeEventListener("saampark_data_synced", loadInvoices)
     }
   }, [loadInvoices])
 
@@ -109,12 +131,18 @@ export default function InvoicesPage() {
         if (clients.length > 0) {
           setClientName(clients[0].name)
           setClientEmail(clients[0].email || "")
+        } else {
+          setClientSelectionMode("custom")
         }
       }).catch(() => {})
 
       getProjects().then(projs => {
         setAvailableProjects(projs.map(p => ({ title: p.title, client: p.client })))
-        if (projs.length > 0) setProjectName(projs[0].title)
+        if (projs.length > 0) {
+          setProjectName(projs[0].title)
+        } else {
+          setProjectSelectionMode("custom")
+        }
       })
     }
   }, [isAddModalOpen])
@@ -166,8 +194,18 @@ export default function InvoicesPage() {
 
   const handleCreateInvoice = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!clientName || !projectName) {
-      alert("Please select client and project.")
+    const finalClientName = clientSelectionMode === "custom" ? customClientName.trim() : clientName.trim()
+    const finalClientEmail = clientSelectionMode === "custom" 
+      ? (customClientEmail.trim() || `${finalClientName.toLowerCase().replace(/[^a-z0-9]/g, '')}@example.com`)
+      : (clientEmail.trim() || `${finalClientName.toLowerCase().replace(/[^a-z0-9]/g, '')}@example.com`)
+    const finalProjectName = projectSelectionMode === "custom" ? customProjectName.trim() : projectName.trim()
+
+    if (!finalClientName) {
+      alert("Please enter or select a client name.")
+      return
+    }
+    if (!finalProjectName) {
+      alert("Please enter or select a project/service name.")
       return
     }
 
@@ -176,26 +214,58 @@ export default function InvoicesPage() {
     const formattedTotal = `₹${totalAmount.toLocaleString("en-IN")}`
 
     let receivedNum = 0
-    let finalStatus: InvoiceStatus = status
+    let finalStatus: InvoiceStatus = "Not paid"
 
-    if (paymentPlanMode === "advance" || paymentPlanMode === "part") {
-      receivedNum = Math.min(Math.max(0, advanceAmountInput), totalAmount)
-      finalStatus = receivedNum >= totalAmount ? "Fully paid" : receivedNum > 0 ? "Partially paid" : "Not paid"
-    } else {
+    if (paymentPlanMode === "full") {
       receivedNum = status === "Fully paid" ? totalAmount : 0
       finalStatus = status
+    } else if (paymentPlanMode === "advance") {
+      receivedNum = Math.min(Math.max(0, advanceAmountInput), totalAmount)
+      finalStatus = receivedNum >= totalAmount ? "Fully paid" : receivedNum > 0 ? "Partially paid" : "Not paid"
+    } else if (paymentPlanMode === "part") {
+      receivedNum = Math.min(Math.max(0, partInitialPayment), totalAmount)
+      finalStatus = receivedNum >= totalAmount ? "Fully paid" : receivedNum > 0 ? "Partially paid" : "Not paid"
     }
 
     const dueNum = Math.max(0, totalAmount - receivedNum)
     const formattedReceived = `₹${receivedNum.toLocaleString("en-IN")}`
     const formattedDue = `₹${dueNum.toLocaleString("en-IN")}`
+    const invoiceId = `INV #${Math.floor(100 + Math.random() * 900)}`
+    const calculatedDueDate = dueDate || new Date(Date.now() + 14 * 86400000).toLocaleDateString("en-GB")
 
-    await addInvoice({
-      client: clientName,
-      clientEmail: clientEmail || `${clientName.toLowerCase().replace(/\s+/g, '')}@example.com`,
-      project: projectName,
+    // 1. If custom client, register into Clients database
+    if (clientSelectionMode === "custom") {
+      try {
+        await saveStoredClient({
+          id: `cli_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          name: finalClientName,
+          email: finalClientEmail,
+          phone: customClientPhone || "N/A",
+          primaryContact: finalClientName,
+          group: "VIP",
+          label: "Corporate",
+          labelColor: "#d8b4fe",
+          projectsCount: 1,
+          totalInvoiced: formattedTotal,
+          paymentReceived: formattedReceived,
+          due: formattedDue,
+          type: "Organization",
+          owner: user?.name || "Admin",
+          createdAt: Date.now(),
+        })
+      } catch (err) {
+        console.warn("Error saving custom client:", err)
+      }
+    }
+
+    // 2. Add Invoice
+    const newInv = await addInvoice({
+      id: invoiceId,
+      client: finalClientName,
+      clientEmail: finalClientEmail,
+      project: finalProjectName,
       billDate: new Date().toLocaleDateString("en-GB"),
-      dueDate: dueDate || new Date(Date.now() + 14 * 86400000).toLocaleDateString("en-GB"),
+      dueDate: calculatedDueDate,
       baseAmount,
       gstRate,
       gstAmount,
@@ -206,10 +276,78 @@ export default function InvoicesPage() {
       billedBy: user?.name || "Admin",
     })
 
-    showToast(`✅ Invoice created successfully for ${clientName}! (Advance: ${formattedReceived}, Due: ${formattedDue})`)
+    // 3. Automatically create Order in Sales Order List
+    try {
+      await addOrder({
+        client: finalClientName,
+        clientEmail: finalClientEmail,
+        project: finalProjectName,
+        orderDate: new Date().toISOString().split("T")[0],
+        deliveryDate: calculatedDueDate,
+        itemsCount: 1,
+        totalAmount: formattedTotal,
+        paymentStatus: dueNum === 0 ? "Paid" : receivedNum > 0 ? "Partially paid" : "Unpaid",
+        status: receivedNum > 0 ? "Processing" : "Pending",
+        notes: `Generated via Invoice ${invoiceId}. ${paymentPlanMode === "advance" ? `Advance: ${formattedReceived}, Balance on delivery: ${formattedDue}.` : paymentPlanMode === "part" ? `Part Payment: ${installmentsCount} parts of ₹${Math.round(dueNum / installmentsCount).toLocaleString("en-IN")}.` : ''}`,
+        invoiceId: invoiceId,
+      })
+    } catch (err) {
+      console.warn("Error creating order for invoice:", err)
+    }
+
+    // 4. Automatically record upfront / advance payment if received
+    if (receivedNum > 0) {
+      try {
+        await addPayment({
+          invoiceId: invoiceId,
+          client: finalClientName,
+          clientEmail: finalClientEmail,
+          project: finalProjectName,
+          paymentDate: new Date().toLocaleDateString("en-GB").replace(/\//g, "-"),
+          paymentMethod: "Bank Transfer / UPI",
+          transactionRef: `TXN-${Date.now().toString().slice(-6)}`,
+          note: paymentPlanMode === "advance" 
+            ? `Advance Down Payment received for ${finalProjectName}` 
+            : paymentPlanMode === "part"
+              ? `Initial installment received for ${finalProjectName}`
+              : `Full invoice settlement for ${finalProjectName}`,
+          amount: formattedReceived,
+          amountNum: receivedNum,
+          status: "Completed",
+        })
+      } catch (err) {
+        console.warn("Error creating payment entry:", err)
+      }
+    }
+
+    // 5. Automatically create Recurring Part Payment Subscription if Part Payment mode is active
+    if (paymentPlanMode === "part" && autoCreateSubscription && dueNum > 0) {
+      try {
+        const perPart = Math.round(dueNum / installmentsCount)
+        await addSubscription({
+          clientName: finalClientName,
+          planName: `${finalProjectName} (Part Payment Plan)`,
+          status: "Active",
+          amount: `₹${perPart.toLocaleString("en-IN")}`,
+          billingCycle: billingCycle as any,
+          nextBillingDate: calculatedDueDate,
+        })
+      } catch (err) {
+        console.warn("Error creating subscription for part payment:", err)
+      }
+    }
+
+    showToast(`✅ Tax Invoice ${invoiceId} created successfully for ${finalClientName}!`)
     setIsAddModalOpen(false)
-    setAdvanceAmountInput(0)
-    setPaymentPlanMode("full")
+    setCustomClientName("")
+    setCustomClientEmail("")
+    setCustomClientPhone("")
+    setCustomProjectName("")
+    setClientSelectionMode("existing")
+    setProjectSelectionMode("existing")
+    setAdvanceAmountInput(20000)
+    setPartInitialPayment(0)
+    setPaymentPlanMode("advance")
     loadInvoices()
   }
 
@@ -714,68 +852,178 @@ export default function InvoicesPage() {
                 </button>
               </div>
 
-              <form onSubmit={handleCreateInvoice} className="p-6 space-y-4 text-xs">
-                <div>
-                  <label className="block text-zinc-500 font-medium mb-1">Client Name *</label>
-                  {availableClients.length > 0 ? (
-                    <select
-                      value={clientName}
-                      onChange={(e) => {
-                        setClientName(e.target.value)
-                        const c = availableClients.find(ac => ac.name === e.target.value)
-                        if (c) setClientEmail(c.email)
-                      }}
-                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200"
-                    >
-                      {availableClients.map(c => (
-                        <option key={c.name} value={c.name}>{c.name} ({c.email})</option>
-                      ))}
-                    </select>
+              <form onSubmit={handleCreateInvoice} className="p-6 space-y-4 text-xs max-h-[85vh] overflow-y-auto">
+                
+                {/* ---------------- 1. CLIENT SELECTION / CUSTOM NAME ---------------- */}
+                <div className="space-y-2 p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/80">
+                  <div className="flex items-center justify-between">
+                    <label className="text-zinc-700 dark:text-zinc-300 font-bold flex items-center gap-1.5">
+                      <Building2 size={14} className="text-blue-600" />
+                      <span>Client Details *</span>
+                    </label>
+                    <div className="flex items-center gap-1 bg-white dark:bg-zinc-900 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-700">
+                      <button
+                        type="button"
+                        onClick={() => setClientSelectionMode("existing")}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                          clientSelectionMode === "existing"
+                            ? "bg-blue-600 text-white shadow-2xs"
+                            : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
+                        }`}
+                      >
+                        Select Existing
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setClientSelectionMode("custom")}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                          clientSelectionMode === "custom"
+                            ? "bg-blue-600 text-white shadow-2xs"
+                            : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
+                        }`}
+                      >
+                        ✍️ Custom Name
+                      </button>
+                    </div>
+                  </div>
+
+                  {clientSelectionMode === "existing" ? (
+                    availableClients.length > 0 ? (
+                      <select
+                        value={clientName}
+                        onChange={(e) => {
+                          setClientName(e.target.value)
+                          const c = availableClients.find(ac => ac.name === e.target.value)
+                          if (c) setClientEmail(c.email)
+                        }}
+                        className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-semibold"
+                      >
+                        {availableClients.map(c => (
+                          <option key={c.name} value={c.name}>{c.name} ({c.email || 'No email'})</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <p className="text-zinc-400 text-[11px]">No registered clients found. Please type custom name below.</p>
+                    )
                   ) : (
-                    <input
-                      type="text"
-                      required
-                      placeholder="Client Name"
-                      value={clientName}
-                      onChange={(e) => setClientName(e.target.value)}
-                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200"
-                    />
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        required={clientSelectionMode === "custom"}
+                        placeholder="Enter Client or Company Name *"
+                        value={customClientName}
+                        onChange={(e) => setCustomClientName(e.target.value)}
+                        className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-blue-300 dark:border-blue-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-bold"
+                      />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <input
+                          type="email"
+                          placeholder="Client Email (Optional)"
+                          value={customClientEmail}
+                          onChange={(e) => setCustomClientEmail(e.target.value)}
+                          className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200"
+                        />
+                        <input
+                          type="tel"
+                          placeholder="Phone / Mobile (Optional)"
+                          value={customClientPhone}
+                          onChange={(e) => setCustomClientPhone(e.target.value)}
+                          className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200"
+                        />
+                      </div>
+                    </div>
                   )}
                 </div>
 
-                <div>
-                  <label className="block text-zinc-500 font-medium mb-1">Project / Service *</label>
-                  {availableProjects.length > 0 ? (
-                    <select
-                      value={projectName}
-                      onChange={(e) => setProjectName(e.target.value)}
-                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200"
-                    >
-                      {availableProjects.map(p => (
-                        <option key={p.title} value={p.title}>{p.title} ({p.client})</option>
-                      ))}
-                    </select>
+                {/* ---------------- 2. PROJECT / SERVICE SELECTION ---------------- */}
+                <div className="space-y-2 p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/80">
+                  <div className="flex items-center justify-between">
+                    <label className="text-zinc-700 dark:text-zinc-300 font-bold flex items-center gap-1.5">
+                      <FolderPlus size={14} className="text-blue-600" />
+                      <span>Project / Service Scope *</span>
+                    </label>
+                    <div className="flex items-center gap-1 bg-white dark:bg-zinc-900 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-700">
+                      <button
+                        type="button"
+                        onClick={() => setProjectSelectionMode("existing")}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                          projectSelectionMode === "existing"
+                            ? "bg-blue-600 text-white shadow-2xs"
+                            : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
+                        }`}
+                      >
+                        Existing Project
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setProjectSelectionMode("custom")}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                          projectSelectionMode === "custom"
+                            ? "bg-blue-600 text-white shadow-2xs"
+                            : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
+                        }`}
+                      >
+                        ✍️ Custom Service
+                      </button>
+                    </div>
+                  </div>
+
+                  {projectSelectionMode === "existing" ? (
+                    availableProjects.length > 0 ? (
+                      <select
+                        value={projectName}
+                        onChange={(e) => setProjectName(e.target.value)}
+                        className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-semibold"
+                      >
+                        {availableProjects.map(p => (
+                          <option key={p.title} value={p.title}>{p.title} ({p.client})</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <p className="text-zinc-400 text-[11px]">No active projects found. Please type custom service below.</p>
+                    )
                   ) : (
-                    <input
-                      type="text"
-                      required
-                      placeholder="Project Title"
-                      value={projectName}
-                      onChange={(e) => setProjectName(e.target.value)}
-                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200"
-                    />
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        required={projectSelectionMode === "custom"}
+                        placeholder="Enter Project / Service Title *"
+                        value={customProjectName}
+                        onChange={(e) => setCustomProjectName(e.target.value)}
+                        className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-blue-300 dark:border-blue-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-bold"
+                      />
+                      <div className="flex flex-wrap gap-1">
+                        {["Website Development", "Software Development", "Android/iOS", "Digital Marketing", "Domain & Hosting"].map(svc => (
+                          <button
+                            key={svc}
+                            type="button"
+                            onClick={() => setCustomProjectName(svc)}
+                            className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-blue-100 dark:hover:bg-blue-900"
+                          >
+                            + {svc}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                {/* ---------------- 3. FINANCIAL BASE & GST ---------------- */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-zinc-500 font-medium mb-1">Base Amount (₹) *</label>
+                    <label className="block text-zinc-500 font-medium mb-1">Base Deal Amount (₹) *</label>
                     <input
                       type="number"
                       required
+                      min={0}
                       value={baseAmount}
-                      onChange={(e) => setBaseAmount(Number(e.target.value))}
-                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200"
+                      onChange={(e) => {
+                        const newBase = Number(e.target.value)
+                        setBaseAmount(newBase)
+                        const newTotal = newBase + Math.round(newBase * (gstRate / 100))
+                        if (advanceAmountInput > newTotal) setAdvanceAmountInput(Math.round(newTotal * 0.4))
+                      }}
+                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-bold"
                     />
                   </div>
                   <div>
@@ -783,7 +1031,7 @@ export default function InvoicesPage() {
                     <select
                       value={gstRate}
                       onChange={(e) => setGstRate(Number(e.target.value))}
-                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200"
+                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-semibold"
                     >
                       <option value={0}>0% (Exempt)</option>
                       <option value={5}>5%</option>
@@ -794,68 +1042,189 @@ export default function InvoicesPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-zinc-500 font-medium mb-1">Due Date</label>
-                    <input
-                      type="date"
-                      value={dueDate}
-                      onChange={(e) => setDueDate(e.target.value)}
-                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-zinc-500 font-medium mb-1">Payment Scheme</label>
-                    <select
-                      value={paymentPlanMode}
-                      onChange={(e) => setPaymentPlanMode(e.target.value as any)}
-                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-semibold"
-                    >
-                      <option value="full">Standard Full Invoice</option>
-                      <option value="advance">Advance Payment (Part Received Upfront)</option>
-                    </select>
-                  </div>
+                <div>
+                  <label className="block text-zinc-500 font-medium mb-1">Invoice Due Date</label>
+                  <input
+                    type="date"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200"
+                  />
                 </div>
 
-                {/* Advance Payment Input */}
-                {paymentPlanMode === "advance" && (
-                  <div className="p-3 bg-blue-50/70 dark:bg-blue-950/40 rounded-xl border border-blue-200 dark:border-blue-800 space-y-2">
-                    <div className="flex justify-between items-center">
-                      <label className="text-blue-900 dark:text-blue-200 font-bold">Advance Amount Received (₹) *</label>
-                      <span className="text-[10px] text-blue-700 dark:text-blue-300">Sets status to Partially Paid</span>
+                {/* ---------------- 4. SEPARATED PAYMENT TERMS BOX ---------------- */}
+                <div className="p-3.5 rounded-xl bg-blue-50/60 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-blue-700 dark:text-blue-300 font-bold text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <Calculator size={14} />
+                      <span>Payment Structure</span>
                     </div>
-                    <input
-                      type="number"
-                      min={1}
-                      max={baseAmount + Math.round(baseAmount * (gstRate / 100))}
-                      value={advanceAmountInput || ""}
-                      onChange={(e) => setAdvanceAmountInput(Number(e.target.value))}
-                      placeholder="e.g. 25000"
-                      className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-blue-300 dark:border-blue-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-bold"
-                    />
-                    <div className="flex gap-1.5 pt-0.5">
-                      {[0.25, 0.5, 0.75].map((pct) => {
-                        const total = baseAmount + Math.round(baseAmount * (gstRate / 100))
-                        const amt = Math.round(total * pct)
-                        return (
-                          <button
-                            key={pct}
-                            type="button"
-                            onClick={() => setAdvanceAmountInput(amt)}
-                            className="px-2 py-0.5 rounded bg-white dark:bg-zinc-800 border border-blue-200 dark:border-blue-700 hover:bg-blue-100 text-[10px] font-semibold text-blue-800 dark:text-blue-300"
-                          >
-                            {pct * 100}% (₹{amt.toLocaleString("en-IN")})
-                          </button>
-                        )
-                      })}
+
+                    <div className="flex items-center gap-1 bg-white dark:bg-zinc-900 p-0.5 rounded-lg border border-blue-200 dark:border-blue-800">
+                      <button
+                        type="button"
+                        onClick={() => setPaymentPlanMode("advance")}
+                        className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-all ${
+                          paymentPlanMode === "advance"
+                            ? "bg-blue-600 text-white shadow-2xs"
+                            : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
+                        }`}
+                      >
+                        🪙 Advance
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentPlanMode("part")}
+                        className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-all ${
+                          paymentPlanMode === "part"
+                            ? "bg-blue-600 text-white shadow-2xs"
+                            : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
+                        }`}
+                      >
+                        🔄 Part Payment
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentPlanMode("full")}
+                        className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-all ${
+                          paymentPlanMode === "full"
+                            ? "bg-blue-600 text-white shadow-2xs"
+                            : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
+                        }`}
+                      >
+                        💳 Full (100%)
+                      </button>
                     </div>
                   </div>
-                )}
 
-                {/* Live Totals & Balance Summary */}
+                  {/* Option 1: Advance */}
+                  {paymentPlanMode === "advance" && (
+                    <div className="p-3 bg-white dark:bg-zinc-900 rounded-xl border border-emerald-300 dark:border-emerald-800 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
+                          <Coins size={13} /> Advance Down Payment (₹)
+                        </label>
+                        <div className="flex items-center gap-1">
+                          {[0.25, 0.40, 0.50].map((pct) => {
+                            const total = baseAmount + Math.round(baseAmount * (gstRate / 100))
+                            const amt = Math.round(total * pct)
+                            return (
+                              <button
+                                key={pct}
+                                type="button"
+                                onClick={() => setAdvanceAmountInput(amt)}
+                                className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-[9px] font-bold"
+                              >
+                                {pct * 100}%
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                      <input
+                        type="number"
+                        min={1}
+                        max={baseAmount + Math.round(baseAmount * (gstRate / 100))}
+                        value={advanceAmountInput}
+                        onChange={(e) => setAdvanceAmountInput(Number(e.target.value))}
+                        className="w-full px-3 py-1.5 bg-emerald-50/50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-700 rounded-lg text-emerald-900 dark:text-emerald-200 font-bold"
+                      />
+                    </div>
+                  )}
+
+                  {/* Option 2: Part Payment */}
+                  {paymentPlanMode === "part" && (
+                    <div className="p-3 bg-white dark:bg-zinc-900 rounded-xl border border-blue-300 dark:border-blue-800 space-y-2.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div>
+                          <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 uppercase mb-1">
+                            Initial Deposit (₹)
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={partInitialPayment}
+                            onChange={(e) => setPartInitialPayment(Number(e.target.value))}
+                            placeholder="₹0"
+                            className="w-full px-2.5 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-bold"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 uppercase mb-1">
+                            Parts
+                          </label>
+                          <select
+                            value={installmentsCount}
+                            onChange={(e) => setInstallmentsCount(Number(e.target.value))}
+                            className="w-full px-2.5 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-semibold"
+                          >
+                            <option value={2}>2 Installments</option>
+                            <option value={3}>3 Installments</option>
+                            <option value={4}>4 Installments</option>
+                            <option value={6}>6 Installments</option>
+                            <option value={12}>12 Installments</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 uppercase mb-1">
+                            Cycle
+                          </label>
+                          <select
+                            value={billingCycle}
+                            onChange={(e) => setBillingCycle(e.target.value as any)}
+                            className="w-full px-2.5 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-semibold"
+                          >
+                            <option value="Monthly">Monthly</option>
+                            <option value="Quarterly">Quarterly</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="p-2 rounded-lg bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <RefreshCw size={13} className="text-blue-600 animate-spin-slow shrink-0" />
+                          <span className="text-[11px] font-bold text-blue-900 dark:text-blue-200">
+                            ₹{Math.round(Math.max(0, (baseAmount + Math.round(baseAmount * (gstRate / 100)) - partInitialPayment)) / installmentsCount).toLocaleString("en-IN")} / {billingCycle.toLowerCase()}
+                          </span>
+                        </div>
+                        <label className="flex items-center gap-1 text-[10px] font-bold text-blue-900 dark:text-blue-200 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={autoCreateSubscription}
+                            onChange={(e) => setAutoCreateSubscription(e.target.checked)}
+                            className="rounded text-blue-600"
+                          />
+                          <span>Add to Subscriptions</span>
+                        </label>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Option 3: Full */}
+                  {paymentPlanMode === "full" && (
+                    <div className="p-2.5 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-700 flex items-center justify-between">
+                      <span className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">
+                        Full Settlement Status:
+                      </span>
+                      <select
+                        value={status}
+                        onChange={(e) => setStatus(e.target.value as any)}
+                        className="px-2.5 py-1 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-bold text-zinc-800 dark:text-zinc-200"
+                      >
+                        <option value="Not paid">Payment Pending</option>
+                        <option value="Fully paid">Fully Paid Upfront</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                {/* ---------------- 5. LIVE TOTALS BREAKDOWN ---------------- */}
                 {(() => {
                   const total = baseAmount + Math.round(baseAmount * (gstRate / 100))
-                  const adv = paymentPlanMode === "advance" ? Math.min(advanceAmountInput, total) : (status === "Fully paid" ? total : 0)
+                  let adv = 0
+                  if (paymentPlanMode === "full") adv = status === "Fully paid" ? total : 0
+                  else if (paymentPlanMode === "advance") adv = Math.min(advanceAmountInput, total)
+                  else if (paymentPlanMode === "part") adv = Math.min(partInitialPayment, total)
                   const due = Math.max(0, total - adv)
 
                   return (
@@ -864,9 +1233,9 @@ export default function InvoicesPage() {
                         <span>Total Payable (Base + GST):</span>
                         <span className="font-bold text-white">₹{total.toLocaleString("en-IN")}</span>
                       </div>
-                      {paymentPlanMode === "advance" && (
+                      {adv > 0 && (
                         <div className="flex justify-between text-emerald-400 font-semibold">
-                          <span>Advance Received:</span>
+                          <span>{paymentPlanMode === "advance" ? "Advance Down Payment:" : "Initial Paid:"}</span>
                           <span>₹{adv.toLocaleString("en-IN")}</span>
                         </div>
                       )}
