@@ -740,9 +740,9 @@ export function AddClientProjectModal({
                       </div>
                     </div>
 
-                    {/* Service Row Fields: Name, SAC, Qty, Unit, Rate, GST */}
+                    {/* Service Row Fields: Name, Rate, Qty & Unit, GST */}
                     <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
-                      <div className="sm:col-span-4">
+                      <div className="sm:col-span-5">
                         <label className="block text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
                           Custom Service Name *
                         </label>
@@ -756,20 +756,7 @@ export function AddClientProjectModal({
                         />
                       </div>
 
-                      <div className="sm:col-span-2">
-                        <label className="block text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                          SAC / HSN
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. 998313"
-                          value={item.sacCode}
-                          onChange={(e) => handleUpdateService(item.id, "sacCode", e.target.value)}
-                          className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono text-zinc-900 dark:text-zinc-100"
-                        />
-                      </div>
-
-                      <div className="sm:col-span-2">
+                      <div className="sm:col-span-3">
                         <label className="block text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
                           Base Rate (₹) *
                         </label>

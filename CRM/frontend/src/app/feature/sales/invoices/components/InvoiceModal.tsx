@@ -478,7 +478,6 @@ export function InvoiceModal({
                     <tr className={`${theme.tableHeaderBg} font-bold text-[10.5px]`}>
                       <th className="py-2.5 px-3 w-10 text-center">NO.</th>
                       <th className="py-2.5 px-3">SERVICES / PRODUCT NAME</th>
-                      <th className="py-2.5 px-3 text-center">HSN / SAC</th>
                       <th className="py-2.5 px-3 text-center">QTY</th>
                       <th className="py-2.5 px-3 text-center">UNIT</th>
                       <th className="py-2.5 px-3 text-right">RATE (₹)</th>
@@ -514,9 +513,6 @@ export function InvoiceModal({
                               )}
                             </div>
                           </td>
-                          <td className="py-3 px-3 text-center font-mono text-[11px] text-zinc-600">
-                            {item.sacCode || (isGstInvoice ? "998313" : "998314")}
-                          </td>
                           <td className="py-3 px-3 text-center font-mono text-[11px]">{item.qty || 1}</td>
                           <td className="py-3 px-3 text-center text-zinc-600 text-[11px]">{item.unit || "Service"}</td>
                           <td className="py-3 px-3 text-right font-mono font-semibold">
@@ -543,7 +539,7 @@ export function InvoiceModal({
                   {/* Subtotal Weights & Amount Bar */}
                   <tfoot>
                     <tr className={`${theme.tableSubtotalBg} font-bold text-[11px] border-t border-zinc-200`}>
-                      <td colSpan={3} className="py-2 px-3 uppercase tracking-wider">
+                      <td colSpan={2} className="py-2 px-3 uppercase tracking-wider">
                         SUBTOTAL SERVICES & BASE AMOUNT
                       </td>
                       <td className="py-2 px-3 text-center font-mono">{totalTableQty}</td>

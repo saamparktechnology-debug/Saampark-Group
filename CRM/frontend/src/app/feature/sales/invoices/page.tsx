@@ -1373,11 +1373,8 @@ export default function InvoicesPage() {
                                   <Trash2 size={13} />
                                 </button>
                               )}
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
-                            <div className="sm:col-span-4">
+                                              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                            <div className="sm:col-span-5">
                               <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Service Name *</label>
                               <input
                                 type="text"
@@ -1389,18 +1386,7 @@ export default function InvoicesPage() {
                               />
                             </div>
 
-                            <div className="sm:col-span-2">
-                              <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">SAC / HSN</label>
-                              <input
-                                type="text"
-                                placeholder="998313"
-                                value={item.sacCode}
-                                onChange={(e) => handleUpdateInvService(item.id, "sacCode", e.target.value)}
-                                className="w-full px-2 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs font-mono"
-                              />
-                            </div>
-
-                            <div className="sm:col-span-2">
+                            <div className="sm:col-span-3">
                               <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Rate (₹) *</label>
                               <input
                                 type="number"
@@ -1412,7 +1398,7 @@ export default function InvoicesPage() {
                                   const val = e.target.value
                                   handleUpdateInvService(item.id, "rate", val === "" ? "" : Math.max(0, Number(val)))
                                 }}
-                                className="w-full px-2 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs font-mono font-bold"
+                                className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs font-mono font-bold"
                               />
                             </div>
 
@@ -1440,6 +1426,8 @@ export default function InvoicesPage() {
                                 <option value={0}>0% (Non-GST)</option>
                               </select>
                             </div>
+                          </div>
+           </div>
                           </div>
 
                           {/* Extra Charges */}
