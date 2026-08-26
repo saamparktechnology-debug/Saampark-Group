@@ -9,7 +9,7 @@ export const getProjects = async (companyId?: string): Promise<Project[]> => {
 }
 
 export const addProject = async (project: Omit<Project, "id">, companyId?: string): Promise<Project> => {
-  const current = await fetchModuleDataFromDB<Project[]>("projects", [], companyId)
+  const current = await fetchModuleDataFromDB<Project[]>("projects", [], companyId || "all")
   const newId = (Math.max(...current.map(p => parseInt(p.id) || 0), 0) + 1).toString()
   
   const newProject: Project = {
@@ -31,7 +31,24 @@ export const addProject = async (project: Omit<Project, "id">, companyId?: strin
     ]
   }
   const updated = [newProject, ...current]
-  await saveModuleDataToDB("projects", updated, companyId)
+  await saveModuleDataToDB("projects", updated, companyId || "all")
+  
+  // Also sync to master "all" and active company if distinct
+  if (companyId && companyId !== "all") {
+    const allList = await fetchModuleDataFromDB<Project[]>("projects", [], "all")
+    const mergedAll = [newProject, ...allList.filter(p => String(p.id) !== String(newId))]
+    await saveModuleDataToDB("projects", mergedAll, "all")
+  } else {
+    // Also save to default tech/digital company
+    const techList = await fetchModuleDataFromDB<Project[]>("projects", [], "tech")
+    await saveModuleDataToDB("projects", [newProject, ...techList.filter(p => String(p.id) !== String(newId))], "tech")
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("storage"))
+    window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+    window.dispatchEvent(new CustomEvent("saampark_projects_updated"))
+  }
   return newProject
 }
 

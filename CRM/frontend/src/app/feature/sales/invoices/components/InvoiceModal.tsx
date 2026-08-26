@@ -48,11 +48,23 @@ export function InvoiceModal({
 
   if (!isOpen || !invoice) return null
 
-  // Calculate numbers accurately
-  const baseNum = invoice.baseAmount || 50000
-  const gstRate = invoice.gstRate || 18
-  const gstAmt = invoice.gstAmount || Math.round(baseNum * (gstRate / 100))
-  const totalVal = baseNum + gstAmt
+  // Calculate numbers accurately from invoice fields
+  const parsedTotal = parseInt((invoice.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
+  const gstRate = invoice.gstRate !== undefined ? invoice.gstRate : 18
+  const baseNum = invoice.baseAmount !== undefined && invoice.baseAmount > 0
+    ? invoice.baseAmount
+    : (parsedTotal > 0 ? Math.round(parsedTotal / (1 + gstRate / 100)) : 0)
+  const gstAmt = invoice.gstAmount !== undefined && invoice.gstAmount > 0
+    ? invoice.gstAmount
+    : (parsedTotal > 0 ? parsedTotal - baseNum : Math.round(baseNum * (gstRate / 100)))
+  const totalVal = parsedTotal > 0 ? parsedTotal : (baseNum + gstAmt)
+
+  const parsedReceived = parseInt((invoice.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
+  const parsedDue = invoice.due !== undefined 
+    ? (parseInt(String(invoice.due).replace(/[^0-9]/g, "")) || 0)
+    : Math.max(0, totalVal - parsedReceived)
+
+  const isPaid = invoice.status === "Fully paid" || invoice.status === "Credited" || (parsedDue === 0 && parsedReceived > 0)
 
   const handlePrint = () => {
     window.print()
@@ -67,8 +79,6 @@ export function InvoiceModal({
       setTimeout(() => setSentSuccess(false), 3000)
     }, 1000)
   }
-
-  const isPaid = invoice.status === "Fully paid" || invoice.status === "Credited"
 
   return (
     <div className="fixed inset-0 top-14 sm:top-0 z-[99999] flex items-start sm:items-center justify-center bg-black/85 backdrop-blur-md p-2 sm:p-6 overflow-y-auto print:p-0 print:bg-white print:static">

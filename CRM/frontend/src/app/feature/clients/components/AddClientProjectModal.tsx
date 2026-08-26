@@ -29,7 +29,8 @@ export function AddClientProjectModal({
   onProjectCreated,
   onInvoiceCreated,
 }: AddClientProjectModalProps) {
-  const { user } = useAuthStore()
+  const { user, activeCompanyId } = useAuthStore()
+  const targetCompany = activeCompanyId || user?.companyId || "tech"
 
   const [creationMode, setCreationMode] = React.useState<"project_and_invoice" | "invoice_only">("project_and_invoice")
   const [projectTitle, setProjectTitle] = React.useState("")
@@ -202,7 +203,7 @@ export function AddClientProjectModal({
           labels: [category, computedPaymentStatus],
           description: description || `Client Project for ${client.name}. Billed by ${billedByAdmin}. ${paymentModel === "advance" ? `Advance Paid: ${formattedAdvance}, Balance Due on Delivery: ${formattedDue}.` : paymentModel === "part" ? `Part Payment Plan: Initial Paid: ${formattedAdvance}, Balance: ${formattedDue} in ${installmentsCount} ${billingCycle.toLowerCase()} installments of ₹${perInstallment.toLocaleString("en-IN")}.` : ''}`,
           members: projectMembers,
-        })
+        }, targetCompany)
       }
 
       // 2. Generate Invoice
@@ -228,7 +229,7 @@ export function AddClientProjectModal({
         due: formattedDue,
         status: invoiceStatus,
         billedBy: billedByAdmin,
-      })
+      }, targetCompany)
 
       // 3. Automatically create Order in Sales Order List
       await addOrder({
@@ -243,7 +244,7 @@ export function AddClientProjectModal({
         status: effectiveAdvance > 0 ? "Processing" : "Pending",
         notes: description || `Order generated for: ${projectTitle} (${category}). ${paymentModel === "advance" ? `Advance: ${formattedAdvance}, Balance on delivery: ${formattedDue}.` : paymentModel === "part" ? `Part Payment: ${installmentsCount} parts of ₹${perInstallment.toLocaleString("en-IN")}.` : ''}`,
         invoiceId: invoiceId,
-      })
+      }, targetCompany)
 
       // 4. Automatically record Upfront / Advance Payment if paid
       if (effectiveAdvance > 0) {
