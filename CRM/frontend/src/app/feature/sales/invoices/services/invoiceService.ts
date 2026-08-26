@@ -11,6 +11,8 @@ export interface InvoiceItem {
   billDate: string
   dueDate: string
   baseAmount?: number
+  setupCharge?: number
+  discount?: number
   gstRate?: number
   gstAmount?: number
   totalInvoiced: string

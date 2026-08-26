@@ -23,6 +23,10 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
   const [startDate, setStartDate] = React.useState("")
   const [deadline, setDeadline] = React.useState("")
   const [price, setPrice] = React.useState("")
+  const [baseAmount, setBaseAmount] = React.useState<number | "">("")
+  const [setupCharge, setSetupCharge] = React.useState<number | "">("")
+  const [discount, setDiscount] = React.useState<number | "">("")
+  const [gstRate, setGstRate] = React.useState<number>(18)
   const [labels, setLabels] = React.useState("")
   const [selectedMemberIds, setSelectedMemberIds] = React.useState<string[]>([])
   const [isSubmitting, setIsSubmitting] = React.useState(false)
@@ -97,12 +101,30 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
     ]
 
     setIsSubmitting(true)
+    const numBase = typeof baseAmount === "number" ? baseAmount : 0
+    const numSetup = typeof setupCharge === "number" ? setupCharge : 0
+    const numDiscount = typeof discount === "number" ? discount : 0
+    const taxableBase = Math.max(0, numBase + numSetup - numDiscount)
+    const gstAmount = Math.round(taxableBase * (gstRate / 100))
+    const totalAmount = taxableBase + gstAmount
+
+    const computedPrice = totalAmount > 0 
+      ? `₹${totalAmount.toLocaleString("en-IN")}`
+      : price ? (price.startsWith("$") || price.startsWith("₹") ? price : `₹${price}`) : "-"
+
+    setIsSubmitting(true)
     try {
       const created = await addProject({
         title,
         projectType,
         client: projectType === "Client Project" ? (client || "-") : "-",
-        price: price ? (price.startsWith("$") || price.startsWith("₹") ? price : `₹${price}`) : "-",
+        price: computedPrice,
+        baseAmount: numBase > 0 ? numBase : undefined,
+        setupCharge: numSetup > 0 ? numSetup : undefined,
+        discount: numDiscount > 0 ? numDiscount : undefined,
+        gstRate,
+        gstAmount: gstAmount > 0 ? gstAmount : undefined,
+        totalAmount: totalAmount > 0 ? totalAmount : undefined,
         startDate: startDate || new Date().toLocaleDateString("en-GB"),
         deadline: deadline || new Date().toLocaleDateString("en-GB"),
         progress: 0,
@@ -120,6 +142,9 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
         setTitle("")
         setDescription("")
         setPrice("")
+        setBaseAmount("")
+        setSetupCharge("")
+        setDiscount("")
         setLabels("")
         setStartDate("")
         setDeadline("")
@@ -294,16 +319,90 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
             />
           </div>
 
-          {/* Price */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <label className="text-zinc-500 font-medium">Price</label>
-            <input
-              type="text"
-              placeholder="Price"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400"
-            />
+          {/* Financial Breakdown: Base, Setup Charge, Discount, GST */}
+          <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/80 space-y-3">
+            <span className="font-bold text-zinc-700 dark:text-zinc-300 block text-[11px]">
+              Financial Terms & Pricing
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div>
+                <label className="text-zinc-500 font-medium block text-[10.5px] mb-1">Base Deal Amount (₹)</label>
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="e.g. 50000"
+                  value={baseAmount}
+                  onChange={(e) => {
+                    const val = e.target.value
+                    setBaseAmount(val === "" ? "" : Math.max(0, Number(val)))
+                  }}
+                  className="w-full px-3 py-1.5 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md text-zinc-800 dark:text-zinc-200 font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="text-zinc-500 font-medium block text-[10.5px] mb-1">Platform / Setup Charge (₹)</label>
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="e.g. 2500"
+                  value={setupCharge}
+                  onChange={(e) => {
+                    const val = e.target.value
+                    setSetupCharge(val === "" ? "" : Math.max(0, Number(val)))
+                  }}
+                  className="w-full px-3 py-1.5 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md text-zinc-800 dark:text-zinc-200 font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="text-zinc-500 font-medium block text-[10.5px] mb-1">Less: Discount (₹)</label>
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="e.g. 1000"
+                  value={discount}
+                  onChange={(e) => {
+                    const val = e.target.value
+                    setDiscount(val === "" ? "" : Math.max(0, Number(val)))
+                  }}
+                  className="w-full px-3 py-1.5 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md text-zinc-800 dark:text-zinc-200 font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="text-zinc-500 font-medium block text-[10.5px] mb-1">GST Rate (%)</label>
+                <select
+                  value={gstRate}
+                  onChange={(e) => setGstRate(Number(e.target.value))}
+                  className="w-full px-3 py-1.5 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md text-zinc-800 dark:text-zinc-200 font-semibold"
+                >
+                  <option value={0}>0% (Non-GST / Exempt)</option>
+                  <option value={5}>5%</option>
+                  <option value={12}>12%</option>
+                  <option value={18}>18% (Standard GST)</option>
+                  <option value={28}>28%</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Price Preview / Override */}
+            <div className="grid grid-cols-4 items-center gap-2 pt-1 border-t border-zinc-200 dark:border-zinc-700">
+              <label className="text-zinc-500 font-medium text-[11px]">Final Price</label>
+              <div className="col-span-3 flex items-center gap-2">
+                <input
+                  type="text"
+                  placeholder="Auto-calculated or custom (e.g. ₹55,000)"
+                  value={
+                    typeof baseAmount === "number" && baseAmount > 0
+                      ? `₹${(Math.max(0, baseAmount + (typeof setupCharge === "number" ? setupCharge : 0) - (typeof discount === "number" ? discount : 0)) + Math.round(Math.max(0, baseAmount + (typeof setupCharge === "number" ? setupCharge : 0) - (typeof discount === "number" ? discount : 0)) * (gstRate / 100))).toLocaleString("en-IN")}`
+                      : price
+                  }
+                  onChange={(e) => setPrice(e.target.value)}
+                  className="flex-1 px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-md text-zinc-800 dark:text-zinc-200 font-bold"
+                />
+              </div>
+            </div>
           </div>
 
           {/* Labels */}

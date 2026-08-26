@@ -58,6 +58,8 @@ export interface Project {
   installmentAmount?: number
   subscriptionId?: string
   baseAmount?: number
+  setupCharge?: number
+  discount?: number
   gstRate?: number
   gstAmount?: number
   totalAmount?: number

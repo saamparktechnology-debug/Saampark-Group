@@ -98,6 +98,8 @@ export default function InvoicesPage() {
   const [customProjectName, setCustomProjectName] = React.useState("")
 
   const [baseAmount, setBaseAmount] = React.useState<number | "">("")
+  const [setupCharge, setSetupCharge] = React.useState<number | "">("")
+  const [discount, setDiscount] = React.useState<number | "">("")
   const [gstRate, setGstRate] = React.useState<number>(18)
   const [dueDate, setDueDate] = React.useState("")
   const [status, setStatus] = React.useState<InvoiceStatus>("Not paid")
@@ -154,6 +156,8 @@ export default function InvoicesPage() {
   React.useEffect(() => {
     if (isAddModalOpen) {
       setBaseAmount("")
+      setSetupCharge("")
+      setDiscount("")
       setAdvanceAmountInput("")
       setPartInitialPayment("")
       setPaymentPlanMode("advance")
@@ -254,11 +258,12 @@ export default function InvoicesPage() {
     }
 
     const numBase = typeof baseAmount === "number" ? baseAmount : 0
-    const numAdvance = typeof advanceAmountInput === "number" ? advanceAmountInput : 0
-    const numPartInitial = typeof partInitialPayment === "number" ? partInitialPayment : 0
+    const numSetup = typeof setupCharge === "number" ? setupCharge : 0
+    const numDiscount = typeof discount === "number" ? discount : 0
+    const taxableBase = Math.max(0, numBase + numSetup - numDiscount)
 
-    const gstAmount = Math.round(numBase * (gstRate / 100))
-    const totalAmount = numBase + gstAmount
+    const gstAmount = Math.round(taxableBase * (gstRate / 100))
+    const totalAmount = taxableBase + gstAmount
     const formattedTotal = `₹${totalAmount.toLocaleString("en-IN")}`
 
     let receivedNum = 0
@@ -268,10 +273,10 @@ export default function InvoicesPage() {
       receivedNum = status === "Fully paid" ? totalAmount : 0
       finalStatus = status
     } else if (paymentPlanMode === "advance") {
-      receivedNum = Math.min(Math.max(0, numAdvance), totalAmount)
+      receivedNum = Math.min(Math.max(0, typeof advanceAmountInput === "number" ? advanceAmountInput : 0), totalAmount)
       finalStatus = receivedNum >= totalAmount ? "Fully paid" : receivedNum > 0 ? "Partially paid" : "Not paid"
     } else if (paymentPlanMode === "part") {
-      receivedNum = Math.min(Math.max(0, numPartInitial), totalAmount)
+      receivedNum = Math.min(Math.max(0, typeof partInitialPayment === "number" ? partInitialPayment : 0), totalAmount)
       finalStatus = receivedNum >= totalAmount ? "Fully paid" : receivedNum > 0 ? "Partially paid" : "Not paid"
     }
 
@@ -331,6 +336,8 @@ export default function InvoicesPage() {
       billDate: new Date().toLocaleDateString("en-GB"),
       dueDate: calculatedDueDate,
       baseAmount: numBase,
+      setupCharge: numSetup,
+      discount: numDiscount,
       gstRate,
       gstAmount,
       totalInvoiced: formattedTotal,
@@ -1158,32 +1165,54 @@ export default function InvoicesPage() {
                   )}
                 </div>
 
-                {/* ---------------- 3. FINANCIAL BASE & GST ---------------- */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* ---------------- 3. FINANCIAL BASE, SETUP CHARGES, DISCOUNT & GST ---------------- */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
                   <div>
-                    <label className="block text-zinc-500 font-medium mb-1">Base Deal Amount (₹) *</label>
+                    <label className="block text-zinc-500 font-medium mb-1">Base Deal (₹) *</label>
                     <input
                       type="number"
                       required
                       min={0}
-                      placeholder="Enter base amount (e.g. 50000)"
+                      placeholder="e.g. 50000"
                       value={baseAmount}
                       onChange={(e) => {
                         const val = e.target.value
-                        if (val === "") {
-                          setBaseAmount("")
-                        } else {
-                          const newBase = Math.max(0, Number(val))
-                          setBaseAmount(newBase)
-                          const newTotal = newBase + Math.round(newBase * (gstRate / 100))
-                          if (typeof advanceAmountInput === "number" && advanceAmountInput > newTotal) {
-                            setAdvanceAmountInput(Math.round(newTotal * 0.4))
-                          }
-                        }
+                        setBaseAmount(val === "" ? "" : Math.max(0, Number(val)))
                       }}
                       className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-bold"
                     />
                   </div>
+
+                  <div>
+                    <label className="block text-zinc-500 font-medium mb-1">Setup Charge (₹)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      placeholder="e.g. 2500"
+                      value={setupCharge}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        setSetupCharge(val === "" ? "" : Math.max(0, Number(val)))
+                      }}
+                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-zinc-500 font-medium mb-1">Discount (₹)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      placeholder="e.g. 1000"
+                      value={discount}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        setDiscount(val === "" ? "" : Math.max(0, Number(val)))
+                      }}
+                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-bold"
+                    />
+                  </div>
+
                   <div>
                     <label className="block text-zinc-500 font-medium mb-1">GST Rate (%)</label>
                     <select
@@ -1191,7 +1220,7 @@ export default function InvoicesPage() {
                       onChange={(e) => setGstRate(Number(e.target.value))}
                       className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-semibold"
                     >
-                      <option value={0}>0% (Exempt)</option>
+                      <option value={0}>0% (Non-GST / Exempt)</option>
                       <option value={5}>5%</option>
                       <option value={12}>12%</option>
                       <option value={18}>18% (Standard GST)</option>
@@ -1199,6 +1228,31 @@ export default function InvoicesPage() {
                     </select>
                   </div>
                 </div>
+
+                {/* Live Computation Badge */}
+                {(() => {
+                  const b = typeof baseAmount === "number" ? baseAmount : 0
+                  const s = typeof setupCharge === "number" ? setupCharge : 0
+                  const d = typeof discount === "number" ? discount : 0
+                  const taxBase = Math.max(0, b + s - d)
+                  const gAmt = Math.round(taxBase * (gstRate / 100))
+                  const tot = taxBase + gAmt
+                  return (
+                    <div className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-[10.5px]">
+                      <div className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400">
+                        <span>Taxable: <strong className="text-zinc-900 dark:text-zinc-100 font-mono font-bold">₹{taxBase.toLocaleString("en-IN")}</strong></span>
+                        <span>+</span>
+                        <span>GST ({gstRate}%): <strong className="text-blue-600 font-mono font-bold">₹{gAmt.toLocaleString("en-IN")}</strong></span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-500">Gross Total:</span>{" "}
+                        <strong className="text-emerald-600 dark:text-emerald-400 font-mono text-xs font-black">
+                          ₹{tot.toLocaleString("en-IN")}
+                        </strong>
+                      </div>
+                    </div>
+                  )
+                })()}
 
                 <div>
                   <label className="block text-zinc-500 font-medium mb-1">Invoice Due Date</label>

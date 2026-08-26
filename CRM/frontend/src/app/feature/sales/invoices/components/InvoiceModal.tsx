@@ -130,19 +130,24 @@ export function InvoiceModal({
   const parsedTotal = parseInt((invoice.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
   const gstRate = isGstInvoice ? (invoice.gstRate !== undefined && invoice.gstRate > 0 ? invoice.gstRate : 18) : 0
   
+  const setupCharge = typeof invoice.setupCharge === "number" ? invoice.setupCharge : 0
+  const discount = typeof invoice.discount === "number" ? invoice.discount : 0
+  
   const baseNum = invoice.baseAmount !== undefined && invoice.baseAmount > 0
     ? invoice.baseAmount
     : (parsedTotal > 0 && isGstInvoice ? Math.round(parsedTotal / (1 + gstRate / 100)) : parsedTotal)
   
+  const taxableBase = Math.max(0, baseNum + setupCharge - discount)
+
   const gstAmt = isGstInvoice
     ? (invoice.gstAmount !== undefined && invoice.gstAmount > 0
         ? invoice.gstAmount
-        : (parsedTotal > 0 ? parsedTotal - baseNum : Math.round(baseNum * (gstRate / 100))))
+        : (parsedTotal > 0 ? parsedTotal - taxableBase : Math.round(taxableBase * (gstRate / 100))))
     : 0
 
   const cgstAmt = Math.round(gstAmt / 2)
   const sgstAmt = Math.round(gstAmt / 2)
-  const totalVal = parsedTotal > 0 ? parsedTotal : (baseNum + gstAmt)
+  const totalVal = parsedTotal > 0 ? parsedTotal : (taxableBase + gstAmt)
 
   const parsedReceived = parseInt((invoice.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
   const parsedDue = invoice.due !== undefined 
@@ -545,16 +550,16 @@ export function InvoiceModal({
                 </div>
                 <div className="flex justify-between py-0.5">
                   <span>Platform / Setup Charge</span>
-                  <span className="font-mono">₹0.00</span>
+                  <span className="font-mono">₹{setupCharge.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between py-0.5 text-zinc-500">
                   <span>Less: Promotional Discount</span>
-                  <span className="font-mono">(-) ₹0.00</span>
+                  <span className="font-mono">(-) ₹{discount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
                 </div>
 
                 <div className="flex justify-between py-1 border-t border-zinc-200 font-bold text-zinc-900">
                   <span>Taxable Base Amount</span>
-                  <span className="font-mono">₹{baseNum.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                  <span className="font-mono">₹{taxableBase.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
                 </div>
 
                 {isGstInvoice && (

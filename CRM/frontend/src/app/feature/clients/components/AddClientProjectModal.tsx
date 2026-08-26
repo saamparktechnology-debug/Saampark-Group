@@ -45,6 +45,8 @@ export function AddClientProjectModal({
   })
   
   const [baseAmount, setBaseAmount] = React.useState<number | "">("")
+  const [setupCharge, setSetupCharge] = React.useState<number | "">("")
+  const [discount, setDiscount] = React.useState<number | "">("")
   const [gstRate, setGstRate] = React.useState<number>(18)
   const [paymentModel, setPaymentModel] = React.useState<"advance" | "part" | "full">("advance")
   const [advanceAmount, setAdvanceAmount] = React.useState<number | "">("")
@@ -71,6 +73,8 @@ export function AddClientProjectModal({
     if (isOpen && client) {
       setCreationMode("project_and_invoice")
       setBaseAmount("")
+      setSetupCharge("")
+      setDiscount("")
       setAdvanceAmount("")
       setPartInitialPayment("")
       setPaymentModel("advance")
@@ -126,11 +130,15 @@ export function AddClientProjectModal({
   if (!isOpen || !client) return null
 
   const numBase = typeof baseAmount === "number" ? baseAmount : 0
+  const numSetup = typeof setupCharge === "number" ? setupCharge : 0
+  const numDiscount = typeof discount === "number" ? discount : 0
+  const taxableBase = Math.max(0, numBase + numSetup - numDiscount)
+
+  const gstAmount = Math.round(taxableBase * (gstRate / 100))
+  const totalAmount = taxableBase + gstAmount
+
   const numAdvance = typeof advanceAmount === "number" ? advanceAmount : 0
   const numPartInitial = typeof partInitialPayment === "number" ? partInitialPayment : 0
-
-  const gstAmount = Math.round(numBase * (gstRate / 100))
-  const totalAmount = numBase + gstAmount
 
   // Distinct calculations per payment structure
   let effectiveAdvance = 0
@@ -235,6 +243,8 @@ export function AddClientProjectModal({
           installmentsCount: paymentModel === "part" ? installmentsCount : undefined,
           installmentAmount: paymentModel === "part" ? perInstallment : undefined,
           baseAmount: numBase,
+          setupCharge: numSetup,
+          discount: numDiscount,
           gstRate,
           gstAmount,
           totalAmount,
@@ -264,6 +274,8 @@ export function AddClientProjectModal({
         billDate: startDate,
         dueDate: deadline,
         baseAmount: numBase,
+        setupCharge: numSetup,
+        discount: numDiscount,
         gstRate,
         gstAmount,
         totalInvoiced: formattedTotal,
@@ -694,29 +706,54 @@ export function AddClientProjectModal({
               </div>
             </div>
 
-            {/* Base Amount & GST Inputs */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Base Amount, Setup Charges, Discount, & GST Inputs Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
               <div>
                 <label className="block text-[11px] font-semibold text-blue-900 dark:text-blue-200 mb-1">
-                  Base Deal Amount (₹)
+                  Base Deal Amount (₹) *
                 </label>
                 <input
                   type="number"
                   min="0"
-                  placeholder="Enter deal amount (e.g. 50000)"
+                  placeholder="e.g. 50000"
                   value={baseAmount}
                   onChange={(e) => {
                     const val = e.target.value
-                    if (val === "") {
-                      setBaseAmount("")
-                    } else {
-                      const newBase = Math.max(0, Number(val))
-                      setBaseAmount(newBase)
-                      const newTotal = newBase + Math.round(newBase * (gstRate / 100))
-                      if (typeof advanceAmount === "number" && advanceAmount > newTotal) {
-                        setAdvanceAmount(Math.round(newTotal * 0.4))
-                      }
-                    }
+                    setBaseAmount(val === "" ? "" : Math.max(0, Number(val)))
+                  }}
+                  className="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-blue-200 dark:border-blue-800 font-bold text-zinc-900 dark:text-zinc-100"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-blue-900 dark:text-blue-200 mb-1">
+                  Platform / Setup Charge (₹)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="e.g. 2500"
+                  value={setupCharge}
+                  onChange={(e) => {
+                    const val = e.target.value
+                    setSetupCharge(val === "" ? "" : Math.max(0, Number(val)))
+                  }}
+                  className="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-blue-200 dark:border-blue-800 font-bold text-zinc-900 dark:text-zinc-100"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-blue-900 dark:text-blue-200 mb-1">
+                  Less: Discount (₹)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="e.g. 1000"
+                  value={discount}
+                  onChange={(e) => {
+                    const val = e.target.value
+                    setDiscount(val === "" ? "" : Math.max(0, Number(val)))
                   }}
                   className="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-blue-200 dark:border-blue-800 font-bold text-zinc-900 dark:text-zinc-100"
                 />
@@ -731,12 +768,27 @@ export function AddClientProjectModal({
                   onChange={(e) => setGstRate(Number(e.target.value))}
                   className="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-blue-200 dark:border-blue-800 font-bold text-zinc-900 dark:text-zinc-100"
                 >
-                  <option value={0}>0% (Exempted)</option>
+                  <option value={0}>0% (Non-GST / Exempt)</option>
                   <option value={5}>5%</option>
                   <option value={12}>12%</option>
                   <option value={18}>18% (Standard GST)</option>
                   <option value={28}>28%</option>
                 </select>
+              </div>
+            </div>
+
+            {/* Live Pricing Breakdown Badge */}
+            <div className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg bg-white dark:bg-zinc-900 border border-blue-200 dark:border-blue-800 text-[10.5px]">
+              <div className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400">
+                <span>Taxable Base: <strong className="text-zinc-900 dark:text-zinc-100 font-mono font-bold">₹{taxableBase.toLocaleString("en-IN")}</strong></span>
+                <span>+</span>
+                <span>GST ({gstRate}%): <strong className="text-blue-600 font-mono font-bold">₹{gstAmount.toLocaleString("en-IN")}</strong></span>
+              </div>
+              <div>
+                <span className="text-zinc-500">Gross Total:</span>{" "}
+                <strong className="text-emerald-600 dark:text-emerald-400 font-mono text-xs font-black">
+                  ₹{totalAmount.toLocaleString("en-IN")}
+                </strong>
               </div>
             </div>
 
