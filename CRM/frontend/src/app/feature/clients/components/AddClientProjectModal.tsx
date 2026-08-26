@@ -65,7 +65,12 @@ export function AddClientProjectModal({
         }
 
         const teams = users
-          .filter(u => (u.role === "Teams" || u.role === "Admin" || u.role === "Super Admin") && u.status !== "Inactive")
+          .filter(u => {
+            const role = (u.role || "").toLowerCase().trim()
+            const isTeam = role === "teams" || role === "team" || role === "employee" || role === "developer" || role === "staff"
+            const isAdminOrClient = role.includes("admin") || role.includes("client")
+            return isTeam && !isAdminOrClient && u.status !== "Inactive"
+          })
           .map(u => ({ id: u.id, name: u.name, role: u.role }))
         
         setAdminsList(admins)

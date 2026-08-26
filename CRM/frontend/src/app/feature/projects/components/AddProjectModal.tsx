@@ -32,11 +32,13 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
 
   React.useEffect(() => {
     if (isOpen) {
-      // 1. Fetch ONLY Team members for assigning
       getUsers().then((allUsers) => {
-        const onlyTeam = allUsers.filter(
-          (u) => (u.role as string) === "Team" || (u.role as string) === "Employee"
-        )
+        const onlyTeam = allUsers.filter((u) => {
+          const role = (u.role || "").toLowerCase().trim()
+          const isTeam = role === "teams" || role === "team" || role === "employee" || role === "developer" || role === "staff"
+          const isAdminOrClient = role.includes("admin") || role.includes("client")
+          return isTeam && !isAdminOrClient && u.status !== "Inactive"
+        })
         setTeamMembers(onlyTeam)
       }).catch(() => {})
 
