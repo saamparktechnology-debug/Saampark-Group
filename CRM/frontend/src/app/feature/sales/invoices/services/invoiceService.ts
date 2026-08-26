@@ -23,17 +23,17 @@ export interface InvoiceItem {
 
 export const INITIAL_INVOICES: InvoiceItem[] = []
 
-export const getInvoices = async (): Promise<InvoiceItem[]> => {
-  const data = await fetchModuleDataFromDB<InvoiceItem[]>("invoices", [])
+export const getInvoices = async (companyId?: string): Promise<InvoiceItem[]> => {
+  const data = await fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], companyId)
   return Array.isArray(data) ? filterGlobalDeletedItems(data) : []
 }
 
-export const addInvoice = async (invoice: Omit<InvoiceItem, "id"> & { id?: string }): Promise<InvoiceItem> => {
-  const current = await getInvoices()
+export const addInvoice = async (invoice: Omit<InvoiceItem, "id"> & { id?: string }, companyId?: string): Promise<InvoiceItem> => {
+  const current = await getInvoices(companyId)
   const nextId = invoice.id || `INV #${Math.floor(100 + Math.random() * 900)}`
   const newInvoice: InvoiceItem = { ...invoice, id: nextId }
   const updated = [newInvoice, ...current]
-  await saveModuleDataToDB("invoices", updated)
+  await saveModuleDataToDB("invoices", updated, companyId)
   return newInvoice
 }
 
@@ -41,9 +41,10 @@ export const updateInvoiceStatus = async (
   id: string, 
   status: InvoiceStatus, 
   paymentReceived?: string,
-  due?: string
+  due?: string,
+  companyId?: string
 ): Promise<InvoiceItem | null> => {
-  const current = await getInvoices()
+  const current = await getInvoices(companyId)
   const strId = String(id).toLowerCase().trim()
   const idx = current.findIndex((i) => String(i.id).toLowerCase().trim() === strId)
   if (idx === -1) return null
@@ -54,7 +55,7 @@ export const updateInvoiceStatus = async (
     paymentReceived: paymentReceived !== undefined ? paymentReceived : (status === "Fully paid" ? target.totalInvoiced : target.paymentReceived),
     due: due !== undefined ? due : (status === "Fully paid" ? "₹0" : target.due),
   }
-  await saveModuleDataToDB("invoices", current)
+  await saveModuleDataToDB("invoices", current, companyId)
   return current[idx]
 }
 
@@ -62,9 +63,10 @@ export const recordPartialPayment = async (
   invoiceId: string,
   paidAmountNum: number,
   paymentMethod: string = "UPI / Net Banking",
-  transactionRef: string = ""
+  transactionRef: string = "",
+  companyId?: string
 ): Promise<InvoiceItem | null> => {
-  const current = await getInvoices()
+  const current = await getInvoices(companyId)
   const strId = String(invoiceId).toLowerCase().trim()
   const idx = current.findIndex((i) => String(i.id).toLowerCase().trim() === strId)
   if (idx === -1) return null
@@ -83,8 +85,9 @@ export const recordPartialPayment = async (
     paymentReceived: `₹${newReceivedNum.toLocaleString("en-IN")}`,
     due: `₹${newDueNum.toLocaleString("en-IN")}`,
   }
+
   current[idx] = updated
-  await saveModuleDataToDB("invoices", current)
+  await saveModuleDataToDB("invoices", current, companyId)
 
   // Record payment entry
   try {

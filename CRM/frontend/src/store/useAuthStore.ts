@@ -261,10 +261,22 @@ export const useAuthStore = create<AuthState>()(
       },
 
       switchBranch: (branchId: string | null) => {
-        set({ activeBranchId: branchId })
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('saampark_branch_switched', { detail: branchId }))
-          window.dispatchEvent(new Event('storage'))
+        const { user } = get()
+        if (!user) return
+
+        const canSwitch =
+          user.role === 'Super Admin' ||
+          user.role === 'Admin' ||
+          !branchId ||
+          user.branchId === branchId ||
+          (user.branchIds && user.branchIds.includes(branchId))
+
+        if (canSwitch) {
+          set({ activeBranchId: branchId })
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('saampark_branch_switched', { detail: branchId }))
+            window.dispatchEvent(new Event('storage'))
+          }
         }
       },
 
@@ -406,6 +418,7 @@ export const useAuthStore = create<AuthState>()(
         if (canSwitch) {
           set({
             activeCompanyId: companyId,
+            activeBranchId: null,
             user: user ? { ...user, companyId: companyId as any } : null,
           })
           if (typeof window !== 'undefined') {

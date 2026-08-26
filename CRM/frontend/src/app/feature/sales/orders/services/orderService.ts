@@ -20,13 +20,13 @@ export interface OrderItem {
   lastReminderSent?: string
 }
 
-export const getOrders = async (): Promise<OrderItem[]> => {
-  const data = await fetchModuleDataFromDB<OrderItem[]>("orders", [])
+export const getOrders = async (companyId?: string): Promise<OrderItem[]> => {
+  const data = await fetchModuleDataFromDB<OrderItem[]>("orders", [], companyId)
   return Array.isArray(data) ? filterGlobalDeletedItems(data) : []
 }
 
-export const addOrder = async (orderData: Omit<OrderItem, "id" | "orderNumber"> & { id?: string; orderNumber?: string }): Promise<OrderItem> => {
-  const current = await getOrders()
+export const addOrder = async (orderData: Omit<OrderItem, "id" | "orderNumber"> & { id?: string; orderNumber?: string }, companyId?: string): Promise<OrderItem> => {
+  const current = await getOrders(companyId)
   const nextId = orderData.id || `ord_${Date.now()}`
   
   // Calculate next Order number if not provided
@@ -49,26 +49,26 @@ export const addOrder = async (orderData: Omit<OrderItem, "id" | "orderNumber"> 
   }
 
   const updated = [newOrder, ...current.filter(o => o.id !== nextId)]
-  await saveModuleDataToDB("orders", updated)
+  await saveModuleDataToDB("orders", updated, companyId)
   return newOrder
 }
 
-export const updateOrder = async (id: string, updates: Partial<OrderItem>): Promise<OrderItem> => {
+export const updateOrder = async (id: string, updates: Partial<OrderItem>, companyId?: string): Promise<OrderItem> => {
   const strId = String(id).toLowerCase().trim()
-  const current = await getOrders()
+  const current = await getOrders(companyId)
   const idx = current.findIndex(o => String(o.id).toLowerCase().trim() === strId)
   if (idx === -1) throw new Error("Order not found")
 
   current[idx] = { ...current[idx], ...updates }
-  await saveModuleDataToDB("orders", current)
+  await saveModuleDataToDB("orders", current, companyId)
   return { ...current[idx] }
 }
 
-export const deleteOrder = async (id: string): Promise<boolean> => {
+export const deleteOrder = async (id: string, companyId?: string): Promise<boolean> => {
   const strId = String(id).toLowerCase().trim()
   await markGlobalItemDeleted(strId, "orders")
-  const current = await getOrders()
+  const current = await getOrders(companyId)
   const filtered = current.filter(o => String(o.id).toLowerCase().trim() !== strId)
-  await saveModuleDataToDB("orders", filtered)
+  await saveModuleDataToDB("orders", filtered, companyId)
   return true
 }

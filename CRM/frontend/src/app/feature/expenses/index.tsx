@@ -26,9 +26,10 @@ export interface ExpenseItem {
 }
 
 export default function ExpensesMain() {
-  const { user } = useAuthStore()
+  const { user, activeCompanyId } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
   
+  const targetComp = activeCompanyId || user?.companyId || "tech"
   const isAdmin = user?.role === "Super Admin" || user?.role === "Admin"
   const canAddExpense = canPerformAction(user, "Expenses", "add")
   const canEditExpense = canPerformAction(user, "Expenses", "edit")
@@ -54,14 +55,18 @@ export default function ExpensesMain() {
   }
 
   const loadExpenses = React.useCallback(async () => {
-    const data = await fetchModuleDataFromDB<ExpenseItem[]>("expenses", [])
+    const data = await fetchModuleDataFromDB<ExpenseItem[]>("expenses", [], targetComp)
     setExpenses(Array.isArray(data) ? filterGlobalDeletedItems(data) : [])
-  }, [])
+  }, [targetComp])
 
   React.useEffect(() => {
     loadExpenses()
     const interval = setInterval(loadExpenses, 4000)
-    return () => clearInterval(interval)
+    window.addEventListener("saampark_company_switched", loadExpenses)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener("saampark_company_switched", loadExpenses)
+    }
   }, [loadExpenses])
 
   const filteredExpenses = React.useMemo(() => {
@@ -108,7 +113,7 @@ export default function ExpensesMain() {
 
     const updated = [newExp, ...expenses]
     setExpenses(updated)
-    await saveModuleDataToDB("expenses", updated)
+    await saveModuleDataToDB("expenses", updated, targetComp)
     showToast(`✅ Expense ${newExp.expenseNumber} recorded!`)
     setIsAddModalOpen(false)
     setTitle("")
@@ -119,7 +124,7 @@ export default function ExpensesMain() {
   const handleUpdateStatus = async (id: string, status: ExpenseItem["status"]) => {
     const updated = expenses.map(e => e.id === id ? { ...e, status } : e)
     setExpenses(updated)
-    await saveModuleDataToDB("expenses", updated)
+    await saveModuleDataToDB("expenses", updated, targetComp)
     showToast(`Expense updated to ${status}.`)
   }
 
@@ -128,7 +133,7 @@ export default function ExpensesMain() {
       await markGlobalItemDeleted(id, "expenses")
       const updated = expenses.filter(e => e.id !== id)
       setExpenses(updated)
-      await saveModuleDataToDB("expenses", updated)
+      await saveModuleDataToDB("expenses", updated, targetComp)
       showToast("Expense removed.")
     }
   }
