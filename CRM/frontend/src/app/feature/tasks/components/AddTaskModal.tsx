@@ -159,12 +159,11 @@ export function AddTaskModal({ isOpen, onClose, onTaskAdded }: AddTaskModalProps
               className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200"
             >
               <option value="-">-</option>
-              <option value="Business Card and Stationery Design">Business Card and Stationery Design</option>
-              <option value="Virtual Reality Experience Design">Virtual Reality Experience Design</option>
-              <option value="Data Analysis and Insights">Data Analysis and Insights</option>
-              <option value="Product Packaging Design">Product Packaging Design</option>
-              <option value="Copywriting for Advertisements">Copywriting for Advertisements</option>
               <option value="Website Development">Website Development</option>
+              <option value="Software Development">Software Development</option>
+              <option value="Android/iOS">Android/iOS</option>
+              <option value="Digital Marketing">Digital Marketing</option>
+              <option value="Domain & Hosting">Domain & Hosting</option>
             </select>
           </div>
 

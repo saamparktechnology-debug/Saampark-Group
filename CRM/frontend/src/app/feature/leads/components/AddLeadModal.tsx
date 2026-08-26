@@ -52,11 +52,11 @@ interface AddLeadModalProps {
 }
 
 const STANDARD_SERVICES = [
-  "Website Devlopment",
-  "E-commers Web",
-  "Web Software",
-  "Android/iOS App",
-  "Digital merketing",
+  "Website Development",
+  "Software Development",
+  "Android/iOS",
+  "Digital Marketing",
+  "Domain & Hosting",
 ]
 
 const STANDARD_SOURCES = [

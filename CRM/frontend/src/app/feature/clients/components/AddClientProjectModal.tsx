@@ -310,12 +310,10 @@ export function AddClientProjectModal({
                 className="w-full px-3.5 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
               >
                 <option value="Website Development">Website Development</option>
-                <option value="Google Ads Campaign">Google Ads Campaign</option>
-                <option value="Google My Business (GMB)">Google My Business (GMB)</option>
-                <option value="VR Experience Design">VR Experience Design</option>
-                <option value="Branding & Packaging">Branding & Packaging</option>
-                <option value="SEO & Social Media">SEO & Social Media</option>
-                <option value="Custom ERP/CRM">Custom ERP/CRM</option>
+                <option value="Software Development">Software Development</option>
+                <option value="Android/iOS">Android/iOS</option>
+                <option value="Digital Marketing">Digital Marketing</option>
+                <option value="Domain & Hosting">Domain & Hosting</option>
               </select>
             </div>
           </div>
