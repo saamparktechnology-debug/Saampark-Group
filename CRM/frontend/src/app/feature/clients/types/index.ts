@@ -19,6 +19,17 @@ export interface ClientItem {
   paymentReceived: string;
   due: string;
   type?: "Organization" | "Person";
+  owner?: string;
+  managers?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  country?: string;
+  vatNumber?: string;
+  gstNumber?: string;
+  currency?: string;
+  disableOnlinePayment?: boolean;
   email?: string;
   website?: string;
   status?: string;

@@ -2,8 +2,10 @@
 
 import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, Check, HelpCircle } from "lucide-react"
+import { X, Check, HelpCircle, User } from "lucide-react"
 import { ClientItem } from "../types"
+import { getUsers } from "@/app/feature/users/services/userService"
+import { useAuthStore } from "@/store/useAuthStore"
 
 interface AddClientModalProps {
   isOpen: boolean
@@ -18,6 +20,8 @@ export function AddClientModal({
   onSave,
   initialData,
 }: AddClientModalProps) {
+  const { user } = useAuthStore()
+
   const [type, setType] = React.useState<"Organization" | "Person">("Organization")
   const [companyName, setCompanyName] = React.useState("")
   const [owner, setOwner] = React.useState("")
@@ -26,40 +30,75 @@ export function AddClientModal({
   const [city, setCity] = React.useState("")
   const [state, setState] = React.useState("")
   const [zip, setZip] = React.useState("")
-  const [country, setCountry] = React.useState("")
+  const [country, setCountry] = React.useState("India")
   const [phone, setPhone] = React.useState("")
   const [website, setWebsite] = React.useState("")
   const [vatNumber, setVatNumber] = React.useState("")
   const [gstNumber, setGstNumber] = React.useState("")
-  const [clientGroup, setClientGroup] = React.useState("")
+  const [clientGroup, setClientGroup] = React.useState("VIP")
   const [currency, setCurrency] = React.useState("INR")
   const [currencySymbol, setCurrencySymbol] = React.useState("₹")
-  const [label, setLabel] = React.useState("")
+  const [label, setLabel] = React.useState("Corporate")
   const [disableOnlinePayment, setDisableOnlinePayment] = React.useState(false)
+  const [ownersList, setOwnersList] = React.useState<{ id: string; name: string; role?: string }[]>([])
 
   React.useEffect(() => {
-    if (initialData) {
-      setCompanyName(initialData.name || "")
-      setPhone(initialData.phone || "")
-      setClientGroup(initialData.group || "")
-      setLabel(initialData.label || "")
-    } else {
-      setCompanyName("")
-      setPhone("")
-      setCountry("")
-      setCity("")
-      setState("")
-      setZip("")
-      setOwner("")
-      setManagers("")
-      setAddress("")
-      setWebsite("")
-      setVatNumber("")
-      setGstNumber("")
-      setClientGroup("")
-      setLabel("")
+    if (isOpen) {
+      getUsers("all").then((users) => {
+        const staff = users
+          .filter((u) => {
+            const role = (u.role || "").toLowerCase().trim()
+            return !role.includes("client") && u.status !== "Inactive"
+          })
+          .map((u) => ({ id: u.id, name: u.name, role: u.role }))
+
+        if (user?.name && !staff.some((s) => s.name.toLowerCase().trim() === user.name.toLowerCase().trim())) {
+          staff.unshift({ id: String(user.id || 'curr'), name: user.name, role: user.role })
+        }
+
+        setOwnersList(staff)
+
+        if (!owner) {
+          setOwner(initialData?.owner || user?.name || (staff.length > 0 ? staff[0].name : "Admin"))
+        }
+      }).catch(() => {})
+
+      if (initialData) {
+        setCompanyName(initialData.name || "")
+        setPhone(initialData.phone || "")
+        setClientGroup(initialData.group || "VIP")
+        setLabel(initialData.label || "Corporate")
+        setOwner(initialData.owner || user?.name || "")
+        setManagers(initialData.managers || "")
+        setAddress(initialData.address || "")
+        setCity(initialData.city || "")
+        setState(initialData.state || "")
+        setZip(initialData.zip || "")
+        setCountry(initialData.country || "India")
+        setWebsite(initialData.website || "")
+        setVatNumber(initialData.vatNumber || "")
+        setGstNumber(initialData.gstNumber || "")
+        setCurrency(initialData.currency || "INR")
+        setDisableOnlinePayment(!!initialData.disableOnlinePayment)
+      } else {
+        setCompanyName("")
+        setPhone("")
+        setCountry("India")
+        setCity("")
+        setState("")
+        setZip("")
+        setOwner(user?.name || "")
+        setManagers("")
+        setAddress("")
+        setWebsite("")
+        setVatNumber("")
+        setGstNumber("")
+        setClientGroup("VIP")
+        setLabel("Corporate")
+        setDisableOnlinePayment(false)
+      }
     }
-  }, [initialData, isOpen])
+  }, [initialData, isOpen, user])
 
   if (!isOpen) return null
 
@@ -75,11 +114,22 @@ export function AddClientModal({
       group: clientGroup || "VIP",
       label: label || "Corporate",
       labelColor: "#d8b4fe",
-      projectsCount: 0,
-      totalInvoiced: "₹0.00",
-      paymentReceived: "₹0.00",
-      due: "₹0.00",
+      projectsCount: initialData?.projectsCount || 0,
+      totalInvoiced: initialData?.totalInvoiced || "₹0.00",
+      paymentReceived: initialData?.paymentReceived || "₹0.00",
+      due: initialData?.due || "₹0.00",
       type,
+      owner: owner || user?.name || "Admin",
+      managers,
+      address,
+      city,
+      state,
+      zip,
+      country,
+      vatNumber,
+      gstNumber,
+      currency,
+      disableOnlinePayment,
       website,
       createdAt: initialData?.createdAt || Date.now(),
     })
@@ -158,10 +208,17 @@ export function AddClientModal({
               <select
                 value={owner}
                 onChange={(e) => setOwner(e.target.value)}
-                className="md:col-span-3 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="md:col-span-3 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="John Doe">John Doe</option>
-                <option value="Admin Account">Admin Account</option>
+                {ownersList.length === 0 ? (
+                  <option value={user?.name || "Admin"}>{user?.name || "Admin"}</option>
+                ) : (
+                  ownersList.map((o) => (
+                    <option key={o.id || o.name} value={o.name}>
+                      {o.name} {o.role ? `(${o.role})` : ""}
+                    </option>
+                  ))
+                )}
               </select>
             </div>
 
