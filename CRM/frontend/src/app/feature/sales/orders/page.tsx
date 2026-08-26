@@ -111,7 +111,13 @@ export default function OrderListPage() {
   React.useEffect(() => {
     loadOrders()
     const interval = setInterval(loadOrders, 4000)
-    return () => clearInterval(interval)
+    window.addEventListener("saampark_data_synced", loadOrders)
+    window.addEventListener("saampark_orders_updated", loadOrders)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener("saampark_data_synced", loadOrders)
+      window.removeEventListener("saampark_orders_updated", loadOrders)
+    }
   }, [loadOrders])
 
   React.useEffect(() => {

@@ -219,11 +219,106 @@ export const sendPaymentReminder = async (invoiceId: string): Promise<{ success:
   return { success: true, message: `Payment reminder logged for ${target.client}.` }
 }
 
-export const deleteInvoice = async (id: string): Promise<boolean> => {
+export const deleteInvoice = async (id: string, companyId?: string): Promise<boolean> => {
   const strId = String(id).toLowerCase().trim()
+  const current = await getInvoices(companyId)
+  const target = current.find(i => String(i.id).toLowerCase().trim() === strId)
+
+  // 1. Mark and remove from invoices
   await markGlobalItemDeleted(strId, "invoices")
-  const current = await getInvoices()
   const filtered = current.filter(i => String(i.id).toLowerCase().trim() !== strId)
-  await saveModuleDataToDB("invoices", filtered)
+  await saveModuleDataToDB("invoices", filtered, companyId)
+
+  if (target) {
+    const targetTotal = parseInt((target.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
+    const targetReceived = parseInt((target.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
+    const targetDue = parseInt((target.due || "0").replace(/[^0-9]/g, "")) || 0
+    const targetProjectNorm = (target.project || "").toLowerCase().trim()
+    const targetClientNorm = (target.client || "").toLowerCase().trim()
+
+    // 2. Cascade delete from Sales Orders
+    try {
+      const orders = await fetchModuleDataFromDB<any[]>("orders", [], companyId)
+      const matchingOrders = orders.filter(o => 
+        (o.invoiceId && String(o.invoiceId).toLowerCase().trim() === strId) ||
+        (targetProjectNorm && o.project && o.project.toLowerCase().trim() === targetProjectNorm && targetClientNorm && o.client && o.client.toLowerCase().trim() === targetClientNorm)
+      )
+      for (const mo of matchingOrders) {
+        if (mo.id) await markGlobalItemDeleted(mo.id, "orders")
+      }
+      const remainingOrders = orders.filter(o => !matchingOrders.some(mo => mo.id === o.id))
+      await saveModuleDataToDB("orders", remainingOrders, companyId)
+    } catch (err) {
+      console.warn("Cascade delete orders failed:", err)
+    }
+
+    // 3. Cascade delete from Payments
+    try {
+      const payments = await fetchModuleDataFromDB<any[]>("payments", [], companyId)
+      const matchingPayments = payments.filter(p =>
+        (p.invoiceId && String(p.invoiceId).toLowerCase().trim() === strId) ||
+        (targetProjectNorm && p.project && p.project.toLowerCase().trim() === targetProjectNorm && targetClientNorm && p.client && p.client.toLowerCase().trim() === targetClientNorm)
+      )
+      for (const mp of matchingPayments) {
+        if (mp.id) await markGlobalItemDeleted(mp.id, "payments")
+      }
+      const remainingPayments = payments.filter(p => !matchingPayments.some(mp => mp.id === p.id))
+      await saveModuleDataToDB("payments", remainingPayments, companyId)
+    } catch (err) {
+      console.warn("Cascade delete payments failed:", err)
+    }
+
+    // 4. Cascade delete from Subscriptions (if any part-payment subscription was created for this project/client)
+    try {
+      const subs = await fetchModuleDataFromDB<any[]>("subscriptions", [], companyId)
+      const matchingSubs = subs.filter(s =>
+        (targetProjectNorm && s.planName && s.planName.toLowerCase().includes(targetProjectNorm) && targetClientNorm && s.clientName && s.clientName.toLowerCase().trim() === targetClientNorm)
+      )
+      for (const ms of matchingSubs) {
+        if (ms.id) await markGlobalItemDeleted(ms.id, "subscriptions")
+      }
+      const remainingSubs = subs.filter(s => !matchingSubs.some(ms => ms.id === s.id))
+      await saveModuleDataToDB("subscriptions", remainingSubs, companyId)
+    } catch (err) {
+      console.warn("Cascade delete subscriptions failed:", err)
+    }
+
+    // 5. Deduct from Client Total Invoiced, Paid & Due Everywhere
+    try {
+      const clients = await getClients(companyId)
+      const clientIdx = clients.findIndex(c => 
+        (c.name && c.name.toLowerCase().trim() === targetClientNorm) ||
+        (target.clientEmail && c.email && c.email.toLowerCase().trim() === target.clientEmail.toLowerCase().trim())
+      )
+      if (clientIdx !== -1) {
+        const c = clients[clientIdx]
+        const currInvoiced = parseInt((c.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
+        const currReceived = parseInt((c.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
+        const currDue = parseInt((c.due || "0").replace(/[^0-9]/g, "")) || 0
+
+        const newInvoiced = Math.max(0, currInvoiced - targetTotal)
+        const newReceived = Math.max(0, currReceived - targetReceived)
+        const newDue = Math.max(0, currDue - targetDue)
+
+        await saveStoredClient({
+          ...c,
+          totalInvoiced: `₹${newInvoiced.toLocaleString("en-IN")}`,
+          paymentReceived: `₹${newReceived.toLocaleString("en-IN")}`,
+          due: `₹${newDue.toLocaleString("en-IN")}`,
+        })
+      }
+    } catch (err) {
+      console.warn("Cascade deduct client balance failed:", err)
+    }
+
+    // 6. Broadcast sync events so all active views update simultaneously
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("saampark_data_synced"))
+      window.dispatchEvent(new Event("saampark_orders_updated"))
+      window.dispatchEvent(new Event("saampark_payments_updated"))
+      window.dispatchEvent(new Event("saampark_clients_updated"))
+    }
+  }
+
   return true
 }

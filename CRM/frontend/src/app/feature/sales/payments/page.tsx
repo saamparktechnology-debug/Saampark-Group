@@ -71,7 +71,13 @@ export default function PaymentsPage() {
   React.useEffect(() => {
     loadData()
     const interval = setInterval(loadData, 4000)
-    return () => clearInterval(interval)
+    window.addEventListener("saampark_data_synced", loadData)
+    window.addEventListener("saampark_payments_updated", loadData)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener("saampark_data_synced", loadData)
+      window.removeEventListener("saampark_payments_updated", loadData)
+    }
   }, [loadData])
 
   const handleInvoiceChange = (invId: string) => {

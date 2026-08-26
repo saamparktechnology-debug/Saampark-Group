@@ -142,10 +142,14 @@ export default function ClientsMain() {
     loadClientData()
     const handleStorage = () => loadClientData()
     window.addEventListener("storage", handleStorage)
+    window.addEventListener("saampark_data_synced", handleStorage)
+    window.addEventListener("saampark_clients_updated", handleStorage)
     const interval = setInterval(loadClientData, 4000)
 
     return () => {
       window.removeEventListener("storage", handleStorage)
+      window.removeEventListener("saampark_data_synced", handleStorage)
+      window.removeEventListener("saampark_clients_updated", handleStorage)
       clearInterval(interval)
     }
   }, [loadClientData])
