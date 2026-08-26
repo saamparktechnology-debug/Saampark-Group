@@ -9,7 +9,7 @@ import {
 import { ClientItem } from "../types"
 import { getUsers } from "@/app/feature/users/services/userService"
 import { addProject } from "@/app/feature/projects/services/projectService"
-import { addInvoice, InvoiceLineItem, AppliedDiscount } from "@/app/feature/sales/invoices/services/invoiceService"
+import { addInvoice, getInvoices, generateInvoiceNumber, InvoiceLineItem, AppliedDiscount } from "@/app/feature/sales/invoices/services/invoiceService"
 import { addOrder } from "@/app/feature/sales/orders/services/orderService"
 import { addPayment } from "@/app/feature/sales/payments/services/paymentService"
 import { addSubscription } from "@/app/feature/subscriptions/services/subscriptionService"
@@ -445,7 +445,8 @@ export function AddClientProjectModal({
       }
 
       // 2. Generate Invoice
-      const invoiceId = `INV #${Math.floor(100 + Math.random() * 900)}`
+      const existingInvoices = await getInvoices(targetCompany)
+      const invoiceId = generateInvoiceNumber(existingInvoices)
       const invoiceStatus = remainingDue === 0 
         ? "Fully paid" 
         : effectiveAdvance > 0 

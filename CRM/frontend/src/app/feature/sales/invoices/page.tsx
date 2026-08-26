@@ -36,6 +36,7 @@ import {
   AppliedDiscount,
   InvoiceStatus, 
   getInvoices, 
+  generateInvoiceNumber,
   addInvoice, 
   deleteInvoice, 
   updateInvoiceStatus, 
@@ -408,7 +409,7 @@ export default function InvoicesPage() {
     const dueNum = Math.max(0, totalAmount - receivedNum)
     const formattedReceived = `₹${receivedNum.toLocaleString("en-IN")}`
     const formattedDue = `₹${dueNum.toLocaleString("en-IN")}`
-    const invoiceId = `INV #${Math.floor(100 + Math.random() * 900)}`
+    const invoiceId = generateInvoiceNumber(invoices)
     const calculatedDueDate = dueDate || new Date(Date.now() + 14 * 86400000).toLocaleDateString("en-GB")
 
     const finalInvoiceItems: InvoiceLineItem[] = itemCalculations.map(it => ({

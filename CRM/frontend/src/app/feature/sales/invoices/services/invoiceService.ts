@@ -57,6 +57,21 @@ export interface InvoiceItem {
 
 export const INITIAL_INVOICES: InvoiceItem[] = []
 
+export const generateInvoiceNumber = (existingInvoices: InvoiceItem[] = [], dateObj: Date = new Date()): string => {
+  const d = String(dateObj.getDate()).padStart(2, "0")
+  const m = String(dateObj.getMonth() + 1).padStart(2, "0")
+  const y = String(dateObj.getFullYear()).slice(-2)
+  const datePrefix = `INV${d}${m}${y}`
+
+  const matching = existingInvoices.filter(i => {
+    const cleanId = (i.id || "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase()
+    return cleanId.startsWith(datePrefix)
+  })
+  const nextSeq = matching.length + 1
+  const seqStr = String(nextSeq).padStart(3, "0")
+  return `${datePrefix}${seqStr}`
+}
+
 export const getInvoices = async (companyId?: string): Promise<InvoiceItem[]> => {
   const data = await fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], companyId)
   return Array.isArray(data) ? filterGlobalDeletedItems(data) : []
@@ -64,7 +79,7 @@ export const getInvoices = async (companyId?: string): Promise<InvoiceItem[]> =>
 
 export const addInvoice = async (invoice: Omit<InvoiceItem, "id"> & { id?: string }, companyId?: string): Promise<InvoiceItem> => {
   const current = await getInvoices(companyId)
-  const nextId = invoice.id || `INV #${Math.floor(100 + Math.random() * 900)}`
+  const nextId = invoice.id || generateInvoiceNumber(current)
   const newInvoice: InvoiceItem = { ...invoice, id: nextId }
   const updated = [newInvoice, ...current]
   await saveModuleDataToDB("invoices", updated, companyId)

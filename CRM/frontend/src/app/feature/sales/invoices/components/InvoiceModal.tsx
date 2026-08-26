@@ -128,7 +128,7 @@ export function InvoiceModal({
         badgeBg: "bg-blue-50 text-blue-800 border-blue-300",
         accentRing: "ring-blue-500",
         sealColor: "text-[#0d47a1] border-[#0d47a1]",
-        invoiceTypeLabel: "TAX INVOICE",
+        invoiceTypeLabel: "INVOICE",
       }
 
   // 2. Financial Computations
@@ -202,25 +202,44 @@ export function InvoiceModal({
   }
 
   return (
-    <div className="fixed inset-0 top-14 sm:top-0 z-[99999] flex items-start sm:items-center justify-center bg-black/85 backdrop-blur-md p-2 sm:p-4 overflow-y-auto print:p-0 print:bg-white print:static">
+    <div className="fixed inset-0 top-14 sm:top-0 z-[99999] flex items-start sm:items-center justify-center bg-black/85 backdrop-blur-md p-2 sm:p-4 overflow-y-auto print:p-0 print:bg-white print:static print:block">
       <style>{`
         @media print {
-          @page { size: A4 portrait; margin: 0.5cm; }
-          body * { visibility: hidden !important; }
-          #printable-invoice, #printable-invoice * { visibility: visible !important; }
+          @page { 
+            size: A4 portrait; 
+            margin: 6mm; 
+          }
+          body { 
+            visibility: hidden !important; 
+            background: white !important;
+          }
+          .no-print { 
+            display: none !important; 
+          }
           #printable-invoice { 
-            position: absolute !important; 
+            visibility: visible !important;
+            display: block !important;
+            position: fixed !important; 
             left: 0 !important; 
             top: 0 !important; 
-            width: 100% !important; 
+            width: 100vw !important; 
+            min-height: 100vh !important;
             margin: 0 !important; 
-            padding: 0 !important;
+            padding: 10px !important;
             background: white !important;
             color: black !important;
             box-shadow: none !important;
             border: none !important;
+            z-index: 999999 !important;
+            overflow: visible !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
-          .no-print { display: none !important; }
+          #printable-invoice * { 
+            visibility: visible !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
         }
       `}</style>
 
@@ -296,15 +315,12 @@ export function InvoiceModal({
             
             {/* Left: Saampark Brand & Company Info */}
             <div className="flex items-start gap-3 flex-1">
-              {/* Logo / Embelm */}
-              <div className={`w-16 h-16 rounded-2xl ${theme.headerGradient} text-white flex flex-col items-center justify-center p-1.5 shadow-md shrink-0`}>
-                <svg viewBox="0 0 100 100" className="w-10 h-10 fill-white drop-shadow">
-                  <path d="M20,60 C20,30 50,20 70,30 C55,35 45,45 45,60 C45,75 75,70 80,85 C65,95 20,90 20,60 Z" />
-                  <polygon points="75,20 78,28 86,28 80,33 82,41 75,36 68,41 70,33 64,28 72,28" />
-                  <polygon points="85,38 87,43 92,43 88,46 90,51 85,48 80,51 82,46 78,43 83,43" />
-                </svg>
-                <span className="text-[8px] font-black tracking-widest uppercase mt-0.5">SAAMPARK</span>
-              </div>
+              {/* Logo */}
+              <img 
+                src="/saampark-logo.png" 
+                alt="Saampark Logo" 
+                className="w-16 h-16 rounded-2xl object-contain p-1 shadow-sm shrink-0 bg-white border border-zinc-200" 
+              />
 
               {/* Title & Subtitle */}
               <div className="space-y-1">
@@ -346,7 +362,7 @@ export function InvoiceModal({
               </div>
             </div>
 
-            {/* Right: Curved Tax Invoice Header Card with Gradient */}
+            {/* Right: Curved Header Card with Gradient */}
             <div className={`w-full sm:w-56 rounded-2xl ${theme.cardHeaderGradient} text-white p-3.5 shadow-md shrink-0 flex flex-col justify-between`}>
               <div className="flex items-center justify-between border-b border-white/20 pb-2">
                 <span className="font-black text-xs tracking-wider uppercase">
@@ -396,7 +412,7 @@ export function InvoiceModal({
               <p className="text-[10.5px] text-zinc-600">
                 <strong>State:</strong> {clientDetails?.state || 'West Bengal - 721101'}
               </p>
-              {clientDetails?.gstNumber && (
+              {isGstInvoice && clientDetails?.gstNumber && (
                 <p className="text-[10px] font-mono font-bold text-zinc-800">
                   GSTIN: {clientDetails.gstNumber}
                 </p>
