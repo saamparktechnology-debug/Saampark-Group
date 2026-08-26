@@ -31,6 +31,7 @@ export function AddClientProjectModal({
 }: AddClientProjectModalProps) {
   const { user } = useAuthStore()
 
+  const [creationMode, setCreationMode] = React.useState<"project_and_invoice" | "invoice_only">("project_and_invoice")
   const [projectTitle, setProjectTitle] = React.useState("")
   const [category, setCategory] = React.useState("Website Development")
   const [billedByAdmin, setBilledByAdmin] = React.useState(user?.name || "Admin")
@@ -59,6 +60,7 @@ export function AddClientProjectModal({
 
   React.useEffect(() => {
     if (isOpen) {
+      setCreationMode("project_and_invoice")
       setBaseAmount("")
       setAdvanceAmount("")
       setPartInitialPayment("")
@@ -96,6 +98,15 @@ export function AddClientProjectModal({
       })
     }
   }, [isOpen, user])
+
+  const handleModeChange = (mode: "project_and_invoice" | "invoice_only") => {
+    setCreationMode(mode)
+    if (mode === "invoice_only") {
+      setAssignedMembers([])
+    } else if (assignedMembers.length === 0 && teamsList.length > 0) {
+      setAssignedMembers([teamsList[0].name])
+    }
+  }
 
   if (!isOpen || !client) return null
 
@@ -140,56 +151,59 @@ export function AddClientProjectModal({
       const formattedAdvance = `₹${effectiveAdvance.toLocaleString("en-IN")}`
       const formattedDue = `₹${remainingDue.toLocaleString("en-IN")}`
 
-      // 1. Add Project
-      const projectMembers = assignedMembers.map(m => ({
-        id: `mem_${m}`,
-        name: m,
-        role: "Specialist",
-        avatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${m}`,
-      }))
+      // 1. Add Project (Only in Project & Invoice mode)
+      let createdProject: any = null
+      if (creationMode === "project_and_invoice") {
+        const projectMembers = assignedMembers.map(m => ({
+          id: `mem_${m}`,
+          name: m,
+          role: "Specialist",
+          avatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${m}`,
+        }))
 
-      const computedProjectStatus = remainingDue === 0 
-        ? "In Progress" 
-        : effectiveAdvance > 0 
+        const computedProjectStatus = remainingDue === 0 
           ? "In Progress" 
-          : "Payment Pending"
+          : effectiveAdvance > 0 
+            ? "In Progress" 
+            : "Payment Pending"
 
-      const computedPaymentStatus = remainingDue === 0 
-        ? "Paid" 
-        : effectiveAdvance > 0 
-          ? (paymentModel === "advance" ? "Advance Received" : "Partially Paid") 
-          : "Payment Pending"
+        const computedPaymentStatus = remainingDue === 0 
+          ? "Paid" 
+          : effectiveAdvance > 0 
+            ? (paymentModel === "advance" ? "Advance Received" : "Partially Paid") 
+            : "Payment Pending"
 
-      const paymentStructureLabel = paymentModel === "advance"
-        ? "Advance Payment"
-        : paymentModel === "part"
-          ? "Part Payment (Subscription)"
-          : "Full Payment"
+        const paymentStructureLabel = paymentModel === "advance"
+          ? "Advance Payment"
+          : paymentModel === "part"
+            ? "Part Payment (Subscription)"
+            : "Full Payment"
 
-      const createdProject = await addProject({
-        title: projectTitle,
-        client: client.name,
-        projectType: "Client Project",
-        price: formattedTotal,
-        startDate,
-        deadline,
-        progress: effectiveAdvance > 0 ? 15 : 0,
-        status: computedProjectStatus,
-        paymentStatus: computedPaymentStatus as any,
-        paymentStructure: paymentStructureLabel as any,
-        advanceAmount: effectiveAdvance,
-        dueAmount: remainingDue,
-        installmentsCount: paymentModel === "part" ? installmentsCount : undefined,
-        installmentAmount: paymentModel === "part" ? perInstallment : undefined,
-        baseAmount: numBase,
-        gstRate,
-        gstAmount,
-        totalAmount,
-        billedBy: billedByAdmin,
-        labels: [category, computedPaymentStatus],
-        description: description || `Client Project for ${client.name}. Billed by ${billedByAdmin}. ${paymentModel === "advance" ? `Advance Paid: ${formattedAdvance}, Balance Due on Delivery: ${formattedDue}.` : paymentModel === "part" ? `Part Payment Plan: Initial Paid: ${formattedAdvance}, Balance: ${formattedDue} in ${installmentsCount} ${billingCycle.toLowerCase()} installments of ₹${perInstallment.toLocaleString("en-IN")}.` : ''}`,
-        members: projectMembers,
-      })
+        createdProject = await addProject({
+          title: projectTitle,
+          client: client.name,
+          projectType: "Client Project",
+          price: formattedTotal,
+          startDate,
+          deadline,
+          progress: effectiveAdvance > 0 ? 15 : 0,
+          status: computedProjectStatus,
+          paymentStatus: computedPaymentStatus as any,
+          paymentStructure: paymentStructureLabel as any,
+          advanceAmount: effectiveAdvance,
+          dueAmount: remainingDue,
+          installmentsCount: paymentModel === "part" ? installmentsCount : undefined,
+          installmentAmount: paymentModel === "part" ? perInstallment : undefined,
+          baseAmount: numBase,
+          gstRate,
+          gstAmount,
+          totalAmount,
+          billedBy: billedByAdmin,
+          labels: [category, computedPaymentStatus],
+          description: description || `Client Project for ${client.name}. Billed by ${billedByAdmin}. ${paymentModel === "advance" ? `Advance Paid: ${formattedAdvance}, Balance Due on Delivery: ${formattedDue}.` : paymentModel === "part" ? `Part Payment Plan: Initial Paid: ${formattedAdvance}, Balance: ${formattedDue} in ${installmentsCount} ${billingCycle.toLowerCase()} installments of ₹${perInstallment.toLocaleString("en-IN")}.` : ''}`,
+          members: projectMembers,
+        })
+      }
 
       // 2. Generate Invoice
       const invoiceId = `INV #${Math.floor(100 + Math.random() * 900)}`
@@ -227,7 +241,7 @@ export function AddClientProjectModal({
         totalAmount: formattedTotal,
         paymentStatus: remainingDue === 0 ? "Paid" : effectiveAdvance > 0 ? "Partially paid" : "Unpaid",
         status: effectiveAdvance > 0 ? "Processing" : "Pending",
-        notes: description || `Order generated for project: ${projectTitle} (${category}). ${paymentModel === "advance" ? `Advance: ${formattedAdvance}, Balance on delivery: ${formattedDue}.` : paymentModel === "part" ? `Part Payment: ${installmentsCount} parts of ₹${perInstallment.toLocaleString("en-IN")}.` : ''}`,
+        notes: description || `Order generated for: ${projectTitle} (${category}). ${paymentModel === "advance" ? `Advance: ${formattedAdvance}, Balance on delivery: ${formattedDue}.` : paymentModel === "part" ? `Part Payment: ${installmentsCount} parts of ₹${perInstallment.toLocaleString("en-IN")}.` : ''}`,
         invoiceId: invoiceId,
       })
 
@@ -265,14 +279,13 @@ export function AddClientProjectModal({
       }
 
       // 6. Update Client Stats in Ledger
-      const storedClients = await getClients()
       const currentInvoicedNum = parseInt((client.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
       const currentDueNum = parseInt((client.due || "0").replace(/[^0-9]/g, "")) || 0
       const currentPaidNum = parseInt((client.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
 
       const updatedClient: ClientItem = {
         ...client,
-        projectsCount: (client.projectsCount || 0) + 1,
+        projectsCount: (client.projectsCount || 0) + (creationMode === "project_and_invoice" ? 1 : 0),
         totalInvoiced: `₹${(currentInvoicedNum + totalAmount).toLocaleString("en-IN")}`,
         due: `₹${(currentDueNum + remainingDue).toLocaleString("en-IN")}`,
         paymentReceived: `₹${(currentPaidNum + effectiveAdvance).toLocaleString("en-IN")}`,
@@ -280,28 +293,30 @@ export function AddClientProjectModal({
 
       saveStoredClient(updatedClient)
 
-      // 4. Automatically create Task(s) in Tasks section for assigned team member(s)
-      const membersToAssign = assignedMembers.length > 0 ? assignedMembers : ["Unassigned"]
-      const tasksToCreate = membersToAssign.map((memberName) => ({
-        title: `${projectTitle} - Initial Setup & Execution`,
-        description: `Deliverable for client ${client.name}. Project: ${projectTitle}. Billed: ${formattedTotal}. Scope: ${description || projectTitle}`,
-        relatedTo: projectTitle,
-        points: "3 Points",
-        assignedTo: memberName,
-        assignedToAvatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${memberName.replace(/\s/g, "")}`,
-        collaborators: assignedMembers.filter((m) => m !== memberName).join(", ") || "-",
-        status: "To do" as const,
-        priority: "High" as const,
-        priorityIcon: "up" as const,
-        labels: [category, "Client Project"],
-        startDate: startDate || "-",
-        deadline: deadline || "30-06-2026",
-        milestone: "Beta Release",
-        isRecurring: false,
-      }))
-      await taskService.addTasks(tasksToCreate)
+      // 7. Automatically create Task(s) in Tasks section if Project & Invoice mode
+      if (creationMode === "project_and_invoice") {
+        const membersToAssign = assignedMembers.length > 0 ? assignedMembers : ["Unassigned"]
+        const tasksToCreate = membersToAssign.map((memberName) => ({
+          title: `${projectTitle} - Initial Setup & Execution`,
+          description: `Deliverable for client ${client.name}. Project: ${projectTitle}. Billed: ${formattedTotal}. Scope: ${description || projectTitle}`,
+          relatedTo: projectTitle,
+          points: "3 Points",
+          assignedTo: memberName,
+          assignedToAvatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${memberName.replace(/\s/g, "")}`,
+          collaborators: assignedMembers.filter((m) => m !== memberName).join(", ") || "-",
+          status: "To do" as const,
+          priority: "High" as const,
+          priorityIcon: "up" as const,
+          labels: [category, "Client Project"],
+          startDate: startDate || "-",
+          deadline: deadline || "30-06-2026",
+          milestone: "Beta Release",
+          isRecurring: false,
+        }))
+        await taskService.addTasks(tasksToCreate)
+      }
 
-      // 5. Notify Client
+      // 8. Notify Client
       if (typeof window !== "undefined") {
         try {
           const notifKey = `saampark_notifications_${(client.email || "").toLowerCase().trim()}`
@@ -309,8 +324,10 @@ export function AddClientProjectModal({
           const prevNotifs = prevNotifsRaw ? JSON.parse(prevNotifsRaw) : []
           const newNotif = {
             id: Date.now(),
-            title: `New Project & Invoice Generated`,
-            message: `Project '${projectTitle}' created with ${invoiceId} for ${formattedTotal}. Status: ${paymentStatus}.`,
+            title: creationMode === "project_and_invoice" ? `New Project & Invoice Generated` : `New Tax Invoice Generated`,
+            message: creationMode === "project_and_invoice" 
+              ? `Project '${projectTitle}' created with ${invoiceId} for ${formattedTotal}. Status: ${paymentStatus}.`
+              : `Tax Invoice ${invoiceId} generated for ${projectTitle} (${formattedTotal}).`,
             timestamp: new Date().toLocaleString(),
             read: false,
           }
@@ -339,11 +356,17 @@ export function AddClientProjectModal({
         <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
-              <Briefcase size={20} />
+              {creationMode === "project_and_invoice" ? <Briefcase size={20} /> : <FileText size={20} />}
             </div>
             <div>
-              <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100">Add Project & Invoice for {client.name}</h2>
-              <p className="text-xs text-zinc-500">Configure project scope, billing GST breakdown, and team assignment</p>
+              <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
+                {creationMode === "project_and_invoice" ? `Add Project & Invoice for ${client.name}` : `Create Tax Invoice for ${client.name}`}
+              </h2>
+              <p className="text-xs text-zinc-500">
+                {creationMode === "project_and_invoice" 
+                  ? "Configure project scope, billing GST breakdown, and team assignment" 
+                  : "Generate direct tax invoice and order billing without creating a project entry"}
+              </p>
             </div>
           </div>
           <button
@@ -358,18 +381,51 @@ export function AddClientProjectModal({
         {/* Form Body */}
         <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-6 space-y-5 text-xs">
           
+          {/* Top Mode Toggle: Project & Invoice VS Only Invoice */}
+          <div className="p-2 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/80 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-zinc-700 dark:text-zinc-300 font-bold text-xs">
+              <span>Billing Target:</span>
+            </div>
+            <div className="flex items-center gap-1.5 bg-white dark:bg-zinc-900 p-1 rounded-lg border border-zinc-200 dark:border-zinc-700">
+              <button
+                type="button"
+                onClick={() => handleModeChange("project_and_invoice")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                  creationMode === "project_and_invoice"
+                    ? "bg-blue-600 text-white shadow-2xs"
+                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+                }`}
+              >
+                <Briefcase size={13} />
+                <span>📁 Project & Invoice</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleModeChange("invoice_only")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                  creationMode === "invoice_only"
+                    ? "bg-blue-600 text-white shadow-2xs"
+                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+                }`}
+              >
+                <FileText size={13} />
+                <span>🧾 Only Invoice</span>
+              </button>
+            </div>
+          </div>
+
           {/* Row 1: Title & Category */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-                Project Title *
+                {creationMode === "project_and_invoice" ? "Project Title *" : "Invoice / Service Title *"}
               </label>
               <input
                 type="text"
                 required
                 value={projectTitle}
                 onChange={(e) => setProjectTitle(e.target.value)}
-                placeholder="e.g. E-Commerce Platform & Mobile App"
+                placeholder={creationMode === "project_and_invoice" ? "e.g. E-Commerce Platform & Mobile App" : "e.g. Annual Digital Marketing & Maintenance"}
                 className="w-full px-3.5 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
               />
             </div>
@@ -409,10 +465,18 @@ export function AddClientProjectModal({
               </select>
             </div>
 
-            <div>
-              <label className="block font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-                Assigned Team Members
-              </label>
+            {/* Assigned Team Members Section (blurred and disabled when Only Invoice is selected) */}
+            <div className={creationMode === "invoice_only" ? "opacity-40 grayscale pointer-events-none select-none relative" : "relative"}>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block font-semibold text-zinc-700 dark:text-zinc-300">
+                  Assigned Team Members
+                </label>
+                {creationMode === "invoice_only" && (
+                  <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
+                    🔒 Disabled (Only Invoice)
+                  </span>
+                )}
+              </div>
               <div className="p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 max-h-28 overflow-y-auto space-y-1">
                 {teamsList.length === 0 ? (
                   <p className="text-zinc-400 text-[11px]">No team members found.</p>
@@ -423,6 +487,7 @@ export function AddClientProjectModal({
                       <label key={t.id} className="flex items-center gap-2 cursor-pointer text-zinc-800 dark:text-zinc-200 hover:bg-zinc-200/50 dark:hover:bg-zinc-700/50 p-1 rounded">
                         <input
                           type="checkbox"
+                          disabled={creationMode === "invoice_only"}
                           checked={isChecked}
                           onChange={() => handleToggleMember(t.name)}
                           className="rounded text-blue-600 focus:ring-blue-500"
@@ -758,10 +823,16 @@ export function AddClientProjectModal({
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md shadow-blue-500/20 flex items-center gap-2 disabled:opacity-50"
+              className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md shadow-blue-500/20 flex items-center gap-2 disabled:opacity-50 cursor-pointer"
             >
-              <Check size={16} />
-              <span>{isSubmitting ? "Generating..." : "Generate Project & Invoice"}</span>
+              {creationMode === "invoice_only" ? <FileText size={16} /> : <Check size={16} />}
+              <span>
+                {isSubmitting
+                  ? "Generating..."
+                  : creationMode === "invoice_only"
+                  ? "Generate Tax Invoice"
+                  : "Generate Project & Invoice"}
+              </span>
             </button>
           </div>
 
