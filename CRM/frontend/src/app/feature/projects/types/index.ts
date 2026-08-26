@@ -62,6 +62,9 @@ export interface Project {
   gstAmount?: number
   totalAmount?: number
   billedBy?: string
+  clientId?: string
+  createdById?: string
+  createdByEmail?: string
   members?: ProjectMember[]
   milestones?: ProjectMilestone[]
   taskBreakdown?: TaskBreakdown

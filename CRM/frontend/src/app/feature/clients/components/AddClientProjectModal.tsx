@@ -155,12 +155,15 @@ export function AddClientProjectModal({
       // 1. Add Project (Only in Project & Invoice mode)
       let createdProject: any = null
       if (creationMode === "project_and_invoice") {
-        const projectMembers = assignedMembers.map(m => ({
-          id: `mem_${m}`,
-          name: m,
-          role: "Specialist",
-          avatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${m}`,
-        }))
+        const projectMembers = assignedMembers.map(m => {
+          const matched = teamsList.find(t => t.name.toLowerCase().trim() === m.toLowerCase().trim())
+          return {
+            id: matched?.id ? String(matched.id) : `mem_${m}`,
+            name: m,
+            role: matched?.role || "Specialist",
+            avatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${m}`,
+          }
+        })
 
         const computedProjectStatus = remainingDue === 0 
           ? "In Progress" 
@@ -180,15 +183,37 @@ export function AddClientProjectModal({
             ? "Part Payment (Subscription)"
             : "Full Payment"
 
+        const starterMilestones: any[] = [
+          {
+            id: `ms_fe_${Date.now()}`,
+            title: "Phase 1: Architecture & UI Setup",
+            stage: "Frontend",
+            status: effectiveAdvance > 0 ? "Completed" : "Pending",
+            notes: `Project scope initiated. Advance status: ${paymentStatus}.`,
+            updatedBy: projectMembers[0]?.name || billedByAdmin,
+            updatedAt: new Date().toISOString(),
+          },
+          {
+            id: `ms_be_${Date.now() + 1}`,
+            title: "Phase 2: Core Development & Integration",
+            stage: "Backend",
+            status: "Pending",
+            notes: "Development in progress",
+            updatedBy: projectMembers[0]?.name || billedByAdmin,
+            updatedAt: new Date().toISOString(),
+          }
+        ]
+
         createdProject = await addProject({
           title: projectTitle,
           client: client.name,
+          clientId: client.id,
           projectType: "Client Project",
           price: formattedTotal,
           startDate,
           deadline,
           progress: effectiveAdvance > 0 ? 15 : 0,
-          status: computedProjectStatus,
+          status: computedProjectStatus as any,
           paymentStatus: computedPaymentStatus as any,
           paymentStructure: paymentStructureLabel as any,
           advanceAmount: effectiveAdvance,
@@ -200,9 +225,12 @@ export function AddClientProjectModal({
           gstAmount,
           totalAmount,
           billedBy: billedByAdmin,
+          createdById: user?.id ? String(user.id) : undefined,
+          createdByEmail: user?.email,
           labels: [category, computedPaymentStatus],
           description: description || `Client Project for ${client.name}. Billed by ${billedByAdmin}. ${paymentModel === "advance" ? `Advance Paid: ${formattedAdvance}, Balance Due on Delivery: ${formattedDue}.` : paymentModel === "part" ? `Part Payment Plan: Initial Paid: ${formattedAdvance}, Balance: ${formattedDue} in ${installmentsCount} ${billingCycle.toLowerCase()} installments of ₹${perInstallment.toLocaleString("en-IN")}.` : ''}`,
           members: projectMembers,
+          milestones: starterMilestones,
         }, targetCompany)
       }
 

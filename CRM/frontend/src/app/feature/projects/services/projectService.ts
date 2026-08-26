@@ -4,8 +4,28 @@ import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted, filte
 export const initialProjects: Project[] = []
 
 export const getProjects = async (companyId?: string): Promise<Project[]> => {
-  const data = await fetchModuleDataFromDB<Project[]>("projects", [], companyId)
-  return Array.isArray(data) ? filterGlobalDeletedItems(data) : []
+  let targetComp = companyId
+  if (!targetComp && typeof window !== "undefined") {
+    try {
+      const { useAuthStore } = require("@/store/useAuthStore")
+      targetComp = useAuthStore.getState().activeCompanyId || undefined
+    } catch {}
+  }
+  
+  const scopedData = await fetchModuleDataFromDB<Project[]>("projects", [], targetComp || "all")
+  const allMaster = (targetComp && targetComp !== "all") 
+    ? await fetchModuleDataFromDB<Project[]>("projects", [], "all")
+    : []
+  
+  const map = new Map<string, Project>()
+  for (const p of (Array.isArray(allMaster) ? allMaster : [])) {
+    if (p && p.id) map.set(String(p.id).toLowerCase().trim(), p)
+  }
+  for (const p of (Array.isArray(scopedData) ? scopedData : [])) {
+    if (p && p.id) map.set(String(p.id).toLowerCase().trim(), p)
+  }
+  
+  return filterGlobalDeletedItems(Array.from(map.values()))
 }
 
 export const addProject = async (project: Omit<Project, "id">, companyId?: string): Promise<Project> => {
