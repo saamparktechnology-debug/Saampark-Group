@@ -134,6 +134,23 @@ export default function InvoicesPage() {
     }
   }, [loadInvoices])
 
+  // Direct QR Code Scan to View Handler (?view=INV...)
+  React.useEffect(() => {
+    if (typeof window !== "undefined" && invoices.length > 0) {
+      const params = new URLSearchParams(window.location.search)
+      const viewId = params.get("view")
+      if (viewId) {
+        const found = invoices.find(
+          (i) => i.id.toLowerCase().trim() === viewId.toLowerCase().trim()
+        )
+        if (found) {
+          setSelectedInvoice(found)
+          setIsInvoiceModalOpen(true)
+        }
+      }
+    }
+  }, [invoices])
+
   React.useEffect(() => {
     if (isAddModalOpen) {
       setBaseAmount("")
