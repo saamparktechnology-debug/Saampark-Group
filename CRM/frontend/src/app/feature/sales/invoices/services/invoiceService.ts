@@ -19,6 +19,11 @@ export interface InvoiceItem {
   status: InvoiceStatus
   billedBy?: string
   lastReminderSent?: string
+  companyId?: string
+  branchId?: string
+  branchName?: string
+  createdByName?: string
+  createdByRole?: string
 }
 
 export const INITIAL_INVOICES: InvoiceItem[] = []

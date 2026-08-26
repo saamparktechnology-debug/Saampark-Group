@@ -15,6 +15,9 @@ export interface PaymentItem {
   amount: string
   amountNum: number
   status: "Completed" | "Pending" | "Failed"
+  companyId?: string
+  branchId?: string
+  branchName?: string
 }
 
 export const INITIAL_PAYMENTS: PaymentItem[] = []
