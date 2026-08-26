@@ -33,6 +33,7 @@ import {
 import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted, filterGlobalDeletedItems } from "@/lib/storageSync"
 import { useAuthStore } from "@/store/useAuthStore"
 import { addInvoice, getInvoices, InvoiceItem } from "../invoices/services/invoiceService"
+import { InvoiceModal } from "../invoices/components/InvoiceModal"
 import { addPayment, sendPaymentReminderNotification } from "../payments/services/paymentService"
 import { getClients } from "@/app/feature/clients/services/clientService"
 import { getProjects } from "@/app/feature/projects/services/projectService"
@@ -89,6 +90,10 @@ export default function OrderListPage() {
 
   const [availableClients, setAvailableClients] = React.useState<{ name: string; email: string }[]>([])
   const [availableProjects, setAvailableProjects] = React.useState<{ title: string; client: string }[]>([])
+
+  // Direct Invoice Viewer Modal State
+  const [selectedInvoice, setSelectedInvoice] = React.useState<InvoiceItem | null>(null)
+  const [isInvoiceModalOpen, setIsInvoiceModalOpen] = React.useState(false)
 
   const showToast = (msg: string) => {
     setToastMessage(msg)
@@ -205,26 +210,49 @@ export default function OrderListPage() {
     showToast(`✅ Payment completed for ${ord.orderNumber}! Synced to Payments.`)
   }
 
-  const handleGenerateInvoice = async (ord: OrderItem) => {
-    const baseAmt = parseInt(ord.totalAmount.replace(/[^0-9]/g, "")) || 10000
-    const inv = await addInvoice({
-      client: ord.client,
-      clientEmail: ord.clientEmail,
-      project: ord.project,
-      billDate: new Date().toLocaleDateString("en-GB"),
-      dueDate: ord.deliveryDate,
-      baseAmount: baseAmt,
-      gstRate: 18,
-      gstAmount: Math.round(baseAmt * 0.18),
-      totalInvoiced: ord.totalAmount,
-      paymentReceived: ord.paymentStatus === "Paid" ? ord.totalAmount : "₹0",
-      due: ord.paymentStatus === "Paid" ? "₹0" : ord.totalAmount,
-      status: ord.paymentStatus === "Paid" ? "Fully paid" : "Not paid",
-      billedBy: "Admin"
-    })
+  const handleViewInvoice = async (ord: OrderItem) => {
+    try {
+      const invs = await getInvoices()
+      let match = invs.find(
+        (i) =>
+          (ord.invoiceId && i.id === ord.invoiceId) ||
+          (i.project && i.project.toLowerCase().trim() === ord.project.toLowerCase().trim()) ||
+          (i.client && i.client.toLowerCase().trim() === ord.client.toLowerCase().trim() && i.totalInvoiced === ord.totalAmount)
+      )
 
-    showToast(`📄 Tax Invoice ${inv.id} generated for ${ord.client}!`)
+      if (!match) {
+        const rawTotal = parseInt(ord.totalAmount.replace(/[^0-9]/g, "")) || 50000
+        const baseAmt = Math.round(rawTotal / 1.18)
+        const gstAmt = rawTotal - baseAmt
+        const isPaid = ord.paymentStatus === "Paid"
+        const isPartiallyPaid = ord.paymentStatus === "Partially paid"
+
+        match = await addInvoice({
+          client: ord.client,
+          clientEmail: ord.clientEmail,
+          project: ord.project,
+          billDate: ord.orderDate || new Date().toLocaleDateString("en-GB"),
+          dueDate: ord.deliveryDate || "30-06-2026",
+          baseAmount: baseAmt,
+          gstRate: 18,
+          gstAmount: gstAmt,
+          totalInvoiced: ord.totalAmount,
+          paymentReceived: isPaid ? ord.totalAmount : isPartiallyPaid ? `₹${Math.round(rawTotal * 0.4).toLocaleString("en-IN")}` : "₹0",
+          due: isPaid ? "₹0" : isPartiallyPaid ? `₹${Math.round(rawTotal * 0.6).toLocaleString("en-IN")}` : ord.totalAmount,
+          status: isPaid ? "Fully paid" : isPartiallyPaid ? "Partially paid" : "Not paid",
+          billedBy: "Admin",
+        })
+      }
+
+      setSelectedInvoice(match)
+      setIsInvoiceModalOpen(true)
+    } catch (err) {
+      console.error("Error viewing invoice:", err)
+      showToast("Error opening invoice details.")
+    }
   }
+
+  const handleGenerateInvoice = handleViewInvoice
 
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1062,6 +1090,13 @@ export default function OrderListPage() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* ---------------- INVOICE VIEWER & PRINT MODAL ---------------- */}
+      <InvoiceModal
+        isOpen={isInvoiceModalOpen}
+        invoice={selectedInvoice}
+        onClose={() => setIsInvoiceModalOpen(false)}
+      />
     </motion.div>
   )
 }
