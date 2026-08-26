@@ -58,6 +58,57 @@ export const updateInvoiceStatus = async (
   return current[idx]
 }
 
+export const recordPartialPayment = async (
+  invoiceId: string,
+  paidAmountNum: number,
+  paymentMethod: string = "UPI / Net Banking",
+  transactionRef: string = ""
+): Promise<InvoiceItem | null> => {
+  const current = await getInvoices()
+  const strId = String(invoiceId).toLowerCase().trim()
+  const idx = current.findIndex((i) => String(i.id).toLowerCase().trim() === strId)
+  if (idx === -1) return null
+
+  const target = current[idx]
+  const prevReceivedNum = parseInt((target.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
+  const totalInvoicedNum = parseInt((target.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
+  
+  const newReceivedNum = prevReceivedNum + paidAmountNum
+  const newDueNum = Math.max(0, totalInvoicedNum - newReceivedNum)
+  const isFullySettled = newDueNum <= 0
+
+  const updated: InvoiceItem = {
+    ...target,
+    status: isFullySettled ? "Fully paid" : "Partially paid",
+    paymentReceived: `₹${newReceivedNum.toLocaleString("en-IN")}`,
+    due: `₹${newDueNum.toLocaleString("en-IN")}`,
+  }
+  current[idx] = updated
+  await saveModuleDataToDB("invoices", current)
+
+  // Record payment entry
+  try {
+    const { addPayment } = await import("@/app/feature/sales/payments/services/paymentService")
+    await addPayment({
+      invoiceId: target.id,
+      client: target.client,
+      clientEmail: target.clientEmail,
+      project: target.project,
+      paymentDate: new Date().toLocaleDateString("en-GB"),
+      paymentMethod,
+      transactionRef: transactionRef || `PART_TXN${Date.now()}`,
+      note: `Partial payment of ₹${paidAmountNum.toLocaleString("en-IN")} for ${target.id}`,
+      amount: `₹${paidAmountNum.toLocaleString("en-IN")}`,
+      amountNum: paidAmountNum,
+      status: "Completed"
+    })
+  } catch (err) {
+    console.warn("Error creating payment entry:", err)
+  }
+
+  return updated
+}
+
 export const markPaymentCompleted = async (
   invoiceId: string, 
   paymentMethod: string = "UPI / Net Banking",

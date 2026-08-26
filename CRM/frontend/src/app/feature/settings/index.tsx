@@ -5,7 +5,8 @@ import { motion } from "framer-motion"
 import { 
   Settings, Building2, Mail, Lock, Sun, Moon, ShieldCheck, 
   Save, CheckCircle2, Globe, Key, AlertCircle, RefreshCw,
-  Camera, Upload, User, Sparkles, Phone, MapPin, Briefcase, Tag
+  Camera, Upload, User, Sparkles, Phone, MapPin, Briefcase, Tag,
+  QrCode, CreditCard
 } from "lucide-react"
 
 import { Button } from "@/components/ui/Button"
@@ -17,8 +18,14 @@ import { getUsers, recordUserAccount } from "@/app/feature/users/services/userSe
 import { CompanyBranchSettings } from "./components/CompanyBranchSettings"
 import { uploadToImgBB } from "@/lib/imgbbUpload"
 import { KycData, KycStatus } from "@/app/feature/users/types"
+import { 
+  getCompanyPaymentSettings, 
+  saveCompanyPaymentSettings, 
+  CompanyPaymentSettings,
+  DEFAULT_COMPANY_PAYMENT_SETTINGS 
+} from "./services/companyPaymentService"
 
-type SettingsTab = "profile" | "kyc" | "organization" | "company" | "smtp" | "theme"
+type SettingsTab = "profile" | "kyc" | "payments" | "organization" | "company" | "smtp" | "theme"
 
 export default function SettingsMain() {
   const { user, loginAs } = useAuthStore()
@@ -81,7 +88,20 @@ export default function SettingsMain() {
   const frontDocInputRef = React.useRef<HTMLInputElement>(null)
   const backDocInputRef = React.useRef<HTMLInputElement>(null)
 
-  // Load settings & user profile on mount
+  // ── Company Payment QR & Bank Details State (for Invoices) ──
+  const [payQrUrl, setPayQrUrl] = React.useState("")
+  const [payBankName, setPayBankName] = React.useState("State Bank of India")
+  const [payAccountHolder, setPayAccountHolder] = React.useState("Saampark Technology & Research Pvt. Ltd.")
+  const [payAccountNumber, setPayAccountNumber] = React.useState("40912384759")
+  const [payIfsc, setPayIfsc] = React.useState("SBIN0001234")
+  const [payUpiId, setPayUpiId] = React.useState("saampark@sbi")
+  const [payBranch, setPayBranch] = React.useState("Balichak Station Road")
+  const [paySwiftCode, setPaySwiftCode] = React.useState("SBININBB123")
+  const [payNotes, setPayNotes] = React.useState("Please scan QR or transfer via NEFT/RTGS/IMPS. Mention Invoice ID in transaction note.")
+  const [isUploadingQr, setIsUploadingQr] = React.useState(false)
+  const qrInputRef = React.useRef<HTMLInputElement>(null)
+
+  // Load settings & user profile & payment QR settings on mount
   React.useEffect(() => {
     fetchModuleDataFromDB("settings", null).then((saved: any) => {
       if (saved) {
@@ -96,6 +116,20 @@ export default function SettingsMain() {
         if (saved.smtpPort) setSmtpPort(saved.smtpPort)
       }
     })
+
+    getCompanyPaymentSettings().then((pSet) => {
+      if (pSet) {
+        if (pSet.qrCodeUrl) setPayQrUrl(pSet.qrCodeUrl)
+        if (pSet.bankName) setPayBankName(pSet.bankName)
+        if (pSet.accountHolderName) setPayAccountHolder(pSet.accountHolderName)
+        if (pSet.accountNumber) setPayAccountNumber(pSet.accountNumber)
+        if (pSet.ifscCode) setPayIfsc(pSet.ifscCode)
+        if (pSet.upiId) setPayUpiId(pSet.upiId)
+        if (pSet.branch) setPayBranch(pSet.branch)
+        if (pSet.swiftCode) setPaySwiftCode(pSet.swiftCode)
+        if (pSet.notes) setPayNotes(pSet.notes)
+      }
+    }).catch(() => {})
 
     if (user) {
       setName(user.name || "")
@@ -380,12 +414,62 @@ export default function SettingsMain() {
     setTimeout(() => setSuccessMsg(""), 3000)
   }
 
-  // Visible Tabs Filter based on user role (Only Super Admin sees Company, Sub-Branches, and SMTP)
+  const handleQrUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 8 * 1024 * 1024) {
+      alert("Image size should be under 8MB.")
+      return
+    }
+    setIsUploadingQr(true)
+    try {
+      const res = await uploadToImgBB(file, `payment_qr_${Date.now()}`)
+      if (res.url) {
+        setPayQrUrl(res.url)
+        setSuccessMsg("✅ Payment QR uploaded to Cloud successfully!")
+        setTimeout(() => setSuccessMsg(""), 3000)
+      }
+    } catch (err: any) {
+      setErrorMsg(`QR Upload failed: ${err.message}`)
+    } finally {
+      setIsUploadingQr(false)
+    }
+  }
+
+  const handleSavePaymentSettings = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      const payload: CompanyPaymentSettings = {
+        qrCodeUrl: payQrUrl,
+        bankName: payBankName.trim() || "State Bank of India",
+        accountHolderName: payAccountHolder.trim() || "Saampark Technology & Research Pvt. Ltd.",
+        accountNumber: payAccountNumber.trim() || "40912384759",
+        ifscCode: payIfsc.trim().toUpperCase() || "SBIN0001234",
+        upiId: payUpiId.trim() || "saampark@sbi",
+        branch: payBranch.trim() || "Balichak Station Road",
+        swiftCode: paySwiftCode.trim() || undefined,
+        notes: payNotes.trim() || undefined,
+      }
+      await saveCompanyPaymentSettings(payload)
+      setSuccessMsg("✅ Payment QR & Official Bank Details saved! These will now appear on all client Invoices.")
+      setTimeout(() => setSuccessMsg(""), 4000)
+    } catch (err: any) {
+      setErrorMsg(`Error saving payment settings: ${err.message}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Visible Tabs Filter based on user role
   const tabsList = React.useMemo(() => {
-    const base = [
+    const base: { id: SettingsTab; label: string; icon: any }[] = [
       { id: "profile", label: "My Profile & Avatar", icon: User },
       { id: "kyc", label: "🛡️ KYC Verification & Banking", icon: ShieldCheck },
     ]
+    if (isSuperAdmin || user?.role === "Admin") {
+      base.push({ id: "payments", label: "💳 Invoice Payment QR & Bank", icon: QrCode })
+    }
     if (isSuperAdmin) {
       base.push(
         { id: "organization", label: "🏢 Companies & Sub-Branches", icon: Building2 },
@@ -395,7 +479,7 @@ export default function SettingsMain() {
     }
     base.push({ id: "theme", label: "Display & Theme", icon: Sun })
     return base
-  }, [isSuperAdmin])
+  }, [isSuperAdmin, user?.role])
 
   return (
     <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 max-w-[1200px] mx-auto p-4 sm:p-6">
@@ -1093,7 +1177,194 @@ export default function SettingsMain() {
         </form>
       )}
 
-      {/* ── TAB 4: THEME ──────────────────────────────────────────────────── */}
+      {/* ── TAB: INVOICE PAYMENT QR & BANK DETAILS ─────────────────────────── */}
+      {activeTab === "payments" && (
+        <div className="space-y-6">
+          <form onSubmit={handleSavePaymentSettings} className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-3xl p-6 space-y-6 max-w-4xl text-xs shadow-2xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-100 dark:border-zinc-800 pb-4">
+              <div>
+                <h3 className="font-bold text-base text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                  <QrCode size={18} className="text-blue-600" />
+                  <span>Invoice Payment QR & Official Bank Account</span>
+                </h3>
+                <p className="text-xs text-zinc-500 mt-0.5">
+                  These details and payment QR code will be dynamically printed on all tax invoices and sent to clients.
+                </p>
+              </div>
+              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 w-fit">
+                Printed on Invoice PDF
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* QR Code Upload Card */}
+              <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 flex flex-col items-center justify-center text-center space-y-3">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
+                  Payment QR Code
+                </span>
+
+                <div className="w-36 h-36 rounded-2xl border-2 border-dashed border-zinc-300 dark:border-zinc-600 flex items-center justify-center overflow-hidden bg-white dark:bg-zinc-900 shadow-inner relative group">
+                  {payQrUrl ? (
+                    <img src={payQrUrl} alt="Payment QR" className="w-full h-full object-contain p-2" />
+                  ) : (
+                    <div className="flex flex-col items-center gap-1 text-zinc-400 p-2">
+                      <QrCode size={36} className="text-zinc-300 dark:text-zinc-600" />
+                      <span className="text-[10px]">No QR Uploaded</span>
+                    </div>
+                  )}
+
+                  {isUploadingQr && (
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center text-white text-[11px] font-bold">
+                      Uploading to Cloud...
+                    </div>
+                  )}
+                </div>
+
+                <input
+                  type="file"
+                  ref={qrInputRef}
+                  onChange={handleQrUpload}
+                  accept="image/*"
+                  className="hidden"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => qrInputRef.current?.click()}
+                  disabled={isUploadingQr}
+                  className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <Upload size={13} />
+                  <span>{payQrUrl ? "Change QR Code" : "Upload QR Image"}</span>
+                </button>
+                <p className="text-[10px] text-zinc-400">Supports GPay, PhonePe, Paytm, BharatPe, BHIM (PNG, JPG)</p>
+              </div>
+
+              {/* Bank Details Inputs */}
+              <div className="md:col-span-2 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-zinc-700 dark:text-zinc-300 font-semibold mb-1">
+                      Bank Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={payBankName}
+                      onChange={(e) => setPayBankName(e.target.value)}
+                      placeholder="e.g. State Bank of India"
+                      required
+                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-zinc-700 dark:text-zinc-300 font-semibold mb-1">
+                      Account Holder / Company Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={payAccountHolder}
+                      onChange={(e) => setPayAccountHolder(e.target.value)}
+                      placeholder="e.g. Saampark Technology & Research Pvt. Ltd."
+                      required
+                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-zinc-700 dark:text-zinc-300 font-semibold mb-1">
+                      Account Number *
+                    </label>
+                    <input
+                      type="text"
+                      value={payAccountNumber}
+                      onChange={(e) => setPayAccountNumber(e.target.value)}
+                      placeholder="e.g. 40912384759"
+                      required
+                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono focus:outline-hidden text-xs font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-zinc-700 dark:text-zinc-300 font-semibold mb-1">
+                      IFSC Code *
+                    </label>
+                    <input
+                      type="text"
+                      value={payIfsc}
+                      onChange={(e) => setPayIfsc(e.target.value.toUpperCase())}
+                      placeholder="e.g. SBIN0001234"
+                      required
+                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono focus:outline-hidden text-xs font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-zinc-700 dark:text-zinc-300 font-semibold mb-1">
+                      UPI ID / VPA *
+                    </label>
+                    <input
+                      type="text"
+                      value={payUpiId}
+                      onChange={(e) => setPayUpiId(e.target.value)}
+                      placeholder="e.g. saampark@sbi"
+                      required
+                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono focus:outline-hidden text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-zinc-700 dark:text-zinc-300 font-semibold mb-1">
+                      Branch Name / Location
+                    </label>
+                    <input
+                      type="text"
+                      value={payBranch}
+                      onChange={(e) => setPayBranch(e.target.value)}
+                      placeholder="e.g. Balichak Station Road"
+                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-zinc-700 dark:text-zinc-300 font-semibold mb-1">
+                    Invoice Payment Instructions / Notes
+                  </label>
+                  <input
+                    type="text"
+                    value={payNotes}
+                    onChange={(e) => setPayNotes(e.target.value)}
+                    placeholder="e.g. Please mention Invoice ID in transaction description."
+                    className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
+              <span className="text-[11px] text-zinc-400 flex items-center gap-1">
+                <CheckCircle2 size={13} className="text-emerald-500" />
+                Auto-saved and synced across all invoice generation
+              </span>
+              <button
+                type="submit"
+                disabled={loading || isUploadingQr}
+                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer disabled:opacity-50"
+              >
+                <Save size={14} />
+                <span>Save Payment QR & Bank Details</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* ── TAB: THEME ────────────────────────────────────────────────────── */}
       {activeTab === "theme" && (
         <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-3xl p-6 space-y-4 max-w-2xl text-xs shadow-2xs">
           <h3 className="font-bold text-sm text-zinc-900 dark:text-zinc-100 flex items-center gap-2">

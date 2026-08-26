@@ -3,6 +3,7 @@
 import * as React from "react"
 import { X, Printer, Send, Edit, CheckCircle2, AlertCircle, Building2, Phone, Mail, Globe, MapPin, ShieldCheck, QrCode } from "lucide-react"
 import { InvoiceItem } from "../services/invoiceService"
+import { getCompanyPaymentSettings, CompanyPaymentSettings, DEFAULT_COMPANY_PAYMENT_SETTINGS } from "@/app/feature/settings/services/companyPaymentService"
 
 interface InvoiceModalProps {
   isOpen: boolean
@@ -21,6 +22,15 @@ export function InvoiceModal({
 }: InvoiceModalProps) {
   const [isSending, setIsSending] = React.useState(false)
   const [sentSuccess, setSentSuccess] = React.useState(false)
+  const [paySettings, setPaySettings] = React.useState<CompanyPaymentSettings>(DEFAULT_COMPANY_PAYMENT_SETTINGS)
+
+  React.useEffect(() => {
+    if (isOpen) {
+      getCompanyPaymentSettings().then((res) => {
+        if (res) setPaySettings(res)
+      }).catch(() => {})
+    }
+  }, [isOpen, invoice])
 
   if (!isOpen || !invoice) return null
 
@@ -219,24 +229,59 @@ export function InvoiceModal({
           </div>
 
           {/* Financial Totals & Bank Details Row */}
-          <div className="flex flex-col sm:flex-row justify-between items-start gap-6 border-t border-zinc-200 pt-6">
+          <div className="flex flex-col lg:flex-row justify-between items-start gap-6 border-t border-zinc-200 pt-6">
             
-            {/* Bank Payment Information */}
-            <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-200 space-y-2 text-xs w-full sm:w-80">
-              <p className="font-black text-blue-900 uppercase text-[11px] tracking-wider flex items-center gap-1.5">
-                <Building2 size={14} className="text-blue-700" /> OFFICIAL BANK AC DETAILS
-              </p>
-              <div className="space-y-1 text-blue-950 font-medium">
-                <p>Bank: <strong>State Bank of India</strong></p>
-                <p>Account Name: <strong>Saampark Technology & Research Pvt. Ltd.</strong></p>
-                <p className="font-mono">Account No: <strong>40912384759</strong></p>
-                <p className="font-mono">IFSC Code: <strong>SBIN0001234</strong></p>
-                <p>Branch: <strong>Balichak Station Road</strong></p>
+            {/* Bank Payment Information & QR Code */}
+            <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-200 space-y-3 text-xs w-full lg:flex-1">
+              <div className="flex items-center justify-between">
+                <p className="font-black text-blue-900 uppercase text-[11px] tracking-wider flex items-center gap-1.5">
+                  <Building2 size={14} className="text-blue-700" /> OFFICIAL BANK & PAYMENT DETAILS
+                </p>
+                <span className="text-[10px] font-bold text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-full">
+                  Scan / Transfer
+                </span>
               </div>
+
+              <div className="flex flex-col sm:flex-row items-center gap-4 pt-1">
+                {/* Payment QR Code Box */}
+                {paySettings.qrCodeUrl ? (
+                  <div className="flex flex-col items-center gap-1.5 p-2 bg-white rounded-xl border border-blue-200 shadow-2xs shrink-0">
+                    <img 
+                      src={paySettings.qrCodeUrl} 
+                      alt="UPI Payment QR Code" 
+                      className="w-24 h-24 sm:w-28 sm:h-28 object-contain rounded-lg"
+                    />
+                    <span className="text-[9px] font-extrabold text-blue-800 uppercase tracking-tighter flex items-center gap-0.5">
+                      <QrCode size={10} /> Scan & Pay UPI
+                    </span>
+                  </div>
+                ) : (
+                  <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-xl bg-blue-100/60 border border-dashed border-blue-300 flex flex-col items-center justify-center text-center p-2 shrink-0 text-blue-500">
+                    <QrCode size={24} className="mb-1 opacity-70" />
+                    <span className="text-[9px] font-semibold leading-tight">UPI QR Code Configured in Settings</span>
+                  </div>
+                )}
+
+                {/* Bank Account Fields */}
+                <div className="space-y-1.5 text-blue-950 font-medium text-[11px] flex-1">
+                  <p>Bank: <strong className="text-blue-900 font-bold">{paySettings.bankName || "State Bank of India"}</strong></p>
+                  <p>Account Name: <strong className="text-blue-900 font-bold">{paySettings.accountHolderName || "Saampark Technology & Research Pvt. Ltd."}</strong></p>
+                  <p className="font-mono">Account No: <strong className="text-blue-900 font-bold tracking-wider text-xs">{paySettings.accountNumber || "40912384759"}</strong></p>
+                  <p className="font-mono">IFSC Code: <strong className="text-blue-900 font-bold tracking-wider text-xs">{paySettings.ifscCode || "SBIN0001234"}</strong></p>
+                  <p className="font-mono">UPI ID: <strong className="text-blue-700 font-bold text-xs bg-white px-1.5 py-0.5 rounded border border-blue-200">{paySettings.upiId || "saampark@sbi"}</strong></p>
+                  {paySettings.branch && <p className="text-[10px] text-blue-800/80">Branch: {paySettings.branch}</p>}
+                </div>
+              </div>
+
+              {paySettings.notes && (
+                <p className="text-[10px] text-blue-800/70 border-t border-blue-200/60 pt-2 italic">
+                  💡 {paySettings.notes}
+                </p>
+              )}
             </div>
 
-            {/* Total Summary Box */}
-            <div className="w-full sm:w-80 p-4 rounded-2xl bg-zinc-900 text-white space-y-2 text-xs shadow-md">
+            {/* Total Summary Box with Advance/Received & Due Breakdown */}
+            <div className="w-full lg:w-84 p-4 rounded-2xl bg-zinc-900 text-white space-y-2 text-xs shadow-md shrink-0">
               <div className="flex justify-between py-1 border-b border-zinc-800 text-zinc-400">
                 <span>Subtotal Base:</span>
                 <span className="font-bold text-white">₹{baseNum.toLocaleString("en-IN")}</span>
@@ -245,9 +290,30 @@ export function InvoiceModal({
                 <span>Integrated GST ({gstRate}%):</span>
                 <span className="font-bold text-white">₹{gstAmt.toLocaleString("en-IN")}</span>
               </div>
-              <div className="flex justify-between py-2 text-base font-black text-emerald-400 border-t border-zinc-700">
-                <span>Total Amount Due:</span>
+              <div className="flex justify-between py-1.5 text-sm font-bold text-white border-b border-zinc-800">
+                <span>Total Invoice Amount:</span>
                 <span>₹{totalVal.toLocaleString("en-IN")}</span>
+              </div>
+              
+              {/* Advance / Paid Amount */}
+              <div className="flex justify-between py-1 text-emerald-400 font-semibold border-b border-zinc-800">
+                <span>Advance / Received:</span>
+                <span>{invoice.paymentReceived || (isPaid ? `₹${totalVal.toLocaleString("en-IN")}` : "₹0")}</span>
+              </div>
+
+              {/* Net Balance Due */}
+              <div className="flex justify-between py-2 text-base font-black text-amber-400 border-t border-zinc-700">
+                <span>Balance Due:</span>
+                <span>{invoice.due || (isPaid ? "₹0" : `₹${totalVal.toLocaleString("en-IN")}`)}</span>
+              </div>
+
+              <div className="pt-1 flex items-center justify-between text-[10px] text-zinc-400">
+                <span>Payment Status:</span>
+                <span className={`font-bold px-2 py-0.5 rounded-full ${
+                  isPaid ? "bg-emerald-500/20 text-emerald-300" : invoice.status === "Partially paid" ? "bg-amber-500/20 text-amber-300" : "bg-rose-500/20 text-rose-300"
+                }`}>
+                  {invoice.status}
+                </span>
               </div>
             </div>
           </div>

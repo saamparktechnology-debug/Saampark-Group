@@ -24,29 +24,37 @@ import { ColumnDef } from "@tanstack/react-table"
 import { DataTable } from "@/components/ui/DataTable"
 import { Button } from "@/components/ui/Button"
 import { Tabs } from "@/components/ui/Tabs"
-import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 import { 
+  InvoiceItem, 
+  InvoiceStatus, 
   getInvoices, 
   addInvoice, 
   deleteInvoice, 
-  markPaymentCompleted, 
-  sendPaymentReminder, 
-  InvoiceItem, 
-  InvoiceStatus 
+  updateInvoiceStatus, 
+  markPaymentCompleted,
+  recordPartialPayment,
+  sendPaymentReminder 
 } from "./services/invoiceService"
-import { useAuthStore } from "@/store/useAuthStore"
 import { InvoiceModal } from "./components/InvoiceModal"
 import { getClients } from "@/app/feature/clients/services/clientService"
 import { getProjects } from "@/app/feature/projects/services/projectService"
+import { useAuthStore } from "@/store/useAuthStore"
+import { usePermissionStore } from "@/store/usePermissionStore"
+import { printPDFReport, exportToExcel } from "@/lib/exportUtils"
 
 export default function InvoicesPage() {
   const { user } = useAuthStore()
+  const { canPerformAction } = usePermissionStore()
+
+  const canAddInvoice = canPerformAction(user, "Sales", "add")
+  const canDeleteInvoice = canPerformAction(user, "Sales", "delete")
   const isClientRole = user?.role === "Clients"
   const clientEmailNorm = (user?.email || "").toLowerCase().trim()
   const clientNameNorm = (user?.name || "").toLowerCase().trim()
 
-  const [activeTab, setActiveTab] = React.useState("invoices")
   const [invoices, setInvoices] = React.useState<InvoiceItem[]>([])
+  const [activeTab, setActiveTab] = React.useState<"all" | InvoiceStatus>("all")
+  const [searchQuery, setSearchQuery] = React.useState("")
   const [selectedInvoice, setSelectedInvoice] = React.useState<InvoiceItem | null>(null)
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = React.useState(false)
   const [isAddModalOpen, setIsAddModalOpen] = React.useState(false)
@@ -56,6 +64,8 @@ export default function InvoicesPage() {
   const [paymentModalInvoice, setPaymentModalInvoice] = React.useState<InvoiceItem | null>(null)
   const [paymentMethod, setPaymentMethod] = React.useState("UPI / Net Banking")
   const [paymentRef, setPaymentRef] = React.useState("")
+  const [paymentTypeOption, setPaymentTypeOption] = React.useState<"full" | "part">("full")
+  const [customPartPaymentAmount, setCustomPartPaymentAmount] = React.useState<number>(0)
 
   // Add Invoice Form state
   const [clientName, setClientName] = React.useState("")
@@ -65,6 +75,8 @@ export default function InvoicesPage() {
   const [gstRate, setGstRate] = React.useState<number>(18)
   const [dueDate, setDueDate] = React.useState("")
   const [status, setStatus] = React.useState<InvoiceStatus>("Not paid")
+  const [paymentPlanMode, setPaymentPlanMode] = React.useState<"full" | "advance" | "part">("full")
+  const [advanceAmountInput, setAdvanceAmountInput] = React.useState<number>(0)
 
   const [availableClients, setAvailableClients] = React.useState<{ name: string; email: string }[]>([])
   const [availableProjects, setAvailableProjects] = React.useState<{ title: string; client: string }[]>([])
@@ -82,7 +94,12 @@ export default function InvoicesPage() {
   React.useEffect(() => {
     loadInvoices()
     const interval = setInterval(loadInvoices, 4000)
-    return () => clearInterval(interval)
+    window.addEventListener("storage", loadInvoices)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener("storage", loadInvoices)
+    }
   }, [loadInvoices])
 
   React.useEffect(() => {
@@ -114,12 +131,28 @@ export default function InvoicesPage() {
 
   const handleConfirmPayment = async () => {
     if (!paymentModalInvoice) return
-    const updated = await markPaymentCompleted(paymentModalInvoice.id, paymentMethod, paymentRef)
-    if (updated) {
-      showToast(`✅ Payment completed! Invoice ${paymentModalInvoice.id} is now Fully Paid and synced to Payments.`)
-      setPaymentModalInvoice(null)
-      setPaymentRef("")
-      loadInvoices()
+    if (paymentTypeOption === "part" && customPartPaymentAmount > 0) {
+      const updated = await recordPartialPayment(
+        paymentModalInvoice.id,
+        customPartPaymentAmount,
+        paymentMethod,
+        paymentRef
+      )
+      if (updated) {
+        showToast(`✅ Partial installment of ₹${customPartPaymentAmount.toLocaleString("en-IN")} recorded for ${paymentModalInvoice.id}!`)
+        setPaymentModalInvoice(null)
+        setPaymentRef("")
+        setCustomPartPaymentAmount(0)
+        loadInvoices()
+      }
+    } else {
+      const updated = await markPaymentCompleted(paymentModalInvoice.id, paymentMethod, paymentRef)
+      if (updated) {
+        showToast(`✅ Payment completed! Invoice ${paymentModalInvoice.id} is now Fully Paid and synced to Payments.`)
+        setPaymentModalInvoice(null)
+        setPaymentRef("")
+        loadInvoices()
+      }
     }
   }
 
@@ -141,7 +174,21 @@ export default function InvoicesPage() {
     const gstAmount = Math.round(baseAmount * (gstRate / 100))
     const totalAmount = baseAmount + gstAmount
     const formattedTotal = `₹${totalAmount.toLocaleString("en-IN")}`
-    const isPaid = status === "Fully paid"
+
+    let receivedNum = 0
+    let finalStatus: InvoiceStatus = status
+
+    if (paymentPlanMode === "advance" || paymentPlanMode === "part") {
+      receivedNum = Math.min(Math.max(0, advanceAmountInput), totalAmount)
+      finalStatus = receivedNum >= totalAmount ? "Fully paid" : receivedNum > 0 ? "Partially paid" : "Not paid"
+    } else {
+      receivedNum = status === "Fully paid" ? totalAmount : 0
+      finalStatus = status
+    }
+
+    const dueNum = Math.max(0, totalAmount - receivedNum)
+    const formattedReceived = `₹${receivedNum.toLocaleString("en-IN")}`
+    const formattedDue = `₹${dueNum.toLocaleString("en-IN")}`
 
     await addInvoice({
       client: clientName,
@@ -153,14 +200,16 @@ export default function InvoicesPage() {
       gstRate,
       gstAmount,
       totalInvoiced: formattedTotal,
-      paymentReceived: isPaid ? formattedTotal : "₹0",
-      due: isPaid ? "₹0" : formattedTotal,
-      status,
-      billedBy: "Admin",
+      paymentReceived: formattedReceived,
+      due: formattedDue,
+      status: finalStatus,
+      billedBy: user?.name || "Admin",
     })
 
-    showToast(`✅ Invoice created successfully for ${clientName}!`)
+    showToast(`✅ Invoice created successfully for ${clientName}! (Advance: ${formattedReceived}, Due: ${formattedDue})`)
     setIsAddModalOpen(false)
+    setAdvanceAmountInput(0)
+    setPaymentPlanMode("full")
     loadInvoices()
   }
 
@@ -536,6 +585,70 @@ export default function InvoicesPage() {
                   </div>
                 </div>
 
+                {/* Payment Option: Full vs Part Payment */}
+                <div>
+                  <label className="block text-zinc-500 font-medium mb-1">Settlement Type</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentTypeOption("full")}
+                      className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-all ${
+                        paymentTypeOption === "full"
+                          ? "bg-blue-600 text-white border-blue-600 shadow-2xs"
+                          : "bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300"
+                      }`}
+                    >
+                      Full Due Settlement ({paymentModalInvoice.due})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaymentTypeOption("part")
+                        const dueNum = parseInt(paymentModalInvoice.due.replace(/[^0-9]/g, "")) || 0
+                        if (customPartPaymentAmount === 0) setCustomPartPaymentAmount(Math.round(dueNum / 2))
+                      }}
+                      className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-all ${
+                        paymentTypeOption === "part"
+                          ? "bg-blue-600 text-white border-blue-600 shadow-2xs"
+                          : "bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300"
+                      }`}
+                    >
+                      Partial Installment
+                    </button>
+                  </div>
+                </div>
+
+                {paymentTypeOption === "part" && (
+                  <div className="space-y-1">
+                    <label className="block text-zinc-500 font-medium">Installment Amount Paid Now (₹) *</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={parseInt(paymentModalInvoice.due.replace(/[^0-9]/g, "")) || 99999999}
+                      value={customPartPaymentAmount || ""}
+                      onChange={(e) => setCustomPartPaymentAmount(Number(e.target.value))}
+                      placeholder="e.g. 15000"
+                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-bold"
+                    />
+                    <div className="flex gap-1.5 pt-1">
+                      {[0.25, 0.5, 0.75].map((pct) => {
+                        const dueNum = parseInt(paymentModalInvoice.due.replace(/[^0-9]/g, "")) || 0
+                        const amt = Math.round(dueNum * pct)
+                        return (
+                          <button
+                            key={pct}
+                            type="button"
+                            onClick={() => setCustomPartPaymentAmount(amt)}
+                            className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 text-[10px] font-semibold text-zinc-700 dark:text-zinc-300"
+                          >
+                            {pct * 100}% (₹{amt.toLocaleString("en-IN")})
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-zinc-500 font-medium mb-1">Payment Method</label>
                   <select
@@ -576,7 +689,7 @@ export default function InvoicesPage() {
                   onClick={handleConfirmPayment}
                   className="px-5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm"
                 >
-                  Confirm Settlement
+                  {paymentTypeOption === "part" ? "Record Partial Payment" : "Confirm Full Settlement"}
                 </button>
               </div>
             </motion.div>
@@ -587,12 +700,12 @@ export default function InvoicesPage() {
       {/* ---------------- CREATE INVOICE MODAL ---------------- */}
       <AnimatePresence>
         {isAddModalOpen && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden"
+              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden my-auto"
             >
               <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800">
                 <h3 className="font-bold text-sm text-zinc-900 dark:text-zinc-100">Create Tax Invoice</h3>
@@ -692,23 +805,78 @@ export default function InvoicesPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-zinc-500 font-medium mb-1">Initial Status</label>
+                    <label className="block text-zinc-500 font-medium mb-1">Payment Scheme</label>
                     <select
-                      value={status}
-                      onChange={(e) => setStatus(e.target.value as InvoiceStatus)}
-                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200"
+                      value={paymentPlanMode}
+                      onChange={(e) => setPaymentPlanMode(e.target.value as any)}
+                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-semibold"
                     >
-                      <option value="Not paid">Not paid</option>
-                      <option value="Fully paid">Fully paid</option>
-                      <option value="Draft">Draft</option>
+                      <option value="full">Standard Full Invoice</option>
+                      <option value="advance">Advance Payment (Part Received Upfront)</option>
                     </select>
                   </div>
                 </div>
 
-                <div className="bg-blue-50/50 dark:bg-blue-950/30 p-3 rounded-lg border border-blue-100 dark:border-blue-900 text-xs flex justify-between font-bold text-blue-900 dark:text-blue-200">
-                  <span>Total Payable:</span>
-                  <span>₹{(baseAmount + Math.round(baseAmount * (gstRate / 100))).toLocaleString("en-IN")}</span>
-                </div>
+                {/* Advance Payment Input */}
+                {paymentPlanMode === "advance" && (
+                  <div className="p-3 bg-blue-50/70 dark:bg-blue-950/40 rounded-xl border border-blue-200 dark:border-blue-800 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <label className="text-blue-900 dark:text-blue-200 font-bold">Advance Amount Received (₹) *</label>
+                      <span className="text-[10px] text-blue-700 dark:text-blue-300">Sets status to Partially Paid</span>
+                    </div>
+                    <input
+                      type="number"
+                      min={1}
+                      max={baseAmount + Math.round(baseAmount * (gstRate / 100))}
+                      value={advanceAmountInput || ""}
+                      onChange={(e) => setAdvanceAmountInput(Number(e.target.value))}
+                      placeholder="e.g. 25000"
+                      className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-blue-300 dark:border-blue-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-bold"
+                    />
+                    <div className="flex gap-1.5 pt-0.5">
+                      {[0.25, 0.5, 0.75].map((pct) => {
+                        const total = baseAmount + Math.round(baseAmount * (gstRate / 100))
+                        const amt = Math.round(total * pct)
+                        return (
+                          <button
+                            key={pct}
+                            type="button"
+                            onClick={() => setAdvanceAmountInput(amt)}
+                            className="px-2 py-0.5 rounded bg-white dark:bg-zinc-800 border border-blue-200 dark:border-blue-700 hover:bg-blue-100 text-[10px] font-semibold text-blue-800 dark:text-blue-300"
+                          >
+                            {pct * 100}% (₹{amt.toLocaleString("en-IN")})
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Live Totals & Balance Summary */}
+                {(() => {
+                  const total = baseAmount + Math.round(baseAmount * (gstRate / 100))
+                  const adv = paymentPlanMode === "advance" ? Math.min(advanceAmountInput, total) : (status === "Fully paid" ? total : 0)
+                  const due = Math.max(0, total - adv)
+
+                  return (
+                    <div className="bg-zinc-900 text-white p-3.5 rounded-xl space-y-1 text-xs shadow-inner">
+                      <div className="flex justify-between text-zinc-400">
+                        <span>Total Payable (Base + GST):</span>
+                        <span className="font-bold text-white">₹{total.toLocaleString("en-IN")}</span>
+                      </div>
+                      {paymentPlanMode === "advance" && (
+                        <div className="flex justify-between text-emerald-400 font-semibold">
+                          <span>Advance Received:</span>
+                          <span>₹{adv.toLocaleString("en-IN")}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-amber-400 font-bold text-sm pt-1 border-t border-zinc-800">
+                        <span>Remaining Balance Due:</span>
+                        <span>₹{due.toLocaleString("en-IN")}</span>
+                      </div>
+                    </div>
+                  )
+                })()}
 
                 <div className="flex items-center justify-end gap-2 pt-2">
                   <button
