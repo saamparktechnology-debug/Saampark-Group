@@ -187,6 +187,9 @@ export default function UsersMain() {
             ? ({ 
                 ...u, 
                 ...saved, 
+                companyId: saved.companyId,
+                companyIds: saved.companyIds,
+                companyName: saved.companyName,
                 branchId: saved.branchId, 
                 branchName: saved.branchName, 
                 role: userData.role || saved.role, 

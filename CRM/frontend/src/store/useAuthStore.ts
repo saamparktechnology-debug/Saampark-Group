@@ -414,24 +414,39 @@ export const useAuthStore = create<AuthState>()(
       },
 
       switchCompany: (companyId: string) => {
-        const { user } = get()
+        const { user, companies } = get()
         if (!user) return
+
+        const targetNorm = String(companyId || '').toLowerCase().trim()
+        const matchedComp = companies.find(c => 
+          String(c.id).toLowerCase().trim() === targetNorm || 
+          String(c.slug || '').toLowerCase().trim() === targetNorm ||
+          String(c.name || '').toLowerCase().trim() === targetNorm
+        )
+        const effectiveId = matchedComp?.id || companyId
         
         // Super Admin can switch to any company.
         // Admins, Teams, Clients can switch between any company they are assigned to.
+        const isSuperAdmin = user.role === 'Super Admin'
+        const userCompIds = (user.companyIds && user.companyIds.length > 0)
+          ? user.companyIds.map(id => String(id).toLowerCase().trim())
+          : [String(user.companyId || 'tech').toLowerCase().trim()]
+
         const canSwitch =
-          user.role === 'Super Admin' ||
-          (user.companyIds && user.companyIds.includes(companyId)) ||
-          user.companyId === companyId
+          isSuperAdmin ||
+          userCompIds.includes(targetNorm) ||
+          (matchedComp && userCompIds.includes(String(matchedComp.id).toLowerCase().trim())) ||
+          (matchedComp?.slug && userCompIds.includes(String(matchedComp.slug).toLowerCase().trim())) ||
+          String(user.companyId).toLowerCase().trim() === targetNorm
 
         if (canSwitch) {
           set({
-            activeCompanyId: companyId,
+            activeCompanyId: effectiveId,
             activeBranchId: null,
-            user: user ? { ...user, companyId: companyId as any } : null,
+            user: user ? { ...user, companyId: effectiveId as any } : null,
           })
           if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('saampark_company_switched', { detail: companyId }))
+            window.dispatchEvent(new CustomEvent('saampark_company_switched', { detail: effectiveId }))
             window.dispatchEvent(new Event('storage'))
           }
         }

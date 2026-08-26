@@ -225,9 +225,15 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
   }
 
   const handleToggleCompany = (compId: string) => {
-    if (selectedCompanyIds.includes(compId)) {
+    const norm = String(compId).toLowerCase().trim()
+    const isAlreadySelected = selectedCompanyIds.some(id => {
+      const idNorm = String(id).toLowerCase().trim()
+      return idNorm === norm
+    })
+
+    if (isAlreadySelected) {
       if (selectedCompanyIds.length > 1) {
-        setSelectedCompanyIds(selectedCompanyIds.filter(id => id !== compId))
+        setSelectedCompanyIds(selectedCompanyIds.filter(id => String(id).toLowerCase().trim() !== norm))
       }
     } else {
       setSelectedCompanyIds([...selectedCompanyIds, compId])
@@ -310,7 +316,10 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
 
     const primaryCompanyId = selectedCompanyIds[0] || "tech"
     const companyNamesList = companies
-      .filter((c) => selectedCompanyIds.includes(c.id) || selectedCompanyIds.includes(c.slug || ""))
+      .filter((c) => selectedCompanyIds.some(sc => {
+        const norm = String(sc).toLowerCase().trim()
+        return norm === String(c.id).toLowerCase().trim() || norm === String(c.slug || '').toLowerCase().trim()
+      }))
       .map((c) => c.name)
 
     const matchedBranch = branches.find((b) => String(b.id).toLowerCase() === String(selectedBranchId).toLowerCase())
@@ -321,7 +330,9 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
       role,
       companyId: primaryCompanyId,
       companyIds: selectedCompanyIds,
-      companyName: companyNamesList.join(", ") || (primaryCompanyId === "digital" ? "SAAMPARK Digital Marketing" : "SAAMPARK Technology"),
+      companyName: companyNamesList.length > 1
+        ? `SAAMPARK Group (${companyNamesList.length} Companies)`
+        : companyNamesList[0] || (primaryCompanyId === "digital" ? "SAAMPARK Digital Marketing" : "SAAMPARK Technology"),
       branchId: selectedBranchId ? selectedBranchId : undefined,
       branchName: matchedBranch?.name || (selectedBranchId ? selectedBranchId : undefined),
       department: department || "General",
@@ -458,7 +469,12 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
                 </label>
                 <div className="p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex flex-wrap gap-2">
                   {availableCompanies.map((c) => {
-                    const isChecked = selectedCompanyIds.includes(c.id) || selectedCompanyIds.includes(c.slug || "")
+                    const cIdNorm = String(c.id).toLowerCase().trim()
+                    const cSlugNorm = String(c.slug || "").toLowerCase().trim()
+                    const isChecked = selectedCompanyIds.some(id => {
+                      const norm = String(id).toLowerCase().trim()
+                      return norm === cIdNorm || norm === cSlugNorm
+                    })
                     return (
                       <button
                         type="button"
@@ -466,7 +482,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
                         onClick={() => handleToggleCompany(c.id)}
                         className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
                           isChecked
-                            ? "bg-blue-600 text-white border-blue-600 shadow-2xs"
+                            ? "bg-blue-600 text-white border-blue-600 shadow-2xs font-bold"
                             : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:border-zinc-400"
                         }`}
                       >
