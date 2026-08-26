@@ -48,18 +48,37 @@ export default function ProjectsMain() {
   }, [activeCompanyId, user?.companyId, selectedProject])
 
   const visibleProjects = React.useMemo(() => {
-    if (!user || isSuperOrAdmin) return projects
+    if (!user) return []
+    if (isSuperOrAdmin) return projects
+
     const normName = (user.name || "").toLowerCase().trim()
     const normEmail = (user.email || "").toLowerCase().trim()
+    const uId = String(user.id || "").toLowerCase().trim()
     const roleStr = String(user.role || "").toLowerCase()
     const isClient = roleStr.includes("client")
 
     return projects.filter((p) => {
+      const pCreatorId = String((p as any).createdById || "").toLowerCase().trim()
+      const pCreatorEmail = ((p as any).createdByEmail || "").toLowerCase().trim()
+
       if (isClient) {
         const clientName = (p.client || "").toLowerCase().trim()
-        return clientName === normName || clientName === normEmail || (normName && clientName.includes(normName))
+        const pClientId = String((p as any).clientId || "").toLowerCase().trim()
+
+        return (
+          clientName === normName ||
+          clientName === normEmail ||
+          (normName && clientName.includes(normName)) ||
+          (uId && pClientId === uId) ||
+          (uId && pCreatorId === uId) ||
+          (normEmail && pCreatorEmail === normEmail)
+        )
       }
-      // For team members: check if member of project
+
+      // For team members: check if creator, lead, or member of project
+      if (uId && pCreatorId === uId) return true
+      if (normEmail && pCreatorEmail === normEmail) return true
+
       const members = p.members || []
       return members.some((m) => {
         const mName = (m.name || "").toLowerCase().trim()

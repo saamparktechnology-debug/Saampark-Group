@@ -27,6 +27,12 @@ export interface ClientItem {
   branchId?: string;
   branchName?: string;
   createdAt?: number | string;
+  createdBy?: string;
+  createdById?: string;
+  createdByName?: string;
+  createdByEmail?: string;
+  createdByRole?: string;
+  isClientPrivate?: boolean;
 }
 
 export type Client = ClientItem;

@@ -441,15 +441,21 @@ export function LeadKanban({
     if (activeFilter === "My leads") {
       const currentUserName = (user?.name || "").toLowerCase().trim()
       const currentUserEmail = (user?.email || "").toLowerCase().trim()
+      const currentUserId = String(user?.id || "").toLowerCase().trim()
+      const cId = String((l as any).createdById || "").toLowerCase().trim()
+      const cEmail = ((l as any).createdByEmail || "").toLowerCase().trim()
+      const cName = ((l as any).createdByName || l.createdBy || "").toLowerCase().trim()
+
       const isMyLead =
+        (currentUserId && cId === currentUserId) ||
+        (currentUserEmail && cEmail === currentUserEmail) ||
+        (currentUserName && cName === currentUserName) ||
         (currentUserName && (
-          (l.createdBy || "").toLowerCase().includes(currentUserName) ||
           (l.caller || "").toLowerCase() === currentUserName ||
           (l.assignedTo || "").toLowerCase() === currentUserName ||
           (l.owner || "").toLowerCase() === currentUserName
         )) ||
         (currentUserEmail && (
-          (l.createdBy || "").toLowerCase().includes(currentUserEmail) ||
           (l.owner || "").toLowerCase() === currentUserEmail
         ))
       return matchesSearch && Boolean(isMyLead)
@@ -1002,6 +1008,14 @@ export function LeadKanban({
                             {l.createdAt || "06 Aug 2025"}
                           </span>
                         </div>
+
+                        {/* Creator Badge if added by a Team member */}
+                        {(l.createdByName || (l.createdBy && l.createdBy !== "Admin" && l.createdBy !== "Super Admin" && l.createdBy !== "Team" && l.createdBy !== "User")) && (
+                          <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-500/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 text-[10px] font-semibold">
+                            <UserIcon size={10} />
+                            <span>Added by: {l.createdByName || l.createdBy}</span>
+                          </div>
+                        )}
 
                         {/* Line 2: Phone & Secondary Contact */}
                         <div className="space-y-1 text-[11px]">

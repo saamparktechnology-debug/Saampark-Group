@@ -48,4 +48,9 @@ export interface Lead {
   lockedReason?: string
   assignedTo?: string
   assigned_to?: string | number
+  createdById?: string
+  createdByName?: string
+  createdByEmail?: string
+  createdByRole?: string
+  isClientPrivate?: boolean
 }

@@ -160,16 +160,51 @@ export default function LeadsMain() {
   const isSuperOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
 
   const visibleLeads = React.useMemo(() => {
-    if (!user || isSuperOrAdmin) return leads
+    if (!user) return []
+
+    // ── SUPER ADMIN & ADMIN VIEW ──
+    // Admins see all leads EXCEPT private client-created leads
+    if (isSuperOrAdmin) {
+      return leads.filter((l) => {
+        const isClientPrivate = (l as any).isClientPrivate === true || l.createdByRole === "Clients"
+        return !isClientPrivate
+      })
+    }
 
     const uName = (user.name || (user as any).full_name || "").toLowerCase().trim()
     const uEmail = (user.email || "").toLowerCase().trim()
     const uId = String(user.id || "").toLowerCase().trim()
 
+    // ── CLIENT ROLE VIEW ──
+    // Clients only see leads created by this specific client
+    if (user.role === "Clients") {
+      return leads.filter((l) => {
+        const cId = String((l as any).createdById || "").toLowerCase().trim()
+        const cEmail = ((l as any).createdByEmail || "").toLowerCase().trim()
+        const createdBy = (l.createdBy || "").toLowerCase().trim()
+
+        return (
+          (uId && cId === uId) ||
+          (uEmail && cEmail === uEmail) ||
+          (uEmail && createdBy === uEmail) ||
+          (uName && createdBy === uName)
+        )
+      })
+    }
+
+    // ── TEAM MEMBER ROLE VIEW ──
+    // Teams see leads assigned directly to them OR created by this specific team member
     return leads.filter((l) => {
+      // Exclude client-private leads
+      if ((l as any).isClientPrivate === true || l.createdByRole === "Clients") {
+        return false
+      }
+
       const caller = (l.caller || "").toLowerCase().trim()
       const owner = (l.owner || "").toLowerCase().trim()
       const createdBy = (l.createdBy || "").toLowerCase().trim()
+      const cId = String((l as any).createdById || "").toLowerCase().trim()
+      const cEmail = ((l as any).createdByEmail || "").toLowerCase().trim()
       const assignedTo = (l.assignedTo || (l as any).assigned_to || "").toString().toLowerCase().trim()
       const managers = (l.managers || "").toLowerCase().trim()
 
@@ -196,9 +231,12 @@ export default function LeadsMain() {
         })
       }
 
-      // Check if created specifically by this user (not generic "Team")
-      const isCreator = (createdBy && createdBy !== "team" && createdBy !== "teams" && createdBy !== "admin") && 
-        (createdBy === uEmail || createdBy === uName || (uEmail && createdBy.includes(uEmail)) || (uName && createdBy.includes(uName)))
+      // Check if created specifically by this team member
+      const isCreator = 
+        (uId && cId === uId) ||
+        (uEmail && cEmail === uEmail) ||
+        ((createdBy && createdBy !== "team" && createdBy !== "teams" && createdBy !== "admin") && 
+          (createdBy === uEmail || createdBy === uName || (uEmail && createdBy.includes(uEmail)) || (uName && createdBy.includes(uName))))
 
       return (
         checkExplicitMatch(assignedTo) ||

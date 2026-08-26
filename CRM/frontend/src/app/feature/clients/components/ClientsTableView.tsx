@@ -279,6 +279,11 @@ export function ClientsTableView({
                           <span>{client.branchName}</span>
                         </span>
                       )}
+                      {(client.createdByName || (client.createdBy && client.createdBy !== "Admin" && client.createdBy !== "Super Admin" && client.createdBy !== "Team" && client.createdBy !== "User")) && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                          <span>👤 Added by: {client.createdByName || client.createdBy}</span>
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="py-3 px-3 flex items-center gap-2">

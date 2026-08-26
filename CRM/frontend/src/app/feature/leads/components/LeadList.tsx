@@ -287,15 +287,21 @@ export function LeadList({
     if (activeFilter === "My leads") {
       const currentUserName = (user?.name || "").toLowerCase().trim()
       const currentUserEmail = (user?.email || "").toLowerCase().trim()
+      const currentUserId = String(user?.id || "").toLowerCase().trim()
+      const cId = String((l as any).createdById || "").toLowerCase().trim()
+      const cEmail = ((l as any).createdByEmail || "").toLowerCase().trim()
+      const cName = ((l as any).createdByName || l.createdBy || "").toLowerCase().trim()
+
       const isMyLead =
+        (currentUserId && cId === currentUserId) ||
+        (currentUserEmail && cEmail === currentUserEmail) ||
+        (currentUserName && cName === currentUserName) ||
         (currentUserName && (
-          (l.createdBy || "").toLowerCase().includes(currentUserName) ||
           (l.caller || "").toLowerCase() === currentUserName ||
           (l.assignedTo || "").toLowerCase() === currentUserName ||
           (l.owner || "").toLowerCase() === currentUserName
         )) ||
         (currentUserEmail && (
-          (l.createdBy || "").toLowerCase().includes(currentUserEmail) ||
           (l.owner || "").toLowerCase() === currentUserEmail
         ))
       return matchesSearch && Boolean(isMyLead)
@@ -1017,19 +1023,27 @@ export function LeadList({
                   >
                     {/* Name (Business with Building Icon) */}
                     <td className="py-3.5 px-4 font-medium text-zinc-900 dark:text-zinc-100">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-md bg-blue-50 dark:bg-blue-950/70 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900 flex items-center justify-center shrink-0">
-                          <Building2 size={13} />
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-md bg-blue-50 dark:bg-blue-950/70 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900 flex items-center justify-center shrink-0">
+                            <Building2 size={13} />
+                          </div>
+                          <span
+                            className={`font-semibold ${
+                              isLocked
+                                ? "text-rose-600 dark:text-rose-400 line-through"
+                                : "text-zinc-900 dark:text-zinc-100"
+                            }`}
+                          >
+                            {l.name}
+                          </span>
                         </div>
-                        <span
-                          className={`font-semibold ${
-                            isLocked
-                              ? "text-rose-600 dark:text-rose-400 line-through"
-                              : "text-zinc-900 dark:text-zinc-100"
-                          }`}
-                        >
-                          {l.name}
-                        </span>
+                        {(l.createdByName || (l.createdBy && l.createdBy !== "Admin" && l.createdBy !== "Super Admin" && l.createdBy !== "Team" && l.createdBy !== "User")) && (
+                          <div className="inline-flex items-center gap-1 px-1.5 py-0.2 w-fit rounded bg-indigo-500/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 text-[9.5px] font-semibold ml-8">
+                            <UserIcon size={9} />
+                            <span>Added by: {l.createdByName || l.createdBy}</span>
+                          </div>
+                        )}
                       </div>
                     </td>
 
