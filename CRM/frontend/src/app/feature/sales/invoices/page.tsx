@@ -87,13 +87,13 @@ export default function InvoicesPage() {
   const [projectName, setProjectName] = React.useState("")
   const [customProjectName, setCustomProjectName] = React.useState("")
 
-  const [baseAmount, setBaseAmount] = React.useState<number>(50000)
+  const [baseAmount, setBaseAmount] = React.useState<number | "">("")
   const [gstRate, setGstRate] = React.useState<number>(18)
   const [dueDate, setDueDate] = React.useState("")
   const [status, setStatus] = React.useState<InvoiceStatus>("Not paid")
   const [paymentPlanMode, setPaymentPlanMode] = React.useState<"advance" | "part" | "full">("advance")
-  const [advanceAmountInput, setAdvanceAmountInput] = React.useState<number>(20000)
-  const [partInitialPayment, setPartInitialPayment] = React.useState<number>(0)
+  const [advanceAmountInput, setAdvanceAmountInput] = React.useState<number | "">("")
+  const [partInitialPayment, setPartInitialPayment] = React.useState<number | "">("")
   const [installmentsCount, setInstallmentsCount] = React.useState<number>(3)
   const [billingCycle, setBillingCycle] = React.useState<"Monthly" | "Quarterly">("Monthly")
   const [autoCreateSubscription, setAutoCreateSubscription] = React.useState<boolean>(true)
@@ -126,6 +126,14 @@ export default function InvoicesPage() {
 
   React.useEffect(() => {
     if (isAddModalOpen) {
+      setBaseAmount("")
+      setAdvanceAmountInput("")
+      setPartInitialPayment("")
+      setPaymentPlanMode("advance")
+      setCustomClientName("")
+      setCustomClientEmail("")
+      setCustomClientPhone("")
+      setCustomProjectName("")
       getClients().then((clients) => {
         setAvailableClients(clients.map(c => ({ name: c.name, email: c.email || "" })))
         if (clients.length > 0) {
@@ -209,8 +217,12 @@ export default function InvoicesPage() {
       return
     }
 
-    const gstAmount = Math.round(baseAmount * (gstRate / 100))
-    const totalAmount = baseAmount + gstAmount
+    const numBase = typeof baseAmount === "number" ? baseAmount : 0
+    const numAdvance = typeof advanceAmountInput === "number" ? advanceAmountInput : 0
+    const numPartInitial = typeof partInitialPayment === "number" ? partInitialPayment : 0
+
+    const gstAmount = Math.round(numBase * (gstRate / 100))
+    const totalAmount = numBase + gstAmount
     const formattedTotal = `₹${totalAmount.toLocaleString("en-IN")}`
 
     let receivedNum = 0
@@ -220,10 +232,10 @@ export default function InvoicesPage() {
       receivedNum = status === "Fully paid" ? totalAmount : 0
       finalStatus = status
     } else if (paymentPlanMode === "advance") {
-      receivedNum = Math.min(Math.max(0, advanceAmountInput), totalAmount)
+      receivedNum = Math.min(Math.max(0, numAdvance), totalAmount)
       finalStatus = receivedNum >= totalAmount ? "Fully paid" : receivedNum > 0 ? "Partially paid" : "Not paid"
     } else if (paymentPlanMode === "part") {
-      receivedNum = Math.min(Math.max(0, partInitialPayment), totalAmount)
+      receivedNum = Math.min(Math.max(0, numPartInitial), totalAmount)
       finalStatus = receivedNum >= totalAmount ? "Fully paid" : receivedNum > 0 ? "Partially paid" : "Not paid"
     }
 
@@ -266,7 +278,7 @@ export default function InvoicesPage() {
       project: finalProjectName,
       billDate: new Date().toLocaleDateString("en-GB"),
       dueDate: calculatedDueDate,
-      baseAmount,
+      baseAmount: numBase,
       gstRate,
       gstAmount,
       totalInvoiced: formattedTotal,
@@ -1016,12 +1028,20 @@ export default function InvoicesPage() {
                       type="number"
                       required
                       min={0}
+                      placeholder="Enter base amount (e.g. 50000)"
                       value={baseAmount}
                       onChange={(e) => {
-                        const newBase = Number(e.target.value)
-                        setBaseAmount(newBase)
-                        const newTotal = newBase + Math.round(newBase * (gstRate / 100))
-                        if (advanceAmountInput > newTotal) setAdvanceAmountInput(Math.round(newTotal * 0.4))
+                        const val = e.target.value
+                        if (val === "") {
+                          setBaseAmount("")
+                        } else {
+                          const newBase = Math.max(0, Number(val))
+                          setBaseAmount(newBase)
+                          const newTotal = newBase + Math.round(newBase * (gstRate / 100))
+                          if (typeof advanceAmountInput === "number" && advanceAmountInput > newTotal) {
+                            setAdvanceAmountInput(Math.round(newTotal * 0.4))
+                          }
+                        }
                       }}
                       className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-bold"
                     />
@@ -1106,7 +1126,8 @@ export default function InvoicesPage() {
                         </label>
                         <div className="flex items-center gap-1">
                           {[0.25, 0.40, 0.50].map((pct) => {
-                            const total = baseAmount + Math.round(baseAmount * (gstRate / 100))
+                            const curBase = typeof baseAmount === "number" ? baseAmount : 0
+                            const total = curBase + Math.round(curBase * (gstRate / 100))
                             const amt = Math.round(total * pct)
                             return (
                               <button
@@ -1123,10 +1144,14 @@ export default function InvoicesPage() {
                       </div>
                       <input
                         type="number"
-                        min={1}
-                        max={baseAmount + Math.round(baseAmount * (gstRate / 100))}
+                        min={0}
+                        max={typeof baseAmount === "number" ? baseAmount + Math.round(baseAmount * (gstRate / 100)) : undefined}
+                        placeholder="Enter advance amount"
                         value={advanceAmountInput}
-                        onChange={(e) => setAdvanceAmountInput(Number(e.target.value))}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          setAdvanceAmountInput(val === "" ? "" : Math.max(0, Number(val)))
+                        }}
                         className="w-full px-3 py-1.5 bg-emerald-50/50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-700 rounded-lg text-emerald-900 dark:text-emerald-200 font-bold"
                       />
                     </div>
@@ -1144,7 +1169,10 @@ export default function InvoicesPage() {
                             type="number"
                             min={0}
                             value={partInitialPayment}
-                            onChange={(e) => setPartInitialPayment(Number(e.target.value))}
+                            onChange={(e) => {
+                              const val = e.target.value
+                              setPartInitialPayment(val === "" ? "" : Math.max(0, Number(val)))
+                            }}
                             placeholder="₹0"
                             className="w-full px-2.5 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-bold"
                           />
@@ -1184,7 +1212,13 @@ export default function InvoicesPage() {
                         <div className="flex items-center gap-1.5">
                           <RefreshCw size={13} className="text-blue-600 animate-spin-slow shrink-0" />
                           <span className="text-[11px] font-bold text-blue-900 dark:text-blue-200">
-                            ₹{Math.round(Math.max(0, (baseAmount + Math.round(baseAmount * (gstRate / 100)) - partInitialPayment)) / installmentsCount).toLocaleString("en-IN")} / {billingCycle.toLowerCase()}
+                            {(() => {
+                              const curBase = typeof baseAmount === "number" ? baseAmount : 0
+                              const curDeposit = typeof partInitialPayment === "number" ? partInitialPayment : 0
+                              const total = curBase + Math.round(curBase * (gstRate / 100))
+                              const rem = Math.max(0, total - curDeposit)
+                              return `₹${Math.round(rem / installmentsCount).toLocaleString("en-IN")} / ${billingCycle.toLowerCase()}`
+                            })()}
                           </span>
                         </div>
                         <label className="flex items-center gap-1 text-[10px] font-bold text-blue-900 dark:text-blue-200 cursor-pointer">
@@ -1220,11 +1254,15 @@ export default function InvoicesPage() {
 
                 {/* ---------------- 5. LIVE TOTALS BREAKDOWN ---------------- */}
                 {(() => {
-                  const total = baseAmount + Math.round(baseAmount * (gstRate / 100))
+                  const curBase = typeof baseAmount === "number" ? baseAmount : 0
+                  const curAdv = typeof advanceAmountInput === "number" ? advanceAmountInput : 0
+                  const curDeposit = typeof partInitialPayment === "number" ? partInitialPayment : 0
+
+                  const total = curBase + Math.round(curBase * (gstRate / 100))
                   let adv = 0
                   if (paymentPlanMode === "full") adv = status === "Fully paid" ? total : 0
-                  else if (paymentPlanMode === "advance") adv = Math.min(advanceAmountInput, total)
-                  else if (paymentPlanMode === "part") adv = Math.min(partInitialPayment, total)
+                  else if (paymentPlanMode === "advance") adv = Math.min(curAdv, total)
+                  else if (paymentPlanMode === "part") adv = Math.min(curDeposit, total)
                   const due = Math.max(0, total - adv)
 
                   return (
@@ -1236,12 +1274,14 @@ export default function InvoicesPage() {
                       {adv > 0 && (
                         <div className="flex justify-between text-emerald-400 font-semibold">
                           <span>{paymentPlanMode === "advance" ? "Advance Down Payment:" : "Initial Paid:"}</span>
-                          <span>₹{adv.toLocaleString("en-IN")}</span>
+                          <span>- ₹{adv.toLocaleString("en-IN")}</span>
                         </div>
                       )}
-                      <div className="flex justify-between text-amber-400 font-bold text-sm pt-1 border-t border-zinc-800">
-                        <span>Remaining Balance Due:</span>
-                        <span>₹{due.toLocaleString("en-IN")}</span>
+                      <div className="flex justify-between text-base font-extrabold border-t border-zinc-700 pt-1.5 mt-1">
+                        <span>Balance Due:</span>
+                        <span className={due > 0 ? "text-amber-400" : "text-emerald-400"}>
+                          ₹{due.toLocaleString("en-IN")}
+                        </span>
                       </div>
                     </div>
                   )

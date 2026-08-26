@@ -42,11 +42,11 @@ export function AddClientProjectModal({
     return d.toISOString().split("T")[0]
   })
   
-  const [baseAmount, setBaseAmount] = React.useState<number>(50000)
+  const [baseAmount, setBaseAmount] = React.useState<number | "">("")
   const [gstRate, setGstRate] = React.useState<number>(18)
   const [paymentModel, setPaymentModel] = React.useState<"advance" | "part" | "full">("advance")
-  const [advanceAmount, setAdvanceAmount] = React.useState<number>(20000)
-  const [partInitialPayment, setPartInitialPayment] = React.useState<number>(0)
+  const [advanceAmount, setAdvanceAmount] = React.useState<number | "">("")
+  const [partInitialPayment, setPartInitialPayment] = React.useState<number | "">("")
   const [installmentsCount, setInstallmentsCount] = React.useState<number>(3)
   const [billingCycle, setBillingCycle] = React.useState<"Monthly" | "Quarterly">("Monthly")
   const [autoCreateSubscription, setAutoCreateSubscription] = React.useState<boolean>(true)
@@ -59,6 +59,10 @@ export function AddClientProjectModal({
 
   React.useEffect(() => {
     if (isOpen) {
+      setBaseAmount("")
+      setAdvanceAmount("")
+      setPartInitialPayment("")
+      setPaymentModel("advance")
       if (user?.name) {
         setBilledByAdmin(user.name)
       }
@@ -95,17 +99,21 @@ export function AddClientProjectModal({
 
   if (!isOpen || !client) return null
 
-  const gstAmount = Math.round(baseAmount * (gstRate / 100))
-  const totalAmount = baseAmount + gstAmount
+  const numBase = typeof baseAmount === "number" ? baseAmount : 0
+  const numAdvance = typeof advanceAmount === "number" ? advanceAmount : 0
+  const numPartInitial = typeof partInitialPayment === "number" ? partInitialPayment : 0
+
+  const gstAmount = Math.round(numBase * (gstRate / 100))
+  const totalAmount = numBase + gstAmount
 
   // Distinct calculations per payment structure
   let effectiveAdvance = 0
   if (paymentModel === "full") {
     effectiveAdvance = paymentStatus === "Paid" ? totalAmount : 0
   } else if (paymentModel === "advance") {
-    effectiveAdvance = Math.min(advanceAmount, totalAmount)
+    effectiveAdvance = Math.min(numAdvance, totalAmount)
   } else if (paymentModel === "part") {
-    effectiveAdvance = Math.min(partInitialPayment, totalAmount)
+    effectiveAdvance = Math.min(numPartInitial, totalAmount)
   }
 
   const remainingDue = Math.max(0, totalAmount - effectiveAdvance)
@@ -173,7 +181,7 @@ export function AddClientProjectModal({
         dueAmount: remainingDue,
         installmentsCount: paymentModel === "part" ? installmentsCount : undefined,
         installmentAmount: paymentModel === "part" ? perInstallment : undefined,
-        baseAmount,
+        baseAmount: numBase,
         gstRate,
         gstAmount,
         totalAmount,
@@ -198,7 +206,7 @@ export function AddClientProjectModal({
         project: projectTitle,
         billDate: startDate,
         dueDate: deadline,
-        baseAmount,
+        baseAmount: numBase,
         gstRate,
         gstAmount,
         totalInvoiced: formattedTotal,
@@ -510,12 +518,20 @@ export function AddClientProjectModal({
                 <input
                   type="number"
                   min="0"
+                  placeholder="Enter deal amount (e.g. 50000)"
                   value={baseAmount}
                   onChange={(e) => {
-                    const newBase = Number(e.target.value)
-                    setBaseAmount(newBase)
-                    const newTotal = newBase + Math.round(newBase * (gstRate / 100))
-                    if (advanceAmount > newTotal) setAdvanceAmount(Math.round(newTotal * 0.4))
+                    const val = e.target.value
+                    if (val === "") {
+                      setBaseAmount("")
+                    } else {
+                      const newBase = Math.max(0, Number(val))
+                      setBaseAmount(newBase)
+                      const newTotal = newBase + Math.round(newBase * (gstRate / 100))
+                      if (typeof advanceAmount === "number" && advanceAmount > newTotal) {
+                        setAdvanceAmount(Math.round(newTotal * 0.4))
+                      }
+                    }
                   }}
                   className="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-blue-200 dark:border-blue-800 font-bold text-zinc-900 dark:text-zinc-100"
                 />
@@ -572,8 +588,12 @@ export function AddClientProjectModal({
                       type="number"
                       min="0"
                       max={totalAmount}
+                      placeholder="Enter advance amount"
                       value={advanceAmount}
-                      onChange={(e) => setAdvanceAmount(Number(e.target.value))}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        setAdvanceAmount(val === "" ? "" : Math.max(0, Number(val)))
+                      }}
                       className="w-full px-3 py-1.5 rounded-lg bg-emerald-50/50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 font-bold text-emerald-800 dark:text-emerald-200"
                     />
                   </div>
@@ -611,7 +631,10 @@ export function AddClientProjectModal({
                       min="0"
                       max={totalAmount}
                       value={partInitialPayment}
-                      onChange={(e) => setPartInitialPayment(Number(e.target.value))}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        setPartInitialPayment(val === "" ? "" : Math.max(0, Number(val)))
+                      }}
                       placeholder="₹0"
                       className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-semibold text-zinc-900 dark:text-zinc-100"
                     />
