@@ -66,7 +66,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
   const [selectedBranchId, setSelectedBranchId] = React.useState<string>("")
   const [department, setDepartment] = React.useState("")
   const [phone, setPhone] = React.useState("")
-  const [password, setPassword] = React.useState("Password123")
+  const [password, setPassword] = React.useState("")
   const [status, setStatus] = React.useState<UserStatus>("Active")
 
   // Available branches for selected companies (with robust slug/id normalization)
@@ -157,10 +157,11 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
         ? activeCompanyId
         : (availableCompanies[0]?.id || "tech")
       setSelectedCompanyIds([defaultComp])
-      setDepartment("Software Engineering")
-      setPhone("+91 98765 43210")
+      setSelectedBranchId("")
+      setDepartment("")
+      setPhone("")
       setStatus("Active")
-      setPassword("Password123")
+      setPassword("")
       setAllowedModules([...CONFIGURABLE_MODULES])
       
       const init: Record<string, ModuleActionFlags> = {}

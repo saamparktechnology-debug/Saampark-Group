@@ -36,11 +36,12 @@ export function AddEventModal({
   initialDate,
   labels,
 }: AddEventModalProps) {
+  const todayStr = React.useMemo(() => new Date().toISOString().split("T")[0], [])
   const [title, setTitle] = React.useState("")
   const [description, setDescription] = React.useState("")
-  const [startDate, setStartDate] = React.useState(initialDate || "2026-08-15")
+  const [startDate, setStartDate] = React.useState(initialDate || todayStr)
   const [startTime, setStartTime] = React.useState("09:00")
-  const [endDate, setEndDate] = React.useState(initialDate || "2026-08-15")
+  const [endDate, setEndDate] = React.useState(initialDate || todayStr)
   const [endTime, setEndTime] = React.useState("10:00")
   const [location, setLocation] = React.useState("")
   const [selectedLabel, setSelectedLabel] = React.useState("")
