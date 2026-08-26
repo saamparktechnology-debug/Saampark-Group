@@ -44,8 +44,9 @@ export function AddClientProjectModal({
   
   const [baseAmount, setBaseAmount] = React.useState<number>(50000)
   const [gstRate, setGstRate] = React.useState<number>(18)
-  const [paymentModel, setPaymentModel] = React.useState<"advance" | "full">("advance")
+  const [paymentModel, setPaymentModel] = React.useState<"advance" | "part" | "full">("advance")
   const [advanceAmount, setAdvanceAmount] = React.useState<number>(20000)
+  const [partInitialPayment, setPartInitialPayment] = React.useState<number>(0)
   const [installmentsCount, setInstallmentsCount] = React.useState<number>(3)
   const [billingCycle, setBillingCycle] = React.useState<"Monthly" | "Quarterly">("Monthly")
   const [autoCreateSubscription, setAutoCreateSubscription] = React.useState<boolean>(true)
@@ -96,9 +97,17 @@ export function AddClientProjectModal({
 
   const gstAmount = Math.round(baseAmount * (gstRate / 100))
   const totalAmount = baseAmount + gstAmount
-  const effectiveAdvance = paymentModel === "full" 
-    ? (paymentStatus === "Paid" ? totalAmount : 0) 
-    : Math.min(advanceAmount, totalAmount)
+
+  // Distinct calculations per payment structure
+  let effectiveAdvance = 0
+  if (paymentModel === "full") {
+    effectiveAdvance = paymentStatus === "Paid" ? totalAmount : 0
+  } else if (paymentModel === "advance") {
+    effectiveAdvance = Math.min(advanceAmount, totalAmount)
+  } else if (paymentModel === "part") {
+    effectiveAdvance = Math.min(partInitialPayment, totalAmount)
+  }
+
   const remainingDue = Math.max(0, totalAmount - effectiveAdvance)
   const perInstallment = installmentsCount > 0 && remainingDue > 0 
     ? Math.round(remainingDue / installmentsCount) 
@@ -140,8 +149,14 @@ export function AddClientProjectModal({
       const computedPaymentStatus = remainingDue === 0 
         ? "Paid" 
         : effectiveAdvance > 0 
-          ? "Advance Received" 
+          ? (paymentModel === "advance" ? "Advance Received" : "Partially Paid") 
           : "Payment Pending"
+
+      const paymentStructureLabel = paymentModel === "advance"
+        ? "Advance Payment"
+        : paymentModel === "part"
+          ? "Part Payment (Subscription)"
+          : "Full Payment"
 
       const createdProject = await addProject({
         title: projectTitle,
@@ -153,18 +168,18 @@ export function AddClientProjectModal({
         progress: effectiveAdvance > 0 ? 15 : 0,
         status: computedProjectStatus,
         paymentStatus: computedPaymentStatus as any,
-        paymentStructure: paymentModel === "advance" ? "Advance + Part Payment" : "Full",
+        paymentStructure: paymentStructureLabel as any,
         advanceAmount: effectiveAdvance,
         dueAmount: remainingDue,
-        installmentsCount: paymentModel === "advance" ? installmentsCount : undefined,
-        installmentAmount: paymentModel === "advance" ? perInstallment : undefined,
+        installmentsCount: paymentModel === "part" ? installmentsCount : undefined,
+        installmentAmount: paymentModel === "part" ? perInstallment : undefined,
         baseAmount,
         gstRate,
         gstAmount,
         totalAmount,
         billedBy: billedByAdmin,
         labels: [category, computedPaymentStatus],
-        description: description || `Client Project for ${client.name}. Billed by ${billedByAdmin}. ${paymentModel === "advance" ? `Advance Paid: ${formattedAdvance}, Balance Due: ${formattedDue} in ${installmentsCount} installments.` : ''}`,
+        description: description || `Client Project for ${client.name}. Billed by ${billedByAdmin}. ${paymentModel === "advance" ? `Advance Paid: ${formattedAdvance}, Balance Due on Delivery: ${formattedDue}.` : paymentModel === "part" ? `Part Payment Plan: Initial Paid: ${formattedAdvance}, Balance: ${formattedDue} in ${installmentsCount} ${billingCycle.toLowerCase()} installments of ₹${perInstallment.toLocaleString("en-IN")}.` : ''}`,
         members: projectMembers,
       })
 
@@ -204,7 +219,7 @@ export function AddClientProjectModal({
         totalAmount: formattedTotal,
         paymentStatus: remainingDue === 0 ? "Paid" : effectiveAdvance > 0 ? "Partially paid" : "Unpaid",
         status: effectiveAdvance > 0 ? "Processing" : "Pending",
-        notes: description || `Order generated for project: ${projectTitle} (${category}). ${paymentModel === "advance" ? `Advance Paid: ${formattedAdvance}, Balance: ${formattedDue}.` : ''}`,
+        notes: description || `Order generated for project: ${projectTitle} (${category}). ${paymentModel === "advance" ? `Advance: ${formattedAdvance}, Balance on delivery: ${formattedDue}.` : paymentModel === "part" ? `Part Payment: ${installmentsCount} parts of ₹${perInstallment.toLocaleString("en-IN")}.` : ''}`,
         invoiceId: invoiceId,
       })
 
@@ -218,15 +233,19 @@ export function AddClientProjectModal({
           paymentDate: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }).replace(/\//g, "-"),
           paymentMethod: "Bank Transfer / UPI",
           transactionRef: `TXN-${Date.now().toString().slice(-6)}`,
-          note: paymentModel === "advance" ? `Advance / Down Payment received for ${projectTitle}` : `Full invoice payment for ${projectTitle}`,
+          note: paymentModel === "advance" 
+            ? `Advance Down Payment received for ${projectTitle}` 
+            : paymentModel === "part"
+              ? `Initial installment received for ${projectTitle}`
+              : `Full invoice payment for ${projectTitle}`,
           amount: formattedAdvance,
           amountNum: effectiveAdvance,
           status: "Completed",
         })
       }
 
-      // 5. Automatically create Recurring Part Payment Subscription if enabled
-      if (paymentModel === "advance" && autoCreateSubscription && remainingDue > 0) {
+      // 5. Automatically create Recurring Part Payment Subscription if Part Payment mode is active
+      if (paymentModel === "part" && autoCreateSubscription && remainingDue > 0) {
         await addSubscription({
           clientName: client.name,
           planName: `${projectTitle} (Part Payment Plan)`,
@@ -436,35 +455,48 @@ export function AddClientProjectModal({
             </div>
           </div>
 
-          {/* Financial GST & Advance / Part Payment Breakdown Box */}
+          {/* Financial GST & Separated Payment Model Breakdown Box */}
           <div className="p-4 rounded-2xl bg-blue-50/60 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 space-y-4">
-            <div className="flex items-center justify-between text-blue-700 dark:text-blue-300 font-bold text-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-blue-700 dark:text-blue-300 font-bold text-xs">
               <div className="flex items-center gap-2">
                 <Calculator size={15} />
                 <span>Financial & Payment Terms</span>
               </div>
-              <div className="flex items-center gap-1 bg-white dark:bg-zinc-900 p-0.5 rounded-lg border border-blue-200 dark:border-blue-800">
+              
+              {/* 3 Separated Payment Model Tabs */}
+              <div className="flex items-center gap-1 bg-white dark:bg-zinc-900 p-0.5 rounded-lg border border-blue-200 dark:border-blue-800 self-start sm:self-auto overflow-x-auto">
                 <button
                   type="button"
                   onClick={() => setPaymentModel("advance")}
-                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all shrink-0 ${
                     paymentModel === "advance"
                       ? "bg-blue-600 text-white shadow-xs"
                       : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
                   }`}
                 >
-                  🪙 Advance + Part Payment
+                  🪙 Advance
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentModel("part")}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all shrink-0 ${
+                    paymentModel === "part"
+                      ? "bg-blue-600 text-white shadow-xs"
+                      : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
+                  }`}
+                >
+                  🔄 Part Payment
                 </button>
                 <button
                   type="button"
                   onClick={() => setPaymentModel("full")}
-                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all shrink-0 ${
                     paymentModel === "full"
                       ? "bg-blue-600 text-white shadow-xs"
                       : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
                   }`}
                 >
-                  💳 Full (100%) Upfront
+                  💳 Full (100%)
                 </button>
               </div>
             </div>
@@ -507,14 +539,21 @@ export function AddClientProjectModal({
               </div>
             </div>
 
-            {/* Advance & Part Payment Detailed Section */}
-            {paymentModel === "advance" ? (
-              <div className="p-3.5 bg-white dark:bg-zinc-900 border border-blue-200 dark:border-blue-800/80 rounded-xl space-y-3">
+            {/* 1. SEPARATE OPTION: ADVANCE PAYMENT ONLY */}
+            {paymentModel === "advance" && (
+              <div className="p-3.5 bg-white dark:bg-zinc-900 border border-emerald-200 dark:border-emerald-900/80 rounded-xl space-y-3">
+                <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-2">
+                  <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                    <Coins size={14} className="text-emerald-600" /> Advance Down Payment Terms
+                  </span>
+                  <span className="text-[10px] text-zinc-400">Balance settled in single final payment</span>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <label className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
-                        <Coins size={13} /> Advance Down Payment (₹)
+                      <label className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
+                        Advance Down Payment (₹)
                       </label>
                       <div className="flex items-center gap-1">
                         {[25, 40, 50].map((pct) => (
@@ -540,89 +579,114 @@ export function AddClientProjectModal({
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-amber-700 dark:text-amber-400 mb-1">
-                      Remaining Balance Due (₹)
+                    <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                      Remaining Balance (Due on Delivery)
                     </label>
-                    <div className="w-full px-3 py-1.5 rounded-lg bg-amber-50/50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 font-bold text-amber-800 dark:text-amber-200 flex items-center justify-between">
+                    <div className="w-full px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-bold text-zinc-900 dark:text-zinc-100 flex items-center justify-between">
                       <span>₹{remainingDue.toLocaleString("en-IN")}</span>
-                      <span className="text-[10px] text-amber-600 dark:text-amber-400 font-normal">To be split in parts</span>
+                      <span className="text-[10px] text-zinc-400 font-normal">Due on final release</span>
                     </div>
                   </div>
                 </div>
+              </div>
+            )}
 
-                {/* Subscription Part Payment Configuration */}
-                {remainingDue > 0 && (
-                  <div className="pt-2.5 border-t border-zinc-100 dark:border-zinc-800 space-y-2.5">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 uppercase mb-1">
-                          Part Installments
-                        </label>
-                        <select
-                          value={installmentsCount}
-                          onChange={(e) => setInstallmentsCount(Number(e.target.value))}
-                          className="w-full px-2.5 py-1 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-800 dark:text-zinc-200"
-                        >
-                          <option value={2}>2 Installments</option>
-                          <option value={3}>3 Installments</option>
-                          <option value={4}>4 Installments</option>
-                          <option value={6}>6 Installments</option>
-                          <option value={12}>12 Installments</option>
-                        </select>
-                      </div>
+            {/* 2. SEPARATE OPTION: PART PAYMENT / SUBSCRIPTION */}
+            {paymentModel === "part" && (
+              <div className="p-3.5 bg-white dark:bg-zinc-900 border border-blue-300 dark:border-blue-800 rounded-xl space-y-3">
+                <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-2">
+                  <span className="text-[11px] font-bold text-blue-800 dark:text-blue-300 flex items-center gap-1.5">
+                    <RefreshCw size={14} className="text-blue-600" /> Part Payment Plan & Subscriptions
+                  </span>
+                  <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold">Recurring Milestones / Installments</span>
+                </div>
 
-                      <div>
-                        <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 uppercase mb-1">
-                          Billing Frequency
-                        </label>
-                        <select
-                          value={billingCycle}
-                          onChange={(e) => setBillingCycle(e.target.value as any)}
-                          className="w-full px-2.5 py-1 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-800 dark:text-zinc-200"
-                        >
-                          <option value="Monthly">Monthly Cycle</option>
-                          <option value="Quarterly">Quarterly Cycle</option>
-                        </select>
-                      </div>
-                    </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 uppercase mb-1">
+                      Initial Deposit (Optional)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max={totalAmount}
+                      value={partInitialPayment}
+                      onChange={(e) => setPartInitialPayment(Number(e.target.value))}
+                      placeholder="₹0"
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-semibold text-zinc-900 dark:text-zinc-100"
+                    />
+                  </div>
 
-                    <div className="p-2.5 rounded-lg bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <RefreshCw size={14} className="text-blue-600 animate-spin-slow shrink-0" />
-                        <div>
-                          <p className="text-[11px] font-bold text-blue-900 dark:text-blue-200">
-                            ₹{perInstallment.toLocaleString("en-IN")} / {billingCycle.toLowerCase()}
-                          </p>
-                          <p className="text-[9px] text-blue-700 dark:text-blue-400">
-                            {installmentsCount} recurring installments of ₹{perInstallment.toLocaleString("en-IN")}
-                          </p>
-                        </div>
-                      </div>
-                      <label className="flex items-center gap-1.5 cursor-pointer text-[10px] font-bold text-blue-900 dark:text-blue-200">
-                        <input
-                          type="checkbox"
-                          checked={autoCreateSubscription}
-                          onChange={(e) => setAutoCreateSubscription(e.target.checked)}
-                          className="rounded text-blue-600 focus:ring-blue-500"
-                        />
-                        <span>Auto-Add to Subscriptions</span>
-                      </label>
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 uppercase mb-1">
+                      Number of Parts
+                    </label>
+                    <select
+                      value={installmentsCount}
+                      onChange={(e) => setInstallmentsCount(Number(e.target.value))}
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-800 dark:text-zinc-200"
+                    >
+                      <option value={2}>2 Installments</option>
+                      <option value={3}>3 Installments</option>
+                      <option value={4}>4 Installments</option>
+                      <option value={6}>6 Installments</option>
+                      <option value={12}>12 Installments</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 uppercase mb-1">
+                      Billing Interval
+                    </label>
+                    <select
+                      value={billingCycle}
+                      onChange={(e) => setBillingCycle(e.target.value as any)}
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-800 dark:text-zinc-200"
+                    >
+                      <option value="Monthly">Monthly Cycle</option>
+                      <option value="Quarterly">Quarterly Cycle</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded-lg bg-blue-50/90 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800/80 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <RefreshCw size={15} className="text-blue-600 animate-spin-slow shrink-0" />
+                    <div>
+                      <p className="text-xs font-extrabold text-blue-900 dark:text-blue-200">
+                        ₹{perInstallment.toLocaleString("en-IN")} / {billingCycle.toLowerCase()}
+                      </p>
+                      <p className="text-[10px] text-blue-700 dark:text-blue-400">
+                        Remaining balance of ₹{remainingDue.toLocaleString("en-IN")} split in {installmentsCount} parts
+                      </p>
                     </div>
                   </div>
-                )}
+                  <label className="flex items-center gap-1.5 cursor-pointer text-[10px] font-bold text-blue-900 dark:text-blue-200 bg-white dark:bg-zinc-900 px-2 py-1 rounded border border-blue-200 dark:border-blue-800">
+                    <input
+                      type="checkbox"
+                      checked={autoCreateSubscription}
+                      onChange={(e) => setAutoCreateSubscription(e.target.checked)}
+                      className="rounded text-blue-600 focus:ring-blue-500"
+                    />
+                    <span>Auto-Add to Subscriptions</span>
+                  </label>
+                </div>
               </div>
-            ) : (
-              <div className="p-3 bg-white dark:bg-zinc-900 border border-blue-200 dark:border-blue-800/80 rounded-xl flex items-center justify-between">
+            )}
+
+            {/* 3. SEPARATE OPTION: FULL UPFRONT PAYMENT */}
+            {paymentModel === "full" && (
+              <div className="p-3.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl flex items-center justify-between">
                 <div>
                   <span className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200 block">
-                    Full Upfront Payment Status
+                    Full Upfront Payment (100%)
                   </span>
-                  <span className="text-[10px] text-zinc-400">Entire amount settled in single invoice</span>
+                  <span className="text-[10px] text-zinc-400">Entire balance settled in single invoice</span>
                 </div>
                 <select
                   value={paymentStatus}
                   onChange={(e) => setPaymentStatus(e.target.value as any)}
-                  className={`px-3 py-1 rounded-lg font-bold border text-xs ${
+                  className={`px-3 py-1.5 rounded-lg font-bold border text-xs ${
                     paymentStatus === "Payment Pending"
                       ? "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300"
                       : "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300"
