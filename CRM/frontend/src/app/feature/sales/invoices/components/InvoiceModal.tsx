@@ -183,7 +183,93 @@ export function InvoiceModal({
     : null
 
   const handlePrint = () => {
-    window.print()
+    const invoiceEl = document.getElementById("printable-invoice")
+    if (!invoiceEl) {
+      window.print()
+      return
+    }
+
+    // Remove any previous temporary print frames
+    const oldFrame = document.getElementById("saampark-print-frame")
+    if (oldFrame) {
+      oldFrame.remove()
+    }
+
+    const printFrame = document.createElement("iframe")
+    printFrame.id = "saampark-print-frame"
+    printFrame.style.position = "fixed"
+    printFrame.style.right = "0"
+    printFrame.style.bottom = "0"
+    printFrame.style.width = "0"
+    printFrame.style.height = "0"
+    printFrame.style.border = "0"
+    printFrame.style.zIndex = "-9999"
+    document.body.appendChild(printFrame)
+
+    const doc = printFrame.contentWindow?.document
+    if (!doc) {
+      window.print()
+      return
+    }
+
+    // Collect all loaded stylesheets and inline styles
+    const styles = Array.from(document.querySelectorAll("link[rel='stylesheet'], style"))
+      .map(s => s.outerHTML)
+      .join("\n")
+
+    doc.open()
+    doc.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Invoice_${invoice.id}</title>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <script src="https://cdn.tailwindcss.com"></script>
+          ${styles}
+          <style>
+            @page {
+              size: A4 portrait;
+              margin: 6mm 8mm;
+            }
+            body {
+              background: white !important;
+              color: black !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            * {
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            .no-print {
+              display: none !important;
+            }
+          </style>
+        </head>
+        <body class="bg-white p-2 text-zinc-900">
+          <div class="w-full max-w-[820px] mx-auto bg-white">
+            ${invoiceEl.innerHTML}
+          </div>
+        </body>
+      </html>
+    `)
+    doc.close()
+
+    setTimeout(() => {
+      try {
+        printFrame.contentWindow?.focus()
+        printFrame.contentWindow?.print()
+      } catch (err) {
+        window.print()
+      }
+      setTimeout(() => {
+        printFrame.remove()
+      }, 3000)
+    }, 400)
   }
 
   const handleSend = () => {
@@ -204,45 +290,6 @@ export function InvoiceModal({
 
   return (
     <div className="fixed inset-0 top-14 sm:top-0 z-[99999] flex items-start sm:items-center justify-center bg-black/85 backdrop-blur-md p-2 sm:p-4 overflow-y-auto print:p-0 print:bg-white print:static print:block">
-      <style>{`
-        @media print {
-          @page { 
-            size: A4 portrait; 
-            margin: 6mm; 
-          }
-          body { 
-            visibility: hidden !important; 
-            background: white !important;
-          }
-          .no-print { 
-            display: none !important; 
-          }
-          #printable-invoice { 
-            visibility: visible !important;
-            display: block !important;
-            position: fixed !important; 
-            left: 0 !important; 
-            top: 0 !important; 
-            width: 100vw !important; 
-            min-height: 100vh !important;
-            margin: 0 !important; 
-            padding: 10px !important;
-            background: white !important;
-            color: black !important;
-            box-shadow: none !important;
-            border: none !important;
-            z-index: 999999 !important;
-            overflow: visible !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
-          #printable-invoice * { 
-            visibility: visible !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
-        }
-      `}</style>
 
       <div className="bg-white border border-zinc-200 rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden max-h-[92vh] sm:max-h-[96vh] my-auto print:max-h-none print:shadow-none print:border-none print:w-full print:rounded-none">
         
