@@ -63,6 +63,8 @@ export interface Project {
   gstRate?: number
   gstAmount?: number
   totalAmount?: number
+  items?: any[]
+  discountsList?: any[]
   billedBy?: string
   clientId?: string
   createdById?: string

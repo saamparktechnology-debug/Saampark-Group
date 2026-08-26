@@ -84,7 +84,12 @@ export function InvoiceModal({
   if (!isOpen || !invoice) return null
 
   // 1. Determine if GST or Non-GST Bill
+  const hasItemGst = invoice.items && invoice.items.length > 0
+    ? invoice.items.some(it => it.gstRate > 0 || it.gstAmount > 0)
+    : false
+
   const isGstInvoice = Boolean(
+    hasItemGst ||
     (typeof invoice.gstRate === "number" && invoice.gstRate > 0) ||
     (typeof invoice.gstAmount === "number" && invoice.gstAmount > 0) ||
     (clientDetails?.gstNumber && clientDetails.gstNumber.trim().length > 4)
@@ -131,7 +136,9 @@ export function InvoiceModal({
   const gstRate = isGstInvoice ? (invoice.gstRate !== undefined && invoice.gstRate > 0 ? invoice.gstRate : 18) : 0
   
   const setupCharge = typeof invoice.setupCharge === "number" ? invoice.setupCharge : 0
-  const discount = typeof invoice.discount === "number" ? invoice.discount : 0
+  const discount = typeof invoice.discount === "number" 
+    ? invoice.discount 
+    : (invoice.discountsList ? invoice.discountsList.reduce((sum, d) => sum + (d.amount || 0), 0) : 0)
   
   const baseNum = invoice.baseAmount !== undefined && invoice.baseAmount > 0
     ? invoice.baseAmount
@@ -436,79 +443,126 @@ export function InvoiceModal({
           </div>
 
           {/* 3. ITEMIZED SERVICES / PROJECT DESCRIPTION TABLE */}
-          <div className="rounded-xl overflow-hidden border border-zinc-200 shadow-2xs">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className={`${theme.tableHeaderBg} font-bold text-[10.5px]`}>
-                  <th className="py-2.5 px-3 w-10 text-center">NO.</th>
-                  <th className="py-2.5 px-3">SERVICES / PRODUCT NAME</th>
-                  <th className="py-2.5 px-3 text-center">HSN / SAC</th>
-                  <th className="py-2.5 px-3 text-center">QTY</th>
-                  <th className="py-2.5 px-3 text-center">UNIT</th>
-                  <th className="py-2.5 px-3 text-right">RATE (₹)</th>
-                  <th className="py-2.5 px-3 text-right">TAX (₹)</th>
-                  <th className="py-2.5 px-3 text-right">AMOUNT (₹)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-200 bg-white font-medium text-zinc-800">
-                <tr>
-                  <td className="py-3 px-3 text-center font-bold text-zinc-500">1</td>
-                  <td className="py-3 px-3">
-                    <div className="space-y-0.5">
-                      <p className="font-extrabold text-zinc-900 text-xs">{invoice.project}</p>
-                      <p className="text-[10px] text-zinc-500">
-                        Enterprise IT Infrastructure, Web/App Engineering & Research Support
-                      </p>
-                      {invoice.billedBy && (
-                        <p className="text-[9px] text-zinc-400 font-mono">Billed By: {invoice.billedBy}</p>
-                      )}
-                    </div>
-                  </td>
-                  <td className="py-3 px-3 text-center font-mono text-[11px] text-zinc-600">
-                    {isGstInvoice ? "998313" : "998314"}
-                  </td>
-                  <td className="py-3 px-3 text-center font-mono text-[11px]">1</td>
-                  <td className="py-3 px-3 text-center text-zinc-600 text-[11px]">Service</td>
-                  <td className="py-3 px-3 text-right font-mono font-semibold">
-                    ₹{baseNum.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                  </td>
-                  <td className="py-3 px-3 text-right font-mono text-zinc-700">
-                    {isGstInvoice ? (
-                      <div>
-                        <span>₹{gstAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-                        <span className="text-[9px] text-zinc-500 block">({gstRate}%)</span>
-                      </div>
-                    ) : (
-                      <span>₹0.00</span>
-                    )}
-                  </td>
-                  <td className="py-3 px-3 text-right font-mono font-black text-zinc-900">
-                    ₹{totalVal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                  </td>
-                </tr>
-              </tbody>
+          {(() => {
+            const renderedItems: any[] = (invoice.items && invoice.items.length > 0)
+              ? invoice.items
+              : [
+                  {
+                    id: 'def_1',
+                    serviceName: invoice.project,
+                    sacCode: isGstInvoice ? "998313" : "998314",
+                    qty: 1,
+                    unit: "Service",
+                    rate: baseNum,
+                    charges: setupCharge > 0 ? [{ id: 'chg_1', name: "Platform Setup", amount: setupCharge }] : [],
+                    gstRate: gstRate,
+                    gstAmount: gstAmt,
+                    totalAmount: totalVal,
+                  }
+                ]
 
-              {/* Subtotal Weights & Amount Bar */}
-              <tfoot>
-                <tr className={`${theme.tableSubtotalBg} font-bold text-[11px] border-t border-zinc-200`}>
-                  <td colSpan={3} className="py-2 px-3 uppercase tracking-wider">
-                    SUBTOTAL SERVICES & BASE AMOUNT
-                  </td>
-                  <td className="py-2 px-3 text-center font-mono">1</td>
-                  <td className="py-2 px-3 text-center">Service</td>
-                  <td className="py-2 px-3 text-right font-mono">
-                    ₹{baseNum.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                  </td>
-                  <td className="py-2 px-3 text-right font-mono">
-                    {isGstInvoice ? `₹${gstAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "₹0.00"}
-                  </td>
-                  <td className="py-2 px-3 text-right font-mono font-black">
-                    ₹{totalVal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+            const totalTableQty = renderedItems.reduce((sum, it) => sum + (it.qty || 1), 0)
+            const totalTableBase = renderedItems.reduce((sum, it) => {
+              const r = typeof it.rate === "number" ? it.rate : 0
+              const q = it.qty || 1
+              const extra = (it.charges || []).reduce((s: number, c: any) => s + (c.amount || 0), 0)
+              return sum + (r * q) + extra
+            }, 0)
+            const totalTableGst = renderedItems.reduce((sum, it) => sum + (it.gstAmount || 0), 0)
+            const totalTableGross = renderedItems.reduce((sum, it) => sum + (it.totalAmount || (it.rate + (it.gstAmount || 0))), 0)
+
+            return (
+              <div className="rounded-xl overflow-hidden border border-zinc-200 shadow-2xs">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className={`${theme.tableHeaderBg} font-bold text-[10.5px]`}>
+                      <th className="py-2.5 px-3 w-10 text-center">NO.</th>
+                      <th className="py-2.5 px-3">SERVICES / PRODUCT NAME</th>
+                      <th className="py-2.5 px-3 text-center">HSN / SAC</th>
+                      <th className="py-2.5 px-3 text-center">QTY</th>
+                      <th className="py-2.5 px-3 text-center">UNIT</th>
+                      <th className="py-2.5 px-3 text-right">RATE (₹)</th>
+                      <th className="py-2.5 px-3 text-right">TAX (₹)</th>
+                      <th className="py-2.5 px-3 text-right">AMOUNT (₹)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-200 bg-white font-medium text-zinc-800">
+                    {renderedItems.map((item, idx) => {
+                      const itemRate = typeof item.rate === "number" ? item.rate : 0
+                      const itemCharges = (item.charges || []).reduce((sum: number, c: any) => sum + (c.amount || 0), 0)
+                      const itemTax = item.gstAmount || 0
+                      const itemGross = item.totalAmount || ((itemRate * (item.qty || 1)) + itemCharges + itemTax)
+
+                      return (
+                        <tr key={item.id || idx}>
+                          <td className="py-3 px-3 text-center font-bold text-zinc-500">{idx + 1}</td>
+                          <td className="py-3 px-3">
+                            <div className="space-y-0.5">
+                              <p className="font-extrabold text-zinc-900 text-xs">{item.serviceName}</p>
+                              {item.charges && item.charges.length > 0 && (
+                                <div className="space-y-0.5 pt-0.5">
+                                  {item.charges.map((chg: any) => (
+                                    <p key={chg.id} className="text-[9.5px] text-zinc-500 flex items-center gap-1">
+                                      <span>+ {chg.name}:</span>
+                                      <strong className="font-mono text-zinc-700">₹{(chg.amount || 0).toLocaleString("en-IN")}</strong>
+                                    </p>
+                                  ))}
+                                </div>
+                              )}
+                              {invoice.billedBy && idx === 0 && (
+                                <p className="text-[9px] text-zinc-400 font-mono">Billed By: {invoice.billedBy}</p>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3 text-center font-mono text-[11px] text-zinc-600">
+                            {item.sacCode || (isGstInvoice ? "998313" : "998314")}
+                          </td>
+                          <td className="py-3 px-3 text-center font-mono text-[11px]">{item.qty || 1}</td>
+                          <td className="py-3 px-3 text-center text-zinc-600 text-[11px]">{item.unit || "Service"}</td>
+                          <td className="py-3 px-3 text-right font-mono font-semibold">
+                            ₹{itemRate.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono text-zinc-700">
+                            {item.gstRate > 0 ? (
+                              <div>
+                                <span>₹{itemTax.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                                <span className="text-[9px] text-zinc-500 block">({item.gstRate}%)</span>
+                              </div>
+                            ) : (
+                              <span>₹0.00</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono font-black text-zinc-900">
+                            ₹{itemGross.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+
+                  {/* Subtotal Weights & Amount Bar */}
+                  <tfoot>
+                    <tr className={`${theme.tableSubtotalBg} font-bold text-[11px] border-t border-zinc-200`}>
+                      <td colSpan={3} className="py-2 px-3 uppercase tracking-wider">
+                        SUBTOTAL SERVICES & BASE AMOUNT
+                      </td>
+                      <td className="py-2 px-3 text-center font-mono">{totalTableQty}</td>
+                      <td className="py-2 px-3 text-center">Items</td>
+                      <td className="py-2 px-3 text-right font-mono">
+                        ₹{totalTableBase.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-2 px-3 text-right font-mono">
+                        ₹{totalTableGst.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-2 px-3 text-right font-mono font-black">
+                        ₹{totalTableGross.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )
+          })()}
 
           {/* 4. TOTAL AMOUNT IN WORDS + TERMS & CONDITIONS (LEFT) & FINANCIAL BREAKDOWN (RIGHT) */}
           <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 pt-1">
@@ -552,10 +606,21 @@ export function InvoiceModal({
                   <span>Platform / Setup Charge</span>
                   <span className="font-mono">₹{setupCharge.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
                 </div>
-                <div className="flex justify-between py-0.5 text-zinc-500">
-                  <span>Less: Promotional Discount</span>
-                  <span className="font-mono">(-) ₹{discount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-                </div>
+
+                {/* Named Discounts List */}
+                {invoice.discountsList && invoice.discountsList.length > 0 ? (
+                  invoice.discountsList.map((d: any) => (
+                    <div key={d.id} className="flex justify-between py-0.5 text-zinc-500">
+                      <span>Less: {d.name}</span>
+                      <span className="font-mono">(-) ₹{(d.amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="flex justify-between py-0.5 text-zinc-500">
+                    <span>Less: Promotional Discount</span>
+                    <span className="font-mono">(-) ₹{discount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                  </div>
+                )}
 
                 <div className="flex justify-between py-1 border-t border-zinc-200 font-bold text-zinc-900">
                   <span>Taxable Base Amount</span>

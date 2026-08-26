@@ -3,6 +3,31 @@ import { getClients, saveStoredClient } from "@/app/feature/clients/services/cli
 
 export type InvoiceStatus = "Draft" | "Partially paid" | "Fully paid" | "Not paid" | "Credited" | "Payment Pending"
 
+export interface InvoiceLineCharge {
+  id: string
+  name: string
+  amount: number
+}
+
+export interface InvoiceLineItem {
+  id: string
+  serviceName: string
+  sacCode?: string
+  qty: number
+  unit: string
+  rate: number
+  charges?: InvoiceLineCharge[]
+  gstRate: number
+  gstAmount: number
+  totalAmount: number
+}
+
+export interface AppliedDiscount {
+  id: string
+  name: string
+  amount: number
+}
+
 export interface InvoiceItem {
   id: string
   client: string
@@ -26,6 +51,8 @@ export interface InvoiceItem {
   branchName?: string
   createdByName?: string
   createdByRole?: string
+  items?: InvoiceLineItem[]
+  discountsList?: AppliedDiscount[]
 }
 
 export const INITIAL_INVOICES: InvoiceItem[] = []

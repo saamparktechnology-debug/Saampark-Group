@@ -22,7 +22,8 @@ import {
   RefreshCw,
   UserPlus,
   FolderPlus,
-  Calculator
+  Calculator,
+  Tag
 } from "lucide-react"
 import { ColumnDef } from "@tanstack/react-table"
 
@@ -31,6 +32,8 @@ import { Button } from "@/components/ui/Button"
 import { Tabs } from "@/components/ui/Tabs"
 import { 
   InvoiceItem, 
+  InvoiceLineItem,
+  AppliedDiscount,
   InvoiceStatus, 
   getInvoices, 
   addInvoice, 
@@ -110,8 +113,101 @@ export default function InvoicesPage() {
   const [billingCycle, setBillingCycle] = React.useState<"Monthly" | "Quarterly">("Monthly")
   const [autoCreateSubscription, setAutoCreateSubscription] = React.useState<boolean>(true)
 
+  // Dynamic Multi-Services State for Invoices
+  const [invoiceServiceItems, setInvoiceServiceItems] = React.useState<any[]>([
+    {
+      id: `svc_${Date.now()}`,
+      serviceName: "Website Development",
+      sacCode: "998313",
+      qty: 1,
+      unit: "Project",
+      rate: "",
+      charges: [],
+      gstRate: 18,
+    }
+  ])
+
+  // Named Multi-Discounts State for Invoices
+  const [invoiceDiscounts, setInvoiceDiscounts] = React.useState<{ id: string; name: string; amount: number | "" }[]>([])
+
   const [availableClients, setAvailableClients] = React.useState<ClientItem[]>([])
   const [availableProjects, setAvailableProjects] = React.useState<{ title: string; client: string }[]>([])
+
+  const handleAddInvService = (presetName?: string, presetSac?: string, presetGst?: number, presetUnit?: string) => {
+    setInvoiceServiceItems(prev => [
+      ...prev,
+      {
+        id: `svc_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        serviceName: presetName || "",
+        sacCode: presetSac || "998313",
+        qty: 1,
+        unit: presetUnit || "Project",
+        rate: "",
+        charges: [],
+        gstRate: presetGst !== undefined ? presetGst : 18,
+      }
+    ])
+  }
+
+  const handleRemoveInvService = (id: string) => {
+    if (invoiceServiceItems.length <= 1) {
+      alert("At least one service is required on the invoice.")
+      return
+    }
+    setInvoiceServiceItems(prev => prev.filter(s => s.id !== id))
+  }
+
+  const handleUpdateInvService = (id: string, field: string, value: any) => {
+    setInvoiceServiceItems(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s))
+  }
+
+  const handleAddInvCharge = (serviceId: string) => {
+    setInvoiceServiceItems(prev => prev.map(s => {
+      if (s.id === serviceId) {
+        return {
+          ...s,
+          charges: [...s.charges, { id: `chg_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`, name: "", amount: "" }]
+        }
+      }
+      return s
+    }))
+  }
+
+  const handleRemoveInvCharge = (serviceId: string, chargeId: string) => {
+    setInvoiceServiceItems(prev => prev.map(s => {
+      if (s.id === serviceId) {
+        return { ...s, charges: s.charges.filter((c: any) => c.id !== chargeId) }
+      }
+      return s
+    }))
+  }
+
+  const handleUpdateInvCharge = (serviceId: string, chargeId: string, field: string, value: any) => {
+    setInvoiceServiceItems(prev => prev.map(s => {
+      if (s.id === serviceId) {
+        return {
+          ...s,
+          charges: s.charges.map((c: any) => c.id === chargeId ? { ...c, [field]: value } : c)
+        }
+      }
+      return s
+    }))
+  }
+
+  const handleAddInvDiscount = () => {
+    setInvoiceDiscounts(prev => [
+      ...prev,
+      { id: `disc_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`, name: "Promotional Discount", amount: "" }
+    ])
+  }
+
+  const handleRemoveInvDiscount = (id: string) => {
+    setInvoiceDiscounts(prev => prev.filter(d => d.id !== id))
+  }
+
+  const handleUpdateInvDiscount = (id: string, field: string, value: any) => {
+    setInvoiceDiscounts(prev => prev.map(d => d.id === id ? { ...d, [field]: value } : d))
+  }
 
   const showToast = (msg: string) => {
     setToastMessage(msg)
@@ -158,6 +254,19 @@ export default function InvoicesPage() {
       setBaseAmount("")
       setSetupCharge("")
       setDiscount("")
+      setInvoiceServiceItems([
+        {
+          id: `svc_${Date.now()}`,
+          serviceName: "Website Development",
+          sacCode: "998313",
+          qty: 1,
+          unit: "Project",
+          rate: "",
+          charges: [],
+          gstRate: 18,
+        }
+      ])
+      setInvoiceDiscounts([])
       setAdvanceAmountInput("")
       setPartInitialPayment("")
       setPaymentPlanMode("advance")
@@ -256,14 +365,30 @@ export default function InvoicesPage() {
       alert("Please enter or select a project/service name.")
       return
     }
+    const itemCalculations = invoiceServiceItems.map((item) => {
+      const numRate = typeof item.rate === "number" ? item.rate : 0
+      const qty = item.qty > 0 ? item.qty : 1
+      const itemCharges = (item.charges || []).reduce((sum: number, c: any) => sum + (typeof c.amount === "number" ? c.amount : 0), 0)
+      const itemBase = (numRate * qty) + itemCharges
+      const itemGst = Math.round(itemBase * ((item.gstRate !== undefined ? item.gstRate : 18) / 100))
+      const itemTotal = itemBase + itemGst
+      return {
+        ...item,
+        numRate,
+        qty,
+        itemCharges,
+        itemBase,
+        itemGst,
+        itemTotal,
+      }
+    })
 
-    const numBase = typeof baseAmount === "number" ? baseAmount : 0
-    const numSetup = typeof setupCharge === "number" ? setupCharge : 0
-    const numDiscount = typeof discount === "number" ? discount : 0
-    const taxableBase = Math.max(0, numBase + numSetup - numDiscount)
-
-    const gstAmount = Math.round(taxableBase * (gstRate / 100))
-    const totalAmount = taxableBase + gstAmount
+    const totalServicesBase = itemCalculations.reduce((sum, it) => sum + (it.numRate * it.qty), 0)
+    const totalPlatformCharges = itemCalculations.reduce((sum, it) => sum + it.itemCharges, 0)
+    const totalDiscounts = invoiceDiscounts.reduce((sum, d) => sum + (typeof d.amount === "number" ? d.amount : 0), 0)
+    const taxableBase = Math.max(0, (totalServicesBase + totalPlatformCharges) - totalDiscounts)
+    const totalGstAmount = itemCalculations.reduce((sum, it) => sum + it.itemGst, 0)
+    const totalAmount = taxableBase + totalGstAmount
     const formattedTotal = `₹${totalAmount.toLocaleString("en-IN")}`
 
     let receivedNum = 0
@@ -285,6 +410,31 @@ export default function InvoicesPage() {
     const formattedDue = `₹${dueNum.toLocaleString("en-IN")}`
     const invoiceId = `INV #${Math.floor(100 + Math.random() * 900)}`
     const calculatedDueDate = dueDate || new Date(Date.now() + 14 * 86400000).toLocaleDateString("en-GB")
+
+    const finalInvoiceItems: InvoiceLineItem[] = itemCalculations.map(it => ({
+      id: it.id,
+      serviceName: it.serviceName.trim() || finalProjectName,
+      sacCode: it.sacCode || "998313",
+      qty: it.qty,
+      unit: it.unit,
+      rate: it.numRate,
+      charges: (it.charges || []).map((c: any) => ({
+        id: c.id,
+        name: c.name.trim() || "Additional Setup",
+        amount: typeof c.amount === "number" ? c.amount : 0,
+      })),
+      gstRate: it.gstRate,
+      gstAmount: it.itemGst,
+      totalAmount: it.itemTotal,
+    }))
+
+    const finalDiscounts: AppliedDiscount[] = invoiceDiscounts
+      .filter(d => (typeof d.amount === "number" && d.amount > 0))
+      .map(d => ({
+        id: d.id,
+        name: d.name.trim() || "Discount",
+        amount: Number(d.amount),
+      }))
 
     // 1. Save or update client in database with complete billing details
     try {
@@ -335,16 +485,18 @@ export default function InvoicesPage() {
       project: finalProjectName,
       billDate: new Date().toLocaleDateString("en-GB"),
       dueDate: calculatedDueDate,
-      baseAmount: numBase,
-      setupCharge: numSetup,
-      discount: numDiscount,
-      gstRate,
-      gstAmount,
+      baseAmount: totalServicesBase,
+      setupCharge: totalPlatformCharges,
+      discount: totalDiscounts,
+      gstRate: itemCalculations[0]?.gstRate || 18,
+      gstAmount: totalGstAmount,
       totalInvoiced: formattedTotal,
       paymentReceived: formattedReceived,
       due: formattedDue,
       status: finalStatus,
       billedBy: user?.name || "Admin",
+      items: finalInvoiceItems,
+      discountsList: finalDiscounts,
     })
 
     // 3. Automatically create Order in Sales Order List
@@ -355,15 +507,15 @@ export default function InvoicesPage() {
         project: finalProjectName,
         orderDate: new Date().toISOString().split("T")[0],
         deliveryDate: calculatedDueDate,
-        itemsCount: 1,
+        itemsCount: invoiceServiceItems.length,
         totalAmount: formattedTotal,
         paymentStatus: dueNum === 0 ? "Paid" : receivedNum > 0 ? "Partially paid" : "Unpaid",
         status: receivedNum > 0 ? "Processing" : "Pending",
-        notes: `Generated via Invoice ${invoiceId}. ${paymentPlanMode === "advance" ? `Advance: ${formattedReceived}, Balance on delivery: ${formattedDue}.` : paymentPlanMode === "part" ? `Part Payment: ${installmentsCount} parts of ₹${Math.round(dueNum / installmentsCount).toLocaleString("en-IN")}.` : ''}`,
+        notes: `Order for: ${finalProjectName}. Services: ${invoiceServiceItems.map(s => s.serviceName).join(", ")}.`,
         invoiceId: invoiceId,
       })
     } catch (err) {
-      console.warn("Error creating order for invoice:", err)
+      console.warn("Could not auto-create sales order:", err)
     }
 
     // 4. Automatically record upfront / advance payment if received
@@ -1165,90 +1317,287 @@ export default function InvoicesPage() {
                   )}
                 </div>
 
-                {/* ---------------- 3. FINANCIAL BASE, SETUP CHARGES, DISCOUNT & GST ---------------- */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-                  <div>
-                    <label className="block text-zinc-500 font-medium mb-1">Base Deal (₹) *</label>
-                    <input
-                      type="number"
-                      required
-                      min={0}
-                      placeholder="e.g. 50000"
-                      value={baseAmount}
-                      onChange={(e) => {
-                        const val = e.target.value
-                        setBaseAmount(val === "" ? "" : Math.max(0, Number(val)))
-                      }}
-                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-bold"
-                    />
+                {/* ---------------- 3. MULTI-SERVICE ITEM BUILDER ---------------- */}
+                <div className="p-3.5 rounded-xl bg-blue-50/50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/60 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-blue-200/80 dark:border-blue-800/60 pb-2">
+                    <span className="font-extrabold text-blue-900 dark:text-blue-200 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                      <span>✨</span> Itemized Services ({invoiceServiceItems.length})
+                    </span>
+
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <span className="text-[10px] text-zinc-500 font-semibold">Quick:</span>
+                      {[
+                        { name: "Website Development", sac: "998313", gst: 18, unit: "Project" },
+                        { name: "Software Development", sac: "998314", gst: 18, unit: "Project" },
+                        { name: "Cloud & Domain", sac: "998315", gst: 18, unit: "Month" },
+                        { name: "Digital Marketing", sac: "998311", gst: 18, unit: "Month" },
+                      ].map(p => (
+                        <button
+                          key={p.name}
+                          type="button"
+                          onClick={() => handleAddInvService(p.name, p.sac, p.gst, p.unit)}
+                          className="px-1.5 py-0.5 rounded bg-white dark:bg-zinc-800 border border-blue-200 dark:border-blue-700 text-[9.5px] font-bold text-blue-700 dark:text-blue-300"
+                        >
+                          + {p.name.split(" ")[0]}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="block text-zinc-500 font-medium mb-1">Setup Charge (₹)</label>
-                    <input
-                      type="number"
-                      min={0}
-                      placeholder="e.g. 2500"
-                      value={setupCharge}
-                      onChange={(e) => {
-                        const val = e.target.value
-                        setSetupCharge(val === "" ? "" : Math.max(0, Number(val)))
-                      }}
-                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-bold"
-                    />
+                  {/* List of services in Add Invoice */}
+                  <div className="space-y-3">
+                    {invoiceServiceItems.map((item, idx) => {
+                      const numR = typeof item.rate === "number" ? item.rate : 0
+                      const q = item.qty > 0 ? item.qty : 1
+                      const extraC = (item.charges || []).reduce((sum: number, c: any) => sum + (typeof c.amount === "number" ? c.amount : 0), 0)
+                      const lineBase = (numR * q) + extraC
+                      const lineGst = Math.round(lineBase * ((item.gstRate !== undefined ? item.gstRate : 18) / 100))
+                      const lineTot = lineBase + lineGst
+
+                      return (
+                        <div key={item.id} className="p-3 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-700 space-y-2.5 shadow-2xs">
+                          <div className="flex items-center justify-between">
+                            <span className="px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300 font-extrabold text-[9.5px]">
+                              ITEM #{idx + 1}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-xs font-black text-zinc-900 dark:text-zinc-100">
+                                Line Total: ₹{lineTot.toLocaleString("en-IN")}
+                              </span>
+                              {invoiceServiceItems.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveInvService(item.id)}
+                                  className="p-1 text-zinc-400 hover:text-rose-600"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                            <div className="sm:col-span-4">
+                              <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Service Name *</label>
+                              <input
+                                type="text"
+                                required
+                                placeholder="Service description"
+                                value={item.serviceName}
+                                onChange={(e) => handleUpdateInvService(item.id, "serviceName", e.target.value)}
+                                className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs font-semibold"
+                              />
+                            </div>
+
+                            <div className="sm:col-span-2">
+                              <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">SAC / HSN</label>
+                              <input
+                                type="text"
+                                placeholder="998313"
+                                value={item.sacCode}
+                                onChange={(e) => handleUpdateInvService(item.id, "sacCode", e.target.value)}
+                                className="w-full px-2 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs font-mono"
+                              />
+                            </div>
+
+                            <div className="sm:col-span-2">
+                              <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Rate (₹) *</label>
+                              <input
+                                type="number"
+                                min="0"
+                                required
+                                placeholder="Price"
+                                value={item.rate}
+                                onChange={(e) => {
+                                  const val = e.target.value
+                                  handleUpdateInvService(item.id, "rate", val === "" ? "" : Math.max(0, Number(val)))
+                                }}
+                                className="w-full px-2 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs font-mono font-bold"
+                              />
+                            </div>
+
+                            <div className="sm:col-span-2">
+                              <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Qty</label>
+                              <input
+                                type="number"
+                                min="1"
+                                value={item.qty}
+                                onChange={(e) => handleUpdateInvService(item.id, "qty", Math.max(1, Number(e.target.value)))}
+                                className="w-full px-2 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs font-mono text-center font-bold"
+                              />
+                            </div>
+
+                            <div className="sm:col-span-2">
+                              <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">GST Rate</label>
+                              <select
+                                value={item.gstRate}
+                                onChange={(e) => handleUpdateInvService(item.id, "gstRate", Number(e.target.value))}
+                                className="w-full px-1.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs font-semibold"
+                              >
+                                <option value={18}>18% (GST)</option>
+                                <option value={12}>12% (Print)</option>
+                                <option value={5}>5%</option>
+                                <option value={0}>0% (Non-GST)</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          {/* Extra Charges */}
+                          <div className="pt-1 space-y-1.5 border-t border-zinc-100 dark:border-zinc-800">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[9.5px] font-bold text-zinc-400 uppercase">Extra Charges ({item.charges?.length || 0})</span>
+                              <button
+                                type="button"
+                                onClick={() => handleAddInvCharge(item.id)}
+                                className="text-[10px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5"
+                              >
+                                <Plus size={11} /> Add Charge
+                              </button>
+                            </div>
+                            {(item.charges || []).map((chg: any) => (
+                              <div key={chg.id} className="flex items-center gap-2">
+                                <input
+                                  type="text"
+                                  placeholder="Charge name (e.g. Server Setup)"
+                                  value={chg.name}
+                                  onChange={(e) => handleUpdateInvCharge(item.id, chg.id, "name", e.target.value)}
+                                  className="flex-1 px-2 py-1 rounded bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-[11px]"
+                                />
+                                <div className="flex items-center gap-1">
+                                  <span className="text-zinc-400 text-[11px]">₹</span>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    placeholder="Price"
+                                    value={chg.amount}
+                                    onChange={(e) => {
+                                      const val = e.target.value
+                                      handleUpdateInvCharge(item.id, chg.id, "amount", val === "" ? "" : Math.max(0, Number(val)))
+                                    }}
+                                    className="w-20 px-1.5 py-1 rounded bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono font-bold text-[11px]"
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveInvCharge(item.id, chg.id)}
+                                  className="p-0.5 text-zinc-400 hover:text-rose-600"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
 
-                  <div>
-                    <label className="block text-zinc-500 font-medium mb-1">Discount (₹)</label>
-                    <input
-                      type="number"
-                      min={0}
-                      placeholder="e.g. 1000"
-                      value={discount}
-                      onChange={(e) => {
-                        const val = e.target.value
-                        setDiscount(val === "" ? "" : Math.max(0, Number(val)))
-                      }}
-                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-bold"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-zinc-500 font-medium mb-1">GST Rate (%)</label>
-                    <select
-                      value={gstRate}
-                      onChange={(e) => setGstRate(Number(e.target.value))}
-                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-semibold"
-                    >
-                      <option value={0}>0% (Non-GST / Exempt)</option>
-                      <option value={5}>5%</option>
-                      <option value={12}>12%</option>
-                      <option value={18}>18% (Standard GST)</option>
-                      <option value={28}>28%</option>
-                    </select>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleAddInvService()}
+                    className="w-full py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-dashed border-blue-400 dark:border-blue-700 text-blue-600 dark:text-blue-300 font-bold text-xs flex items-center justify-center gap-1"
+                  >
+                    <Plus size={13} /> Add Another Service
+                  </button>
                 </div>
 
-                {/* Live Computation Badge */}
+                {/* ---------------- 4. NAMED MULTI-DISCOUNTS ---------------- */}
+                <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-zinc-800 dark:text-zinc-200 text-xs flex items-center gap-1">
+                      <Tag size={12} className="text-amber-600" />
+                      <span>Promotional Discounts ({invoiceDiscounts.length})</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleAddInvDiscount}
+                      className="text-[10.5px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5"
+                    >
+                      <Plus size={11} /> Add Discount
+                    </button>
+                  </div>
+
+                  {invoiceDiscounts.length > 0 && (
+                    <div className="space-y-1.5">
+                      {invoiceDiscounts.map(disc => (
+                        <div key={disc.id} className="flex items-center gap-2 bg-white dark:bg-zinc-900 p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700">
+                          <input
+                            type="text"
+                            placeholder="Discount name (e.g. Launch Offer)"
+                            value={disc.name}
+                            onChange={(e) => handleUpdateInvDiscount(disc.id, "name", e.target.value)}
+                            className="flex-1 px-2 py-1 rounded bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs"
+                          />
+                          <div className="flex items-center gap-1">
+                            <span className="text-rose-500 font-bold text-xs">(-) ₹</span>
+                            <input
+                              type="number"
+                              min="0"
+                              placeholder="Amount"
+                              value={disc.amount}
+                              onChange={(e) => {
+                                const val = e.target.value
+                                handleUpdateInvDiscount(disc.id, "amount", val === "" ? "" : Math.max(0, Number(val)))
+                              }}
+                              className="w-24 px-2 py-1 rounded bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono font-bold text-xs text-rose-600"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveInvDiscount(disc.id)}
+                            className="p-1 text-zinc-400 hover:text-rose-600"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* ---------------- 5. LIVE COMPUTATION SUMMARY ---------------- */}
                 {(() => {
-                  const b = typeof baseAmount === "number" ? baseAmount : 0
-                  const s = typeof setupCharge === "number" ? setupCharge : 0
-                  const d = typeof discount === "number" ? discount : 0
-                  const taxBase = Math.max(0, b + s - d)
-                  const gAmt = Math.round(taxBase * (gstRate / 100))
-                  const tot = taxBase + gAmt
+                  const itemCalcs = invoiceServiceItems.map((item) => {
+                    const numR = typeof item.rate === "number" ? item.rate : 0
+                    const q = item.qty > 0 ? item.qty : 1
+                    const extraC = (item.charges || []).reduce((sum: number, c: any) => sum + (typeof c.amount === "number" ? c.amount : 0), 0)
+                    const lineBase = (numR * q) + extraC
+                    const lineGst = Math.round(lineBase * ((item.gstRate !== undefined ? item.gstRate : 18) / 100))
+                    return { lineBase, lineGst, numR, q, extraC }
+                  })
+
+                  const totBase = itemCalcs.reduce((sum, it) => sum + (it.numR * it.q), 0)
+                  const totCharges = itemCalcs.reduce((sum, it) => sum + it.extraC, 0)
+                  const totDisc = invoiceDiscounts.reduce((sum, d) => sum + (typeof d.amount === "number" ? d.amount : 0), 0)
+                  const taxBase = Math.max(0, (totBase + totCharges) - totDisc)
+                  const totGst = itemCalcs.reduce((sum, it) => sum + it.lineGst, 0)
+                  const grandTot = taxBase + totGst
+
                   return (
-                    <div className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-[10.5px]">
-                      <div className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400">
-                        <span>Taxable: <strong className="text-zinc-900 dark:text-zinc-100 font-mono font-bold">₹{taxBase.toLocaleString("en-IN")}</strong></span>
-                        <span>+</span>
-                        <span>GST ({gstRate}%): <strong className="text-blue-600 font-mono font-bold">₹{gAmt.toLocaleString("en-IN")}</strong></span>
+                    <div className="p-3 rounded-xl bg-zinc-900 text-white space-y-1.5 text-xs shadow-md">
+                      <div className="flex justify-between text-zinc-300 text-[11px]">
+                        <span>Total Services Base:</span>
+                        <span className="font-mono font-bold text-white">₹{totBase.toLocaleString("en-IN")}</span>
                       </div>
-                      <div>
-                        <span className="text-zinc-500">Gross Total:</span>{" "}
-                        <strong className="text-emerald-600 dark:text-emerald-400 font-mono text-xs font-black">
-                          ₹{tot.toLocaleString("en-IN")}
-                        </strong>
+                      {totCharges > 0 && (
+                        <div className="flex justify-between text-blue-300 text-[11px]">
+                          <span>Total Extra Charges:</span>
+                          <span className="font-mono font-bold">₹{totCharges.toLocaleString("en-IN")}</span>
+                        </div>
+                      )}
+                      {totDisc > 0 && (
+                        <div className="flex justify-between text-rose-400 text-[11px]">
+                          <span>Total Discounts:</span>
+                          <span className="font-mono font-bold">(-) ₹{totDisc.toLocaleString("en-IN")}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-zinc-400 text-[11px]">
+                        <span>Total GST Taxes:</span>
+                        <span className="font-mono font-bold text-blue-400">₹{totGst.toLocaleString("en-IN")}</span>
+                      </div>
+                      <div className="flex justify-between pt-1 border-t border-zinc-700 font-bold text-emerald-400 text-sm">
+                        <span>Grand Total (Net Payable):</span>
+                        <span className="font-mono text-base font-black">₹{grandTot.toLocaleString("en-IN")}</span>
                       </div>
                     </div>
                   )

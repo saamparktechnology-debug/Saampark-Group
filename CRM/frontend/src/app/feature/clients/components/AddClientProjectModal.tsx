@@ -1,17 +1,20 @@
 "use client"
 
 import * as React from "react"
-import { X, Check, DollarSign, Calculator, UserCheck, Calendar, Briefcase, FileText, Coins, RefreshCw, Layers, CreditCard, Building2, Mail, Phone, MapPin } from "lucide-react"
+import { 
+  X, Check, DollarSign, Calculator, UserCheck, Calendar, Briefcase, FileText, 
+  Coins, RefreshCw, Layers, CreditCard, Building2, Mail, Phone, MapPin, 
+  Plus, Trash2, Tag, ChevronDown, Sparkles
+} from "lucide-react"
 import { ClientItem } from "../types"
 import { getUsers } from "@/app/feature/users/services/userService"
 import { addProject } from "@/app/feature/projects/services/projectService"
-import { addInvoice } from "@/app/feature/sales/invoices/services/invoiceService"
+import { addInvoice, InvoiceLineItem, AppliedDiscount } from "@/app/feature/sales/invoices/services/invoiceService"
 import { addOrder } from "@/app/feature/sales/orders/services/orderService"
 import { addPayment } from "@/app/feature/sales/payments/services/paymentService"
 import { addSubscription } from "@/app/feature/subscriptions/services/subscriptionService"
 import { taskService } from "@/app/feature/tasks/services/taskService"
 import { saveStoredClient, getClients } from "../services/clientService"
-
 import { useAuthStore } from "@/store/useAuthStore"
 
 interface AddClientProjectModalProps {
@@ -21,6 +24,34 @@ interface AddClientProjectModalProps {
   onProjectCreated: () => void
   onInvoiceCreated?: (invoice: any) => void
 }
+
+export interface ServiceFormItem {
+  id: string
+  serviceName: string
+  sacCode: string
+  qty: number
+  unit: string
+  rate: number | ""
+  charges: { id: string; name: string; amount: number | "" }[]
+  gstRate: number
+}
+
+export interface FormDiscountItem {
+  id: string
+  name: string
+  amount: number | ""
+}
+
+const SERVICE_PRESETS = [
+  { name: "Website Development", sac: "998313", gst: 18, unit: "Project" },
+  { name: "Software Development", sac: "998314", gst: 18, unit: "Project" },
+  { name: "Android / iOS App", sac: "998314", gst: 18, unit: "Project" },
+  { name: "Cloud & Domain Hosting", sac: "998315", gst: 18, unit: "Month" },
+  { name: "UI/UX & Graphics", sac: "998312", gst: 18, unit: "Design" },
+  { name: "Digital Marketing & SEO", sac: "998311", gst: 18, unit: "Month" },
+  { name: "Print & Media Works", sac: "998912", gst: 12, unit: "Job" },
+  { name: "General Consulting (Non-GST)", sac: "998319", gst: 0, unit: "Nos" },
+]
 
 export function AddClientProjectModal({
   isOpen,
@@ -43,11 +74,25 @@ export function AddClientProjectModal({
     d.setMonth(d.getMonth() + 1)
     return d.toISOString().split("T")[0]
   })
-  
-  const [baseAmount, setBaseAmount] = React.useState<number | "">("")
-  const [setupCharge, setSetupCharge] = React.useState<number | "">("")
-  const [discount, setDiscount] = React.useState<number | "">("")
-  const [gstRate, setGstRate] = React.useState<number>(18)
+
+  // 1. Dynamic Multi-Services State
+  const [serviceItems, setServiceItems] = React.useState<ServiceFormItem[]>([
+    {
+      id: `svc_${Date.now()}`,
+      serviceName: "Website Development",
+      sacCode: "998313",
+      qty: 1,
+      unit: "Project",
+      rate: "",
+      charges: [],
+      gstRate: 18,
+    }
+  ])
+
+  // 2. Named Multi-Discounts State
+  const [discountsList, setDiscountsList] = React.useState<FormDiscountItem[]>([])
+
+  // 3. Payment Structure State
   const [paymentModel, setPaymentModel] = React.useState<"advance" | "part" | "full">("advance")
   const [advanceAmount, setAdvanceAmount] = React.useState<number | "">("")
   const [partInitialPayment, setPartInitialPayment] = React.useState<number | "">("")
@@ -72,9 +117,19 @@ export function AddClientProjectModal({
   React.useEffect(() => {
     if (isOpen && client) {
       setCreationMode("project_and_invoice")
-      setBaseAmount("")
-      setSetupCharge("")
-      setDiscount("")
+      setServiceItems([
+        {
+          id: `svc_${Date.now()}`,
+          serviceName: "Website Development",
+          sacCode: "998313",
+          qty: 1,
+          unit: "Project",
+          rate: "",
+          charges: [],
+          gstRate: 18,
+        }
+      ])
+      setDiscountsList([])
       setAdvanceAmount("")
       setPartInitialPayment("")
       setPaymentModel("advance")
@@ -103,8 +158,8 @@ export function AddClientProjectModal({
             const isAdminOrClient = role.includes("admin") || role.includes("client")
             return isTeam && !isAdminOrClient && u.status !== "Inactive"
           })
-          .map(u => ({ id: u.id, name: u.name, role: u.role }))
-        
+          .map(u => ({ id: u.id, name: u.name, role: u.department || "Developer" }))
+
         setAdminsList(admins)
         setTeamsList(teams)
 
@@ -127,15 +182,113 @@ export function AddClientProjectModal({
     }
   }
 
+  // --- Dynamic Service Management ---
+  const handleAddService = (preset?: typeof SERVICE_PRESETS[0]) => {
+    const newItem: ServiceFormItem = {
+      id: `svc_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      serviceName: preset?.name || "",
+      sacCode: preset?.sac || "998313",
+      qty: 1,
+      unit: preset?.unit || "Project",
+      rate: "",
+      charges: [],
+      gstRate: preset !== undefined ? preset.gst : 18,
+    }
+    setServiceItems(prev => [...prev, newItem])
+  }
+
+  const handleRemoveService = (id: string) => {
+    if (serviceItems.length <= 1) {
+      alert("At least one service is required.")
+      return
+    }
+    setServiceItems(prev => prev.filter(s => s.id !== id))
+  }
+
+  const handleUpdateService = (id: string, field: keyof ServiceFormItem, value: any) => {
+    setServiceItems(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s))
+  }
+
+  const handleAddCharge = (serviceId: string) => {
+    const newCharge = {
+      id: `chg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      name: "",
+      amount: "" as number | "",
+    }
+    setServiceItems(prev => prev.map(s => {
+      if (s.id === serviceId) {
+        return { ...s, charges: [...s.charges, newCharge] }
+      }
+      return s
+    }))
+  }
+
+  const handleRemoveCharge = (serviceId: string, chargeId: string) => {
+    setServiceItems(prev => prev.map(s => {
+      if (s.id === serviceId) {
+        return { ...s, charges: s.charges.filter(c => c.id !== chargeId) }
+      }
+      return s
+    }))
+  }
+
+  const handleUpdateCharge = (serviceId: string, chargeId: string, field: "name" | "amount", value: any) => {
+    setServiceItems(prev => prev.map(s => {
+      if (s.id === serviceId) {
+        return {
+          ...s,
+          charges: s.charges.map(c => c.id === chargeId ? { ...c, [field]: value } : c)
+        }
+      }
+      return s
+    }))
+  }
+
+  // --- Dynamic Named Discounts Management ---
+  const handleAddDiscount = () => {
+    const newDisc: FormDiscountItem = {
+      id: `disc_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      name: "Promotional Discount",
+      amount: "",
+    }
+    setDiscountsList(prev => [...prev, newDisc])
+  }
+
+  const handleRemoveDiscount = (id: string) => {
+    setDiscountsList(prev => prev.filter(d => d.id !== id))
+  }
+
+  const handleUpdateDiscount = (id: string, field: keyof FormDiscountItem, value: any) => {
+    setDiscountsList(prev => prev.map(d => d.id === id ? { ...d, [field]: value } : d))
+  }
+
   if (!isOpen || !client) return null
 
-  const numBase = typeof baseAmount === "number" ? baseAmount : 0
-  const numSetup = typeof setupCharge === "number" ? setupCharge : 0
-  const numDiscount = typeof discount === "number" ? discount : 0
-  const taxableBase = Math.max(0, numBase + numSetup - numDiscount)
+  // --- Combined Mathematical Calculations ---
+  const itemCalculations = serviceItems.map((item) => {
+    const numRate = typeof item.rate === "number" ? item.rate : 0
+    const qty = item.qty > 0 ? item.qty : 1
+    const itemCharges = item.charges.reduce((sum, c) => sum + (typeof c.amount === "number" ? c.amount : 0), 0)
+    const itemBase = (numRate * qty) + itemCharges
+    const itemGst = Math.round(itemBase * (item.gstRate / 100))
+    const itemTotal = itemBase + itemGst
+    return {
+      ...item,
+      numRate,
+      qty,
+      itemCharges,
+      itemBase,
+      itemGst,
+      itemTotal,
+    }
+  })
 
-  const gstAmount = Math.round(taxableBase * (gstRate / 100))
-  const totalAmount = taxableBase + gstAmount
+  const totalServicesBase = itemCalculations.reduce((sum, it) => sum + (it.numRate * it.qty), 0)
+  const totalPlatformCharges = itemCalculations.reduce((sum, it) => sum + it.itemCharges, 0)
+  const totalDiscounts = discountsList.reduce((sum, d) => sum + (typeof d.amount === "number" ? d.amount : 0), 0)
+  const taxableBase = Math.max(0, (totalServicesBase + totalPlatformCharges) - totalDiscounts)
+  const totalGstAmount = itemCalculations.reduce((sum, it) => sum + it.itemGst, 0)
+  const totalAmount = taxableBase + totalGstAmount
 
   const numAdvance = typeof advanceAmount === "number" ? advanceAmount : 0
   const numPartInitial = typeof partInitialPayment === "number" ? partInitialPayment : 0
@@ -168,11 +321,42 @@ export function AddClientProjectModal({
       return
     }
 
+    if (serviceItems.some(s => !s.serviceName.trim())) {
+      alert("Please ensure every service has a valid name.")
+      return
+    }
+
     setIsSubmitting(true)
     try {
       const formattedTotal = `₹${totalAmount.toLocaleString("en-IN")}`
       const formattedAdvance = `₹${effectiveAdvance.toLocaleString("en-IN")}`
       const formattedDue = `₹${remainingDue.toLocaleString("en-IN")}`
+
+      // Prepared structured line items for invoice & project
+      const finalInvoiceItems: InvoiceLineItem[] = itemCalculations.map(it => ({
+        id: it.id,
+        serviceName: it.serviceName.trim(),
+        sacCode: it.sacCode || "998313",
+        qty: it.qty,
+        unit: it.unit,
+        rate: it.numRate,
+        charges: it.charges.map(c => ({
+          id: c.id,
+          name: c.name.trim() || "Additional Setup",
+          amount: typeof c.amount === "number" ? c.amount : 0,
+        })),
+        gstRate: it.gstRate,
+        gstAmount: it.itemGst,
+        totalAmount: it.itemTotal,
+      }))
+
+      const finalDiscounts: AppliedDiscount[] = discountsList
+        .filter(d => (typeof d.amount === "number" && d.amount > 0))
+        .map(d => ({
+          id: d.id,
+          name: d.name.trim() || "Discount",
+          amount: Number(d.amount),
+        }))
 
       // 1. Add Project (Only in Project & Invoice mode)
       let createdProject: any = null
@@ -242,17 +426,19 @@ export function AddClientProjectModal({
           dueAmount: remainingDue,
           installmentsCount: paymentModel === "part" ? installmentsCount : undefined,
           installmentAmount: paymentModel === "part" ? perInstallment : undefined,
-          baseAmount: numBase,
-          setupCharge: numSetup,
-          discount: numDiscount,
-          gstRate,
-          gstAmount,
+          baseAmount: totalServicesBase,
+          setupCharge: totalPlatformCharges,
+          discount: totalDiscounts,
+          gstRate: itemCalculations[0]?.gstRate || 18,
+          gstAmount: totalGstAmount,
           totalAmount,
+          items: finalInvoiceItems,
+          discountsList: finalDiscounts,
           billedBy: billedByAdmin,
           createdById: user?.id ? String(user.id) : undefined,
           createdByEmail: user?.email,
           labels: [category, computedPaymentStatus],
-          description: description || `Client Project for ${client.name}. Billed by ${billedByAdmin}. ${paymentModel === "advance" ? `Advance Paid: ${formattedAdvance}, Balance Due on Delivery: ${formattedDue}.` : paymentModel === "part" ? `Part Payment Plan: Initial Paid: ${formattedAdvance}, Balance: ${formattedDue} in ${installmentsCount} ${billingCycle.toLowerCase()} installments of ₹${perInstallment.toLocaleString("en-IN")}.` : ''}`,
+          description: description || `Client Project for ${client.name}. ${serviceItems.map(s => s.serviceName).join(", ")}. Billed by ${billedByAdmin}.`,
           members: projectMembers,
           milestones: starterMilestones,
         }, targetCompany)
@@ -273,16 +459,18 @@ export function AddClientProjectModal({
         project: projectTitle,
         billDate: startDate,
         dueDate: deadline,
-        baseAmount: numBase,
-        setupCharge: numSetup,
-        discount: numDiscount,
-        gstRate,
-        gstAmount,
+        baseAmount: totalServicesBase,
+        setupCharge: totalPlatformCharges,
+        discount: totalDiscounts,
+        gstRate: itemCalculations[0]?.gstRate || 18,
+        gstAmount: totalGstAmount,
         totalInvoiced: formattedTotal,
         paymentReceived: formattedAdvance,
         due: formattedDue,
         status: invoiceStatus,
         billedBy: billedByAdmin,
+        items: finalInvoiceItems,
+        discountsList: finalDiscounts,
       }, targetCompany)
 
       // 3. Automatically create Order in Sales Order List
@@ -292,279 +480,151 @@ export function AddClientProjectModal({
         project: projectTitle,
         orderDate: startDate || new Date().toISOString().split("T")[0],
         deliveryDate: deadline || "30-06-2026",
-        itemsCount: 1,
+        itemsCount: serviceItems.length,
         totalAmount: formattedTotal,
         paymentStatus: remainingDue === 0 ? "Paid" : effectiveAdvance > 0 ? "Partially paid" : "Unpaid",
         status: effectiveAdvance > 0 ? "Processing" : "Pending",
-        notes: description || `Order generated for: ${projectTitle} (${category}). ${paymentModel === "advance" ? `Advance: ${formattedAdvance}, Balance on delivery: ${formattedDue}.` : paymentModel === "part" ? `Part Payment: ${installmentsCount} parts of ₹${perInstallment.toLocaleString("en-IN")}.` : ''}`,
+        notes: description || `Order for: ${projectTitle}. Services: ${serviceItems.map(s => s.serviceName).join(", ")}.`,
         invoiceId: invoiceId,
       }, targetCompany)
 
-      // 4. Automatically record Upfront / Advance Payment if paid
+      // 4. Record Initial Payment (if advance paid)
       if (effectiveAdvance > 0) {
         await addPayment({
           invoiceId: invoiceId,
           client: client.name,
           clientEmail: client.email,
           project: projectTitle,
-          paymentDate: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }).replace(/\//g, "-"),
-          paymentMethod: "Bank Transfer / UPI",
-          transactionRef: `TXN-${Date.now().toString().slice(-6)}`,
-          note: paymentModel === "advance" 
-            ? `Advance Down Payment received for ${projectTitle}` 
-            : paymentModel === "part"
-              ? `Initial installment received for ${projectTitle}`
-              : `Full invoice payment for ${projectTitle}`,
+          paymentDate: startDate,
+          paymentMethod: paymentModel === "advance" ? "Advance (Initial Deposit)" : "Initial Milestone / Part Payment",
+          transactionRef: `REC_${Date.now().toString().slice(-6)}`,
+          note: `Initial payment for ${projectTitle} (${serviceItems.length} services)`,
           amount: formattedAdvance,
           amountNum: effectiveAdvance,
           status: "Completed",
+          companyId: targetCompany,
         })
       }
 
-      // 5. Automatically create Recurring Part Payment Subscription if Part Payment mode is active
-      if (paymentModel === "part" && autoCreateSubscription && remainingDue > 0) {
-        await addSubscription({
-          clientName: client.name,
-          planName: `${projectTitle} (Part Payment Plan)`,
-          status: "Active",
-          amount: `₹${perInstallment.toLocaleString("en-IN")}`,
-          billingCycle: billingCycle as any,
-          nextBillingDate: deadline,
-        })
-      }
+      // 5. Update Stored Client Record with Latest Contact Info
+      try {
+        const allClients = await getClients()
+        const currentStored = allClients.find(c => c.name.toLowerCase().trim() === client.name.toLowerCase().trim())
+        if (currentStored) {
+          const currentTotal = parseInt(currentStored.totalInvoiced.replace(/[^0-9]/g, "")) || 0
+          const currentPaid = parseInt(currentStored.paymentReceived.replace(/[^0-9]/g, "")) || 0
+          const currentDue = parseInt(currentStored.due.replace(/[^0-9]/g, "")) || 0
 
-      // 6. Update Client Stats and Billing Details in Ledger
-      const currentInvoicedNum = parseInt((client.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
-      const currentDueNum = parseInt((client.due || "0").replace(/[^0-9]/g, "")) || 0
-      const currentPaidNum = parseInt((client.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
-
-      const updatedClient: ClientItem = {
-        ...client,
-        email: clientEmail.trim() || client.email,
-        phone: clientPhone.trim() || client.phone,
-        address: clientAddress.trim() || client.address,
-        city: clientCity.trim() || client.city,
-        state: clientState.trim() || client.state,
-        gstNumber: clientGst.trim() || client.gstNumber,
-        projectsCount: (client.projectsCount || 0) + (creationMode === "project_and_invoice" ? 1 : 0),
-        totalInvoiced: `₹${(currentInvoicedNum + totalAmount).toLocaleString("en-IN")}`,
-        due: `₹${(currentDueNum + remainingDue).toLocaleString("en-IN")}`,
-        paymentReceived: `₹${(currentPaidNum + effectiveAdvance).toLocaleString("en-IN")}`,
-      }
-
-      await saveStoredClient(updatedClient)
-
-      // 7. Automatically create Task(s) in Tasks section if Project & Invoice mode
-      if (creationMode === "project_and_invoice") {
-        const membersToAssign = assignedMembers.length > 0 ? assignedMembers : ["Unassigned"]
-        const tasksToCreate = membersToAssign.map((memberName) => ({
-          title: `${projectTitle} - Initial Setup & Execution`,
-          description: `Deliverable for client ${client.name}. Project: ${projectTitle}. Billed: ${formattedTotal}. Scope: ${description || projectTitle}`,
-          relatedTo: projectTitle,
-          points: "3 Points",
-          assignedTo: memberName,
-          assignedToAvatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${memberName.replace(/\s/g, "")}`,
-          collaborators: assignedMembers.filter((m) => m !== memberName).join(", ") || "-",
-          status: "To do" as const,
-          priority: "High" as const,
-          priorityIcon: "up" as const,
-          labels: [category, "Client Project"],
-          startDate: startDate || "-",
-          deadline: deadline || "30-06-2026",
-          milestone: "Beta Release",
-          isRecurring: false,
-        }))
-        await taskService.addTasks(tasksToCreate)
-      }
-
-      // 8. Notify Client
-      if (typeof window !== "undefined") {
-        try {
-          const notifKey = `saampark_notifications_${(client.email || "").toLowerCase().trim()}`
-          const prevNotifsRaw = localStorage.getItem(notifKey)
-          const prevNotifs = prevNotifsRaw ? JSON.parse(prevNotifsRaw) : []
-          const newNotif = {
-            id: Date.now(),
-            title: creationMode === "project_and_invoice" ? `New Project & Invoice Generated` : `New Tax Invoice Generated`,
-            message: creationMode === "project_and_invoice" 
-              ? `Project '${projectTitle}' created with ${invoiceId} for ${formattedTotal}. Status: ${paymentStatus}.`
-              : `Tax Invoice ${invoiceId} generated for ${projectTitle} (${formattedTotal}).`,
-            timestamp: new Date().toLocaleString(),
-            read: false,
-          }
-          localStorage.setItem(notifKey, JSON.stringify([newNotif, ...prevNotifs]))
-        } catch {}
+          await saveStoredClient({
+            ...currentStored,
+            email: clientEmail.trim() || currentStored.email,
+            phone: clientPhone.trim() || currentStored.phone,
+            address: clientAddress.trim() || currentStored.address,
+            city: clientCity.trim() || currentStored.city,
+            state: clientState.trim() || currentStored.state,
+            gstNumber: clientGst.trim() || currentStored.gstNumber,
+            totalInvoiced: `₹${(currentTotal + totalAmount).toLocaleString("en-IN")}`,
+            paymentReceived: `₹${(currentPaid + effectiveAdvance).toLocaleString("en-IN")}`,
+            due: `₹${(currentDue + remainingDue).toLocaleString("en-IN")}`,
+            projectsCount: (currentStored.projectsCount || 0) + (creationMode === "project_and_invoice" ? 1 : 0),
+          })
+        }
+      } catch (err) {
+        console.warn("Could not sync client record:", err)
       }
 
       onProjectCreated()
+      if (onInvoiceCreated) onInvoiceCreated(createdInvoice)
       onClose()
-      if (onInvoiceCreated) {
-        onInvoiceCreated(createdInvoice)
-      }
     } catch (err) {
       console.error(err)
-      alert("Error creating project and invoice.")
+      alert("An error occurred while creating the project and invoice.")
     } finally {
       setIsSubmitting(false)
     }
   }
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] my-auto flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-[9999] flex items-start sm:items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto">
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden my-auto flex flex-col max-h-[92vh]">
         
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
-              {creationMode === "project_and_invoice" ? <Briefcase size={20} /> : <FileText size={20} />}
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
-                {creationMode === "project_and_invoice" ? `Add Project & Invoice for ${client.name}` : `Create Tax Invoice for ${client.name}`}
-              </h2>
-              <p className="text-xs text-zinc-500">
-                {creationMode === "project_and_invoice" 
-                  ? "Configure project scope, billing GST breakdown, and team assignment" 
-                  : "Generate direct tax invoice and order billing without creating a project entry"}
-              </p>
-            </div>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
+          <div>
+            <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+              <Briefcase className="text-blue-600" size={18} />
+              <span>Multi-Service Project & Billing Setup</span>
+            </h2>
+            <p className="text-xs text-zinc-500">
+              Add multiple custom services, line-level charges, independent GST rates & discounts for <strong>{client.name}</strong>
+            </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 p-1.5 rounded-lg transition-colors cursor-pointer"
           >
             <X size={18} />
           </button>
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-6 space-y-5 text-xs">
+        <form onSubmit={handleSave} className="p-4 sm:p-6 overflow-y-auto space-y-5 text-xs flex-1">
           
-          {/* Top Mode Toggle: Project & Invoice VS Only Invoice */}
-          <div className="p-2 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/80 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-zinc-700 dark:text-zinc-300 font-bold text-xs">
-              <span>Billing Target:</span>
+          {/* Creation Mode Toggle */}
+          <div className="p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-200 dark:border-zinc-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Layers size={16} className="text-blue-600 shrink-0" />
+              <div>
+                <span className="font-bold text-zinc-800 dark:text-zinc-200 block text-xs">Creation Scope</span>
+                <span className="text-[11px] text-zinc-500">Choose whether to initialize developer project workspace or tax invoice only</span>
+              </div>
             </div>
-            <div className="flex items-center gap-1.5 bg-white dark:bg-zinc-900 p-1 rounded-lg border border-zinc-200 dark:border-zinc-700">
+            <div className="flex items-center gap-1.5 bg-white dark:bg-zinc-900 p-1 rounded-lg border border-zinc-200 dark:border-zinc-700 shrink-0">
               <button
                 type="button"
                 onClick={() => handleModeChange("project_and_invoice")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                className={`px-3 py-1.5 rounded-md font-bold text-xs transition-all cursor-pointer ${
                   creationMode === "project_and_invoice"
-                    ? "bg-blue-600 text-white shadow-2xs"
-                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+                    ? "bg-blue-600 text-white shadow-xs"
+                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
                 }`}
               >
-                <Briefcase size={13} />
-                <span>📁 Project & Invoice</span>
+                🚀 Project & Invoice
               </button>
               <button
                 type="button"
                 onClick={() => handleModeChange("invoice_only")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                className={`px-3 py-1.5 rounded-md font-bold text-xs transition-all cursor-pointer ${
                   creationMode === "invoice_only"
-                    ? "bg-blue-600 text-white shadow-2xs"
-                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+                    ? "bg-blue-600 text-white shadow-xs"
+                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
                 }`}
               >
-                <FileText size={13} />
-                <span>🧾 Only Invoice</span>
+                📄 Only Invoice
               </button>
             </div>
           </div>
 
-          {/* Client Profile & Billing Details (Prefilled & Editable) */}
-          <div className="p-3.5 bg-blue-50/40 dark:bg-blue-950/20 rounded-xl border border-blue-100 dark:border-blue-900/40 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Building2 size={14} className="text-blue-600 dark:text-blue-400" />
-                <span className="font-bold text-zinc-900 dark:text-zinc-100">Client & Billing Details</span>
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300">
-                  {client.group || "VIP Client"}
-                </span>
-              </div>
-              <span className="text-[10px] text-zinc-400 font-medium">Auto-prefilled from profile (Editable)</span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-              <div>
-                <label className="block text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 mb-0.5">Email Address</label>
-                <input
-                  type="email"
-                  value={clientEmail}
-                  onChange={(e) => setClientEmail(e.target.value)}
-                  placeholder="client@company.com"
-                  className="w-full px-2.5 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 text-xs focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 mb-0.5">Phone Number</label>
-                <input
-                  type="tel"
-                  value={clientPhone}
-                  onChange={(e) => setClientPhone(e.target.value)}
-                  placeholder="+91 9876543210"
-                  className="w-full px-2.5 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 text-xs focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 mb-0.5">GSTIN / Tax ID</label>
-                <input
-                  type="text"
-                  value={clientGst}
-                  onChange={(e) => setClientGst(e.target.value)}
-                  placeholder="e.g. 19AAAAA0000A1Z5"
-                  className="w-full px-2.5 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 text-xs focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="block text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 mb-0.5">Billing Address</label>
-                <input
-                  type="text"
-                  value={clientAddress}
-                  onChange={(e) => setClientAddress(e.target.value)}
-                  placeholder="Street / Office Address"
-                  className="w-full px-2.5 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 text-xs focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 mb-0.5">City / State</label>
-                <input
-                  type="text"
-                  value={clientCity}
-                  onChange={(e) => setClientCity(e.target.value)}
-                  placeholder="City, State"
-                  className="w-full px-2.5 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 text-xs focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Row 1: Title & Category */}
+          {/* Project Title & Category */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-                {creationMode === "project_and_invoice" ? "Project Title *" : "Invoice / Service Title *"}
+                Project / Order Title *
               </label>
               <input
                 type="text"
                 required
+                placeholder="e.g. Complete Digital Transformation Suite"
                 value={projectTitle}
                 onChange={(e) => setProjectTitle(e.target.value)}
-                placeholder={creationMode === "project_and_invoice" ? "e.g. E-Commerce Platform & Mobile App" : "e.g. Annual Digital Marketing & Maintenance"}
                 className="w-full px-3.5 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
               />
             </div>
 
             <div>
               <label className="block font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-                Service Category
+                Primary Category
               </label>
               <select
                 value={category}
@@ -580,8 +640,8 @@ export function AddClientProjectModal({
             </div>
           </div>
 
-          {/* Row 2: Billed By Admin & Team Members */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Dates & Billed By */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
                 Billed By (Admin)
@@ -589,7 +649,7 @@ export function AddClientProjectModal({
               <select
                 value={billedByAdmin}
                 onChange={(e) => setBilledByAdmin(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                className="w-full px-3 py-1.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
               >
                 {adminsList.map(a => (
                   <option key={a.id} value={a.name}>{a.name}</option>
@@ -597,44 +657,6 @@ export function AddClientProjectModal({
               </select>
             </div>
 
-            {/* Assigned Team Members Section (blurred and disabled when Only Invoice is selected) */}
-            <div className={creationMode === "invoice_only" ? "opacity-40 grayscale pointer-events-none select-none relative" : "relative"}>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block font-semibold text-zinc-700 dark:text-zinc-300">
-                  Assigned Team Members
-                </label>
-                {creationMode === "invoice_only" && (
-                  <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
-                    🔒 Disabled (Only Invoice)
-                  </span>
-                )}
-              </div>
-              <div className="p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 max-h-28 overflow-y-auto space-y-1">
-                {teamsList.length === 0 ? (
-                  <p className="text-zinc-400 text-[11px]">No team members found.</p>
-                ) : (
-                  teamsList.map(t => {
-                    const isChecked = assignedMembers.includes(t.name)
-                    return (
-                      <label key={t.id} className="flex items-center gap-2 cursor-pointer text-zinc-800 dark:text-zinc-200 hover:bg-zinc-200/50 dark:hover:bg-zinc-700/50 p-1 rounded">
-                        <input
-                          type="checkbox"
-                          disabled={creationMode === "invoice_only"}
-                          checked={isChecked}
-                          onChange={() => handleToggleMember(t.name)}
-                          className="rounded text-blue-600 focus:ring-blue-500"
-                        />
-                        <span>{t.name}</span>
-                      </label>
-                    )
-                  })
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Row 3: Dates */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block font-semibold text-zinc-700 dark:text-zinc-300 mb-1 flex items-center gap-1">
                 <Calendar size={13} /> Start Date
@@ -643,37 +665,356 @@ export function AddClientProjectModal({
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                className="w-full px-3 py-1.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-medium"
               />
             </div>
 
             <div>
               <label className="block font-semibold text-zinc-700 dark:text-zinc-300 mb-1 flex items-center gap-1">
-                <Calendar size={13} /> Target Release / Due Date
+                <Calendar size={13} /> Due / Delivery Date
               </label>
               <input
                 type="date"
                 value={deadline}
                 onChange={(e) => setDeadline(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                className="w-full px-3 py-1.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-medium"
               />
             </div>
           </div>
 
-          {/* Financial GST & Separated Payment Model Breakdown Box */}
-          <div className="p-4 rounded-2xl bg-blue-50/60 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-blue-700 dark:text-blue-300 font-bold text-xs">
+          {/* ---------------- MULTI-SERVICE ITEM BUILDER ---------------- */}
+          <div className="p-4 rounded-2xl bg-blue-50/50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/60 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-blue-200/80 dark:border-blue-800/60 pb-3">
               <div className="flex items-center gap-2">
-                <Calculator size={15} />
-                <span>Financial & Payment Terms</span>
+                <Sparkles size={16} className="text-blue-600" />
+                <span className="font-extrabold text-blue-900 dark:text-blue-200 text-xs uppercase tracking-wider">
+                  Itemized Services & Pricing ({serviceItems.length} {serviceItems.length === 1 ? 'Service' : 'Services'})
+                </span>
               </div>
-              
-              {/* 3 Separated Payment Model Tabs */}
-              <div className="flex items-center gap-1 bg-white dark:bg-zinc-900 p-0.5 rounded-lg border border-blue-200 dark:border-blue-800 self-start sm:self-auto overflow-x-auto">
+
+              {/* Quick Preset Buttons */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[10px] text-zinc-500 font-semibold">Quick Add:</span>
+                {SERVICE_PRESETS.slice(0, 4).map(preset => (
+                  <button
+                    key={preset.name}
+                    type="button"
+                    onClick={() => handleAddService(preset)}
+                    className="px-2 py-0.5 rounded bg-white dark:bg-zinc-800 border border-blue-200 dark:border-blue-700 hover:bg-blue-50 text-[10px] font-bold text-blue-700 dark:text-blue-300 transition-colors cursor-pointer"
+                  >
+                    + {preset.name.split(" ")[0]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* List of Dynamic Service Cards */}
+            <div className="space-y-3">
+              {serviceItems.map((item, index) => {
+                const itemCalc = itemCalculations[index]
+                return (
+                  <div 
+                    key={item.id} 
+                    className="p-3.5 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-700 shadow-2xs space-y-3 relative group"
+                  >
+                    {/* Header of Item Row */}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300 font-extrabold text-[10px]">
+                        SERVICE #{index + 1}
+                      </span>
+                      
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs font-black text-zinc-900 dark:text-zinc-100">
+                          Line Total: ₹{itemCalc?.itemTotal.toLocaleString("en-IN") || 0}
+                        </span>
+                        {serviceItems.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveService(item.id)}
+                            className="p-1 text-zinc-400 hover:text-rose-600 transition-colors cursor-pointer"
+                            title="Remove this service"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Service Row Fields: Name, SAC, Qty, Unit, Rate, GST */}
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+                      <div className="sm:col-span-4">
+                        <label className="block text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                          Custom Service Name *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Custom React Application"
+                          value={item.serviceName}
+                          onChange={(e) => handleUpdateService(item.id, "serviceName", e.target.value)}
+                          className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-semibold text-zinc-900 dark:text-zinc-100"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <label className="block text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                          SAC / HSN
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 998313"
+                          value={item.sacCode}
+                          onChange={(e) => handleUpdateService(item.id, "sacCode", e.target.value)}
+                          className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono text-zinc-900 dark:text-zinc-100"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <label className="block text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                          Base Rate (₹) *
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          required
+                          placeholder="e.g. 35000"
+                          value={item.rate}
+                          onChange={(e) => {
+                            const val = e.target.value
+                            handleUpdateService(item.id, "rate", val === "" ? "" : Math.max(0, Number(val)))
+                          }}
+                          className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono font-bold text-zinc-900 dark:text-zinc-100"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <label className="block text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                          Qty & Unit
+                        </label>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min="1"
+                            value={item.qty}
+                            onChange={(e) => handleUpdateService(item.id, "qty", Math.max(1, Number(e.target.value)))}
+                            className="w-12 px-1.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono text-center font-bold"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Unit"
+                            value={item.unit}
+                            onChange={(e) => handleUpdateService(item.id, "unit", e.target.value)}
+                            className="w-full px-2 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-[11px]"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <label className="block text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                          GST Rate
+                        </label>
+                        <select
+                          value={item.gstRate}
+                          onChange={(e) => handleUpdateService(item.id, "gstRate", Number(e.target.value))}
+                          className="w-full px-2 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-semibold text-zinc-900 dark:text-zinc-100"
+                        >
+                          <option value={18}>18% (GST)</option>
+                          <option value={12}>12% (Print)</option>
+                          <option value={5}>5%</option>
+                          <option value={0}>0% (Non-GST)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Inline Item-Specific Extra Charges */}
+                    <div className="pt-1 space-y-2 border-t border-zinc-100 dark:border-zinc-800">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-tight">
+                          Item-Level Extra Charges / Add-ons ({item.charges.length})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleAddCharge(item.id)}
+                          className="text-[10px] font-bold text-blue-600 hover:text-blue-800 dark:text-blue-400 flex items-center gap-1 cursor-pointer"
+                        >
+                          <Plus size={11} />
+                          <span>Add Specific Charge</span>
+                        </button>
+                      </div>
+
+                      {item.charges.length > 0 && (
+                        <div className="space-y-1.5 pl-2 border-l-2 border-blue-300 dark:border-blue-700">
+                          {item.charges.map((chg) => (
+                            <div key={chg.id} className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                placeholder="Charge name (e.g. Dedicated Server Setup)"
+                                value={chg.name}
+                                onChange={(e) => handleUpdateCharge(item.id, chg.id, "name", e.target.value)}
+                                className="flex-1 px-2 py-1 rounded bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-[11px]"
+                              />
+                              <div className="flex items-center gap-1">
+                                <span className="text-zinc-400 text-[11px]">₹</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  placeholder="Price"
+                                  value={chg.amount}
+                                  onChange={(e) => {
+                                    const val = e.target.value
+                                    handleUpdateCharge(item.id, chg.id, "amount", val === "" ? "" : Math.max(0, Number(val)))
+                                  }}
+                                  className="w-24 px-2 py-1 rounded bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono font-bold text-[11px]"
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveCharge(item.id, chg.id)}
+                                className="p-1 text-zinc-400 hover:text-rose-600 transition-colors cursor-pointer"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Add Another Service Button */}
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => handleAddService()}
+                className="w-full py-2 rounded-xl bg-white dark:bg-zinc-900 border border-dashed border-blue-400 dark:border-blue-700 text-blue-600 dark:text-blue-300 hover:bg-blue-50/80 font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer"
+              >
+                <Plus size={14} />
+                <span>Add Another Service / Product</span>
+              </button>
+            </div>
+          </div>
+
+          {/* ---------------- NAMED MULTI-DISCOUNTS SECTION ---------------- */}
+          <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-zinc-800 dark:text-zinc-200 text-xs flex items-center gap-1.5">
+                <Tag size={13} className="text-amber-600" />
+                <span>Promotional Discounts & Rebates ({discountsList.length})</span>
+              </span>
+              <button
+                type="button"
+                onClick={handleAddDiscount}
+                className="text-[11px] font-bold text-blue-600 hover:text-blue-800 dark:text-blue-400 flex items-center gap-1 cursor-pointer"
+              >
+                <Plus size={12} />
+                <span>Add Discount</span>
+              </button>
+            </div>
+
+            {discountsList.length === 0 ? (
+              <p className="text-[11px] text-zinc-400 italic">No discounts applied. Click &quot;Add Discount&quot; to apply custom promotional rebates.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {discountsList.map((disc) => (
+                  <div key={disc.id} className="flex items-center gap-2 bg-white dark:bg-zinc-900 p-2 rounded-lg border border-zinc-200 dark:border-zinc-700">
+                    <input
+                      type="text"
+                      placeholder="Discount Title (e.g. Festival Offer / Referral 10%)"
+                      value={disc.name}
+                      onChange={(e) => handleUpdateDiscount(disc.id, "name", e.target.value)}
+                      className="flex-1 px-2.5 py-1 rounded bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs font-medium"
+                    />
+                    <div className="flex items-center gap-1">
+                      <span className="text-rose-500 font-bold text-xs">(-) ₹</span>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="Amount"
+                        value={disc.amount}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          handleUpdateDiscount(disc.id, "amount", val === "" ? "" : Math.max(0, Number(val)))
+                        }}
+                        className="w-28 px-2 py-1 rounded bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono font-bold text-xs text-rose-600"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveDiscount(disc.id)}
+                      className="p-1 text-zinc-400 hover:text-rose-600 transition-colors cursor-pointer"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ---------------- LIVE FINANCIAL SUMMARY LEDGER ---------------- */}
+          <div className="p-3.5 rounded-xl bg-zinc-900 text-white space-y-2 text-xs shadow-md">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+              <span className="font-extrabold uppercase tracking-wider text-zinc-400 text-[10px]">
+                Consolidated Financial Summary
+              </span>
+              <span className="font-bold text-zinc-300 text-[11px]">
+                {serviceItems.length} Services Itemized
+              </span>
+            </div>
+
+            <div className="space-y-1 text-zinc-300 text-[11px]">
+              <div className="flex justify-between">
+                <span>Total Services Base Value:</span>
+                <span className="font-mono font-bold text-white">₹{totalServicesBase.toLocaleString("en-IN")}</span>
+              </div>
+
+              {totalPlatformCharges > 0 && (
+                <div className="flex justify-between text-blue-300">
+                  <span>Total Additional / Setup Charges:</span>
+                  <span className="font-mono font-bold">₹{totalPlatformCharges.toLocaleString("en-IN")}</span>
+                </div>
+              )}
+
+              {totalDiscounts > 0 && (
+                <div className="flex justify-between text-rose-400">
+                  <span>Total Discounts Applied:</span>
+                  <span className="font-mono font-bold">(-) ₹{totalDiscounts.toLocaleString("en-IN")}</span>
+                </div>
+              )}
+
+              <div className="flex justify-between py-1 border-t border-zinc-800 font-bold text-white">
+                <span>Taxable Base Value:</span>
+                <span className="font-mono">₹{taxableBase.toLocaleString("en-IN")}</span>
+              </div>
+
+              <div className="flex justify-between text-zinc-400">
+                <span>Total GST Taxes:</span>
+                <span className="font-mono font-bold text-blue-400">₹{totalGstAmount.toLocaleString("en-IN")}</span>
+              </div>
+
+              <div className="flex justify-between py-1.5 text-base font-black text-emerald-400 border-t border-zinc-700">
+                <span>Grand Total (Net Payable):</span>
+                <span className="font-mono">₹{totalAmount.toLocaleString("en-IN")}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* ---------------- PAYMENT TERMS & DOWNPAYMENT ---------------- */}
+          <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-zinc-800 dark:text-zinc-200 font-bold text-xs">
+              <div className="flex items-center gap-1.5">
+                <Calculator size={14} className="text-blue-600" />
+                <span>Payment Plan & Settlement Structure</span>
+              </div>
+
+              <div className="flex items-center gap-1 bg-white dark:bg-zinc-900 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-700">
                 <button
                   type="button"
                   onClick={() => setPaymentModel("advance")}
-                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all shrink-0 ${
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
                     paymentModel === "advance"
                       ? "bg-blue-600 text-white shadow-xs"
                       : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
@@ -684,7 +1025,7 @@ export function AddClientProjectModal({
                 <button
                   type="button"
                   onClick={() => setPaymentModel("part")}
-                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all shrink-0 ${
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
                     paymentModel === "part"
                       ? "bg-blue-600 text-white shadow-xs"
                       : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
@@ -695,7 +1036,7 @@ export function AddClientProjectModal({
                 <button
                   type="button"
                   onClick={() => setPaymentModel("full")}
-                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all shrink-0 ${
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
                     paymentModel === "full"
                       ? "bg-blue-600 text-white shadow-xs"
                       : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
@@ -706,185 +1047,72 @@ export function AddClientProjectModal({
               </div>
             </div>
 
-            {/* Base Amount, Setup Charges, Discount, & GST Inputs Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-              <div>
-                <label className="block text-[11px] font-semibold text-blue-900 dark:text-blue-200 mb-1">
-                  Base Deal Amount (₹) *
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="e.g. 50000"
-                  value={baseAmount}
-                  onChange={(e) => {
-                    const val = e.target.value
-                    setBaseAmount(val === "" ? "" : Math.max(0, Number(val)))
-                  }}
-                  className="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-blue-200 dark:border-blue-800 font-bold text-zinc-900 dark:text-zinc-100"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-blue-900 dark:text-blue-200 mb-1">
-                  Platform / Setup Charge (₹)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="e.g. 2500"
-                  value={setupCharge}
-                  onChange={(e) => {
-                    const val = e.target.value
-                    setSetupCharge(val === "" ? "" : Math.max(0, Number(val)))
-                  }}
-                  className="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-blue-200 dark:border-blue-800 font-bold text-zinc-900 dark:text-zinc-100"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-blue-900 dark:text-blue-200 mb-1">
-                  Less: Discount (₹)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="e.g. 1000"
-                  value={discount}
-                  onChange={(e) => {
-                    const val = e.target.value
-                    setDiscount(val === "" ? "" : Math.max(0, Number(val)))
-                  }}
-                  className="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-blue-200 dark:border-blue-800 font-bold text-zinc-900 dark:text-zinc-100"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-blue-900 dark:text-blue-200 mb-1">
-                  GST Rate (%)
-                </label>
-                <select
-                  value={gstRate}
-                  onChange={(e) => setGstRate(Number(e.target.value))}
-                  className="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-blue-200 dark:border-blue-800 font-bold text-zinc-900 dark:text-zinc-100"
-                >
-                  <option value={0}>0% (Non-GST / Exempt)</option>
-                  <option value={5}>5%</option>
-                  <option value={12}>12%</option>
-                  <option value={18}>18% (Standard GST)</option>
-                  <option value={28}>28%</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Live Pricing Breakdown Badge */}
-            <div className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg bg-white dark:bg-zinc-900 border border-blue-200 dark:border-blue-800 text-[10.5px]">
-              <div className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400">
-                <span>Taxable Base: <strong className="text-zinc-900 dark:text-zinc-100 font-mono font-bold">₹{taxableBase.toLocaleString("en-IN")}</strong></span>
-                <span>+</span>
-                <span>GST ({gstRate}%): <strong className="text-blue-600 font-mono font-bold">₹{gstAmount.toLocaleString("en-IN")}</strong></span>
-              </div>
-              <div>
-                <span className="text-zinc-500">Gross Total:</span>{" "}
-                <strong className="text-emerald-600 dark:text-emerald-400 font-mono text-xs font-black">
-                  ₹{totalAmount.toLocaleString("en-IN")}
-                </strong>
-              </div>
-            </div>
-
-            {/* 1. SEPARATE OPTION: ADVANCE PAYMENT ONLY */}
+            {/* Advance Option */}
             {paymentModel === "advance" && (
-              <div className="p-3.5 bg-white dark:bg-zinc-900 border border-emerald-200 dark:border-emerald-900/80 rounded-xl space-y-3">
-                <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-2">
-                  <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
-                    <Coins size={14} className="text-emerald-600" /> Advance Down Payment Terms
-                  </span>
-                  <span className="text-[10px] text-zinc-400">Balance settled in single final payment</span>
+              <div className="p-3 bg-white dark:bg-zinc-900 rounded-xl border border-emerald-300 dark:border-emerald-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
+                    <Coins size={13} /> Advance Down Payment (₹)
+                  </label>
+                  <div className="flex items-center gap-1">
+                    {[0.25, 0.40, 0.50].map((pct) => (
+                      <button
+                        key={pct}
+                        type="button"
+                        onClick={() => setAdvanceAmount(Math.round(totalAmount * pct))}
+                        className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-[9px] font-bold cursor-pointer"
+                      >
+                        {pct * 100}%
+                      </button>
+                    ))}
+                  </div>
                 </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
-                        Advance Down Payment (₹)
-                      </label>
-                      <div className="flex items-center gap-1">
-                        {[25, 40, 50].map((pct) => (
-                          <button
-                            key={pct}
-                            type="button"
-                            onClick={() => setAdvanceAmount(Math.round(totalAmount * (pct / 100)))}
-                            className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-300"
-                          >
-                            {pct}%
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <input
-                      type="number"
-                      min="0"
-                      max={totalAmount}
-                      placeholder="Enter advance amount"
-                      value={advanceAmount}
-                      onChange={(e) => {
-                        const val = e.target.value
-                        setAdvanceAmount(val === "" ? "" : Math.max(0, Number(val)))
-                      }}
-                      className="w-full px-3 py-1.5 rounded-lg bg-emerald-50/50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 font-bold text-emerald-800 dark:text-emerald-200"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                      Remaining Balance (Due on Delivery)
-                    </label>
-                    <div className="w-full px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-bold text-zinc-900 dark:text-zinc-100 flex items-center justify-between">
-                      <span>₹{remainingDue.toLocaleString("en-IN")}</span>
-                      <span className="text-[10px] text-zinc-400 font-normal">Due on final release</span>
-                    </div>
-                  </div>
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="Enter initial advance (e.g. 20000)"
+                  value={advanceAmount}
+                  onChange={(e) => {
+                    const val = e.target.value
+                    setAdvanceAmount(val === "" ? "" : Math.max(0, Number(val)))
+                  }}
+                  className="w-full px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-emerald-200 dark:border-emerald-800 font-mono font-bold text-zinc-900 dark:text-zinc-100"
+                />
+                <div className="flex justify-between text-[10.5px] pt-1">
+                  <span className="text-zinc-500">Initial Paid: <strong className="text-emerald-600 font-mono">₹{effectiveAdvance.toLocaleString("en-IN")}</strong></span>
+                  <span className="text-zinc-500">Balance Due on Delivery: <strong className="text-rose-600 font-mono">₹{remainingDue.toLocaleString("en-IN")}</strong></span>
                 </div>
               </div>
             )}
 
-            {/* 2. SEPARATE OPTION: PART PAYMENT / SUBSCRIPTION */}
+            {/* Part Payment (Subscription) Option */}
             {paymentModel === "part" && (
-              <div className="p-3.5 bg-white dark:bg-zinc-900 border border-blue-300 dark:border-blue-800 rounded-xl space-y-3">
-                <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-2">
-                  <span className="text-[11px] font-bold text-blue-800 dark:text-blue-300 flex items-center gap-1.5">
-                    <RefreshCw size={14} className="text-blue-600" /> Part Payment Plan & Subscriptions
-                  </span>
-                  <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold">Recurring Milestones / Installments</span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="p-3 bg-white dark:bg-zinc-900 rounded-xl border border-blue-300 dark:border-blue-800 space-y-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 uppercase mb-1">
-                      Initial Deposit (Optional)
+                    <label className="text-[11px] font-bold text-blue-800 dark:text-blue-300 block mb-1">
+                      Initial Deposit (₹)
                     </label>
                     <input
                       type="number"
                       min="0"
-                      max={totalAmount}
                       value={partInitialPayment}
                       onChange={(e) => {
                         const val = e.target.value
                         setPartInitialPayment(val === "" ? "" : Math.max(0, Number(val)))
                       }}
-                      placeholder="₹0"
-                      className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-semibold text-zinc-900 dark:text-zinc-100"
+                      className="w-full px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono font-bold"
+                      placeholder="Initial payment"
                     />
                   </div>
-
                   <div>
-                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 uppercase mb-1">
-                      Number of Parts
+                    <label className="text-[11px] font-bold text-blue-800 dark:text-blue-300 block mb-1">
+                      Installments Count
                     </label>
                     <select
                       value={installmentsCount}
-                      onChange={(e) => setInstallmentsCount(Number(e.target.value))}
-                      className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-800 dark:text-zinc-200"
+                      onChange={(e) => setInstallmentsCount(Math.max(1, Number(e.target.value)))}
+                      className="w-full px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-bold"
                     >
                       <option value={2}>2 Installments</option>
                       <option value={3}>3 Installments</option>
@@ -893,118 +1121,30 @@ export function AddClientProjectModal({
                       <option value={12}>12 Installments</option>
                     </select>
                   </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 uppercase mb-1">
-                      Billing Interval
-                    </label>
-                    <select
-                      value={billingCycle}
-                      onChange={(e) => setBillingCycle(e.target.value as any)}
-                      className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-800 dark:text-zinc-200"
-                    >
-                      <option value="Monthly">Monthly Cycle</option>
-                      <option value="Quarterly">Quarterly Cycle</option>
-                    </select>
-                  </div>
                 </div>
-
-                <div className="p-2.5 rounded-lg bg-blue-50/90 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800/80 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <RefreshCw size={15} className="text-blue-600 animate-spin-slow shrink-0" />
-                    <div>
-                      <p className="text-xs font-extrabold text-blue-900 dark:text-blue-200">
-                        ₹{perInstallment.toLocaleString("en-IN")} / {billingCycle.toLowerCase()}
-                      </p>
-                      <p className="text-[10px] text-blue-700 dark:text-blue-400">
-                        Remaining balance of ₹{remainingDue.toLocaleString("en-IN")} split in {installmentsCount} parts
-                      </p>
-                    </div>
-                  </div>
-                  <label className="flex items-center gap-1.5 cursor-pointer text-[10px] font-bold text-blue-900 dark:text-blue-200 bg-white dark:bg-zinc-900 px-2 py-1 rounded border border-blue-200 dark:border-blue-800">
-                    <input
-                      type="checkbox"
-                      checked={autoCreateSubscription}
-                      onChange={(e) => setAutoCreateSubscription(e.target.checked)}
-                      className="rounded text-blue-600 focus:ring-blue-500"
-                    />
-                    <span>Auto-Add to Subscriptions</span>
-                  </label>
+                <div className="p-2 rounded bg-blue-50 dark:bg-blue-950/40 text-[10.5px] text-blue-900 dark:text-blue-200 font-medium">
+                  💡 Balance of <strong className="font-mono">₹{remainingDue.toLocaleString("en-IN")}</strong> split into <strong className="font-mono">{installmentsCount}</strong> {billingCycle.toLowerCase()} parts of <strong className="font-mono">₹{perInstallment.toLocaleString("en-IN")}</strong> each.
                 </div>
               </div>
             )}
-
-            {/* 3. SEPARATE OPTION: FULL UPFRONT PAYMENT */}
-            {paymentModel === "full" && (
-              <div className="p-3.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl flex items-center justify-between">
-                <div>
-                  <span className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200 block">
-                    Full Upfront Payment (100%)
-                  </span>
-                  <span className="text-[10px] text-zinc-400">Entire balance settled in single invoice</span>
-                </div>
-                <select
-                  value={paymentStatus}
-                  onChange={(e) => setPaymentStatus(e.target.value as any)}
-                  className={`px-3 py-1.5 rounded-lg font-bold border text-xs ${
-                    paymentStatus === "Payment Pending"
-                      ? "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300"
-                      : "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300"
-                  }`}
-                >
-                  <option value="Paid">Paid / Received in Full</option>
-                  <option value="Payment Pending">Full Payment Pending</option>
-                </select>
-              </div>
-            )}
-
-            {/* Calculated Summary */}
-            <div className="pt-2 border-t border-blue-200/60 dark:border-blue-800/60 flex items-center justify-between text-xs font-semibold">
-              <span className="text-zinc-600 dark:text-zinc-400">
-                Tax: <strong>₹{gstAmount.toLocaleString("en-IN")}</strong> ({gstRate}%)
-              </span>
-              <span className="text-blue-700 dark:text-blue-300 text-sm font-extrabold">
-                Total Deal: ₹{totalAmount.toLocaleString("en-IN")}
-              </span>
-            </div>
           </div>
 
-          {/* Description / Notes */}
-          <div>
-            <label className="block font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-              Billing Remarks & Description
-            </label>
-            <textarea
-              rows={2}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Add project specifications or payment terms..."
-              className="w-full px-3.5 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-            />
-          </div>
-
-          {/* Footer Buttons */}
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-100 dark:border-zinc-800">
+          {/* Footer Actions */}
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-200 dark:border-zinc-800">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 font-semibold"
+              className="px-4 py-2 rounded-xl text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 font-bold text-xs transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md shadow-blue-500/20 flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+              className="px-6 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition-all disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
             >
-              {creationMode === "invoice_only" ? <FileText size={16} /> : <Check size={16} />}
-              <span>
-                {isSubmitting
-                  ? "Generating..."
-                  : creationMode === "invoice_only"
-                  ? "Generate Tax Invoice"
-                  : "Generate Project & Invoice"}
-              </span>
+              <Check size={14} />
+              <span>{isSubmitting ? "Generating Setup..." : creationMode === "project_and_invoice" ? "Create Project & Generate Invoice" : "Generate Invoice Only"}</span>
             </button>
           </div>
 
