@@ -171,13 +171,15 @@ export function InvoiceModal({
     ? "PART PAID" 
     : "NOT PAID"
 
-  // 3. URLs and Direct-View QR Code
+  // 3. URLs and Direct-View QR Code (For scanning & opening invoice)
   const originUrl = typeof window !== "undefined" ? window.location.origin : "https://saamparktechnology.com"
   const verifyInvoiceUrl = `${originUrl}/feature/sales/invoices?view=${encodeURIComponent(invoice.id)}`
   const verifyQrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(verifyInvoiceUrl)}&margin=2`
   
-  const upiIntentUrl = `upi://pay?pa=${paySettings.upiId || "saampark@sbi"}&pn=Saampark%20Technology&am=${totalVal}&cu=INR&tn=${encodeURIComponent(invoice.id)}`
-  const upiQrCodeUrl = paySettings.qrCodeUrl || `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(upiIntentUrl)}&margin=2`
+  // Custom Payment QR: Only rendered if saved by admin in Settings
+  const customPaymentQrUrl = paySettings.qrCodeUrl && paySettings.qrCodeUrl.trim().length > 0
+    ? paySettings.qrCodeUrl
+    : null
 
   const handlePrint = () => {
     window.print()
@@ -665,78 +667,72 @@ export function InvoiceModal({
             </div>
           </div>
 
-          {/* 5. PAYMENT OPTIONS | PAY BY CARD | BANK DETAILS (BARCODE REMOVED) */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+          {/* 5. PAYMENT & BANK TRANSFER DETAILS (PAY BY CARD REMOVED) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
             
-            {/* Box 1: UPI / QR CODE */}
+            {/* Box 1: UPI / DIGITAL PAYMENT */}
             <div className={`p-2.5 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-1.5`}>
               <div className="flex items-center justify-between">
                 <span className="font-black text-[10px] uppercase tracking-wider text-zinc-800 flex items-center gap-1">
-                  <span>💳</span> PAYMENT OPTIONS
+                  <span>📱</span> UPI & DIGITAL PAYMENT
                 </span>
-                <span className="text-[9px] font-bold text-emerald-700">Scan & Pay</span>
+                <span className="text-[9px] font-bold text-emerald-700">Instant Settlement</span>
               </div>
 
-              <div className="flex items-center gap-2">
-                <img 
-                  src={upiQrCodeUrl} 
-                  alt="UPI QR Code" 
-                  className="w-16 h-16 rounded bg-white p-0.5 border border-zinc-200 shrink-0 shadow-2xs" 
-                />
-                <div className="space-y-1 text-[9.5px]">
-                  <div className="flex items-center gap-1 flex-wrap font-bold text-zinc-700">
+              <div className="flex items-center gap-3">
+                {customPaymentQrUrl ? (
+                  <img 
+                    src={customPaymentQrUrl} 
+                    alt="Payment QR Code" 
+                    className="w-16 h-16 rounded bg-white p-0.5 border border-zinc-200 shrink-0 shadow-2xs object-contain" 
+                  />
+                ) : (
+                  <div className="w-14 h-14 rounded-lg bg-white border border-zinc-200 flex flex-col items-center justify-center text-center p-1 shrink-0 text-zinc-500">
+                    <span className="text-base">⚡</span>
+                    <span className="text-[8px] font-bold">UPI PAY</span>
+                  </div>
+                )}
+                
+                <div className="space-y-1 text-[9.5px] flex-1">
+                  <div className="flex justify-between">
+                    <span className="text-zinc-600">UPI ID:</span>
+                    <strong className="font-mono text-zinc-900 font-bold">{paySettings.upiId || "saampark@sbi"}</strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-600">Account Holder:</span>
+                    <strong className="text-zinc-900 font-bold truncate max-w-[150px]">{paySettings.accountHolderName || "Saampark Technology Pvt. Ltd."}</strong>
+                  </div>
+                  <div className="flex items-center gap-1 flex-wrap pt-0.5 font-bold text-zinc-600 text-[8.5px]">
                     <span className="px-1 py-0.2 rounded bg-white border border-zinc-200">GPay</span>
                     <span className="px-1 py-0.2 rounded bg-white border border-zinc-200">PhonePe</span>
                     <span className="px-1 py-0.2 rounded bg-white border border-zinc-200">Paytm</span>
                     <span className="px-1 py-0.2 rounded bg-white border border-zinc-200">BHIM UPI</span>
                   </div>
-                  <p className="font-mono text-[9px] text-zinc-600 truncate max-w-[130px]">
-                    {paySettings.upiId || "saampark@sbi"}
-                  </p>
                 </div>
               </div>
             </div>
 
-            {/* Box 2: PAY BY CARD */}
+            {/* Box 2: OFFICIAL BANK DETAILS */}
             <div className={`p-2.5 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-1`}>
               <span className="font-black text-[10px] uppercase tracking-wider text-zinc-800 flex items-center gap-1">
-                <span>💳</span> PAY BY CARD
-              </span>
-              <p className="font-mono font-bold text-xs text-zinc-900 tracking-wider">
-                1234 5678 9012 3456
-              </p>
-              <div className="space-y-0.2 text-[9.5px] text-zinc-600">
-                <p>Card Holder: <strong className="text-zinc-800">Saampark Technology Pvt. Ltd.</strong></p>
-                <p>Bank: <strong className="text-zinc-800">HDFC Bank</strong> | IFSC: <strong className="text-zinc-800">HDFC0001234</strong></p>
-              </div>
-              <div className="flex items-center gap-1.5 pt-0.5 font-bold text-[9px] text-zinc-500">
-                <span className="px-1 py-0.2 rounded bg-white border border-zinc-200">VISA</span>
-                <span className="px-1 py-0.2 rounded bg-white border border-zinc-200">Mastercard</span>
-                <span className="px-1 py-0.2 rounded bg-white border border-zinc-200">RuPay</span>
-              </div>
-            </div>
-
-            {/* Box 3: OFFICIAL BANK DETAILS */}
-            <div className={`p-2.5 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-1`}>
-              <span className="font-black text-[10px] uppercase tracking-wider text-zinc-800 flex items-center gap-1">
-                <span>🏛️</span> BANK DETAILS
+                <span>🏛️</span> BANK TRANSFER (NEFT / RTGS / IMPS)
               </span>
               <div className="space-y-0.5 text-[9.5px] text-zinc-700">
                 <div className="flex justify-between">
                   <span>Bank Name:</span>
-                  <strong className="text-zinc-900 font-bold">{paySettings.bankName || "HDFC Bank"}</strong>
+                  <strong className="text-zinc-900 font-bold">{paySettings.bankName || "State Bank of India"}</strong>
                 </div>
                 <div className="flex justify-between font-mono">
                   <span>A/C No.:</span>
-                  <strong className="text-zinc-900 font-bold text-[10px]">{paySettings.accountNumber || "50200012345678"}</strong>
+                  <strong className="text-zinc-900 font-bold text-[10px]">{paySettings.accountNumber || "40912384759"}</strong>
                 </div>
                 <div className="flex justify-between font-mono">
                   <span>IFSC Code:</span>
-                  <strong className="text-zinc-900 font-bold">{paySettings.ifscCode || "HDFC0001234"}</strong>
+                  <strong className="text-zinc-900 font-bold">{paySettings.ifscCode || "SBIN0001234"}</strong>
                 </div>
                 <div className="flex justify-between">
                   <span>Branch:</span>
-                  <strong className="text-zinc-900">{paySettings.branch || "Durgapur"}</strong>
+                  <strong className="text-zinc-900">{paySettings.branch || "Balichak"}</strong>
                 </div>
               </div>
             </div>
