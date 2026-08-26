@@ -93,8 +93,25 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
   // Filter configurable modules: Admin can ONLY see & grant modules the Admin himself has permission to access
   const displayableModules = React.useMemo(() => {
     if (isCurrentSuperAdmin) return CONFIGURABLE_MODULES
-    return CONFIGURABLE_MODULES.filter((m) => isModuleAllowed(currentUser, m))
-  }, [isCurrentSuperAdmin, currentUser, isModuleAllowed])
+    return CONFIGURABLE_MODULES.filter((m) => {
+      const uAny = currentUser as any
+      if (uAny?.allowedModules && Array.isArray(uAny.allowedModules)) {
+        return uAny.allowedModules.includes(m)
+      }
+      if (uAny?.permissions?.allowedModules && Array.isArray(uAny.permissions.allowedModules)) {
+        return uAny.permissions.allowedModules.includes(m)
+      }
+      return isModuleAllowed(currentUser, m)
+    })
+  }, [
+    isCurrentSuperAdmin,
+    currentUser,
+    currentUser?.permissions,
+    (currentUser as any)?.allowedModules,
+    isModuleAllowed,
+    userPermissions,
+    userActionPermissions,
+  ])
 
   // Matrix of active module checkboxes per user
   const [actionMatrix, setActionMatrix] = React.useState<Record<string, ModuleActionFlags>>({})

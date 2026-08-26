@@ -57,11 +57,27 @@ export function ModulePermissionsModal({ isOpen, onClose }: ModulePermissionsMod
 
   const isCurrentSuperAdmin = user?.role === "Super Admin"
 
-  // If Admin, only display modules that the Admin can access
+  // If Admin, strictly display ONLY the modules that this Admin can access
   const allowedConfigurableModules = React.useMemo(() => {
     if (isCurrentSuperAdmin) return ALL_MODULE_NAMES
-    return ALL_MODULE_NAMES.filter((m) => usePermissionStore.getState().isModuleAllowed(user, m))
-  }, [isCurrentSuperAdmin, user])
+    return ALL_MODULE_NAMES.filter((m) => {
+      const uAny = user as any
+      if (uAny?.allowedModules && Array.isArray(uAny.allowedModules)) {
+        return uAny.allowedModules.includes(m)
+      }
+      if (uAny?.permissions?.allowedModules && Array.isArray(uAny.permissions.allowedModules)) {
+        return uAny.permissions.allowedModules.includes(m)
+      }
+      return usePermissionStore.getState().isModuleAllowed(user, m)
+    })
+  }, [
+    isCurrentSuperAdmin,
+    user,
+    user?.permissions,
+    (user as any)?.allowedModules,
+    rolePermissions,
+    roleActionPermissions,
+  ])
 
   // Initialize Action Matrix whenever active tab changes or modal opens
   React.useEffect(() => {
