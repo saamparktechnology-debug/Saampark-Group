@@ -257,8 +257,14 @@ export function ClientsTableView({
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 text-slate-700 dark:text-slate-200">
             {filteredClients.length === 0 ? (
               <tr>
-                <td colSpan={10} className="py-8 text-center text-slate-400 text-sm">
-                  No clients found.
+                <td colSpan={10} className="py-12 text-center text-slate-400">
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center text-xl shadow-xs">
+                      🏢
+                    </div>
+                    <p className="font-semibold text-sm text-slate-700 dark:text-slate-200">No clients found</p>
+                    <p className="text-xs text-slate-400 max-w-xs">No client accounts match the active filter or search query.</p>
+                  </div>
                 </td>
               </tr>
             ) : (

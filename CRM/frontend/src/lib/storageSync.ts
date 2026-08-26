@@ -69,10 +69,26 @@ export function filterGlobalDeletedItems<T extends { id: string | number }>(item
   return items.filter((item) => item?.id && !list.includes(String(item.id).toLowerCase().trim()))
 }
 
+// In-memory micro-cache & in-flight promise deduplication
+const inFlightRequests = new Map<string, Promise<any>>()
+const cacheStore = new Map<string, { data: any; timestamp: number }>()
+const CACHE_TTL_MS = 1200 // 1.2s micro-cache to prevent duplicate concurrent queries
+
+export function invalidateModuleCache(moduleKey?: string) {
+  if (moduleKey) {
+    for (const k of cacheStore.keys()) {
+      if (k.startsWith(moduleKey)) {
+        cacheStore.delete(k)
+      }
+    }
+  } else {
+    cacheStore.clear()
+  }
+}
+
 /**
  * Fetch module data from MySQL DB with company isolation.
- * MySQL is the single source of truth — no localStorage fallback for business data.
- * Response shape from backend: { status: "success", message: "...", data: <payload> }
+ * MySQL is the single source of truth.
  */
 export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: T, companyId?: string): Promise<T> {
   const localDeleted = await syncGlobalDeletedIds()
@@ -86,12 +102,45 @@ export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: 
       } catch {}
     }
 
-    const queryStr = targetCompany && targetCompany !== "all" ? `?company_id=${encodeURIComponent(targetCompany)}` : ""
-    const res = await api.get(`/store/${moduleKey}${queryStr}`)
-    const isError = !res || res.status === "error" || res.error === true
+    const cacheKey = `${moduleKey}_${targetCompany || "default"}`
+    const now = Date.now()
+    const cached = cacheStore.get(cacheKey)
 
-    if (!isError && res?.data !== undefined && res?.data !== null) {
-      const serverData = res.data
+    if (cached && now - cached.timestamp < CACHE_TTL_MS) {
+      if (Array.isArray(cached.data)) {
+        return filterGlobalDeletedItems(cached.data as any, localDeleted) as any
+      }
+      return cached.data as any
+    }
+
+    // Deduplicate concurrent requests
+    if (inFlightRequests.has(cacheKey)) {
+      const pendingRes = await inFlightRequests.get(cacheKey)
+      if (pendingRes !== undefined && pendingRes !== null) {
+        if (Array.isArray(pendingRes)) {
+          return filterGlobalDeletedItems(pendingRes as any, localDeleted) as any
+        }
+        return pendingRes as any
+      }
+    }
+
+    const queryStr = targetCompany && targetCompany !== "all" ? `?company_id=${encodeURIComponent(targetCompany)}` : ""
+    
+    const requestPromise = api.get(`/store/${moduleKey}${queryStr}`).then((res) => {
+      const isError = !res || res.status === "error" || res.error === true
+      if (!isError && res?.data !== undefined && res?.data !== null) {
+        cacheStore.set(cacheKey, { data: res.data, timestamp: Date.now() })
+        return res.data
+      }
+      return null
+    }).finally(() => {
+      inFlightRequests.delete(cacheKey)
+    })
+
+    inFlightRequests.set(cacheKey, requestPromise)
+    const serverData = await requestPromise
+
+    if (serverData !== null && serverData !== undefined) {
       if (Array.isArray(serverData)) {
         return filterGlobalDeletedItems(serverData as any, localDeleted) as any
       } else if (typeof serverData === "object" && Object.keys(serverData).length > 0) {
@@ -102,8 +151,6 @@ export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: 
     console.warn(`MySQL fetch warning for module ${moduleKey}:`, err)
   }
 
-  // MySQL is the source of truth — return empty array if no data found
-  // Only use fallbackData if explicitly provided as non-empty (e.g., seed default labels)
   if (Array.isArray(fallbackData) && (fallbackData as any[]).length === 0) {
     return [] as any
   }
@@ -111,7 +158,7 @@ export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: 
 }
 
 /**
- * Save module data to MySQL DB — single source of truth, no localStorage writes.
+ * Save module data to MySQL DB — single source of truth.
  */
 export async function saveModuleDataToDB<T>(moduleKey: string, data: T, companyId?: string): Promise<void> {
   try {
@@ -122,6 +169,8 @@ export async function saveModuleDataToDB<T>(moduleKey: string, data: T, companyI
         targetCompany = useAuthStore.getState().activeCompanyId || undefined
       } catch {}
     }
+
+    invalidateModuleCache(moduleKey)
 
     await api.post(`/store/${moduleKey}`, { 
       data, 

@@ -1357,8 +1357,24 @@ export function LeadList({
 
               {filteredLeads.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="py-8 text-center text-zinc-400">
-                    No leads found matching criteria.
+                  <td colSpan={11} className="py-12 text-center text-zinc-400">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <div className="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 text-zinc-400 flex items-center justify-center text-xl shadow-xs">
+                        📋
+                      </div>
+                      <p className="font-semibold text-sm text-zinc-700 dark:text-zinc-300">No leads found matching criteria</p>
+                      <p className="text-xs text-zinc-400 max-w-xs">Try adjusting your filters or search keywords, or add a new lead.</p>
+                      {canAddLead && (
+                        <button
+                          type="button"
+                          onClick={onOpenAddModal}
+                          className="mt-2 inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-lg shadow-xs hover:bg-blue-700 transition-colors cursor-pointer"
+                        >
+                          <Plus size={13} />
+                          <span>Add New Lead</span>
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               )}

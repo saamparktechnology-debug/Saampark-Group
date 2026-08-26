@@ -95,12 +95,34 @@ export default function DashboardMain() {
 
   React.useEffect(() => {
     refreshLiveDashboard()
-    const interval = setInterval(refreshLiveDashboard, 2500)
+    
+    let interval: any = null
+    const startPolling = () => {
+      if (!interval) {
+        interval = setInterval(() => {
+          if (typeof document !== "undefined" && !document.hidden) {
+            refreshLiveDashboard()
+          }
+        }, 5000)
+      }
+    }
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        refreshLiveDashboard()
+      }
+    }
+
+    startPolling()
     window.addEventListener("storage", refreshLiveDashboard)
+    window.addEventListener("saampark_company_switched", refreshLiveDashboard)
+    document.addEventListener("visibilitychange", handleVisibility)
 
     return () => {
-      clearInterval(interval)
+      if (interval) clearInterval(interval)
       window.removeEventListener("storage", refreshLiveDashboard)
+      window.removeEventListener("saampark_company_switched", refreshLiveDashboard)
+      document.removeEventListener("visibilitychange", handleVisibility)
     }
   }, [refreshLiveDashboard])
 

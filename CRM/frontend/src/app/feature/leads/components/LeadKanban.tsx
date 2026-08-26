@@ -1286,8 +1286,12 @@ export function LeadKanban({
                 })}
 
                 {columnLeads.length === 0 && (
-                  <div className="p-4 text-center text-xs text-zinc-400 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-lg">
-                    No leads in {col.title}
+                  <div className="py-6 px-3 text-center border-2 border-dashed border-zinc-200/80 dark:border-zinc-800/80 rounded-xl bg-zinc-50/40 dark:bg-zinc-850/40 flex flex-col items-center justify-center gap-1.5 transition-colors">
+                    <div className="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-400 flex items-center justify-center text-xs">
+                      📭
+                    </div>
+                    <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">No leads in {col.title}</p>
+                    <p className="text-[9.5px] text-zinc-400">Drag a lead card here</p>
                   </div>
                 )}
               </div>

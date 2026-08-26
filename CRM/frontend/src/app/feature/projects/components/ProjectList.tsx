@@ -459,8 +459,24 @@ export function ProjectList({
 
               {filteredProjects.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="py-8 text-center text-zinc-400">
-                    No projects found matching criteria.
+                  <td colSpan={9} className="py-12 text-center text-zinc-400">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <div className="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 text-zinc-400 flex items-center justify-center text-xl shadow-xs">
+                        🚀
+                      </div>
+                      <p className="font-semibold text-sm text-zinc-700 dark:text-zinc-200">No projects found</p>
+                      <p className="text-xs text-zinc-400 max-w-xs">No projects match the active filters or search terms.</p>
+                      {canAddProject && (
+                        <button
+                          type="button"
+                          onClick={onOpenAddModal}
+                          className="mt-2 inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-lg shadow-xs hover:bg-blue-700 transition-colors cursor-pointer"
+                        >
+                          <Plus size={13} />
+                          <span>Add New Project</span>
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               )}
