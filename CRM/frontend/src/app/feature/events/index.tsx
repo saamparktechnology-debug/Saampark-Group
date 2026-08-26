@@ -9,6 +9,7 @@ import { CalendarGrid } from "./components/CalendarGrid"
 import { ManageLabelsModal } from "./components/ManageLabelsModal"
 import { AddEventModal } from "./components/AddEventModal"
 import { EventDetailsModal } from "./components/EventDetailsModal"
+import { useAuthStore } from "@/store/useAuthStore"
 import {
   getEvents,
   saveStoredEvent,
@@ -19,6 +20,9 @@ import {
 } from "./services/eventService"
 
 export default function EventsMain() {
+  const { user, activeCompanyId } = useAuthStore()
+  const targetComp = activeCompanyId || user?.companyId || "tech"
+
   const [events, setEvents] = React.useState<CalendarEvent[]>([])
   const [labels, setLabels] = React.useState<EventLabel[]>([])
 
@@ -35,11 +39,64 @@ export default function EventsMain() {
   const [isDetailsModalOpen, setIsDetailsModalOpen] = React.useState(false)
   const [selectedEventDetails, setSelectedEventDetails] = React.useState<CalendarEvent | null>(null)
 
-  // Load events and labels from MySQL on mount
+  const loadData = React.useCallback(async () => {
+    const evts = await getEvents(targetComp)
+    setEvents(evts)
+    const lbls = await getStoredEventLabels(targetComp)
+    setLabels(lbls)
+  }, [targetComp])
+
+  // Load events and labels from MySQL on mount & on company switch
   React.useEffect(() => {
-    getEvents().then(setEvents).catch(() => {})
-    getStoredEventLabels().then(setLabels).catch(() => {})
-  }, [])
+    loadData()
+    window.addEventListener("saampark_company_switched", loadData)
+    window.addEventListener("saampark_branch_switched", loadData)
+    return () => {
+      window.removeEventListener("saampark_company_switched", loadData)
+      window.removeEventListener("saampark_branch_switched", loadData)
+    }
+  }, [loadData])
+
+  // Strict Event Visibility & Isolation Filter:
+  // 1. Super Admin: sees all events in targetComp
+  // 2. Company Admin: sees all events in assigned company
+  // 3. Client: sees own created events + Admin broadcast events targeted to "only_clients" or "all"
+  // 4. Teams / Developer: sees own created events + Admin broadcast events targeted to "only_teams" or "all"
+  const accessibleEvents = React.useMemo(() => {
+    const isSuperAdmin = user?.role === "Super Admin"
+    const isCompanyAdmin = user?.role === "Admin"
+    if (isSuperAdmin || isCompanyAdmin) return events
+
+    const currentUserEmail = (user?.email || "").toLowerCase().trim()
+    const currentUserName = (user?.name || "").toLowerCase().trim()
+    const role = (user?.role || "").toLowerCase().trim()
+    const isClient = role === "clients" || role === "client"
+
+    return events.filter((evt) => {
+      const creatorEmail = (evt.creatorEmail || "").toLowerCase().trim()
+      const creatorName = (evt.createdBy || (evt as any).created_by || "").toLowerCase().trim()
+
+      // 1. Personal creator access (Always sees own created events)
+      if (
+        (currentUserEmail && creatorEmail === currentUserEmail) ||
+        (currentUserEmail && creatorEmail.includes(currentUserEmail)) ||
+        (currentUserName && creatorName === currentUserName)
+      ) {
+        return true
+      }
+
+      // 2. Broadcast events from Admin / Super Admin
+      const aud = evt.audience
+      if (aud === "all") return true
+      if (isClient && aud === "only_clients") return true
+      if (!isClient && aud === "only_teams") return true
+
+      // If legacy event without audience and shareWith is set to All team members:
+      if (!aud && evt.shareWith === "All team members" && !isClient) return true
+
+      return false
+    })
+  }, [events, user])
 
   // Date Cell Click Handler -> Opens Add Event Modal with clicked date pre-filled
   const handleDateClick = (dateStr: string) => {
@@ -54,22 +111,22 @@ export default function EventsMain() {
   }
 
   const handleAddLabel = async (newLabel: EventLabel) => {
-    const updated = await saveStoredEventLabel(newLabel)
+    const updated = await saveStoredEventLabel(newLabel, targetComp)
     setLabels(updated)
   }
 
   const handleDeleteLabel = async (id: string) => {
-    const updated = await deleteStoredEventLabel(id)
+    const updated = await deleteStoredEventLabel(id, targetComp)
     setLabels(updated)
   }
 
   const handleSaveEvent = async (newEvent: Partial<CalendarEvent>) => {
-    const updated = await saveStoredEvent(newEvent as CalendarEvent)
+    const updated = await saveStoredEvent(newEvent as CalendarEvent, targetComp)
     setEvents(updated)
   }
 
   const handleDeleteEvent = async (id: string) => {
-    const updated = await deleteStoredEvent(id)
+    const updated = await deleteStoredEvent(id, targetComp)
     setEvents(updated)
   }
 
@@ -100,7 +157,7 @@ export default function EventsMain() {
 
       {/* Main Calendar View Grid */}
       <CalendarGrid
-        events={events}
+        events={accessibleEvents}
         viewMode={viewMode}
         onSelectViewMode={setViewMode}
         selectedLabel={selectedLabel}

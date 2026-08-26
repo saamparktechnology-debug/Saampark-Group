@@ -2,8 +2,9 @@
 
 import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, Check, Paperclip, Mic } from "lucide-react"
-import { CalendarEvent, EventLabel, EventTypeOption } from "../types"
+import { X, Check, Paperclip, Mic, Lock, Users, Globe, Building2 } from "lucide-react"
+import { CalendarEvent, EventLabel, EventTypeOption, EventAudience } from "../types"
+import { useAuthStore } from "@/store/useAuthStore"
 
 interface AddEventModalProps {
   isOpen: boolean
@@ -36,6 +37,9 @@ export function AddEventModal({
   initialDate,
   labels,
 }: AddEventModalProps) {
+  const { user, activeCompanyId, activeBranchId } = useAuthStore()
+  const isAdmin = user?.role === "Super Admin" || user?.role === "Admin"
+
   const todayStr = React.useMemo(() => new Date().toISOString().split("T")[0], [])
   const [title, setTitle] = React.useState("")
   const [description, setDescription] = React.useState("")
@@ -47,7 +51,7 @@ export function AddEventModal({
   const [selectedLabel, setSelectedLabel] = React.useState("")
   const [client, setClient] = React.useState("")
   const [isPublicHoliday, setIsPublicHoliday] = React.useState(false)
-  const [shareWith, setShareWith] = React.useState<"Only me" | "All team members" | "Specific members and teams">("All team members")
+  const [audience, setAudience] = React.useState<EventAudience>(isAdmin ? "all" : "only_me")
   const [isRepeat, setIsRepeat] = React.useState(false)
   const [selectedColor, setSelectedColor] = React.useState(COLOR_SWATCHES[12]) // Default Royal Blue
 
@@ -56,7 +60,10 @@ export function AddEventModal({
       setStartDate(initialDate)
       setEndDate(initialDate)
     }
-  }, [initialDate, isOpen])
+    if (!isAdmin) {
+      setAudience("only_me")
+    }
+  }, [initialDate, isOpen, isAdmin])
 
   if (!isOpen) return null
 
@@ -68,9 +75,9 @@ export function AddEventModal({
       id: `evt_${Date.now()}`,
       title: title.trim(),
       description: description.trim(),
-      startDate: startDate || "2026-08-15",
+      startDate: startDate || todayStr,
       startTime,
-      endDate: endDate || startDate || "2026-08-15",
+      endDate: endDate || startDate || todayStr,
       endTime,
       location,
       label: selectedLabel || "General",
@@ -78,10 +85,17 @@ export function AddEventModal({
       eventType: "Events" as EventTypeOption,
       client,
       isPublicHoliday,
-      shareWith,
+      audience: isAdmin ? audience : "only_me",
+      shareWith: audience === "only_me" ? "Only me" : "All team members",
       isRepeat,
       color: selectedColor,
       isLocked: true,
+      createdBy: user?.name || "User",
+      creatorEmail: (user?.email || "").toLowerCase().trim(),
+      creatorRole: user?.role || "User",
+      companyId: activeCompanyId || user?.companyId || "tech",
+      branchId: activeBranchId || user?.branchId || undefined,
+      createdAt: new Date().toISOString(),
     })
 
     // Reset form
@@ -246,23 +260,55 @@ export function AddEventModal({
               </div>
             </div>
 
-            {/* Share With Options */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-start">
-              <label className="text-slate-600 dark:text-slate-400 font-medium pt-1">Share with</label>
-              <div className="md:col-span-3 space-y-2">
-                {(["Only me", "All team members", "Specific members and teams"] as const).map((opt) => (
-                  <label key={opt} className="flex items-center gap-2.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={shareWith === opt}
-                      onChange={() => setShareWith(opt)}
-                      className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
-                    />
-                    <span className="text-slate-700 dark:text-slate-300">{opt}</span>
-                  </label>
-                ))}
+            {/* Audience / Visibility Options */}
+            {isAdmin ? (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-start">
+                <label className="text-slate-600 dark:text-slate-400 font-medium pt-1">
+                  Reminder Visibility
+                </label>
+                <div className="md:col-span-3 space-y-2">
+                  {[
+                    { id: "only_me", label: "🔒 Only Me (Private)", desc: "Visible and manageable only by you" },
+                    { id: "only_clients", label: "🏢 Only Clients", desc: "Broadcast reminder visible to all clients" },
+                    { id: "only_teams", label: "👥 Only Teams", desc: "Broadcast reminder visible to all team members / devs" },
+                    { id: "all", label: "🌐 All (Everyone)", desc: "Broadcast to all clients, teams, and admins" },
+                  ].map((opt) => (
+                    <label
+                      key={opt.id}
+                      className={`flex items-start gap-2.5 p-2 rounded-xl cursor-pointer border transition-colors ${
+                        audience === opt.id
+                          ? "bg-blue-50/70 dark:bg-blue-950/40 border-blue-300 dark:border-blue-700"
+                          : "border-slate-200 dark:border-slate-750 hover:bg-slate-50 dark:hover:bg-slate-800"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="event_audience_option"
+                        checked={audience === opt.id}
+                        onChange={() => setAudience(opt.id as any)}
+                        className="w-4 h-4 text-blue-600 mt-0.5"
+                      />
+                      <div>
+                        <span className="text-slate-900 dark:text-slate-100 font-bold text-xs">
+                          {opt.label}
+                        </span>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                          {opt.desc}
+                        </p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
+                <label className="text-slate-600 dark:text-slate-400 font-medium">Visibility</label>
+                <div className="md:col-span-3 flex items-center gap-2 p-3 rounded-xl bg-blue-50/60 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-xs font-semibold text-blue-900 dark:text-blue-200">
+                  <span>🔒</span>
+                  <span>Personal Private Reminder (Only visible and removable by you)</span>
+                </div>
+              </div>
+            )}
 
             {/* Repeat Toggle */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center">

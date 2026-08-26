@@ -2,8 +2,9 @@
 
 import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, Lock, Clock, Plus, Trash2, Edit3, XCircle } from "lucide-react"
+import { X, Lock, Clock, Plus, Trash2, Edit3, XCircle, Users, Globe, Building2, ShieldAlert } from "lucide-react"
 import { CalendarEvent } from "../types"
+import { useAuthStore } from "@/store/useAuthStore"
 
 interface EventDetailsModalProps {
   isOpen: boolean
@@ -20,11 +21,20 @@ export function EventDetailsModal({
   onDelete,
   onEdit,
 }: EventDetailsModalProps) {
+  const { user } = useAuthStore()
   const [reminders, setReminders] = React.useState<string[]>([])
   const [newReminder, setNewReminder] = React.useState("")
   const [isAddingReminder, setIsAddingReminder] = React.useState(false)
 
   if (!isOpen || !event) return null
+
+  const isSuperAdmin = user?.role === "Super Admin"
+  const isCompanyAdmin = user?.role === "Admin"
+  const isCreator =
+    (event.creatorEmail && event.creatorEmail.toLowerCase() === (user?.email || "").toLowerCase().trim()) ||
+    (event.createdBy && event.createdBy.toLowerCase().trim() === (user?.name || "").toLowerCase().trim())
+
+  const canModify = isSuperAdmin || isCompanyAdmin || isCreator
 
   const handleAddReminderSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -38,6 +48,15 @@ export function EventDetailsModal({
     setReminders((prev) => prev.filter((_, i) => i !== idx))
   }
 
+  let audienceBadge = { label: "🔒 Private Event", color: "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300" }
+  if (event.audience === "only_clients") {
+    audienceBadge = { label: "🏢 Broadcast to Clients", color: "bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200" }
+  } else if (event.audience === "only_teams") {
+    audienceBadge = { label: "👥 Broadcast to Teams", color: "bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200" }
+  } else if (event.audience === "all") {
+    audienceBadge = { label: "🌐 Broadcast to Everyone", color: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200" }
+  }
+
   return (
     <AnimatePresence>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
@@ -45,12 +64,15 @@ export function EventDetailsModal({
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.95 }}
-          className="relative w-full max-w-xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-6 text-slate-800 dark:text-slate-100"
+          className="relative w-full max-w-xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-5 text-slate-800 dark:text-slate-100"
         >
           {/* Modal Header */}
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-            <h2 className="text-xl font-medium text-slate-700 dark:text-slate-200">
-              Event details
+            <h2 className="text-xl font-medium text-slate-700 dark:text-slate-200 flex items-center gap-2">
+              <span>Event Details</span>
+              <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${audienceBadge.color}`}>
+                {audienceBadge.label}
+              </span>
             </h2>
             <button
               onClick={onClose}
@@ -62,9 +84,12 @@ export function EventDetailsModal({
 
           {/* Title & Time Header */}
           <div className="space-y-2">
-            <div className="flex items-center gap-2 text-rose-500 font-normal">
-              <Lock size={20} className="shrink-0 text-rose-500" />
-              <h3 className="text-2xl font-normal text-slate-800 dark:text-slate-100">
+            <div className="flex items-center gap-2 font-semibold">
+              <span
+                style={{ backgroundColor: event.color || "#ef4444" }}
+                className="w-3.5 h-3.5 rounded-full shrink-0"
+              />
+              <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100">
                 {event.title}
               </h3>
             </div>
@@ -72,7 +97,7 @@ export function EventDetailsModal({
             <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 pl-0.5">
               <Clock size={15} className="shrink-0 text-slate-400" />
               <span>
-                Today, {event.startTime || "06:33:00 am"} – {event.endTime || "07:23:00 am"}
+                {event.startDate} {event.startTime ? `(${event.startTime} – ${event.endTime || ""})` : ""}
               </span>
             </div>
           </div>
@@ -86,17 +111,30 @@ export function EventDetailsModal({
           </div>
 
           {/* User Creator Avatar Badge */}
-          <div className="flex items-center gap-3 pt-1">
-            <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/40 overflow-hidden flex items-center justify-center text-xs font-semibold text-blue-600 dark:text-blue-300 shrink-0">
-              <img
-                src={`https://api.dicebear.com/7.x/notionists/svg?seed=${(event as any).created_by || "User"}`}
-                alt={(event as any).created_by || "User"}
-                className="w-full h-full object-cover"
-              />
+          <div className="flex items-center justify-between pt-1 text-xs">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-900/40 overflow-hidden flex items-center justify-center font-semibold text-blue-600 dark:text-blue-300 shrink-0">
+                <img
+                  src={`https://api.dicebear.com/7.x/notionists/svg?seed=${event.createdBy || (event as any).created_by || "User"}`}
+                  alt={event.createdBy || "User"}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div>
+                <span className="font-semibold text-slate-800 dark:text-slate-200 block">
+                  {event.createdBy || (event as any).created_by || "Organizer"}
+                </span>
+                <span className="text-[10px] text-slate-400">
+                  {event.creatorRole || "Organizer"} {event.companyId ? `• ${event.companyId.toUpperCase()}` : ""}
+                </span>
+              </div>
             </div>
-            <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-              {(event as any).created_by || "Admin Organizer"}
-            </span>
+
+            {!canModify && (
+              <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 px-2.5 py-1 rounded font-semibold flex items-center gap-1">
+                <Lock size={10} /> Read-Only Broadcast
+              </span>
+            )}
           </div>
 
           {/* Reminders (Private) Section */}
@@ -159,27 +197,33 @@ export function EventDetailsModal({
 
           {/* Footer Actions */}
           <div className="flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800 pt-4">
-            <button
-              type="button"
-              onClick={() => {
-                onDelete(event.id)
-                onClose()
-              }}
-              className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm font-medium flex items-center gap-1.5 transition-colors"
-            >
-              <Trash2 size={15} className="text-slate-500" /> Delete event
-            </button>
+            {canModify && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm(`Are you sure you want to remove event "${event.title}"?`)) {
+                      onDelete(event.id)
+                      onClose()
+                    }
+                  }}
+                  className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-sm font-medium flex items-center gap-1.5 transition-colors"
+                >
+                  <Trash2 size={15} /> Delete event
+                </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                onEdit(event)
-                onClose()
-              }}
-              className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm font-medium flex items-center gap-1.5 transition-colors"
-            >
-              <Edit3 size={15} className="text-slate-500" /> Edit event
-            </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onEdit(event)
+                    onClose()
+                  }}
+                  className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm font-medium flex items-center gap-1.5 transition-colors"
+                >
+                  <Edit3 size={15} /> Edit event
+                </button>
+              </>
+            )}
 
             <button
               type="button"

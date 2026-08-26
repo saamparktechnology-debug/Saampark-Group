@@ -14,6 +14,8 @@ export interface EventLabel {
   color: string; // HEX or CSS color
 }
 
+export type EventAudience = "only_me" | "only_clients" | "only_teams" | "all";
+
 export interface CalendarEvent {
   id: string;
   title: string;
@@ -29,7 +31,14 @@ export interface CalendarEvent {
   client?: string;
   isPublicHoliday?: boolean;
   shareWith?: "Only me" | "All team members" | "Specific members and teams";
+  audience?: EventAudience;
   isRepeat?: boolean;
   color: string;
   isLocked?: boolean;
+  createdBy?: string;
+  creatorEmail?: string;
+  creatorRole?: string;
+  companyId?: string;
+  branchId?: string;
+  createdAt?: string;
 }
