@@ -34,7 +34,7 @@ import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted, filte
 import { useAuthStore } from "@/store/useAuthStore"
 import { addInvoice, getInvoices, InvoiceItem } from "../invoices/services/invoiceService"
 import { InvoiceModal } from "../invoices/components/InvoiceModal"
-import { addPayment, sendPaymentReminderNotification } from "../payments/services/paymentService"
+import { addPayment, settleOrUpdatePaymentToCompleted, sendPaymentReminderNotification } from "../payments/services/paymentService"
 import { getClients } from "@/app/feature/clients/services/clientService"
 import { getProjects } from "@/app/feature/projects/services/projectService"
 import { Project, ProjectMilestone } from "@/app/feature/projects/types"
@@ -199,21 +199,21 @@ export default function OrderListPage() {
     await saveModuleDataToDB("orders", updated)
 
     const numAmount = parseInt(ord.totalAmount.replace(/[^0-9]/g, "")) || 0
-    await addPayment({
-      invoiceId: ord.orderNumber,
+    await settleOrUpdatePaymentToCompleted({
+      orderNumber: ord.orderNumber,
+      invoiceId: ord.invoiceId || ord.orderNumber,
       client: ord.client,
       clientEmail: ord.clientEmail,
       project: ord.project,
       paymentDate: new Date().toLocaleDateString("en-GB"),
       paymentMethod: "UPI / Net Banking",
       transactionRef: `ORD_PAY_${Date.now()}`,
-      note: `Payment settlement for ${ord.orderNumber}`,
-      amount: ord.totalAmount,
-      amountNum: numAmount,
-      status: "Completed"
+      totalAmount: ord.totalAmount,
+      totalAmountNum: numAmount,
     })
 
-    showToast(`✅ Payment completed for ${ord.orderNumber}! Synced to Payments.`)
+    showToast(`✅ Payment converted to Full Paid for ${ord.orderNumber}! Synced to Payments.`)
+    loadOrders()
   }
 
   const handleViewInvoice = async (ord: OrderItem) => {

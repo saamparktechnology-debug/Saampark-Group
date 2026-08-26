@@ -85,6 +85,178 @@ export const addPayment = async (paymentData: Omit<PaymentItem, "id"> & { id?: s
   return newPayment
 }
 
+/**
+ * Record or convert an existing partial/advance payment to Completed/Full Paid in-place.
+ * If an existing payment entry exists for this invoice or client/project, updates it in place (DOES NOT DUPLICATE).
+ * Otherwise creates a new completed payment entry.
+ */
+export const settleOrUpdatePaymentToCompleted = async (params: {
+  invoiceId?: string
+  orderNumber?: string
+  client: string
+  clientEmail?: string
+  project: string
+  paymentDate?: string
+  paymentMethod?: string
+  transactionRef?: string
+  note?: string
+  totalAmount: string
+  totalAmountNum?: number
+}): Promise<PaymentItem> => {
+  const current = await getPayments()
+  const normClient = params.client.toLowerCase().trim()
+  const normProject = params.project.toLowerCase().trim()
+  const normInvId = (params.invoiceId || "").toLowerCase().trim()
+  const normOrdNum = (params.orderNumber || "").toLowerCase().trim()
+
+  // Find existing payment for this invoice or project/client
+  const existingIdx = current.findIndex((p) => {
+    const pInv = (p.invoiceId || "").toLowerCase().trim()
+    const pClient = (p.client || "").toLowerCase().trim()
+    const pProj = (p.project || "").toLowerCase().trim()
+
+    if (normInvId && pInv && (pInv === normInvId || pInv.includes(normInvId) || normInvId.includes(pInv))) {
+      return true
+    }
+    if (normOrdNum && pInv && (pInv === normOrdNum || pInv.includes(normOrdNum) || normOrdNum.includes(pInv))) {
+      return true
+    }
+    if (pClient === normClient && pProj === normProject) {
+      return true
+    }
+    return false
+  })
+
+  const numAmount = params.totalAmountNum !== undefined 
+    ? params.totalAmountNum 
+    : (parseInt(params.totalAmount.replace(/[^0-9]/g, "")) || 0)
+  const formattedAmount = params.totalAmount.startsWith("₹") ? params.totalAmount : `₹${params.totalAmount}`
+
+  let settledPayment: PaymentItem
+
+  if (existingIdx !== -1) {
+    // CONVERT existing partial/advance payment to FULL PAID (DO NOT GENERATE DUPLICATE)
+    settledPayment = {
+      ...current[existingIdx],
+      amount: formattedAmount,
+      amountNum: numAmount,
+      status: "Completed",
+      paymentMethod: params.paymentMethod || current[existingIdx].paymentMethod || "UPI / Net Banking",
+      transactionRef: params.transactionRef || current[existingIdx].transactionRef || `SETTLE_${Date.now()}`,
+      note: `Full payment settlement completed for ${params.project}`,
+      paymentDate: new Date().toLocaleDateString("en-GB"),
+    }
+    current[existingIdx] = settledPayment
+    await saveModuleDataToDB("payments", current)
+  } else {
+    // If no prior payment record existed, create one
+    settledPayment = {
+      id: `P-${Math.floor(100 + Math.random() * 900)}`,
+      invoiceId: params.invoiceId || params.orderNumber || "INV-SETTLED",
+      client: params.client,
+      clientEmail: params.clientEmail,
+      project: params.project,
+      paymentDate: new Date().toLocaleDateString("en-GB"),
+      paymentMethod: params.paymentMethod || "UPI / Net Banking",
+      transactionRef: params.transactionRef || `TXN_${Date.now()}`,
+      note: `Full payment settlement completed for ${params.project}`,
+      amount: formattedAmount,
+      amountNum: numAmount,
+      status: "Completed",
+    }
+    const updated = [settledPayment, ...current]
+    await saveModuleDataToDB("payments", updated)
+  }
+
+  // 1. Sync & update Invoices
+  try {
+    const invoices = await getInvoices()
+    const invMatch = invoices.find(i => 
+      (normInvId && i.id.toLowerCase().trim() === normInvId) ||
+      (i.client.toLowerCase().trim() === normClient && i.project.toLowerCase().trim() === normProject)
+    )
+    if (invMatch) {
+      await updateInvoiceStatus(invMatch.id, "Fully paid", formattedAmount, "₹0")
+    }
+  } catch (err) {
+    console.warn("Error syncing invoice in settleOrUpdatePaymentToCompleted:", err)
+  }
+
+  // 2. Sync & update Orders
+  try {
+    const orders = await fetchModuleDataFromDB<any[]>("orders", [])
+    const ordIdx = orders.findIndex(o => 
+      (normOrdNum && (o.orderNumber?.toLowerCase().trim() === normOrdNum || o.id?.toLowerCase().trim() === normOrdNum)) ||
+      (normInvId && o.invoiceId?.toLowerCase().trim() === normInvId) ||
+      (o.client?.toLowerCase().trim() === normClient && o.project?.toLowerCase().trim() === normProject)
+    )
+    if (ordIdx !== -1) {
+      orders[ordIdx] = {
+        ...orders[ordIdx],
+        paymentStatus: "Paid",
+        status: "Completed"
+      }
+      await saveModuleDataToDB("orders", orders)
+    }
+  } catch (err) {
+    console.warn("Error syncing order in settleOrUpdatePaymentToCompleted:", err)
+  }
+
+  // 3. Sync Client ledger
+  try {
+    const clients = await getClients()
+    const cIdx = clients.findIndex(c => 
+      c.name.toLowerCase().trim() === normClient || 
+      (params.clientEmail && c.email?.toLowerCase().trim() === params.clientEmail.toLowerCase().trim())
+    )
+    if (cIdx !== -1) {
+      const targetClient = clients[cIdx]
+      const currentInvoiced = parseInt((targetClient.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
+      const currentPaid = parseInt((targetClient.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
+      const currentDue = parseInt((targetClient.due || "0").replace(/[^0-9]/g, "")) || 0
+
+      const newPaid = Math.max(currentInvoiced, currentPaid + currentDue)
+      const updatedClient = {
+        ...targetClient,
+        due: "₹0",
+        paymentReceived: `₹${newPaid.toLocaleString("en-IN")}`,
+      }
+      await saveStoredClient(updatedClient)
+    }
+  } catch (err) {
+    console.warn("Error syncing client in settleOrUpdatePaymentToCompleted:", err)
+  }
+
+  // 4. Sync Project payment status
+  try {
+    const { getProjects, updateProject } = await import("@/app/feature/projects/services/projectService")
+    const projs = await getProjects()
+    const pMatch = projs.find(p => 
+      p.title.toLowerCase().trim() === normProject || 
+      p.client.toLowerCase().trim() === normClient
+    )
+    if (pMatch) {
+      await updateProject(pMatch.id, {
+        paymentStatus: "Paid",
+        dueAmount: 0,
+        advanceAmount: numAmount,
+      })
+    }
+  } catch (err) {
+    console.warn("Error syncing project in settleOrUpdatePaymentToCompleted:", err)
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("storage"))
+    window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+    window.dispatchEvent(new CustomEvent("saampark_orders_updated"))
+    window.dispatchEvent(new CustomEvent("saampark_invoices_updated"))
+    window.dispatchEvent(new CustomEvent("saampark_projects_updated"))
+  }
+
+  return settledPayment
+}
+
 export const deletePayment = async (id: string): Promise<boolean> => {
   const strId = String(id).toLowerCase().trim()
   await markGlobalItemDeleted(strId, "payments")

@@ -89,24 +89,55 @@ export const recordPartialPayment = async (
   current[idx] = updated
   await saveModuleDataToDB("invoices", current, companyId)
 
-  // Record payment entry
+  // Record or update payment entry
   try {
-    const { addPayment } = await import("@/app/feature/sales/payments/services/paymentService")
-    await addPayment({
-      invoiceId: target.id,
-      client: target.client,
-      clientEmail: target.clientEmail,
-      project: target.project,
-      paymentDate: new Date().toLocaleDateString("en-GB"),
-      paymentMethod,
-      transactionRef: transactionRef || `PART_TXN${Date.now()}`,
-      note: `Partial payment of ₹${paidAmountNum.toLocaleString("en-IN")} for ${target.id}`,
-      amount: `₹${paidAmountNum.toLocaleString("en-IN")}`,
-      amountNum: paidAmountNum,
-      status: "Completed"
-    })
+    const { getPayments, settleOrUpdatePaymentToCompleted } = await import("@/app/feature/sales/payments/services/paymentService")
+    if (isFullySettled) {
+      await settleOrUpdatePaymentToCompleted({
+        invoiceId: target.id,
+        client: target.client,
+        clientEmail: target.clientEmail,
+        project: target.project,
+        paymentMethod,
+        transactionRef,
+        totalAmount: target.totalInvoiced,
+        totalAmountNum: totalInvoicedNum,
+      })
+    } else {
+      // Update existing payment in place or add new
+      const payments = await getPayments()
+      const pIdx = payments.findIndex(p => 
+        (p.invoiceId && p.invoiceId.toLowerCase().trim() === target.id.toLowerCase().trim()) ||
+        (p.client.toLowerCase().trim() === target.client.toLowerCase().trim() && p.project.toLowerCase().trim() === target.project.toLowerCase().trim())
+      )
+      if (pIdx !== -1) {
+        payments[pIdx] = {
+          ...payments[pIdx],
+          amount: `₹${newReceivedNum.toLocaleString("en-IN")}`,
+          amountNum: newReceivedNum,
+          note: `Installment payment updated: ₹${newReceivedNum.toLocaleString("en-IN")} received for ${target.project}`,
+          paymentDate: new Date().toLocaleDateString("en-GB"),
+        }
+        await saveModuleDataToDB("payments", payments)
+      } else {
+        const { addPayment } = await import("@/app/feature/sales/payments/services/paymentService")
+        await addPayment({
+          invoiceId: target.id,
+          client: target.client,
+          clientEmail: target.clientEmail,
+          project: target.project,
+          paymentDate: new Date().toLocaleDateString("en-GB"),
+          paymentMethod,
+          transactionRef: transactionRef || `PART_TXN${Date.now()}`,
+          note: `Partial payment of ₹${paidAmountNum.toLocaleString("en-IN")} for ${target.id}`,
+          amount: `₹${paidAmountNum.toLocaleString("en-IN")}`,
+          amountNum: paidAmountNum,
+          status: "Completed"
+        })
+      }
+    }
   } catch (err) {
-    console.warn("Error creating payment entry:", err)
+    console.warn("Error updating payment entry in recordPartialPayment:", err)
   }
 
   return updated
@@ -132,45 +163,22 @@ export const markPaymentCompleted = async (
   current[idx] = updated
   await saveModuleDataToDB("invoices", current)
 
-  // 1. Record completed payment entry in payments store
+  // Settle or update existing payment record in-place
   try {
-    const { addPayment } = await import("@/app/feature/sales/payments/services/paymentService")
-    const dueAmountNum = parseInt(target.due.replace(/[^0-9]/g, "")) || parseInt(target.totalInvoiced.replace(/[^0-9]/g, "")) || 0
-    await addPayment({
+    const { settleOrUpdatePaymentToCompleted } = await import("@/app/feature/sales/payments/services/paymentService")
+    const totalAmountNum = parseInt(target.totalInvoiced.replace(/[^0-9]/g, "")) || 0
+    await settleOrUpdatePaymentToCompleted({
       invoiceId: target.id,
       client: target.client,
       clientEmail: target.clientEmail,
       project: target.project,
-      paymentDate: new Date().toLocaleDateString("en-GB"),
       paymentMethod,
-      transactionRef: transactionRef || `TXN${Date.now()}`,
-      note: `Full clearance settlement for ${target.id}`,
-      amount: target.totalInvoiced,
-      amountNum: dueAmountNum,
-      status: "Completed"
+      transactionRef,
+      totalAmount: target.totalInvoiced,
+      totalAmountNum,
     })
   } catch (err) {
-    console.warn("Error creating payment entry:", err)
-  }
-
-  // 2. Update Client Statistics
-  try {
-    const clients = await getClients()
-    const cIdx = clients.findIndex(c => c.name.toLowerCase() === target.client.toLowerCase() || (target.clientEmail && c.email === target.clientEmail))
-    if (cIdx !== -1) {
-      const c = clients[cIdx]
-      const currentPaid = parseInt((c.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
-      const currentDue = parseInt((c.due || "0").replace(/[^0-9]/g, "")) || 0
-      const clearedAmount = parseInt(target.totalInvoiced.replace(/[^0-9]/g, "")) || 0
-      
-      saveStoredClient({
-        ...c,
-        paymentReceived: `₹${(currentPaid + clearedAmount).toLocaleString("en-IN")}`,
-        due: `₹${Math.max(0, currentDue - clearedAmount).toLocaleString("en-IN")}`
-      })
-    }
-  } catch (err) {
-    console.warn("Error updating client balance:", err)
+    console.warn("Error settling payment entry in markPaymentCompleted:", err)
   }
 
   // 3. Notify Client of payment confirmation
