@@ -1188,13 +1188,32 @@ export default function SettingsMain() {
                   <span>Invoice Payment QR & Official Bank Account</span>
                 </h3>
                 <p className="text-xs text-zinc-500 mt-0.5">
-                  These details and payment QR code will be dynamically printed on all tax invoices and sent to clients.
+                  These details and payment QR code are dynamically printed on all tax invoices sent to clients.
                 </p>
               </div>
-              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 w-fit">
-                Printed on Invoice PDF
-              </span>
+              <div className="flex items-center gap-2">
+                {!isSuperAdmin && (
+                  <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 flex items-center gap-1">
+                    <Lock size={10} /> View Only (Super Admin Editable)
+                  </span>
+                )}
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 w-fit">
+                  Printed on Invoice PDF
+                </span>
+              </div>
             </div>
+
+            {!isSuperAdmin && (
+              <div className="p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-start gap-2.5 text-amber-900 dark:text-amber-200 text-xs">
+                <Lock size={15} className="text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold">Organization Security Policy</p>
+                  <p className="text-[11px] text-amber-800/90 dark:text-amber-300/90 mt-0.5">
+                    Payment QR & Official Bank details are displayed here for your verification and reference. Only <strong>Super Admin</strong> is authorized to edit or update company banking credentials.
+                  </p>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* QR Code Upload Card */}
@@ -1220,23 +1239,27 @@ export default function SettingsMain() {
                   )}
                 </div>
 
-                <input
-                  type="file"
-                  ref={qrInputRef}
-                  onChange={handleQrUpload}
-                  accept="image/*"
-                  className="hidden"
-                />
+                {isSuperAdmin && (
+                  <>
+                    <input
+                      type="file"
+                      ref={qrInputRef}
+                      onChange={handleQrUpload}
+                      accept="image/*"
+                      className="hidden"
+                    />
 
-                <button
-                  type="button"
-                  onClick={() => qrInputRef.current?.click()}
-                  disabled={isUploadingQr}
-                  className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  <Upload size={13} />
-                  <span>{payQrUrl ? "Change QR Code" : "Upload QR Image"}</span>
-                </button>
+                    <button
+                      type="button"
+                      onClick={() => qrInputRef.current?.click()}
+                      disabled={isUploadingQr}
+                      className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      <Upload size={13} />
+                      <span>{payQrUrl ? "Change QR Code" : "Upload QR Image"}</span>
+                    </button>
+                  </>
+                )}
                 <p className="text-[10px] text-zinc-400">Supports GPay, PhonePe, Paytm, BharatPe, BHIM (PNG, JPG)</p>
               </div>
 
@@ -1249,11 +1272,14 @@ export default function SettingsMain() {
                     </label>
                     <input
                       type="text"
+                      disabled={!isSuperAdmin}
                       value={payBankName}
                       onChange={(e) => setPayBankName(e.target.value)}
                       placeholder="e.g. State Bank of India"
                       required
-                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden text-xs"
+                      className={`w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden text-xs ${
+                        !isSuperAdmin ? "opacity-75 cursor-not-allowed" : ""
+                      }`}
                     />
                   </div>
 
@@ -1263,11 +1289,14 @@ export default function SettingsMain() {
                     </label>
                     <input
                       type="text"
+                      disabled={!isSuperAdmin}
                       value={payAccountHolder}
                       onChange={(e) => setPayAccountHolder(e.target.value)}
                       placeholder="e.g. Saampark Technology & Research Pvt. Ltd."
                       required
-                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden text-xs"
+                      className={`w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden text-xs ${
+                        !isSuperAdmin ? "opacity-75 cursor-not-allowed" : ""
+                      }`}
                     />
                   </div>
                 </div>
@@ -1279,11 +1308,14 @@ export default function SettingsMain() {
                     </label>
                     <input
                       type="text"
+                      disabled={!isSuperAdmin}
                       value={payAccountNumber}
                       onChange={(e) => setPayAccountNumber(e.target.value)}
                       placeholder="e.g. 40912384759"
                       required
-                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono focus:outline-hidden text-xs font-bold"
+                      className={`w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono focus:outline-hidden text-xs font-bold ${
+                        !isSuperAdmin ? "opacity-75 cursor-not-allowed" : ""
+                      }`}
                     />
                   </div>
 
@@ -1293,11 +1325,14 @@ export default function SettingsMain() {
                     </label>
                     <input
                       type="text"
+                      disabled={!isSuperAdmin}
                       value={payIfsc}
                       onChange={(e) => setPayIfsc(e.target.value.toUpperCase())}
                       placeholder="e.g. SBIN0001234"
                       required
-                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono focus:outline-hidden text-xs font-bold"
+                      className={`w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono focus:outline-hidden text-xs font-bold ${
+                        !isSuperAdmin ? "opacity-75 cursor-not-allowed" : ""
+                      }`}
                     />
                   </div>
                 </div>
@@ -1309,11 +1344,14 @@ export default function SettingsMain() {
                     </label>
                     <input
                       type="text"
+                      disabled={!isSuperAdmin}
                       value={payUpiId}
                       onChange={(e) => setPayUpiId(e.target.value)}
                       placeholder="e.g. saampark@sbi"
                       required
-                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono focus:outline-hidden text-xs"
+                      className={`w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono focus:outline-hidden text-xs ${
+                        !isSuperAdmin ? "opacity-75 cursor-not-allowed" : ""
+                      }`}
                     />
                   </div>
 
@@ -1323,10 +1361,13 @@ export default function SettingsMain() {
                     </label>
                     <input
                       type="text"
+                      disabled={!isSuperAdmin}
                       value={payBranch}
                       onChange={(e) => setPayBranch(e.target.value)}
                       placeholder="e.g. Balichak Station Road"
-                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden text-xs"
+                      className={`w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden text-xs ${
+                        !isSuperAdmin ? "opacity-75 cursor-not-allowed" : ""
+                      }`}
                     />
                   </div>
                 </div>
@@ -1337,10 +1378,13 @@ export default function SettingsMain() {
                   </label>
                   <input
                     type="text"
+                    disabled={!isSuperAdmin}
                     value={payNotes}
                     onChange={(e) => setPayNotes(e.target.value)}
                     placeholder="e.g. Please mention Invoice ID in transaction description."
-                    className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden text-xs"
+                    className={`w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden text-xs ${
+                      !isSuperAdmin ? "opacity-75 cursor-not-allowed" : ""
+                    }`}
                   />
                 </div>
               </div>
@@ -1351,14 +1395,16 @@ export default function SettingsMain() {
                 <CheckCircle2 size={13} className="text-emerald-500" />
                 Auto-saved and synced across all invoice generation
               </span>
-              <button
-                type="submit"
-                disabled={loading || isUploadingQr}
-                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer disabled:opacity-50"
-              >
-                <Save size={14} />
-                <span>Save Payment QR & Bank Details</span>
-              </button>
+              {isSuperAdmin && (
+                <button
+                  type="submit"
+                  disabled={loading || isUploadingQr}
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <Save size={14} />
+                  <span>Save Payment QR & Bank Details</span>
+                </button>
+              )}
             </div>
           </form>
         </div>
