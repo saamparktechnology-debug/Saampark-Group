@@ -637,6 +637,18 @@ export function ProjectDetailView({
                       <span className="text-zinc-400">Project Value:</span>
                       <span className="font-bold text-emerald-600">{selectedProject.price}</span>
                     </div>
+                    {selectedProject.advanceAmount !== undefined && selectedProject.advanceAmount > 0 && (
+                      <div className="flex justify-between text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold bg-emerald-50/60 dark:bg-emerald-950/30 px-2 py-1 rounded">
+                        <span>Advance Paid:</span>
+                        <span>₹{selectedProject.advanceAmount.toLocaleString("en-IN")}</span>
+                      </div>
+                    )}
+                    {selectedProject.dueAmount !== undefined && selectedProject.dueAmount > 0 && (
+                      <div className="flex justify-between text-[11px] text-amber-600 dark:text-amber-400 font-semibold bg-amber-50/60 dark:bg-amber-950/30 px-2 py-1 rounded">
+                        <span>Balance Due:</span>
+                        <span>₹{selectedProject.dueAmount.toLocaleString("en-IN")} {selectedProject.installmentsCount ? `(${selectedProject.installmentsCount} Parts)` : ''}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 

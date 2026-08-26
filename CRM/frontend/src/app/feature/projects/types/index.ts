@@ -50,7 +50,13 @@ export interface Project {
   description?: string
   starred?: boolean
   totalHours?: number
-  paymentStatus?: "Payment Pending" | "Paid"
+  paymentStatus?: "Payment Pending" | "Paid" | "Advance Received" | "Partially Paid"
+  paymentStructure?: "Full" | "Advance + Part Payment"
+  advanceAmount?: number
+  dueAmount?: number
+  installmentsCount?: number
+  installmentAmount?: number
+  subscriptionId?: string
   baseAmount?: number
   gstRate?: number
   gstAmount?: number

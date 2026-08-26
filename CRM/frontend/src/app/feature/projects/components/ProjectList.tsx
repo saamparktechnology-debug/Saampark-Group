@@ -308,7 +308,16 @@ export function ProjectList({
                     <td className="py-3.5 px-4 text-zinc-600 dark:text-zinc-400">{p.client}</td>
 
                     {/* Price */}
-                    <td className="py-3.5 px-4 text-zinc-600 dark:text-zinc-400">{p.price}</td>
+                    <td className="py-3.5 px-4 text-zinc-600 dark:text-zinc-400">
+                      <div className="font-semibold text-zinc-900 dark:text-zinc-100">{p.price}</div>
+                      {p.advanceAmount !== undefined && p.advanceAmount > 0 && p.dueAmount !== undefined && p.dueAmount > 0 ? (
+                        <div className="text-[10px] flex items-center gap-1 font-medium mt-0.5">
+                          <span className="text-emerald-600 dark:text-emerald-400">Adv: ₹{p.advanceAmount.toLocaleString("en-IN")}</span>
+                          <span className="text-zinc-400">•</span>
+                          <span className="text-amber-600 dark:text-amber-400">Due: ₹{p.dueAmount.toLocaleString("en-IN")}</span>
+                        </div>
+                      ) : null}
+                    </td>
 
                     {/* Start date */}
                     <td className="py-3.5 px-4 text-zinc-600 dark:text-zinc-400">{p.startDate}</td>
