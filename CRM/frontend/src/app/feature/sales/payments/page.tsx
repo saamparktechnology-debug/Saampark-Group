@@ -73,12 +73,15 @@ export default function PaymentsPage() {
     const interval = setInterval(loadData, 4000)
     window.addEventListener("saampark_data_synced", loadData)
     window.addEventListener("saampark_payments_updated", loadData)
+    window.addEventListener("saampark_company_switched", loadData)
     return () => {
       clearInterval(interval)
       window.removeEventListener("saampark_data_synced", loadData)
       window.removeEventListener("saampark_payments_updated", loadData)
+      window.removeEventListener("saampark_company_switched", loadData)
     }
-  }, [loadData])
+  }, [loadData, useAuthStore.getState().activeCompanyId])
+
 
   const handleInvoiceChange = (invId: string) => {
     setSelectedInvoiceId(invId)

@@ -225,13 +225,16 @@ export default function InvoicesPage() {
     const interval = setInterval(loadInvoices, 4000)
     window.addEventListener("storage", loadInvoices)
     window.addEventListener("saampark_data_synced", loadInvoices)
+    window.addEventListener("saampark_company_switched", loadInvoices)
 
     return () => {
       clearInterval(interval)
       window.removeEventListener("storage", loadInvoices)
       window.removeEventListener("saampark_data_synced", loadInvoices)
+      window.removeEventListener("saampark_company_switched", loadInvoices)
     }
-  }, [loadInvoices])
+  }, [loadInvoices, useAuthStore.getState().activeCompanyId])
+
 
   // Direct QR Code Scan to View Handler (?view=INV...)
   React.useEffect(() => {

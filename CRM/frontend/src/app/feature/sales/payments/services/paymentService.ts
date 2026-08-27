@@ -22,27 +22,85 @@ export interface PaymentItem {
 
 export const INITIAL_PAYMENTS: PaymentItem[] = []
 
-export const getPayments = async (): Promise<PaymentItem[]> => {
-  const data = await fetchModuleDataFromDB<PaymentItem[]>("payments", [])
-  return Array.isArray(data) ? filterGlobalDeletedItems(data) : []
+export const getPayments = async (companyId?: string): Promise<PaymentItem[]> => {
+  let targetComp = companyId
+  if (!targetComp && typeof window !== "undefined") {
+    try {
+      const { useAuthStore } = require("@/store/useAuthStore")
+      targetComp = useAuthStore.getState().activeCompanyId || undefined
+    } catch {}
+  }
+
+  if (!targetComp || targetComp === "all") {
+    const knownCompanies = ["all", "tech", "infotech", "fashion", "digital", "consultancy", "jewellers"]
+    const results = await Promise.all(
+      knownCompanies.map(c => fetchModuleDataFromDB<PaymentItem[]>("payments", [], c).catch(() => []))
+    )
+    const map = new Map<string, PaymentItem>()
+    for (const p of results.flat()) {
+      if (p && p.id) map.set(String(p.id).toLowerCase().trim(), p)
+    }
+    return filterGlobalDeletedItems(Array.from(map.values()))
+  }
+
+  const scopedData = await fetchModuleDataFromDB<PaymentItem[]>("payments", [], targetComp)
+  const allMaster = await fetchModuleDataFromDB<PaymentItem[]>("payments", [], "all").catch(() => [])
+
+  const map = new Map<string, PaymentItem>()
+  for (const p of (Array.isArray(allMaster) ? allMaster : [])) {
+    if (p && p.id) {
+      const pComp = p.companyId || (p as any).company || "tech"
+      if (pComp === targetComp || (targetComp === "tech" && !p.companyId)) {
+        map.set(String(p.id).toLowerCase().trim(), p)
+      }
+    }
+  }
+  for (const p of (Array.isArray(scopedData) ? scopedData : [])) {
+    if (p && p.id) map.set(String(p.id).toLowerCase().trim(), p)
+  }
+
+  return filterGlobalDeletedItems(Array.from(map.values()))
 }
 
-export const addPayment = async (paymentData: Omit<PaymentItem, "id"> & { id?: string }): Promise<PaymentItem> => {
-  const current = await getPayments()
-  const nextId = paymentData.id || `P-${Math.floor(100 + Math.random() * 900)}`
+export const addPayment = async (paymentData: Omit<PaymentItem, "id"> & { id?: string }, companyId?: string): Promise<PaymentItem> => {
+  let targetComp = companyId || paymentData.companyId
+  if (!targetComp && typeof window !== "undefined") {
+    try {
+      const { useAuthStore } = require("@/store/useAuthStore")
+      targetComp = useAuthStore.getState().activeCompanyId || undefined
+    } catch {}
+  }
+  targetComp = targetComp || "tech"
+
+  const current = await getPayments(targetComp)
+  const nextId = paymentData.id || `P-${Math.floor(1000 + Math.random() * 9000)}`
   const numAmount = typeof paymentData.amountNum === "number" ? paymentData.amountNum : (parseInt(String(paymentData.amount).replace(/[^0-9]/g, "")) || 0)
   const formattedAmount = paymentData.amount.startsWith("₹") ? paymentData.amount : `₹${paymentData.amount}`
 
   const newPayment: PaymentItem = {
     ...paymentData,
     id: nextId,
+    companyId: targetComp,
     amount: formattedAmount,
     amountNum: numAmount,
     status: paymentData.status || "Completed"
   }
 
-  const updated = [newPayment, ...current]
-  await saveModuleDataToDB("payments", updated)
+  const updatedScoped = [newPayment, ...current.filter(p => String(p.id).toLowerCase().trim() !== nextId.toLowerCase().trim())]
+  await saveModuleDataToDB("payments", updatedScoped, targetComp)
+
+  if (targetComp !== "all") {
+    const currentAll = await fetchModuleDataFromDB<PaymentItem[]>("payments", [], "all").catch(() => [])
+    const updatedAll = [newPayment, ...(Array.isArray(currentAll) ? currentAll.filter(p => String(p.id).toLowerCase().trim() !== nextId.toLowerCase().trim()) : [])]
+    await saveModuleDataToDB("payments", updatedAll, "all")
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("storage"))
+    window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+    window.dispatchEvent(new CustomEvent("saampark_payments_updated"))
+  }
+
 
   // 1. Sync Invoice if invoiceId is provided
   if (paymentData.invoiceId && paymentData.invoiceId !== "None") {
@@ -53,14 +111,15 @@ export const addPayment = async (paymentData: Omit<PaymentItem, "id"> & { id?: s
         const invTotalNum = parseInt((targetInv.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
         
         // Aggregate all completed payments for this specific invoice
-        const invPayments = updated.filter(p => 
+        const invPayments = updatedScoped.filter((p: PaymentItem) => 
           p.invoiceId && 
           p.invoiceId.toLowerCase().trim() === targetInv.id.toLowerCase().trim() && 
           p.status === "Completed"
         )
-        const totalCompletedPaid = invPayments.reduce((sum, p) => sum + (p.amountNum || 0), 0)
+        const totalCompletedPaid = invPayments.reduce((sum: number, p: PaymentItem) => sum + (p.amountNum || 0), 0)
         const effectivePaid = Math.min(invTotalNum, totalCompletedPaid)
         const remainingDue = Math.max(0, invTotalNum - effectivePaid)
+
 
         const newStatus = remainingDue === 0 
           ? "Fully paid" 
