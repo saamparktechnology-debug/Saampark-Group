@@ -468,11 +468,13 @@ export default function SettingsMain() {
       { id: "kyc", label: "🛡️ KYC Verification & Banking", icon: ShieldCheck },
     ]
     if (isSuperAdmin || user?.role === "Admin") {
-      base.push({ id: "payments", label: "💳 Invoice Payment QR & Bank", icon: QrCode })
+      base.push(
+        { id: "payments", label: "💳 Invoice Payment QR & Bank", icon: QrCode },
+        { id: "organization", label: "🏢 Companies & Sub-Branches", icon: Building2 }
+      )
     }
     if (isSuperAdmin) {
       base.push(
-        { id: "organization", label: "🏢 Companies & Sub-Branches", icon: Building2 },
         { id: "company", label: "Workspace Branding", icon: Settings },
         { id: "smtp", label: "Email / SMTP Setup", icon: Mail }
       )
@@ -532,8 +534,8 @@ export default function SettingsMain() {
         })}
       </div>
 
-      {/* ── TAB: COMPANIES & SUB-BRANCHES (Super Admin Only) ──────────────── */}
-      {activeTab === "organization" && isSuperAdmin && (
+      {/* ── TAB: COMPANIES & SUB-BRANCHES (Super Admin & Admin) ──────────────── */}
+      {activeTab === "organization" && (isSuperAdmin || user?.role === "Admin") && (
         <CompanyBranchSettings />
       )}
 

@@ -240,12 +240,12 @@ export function Topbar() {
         {activeCompany && (
           <div className="relative ml-2 sm:ml-4">
             <div className="flex items-center gap-1.5">
-              {allowedCompanies.length > 1 ? (
+              {allowedCompanies.length > 1 || branches.some(b => b.companyId === activeCompany.id || b.companyId === activeCompany.slug) ? (
                 <button
                   type="button"
                   onClick={(e) => { stop(e); setShowCompanyMenu(v => !v); setShowProfileMenu(false); setShowQuickAdd(false); setShowNotifications(false) }}
                   className="flex items-center gap-2 px-3 py-1.5 bg-surface-pressed border border-primary/30 hover:border-primary/60 rounded-full text-xs font-semibold text-foreground transition-all cursor-pointer shadow-2xs"
-                  title="Click to switch active company workspace"
+                  title="Click to switch active company or sub-branch"
                 >
                   <span className="text-sm">{activeCompany.logo || "🏢"}</span>
                   <span className="truncate max-w-[140px] sm:max-w-[180px]">{activeCompany.name}</span>
@@ -279,7 +279,7 @@ export function Topbar() {
 
             {/* Company & Branch Dropdown Menu */}
             <AnimatePresence>
-              {showCompanyMenu && allowedCompanies.length > 1 && (
+              {showCompanyMenu && (allowedCompanies.length > 1 || branches.some(b => b.companyId === activeCompany.id || b.companyId === activeCompany.slug)) && (
                 <motion.div
                   initial={{ opacity: 0, y: 8, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
