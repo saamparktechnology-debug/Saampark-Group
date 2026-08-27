@@ -85,19 +85,20 @@ export function InvoiceModal({
 
   if (!isOpen || !invoice) return null
 
-  // 1. Determine if GST or Non-GST Bill
-  const hasItemGst = invoice.items && invoice.items.length > 0
-    ? invoice.items.some(it => it.gstRate > 0 || it.gstAmount > 0)
+  // 1. Determine if GST (>0%) or Non-GST / 0% GST Bill
+  const hasItemGst = Array.isArray(invoice.items) && invoice.items.length > 0
+    ? invoice.items.some(it => (Number(it.gstRate) || 0) > 0 || (Number(it.gstAmount) || 0) > 0)
     : false
 
   const isGstInvoice = Boolean(
     hasItemGst ||
     (typeof invoice.gstRate === "number" && invoice.gstRate > 0) ||
-    (typeof invoice.gstAmount === "number" && invoice.gstAmount > 0) ||
-    (clientDetails?.gstNumber && clientDetails.gstNumber.trim().length > 4)
+    (typeof invoice.gstAmount === "number" && invoice.gstAmount > 0)
   )
 
   // Theme configuration based on GST vs Non-GST
+  // GST Invoice: Teal (#005f69) -> "TAX INVOICE"
+  // Non-GST / 0% GST: Light Blue (#0284c7) -> "INVOICE"
   const theme = isGstInvoice
     ? {
         name: "gst-teal",
@@ -116,19 +117,19 @@ export function InvoiceModal({
         invoiceTypeLabel: "TAX INVOICE",
       }
     : {
-        name: "non-gst-blue",
-        headerGradient: "bg-gradient-to-r from-[#0d47a1] via-[#1565c0] to-[#1976d2]",
-        cardHeaderGradient: "bg-gradient-to-br from-[#0d47a1] via-[#1565c0] to-[#1976d2]",
-        primaryBg: "bg-[#0d47a1]",
-        primaryText: "text-[#0d47a1]",
-        lightBg: "bg-blue-50/60 dark:bg-blue-950/30",
-        lightBorder: "border-blue-200/80 dark:border-blue-800/60",
-        tableHeaderBg: "bg-[#0d47a1] text-white",
-        tableSubtotalBg: "bg-[#e3f2fd] text-[#0d47a1] dark:bg-[#0d47a1]/40 dark:text-blue-300",
-        grandTotalBg: "bg-[#0d47a1] text-white",
-        badgeBg: "bg-blue-50 text-blue-800 border-blue-300",
-        accentRing: "ring-blue-500",
-        sealColor: "text-[#0d47a1] border-[#0d47a1]",
+        name: "non-gst-light-blue",
+        headerGradient: "bg-gradient-to-r from-[#0284c7] via-[#0ea5e9] to-[#38bdf8]",
+        cardHeaderGradient: "bg-gradient-to-br from-[#0284c7] via-[#0ea5e9] to-[#38bdf8]",
+        primaryBg: "bg-[#0284c7]",
+        primaryText: "text-[#0284c7]",
+        lightBg: "bg-sky-50/70 dark:bg-sky-950/30",
+        lightBorder: "border-sky-200/80 dark:border-sky-800/60",
+        tableHeaderBg: "bg-[#0284c7] text-white",
+        tableSubtotalBg: "bg-[#e0f2fe] text-[#0284c7] dark:bg-[#0284c7]/40 dark:text-sky-300",
+        grandTotalBg: "bg-[#0284c7] text-white",
+        badgeBg: "bg-sky-50 text-sky-800 border-sky-300",
+        accentRing: "ring-[#0284c7]",
+        sealColor: "text-[#0284c7] border-[#0284c7]",
         invoiceTypeLabel: "INVOICE",
       }
 
@@ -554,9 +555,11 @@ export function InvoiceModal({
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-white/80 flex items-center gap-1">
-                        <span>📅</span> INVOICE DATE
+                        <span>📅</span> INVOICE DATE & TIME
                       </span>
-                      <strong className="text-white font-mono">{invoice.billDate}</strong>
+                      <strong className="text-white font-mono text-[9.5px]">
+                        {invoice.billDate} {invoice.billTime ? `• ${invoice.billTime}` : (invoice.createdAt ? `• ${new Date(invoice.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}` : "")}
+                      </strong>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-white/80 flex items-center gap-1">

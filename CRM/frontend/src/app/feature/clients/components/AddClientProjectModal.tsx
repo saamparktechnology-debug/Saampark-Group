@@ -100,6 +100,8 @@ export function AddClientProjectModal({
   const [advanceAmount, setAdvanceAmount] = React.useState<number | "">("")
   const [partInitialPayment, setPartInitialPayment] = React.useState<number | "">("")
   const [installmentsCount, setInstallmentsCount] = React.useState<number>(3)
+  const [subscriptionMonths, setSubscriptionMonths] = React.useState<number>(3)
+  const [partPayTiming, setPartPayTiming] = React.useState<"pay_now" | "pay_after_3_months">("pay_now")
   const [billingCycle, setBillingCycle] = React.useState<"Monthly" | "Quarterly">("Monthly")
   const [autoCreateSubscription, setAutoCreateSubscription] = React.useState<boolean>(true)
   const [paymentStatus, setPaymentStatus] = React.useState<"Payment Pending" | "Paid">("Paid")
@@ -345,6 +347,14 @@ export function AddClientProjectModal({
   const numAdvance = typeof advanceAmount === "number" ? advanceAmount : 0
   const numPartInitial = typeof partInitialPayment === "number" ? partInitialPayment : 0
 
+  const calculated3MonthDate = React.useMemo(() => {
+    const baseDate = startDate ? new Date(startDate) : new Date()
+    const validDate = isNaN(baseDate.getTime()) ? new Date() : baseDate
+    const d = new Date(validDate)
+    d.setMonth(d.getMonth() + (subscriptionMonths || 3))
+    return d.toISOString().split("T")[0]
+  }, [startDate, subscriptionMonths])
+
   // Distinct calculations per payment structure
   let effectiveAdvance = 0
   if (paymentModel === "full") {
@@ -352,13 +362,18 @@ export function AddClientProjectModal({
   } else if (paymentModel === "advance") {
     effectiveAdvance = Math.min(numAdvance, totalAmount)
   } else if (paymentModel === "part") {
-    effectiveAdvance = Math.min(numPartInitial, totalAmount)
+    effectiveAdvance = partPayTiming === "pay_after_3_months" ? 0 : Math.min(numPartInitial, totalAmount)
   }
 
   const remainingDue = Math.max(0, totalAmount - effectiveAdvance)
-  const perInstallment = installmentsCount > 0 && remainingDue > 0 
-    ? Math.round(remainingDue / installmentsCount) 
+  const activeInstallmentsCount = (subscriptionMonths || installmentsCount || 1)
+  const perInstallment = activeInstallmentsCount > 0 && remainingDue > 0 
+    ? Math.round(remainingDue / activeInstallmentsCount) 
     : remainingDue
+
+  const effectiveDeadline = (paymentModel === "part" && partPayTiming === "pay_after_3_months")
+    ? (deadline || calculated3MonthDate)
+    : (deadline || "30-06-2026")
 
   const handleToggleMember = (name: string) => {
     setAssignedMembers(prev => 
@@ -470,15 +485,15 @@ export function AddClientProjectModal({
           clientId: client.id,
           projectType: "Client Project",
           price: formattedTotal,
-          startDate,
-          deadline,
+          startDate: startDate || new Date().toISOString().split("T")[0],
+          deadline: effectiveDeadline,
           progress: effectiveAdvance > 0 ? 15 : 0,
           status: computedProjectStatus as any,
           paymentStatus: computedPaymentStatus as any,
           paymentStructure: paymentStructureLabel as any,
           advanceAmount: effectiveAdvance,
           dueAmount: remainingDue,
-          installmentsCount: paymentModel === "part" ? installmentsCount : undefined,
+          installmentsCount: paymentModel === "part" ? activeInstallmentsCount : undefined,
           installmentAmount: paymentModel === "part" ? perInstallment : undefined,
           baseAmount: totalServicesBase,
           setupCharge: totalPlatformCharges,
@@ -491,7 +506,7 @@ export function AddClientProjectModal({
           billedBy: billedByAdmin,
           createdById: user?.id ? String(user.id) : undefined,
           createdByEmail: user?.email,
-          labels: [category, computedPaymentStatus],
+          labels: [category, computedPaymentStatus, ...(paymentModel === "part" ? [`${subscriptionMonths}-Month Subscription`] : [])],
           description: description || `Client Project for ${client.name}. ${serviceItems.map(s => s.serviceName).join(", ")}. Billed by ${billedByAdmin}.`,
           members: projectMembers,
           milestones: starterMilestones,
@@ -505,7 +520,7 @@ export function AddClientProjectModal({
               title: `[${projectTitle}] - Milestone & Core Deliverables`,
               description: `Task for project "${projectTitle}". Client: ${client.name}. Category: ${category}. Assigned to: ${m.name}.`,
               startDate: startDate || new Date().toISOString().split("T")[0],
-              deadline: deadline || "30-06-2026",
+              deadline: effectiveDeadline,
               status: "In progress",
               priority: "High",
               assignedTo: m.name,
@@ -523,23 +538,25 @@ export function AddClientProjectModal({
         }
       }
 
-      // 2. Generate Invoice with globally unique ascending number INV(DATE)0001-0002...
-      const existingInvoices = await getInvoices("all")
-      const invoiceId = generateInvoiceNumber(existingInvoices, new Date(startDate || Date.now()))
+      // 2. Generate Invoice with automatic fast number & exact date & time
       const invoiceStatus = remainingDue === 0 
         ? "Fully paid" 
         : effectiveAdvance > 0 
           ? "Partially paid" 
           : "Not paid"
 
+      const now = new Date()
+      const billTime = now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })
+
       const createdInvoice = await addInvoice({
-        id: invoiceId,
         client: client.name,
         clientEmail: clientEmail.trim() || client.email,
         clientId: client.id,
         project: projectTitle,
-        billDate: startDate,
-        dueDate: deadline,
+        billDate: startDate || now.toISOString().split("T")[0],
+        billTime: billTime,
+        createdAt: now.getTime(),
+        dueDate: effectiveDeadline,
         baseAmount: totalServicesBase,
         setupCharge: totalPlatformCharges,
         discount: totalDiscounts,
@@ -554,55 +571,73 @@ export function AddClientProjectModal({
         discountsList: finalDiscounts,
       } as any, targetCompany)
 
+      const invoiceId = createdInvoice.id
 
-      // 3. Automatically create Order in Sales Order List
-      await addOrder({
-        client: client.name,
-        clientEmail: client.email,
-        clientId: client.id,
-        project: projectTitle,
-        orderDate: startDate || new Date().toISOString().split("T")[0],
-        deliveryDate: deadline || "30-06-2026",
-        itemsCount: serviceItems.length,
-        totalAmount: formattedTotal,
-        paymentStatus: remainingDue === 0 ? "Paid" : effectiveAdvance > 0 ? "Partially paid" : "Unpaid",
-        status: effectiveAdvance > 0 ? "Processing" : "Pending",
-        notes: description || `Order for: ${projectTitle}. Services: ${serviceItems.map(s => s.serviceName).join(", ")}.`,
-        invoiceId: invoiceId,
-      } as any, targetCompany)
-
-
-      // 4. Record Initial Payment (if advance paid)
-      if (effectiveAdvance > 0) {
-        await addPayment({
-          invoiceId: invoiceId,
+      // 3. Concurrently create Order and Initial Payment (if advance paid)
+      const followUpTasks: Promise<any>[] = [
+        addOrder({
           client: client.name,
           clientEmail: client.email,
+          clientId: client.id,
           project: projectTitle,
-          paymentDate: startDate,
-          paymentMethod: paymentModel === "advance" ? "Advance (Initial Deposit)" : "Initial Milestone / Part Payment",
-          transactionRef: `REC_${Date.now().toString().slice(-6)}`,
-          note: `Initial payment for ${projectTitle} (${serviceItems.length} services)`,
-          amount: formattedAdvance,
-          amountNum: effectiveAdvance,
-          status: "Completed",
-          companyId: targetCompany,
-        }, targetCompany)
+          orderDate: startDate || now.toISOString().split("T")[0],
+          deliveryDate: effectiveDeadline,
+          itemsCount: serviceItems.length,
+          totalAmount: formattedTotal,
+          paymentStatus: remainingDue === 0 ? "Paid" : effectiveAdvance > 0 ? "Partially paid" : "Unpaid",
+          status: effectiveAdvance > 0 ? "Processing" : "Pending",
+          notes: description || `Order for: ${projectTitle}. Services: ${serviceItems.map(s => s.serviceName).join(", ")}.`,
+          invoiceId: invoiceId,
+        } as any, targetCompany)
+      ]
 
+      if (effectiveAdvance > 0) {
+        followUpTasks.push(
+          addPayment({
+            invoiceId: invoiceId,
+            client: client.name,
+            clientEmail: client.email,
+            project: projectTitle,
+            paymentDate: startDate || now.toISOString().split("T")[0],
+            paymentMethod: paymentModel === "advance" ? "Advance (Initial Deposit)" : "Initial Milestone / Part Payment",
+            transactionRef: `REC_${Date.now().toString().slice(-6)}`,
+            note: `Initial payment for ${projectTitle} (${serviceItems.length} services)`,
+            amount: formattedAdvance,
+            amountNum: effectiveAdvance,
+            status: "Completed",
+            companyId: targetCompany,
+          }, targetCompany)
+        )
 
-        // Dispatch Payment Receipt Email
+        // Non-blocking dispatch Payment Receipt Email
         sendPaymentReceiptEmailNotification({
           invoice: createdInvoice,
           paidAmount: formattedAdvance,
           remainingDue: formattedDue,
-          nextDueDate: deadline,
+          nextDueDate: effectiveDeadline,
           paymentMethod: paymentModel === "advance" ? "Advance (Initial Deposit)" : "Initial Milestone / Part Payment",
           recipientEmail: client.email,
         }).catch(() => null)
       } else {
-        // Dispatch Invoice Details Email
+        // Non-blocking dispatch Invoice Details Email
         sendInvoiceDetailsEmailNotification(createdInvoice, client.email).catch(() => null)
       }
+
+      // 4. Automatically add to Recurring Subscriptions if Part Payment is selected
+      if (paymentModel === "part") {
+        followUpTasks.push(
+          addSubscription({
+            clientName: client.name,
+            planName: `${projectTitle} (${subscriptionMonths}-Month Subscription / Part Payment)`,
+            status: "Active",
+            amount: `₹${perInstallment.toLocaleString("en-IN")}`,
+            billingCycle: "Monthly",
+            nextBillingDate: effectiveDeadline,
+          }, targetCompany)
+        )
+      }
+
+      await Promise.all(followUpTasks)
 
       // 5. Update Stored Client Record with Latest Contact Info
       try {
@@ -1463,12 +1498,114 @@ export function AddClientProjectModal({
 
             {/* Part Payment (Subscription) Option */}
             {paymentModel === "part" && (
-              <div className="p-3 bg-white dark:bg-zinc-900 rounded-xl border border-blue-300 dark:border-blue-800 space-y-2">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[11px] font-bold text-blue-800 dark:text-blue-300 block mb-1">
-                      Initial Deposit (₹)
+              <div className="p-3.5 bg-white dark:bg-zinc-900 rounded-xl border border-blue-300 dark:border-blue-800 space-y-3 shadow-2xs">
+                
+                {/* 1. Subscription Duration & Price Breakdown */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[11px] font-bold text-blue-900 dark:text-blue-200 flex items-center gap-1">
+                      <span>🗓️ Subscription Plan & Duration</span>
                     </label>
+                    <span className="text-[10px] font-mono font-bold text-blue-700 dark:text-blue-300">
+                      Total: ₹{totalAmount.toLocaleString("en-IN")}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { months: 3, label: "3 Months", subtitle: "Quarterly Plan", badge: "Recommended" },
+                      { months: 6, label: "6 Months", subtitle: "Half-Yearly", badge: "Standard" },
+                      { months: 12, label: "12 Months", subtitle: "Annual Plan", badge: "Extended" }
+                    ].map((plan) => {
+                      const isSelected = subscriptionMonths === plan.months
+                      const monthlyRate = Math.round(totalAmount / plan.months)
+                      return (
+                        <button
+                          key={plan.months}
+                          type="button"
+                          onClick={() => {
+                            setSubscriptionMonths(plan.months)
+                            setInstallmentsCount(plan.months)
+                          }}
+                          className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                            isSelected
+                              ? "border-blue-600 bg-blue-50/80 dark:bg-blue-950/60 ring-2 ring-blue-500/30"
+                              : "border-zinc-200 dark:border-zinc-700 bg-zinc-50/50 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-extrabold text-xs text-zinc-900 dark:text-zinc-100">{plan.label}</span>
+                            {isSelected && <span className="w-2 h-2 rounded-full bg-blue-600" />}
+                          </div>
+                          <p className="text-[11px] font-mono font-black text-blue-700 dark:text-blue-300 mt-1">
+                            ₹{monthlyRate.toLocaleString("en-IN")}<span className="text-[9px] font-normal text-zinc-500">/mo</span>
+                          </p>
+                          <span className="text-[9px] text-zinc-400 block mt-0.5">{plan.subtitle}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* 2. Timing Choice: Pay Now / Advance Pay vs Pay After 3 Months Due Date */}
+                <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800 space-y-2">
+                  <label className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200 block">
+                    ⚡ Payment Settlement Schedule
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPartPayTiming("pay_now")}
+                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                        partPayTiming === "pay_now"
+                          ? "border-emerald-600 bg-emerald-50/80 dark:bg-emerald-950/60 ring-2 ring-emerald-500/30"
+                          : "border-zinc-200 dark:border-zinc-700 bg-zinc-50/50 hover:bg-zinc-100"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 font-bold text-xs text-emerald-900 dark:text-emerald-200">
+                        <span>💵 Pay Now / Advance Pay</span>
+                      </div>
+                      <p className="text-[10px] text-zinc-500 mt-0.5">Collect advance deposit or Month 1 today, remaining scheduled.</p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPartPayTiming("pay_after_3_months")
+                        setPartInitialPayment(0)
+                        if (!deadline) {
+                          setDeadline(calculated3MonthDate)
+                        }
+                      }}
+                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                        partPayTiming === "pay_after_3_months"
+                          ? "border-indigo-600 bg-indigo-50/80 dark:bg-indigo-950/60 ring-2 ring-indigo-500/30"
+                          : "border-zinc-200 dark:border-zinc-700 bg-zinc-50/50 hover:bg-zinc-100"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 font-bold text-xs text-indigo-900 dark:text-indigo-200">
+                        <span>🗓️ Pay After {subscriptionMonths} Months (Due Date)</span>
+                      </div>
+                      <p className="text-[10px] text-zinc-500 mt-0.5">₹0 advance today. Full invoice payable after {subscriptionMonths} months.</p>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 3. Dynamic Inputs / Calculations */}
+                {partPayTiming === "pay_now" ? (
+                  <div className="p-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300">
+                        Advance Paid Today (₹)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setPartInitialPayment(Math.round(totalAmount / subscriptionMonths))}
+                        className="text-[9.5px] text-blue-600 font-bold hover:underline cursor-pointer"
+                      >
+                        Set 1 Month (₹{Math.round(totalAmount / subscriptionMonths).toLocaleString("en-IN")})
+                      </button>
+                    </div>
                     <input
                       type="number"
                       min="0"
@@ -1477,30 +1614,25 @@ export function AddClientProjectModal({
                         const val = e.target.value
                         setPartInitialPayment(val === "" ? "" : Math.max(0, Number(val)))
                       }}
-                      className="w-full px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono font-bold"
-                      placeholder="Initial payment"
+                      className="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 font-mono font-bold text-zinc-900 dark:text-zinc-100"
+                      placeholder="Enter advance amount"
                     />
+                    <div className="flex justify-between text-[10px] text-zinc-500 pt-0.5">
+                      <span>Paid Today: <strong className="text-emerald-600 font-mono">₹{effectiveAdvance.toLocaleString("en-IN")}</strong></span>
+                      <span>Balance Due: <strong className="text-rose-600 font-mono">₹{remainingDue.toLocaleString("en-IN")}</strong> split over {subscriptionMonths} months</span>
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-[11px] font-bold text-blue-800 dark:text-blue-300 block mb-1">
-                      Installments Count
-                    </label>
-                    <select
-                      value={installmentsCount}
-                      onChange={(e) => setInstallmentsCount(Math.max(1, Number(e.target.value)))}
-                      className="w-full px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-bold"
-                    >
-                      <option value={2}>2 Installments</option>
-                      <option value={3}>3 Installments</option>
-                      <option value={4}>4 Installments</option>
-                      <option value={6}>6 Installments</option>
-                      <option value={12}>12 Installments</option>
-                    </select>
+                ) : (
+                  <div className="p-2.5 rounded-lg bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-indigo-900 dark:text-indigo-200">Scheduled Invoice Due Date:</span>
+                      <strong className="font-mono text-indigo-700 dark:text-indigo-300 text-sm">{calculated3MonthDate}</strong>
+                    </div>
+                    <p className="text-[10px] text-indigo-700 dark:text-indigo-300/90 leading-tight">
+                      📌 Payment Status will be set to <strong>Payment Due</strong>. Full invoice total of <strong>₹{totalAmount.toLocaleString("en-IN")}</strong> is scheduled for collection on <strong>{calculated3MonthDate}</strong> ({subscriptionMonths}-month settlement period).
+                    </p>
                   </div>
-                </div>
-                <div className="p-2 rounded bg-blue-50 dark:bg-blue-950/40 text-[10.5px] text-blue-900 dark:text-blue-200 font-medium">
-                  💡 Balance of <strong className="font-mono">₹{remainingDue.toLocaleString("en-IN")}</strong> split into <strong className="font-mono">{installmentsCount}</strong> {billingCycle.toLowerCase()} parts of <strong className="font-mono">₹{perInstallment.toLocaleString("en-IN")}</strong> each.
-                </div>
+                )}
               </div>
             )}
           </div>

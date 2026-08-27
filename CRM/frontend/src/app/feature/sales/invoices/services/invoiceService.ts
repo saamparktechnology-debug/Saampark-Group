@@ -33,8 +33,11 @@ export interface InvoiceItem {
   id: string
   client: string
   clientEmail?: string
+  clientId?: string
   project: string
   billDate: string
+  billTime?: string
+  createdAt?: number | string
   dueDate: string
   baseAmount?: number
   setupCharge?: number
@@ -150,18 +153,23 @@ export const addInvoice = async (invoice: Omit<InvoiceItem, "id"> & { id?: strin
   }
   const effectiveComp = (!targetComp || targetComp === "all") ? "tech" : targetComp
 
-  const allCurrent = await getInvoices("all")
+  // Fetch scoped and all in parallel for instant execution
+  const [currentScoped, currentAll] = await Promise.all([
+    fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], effectiveComp).catch(() => []),
+    fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], "all").catch(() => [])
+  ])
+
   const deletedIds = getLocalDeletedIds()
   let nextId = (invoice.id || "").trim()
 
   // If no ID provided or if requested ID already exists or is in deleted list, calculate next unique ID
   if (
     !nextId || 
-    allCurrent.some(i => String(i.id).toUpperCase().trim() === nextId.toUpperCase()) ||
+    currentAll.some(i => String(i.id).toUpperCase().trim() === nextId.toUpperCase()) ||
     deletedIds.includes(nextId.toLowerCase().trim())
   ) {
     const billDateObj = invoice.billDate ? new Date(invoice.billDate) : new Date()
-    nextId = generateInvoiceNumber(allCurrent, isNaN(billDateObj.getTime()) ? new Date() : billDateObj)
+    nextId = generateInvoiceNumber(currentAll, isNaN(billDateObj.getTime()) ? new Date() : billDateObj)
   }
 
   let activeBranch: string | undefined = undefined
@@ -172,27 +180,38 @@ export const addInvoice = async (invoice: Omit<InvoiceItem, "id"> & { id?: strin
     } catch {}
   }
 
+  const now = new Date()
+  const billTime = invoice.billTime || now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })
+  const createdAt = invoice.createdAt || now.getTime()
+
   const newInvoice: InvoiceItem = { 
     ...invoice, 
     id: nextId,
+    billTime,
+    createdAt,
     companyId: effectiveComp,
     branchId: invoice.branchId || activeBranch || undefined
   }
 
-  const currentScoped = await fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], effectiveComp)
-  const currentTech = effectiveComp !== "tech" ? await fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], "tech") : []
-  const currentAll = await fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], "all")
-
   const updatedScoped = [newInvoice, ...(Array.isArray(currentScoped) ? currentScoped.filter(i => String(i.id).toUpperCase().trim() !== nextId.toUpperCase().trim()) : [])]
-  await saveModuleDataToDB("invoices", updatedScoped, effectiveComp)
+  const updatedAll = [newInvoice, ...(Array.isArray(currentAll) ? currentAll.filter(i => String(i.id).toUpperCase().trim() !== nextId.toUpperCase().trim()) : [])]
+
+  // Parallel non-blocking saves across target databases
+  const saveTasks: Promise<any>[] = [
+    saveModuleDataToDB("invoices", updatedScoped, effectiveComp),
+    saveModuleDataToDB("invoices", updatedAll, "all"),
+  ]
 
   if (effectiveComp !== "tech") {
-    const updatedTech = [newInvoice, ...(Array.isArray(currentTech) ? currentTech.filter(i => String(i.id).toUpperCase().trim() !== nextId.toUpperCase().trim()) : [])]
-    await saveModuleDataToDB("invoices", updatedTech, "tech")
+    saveTasks.push(
+      fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], "tech").catch(() => []).then(techList => {
+        const updatedTech = [newInvoice, ...(Array.isArray(techList) ? techList.filter(i => String(i.id).toUpperCase().trim() !== nextId.toUpperCase().trim()) : [])]
+        return saveModuleDataToDB("invoices", updatedTech, "tech")
+      })
+    )
   }
 
-  const updatedAll = [newInvoice, ...(Array.isArray(currentAll) ? currentAll.filter(i => String(i.id).toUpperCase().trim() !== nextId.toUpperCase().trim()) : [])]
-  await saveModuleDataToDB("invoices", updatedAll, "all")
+  await Promise.all(saveTasks)
 
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("storage"))
