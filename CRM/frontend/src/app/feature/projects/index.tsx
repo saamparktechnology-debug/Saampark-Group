@@ -12,7 +12,16 @@ import { useAuthStore } from "@/store/useAuthStore"
 
 export default function ProjectsMain() {
   const { user, activeCompanyId } = useAuthStore()
-  const isSuperOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
+  const roleLower = (user?.role || "").toLowerCase().trim()
+  const isSuperOrAdmin = 
+    roleLower.includes("admin") || 
+    roleLower.includes("super") || 
+    roleLower.includes("owner") || 
+    roleLower.includes("manager") ||
+    roleLower.includes("management") ||
+    roleLower === "admin" ||
+    roleLower === "super admin"
+
 
   const [projects, setProjects] = React.useState<Project[]>([])
   const [viewMode, setViewMode] = React.useState<"table" | "detail">("table")

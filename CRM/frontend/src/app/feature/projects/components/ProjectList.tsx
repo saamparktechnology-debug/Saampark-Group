@@ -53,10 +53,10 @@ export function ProjectList({
       p.client.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.id.toLowerCase().includes(searchQuery.toLowerCase())
 
-    if (activeFilter === "Completed") return matchesSearch && p.status === "Completed"
-    if (activeFilter === "High Priority") return matchesSearch && p.labels.includes("Urgent")
-    if (activeFilter === "Open projects") return matchesSearch && p.status === "Open"
-    if (activeFilter === "Upcoming") return matchesSearch && (p.status === "Open" || p.status === "Hold")
+    if (activeFilter === "Completed") return matchesSearch && (p.status === "Completed" || p.status === "Finished")
+    if (activeFilter === "High Priority") return matchesSearch && (p.labels?.includes("Urgent") || p.labels?.includes("High"))
+    if (activeFilter === "Open projects") return matchesSearch && (p.status === "Open" || p.status === "In Progress" || p.status === "Payment Pending")
+    if (activeFilter === "Upcoming") return matchesSearch && (p.status === "Open" || p.status === "Hold" || p.status === "Payment Pending")
 
     return matchesSearch
   })
