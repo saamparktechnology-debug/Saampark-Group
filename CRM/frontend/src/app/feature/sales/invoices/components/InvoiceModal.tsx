@@ -206,13 +206,13 @@ export function InvoiceModal({
               <style>
                 @page {
                   size: A4 portrait;
-                  margin: 6mm 6mm;
+                  margin: 4mm 4mm;
                 }
                 html, body {
                   background: white !important;
                   color: black !important;
                   margin: 0 !important;
-                  padding: 10px !important;
+                  padding: 4px !important;
                   overflow: visible !important;
                   -webkit-print-color-adjust: exact !important;
                   print-color-adjust: exact !important;
@@ -280,12 +280,12 @@ export function InvoiceModal({
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
           ${document.head.innerHTML}
           <style>
-            @page { size: A4 portrait; margin: 6mm 6mm; }
+            @page { size: A4 portrait; margin: 4mm 4mm; }
             html, body {
               background: white !important;
               color: black !important;
               margin: 0 !important;
-              padding: 10px !important;
+              padding: 4px !important;
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
             }
@@ -397,164 +397,11 @@ export function InvoiceModal({
               <X size={18} />
             </button>
           </div>
-        </div>
-
-        {/* ── PRINTABLE INVOICE CANVAS ────────────────────────────────────── */}
+        </div>        {/* ── PRINTABLE INVOICE CANVAS ────────────────────────────────────── */}
         <div 
           id="printable-invoice" 
-          className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-4 bg-white text-zinc-900 font-sans text-xs leading-normal select-text"
+          className="flex-1 overflow-y-auto p-3 sm:p-5 bg-white text-zinc-900 font-sans text-xs leading-normal select-text"
         >
-          {/* 1. TOP HEADER BRANDING & TAX INVOICE BADGE */}
-          <div className="flex flex-col sm:flex-row justify-between items-start gap-4 border-b border-zinc-200 pb-4">
-            
-            {/* Left: Saampark Brand & Company Info */}
-            <div className="flex items-start gap-3 flex-1">
-              {/* Logo */}
-              <img 
-                src="/saampark-logo.png" 
-                alt="Saampark Logo" 
-                className="w-16 h-16 rounded-2xl object-contain p-1 shadow-sm shrink-0 bg-white border border-zinc-200" 
-              />
-
-              {/* Title & Subtitle */}
-              <div className="space-y-1">
-                <div>
-                  <h1 className="text-xl sm:text-2xl font-black tracking-tight text-zinc-900 leading-none">
-                    SAAMPARK
-                  </h1>
-                  <h2 className="text-xs sm:text-sm font-bold text-zinc-700 tracking-wide mt-0.5 uppercase">
-                    TECHNOLOGY & RESEARCH PRIVATE LIMITED
-                  </h2>
-                </div>
-
-                <p className="text-[10px] font-semibold text-zinc-500 font-mono">
-                  CIN: <span className="text-zinc-700">U72900WB2024PTC271234</span>
-                  {isGstInvoice && (
-                    <> | GSTIN: <span className="text-zinc-800 font-bold">19ABFCS1234D1ZS</span></>
-                  )}
-                </p>
-
-                {/* Company Contact Coordinates Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 text-[10px] text-zinc-600 pt-0.5">
-                  <p className="flex items-center gap-1">
-                    <MapPin size={10} className={`${theme.primaryText} shrink-0`} />
-                    <span>Madinipur, Kolkata, Durgapur, WB, IN - 721101</span>
-                  </p>
-                  <p className="flex items-center gap-1">
-                    <Phone size={10} className={`${theme.primaryText} shrink-0`} />
-                    <span>+91 9901518567 / +91 9901518569</span>
-                  </p>
-                  <p className="flex items-center gap-1">
-                    <Globe size={10} className={`${theme.primaryText} shrink-0`} />
-                    <span>www.saamparktechnology.com</span>
-                  </p>
-                  <p className="flex items-center gap-1">
-                    <Mail size={10} className={`${theme.primaryText} shrink-0`} />
-                    <span>info@saamparktechnology.com</span>
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Right: Curved Header Card with Gradient */}
-            <div className={`w-full sm:w-56 rounded-2xl ${theme.cardHeaderGradient} text-white p-3.5 shadow-md shrink-0 flex flex-col justify-between`}>
-              <div className="flex items-center justify-between border-b border-white/20 pb-2">
-                <span className="font-black text-xs tracking-wider uppercase">
-                  {theme.invoiceTypeLabel}
-                </span>
-                <span className={`px-2 py-0.5 rounded-full text-[9.5px] font-black tracking-wider uppercase ${
-                  isFullyPaid 
-                    ? "bg-white text-emerald-800" 
-                    : isPartPaid 
-                    ? "bg-white text-amber-800" 
-                    : "bg-white text-rose-800"
-                }`}>
-                  {statusBadgeText}
-                </span>
-              </div>
-
-              <div className="space-y-1.5 pt-2 text-[10px]">
-                <div className="flex justify-between">
-                  <span className="text-white/80">INVOICE NO.</span>
-                  <strong className="font-mono text-white text-[11px]">{invoice.id}</strong>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-white/80">INVOICE DATE</span>
-                  <strong className="text-white font-mono">{invoice.billDate}</strong>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-white/80">NEXT DUE DATE</span>
-                  <strong className="text-white font-mono">{invoice.dueDate || "-"}</strong>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 2. THREE-COLUMN INFO CARDS: BILL TO | PLACE OF SUPPLY | SCAN TO VERIFY */}
-          <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-1">
-            
-            {/* Box 1: BILL TO (5 cols) */}
-            <div className={`sm:col-span-5 p-3 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-1`}>
-              <div className="flex items-center gap-1 text-[10.5px] font-black uppercase tracking-wider text-zinc-700">
-                <span className={theme.primaryText}>👤</span>
-                <span>BILL TO</span>
-              </div>
-              <p className="font-extrabold text-xs text-zinc-900 leading-tight">{invoice.client}</p>
-              <p className="text-[10.5px] text-zinc-600">
-                <strong>Address:</strong> {clientDetails?.address || invoice.clientEmail ? `${clientDetails?.address || 'Corporate Center'}` : 'Head Office'}
-              </p>
-              <p className="text-[10.5px] text-zinc-600">
-                <strong>State:</strong> {clientDetails?.state || 'West Bengal - 721101'}
-              </p>
-              {isGstInvoice && clientDetails?.gstNumber && (
-                <p className="text-[10px] font-mono font-bold text-zinc-800">
-                  GSTIN: {clientDetails.gstNumber}
-                </p>
-              )}
-            </div>
-
-            {/* Box 2: PLACE OF SUPPLY (4 cols) */}
-            <div className={`sm:col-span-4 p-3 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-1`}>
-              <div className="flex items-center gap-1 text-[10.5px] font-black uppercase tracking-wider text-zinc-700">
-                <span className={theme.primaryText}>📍</span>
-                <span>PLACE OF SUPPLY</span>
-              </div>
-              <p className="text-[10.5px] text-zinc-700">
-                <strong>Ph No:</strong> {clientDetails?.phone || invoice.billedBy ? `${clientDetails?.phone || '+91 9901518567'}` : '+91 9901518567'}
-              </p>
-              <p className="text-[10.5px] text-zinc-600 leading-snug">
-                Madinipur, Kolkata, Durgapur, West Bengal, India
-              </p>
-              <p className="text-[10px] font-semibold text-zinc-700">
-                West Bengal (Code: 19)
-              </p>
-            </div>
-
-            {/* Box 3: SCAN TO DIRECTLY VIEW INVOICE (3 cols) */}
-            <div className={`sm:col-span-3 p-2 rounded-xl ${theme.lightBg} border ${theme.lightBorder} flex flex-col items-center justify-center text-center space-y-1`}>
-              <span className="text-[9.5px] font-black tracking-wider uppercase text-zinc-700">
-                SCAN TO VERIFY
-              </span>
-              <a 
-                href={verifyInvoiceUrl} 
-                target="_blank" 
-                rel="noreferrer"
-                className="group relative cursor-pointer hover:opacity-90 transition-opacity"
-                title="Scan with camera or click to open live invoice view"
-              >
-                <img 
-                  src={verifyQrCodeUrl} 
-                  alt={`QR code for invoice ${invoice.id}`} 
-                  className="w-16 h-16 object-contain rounded bg-white p-0.5 border border-zinc-200 shadow-2xs group-hover:scale-105 transition-transform" 
-                />
-              </a>
-              <span className="text-[8.5px] font-mono font-bold text-zinc-600 truncate max-w-full">
-                {invoice.id}
-              </span>
-            </div>
-          </div>
-
-          {/* 3. ITEMIZED SERVICES / PROJECT DESCRIPTION TABLE */}
           {(() => {
             const rawItems: any[] = (invoice.items && invoice.items.length > 0)
               ? invoice.items
@@ -607,329 +454,501 @@ export function InvoiceModal({
             const totalTableGst = finalRenderedRows.reduce((sum, it) => sum + it.rowTax, 0)
             const totalTableGross = finalRenderedRows.reduce((sum, it) => sum + it.rowTotal, 0)
 
-            return (
-              <div className="rounded-xl overflow-hidden border border-zinc-200 shadow-2xs">
-                <table className="w-full text-left text-xs border-collapse">
+            const isMultiPage = finalRenderedRows.length > 5
+            const page1Items = isMultiPage ? finalRenderedRows.slice(0, 5) : finalRenderedRows
+            const page2Items = isMultiPage ? finalRenderedRows.slice(5) : []
+
+            const renderTopHeader = (pageNumber?: number) => (
+              <div className="flex flex-col sm:flex-row justify-between items-start gap-3 border-b border-zinc-200 pb-2.5">
+                {/* Left: Saampark Brand & Company Info */}
+                <div className="flex items-start gap-2.5 flex-1">
+                  <img 
+                    src="/saampark-logo.png" 
+                    alt="Saampark Logo" 
+                    className="w-12 h-12 rounded-xl object-contain p-0.5 shadow-xs shrink-0 bg-white border border-zinc-200" 
+                  />
+
+                  <div className="space-y-0.5">
+                    <div>
+                      <h1 className="text-lg sm:text-xl font-black tracking-tight text-zinc-900 leading-none">
+                        SAAMPARK
+                      </h1>
+                      <h2 className="text-[11px] font-bold text-zinc-700 tracking-wide uppercase">
+                        TECHNOLOGY & RESEARCH PRIVATE LIMITED
+                      </h2>
+                    </div>
+
+                    <p className="text-[9px] font-semibold text-zinc-500 font-mono">
+                      CIN: <span className="text-zinc-700">U72900WB2024PTC271234</span>
+                      {isGstInvoice && (
+                        <> | GSTIN: <span className="text-zinc-800 font-bold">19ABFCS1234D1ZS</span></>
+                      )}
+                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-0.2 text-[9px] text-zinc-600">
+                      <p className="flex items-center gap-1">
+                        <MapPin size={9} className={`${theme.primaryText} shrink-0`} />
+                        <span>Madinipur, Kolkata, Durgapur, WB - 721101</span>
+                      </p>
+                      <p className="flex items-center gap-1">
+                        <Phone size={9} className={`${theme.primaryText} shrink-0`} />
+                        <span>+91 9901518567 / +91 9901518569</span>
+                      </p>
+                      <p className="flex items-center gap-1">
+                        <Globe size={9} className={`${theme.primaryText} shrink-0`} />
+                        <span>www.saamparktechnology.com</span>
+                      </p>
+                      <p className="flex items-center gap-1">
+                        <Mail size={9} className={`${theme.primaryText} shrink-0`} />
+                        <span>info@saamparktechnology.com</span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right: Header Card with Gradient */}
+                <div className={`w-full sm:w-52 rounded-xl ${theme.cardHeaderGradient} text-white p-2.5 shadow-xs shrink-0 flex flex-col justify-between`}>
+                  <div className="flex items-center justify-between border-b border-white/20 pb-1">
+                    <span className="font-black text-[11px] tracking-wider uppercase">
+                      {theme.invoiceTypeLabel} {pageNumber ? `(P.${pageNumber}/2)` : ''}
+                    </span>
+                    <span className={`px-1.5 py-0.2 rounded-full text-[8.5px] font-black tracking-wider uppercase ${
+                      isFullyPaid 
+                        ? "bg-white text-emerald-800" 
+                        : isPartPaid 
+                        ? "bg-white text-amber-800" 
+                        : "bg-white text-rose-800"
+                    }`}>
+                      {statusBadgeText}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1 pt-1.5 text-[9.5px]">
+                    <div className="flex justify-between">
+                      <span className="text-white/80">INVOICE NO.</span>
+                      <strong className="font-mono text-white text-[10px]">{invoice.id}</strong>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-white/80">INVOICE DATE</span>
+                      <strong className="text-white font-mono">{invoice.billDate}</strong>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-white/80">DUE DATE</span>
+                      <strong className="text-white font-mono">{invoice.dueDate || "-"}</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+
+            const renderInfoCards = () => (
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 pt-0.5">
+                {/* Box 1: BILL TO (5 cols) */}
+                <div className={`sm:col-span-5 p-2 rounded-lg ${theme.lightBg} border ${theme.lightBorder} space-y-0.5`}>
+                  <div className="flex items-center gap-1 text-[9.5px] font-black uppercase tracking-wider text-zinc-700">
+                    <span className={theme.primaryText}>👤</span>
+                    <span>BILL TO</span>
+                  </div>
+                  <p className="font-extrabold text-[11px] text-zinc-900 leading-tight">{invoice.client}</p>
+                  <p className="text-[9.5px] text-zinc-600">
+                    <strong>Address:</strong> {clientDetails?.address || (invoice.clientEmail ? `${clientDetails?.address || 'Corporate Center'}` : 'Head Office')}
+                  </p>
+                  <p className="text-[9.5px] text-zinc-600">
+                    <strong>State:</strong> {clientDetails?.state || 'West Bengal - 721101'}
+                  </p>
+                  {isGstInvoice && clientDetails?.gstNumber && (
+                    <p className="text-[9px] font-mono font-bold text-zinc-800">
+                      GSTIN: {clientDetails.gstNumber}
+                    </p>
+                  )}
+                </div>
+
+                {/* Box 2: PLACE OF SUPPLY (4 cols) */}
+                <div className={`sm:col-span-4 p-2 rounded-lg ${theme.lightBg} border ${theme.lightBorder} space-y-0.5`}>
+                  <div className="flex items-center gap-1 text-[9.5px] font-black uppercase tracking-wider text-zinc-700">
+                    <span className={theme.primaryText}>📍</span>
+                    <span>PLACE OF SUPPLY</span>
+                  </div>
+                  <p className="text-[9.5px] text-zinc-700">
+                    <strong>Ph No:</strong> {clientDetails?.phone || (invoice.billedBy ? `${clientDetails?.phone || '+91 9901518567'}` : '+91 9901518567')}
+                  </p>
+                  <p className="text-[9.5px] text-zinc-600 leading-tight">
+                    Madinipur, Kolkata, Durgapur, West Bengal, India
+                  </p>
+                  <p className="text-[9px] font-semibold text-zinc-700">
+                    West Bengal (State Code: 19)
+                  </p>
+                </div>
+
+                {/* Box 3: SCAN TO DIRECTLY VIEW INVOICE (3 cols) */}
+                <div className={`sm:col-span-3 p-1.5 rounded-lg ${theme.lightBg} border ${theme.lightBorder} flex flex-col items-center justify-center text-center space-y-0.5`}>
+                  <span className="text-[8.5px] font-black tracking-wider uppercase text-zinc-700">
+                    SCAN TO VERIFY
+                  </span>
+                  <a 
+                    href={verifyInvoiceUrl} 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="cursor-pointer hover:opacity-90 transition-opacity"
+                    title="Scan to open digital invoice"
+                  >
+                    <img 
+                      src={verifyQrCodeUrl} 
+                      alt={`QR code for invoice ${invoice.id}`} 
+                      className="w-12 h-12 object-contain rounded bg-white p-0.5 border border-zinc-200 shadow-2xs" 
+                    />
+                  </a>
+                  <span className="text-[8px] font-mono font-bold text-zinc-600 truncate max-w-full">
+                    {invoice.id}
+                  </span>
+                </div>
+              </div>
+            )
+
+            const renderTable = (itemsList: typeof finalRenderedRows, startIndex: number, showSubtotal: boolean) => (
+              <div className="rounded-lg overflow-hidden border border-zinc-200 shadow-2xs">
+                <table className="w-full text-left text-[10px] border-collapse">
                   <thead>
-                    <tr className={`${theme.tableHeaderBg} font-bold text-[10.5px]`}>
-                      <th className="py-2.5 px-3 w-10 text-center">NO.</th>
-                      <th className="py-2.5 px-3">SERVICES / PRODUCT NAME</th>
-                      <th className="py-2.5 px-3 text-center">QTY</th>
-                      <th className="py-2.5 px-3 text-center">UNIT</th>
-                      <th className="py-2.5 px-3 text-right">RATE (₹)</th>
-                      <th className="py-2.5 px-3 text-right">TAX (₹)</th>
-                      <th className="py-2.5 px-3 text-right">AMOUNT (₹)</th>
+                    <tr className={`${theme.tableHeaderBg} font-bold text-[9.5px]`}>
+                      <th className="py-1.5 px-2.5 w-8 text-center">NO.</th>
+                      <th className="py-1.5 px-2.5">SERVICES / PRODUCT NAME</th>
+                      <th className="py-1.5 px-2 text-center">QTY</th>
+                      <th className="py-1.5 px-2 text-center">UNIT</th>
+                      <th className="py-1.5 px-2.5 text-right">RATE (₹)</th>
+                      <th className="py-1.5 px-2.5 text-right">TAX (₹)</th>
+                      <th className="py-1.5 px-2.5 text-right">AMOUNT (₹)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-200 bg-white font-medium text-zinc-800">
-                    {finalRenderedRows.map((item, idx) => {
-                      return (
-                        <tr key={item.id || idx}>
-                          <td className="py-3 px-3 text-center font-bold text-zinc-500">{idx + 1}</td>
-                          <td className="py-3 px-3">
-                            <div className="space-y-0.5">
-                              <p className="font-extrabold text-zinc-900 text-xs">{item.serviceName}</p>
-                              {item.charges && item.charges.length > 0 && (
-                                <div className="space-y-0.5 pt-0.5">
-                                  {item.charges.map((chg: any) => (
-                                    <p key={chg.id} className="text-[9.5px] text-zinc-500 flex items-center gap-1">
-                                      <span>+ {chg.name}:</span>
-                                      <strong className="font-mono text-zinc-700">₹{(chg.amount || 0).toLocaleString("en-IN")}</strong>
-                                    </p>
-                                  ))}
-                                </div>
-                              )}
-                              {invoice.billedBy && idx === 0 && (
-                                <p className="text-[9px] text-zinc-400 font-mono">Billed By: {invoice.billedBy}</p>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-3 px-3 text-center font-mono text-[11px]">{item.itemQty}</td>
-                          <td className="py-3 px-3 text-center text-zinc-600 text-[11px]">{item.unit || "Service"}</td>
-                          <td className="py-3 px-3 text-right font-mono font-semibold">
-                            ₹{item.itemRate.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="py-3 px-3 text-right font-mono text-zinc-700">
-                            {item.gstRate > 0 && item.rowTax > 0 ? (
-                              <div>
-                                <span>₹{item.rowTax.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-                                <span className="text-[9px] text-zinc-500 block">({item.gstRate}%)</span>
+                    {itemsList.map((item, idx) => (
+                      <tr key={item.id || idx}>
+                        <td className="py-1.5 px-2 text-center font-bold text-zinc-500">{startIndex + idx + 1}</td>
+                        <td className="py-1.5 px-2.5">
+                          <div className="space-y-0.2">
+                            <p className="font-bold text-zinc-900 text-[10.5px] leading-tight">{item.serviceName}</p>
+                            {item.charges && item.charges.length > 0 && (
+                              <div className="space-y-0.2">
+                                {item.charges.map((chg: any) => (
+                                  <p key={chg.id} className="text-[8.5px] text-zinc-500 flex items-center gap-1">
+                                    <span>+ {chg.name}:</span>
+                                    <strong className="font-mono text-zinc-700">₹{(chg.amount || 0).toLocaleString("en-IN")}</strong>
+                                  </p>
+                                ))}
                               </div>
-                            ) : (
-                              <span>₹0.00</span>
                             )}
-                          </td>
-                          <td className="py-3 px-3 text-right font-mono font-black text-zinc-900">
-                            ₹{item.rowTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                          </td>
-                        </tr>
-                      )
-                    })}
+                            {invoice.billedBy && idx === 0 && startIndex === 0 && (
+                              <p className="text-[8px] text-zinc-400 font-mono">Billed By: {invoice.billedBy}</p>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-1.5 px-2 text-center font-mono text-[10px]">{item.itemQty}</td>
+                        <td className="py-1.5 px-2 text-center text-zinc-600 text-[10px]">{item.unit || "Service"}</td>
+                        <td className="py-1.5 px-2.5 text-right font-mono font-semibold">
+                          ₹{item.itemRate.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-1.5 px-2.5 text-right font-mono text-zinc-700">
+                          {item.gstRate > 0 && item.rowTax > 0 ? (
+                            <div>
+                              <span>₹{item.rowTax.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                              <span className="text-[8px] text-zinc-500 block">({item.gstRate}%)</span>
+                            </div>
+                          ) : (
+                            <span>₹0.00</span>
+                          )}
+                        </td>
+                        <td className="py-1.5 px-2.5 text-right font-mono font-black text-zinc-900">
+                          ₹{item.rowTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
-
-                  {/* Subtotal Weights & Amount Bar */}
-                  <tfoot>
-                    <tr className={`${theme.tableSubtotalBg} font-bold text-[11px] border-t border-zinc-200`}>
-                      <td colSpan={2} className="py-2 px-3 uppercase tracking-wider">
-                        SUBTOTAL SERVICES & BASE AMOUNT
-                      </td>
-                      <td className="py-2 px-3 text-center font-mono">{totalTableQty}</td>
-                      <td className="py-2 px-3 text-center">Items</td>
-                      <td className="py-2 px-3 text-right font-mono">
-                        ₹{totalTableBase.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-2 px-3 text-right font-mono">
-                        ₹{totalTableGst.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-2 px-3 text-right font-mono font-black">
-                        ₹{totalTableGross.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                      </td>
-                    </tr>
-                  </tfoot>
+                  {showSubtotal && (
+                    <tfoot>
+                      <tr className={`${theme.tableSubtotalBg} font-bold text-[10px] border-t border-zinc-200`}>
+                        <td colSpan={2} className="py-1.5 px-2.5 uppercase tracking-wider">
+                          SUBTOTAL SERVICES & BASE AMOUNT
+                        </td>
+                        <td className="py-1.5 px-2 text-center font-mono">{totalTableQty}</td>
+                        <td className="py-1.5 px-2 text-center">Items</td>
+                        <td className="py-1.5 px-2.5 text-right font-mono">
+                          ₹{totalTableBase.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-1.5 px-2.5 text-right font-mono">
+                          ₹{totalTableGst.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-1.5 px-2.5 text-right font-mono font-black">
+                          ₹{totalTableGross.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  )}
                 </table>
               </div>
             )
+
+            const renderFinancialsAndFooter = () => (
+              <>
+                {/* 4. TOTAL AMOUNT IN WORDS + TERMS & CONDITIONS (LEFT) & FINANCIAL BREAKDOWN (RIGHT) */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-0.5">
+                  {/* Left 6 Columns: Amount in Words & Terms */}
+                  <div className="sm:col-span-6 space-y-1.5">
+                    <div className={`p-2 rounded-lg ${theme.lightBg} border ${theme.lightBorder} space-y-0.2`}>
+                      <span className="font-black text-[9px] uppercase tracking-wider text-zinc-600 flex items-center gap-1">
+                        <span>📝</span> TOTAL AMOUNT IN WORDS
+                      </span>
+                      <p className="font-bold text-zinc-900 italic text-[10px] leading-tight">
+                        {numberToIndianWords(totalVal)}
+                      </p>
+                    </div>
+
+                    <div className="p-2 rounded-lg bg-zinc-50 border border-zinc-200 space-y-0.5">
+                      <span className="font-black text-[9px] uppercase tracking-wider text-zinc-700 block border-b border-zinc-200 pb-0.2">
+                        TERMS & CONDITIONS
+                      </span>
+                      <ol className="space-y-0.2 text-[8px] text-zinc-700 font-medium leading-tight list-decimal list-inside">
+                        <li>E.& O.E.</li>
+                        <li>Total payment due to be paid within due date to avoid suspension/cancellation.</li>
+                        <li>Please include the invoice number in your payment notes.</li>
+                        <li>All disputes are subject to Paschim Medinipur jurisdiction only.</li>
+                        <li>For payment & refund related queries, read our Refund & Return Policy on website.</li>
+                      </ol>
+                    </div>
+                  </div>
+
+                  {/* Right 6 Columns: Financial Computation Matrix */}
+                  <div className="sm:col-span-6 space-y-0.5 text-[9.5px]">
+                    <div className="p-2 rounded-lg bg-zinc-50 border border-zinc-200 space-y-0.5 text-zinc-700">
+                      <div className="flex justify-between py-0.1">
+                        <span>Total Services Value</span>
+                        <span className="font-mono font-semibold">₹{baseNum.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex justify-between py-0.1">
+                        <span>Platform / Setup Charge</span>
+                        <span className="font-mono">₹{setupCharge.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                      </div>
+
+                      {invoice.discountsList && invoice.discountsList.length > 0 ? (
+                        invoice.discountsList.map((d: any) => (
+                          <div key={d.id} className="flex justify-between py-0.1 text-zinc-500">
+                            <span>Less: {d.name}</span>
+                            <span className="font-mono">(-) ₹{(d.amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="flex justify-between py-0.1 text-zinc-500">
+                          <span>Less: Promotional Discount</span>
+                          <span className="font-mono">(-) ₹{discount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between py-0.2 border-t border-zinc-200 font-bold text-zinc-900">
+                        <span>Taxable Base Amount</span>
+                        <span className="font-mono">₹{taxableBase.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                      </div>
+
+                      {isGstInvoice && (
+                        <>
+                          <div className="flex justify-between py-0.1 text-zinc-600">
+                            <span>CGST ({(gstRate / 2).toFixed(1)}%)</span>
+                            <span className="font-mono">₹{cgstAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                          </div>
+                          <div className="flex justify-between py-0.1 text-zinc-600">
+                            <span>SGST ({(gstRate / 2).toFixed(1)}%)</span>
+                            <span className="font-mono">₹{sgstAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                          </div>
+                        </>
+                      )}
+
+                      <div className={`flex justify-between p-1.5 rounded ${theme.grandTotalBg} font-black text-[11px] tracking-wide my-0.5 shadow-xs`}>
+                        <span>GRAND TOTAL (NET PAYABLE)</span>
+                        <span className="font-mono text-xs">₹{totalVal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                      </div>
+
+                      <div className="flex justify-between py-0.2 text-emerald-700 font-bold">
+                        <span>Received Amount</span>
+                        <span className="font-mono">₹{parsedReceived.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                      </div>
+
+                      <div className="flex justify-between py-0.1 text-zinc-500">
+                        <span>Previous Balance</span>
+                        <span className="font-mono">₹0.00</span>
+                      </div>
+
+                      <div className="flex justify-between py-0.2 border-t border-zinc-200 font-black text-[10px] text-rose-600">
+                        <span>Current Balance (Total Due)</span>
+                        <span className="font-mono">₹{parsedDue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                      </div>
+
+                      <div className="flex justify-between pt-0.1 text-[8.5px] text-zinc-500">
+                        <span>Next Due Date</span>
+                        <span className="font-mono font-bold text-zinc-800">{invoice.dueDate || "-"}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 5. PAYMENT & BANK TRANSFER DETAILS */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
+                  <div className={`p-2 rounded-lg ${theme.lightBg} border ${theme.lightBorder} space-y-0.5`}>
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-[9px] uppercase tracking-wider text-zinc-800 flex items-center gap-1">
+                        <span>📱</span> UPI & DIGITAL PAYMENT
+                      </span>
+                      <span className="text-[8px] font-bold text-emerald-700">Instant Settlement</span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {customPaymentQrUrl ? (
+                        <img 
+                          src={customPaymentQrUrl} 
+                          alt="Payment QR Code" 
+                          className="w-11 h-11 rounded bg-white p-0.5 border border-zinc-200 shrink-0 object-contain" 
+                        />
+                      ) : (
+                        <div className="w-9 h-9 rounded bg-white border border-zinc-200 flex flex-col items-center justify-center text-center p-0.5 shrink-0 text-zinc-500">
+                          <span className="text-xs">⚡</span>
+                          <span className="text-[6.5px] font-bold">UPI PAY</span>
+                        </div>
+                      )}
+                      
+                      <div className="space-y-0.2 text-[8px] flex-1">
+                        <div className="flex justify-between">
+                          <span className="text-zinc-600">UPI ID:</span>
+                          <strong className="font-mono text-zinc-900 font-bold">{paySettings.upiId || "saampark@sbi"}</strong>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-zinc-600">Account Holder:</span>
+                          <strong className="text-zinc-900 font-bold truncate max-w-[120px]">{paySettings.accountHolderName || "Saampark Technology Pvt. Ltd."}</strong>
+                        </div>
+                        <div className="flex items-center gap-1 flex-wrap pt-0.1 font-bold text-zinc-600 text-[7.5px]">
+                          <span className="px-1 py-0.1 rounded bg-white border border-zinc-200">GPay</span>
+                          <span className="px-1 py-0.1 rounded bg-white border border-zinc-200">PhonePe</span>
+                          <span className="px-1 py-0.1 rounded bg-white border border-zinc-200">Paytm</span>
+                          <span className="px-1 py-0.1 rounded bg-white border border-zinc-200">BHIM UPI</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className={`p-2 rounded-lg ${theme.lightBg} border ${theme.lightBorder} space-y-0.2`}>
+                    <span className="font-black text-[9px] uppercase tracking-wider text-zinc-800 flex items-center gap-1">
+                      <span>🏛️</span> BANK TRANSFER (NEFT / RTGS / IMPS)
+                    </span>
+                    <div className="space-y-0.1 text-[8px] text-zinc-700">
+                      <div className="flex justify-between">
+                        <span>Bank Name:</span>
+                        <strong className="text-zinc-900 font-bold">{paySettings.bankName || "State Bank of India"}</strong>
+                      </div>
+                      <div className="flex justify-between font-mono">
+                        <span>A/C No.:</span>
+                        <strong className="text-zinc-900 font-bold">{paySettings.accountNumber || "40912384759"}</strong>
+                      </div>
+                      <div className="flex justify-between font-mono">
+                        <span>IFSC Code:</span>
+                        <strong className="text-zinc-900 font-bold">{paySettings.ifscCode || "SBIN0001234"}</strong>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Branch:</span>
+                        <strong className="text-zinc-900">{paySettings.branch || "Balichak"}</strong>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 6. SIGNATURES & OFFICIAL SEAL ROW */}
+                <div className="flex flex-row justify-between items-center gap-2 pt-1 border-t border-zinc-200">
+                  <div className="text-center space-y-0.2">
+                    <div className="h-5 flex items-end justify-center">
+                      <span className="font-serif italic text-zinc-500 text-[10px]">Customer Signature</span>
+                    </div>
+                    <div className="w-28 border-t border-zinc-400 pt-0.1">
+                      <p className="text-[7.5px] font-black uppercase text-zinc-600">CUSTOMER SIGNATURE</p>
+                    </div>
+                  </div>
+
+                  <div className={`px-2.5 py-0.5 rounded-lg ${theme.lightBg} border ${theme.lightBorder} text-center space-y-0.1`}>
+                    <p className="font-extrabold text-[9.5px] text-zinc-900">
+                      💬 Thank you for your business!
+                    </p>
+                    <p className="text-[8px] text-zinc-500">
+                      We look forward to serving you again.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <div className="text-center space-y-0.2">
+                      <div className="h-5 flex items-end justify-center">
+                        <span className="font-serif italic text-zinc-700 text-[10px] font-bold">Saampark Authorised</span>
+                      </div>
+                      <div className="w-28 border-t border-zinc-400 pt-0.1">
+                        <p className="text-[7.5px] font-black uppercase text-zinc-700">AUTHORISED SIGNATORY</p>
+                      </div>
+                    </div>
+
+                    <div className={`w-10 h-10 rounded-full border-2 border-dashed ${theme.sealColor} flex flex-col items-center justify-center text-center p-0.1 shadow-2xs shrink-0 select-none`}>
+                      <span className="text-[4px] font-black tracking-tighter uppercase leading-none">
+                        SAAMPARK TECH
+                      </span>
+                      <span className="text-[5px] font-black my-0.1">★ SEAL ★</span>
+                      <span className="text-[4px] font-bold tracking-tighter uppercase leading-none">
+                        AUTHORISED
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 7. BOTTOM BANNER */}
+                <div className={`rounded-lg ${theme.headerGradient} text-white p-1 text-[8px] font-medium flex flex-wrap items-center justify-between gap-1 shadow-xs`}>
+                  <p className="flex items-center gap-1">
+                    <MapPin size={8} />
+                    <span>Madinipur, Kolkata, Durgapur, West Bengal, India - 721101</span>
+                  </p>
+                  <p className="flex items-center gap-1 font-mono">
+                    <Phone size={8} />
+                    <span>+91 9901518567, +91 9901518569</span>
+                  </p>
+                  <p className="flex items-center gap-1">
+                    <Globe size={8} />
+                    <span>www.saamparktechnology.com</span>
+                  </p>
+                </div>
+              </>
+            )
+
+            if (!isMultiPage) {
+              // ── SINGLE PAGE LAYOUT (1 to 5 services, strictly fits on 1 A4 page) ──
+              return (
+                <div className="space-y-2" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
+                  {renderTopHeader()}
+                  {renderInfoCards()}
+                  {renderTable(page1Items, 0, true)}
+                  {renderFinancialsAndFooter()}
+                </div>
+              )
+            } else {
+              // ── MULTI-PAGE LAYOUT (> 5 services) ──
+              return (
+                <div className="space-y-6">
+                  {/* PAGE 1: First 5 services */}
+                  <div className="space-y-3 pb-4" style={{ pageBreakAfter: 'always', breakAfter: 'page' }}>
+                    {renderTopHeader(1)}
+                    {renderInfoCards()}
+                    {renderTable(page1Items, 0, false)}
+                    <div className="p-2 rounded bg-zinc-100 text-center font-bold text-[9.5px] text-zinc-600 border border-zinc-200">
+                      Page 1 of 2 — (Services 1 to 5) — Remaining services and payment details continued on Page 2 ➔
+                    </div>
+                  </div>
+
+                  {/* PAGE 2: Services 6+ and complete financial settlement */}
+                  <div className="space-y-2 pt-2" style={{ pageBreakBefore: 'always', breakBefore: 'page' }}>
+                    {renderTopHeader(2)}
+                    {renderTable(page2Items, 5, true)}
+                    {renderFinancialsAndFooter()}
+                  </div>
+                </div>
+              )
+            }
           })()}
-
-          {/* 4. TOTAL AMOUNT IN WORDS + TERMS & CONDITIONS (LEFT) & FINANCIAL BREAKDOWN (RIGHT) */}
-          <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 pt-1">
-            
-            {/* Left 6 Columns: Amount in Words & Terms */}
-            <div className="sm:col-span-6 space-y-3">
-              
-              {/* Amount In Words Card */}
-              <div className={`p-2.5 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-0.5`}>
-                <span className="font-black text-[9.5px] uppercase tracking-wider text-zinc-600 flex items-center gap-1">
-                  <span>📝</span> TOTAL AMOUNT IN WORDS
-                </span>
-                <p className="font-bold text-zinc-900 italic text-[11px] leading-tight">
-                  {numberToIndianWords(totalVal)}
-                </p>
-              </div>
-
-              {/* Exact Terms & Conditions Specified by User */}
-              <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200 space-y-1.5">
-                <span className="font-black text-[10px] uppercase tracking-wider text-zinc-700 block border-b border-zinc-200 pb-1">
-                  TERMS & CONDITIONS
-                </span>
-                <ol className="space-y-1 text-[9.5px] text-zinc-700 font-medium leading-tight list-decimal list-inside">
-                  <li>E.& O.E.</li>
-                  <li>Total payment due to be paid within due date to avoid suspension/cancellation.</li>
-                  <li>Please include the invoice number in your payment notes.</li>
-                  <li>All disputes are subject to Paschim Medinipur jurisdiction only.</li>
-                  <li>For payment & refund related queries, read our Refund & Return Policy on website.</li>
-                </ol>
-              </div>
-            </div>
-
-            {/* Right 6 Columns: Financial Computation Matrix */}
-            <div className="sm:col-span-6 space-y-1.5 text-[11px]">
-              <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200 space-y-1 text-zinc-700">
-                <div className="flex justify-between py-0.5">
-                  <span>Total Services Value</span>
-                  <span className="font-mono font-semibold">₹{baseNum.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-                </div>
-                <div className="flex justify-between py-0.5">
-                  <span>Platform / Setup Charge</span>
-                  <span className="font-mono">₹{setupCharge.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-                </div>
-
-                {/* Named Discounts List */}
-                {invoice.discountsList && invoice.discountsList.length > 0 ? (
-                  invoice.discountsList.map((d: any) => (
-                    <div key={d.id} className="flex justify-between py-0.5 text-zinc-500">
-                      <span>Less: {d.name}</span>
-                      <span className="font-mono">(-) ₹{(d.amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-                    </div>
-                  ))
-                ) : (
-                  <div className="flex justify-between py-0.5 text-zinc-500">
-                    <span>Less: Promotional Discount</span>
-                    <span className="font-mono">(-) ₹{discount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-                  </div>
-                )}
-
-                <div className="flex justify-between py-1 border-t border-zinc-200 font-bold text-zinc-900">
-                  <span>Taxable Base Amount</span>
-                  <span className="font-mono">₹{taxableBase.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-                </div>
-
-                {isGstInvoice && (
-                  <>
-                    <div className="flex justify-between py-0.5 text-zinc-600">
-                      <span>CGST ({(gstRate / 2).toFixed(1)}%)</span>
-                      <span className="font-mono">₹{cgstAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="flex justify-between py-0.5 text-zinc-600">
-                      <span>SGST ({(gstRate / 2).toFixed(1)}%)</span>
-                      <span className="font-mono">₹{sgstAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-                    </div>
-                  </>
-                )}
-
-                {/* GRAND TOTAL (NET PAYABLE) - Prominent Theme Banner */}
-                <div className={`flex justify-between p-2.5 rounded-lg ${theme.grandTotalBg} font-black text-sm tracking-wide mt-1 shadow-xs`}>
-                  <span>GRAND TOTAL (NET PAYABLE)</span>
-                  <span className="font-mono text-base">₹{totalVal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-                </div>
-
-                <div className="flex justify-between py-1 text-emerald-700 font-bold">
-                  <span>Received Amount</span>
-                  <span className="font-mono">₹{parsedReceived.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-                </div>
-
-                <div className="flex justify-between py-0.5 text-zinc-500">
-                  <span>Previous Balance</span>
-                  <span className="font-mono">₹0.00</span>
-                </div>
-
-                <div className="flex justify-between py-1 border-t border-zinc-200 font-black text-xs text-rose-600">
-                  <span>Current Balance (Total Due)</span>
-                  <span className="font-mono">₹{parsedDue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-                </div>
-
-                <div className="flex justify-between pt-0.5 text-[10px] text-zinc-500">
-                  <span>Next Due Date</span>
-                  <span className="font-mono font-bold text-zinc-800">{invoice.dueDate || "-"}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 5. PAYMENT & BANK TRANSFER DETAILS (PAY BY CARD REMOVED) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-            
-            {/* Box 1: UPI / DIGITAL PAYMENT */}
-            <div className={`p-2.5 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-1.5`}>
-              <div className="flex items-center justify-between">
-                <span className="font-black text-[10px] uppercase tracking-wider text-zinc-800 flex items-center gap-1">
-                  <span>📱</span> UPI & DIGITAL PAYMENT
-                </span>
-                <span className="text-[9px] font-bold text-emerald-700">Instant Settlement</span>
-              </div>
-
-              <div className="flex items-center gap-3">
-                {customPaymentQrUrl ? (
-                  <img 
-                    src={customPaymentQrUrl} 
-                    alt="Payment QR Code" 
-                    className="w-16 h-16 rounded bg-white p-0.5 border border-zinc-200 shrink-0 shadow-2xs object-contain" 
-                  />
-                ) : (
-                  <div className="w-14 h-14 rounded-lg bg-white border border-zinc-200 flex flex-col items-center justify-center text-center p-1 shrink-0 text-zinc-500">
-                    <span className="text-base">⚡</span>
-                    <span className="text-[8px] font-bold">UPI PAY</span>
-                  </div>
-                )}
-                
-                <div className="space-y-1 text-[9.5px] flex-1">
-                  <div className="flex justify-between">
-                    <span className="text-zinc-600">UPI ID:</span>
-                    <strong className="font-mono text-zinc-900 font-bold">{paySettings.upiId || "saampark@sbi"}</strong>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-zinc-600">Account Holder:</span>
-                    <strong className="text-zinc-900 font-bold truncate max-w-[150px]">{paySettings.accountHolderName || "Saampark Technology Pvt. Ltd."}</strong>
-                  </div>
-                  <div className="flex items-center gap-1 flex-wrap pt-0.5 font-bold text-zinc-600 text-[8.5px]">
-                    <span className="px-1 py-0.2 rounded bg-white border border-zinc-200">GPay</span>
-                    <span className="px-1 py-0.2 rounded bg-white border border-zinc-200">PhonePe</span>
-                    <span className="px-1 py-0.2 rounded bg-white border border-zinc-200">Paytm</span>
-                    <span className="px-1 py-0.2 rounded bg-white border border-zinc-200">BHIM UPI</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Box 2: OFFICIAL BANK DETAILS */}
-            <div className={`p-2.5 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-1`}>
-              <span className="font-black text-[10px] uppercase tracking-wider text-zinc-800 flex items-center gap-1">
-                <span>🏛️</span> BANK TRANSFER (NEFT / RTGS / IMPS)
-              </span>
-              <div className="space-y-0.5 text-[9.5px] text-zinc-700">
-                <div className="flex justify-between">
-                  <span>Bank Name:</span>
-                  <strong className="text-zinc-900 font-bold">{paySettings.bankName || "State Bank of India"}</strong>
-                </div>
-                <div className="flex justify-between font-mono">
-                  <span>A/C No.:</span>
-                  <strong className="text-zinc-900 font-bold text-[10px]">{paySettings.accountNumber || "40912384759"}</strong>
-                </div>
-                <div className="flex justify-between font-mono">
-                  <span>IFSC Code:</span>
-                  <strong className="text-zinc-900 font-bold">{paySettings.ifscCode || "SBIN0001234"}</strong>
-                </div>
-                <div className="flex justify-between">
-                  <span>Branch:</span>
-                  <strong className="text-zinc-900">{paySettings.branch || "Balichak"}</strong>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 6. SIGNATURES & OFFICIAL SEAL ROW */}
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-2 border-t border-zinc-200">
-            
-            {/* Customer Signature */}
-            <div className="text-center space-y-1">
-              <div className="h-9 flex items-end justify-center">
-                <span className="font-serif italic text-zinc-500 text-sm">Customer Signature</span>
-              </div>
-              <div className="w-36 border-t border-zinc-400 pt-0.5">
-                <p className="text-[9px] font-black uppercase text-zinc-600">CUSTOMER SIGNATURE</p>
-              </div>
-            </div>
-
-            {/* Thank You Note */}
-            <div className={`px-4 py-1.5 rounded-xl ${theme.lightBg} border ${theme.lightBorder} text-center space-y-0.5`}>
-              <p className="font-extrabold text-[11px] text-zinc-900">
-                💬 Thank you for your business!
-              </p>
-              <p className="text-[9.5px] text-zinc-500">
-                We look forward to serving you again.
-              </p>
-            </div>
-
-            {/* Authorised Signatory + Seal Stamp */}
-            <div className="flex items-center gap-3">
-              <div className="text-center space-y-1">
-                <div className="h-9 flex items-end justify-center">
-                  <span className="font-serif italic text-zinc-700 text-sm font-bold">Saampark Authorised</span>
-                </div>
-                <div className="w-36 border-t border-zinc-400 pt-0.5">
-                  <p className="text-[9px] font-black uppercase text-zinc-700">AUTHORISED SIGNATORY</p>
-                </div>
-              </div>
-
-              {/* Official Circular Seal Stamp */}
-              <div className={`w-14 h-14 rounded-full border-2 border-dashed ${theme.sealColor} flex flex-col items-center justify-center text-center p-0.5 shadow-2xs shrink-0 select-none`}>
-                <span className="text-[5.5px] font-black tracking-tighter uppercase leading-tight">
-                  SAAMPARK TECH & RESEARCH
-                </span>
-                <span className="text-[6.5px] font-black my-0.5">★ SEAL ★</span>
-                <span className="text-[5.5px] font-bold tracking-tighter uppercase leading-tight">
-                  AUTHORISED
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* 7. BOTTOM BANNER */}
-          <div className={`rounded-xl ${theme.headerGradient} text-white p-2 text-[9.5px] font-medium flex flex-wrap items-center justify-between gap-2 shadow-sm`}>
-            <p className="flex items-center gap-1">
-              <MapPin size={11} />
-              <span>Madinipur, Kolkata, Durgapur, West Bengal, India - 721101</span>
-            </p>
-            <p className="flex items-center gap-1 font-mono">
-              <Phone size={11} />
-              <span>+91 9901518567, +91 9901518569</span>
-            </p>
-            <p className="flex items-center gap-1">
-              <Globe size={11} />
-              <span>www.saamparktechnology.com</span>
-            </p>
-          </div>
-
         </div>
       </div>
     </div>
