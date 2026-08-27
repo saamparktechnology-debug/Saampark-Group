@@ -15,7 +15,7 @@ interface AddProjectModalProps {
 }
 
 export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectModalProps) {
-  const { user } = useAuthStore()
+  const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
   const [title, setTitle] = React.useState("")
   const [projectType, setProjectType] = React.useState<ProjectType>("Client Project")
   const [client, setClient] = React.useState("")
@@ -39,9 +39,7 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
       getUsers().then((allUsers) => {
         const onlyTeam = allUsers.filter((u) => {
           const role = (u.role || "").toLowerCase().trim()
-          const isTeam = role === "teams" || role === "team" || role === "employee" || role === "developer" || role === "staff"
-          const isAdminOrClient = role.includes("admin") || role.includes("client")
-          return isTeam && !isAdminOrClient && u.status !== "Inactive"
+          return !role.includes("admin") && !role.includes("super") && !role.includes("client") && role !== "owner" && u.status !== "Inactive"
         })
         setTeamMembers(onlyTeam)
       }).catch(() => {})
@@ -108,17 +106,20 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
     const gstAmount = Math.round(taxableBase * (gstRate / 100))
     const totalAmount = taxableBase + gstAmount
 
-    const computedPrice = totalAmount > 0 
+    const formattedPrice = totalAmount > 0 
       ? `₹${totalAmount.toLocaleString("en-IN")}`
       : price ? (price.startsWith("$") || price.startsWith("₹") ? price : `₹${price}`) : "-"
+
+    const currentBranchObj = branches.find(b => b.id === (activeBranchId || user?.branchId))
+    const finalBranchName = currentBranchObj?.name || user?.branchName || undefined
 
     setIsSubmitting(true)
     try {
       const created = await addProject({
         title,
         projectType,
-        client: projectType === "Client Project" ? (client || "-") : "-",
-        price: computedPrice,
+        client: projectType === "Client Project" ? (client || (availableClients[0]?.name ?? "Direct Client")) : "Internal Operations",
+        price: formattedPrice,
         baseAmount: numBase > 0 ? numBase : undefined,
         setupCharge: numSetup > 0 ? numSetup : undefined,
         discount: numDiscount > 0 ? numDiscount : undefined,
@@ -134,6 +135,9 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
         billedBy: user?.name || "Admin",
         members: assignedMembers,
         milestones: defaultMilestones,
+        branchId: activeBranchId || user?.branchId || undefined,
+        branchName: finalBranchName,
+        companyId: activeCompanyId || user?.companyId || "tech",
       })
 
       onProjectAdded(created)

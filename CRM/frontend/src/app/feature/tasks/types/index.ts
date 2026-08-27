@@ -21,6 +21,8 @@ export interface Task {
   description?: string
   isRecurring?: boolean
   companyId?: string
+  branchId?: string
+  branchName?: string
   client?: string
   clientEmail?: string
   createdBy?: string

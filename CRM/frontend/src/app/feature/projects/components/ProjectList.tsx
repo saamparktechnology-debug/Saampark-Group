@@ -67,10 +67,9 @@ export function ProjectList({
       filename: "SAAMPARK_Projects",
       title: "Projects Report",
       subtitle: activeFilter || "All Projects",
-      headers: ["#", "Project ID", "Title", "Client", "Price", "Start Date", "Deadline", "Progress", "Status"],
+      headers: ["#", "Title", "Client", "Price", "Start Date", "Deadline", "Progress", "Status"],
       rows: filteredProjects.map((p, idx) => [
         idx + 1,
-        p.id,
         p.title,
         p.client,
         p.price,
@@ -87,10 +86,9 @@ export function ProjectList({
     printPDFReport({
       title: "Projects Report",
       subtitle: activeFilter || "All Projects",
-      headers: ["#", "Project ID", "Title", "Client", "Price", "Start Date", "Deadline", "Progress", "Status"],
+      headers: ["#", "Title", "Client", "Price", "Start Date", "Deadline", "Progress", "Status"],
       rows: filteredProjects.map((p, idx) => [
         idx + 1,
-        p.id,
         p.title,
         p.client,
         p.price,
@@ -245,7 +243,6 @@ export function ProjectList({
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="border-b border-zinc-200/80 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 font-semibold bg-zinc-50/50 dark:bg-zinc-800/40">
-                <th className="py-3 px-4 w-12">ID</th>
                 <th className="py-3 px-4">Title</th>
                 <th className="py-3 px-4">
                   <div className="flex items-center gap-1">
@@ -272,9 +269,6 @@ export function ProjectList({
                     key={p.id}
                     className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40 transition-colors group"
                   >
-                    {/* ID */}
-                    <td className="py-3.5 px-4 font-normal text-zinc-500">{p.id}</td>
-
                     {/* Title & Badges */}
                     <td className="py-3.5 px-4">
                       <div className="space-y-1">

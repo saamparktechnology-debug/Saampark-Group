@@ -25,7 +25,7 @@ type ReportTab = "revenue" | "gst_analytics" | "leads" | "productivity" | "atten
 type InvoiceFilterType = "all" | "gst" | "non_gst" | "due" | "paid" | "partially_paid"
 
 export default function ReportsMain() {
-  const { user, branches, activeCompanyId } = useAuthStore()
+  const { user, branches, activeCompanyId, activeBranchId } = useAuthStore()
   
   const isSuperAdmin = user?.role === "Super Admin"
   const isAdmin = user?.role === "Admin"
@@ -51,17 +51,26 @@ export default function ReportsMain() {
 
   // Selected Branch state
   const [selectedBranchId, setSelectedBranchId] = React.useState<string>(() => {
+    if (activeBranchId) return activeBranchId
     if (isSuperAdmin) return "all"
     if (userAssignedBranchId) return userAssignedBranchId
     return "all"
   })
 
-  // Sync activeCompanyId from auth store if changed
+  // Sync activeCompanyId & activeBranchId from auth store if changed
   React.useEffect(() => {
     if (activeCompanyId && isSuperAdmin && activeCompanyId !== "all") {
       setSelectedCompanyId(activeCompanyId)
     }
   }, [activeCompanyId, isSuperAdmin])
+
+  React.useEffect(() => {
+    if (activeBranchId) {
+      setSelectedBranchId(activeBranchId)
+    } else if (isSuperAdmin) {
+      setSelectedBranchId("all")
+    }
+  }, [activeBranchId, isSuperAdmin])
 
   const [activeTab, setActiveTab] = React.useState<ReportTab>("revenue")
   const [invoiceSubFilter, setInvoiceSubFilter] = React.useState<InvoiceFilterType>("all")
@@ -161,9 +170,26 @@ export default function ReportsMain() {
       if (selectedCompanyId && selectedCompanyId !== "all") {
         if (p.companyId && p.companyId !== selectedCompanyId) return false
       }
+      if (isTeamOrBranchAdmin && userAssignedBranchId) {
+        const pBranch = p.branchId || (p as any).branch_id
+        if (pBranch && pBranch !== userAssignedBranchId) return false
+      } else if (selectedBranchId !== "all") {
+        const targetBranchObj = availableBranches.find((b) => b.id === selectedBranchId || b.name.toLowerCase() === selectedBranchId.toLowerCase())
+        const targetBranchId = String(targetBranchObj?.id || selectedBranchId).toLowerCase().trim()
+        const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
+
+        const pBranch = String(p.branchId || (p as any).branch_id || "").toLowerCase().trim()
+        const pBranchName = String(p.branchName || (p as any).branch_name || "").toLowerCase().trim()
+
+        const isMatch =
+          (pBranch && (pBranch === targetBranchId || (targetBranchName && pBranch === targetBranchName))) ||
+          (pBranchName && (pBranchName === targetBranchName || pBranchName === targetBranchId))
+
+        if (!isMatch) return false
+      }
       return true
     })
-  }, [payments, selectedCompanyId])
+  }, [payments, selectedCompanyId, selectedBranchId, isTeamOrBranchAdmin, userAssignedBranchId, availableBranches])
 
   // ── Scoped Leads Filter ───────────────────────────────────────────────────
   const scopedLeads = React.useMemo(() => {
@@ -174,11 +200,22 @@ export default function ReportsMain() {
       if (isTeamOrBranchAdmin && userAssignedBranchId) {
         if (l.branchId && l.branchId !== userAssignedBranchId) return false
       } else if (selectedBranchId !== "all") {
-        if (l.branchId !== selectedBranchId && l.branchName !== selectedBranchId) return false
+        const targetBranchObj = availableBranches.find((b) => b.id === selectedBranchId || b.name.toLowerCase() === selectedBranchId.toLowerCase())
+        const targetBranchId = String(targetBranchObj?.id || selectedBranchId).toLowerCase().trim()
+        const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
+
+        const lBranch = String(l.branchId || (l as any).assignedBranchId || (l as any).branch_id || "").toLowerCase().trim()
+        const lBranchName = String(l.branchName || (l as any).assignedBranchName || (l as any).branch_name || "").toLowerCase().trim()
+
+        const isMatch =
+          (lBranch && (lBranch === targetBranchId || (targetBranchName && lBranch === targetBranchName))) ||
+          (lBranchName && (lBranchName === targetBranchName || lBranchName === targetBranchId))
+
+        if (!isMatch) return false
       }
       return true
     })
-  }, [leads, selectedCompanyId, selectedBranchId, isTeamOrBranchAdmin, userAssignedBranchId])
+  }, [leads, selectedCompanyId, selectedBranchId, isTeamOrBranchAdmin, userAssignedBranchId, availableBranches])
 
   // ── GST vs Non-GST Invoices Categorization & Metrics ──────────────────────
   const gstInvoices = React.useMemo(() => {

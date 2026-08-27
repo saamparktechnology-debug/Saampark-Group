@@ -1,7 +1,14 @@
 import { UserItem, UserRole } from "../types";
 import { api } from "@/lib/api";
 import { usePermissionStore } from "@/store/usePermissionStore";
-import { filterGlobalDeletedItems, markGlobalItemDeleted, fetchModuleDataFromDB, saveModuleDataToDB } from "@/lib/storageSync";
+import { 
+  filterGlobalDeletedItems, 
+  markGlobalItemDeleted, 
+  fetchModuleDataFromDB, 
+  saveModuleDataToDB,
+  syncGlobalDeletedIds,
+  getLocalDeletedIds 
+} from "@/lib/storageSync";
 
 // Deleted user emails tracked in MySQL via markGlobalItemDeleted
 const DELETED_KEY = "saampark_deleted_user_emails"
@@ -26,91 +33,44 @@ export const DEFAULT_SYSTEM_ACCOUNTS: UserItem[] = [
   },
 ];
 
-// Helper: get deleted user emails from localStorage cache (synced from MySQL deleted table)
+// Helper: get deleted user emails (synced from MySQL deleted table)
+export async function getDeletedUserEmailsAsync(): Promise<string[]> {
+  const deletedIds = await syncGlobalDeletedIds();
+  return deletedIds.filter((id: string) => id.includes('@'));
+}
+
 export function getDeletedUserEmails(): string[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(DELETED_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  const deleted = getLocalDeletedIds();
+  return deleted.filter((id: string) => id.includes('@'));
 }
 
 // Helper: check if a specific user email has been deleted
 export function isUserDeleted(email: string): boolean {
   if (!email) return false;
   const normEmail = email.toLowerCase().trim();
-
-  // If the account has been re-created or exists in local active accounts, it is NOT deleted!
-  if (typeof window !== "undefined") {
-    try {
-      const rawLocal = localStorage.getItem("saampark_registered_accounts");
-      if (rawLocal) {
-        const localList: UserItem[] = JSON.parse(rawLocal);
-        if (Array.isArray(localList) && localList.some((u) => u.email.toLowerCase().trim() === normEmail)) {
-          unmarkUserAsDeleted(normEmail);
-          return false;
-        }
-      }
-    } catch {}
-  }
-
   return getDeletedUserEmails().includes(normEmail);
 }
 
-// Helper: mark a user email as permanently deleted (stored in MySQL via markGlobalItemDeleted + local cache)
+// Helper: mark a user email as permanently deleted (stored in MySQL via markGlobalItemDeleted)
 export function markUserAsDeleted(email: string): void {
   if (!email) return;
   const normEmail = email.toLowerCase().trim();
-  // Update local cache
-  try {
-    const current = getDeletedUserEmails();
-    if (!current.includes(normEmail)) {
-      localStorage.setItem(DELETED_KEY, JSON.stringify([...current, normEmail]));
-    }
-  } catch {}
-  // Sync to MySQL
   markGlobalItemDeleted(normEmail, "users").catch(() => {});
 }
 
-// Helper: unmark a user email as deleted (clears from local cache)
+// Helper: unmark a user email as deleted
 export function unmarkUserAsDeleted(email: string): void {
-  if (!email) return;
-  const normEmail = email.toLowerCase().trim();
-  try {
-    const current = getDeletedUserEmails();
-    const filtered = current.filter((e) => e !== normEmail);
-    localStorage.setItem(DELETED_KEY, JSON.stringify(filtered));
-  } catch {}
+  // No-op for DB, active record in users table takes precedence
 }
 
-// Helper: get user accounts — reads from MySQL, returns DEFAULT_SYSTEM_ACCOUNTS if empty
+// Helper: get user accounts — reads strictly from MySQL database
 export async function getStoredUserAccountsAsync(): Promise<UserItem[]> {
-  let dbData = await fetchModuleDataFromDB<UserItem[]>("users", DEFAULT_SYSTEM_ACCOUNTS, "all");
+  const [dbData, deletedEmails] = await Promise.all([
+    fetchModuleDataFromDB<UserItem[]>("users", DEFAULT_SYSTEM_ACCOUNTS, "all"),
+    getDeletedUserEmailsAsync()
+  ]);
+
   let data = Array.isArray(dbData) && dbData.length > 0 ? dbData : [...DEFAULT_SYSTEM_ACCOUNTS];
-
-  if (typeof window !== "undefined") {
-    try {
-      const rawLocal = localStorage.getItem("saampark_registered_accounts");
-      if (rawLocal) {
-        const localList: UserItem[] = JSON.parse(rawLocal);
-        if (Array.isArray(localList)) {
-          localList.forEach((lu) => {
-            const emailNorm = (lu.email || "").toLowerCase().trim();
-            if (emailNorm) {
-              const idx = data.findIndex((u) => u.email.toLowerCase().trim() === emailNorm);
-              if (idx < 0) {
-                data.push(lu);
-              }
-            }
-          });
-        }
-      }
-    } catch {}
-  }
-
-  const deletedEmails = getDeletedUserEmails();
   return data.filter((a) => !deletedEmails.includes(a.email.toLowerCase().trim()));
 }
 
@@ -327,10 +287,8 @@ export async function deleteUser(id: string, email?: string): Promise<boolean> {
   await saveModuleDataToDB("users", filtered, "all");
 
   if (typeof window !== "undefined") {
-    try {
-      localStorage.setItem("saampark_registered_accounts", JSON.stringify(filtered));
-    } catch {}
     window.dispatchEvent(new Event("storage"));
+    window.dispatchEvent(new CustomEvent("saampark_data_synced"));
 
     // Instantly log out if current tab belongs to deleted user
     try {
@@ -372,7 +330,7 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
   let dbUsers = await fetchModuleDataFromDB<UserItem[]>("users", DEFAULT_SYSTEM_ACCOUNTS, "all");
   if (!Array.isArray(dbUsers)) dbUsers = [];
 
-  const deletedEmails = getDeletedUserEmails().map((e) => e.toLowerCase().trim());
+  const deletedEmails = (await getDeletedUserEmailsAsync()).map((e) => e.toLowerCase().trim());
 
   // Ensure default system accounts (Super Admin, Admin, Teams) exist in dbUsers unless deleted
   DEFAULT_SYSTEM_ACCOUNTS.forEach((sysAcc) => {
@@ -413,31 +371,6 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
       }
     }
   } catch {}
-
-  // Merge locally stored registered accounts from browser localStorage if available
-  if (typeof window !== "undefined") {
-    try {
-      const rawLocal = localStorage.getItem("saampark_registered_accounts");
-      if (rawLocal) {
-        const localList: UserItem[] = JSON.parse(rawLocal);
-        if (Array.isArray(localList)) {
-          localList.forEach((lu) => {
-            const emailNorm = (lu.email || "").toLowerCase().trim();
-            if (emailNorm && !deletedEmails.includes(emailNorm)) {
-              const idx = dbUsers.findIndex((u) => u.email.toLowerCase().trim() === emailNorm);
-              if (idx < 0) {
-                dbUsers.push(lu);
-              } else {
-                dbUsers[idx] = { ...lu, ...dbUsers[idx] };
-              }
-            }
-          });
-        }
-      }
-    } catch (err) {
-      console.warn("Local registered accounts merge warning:", err);
-    }
-  }
 
   // 2. Merge with live backend /users database table if available
   try {

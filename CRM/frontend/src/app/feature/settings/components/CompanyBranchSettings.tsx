@@ -105,7 +105,7 @@ export function CompanyBranchSettings() {
   }
 
   const handleDeleteCompany = async (compId: string, compName: string) => {
-    if (!confirm(`Are you sure you want to permanently delete company "${compName}" and all its sub-branches?`)) {
+    if (!confirm(`Are you sure you want to permanently delete company "${compName}" and all its branches?`)) {
       return
     }
     try {
@@ -186,7 +186,7 @@ export function CompanyBranchSettings() {
   }
 
   const handleDeleteBranch = async (branchId: string, bName: string) => {
-    if (!confirm(`Are you sure you want to delete sub-branch "${bName}"?`)) {
+    if (!confirm(`Are you sure you want to delete branch "${bName}"?`)) {
       return
     }
     await deleteBranch(branchId)
@@ -202,13 +202,13 @@ export function CompanyBranchSettings() {
               <Building2 size={20} />
             </span>
             <h2 className="text-xl font-bold text-foreground">
-              Company & Sub-Branch Organization
+              Company & Branch Organization
             </h2>
           </div>
           <p className="text-xs text-muted-foreground max-w-xl">
             {isSuperAdmin
-              ? "Super Admin Master Panel: Create and manage top-level companies, or configure sub-branches and location hubs."
-              : "Company Admin Panel: Create and manage sub-branches, and assign specific team members and clients to branch locations."}
+              ? "Super Admin Master Panel: Create and manage top-level companies, or configure branches and location hubs."
+              : "Company Admin Panel: Create and manage branches, and assign specific team members and clients to branch locations."}
           </p>
         </div>
 
@@ -225,7 +225,7 @@ export function CompanyBranchSettings() {
         )}
       </div>
 
-      {/* Companies & Sub-Branches Accordion List */}
+      {/* Companies & Branches Accordion List */}
       <div className="space-y-4">
         {visibleCompanies.map((company) => {
           const compBranches = branches.filter((b) => b.companyId === company.id || b.companyId === company.slug)
@@ -256,7 +256,7 @@ export function CompanyBranchSettings() {
                     <div className="flex items-center gap-2">
                       <h3 className="text-base font-bold text-foreground">{company.name}</h3>
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary border border-primary/20">
-                        {compBranches.length} Sub-Branch{compBranches.length === 1 ? "" : "es"}
+                        {compBranches.length} Branch{compBranches.length === 1 ? "" : "es"}
                       </span>
                     </div>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
@@ -277,7 +277,7 @@ export function CompanyBranchSettings() {
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-xs font-bold hover:bg-blue-100 transition-colors cursor-pointer"
                   >
                     <Plus size={14} />
-                    <span>Add Sub-Branch</span>
+                    <span>Add Branch</span>
                   </button>
 
                   {isSuperAdmin && companies.length > 1 && (
@@ -293,25 +293,25 @@ export function CompanyBranchSettings() {
                 </div>
               </div>
 
-              {/* Sub-Branches List Body */}
+              {/* Branches List Body */}
               {isExpanded && (
                 <div className="p-5 space-y-4 bg-surface/50">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                      Sub-Branches & Location Hubs ({compBranches.length})
+                      Branches & Location Hubs ({compBranches.length})
                     </span>
                   </div>
 
                   {compBranches.length === 0 ? (
                     <div className="py-8 text-center bg-surface rounded-2xl border border-dashed border-border p-6">
-                      <p className="text-xs text-muted-foreground">No sub-branches created for this company yet.</p>
+                      <p className="text-xs text-muted-foreground">No branches created for this company yet.</p>
                       <button
                         type="button"
                         onClick={() => handleOpenCreateBranch(company.id)}
                         className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary/10 text-primary text-xs font-bold hover:bg-primary/20 transition-colors cursor-pointer"
                       >
                         <Plus size={14} />
-                        <span>Create First Sub-Branch</span>
+                        <span>Create First Branch</span>
                       </button>
                     </div>
                   ) : (
@@ -374,7 +374,7 @@ export function CompanyBranchSettings() {
                                   type="button"
                                   onClick={() => handleOpenEditBranch(branch)}
                                   className="p-1.5 text-zinc-500 hover:text-foreground hover:bg-surface-hover rounded-lg transition-colors cursor-pointer"
-                                  title="Edit Sub-Branch"
+                                  title="Edit Branch"
                                 >
                                   <Pencil size={13} />
                                 </button>
@@ -382,7 +382,7 @@ export function CompanyBranchSettings() {
                                   type="button"
                                   onClick={() => handleDeleteBranch(branch.id, branch.name)}
                                   className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors cursor-pointer"
-                                  title="Delete Sub-Branch"
+                                  title="Delete Branch"
                                 >
                                   <Trash2 size={13} />
                                 </button>
@@ -492,7 +492,7 @@ export function CompanyBranchSettings() {
         )}
       </AnimatePresence>
 
-      {/* ── CREATE / EDIT SUB-BRANCH MODAL (Admin & Super Admin) ───────────────── */}
+      {/* ── CREATE / EDIT BRANCH MODAL (Admin & Super Admin) ───────────────── */}
       <AnimatePresence>
         {isBranchModalOpen && (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
@@ -503,10 +503,12 @@ export function CompanyBranchSettings() {
               className="w-full max-w-lg bg-surface p-6 rounded-3xl border border-border shadow-2xl space-y-4"
             >
               <div className="flex items-center justify-between border-b border-border/50 pb-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-xl">📍</span>
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 shrink-0 shadow-2xs">
+                    <MapPin size={16} />
+                  </div>
                   <h3 className="font-bold text-base text-foreground">
-                    {editingBranch ? "Edit Sub-Branch" : "Create New Sub-Branch"}
+                    {editingBranch ? "Edit Branch" : "Create New Branch"}
                   </h3>
                 </div>
                 <button
@@ -561,7 +563,7 @@ export function CompanyBranchSettings() {
                   )}
                   <p className="text-[10px] text-muted-foreground mt-1">
                     {isSuperAdmin
-                      ? "Super Admin can create a sub-branch under any registered company."
+                      ? "Super Admin can create a branch under any registered company."
                       : "Branches created by this Admin are automatically scoped under your assigned company."}
                   </p>
                 </div>
@@ -660,7 +662,7 @@ export function CompanyBranchSettings() {
                     type="submit"
                     className="px-5 py-2 rounded-xl bg-primary text-primary-foreground font-bold shadow-md hover:bg-primary/90"
                   >
-                    {editingBranch ? "Update Sub-Branch" : "Create Sub-Branch"}
+                    {editingBranch ? "Update Branch" : "Create Branch"}
                   </button>
                 </div>
               </form>

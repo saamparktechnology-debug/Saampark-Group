@@ -21,6 +21,9 @@ import {
   Pencil,
   CheckCircle2,
   X,
+  Check,
+  Layers,
+  Trash2,
 } from "lucide-react"
 import { Lead, LeadStatus } from "../types"
 import { LeadFiltersDropdown } from "./LeadFiltersDropdown"
@@ -36,6 +39,8 @@ interface LeadKanbanProps {
   activeViewTab: "list" | "kanban"
   onChangeViewTab: (tab: "list" | "kanban") => void
   onOpenAddModal: () => void
+  onOpenEditModal?: (lead: Lead) => void
+  onDeleteLead?: (id: string) => void
   onSelectLeadDetail: (lead: Lead) => void
   onLeadUpdated: (updatedLead: Lead) => void
   onOpenManageLabelsModal: () => void
@@ -228,18 +233,21 @@ export function LeadKanban({
   activeViewTab = "kanban",
   onChangeViewTab,
   onOpenAddModal,
+  onOpenEditModal,
+  onDeleteLead,
   onSelectLeadDetail,
   onLeadUpdated,
   onOpenManageLabelsModal,
   onToggleLeadLabel,
 }: LeadKanbanProps) {
-  const { user, branches, activeCompanyId } = useAuthStore()
+  const { user, branches, activeCompanyId, activeBranchId } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
 
-  const canAddLead = canPerformAction(user, "Leads", "add")
-  const canEditLead = canPerformAction(user, "Leads", "edit")
-  const canDeleteLead = canPerformAction(user, "Leads", "delete")
+  const isSuperAdmin = user?.role === "Super Admin"
   const isSuperAdminOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
+  const canAddLead = isSuperAdmin || canPerformAction(user, "Leads", "add")
+  const canEditLead = isSuperAdmin || canPerformAction(user, "Leads", "edit")
+  const canDeleteLead = isSuperAdmin || canPerformAction(user, "Leads", "delete")
 
   // Branches belonging to current active company
   const activeBranches = React.useMemo(() => {
@@ -250,7 +258,6 @@ export function LeadKanban({
     return branches
   }, [branches, activeCompanyId])
 
-  const [selectedBranchFilter, setSelectedBranchFilter] = React.useState<string>("all")
   const [allUsers, setAllUsers] = React.useState<{ id: string; name: string; role?: string; department?: string; email?: string; avatar?: string }[]>([])
   const [selectedMember, setSelectedMember] = React.useState<string>("all")
   const [selectedMemberStage, setSelectedMemberStage] = React.useState<string>("all")
@@ -311,6 +318,21 @@ export function LeadKanban({
   const [searchQuery, setSearchQuery] = React.useState("")
   const [isFiltersDropdownOpen, setIsFiltersDropdownOpen] = React.useState(false)
   const [draggedLeadId, setDraggedLeadId] = React.useState<string | null>(null)
+
+  const [selectedBranchFilter, setSelectedBranchFilter] = React.useState<string>(activeBranchId || "all")
+
+  React.useEffect(() => {
+    if (activeBranchId) {
+      setSelectedBranchFilter(activeBranchId)
+    } else {
+      setSelectedBranchFilter("all")
+    }
+  }, [activeBranchId])
+
+  const [selectedStageFilter, setSelectedStageFilter] = React.useState<string>("all")
+  const [isStageDropdownOpen, setIsStageDropdownOpen] = React.useState(false)
+  const [selectedReminderFilter, setSelectedReminderFilter] = React.useState<string>("all")
+  const [isReminderDropdownOpen, setIsReminderDropdownOpen] = React.useState(false)
   const [activeContactTarget, setActiveContactTarget] = React.useState<Record<string, "primary" | "secondary">>({})
   const [moveToast, setMoveToast] = React.useState<{
     visible: boolean
@@ -417,7 +439,62 @@ export function LeadKanban({
       serviceStr.includes(q) ||
       sourceStr.includes(q)
 
-    // Team member filter
+    if (!matchesSearch) return false
+
+    // ── STAGE / STATUS FILTER ──
+    if (selectedStageFilter !== "all") {
+      const normLeadStatus = (l.status === "They come to our office" ? "Our Office Visit" : (l.status || "New")).toLowerCase().trim()
+      const normTargetStage = (selectedStageFilter === "They come to our office" ? "Our Office Visit" : selectedStageFilter).toLowerCase().trim()
+      if (normLeadStatus !== normTargetStage) return false
+    }
+
+    // ── REMINDER DATE FILTER ──
+    if (selectedReminderFilter !== "all") {
+      const rawDate = l.reminderDate
+      const parsedD = parseLeadDate(rawDate)
+      
+      if (selectedReminderFilter === "none") {
+        const clean = (rawDate || "").toString().toLowerCase().trim()
+        if (clean && clean !== "none" && clean !== "-" && clean !== "00,00,0000" && clean !== "00-00-0000" && !clean.includes("no reminder") && parsedD) {
+          return false
+        }
+      } else {
+        if (!parsedD) return false
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const targetTime = parsedD.getTime()
+
+        if (selectedReminderFilter === "today") {
+          const endToday = new Date(today)
+          endToday.setDate(endToday.getDate() + 1)
+          if (targetTime < today.getTime() || targetTime >= endToday.getTime()) return false
+        } else if (selectedReminderFilter === "yesterday") {
+          const startYest = new Date(today)
+          startYest.setDate(startYest.getDate() - 1)
+          if (targetTime < startYest.getTime() || targetTime >= today.getTime()) return false
+        } else if (selectedReminderFilter === "tomorrow") {
+          const startTom = new Date(today)
+          startTom.setDate(startTom.getDate() + 1)
+          const endTom = new Date(today)
+          endTom.setDate(endTom.getDate() + 2)
+          if (targetTime < startTom.getTime() || targetTime >= endTom.getTime()) return false
+        } else if (selectedReminderFilter === "week") {
+          // Current / next 7 days
+          const startWeek = new Date(today)
+          const endWeek = new Date(today)
+          endWeek.setDate(endWeek.getDate() + 7)
+          if (targetTime < startWeek.getTime() || targetTime > endWeek.getTime()) return false
+        } else if (selectedReminderFilter === "month") {
+          // Current / next 30 days
+          const startMonth = new Date(today)
+          const endMonth = new Date(today)
+          endMonth.setDate(endMonth.getDate() + 30)
+          if (targetTime < startMonth.getTime() || targetTime > endMonth.getTime()) return false
+        }
+      }
+    }
+
+    // ── TEAM MEMBER FILTER ──
     if (selectedMember !== "all") {
       if (selectedMember === "unassigned") {
         const isAssigned =
@@ -443,16 +520,23 @@ export function LeadKanban({
       }
     }
 
-    // Branch Filter
-    if (selectedBranchFilter !== "all") {
-      if (selectedBranchFilter === "unassigned") {
+    // ── BRANCH FILTER ──
+    const effectiveBranch = selectedBranchFilter !== "all" ? selectedBranchFilter : (activeBranchId || "all")
+    if (effectiveBranch !== "all") {
+      if (effectiveBranch === "unassigned") {
         if (l.branchId || l.assignedBranchId || l.branchName || l.assignedBranchName) return false
       } else {
+        const targetBranchObj = branches.find(b => b.id === effectiveBranch || b.name.toLowerCase() === effectiveBranch.toLowerCase())
+        const targetBranchId = String(targetBranchObj?.id || effectiveBranch).toLowerCase().trim()
+        const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
+
+        const lBranch = String(l.branchId || l.assignedBranchId || (l as any).branch_id || "").toLowerCase().trim()
+        const lBranchName = String(l.branchName || l.assignedBranchName || (l as any).branch_name || "").toLowerCase().trim()
+
         const bMatch =
-          l.branchId === selectedBranchFilter ||
-          l.assignedBranchId === selectedBranchFilter ||
-          (l.branchName && l.branchName.toLowerCase() === selectedBranchFilter.toLowerCase()) ||
-          (l.assignedBranchName && l.assignedBranchName.toLowerCase() === selectedBranchFilter.toLowerCase())
+          (lBranch && (lBranch === targetBranchId || (targetBranchName && lBranch === targetBranchName))) ||
+          (lBranchName && (lBranchName === targetBranchName || lBranchName === targetBranchId))
+
         if (!bMatch) return false
       }
     }
@@ -460,7 +544,7 @@ export function LeadKanban({
     const leadLabels = l.labels || []
 
     if (!activeFilter || activeFilter === "All leads" || activeFilter === "All Leads") {
-      return matchesSearch
+      return true
     }
 
     if (activeFilter === "My leads") {
@@ -483,17 +567,17 @@ export function LeadKanban({
         (currentUserEmail && (
           (l.owner || "").toLowerCase() === currentUserEmail
         ))
-      return matchesSearch && Boolean(isMyLead)
+      return Boolean(isMyLead)
     }
 
     // Check if activeFilter matches a source (e.g. Social Media, Meta Ads, Google Ads, Local Market)
     const leadSource = (l.source || "").toLowerCase().trim()
     const filterClean = activeFilter.toLowerCase().trim()
     if (leadSource === filterClean) {
-      return matchesSearch
+      return true
     }
 
-    return matchesSearch && leadLabels.includes(activeFilter)
+    return leadLabels.includes(activeFilter)
   })
 
   // Drag and drop handling
@@ -513,7 +597,7 @@ export function LeadKanban({
     if (!leadId) return
     const targetLead = leads.find((l) => l.id === leadId)
     if (targetLead && targetLead.status !== newStatus) {
-      if (targetLead.isLocked && !isSuperAdminOrAdmin) {
+      if (targetLead.isLocked && !isSuperAdminOrAdmin && newStatus !== "Won" && newStatus !== "Lost") {
         alert("🔒 This lead is locked due to missed SLA and cannot be moved.")
         setDraggedLeadId(null)
         return
@@ -860,8 +944,8 @@ export function LeadKanban({
                 onChange={(e) => setSelectedBranchFilter(e.target.value)}
                 className="px-2.5 py-1.5 text-xs font-semibold rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-100/80 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 focus:ring-1 focus:ring-blue-500 cursor-pointer"
               >
-                <option value="all">📍 All Branches ({activeBranches.length})</option>
-                <option value="unassigned">📍 Unassigned to Branch</option>
+                <option value="all">All Branches ({activeBranches.length})</option>
+                <option value="unassigned">Unassigned to Branch</option>
                 {activeBranches.map((b) => (
                   <option key={b.id} value={b.id}>
                     {b.name} ({b.city || b.code || "Branch"})
@@ -871,12 +955,156 @@ export function LeadKanban({
             </div>
           )}
 
+          {/* Stage / Status Filter Dropdown */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setIsStageDropdownOpen(!isStageDropdownOpen)
+                setIsReminderDropdownOpen(false)
+                setIsMemberDropdownOpen(false)
+                setIsFiltersDropdownOpen(false)
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border rounded-md transition-colors cursor-pointer ${
+                selectedStageFilter !== "all"
+                  ? "bg-cyan-50 dark:bg-cyan-950/60 text-cyan-700 dark:text-cyan-300 border-cyan-300 dark:border-cyan-700 font-semibold"
+                  : "bg-zinc-100/80 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-200/70"
+              }`}
+            >
+              <Layers size={13} className={selectedStageFilter !== "all" ? "text-cyan-600" : "text-zinc-500"} />
+              <span>{selectedStageFilter === "all" ? "All Stages" : selectedStageFilter}</span>
+              <span className="text-[10px] ml-0.5">▼</span>
+            </button>
+
+            {isStageDropdownOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-20"
+                  onClick={() => setIsStageDropdownOpen(false)}
+                />
+                <div className="absolute left-0 mt-1 w-52 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl z-30 overflow-hidden py-1 max-h-80 overflow-y-auto">
+                  <p className="px-3 py-1.5 text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
+                    Filter by Stage
+                  </p>
+                  {[
+                    "all",
+                    "New",
+                    "Qualified",
+                    "Discussion",
+                    "Negotiation",
+                    "Store Visit",
+                    "Our Office Visit",
+                    "They come to our office",
+                    "Won",
+                    "Lost",
+                  ].map((st) => {
+                    const isSel = selectedStageFilter === st
+                    const label = st === "all" ? "All Stages" : st
+                    return (
+                      <button
+                        key={st}
+                        type="button"
+                        onClick={() => {
+                          setSelectedStageFilter(st)
+                          setIsStageDropdownOpen(false)
+                        }}
+                        className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${
+                          isSel ? "font-bold text-cyan-600 dark:text-cyan-400 bg-cyan-50/50 dark:bg-cyan-950/30" : "text-zinc-700 dark:text-zinc-300"
+                        }`}
+                      >
+                        <span>{label}</span>
+                        {isSel && <Check size={13} />}
+                      </button>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Reminder Filter Dropdown */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setIsReminderDropdownOpen(!isReminderDropdownOpen)
+                setIsStageDropdownOpen(false)
+                setIsMemberDropdownOpen(false)
+                setIsFiltersDropdownOpen(false)
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border rounded-md transition-colors cursor-pointer ${
+                selectedReminderFilter !== "all"
+                  ? "bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 font-semibold"
+                  : "bg-zinc-100/80 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-200/70"
+              }`}
+            >
+              <Clock size={13} className={selectedReminderFilter !== "all" ? "text-amber-600" : "text-zinc-500"} />
+              <span>
+                {selectedReminderFilter === "all"
+                  ? "All Reminders"
+                  : selectedReminderFilter === "none"
+                  ? "No Reminder / None"
+                  : selectedReminderFilter === "today"
+                  ? "Today"
+                  : selectedReminderFilter === "yesterday"
+                  ? "Yesterday"
+                  : selectedReminderFilter === "tomorrow"
+                  ? "Tomorrow"
+                  : selectedReminderFilter === "week"
+                  ? "This Week (7 Days)"
+                  : "This Month (30 Days)"}
+              </span>
+              <span className="text-[10px] ml-0.5">▼</span>
+            </button>
+
+            {isReminderDropdownOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-20"
+                  onClick={() => setIsReminderDropdownOpen(false)}
+                />
+                <div className="absolute left-0 mt-1 w-56 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-xl z-30 overflow-hidden py-1">
+                  <p className="px-3 py-1.5 text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
+                    Filter by Reminder Date
+                  </p>
+                  {[
+                    { id: "all", label: "All Reminders" },
+                    { id: "none", label: "No Reminder / None" },
+                    { id: "today", label: "Today" },
+                    { id: "yesterday", label: "Yesterday" },
+                    { id: "tomorrow", label: "Tomorrow" },
+                    { id: "week", label: "This Week (7 Days)" },
+                    { id: "month", label: "This Month (30 Days)" },
+                  ].map((opt) => {
+                    const isSel = selectedReminderFilter === opt.id
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedReminderFilter(opt.id)
+                          setIsReminderDropdownOpen(false)
+                        }}
+                        className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${
+                          isSel ? "font-bold text-amber-600 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-950/30" : "text-zinc-700 dark:text-zinc-300"
+                        }`}
+                      >
+                        <span>{opt.label}</span>
+                        {isSel && <Check size={13} />}
+                      </button>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+
           {/* Plus Add Filter */}
           {canAddLead && (
             <button
               type="button"
               onClick={onOpenAddModal}
-              className="p-1.5 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 border border-zinc-200 dark:border-zinc-700 rounded-lg bg-zinc-50/50 dark:bg-zinc-800/50"
+              className="p-1.5 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 border border-zinc-200 dark:border-zinc-700 rounded-lg bg-zinc-50/50 dark:bg-zinc-800/50 cursor-pointer"
             >
               <Plus size={14} />
             </button>
@@ -1058,7 +1286,16 @@ export function LeadKanban({
                           {(l.createdByName || l.createdBy) && (
                             <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/70 text-[9px] font-semibold">
                               <UserIcon size={9} />
-                              <span>Added by: {l.createdByName || l.createdBy} {l.createdByRole ? `(${l.createdByRole})` : ""}</span>
+                              <span className="inline-flex items-center gap-1">
+                                Added by: {l.createdByName || l.createdBy} {l.createdByRole ? `(${l.createdByRole})` : ""}
+                                {(l.branchName || l.branchId) && (
+                                  <>
+                                    <span className="opacity-50">•</span>
+                                    <MapPin size={9} className="text-amber-500 inline" />
+                                    <span>{l.branchName || `Branch (${l.branchId})`}</span>
+                                  </>
+                                )}
+                              </span>
                             </div>
                           )}
 
@@ -1281,12 +1518,34 @@ export function LeadKanban({
                                 onMouseDown={(e) => e.stopPropagation()}
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  onSelectLeadDetail(l)
+                                  if (onOpenEditModal) {
+                                    onOpenEditModal(l)
+                                  } else {
+                                    onSelectLeadDetail(l)
+                                  }
                                 }}
                                 className="w-7 h-7 min-w-[28px] min-h-[28px] rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-2xs"
                                 title="Edit lead"
                               >
                                 <Pencil size={13} className="pointer-events-none" />
+                              </button>
+                            )}
+
+                            {/* Delete Lead Button (Shown when delete permission is granted) */}
+                            {canDeleteLead && onDeleteLead && (
+                              <button
+                                type="button"
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  if (window.confirm(`Are you sure you want to delete lead "${l.name}"?`)) {
+                                    onDeleteLead(l.id)
+                                  }
+                                }}
+                                className="w-7 h-7 min-w-[28px] min-h-[28px] rounded-lg bg-zinc-100 hover:bg-rose-100 text-zinc-500 hover:text-rose-600 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-rose-950 dark:hover:text-rose-400 flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-2xs"
+                                title="Delete lead"
+                              >
+                                <Trash2 size={13} className="pointer-events-none" />
                               </button>
                             )}
 

@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { motion } from "framer-motion"
-import { Search, Filter, Shield, Edit2, Trash2, CheckCircle2, XCircle, Clock, Building2, Mail, Phone, Lock } from "lucide-react"
+import { Search, Filter, Shield, Edit2, Trash2, CheckCircle2, XCircle, Clock, Building2, Mail, Phone, Lock, MapPin } from "lucide-react"
 import { UserItem, UserRole, UserStatus } from "../types"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { useAuthStore } from "@/store/useAuthStore"
@@ -269,7 +269,7 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
                           {/* Branch Badge (only shown when assigned to a specific branch) */}
                           {(u.branchName || u.branchId) && (
                             <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 w-fit">
-                              <span>📍</span>
+                              <MapPin size={10} className="text-amber-500 shrink-0" />
                               <span>{u.branchName || `Branch (${u.branchId})`}</span>
                             </div>
                           )}

@@ -183,7 +183,10 @@ export function AddClientProjectModal({
         }
 
         const teams = users
-          .filter(u => u.role !== "Clients" && u.status !== "Inactive")
+          .filter(u => {
+            const r = (u.role || "").toLowerCase().trim()
+            return !r.includes("admin") && !r.includes("super") && !r.includes("client") && r !== "owner" && u.status !== "Inactive"
+          })
           .map(u => ({ 
             id: String(u.id), 
             name: u.name, 

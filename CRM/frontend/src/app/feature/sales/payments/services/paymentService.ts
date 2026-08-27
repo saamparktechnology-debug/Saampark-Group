@@ -77,10 +77,19 @@ export const addPayment = async (paymentData: Omit<PaymentItem, "id"> & { id?: s
   const numAmount = typeof paymentData.amountNum === "number" ? paymentData.amountNum : (parseInt(String(paymentData.amount).replace(/[^0-9]/g, "")) || 0)
   const formattedAmount = paymentData.amount.startsWith("₹") ? paymentData.amount : `₹${paymentData.amount}`
 
+  let activeBranch: string | undefined = undefined
+  if (typeof window !== "undefined") {
+    try {
+      const { useAuthStore } = require("@/store/useAuthStore")
+      activeBranch = useAuthStore.getState().activeBranchId || useAuthStore.getState().user?.branchId || undefined
+    } catch {}
+  }
+
   const newPayment: PaymentItem = {
     ...paymentData,
     id: nextId,
     companyId: targetComp,
+    branchId: (paymentData as any).branchId || activeBranch || undefined,
     amount: formattedAmount,
     amountNum: numAmount,
     status: paymentData.status || "Completed"

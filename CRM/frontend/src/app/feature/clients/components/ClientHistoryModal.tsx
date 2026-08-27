@@ -7,6 +7,7 @@ import {
   User, Receipt, Shield, Tag, DollarSign, Trash2
 } from "lucide-react"
 import { ClientItem } from "../types"
+import { formatDisplayEmail } from "../services/clientService"
 import { getProjects, deleteProject } from "@/app/feature/projects/services/projectService"
 import { Project } from "@/app/feature/projects/types"
 import { getInvoices, deleteInvoice, InvoiceItem } from "@/app/feature/sales/invoices/services/invoiceService"
@@ -290,7 +291,7 @@ export function ClientHistoryModal({
               <Mail size={14} className="text-blue-500 shrink-0" />
               <div className="truncate">
                 <span className="text-[10px] text-zinc-400 block">Email</span>
-                <span className="font-semibold">{client.email || "No Email Provided"}</span>
+                <span className="font-semibold">{formatDisplayEmail(client.email) || "-"}</span>
               </div>
             </div>
 

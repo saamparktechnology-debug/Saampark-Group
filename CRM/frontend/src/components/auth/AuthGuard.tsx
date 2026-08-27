@@ -22,8 +22,9 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
     const state = useAuthStore.getState()
     const isAuth = Boolean(state.isAuthenticated && state.user && state.user.email)
+    const isPublicPage = pathname === "/login" || pathname?.startsWith("/public/") || pathname?.startsWith("/verify-invoice")
 
-    if (!isAuth && pathname !== "/login") {
+    if (!isAuth && !isPublicPage) {
       router.replace("/login")
     } else if (isAuth && pathname === "/login") {
       router.replace("/feature/dashboard")

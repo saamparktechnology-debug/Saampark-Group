@@ -75,10 +75,19 @@ export const addProject = async (project: Omit<Project, "id">, companyId?: strin
     newId = `PRJ_${Date.now().toString().slice(-6)}`
   }
   
+  let activeBranch: string | undefined = undefined
+  if (typeof window !== "undefined") {
+    try {
+      const { useAuthStore } = require("@/store/useAuthStore")
+      activeBranch = useAuthStore.getState().activeBranchId || useAuthStore.getState().user?.branchId || undefined
+    } catch {}
+  }
+
   const newProject: Project = {
     ...project,
     id: newId,
     companyId: effectiveComp,
+    branchId: (project as any).branchId || activeBranch || undefined,
     starred: false,
     totalHours: 0,
     members: project.members || [],

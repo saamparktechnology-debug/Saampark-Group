@@ -22,7 +22,7 @@ export function AddClientModal({
   onSave,
   initialData,
 }: AddClientModalProps) {
-  const { user } = useAuthStore()
+  const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
 
   const [type, setType] = React.useState<"Organization" | "Person">("Organization")
   const [companyName, setCompanyName] = React.useState("")
@@ -34,6 +34,7 @@ export function AddClientModal({
   const [zip, setZip] = React.useState("")
   const [country, setCountry] = React.useState("India")
   const [phone, setPhone] = React.useState("")
+  const [email, setEmail] = React.useState("")
   const [website, setWebsite] = React.useState("")
   const [vatNumber, setVatNumber] = React.useState("")
   const [gstNumber, setGstNumber] = React.useState("")
@@ -50,18 +51,14 @@ export function AddClientModal({
         const staff = users
           .filter((u) => {
             const role = (u.role || "").toLowerCase().trim()
-            return !role.includes("client") && u.status !== "Inactive"
+            return !role.includes("admin") && !role.includes("super") && !role.includes("client") && role !== "owner" && u.status !== "Inactive"
           })
           .map((u) => ({ id: u.id, name: u.name, role: u.role }))
-
-        if (user?.name && !staff.some((s) => s.name.toLowerCase().trim() === user.name.toLowerCase().trim())) {
-          staff.unshift({ id: String(user.id || 'curr'), name: user.name, role: user.role })
-        }
 
         setOwnersList(staff)
 
         if (!owner) {
-          setOwner(initialData?.owner || user?.name || (staff.length > 0 ? staff[0].name : "Admin"))
+          setOwner(initialData?.owner || (staff.length > 0 ? staff[0].name : "Team"))
         }
       }).catch(() => {})
 
@@ -108,11 +105,15 @@ export function AddClientModal({
     e.preventDefault()
     if (!companyName.trim()) return
 
+    const currentBranchObj = branches.find(b => b.id === (activeBranchId || user?.branchId))
+    const finalBranchName = currentBranchObj?.name || user?.branchName || undefined
+
     const newClient: ClientItem = {
       id: initialData ? initialData.id : `cli_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       name: companyName.trim(),
       primaryContact: companyName.trim(),
       phone: phone.trim(),
+      email: email.trim(),
       group: clientGroup || "VIP",
       label: label || "Corporate",
       labelColor: "#d8b4fe",
@@ -134,6 +135,9 @@ export function AddClientModal({
       disableOnlinePayment,
       website,
       createdAt: initialData?.createdAt || Date.now(),
+      branchId: initialData?.branchId || activeBranchId || user?.branchId || undefined,
+      branchName: initialData?.branchName || finalBranchName,
+      companyId: initialData?.companyId || activeCompanyId || user?.companyId || "tech",
     }
 
     onSave(newClient)

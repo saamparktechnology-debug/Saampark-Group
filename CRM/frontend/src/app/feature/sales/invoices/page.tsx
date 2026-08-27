@@ -30,6 +30,7 @@ import { ColumnDef } from "@tanstack/react-table"
 import { DataTable } from "@/components/ui/DataTable"
 import { Button } from "@/components/ui/Button"
 import { Tabs } from "@/components/ui/Tabs"
+import { ThreeDotLoader } from "@/components/ui/ThreeDotLoader"
 import { 
   InvoiceItem, 
   InvoiceLineItem,
@@ -56,7 +57,7 @@ import { usePermissionStore } from "@/store/usePermissionStore"
 import { printPDFReport, exportToExcel } from "@/lib/exportUtils"
 
 export default function InvoicesPage() {
-  const { user } = useAuthStore()
+  const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
 
   const canAddInvoice = canPerformAction(user, "Sales", "add")
@@ -211,32 +212,41 @@ export default function InvoicesPage() {
     setInvoiceDiscounts(prev => prev.map(d => d.id === id ? { ...d, [field]: value } : d))
   }
 
+  const [isLoading, setIsLoading] = React.useState(true)
+
   const showToast = (msg: string) => {
     setToastMessage(msg)
     setTimeout(() => setToastMessage(null), 4000)
   }
 
-  const loadInvoices = React.useCallback(async () => {
-    const data = await getInvoices()
-    setInvoices(data)
-  }, [])
+  const loadInvoices = React.useCallback(async (showLoading = false) => {
+    if (showLoading) setIsLoading(true)
+    try {
+      const targetComp = activeCompanyId || user?.companyId || "tech"
+      const data = await getInvoices(targetComp)
+      setInvoices(data || [])
+    } finally {
+      if (showLoading) setIsLoading(false)
+    }
+  }, [activeCompanyId, user?.companyId])
 
   React.useEffect(() => {
-    loadInvoices()
-    const interval = setInterval(loadInvoices, 4000)
-    window.addEventListener("storage", loadInvoices)
-    window.addEventListener("saampark_data_synced", loadInvoices)
-    window.addEventListener("saampark_company_switched", loadInvoices)
-    window.addEventListener("saampark_invoices_updated", loadInvoices)
+    loadInvoices(true)
+    const handleReload = () => loadInvoices(false)
+    window.addEventListener("storage", handleReload)
+    window.addEventListener("saampark_data_synced", handleReload)
+    window.addEventListener("saampark_company_switched", handleReload)
+    window.addEventListener("saampark_branch_switched", handleReload)
+    window.addEventListener("saampark_invoices_updated", handleReload)
 
     return () => {
-      clearInterval(interval)
-      window.removeEventListener("storage", loadInvoices)
-      window.removeEventListener("saampark_data_synced", loadInvoices)
-      window.removeEventListener("saampark_company_switched", loadInvoices)
-      window.removeEventListener("saampark_invoices_updated", loadInvoices)
+      window.removeEventListener("storage", handleReload)
+      window.removeEventListener("saampark_data_synced", handleReload)
+      window.removeEventListener("saampark_company_switched", handleReload)
+      window.removeEventListener("saampark_branch_switched", handleReload)
+      window.removeEventListener("saampark_invoices_updated", handleReload)
     }
-  }, [loadInvoices, useAuthStore.getState().activeCompanyId])
+  }, [loadInvoices])
 
 
   // Direct QR Code Scan to View Handler (?view=INV...)
@@ -599,17 +609,46 @@ export default function InvoicesPage() {
 
   // Client-specific vs Admin filtered invoices
   const displayedInvoices = React.useMemo(() => {
-    if (!isClientRole) return invoices
-    return invoices.filter((i) => {
-      const iEmail = (i.clientEmail || "").toLowerCase().trim()
-      const iName = (i.client || "").toLowerCase().trim()
-      return (
-        (clientEmailNorm && iEmail === clientEmailNorm) ||
-        (clientNameNorm && iName === clientNameNorm) ||
-        (clientNameNorm && (iName.includes(clientNameNorm) || clientNameNorm.includes(iName)))
-      )
-    })
-  }, [invoices, isClientRole, clientEmailNorm, clientNameNorm])
+    const userComp = (activeCompanyId || user?.companyId || "").toLowerCase().trim()
+    const targetBranch = activeBranchId
+
+    const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
+    const targetBranchId = String(targetBranchObj?.id || targetBranch || "").toLowerCase().trim()
+    const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
+
+    const checkBranch = (i: any) => {
+      if (!targetBranch) return true
+      const iBranch = String(i.branchId || i.branch_id || "").toLowerCase().trim()
+      const iBranchName = String(i.branchName || i.branch_name || "").toLowerCase().trim()
+      return (iBranch && (iBranch === targetBranchId || (targetBranchName && iBranch === targetBranchName))) ||
+             (iBranchName && (iBranchName === targetBranchName || iBranchName === targetBranchId))
+    }
+
+    let filtered = invoices
+    if (isClientRole) {
+      filtered = filtered.filter((i) => {
+        if (!checkBranch(i)) return false
+        const iEmail = (i.clientEmail || "").toLowerCase().trim()
+        const iName = (i.client || "").toLowerCase().trim()
+        return (
+          (clientEmailNorm && iEmail === clientEmailNorm) ||
+          (clientNameNorm && iName === clientNameNorm) ||
+          (clientNameNorm && (iName.includes(clientNameNorm) || clientNameNorm.includes(iName)))
+        )
+      })
+    } else {
+      if (userComp && userComp !== "all") {
+        filtered = filtered.filter((i) => {
+          const iComp = (i.companyId || (i as any).company || "tech").toLowerCase().trim()
+          return iComp === userComp || (userComp === "tech" && !i.companyId)
+        })
+      }
+      if (targetBranch) {
+        filtered = filtered.filter((i) => checkBranch(i))
+      }
+    }
+    return filtered
+  }, [invoices, isClientRole, clientEmailNorm, clientNameNorm, activeCompanyId, activeBranchId, branches, user?.companyId])
 
   // Summary Metrics based on displayed invoices
   const totalInvoicedNum = displayedInvoices.reduce((sum, i) => sum + (parseInt((i.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0), 0)
@@ -923,11 +962,15 @@ export default function InvoicesPage() {
 
       {/* ---------------- TABLE CONTAINER ---------------- */}
       <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl p-6 shadow-2xs">
-        <DataTable 
-          columns={columns} 
-          data={displayedInvoices} 
-          searchKey="client"
-        />
+        {isLoading ? (
+          <ThreeDotLoader text="Loading tax invoices & payments..." fullScreen={false} />
+        ) : (
+          <DataTable 
+            columns={columns} 
+            data={displayedInvoices} 
+            searchKey="client"
+          />
+        )}
       </div>
 
       {/* ---------------- IMMERSIVE TAX INVOICE MODAL ---------------- */}

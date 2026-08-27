@@ -174,10 +174,10 @@ export function InvoiceModal({
     ? "PART PAID" 
     : "NOT PAID"
 
-  // 3. URLs and Direct-View QR Code (For scanning & opening invoice)
+  // 3. URLs and Direct-View QR Code (For scanning & opening invoice without login)
   const originUrl = typeof window !== "undefined" ? window.location.origin : "https://saamparktechnology.com"
-  const verifyInvoiceUrl = `${originUrl}/feature/sales/invoices?view=${encodeURIComponent(invoice.id)}`
-  const verifyQrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(verifyInvoiceUrl)}&margin=2`
+  const verifyInvoiceUrl = `${originUrl}/public/invoice?id=${encodeURIComponent(invoice.id)}`
+  const verifyQrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(verifyInvoiceUrl)}&margin=6&format=png`
   
   // Custom Payment QR: Only rendered if saved by admin in Settings
   const customPaymentQrUrl = paySettings.qrCodeUrl && paySettings.qrCodeUrl.trim().length > 0
@@ -618,13 +618,13 @@ export function InvoiceModal({
                     href={verifyInvoiceUrl} 
                     target="_blank" 
                     rel="noreferrer"
-                    className="cursor-pointer hover:opacity-90 transition-opacity"
+                    className="cursor-pointer hover:opacity-90 transition-opacity p-0.5 bg-white border border-zinc-300 shadow-xs flex items-center justify-center"
                     title="Scan to open digital invoice"
                   >
                     <img 
                       src={verifyQrCodeUrl} 
                       alt={`QR code for invoice ${invoice.id}`} 
-                      className="w-14 h-14 object-contain rounded-lg bg-white p-0.5 border border-zinc-200 shadow-2xs" 
+                      className="w-16 h-16 object-contain block bg-white" 
                     />
                   </a>
                   <span className="text-[8.5px] font-mono font-bold text-zinc-600 truncate max-w-full">
@@ -846,7 +846,7 @@ export function InvoiceModal({
                         <img 
                           src={customPaymentQrUrl} 
                           alt="Payment QR Code" 
-                          className="w-13 h-13 rounded-lg bg-white p-0.5 border border-zinc-200 shrink-0 object-contain shadow-2xs" 
+                          className="w-14 h-14 bg-white p-1 border border-zinc-300 shrink-0 object-contain shadow-xs" 
                         />
                       ) : (
                         <div className="w-11 h-11 rounded-lg bg-white border border-zinc-200 flex flex-col items-center justify-center text-center p-0.5 shrink-0 text-zinc-500">

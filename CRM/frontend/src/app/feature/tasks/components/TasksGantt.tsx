@@ -94,7 +94,6 @@ export function TasksGantt({
             return (
               <div key={t.id} className="grid grid-cols-12 items-center gap-2 text-xs py-1">
                 <div className="col-span-4 font-medium text-zinc-800 dark:text-zinc-200 truncate">
-                  <span className="text-zinc-400 font-mono mr-2">{t.id}</span>
                   <span>{t.title}</span>
                 </div>
                 <div className="col-span-8 bg-zinc-100 dark:bg-zinc-800/60 h-7 rounded-lg relative overflow-hidden flex items-center px-2">

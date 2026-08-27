@@ -11,6 +11,7 @@ import { EditLeadModal } from "./components/EditLeadModal"
 import { ManageLabelsModal, LabelItem } from "./components/ManageLabelsModal"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
+import { ThreeDotLoader } from "@/components/ui/ThreeDotLoader"
 
 export const INITIAL_LABELS: LabelItem[] = [
   { id: "lbl_3", name: "Call this week", color: "#a855f7" },
@@ -23,7 +24,7 @@ export const INITIAL_LABELS: LabelItem[] = [
 ]
 
 export default function LeadsMain() {
-  const { user, activeCompanyId } = useAuthStore()
+  const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
   const [leads, setLeads] = React.useState<Lead[]>([])
   const [activeViewTab, setActiveViewTab] = React.useState<"list" | "kanban">("list")
   const [availableLabels, setAvailableLabels] = React.useState<LabelItem[]>(INITIAL_LABELS)
@@ -81,15 +82,17 @@ export default function LeadsMain() {
         if (showLoading) setIsLoading(false)
       }
     }
-    fetchFreshLeads(true)                              // first load: show spinner
-    const interval = setInterval(() => fetchFreshLeads(false), 3000)  // background: silent
+    fetchFreshLeads(true)
     const storageHandler = () => fetchFreshLeads(false)
     window.addEventListener("storage", storageHandler)
     window.addEventListener("saampark_company_switched", storageHandler)
+    window.addEventListener("saampark_branch_switched", storageHandler)
+    window.addEventListener("saampark_data_synced", storageHandler)
     return () => {
-      clearInterval(interval)
       window.removeEventListener("storage", storageHandler)
       window.removeEventListener("saampark_company_switched", storageHandler)
+      window.removeEventListener("saampark_branch_switched", storageHandler)
+      window.removeEventListener("saampark_data_synced", storageHandler)
     }
   }, [activeCompanyId, user?.companyId])
 
@@ -161,13 +164,36 @@ export default function LeadsMain() {
 
   const visibleLeads = React.useMemo(() => {
     if (!user) return []
+    const userComp = (activeCompanyId || user?.companyId || "").toLowerCase().trim()
+    const targetBranch = activeBranchId
 
     // ── SUPER ADMIN & ADMIN VIEW ──
-    // Admins see all leads EXCEPT private client-created leads
+    // Admins see all leads EXCEPT private client-created leads, filtered strictly by active company & branch
     if (isSuperOrAdmin) {
       return leads.filter((l) => {
         const isClientPrivate = (l as any).isClientPrivate === true || l.createdByRole === "Clients"
-        return !isClientPrivate
+        if (isClientPrivate) return false
+
+        if (userComp && userComp !== "all") {
+          const lComp = (l.companyId || (l as any).company || "tech").toLowerCase().trim()
+          if (lComp !== userComp && !(userComp === "tech" && !l.companyId)) return false
+        }
+
+        if (targetBranch) {
+          const lBranch = String(l.branchId || (l as any).assignedBranchId || (l as any).branch_id || "").toLowerCase().trim()
+          const lBranchName = String(l.branchName || (l as any).assignedBranchName || (l as any).branch_name || "").toLowerCase().trim()
+          const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === targetBranch.toLowerCase())
+          const targetBranchId = String(targetBranchObj?.id || targetBranch).toLowerCase().trim()
+          const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
+
+          const isBranchMatch =
+            (lBranch && (lBranch === targetBranchId || (targetBranchName && lBranch === targetBranchName))) ||
+            (lBranchName && (lBranchName === targetBranchName || lBranchName === targetBranchId))
+
+          if (!isBranchMatch) return false
+        }
+
+        return true
       })
     }
 
@@ -182,6 +208,20 @@ export default function LeadsMain() {
         const cId = String((l as any).createdById || "").toLowerCase().trim()
         const cEmail = ((l as any).createdByEmail || "").toLowerCase().trim()
         const createdBy = (l.createdBy || "").toLowerCase().trim()
+
+        if (targetBranch) {
+          const lBranch = String(l.branchId || (l as any).assignedBranchId || (l as any).branch_id || "").toLowerCase().trim()
+          const lBranchName = String(l.branchName || (l as any).assignedBranchName || (l as any).branch_name || "").toLowerCase().trim()
+          const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === targetBranch.toLowerCase())
+          const targetBranchId = String(targetBranchObj?.id || targetBranch).toLowerCase().trim()
+          const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
+
+          const isBranchMatch =
+            (lBranch && (lBranch === targetBranchId || (targetBranchName && lBranch === targetBranchName))) ||
+            (lBranchName && (lBranchName === targetBranchName || lBranchName === targetBranchId))
+
+          if (!isBranchMatch) return false
+        }
 
         return (
           (uId && cId === uId) ||
@@ -198,6 +238,20 @@ export default function LeadsMain() {
       // Exclude client-private leads
       if ((l as any).isClientPrivate === true || l.createdByRole === "Clients") {
         return false
+      }
+
+      if (targetBranch) {
+        const lBranch = String(l.branchId || (l as any).assignedBranchId || (l as any).branch_id || "").toLowerCase().trim()
+        const lBranchName = String(l.branchName || (l as any).assignedBranchName || (l as any).branch_name || "").toLowerCase().trim()
+        const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === targetBranch.toLowerCase())
+        const targetBranchId = String(targetBranchObj?.id || targetBranch).toLowerCase().trim()
+        const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
+
+        const isBranchMatch =
+          (lBranch && (lBranch === targetBranchId || (targetBranchName && lBranch === targetBranchName))) ||
+          (lBranchName && (lBranchName === targetBranchName || lBranchName === targetBranchId))
+
+        if (!isBranchMatch) return false
       }
 
       const caller = (l.caller || "").toLowerCase().trim()
@@ -246,7 +300,11 @@ export default function LeadsMain() {
         isCreator
       )
     })
-  }, [leads, user, isSuperOrAdmin])
+  }, [leads, user, isSuperOrAdmin, activeCompanyId, activeBranchId, branches])
+
+  if (isLoading) {
+    return <ThreeDotLoader text="Loading leads & opportunities..." fullScreen={false} />
+  }
 
   return (
     <motion.div
@@ -276,6 +334,8 @@ export default function LeadsMain() {
           activeViewTab={activeViewTab}
           onChangeViewTab={setActiveViewTab}
           onOpenAddModal={() => setIsAddModalOpen(true)}
+          onOpenEditModal={handleOpenEditModal}
+          onDeleteLead={handleDeleteLead}
           onSelectLeadDetail={handleSelectLeadDetail}
           onLeadUpdated={handleLeadUpdated}
           onOpenManageLabelsModal={() => setIsManageLabelsModalOpen(true)}

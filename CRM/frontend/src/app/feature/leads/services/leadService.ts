@@ -90,9 +90,7 @@ export function isReminderDateOverdue(dateStr?: string): boolean {
 export async function syncLeadReminderTask(lead: Lead): Promise<void> {
   if (!lead || !lead.name) return
   const rDate = (lead.reminderDate || "").toString().toLowerCase().trim()
-  if (!rDate || rDate === "none" || rDate === "00,00,0000" || rDate === "00-00-0000" || rDate === "00/00/0000") {
-    return
-  }
+  const hasReminder = Boolean(rDate && rDate !== "none" && rDate !== "00,00,0000" && rDate !== "00-00-0000" && rDate !== "00/00/0000")
 
   const assignedTo = lead.caller || lead.owner || "Team"
   const taskId = `lead_task_${lead.id}`
@@ -107,22 +105,28 @@ export async function syncLeadReminderTask(lead: Lead): Promise<void> {
     const existingTasks = await taskService.getTasks()
     const found = existingTasks.find((t) => t.id === taskId || t.id === `task_${lead.id}` || t.relatedTo === `Lead: ${lead.name}`)
 
-    const taskTitle = `Follow-up Call: ${lead.name}`
-    const deadlineVal = `${lead.reminderDate}${lead.reminderTime ? ` (${lead.reminderTime})` : ''}`
+    const taskTitle = lead.name
+    const deadlineVal = hasReminder
+      ? `${lead.reminderDate}${lead.reminderTime && lead.reminderTime !== "None" ? ` (${lead.reminderTime})` : ''}`
+      : "None"
     const isDone = lead.status === "Won" || lead.status === "Lost"
     const desc = `Primary Contact: ${lead.primaryContact || lead.name}. Phone: ${lead.phone || 'N/A'}. Services: ${lead.service || 'N/A'}. Notes: ${lead.reminderNotes || 'Follow up call scheduled'}`
+    
+    // Dynamic milestone based on lead stage
+    const currentLeadStage = lead.status === "They come to our office" ? "Our Office Visit" : (lead.status || "New")
 
     if (found) {
       await taskService.updateTask(found.id, {
         title: taskTitle,
         assignedTo,
         deadline: deadlineVal,
+        milestone: currentLeadStage,
         description: desc,
         status: isDone ? "Done" : (found.status || "To do"),
         priority: "High",
+        labels: ["Follow-up"],
       })
-    } else {
-      // Check again to avoid recreating deleted tasks
+    } else if (hasReminder) {
       if (isGlobalItemDeleted(taskId)) return
 
       await taskService.addTask({
@@ -130,7 +134,7 @@ export async function syncLeadReminderTask(lead: Lead): Promise<void> {
         title: taskTitle,
         startDate: lead.createdAt || new Date().toISOString().split("T")[0],
         deadline: deadlineVal,
-        milestone: "Lead Follow-up",
+        milestone: currentLeadStage,
         relatedTo: `Lead: ${lead.name}`,
         assignedTo,
         assignedToAvatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${assignedTo}`,
@@ -141,6 +145,9 @@ export async function syncLeadReminderTask(lead: Lead): Promise<void> {
         labels: ["Follow-up"],
         points: "2 Points",
         description: desc,
+        branchId: lead.branchId,
+        branchName: lead.branchName,
+        companyId: lead.companyId || "tech",
       } as any)
     }
   } catch (err) {
@@ -153,8 +160,18 @@ export const getLeads = async (companyId?: string): Promise<Lead[]> => {
   const list = Array.isArray(dbData) ? filterGlobalDeletedItems(dbData) : []
 
   // Auto-lock leads if daily update or reminder date was missed (overdue)
+  // Leads in "Won" or "Lost" stages are NEVER locked
   let hasChanges = false
   const processed = list.map((lead) => {
+    if ((lead.status === "Won" || lead.status === "Lost") && lead.isLocked) {
+      hasChanges = true
+      return {
+        ...lead,
+        isLocked: false,
+        lockedReason: undefined,
+      }
+    }
+
     if (
       !lead.isLocked &&
       lead.status !== "Won" &&
@@ -183,11 +200,12 @@ export async function checkAndAutoConvertLeadToClient(lead: Lead, companyId?: st
 
   try {
     const storedClients = await getClients()
-    const emailNorm = (lead.email || `lead_${lead.id}@saampark.in`).toLowerCase().trim()
+    const rawEmail = (lead.email || "").trim()
+    const internalEmail = rawEmail || `lead_${lead.id}@saampark.in`
     const clientName = lead.name || "Won Client"
 
     const exists = storedClients.some(
-      (c) => c.name.toLowerCase().trim() === clientName.toLowerCase().trim() || c.email?.toLowerCase().trim() === emailNorm
+      (c) => c.name.toLowerCase().trim() === clientName.toLowerCase().trim() || (rawEmail && c.email?.toLowerCase().trim() === rawEmail.toLowerCase().trim())
     )
 
     if (!exists) {
@@ -195,7 +213,7 @@ export async function checkAndAutoConvertLeadToClient(lead: Lead, companyId?: st
         id: `cli_${lead.id}`,
         name: clientName,
         primaryContact: lead.primaryContact || lead.name,
-        email: emailNorm,
+        email: rawEmail,
         phone: lead.phone || "N/A",
         group: "VIP",
         label: lead.service || "Potential",
@@ -205,15 +223,18 @@ export async function checkAndAutoConvertLeadToClient(lead: Lead, companyId?: st
         paymentReceived: "₹0",
         due: lead.value || "₹0",
         address: `${lead.city || ""}, ${lead.state || ""}, ${lead.country || ""}`.trim(),
+        branchId: lead.branchId,
+        branchName: lead.branchName,
+        companyId: lead.companyId || companyId || "tech",
       }
 
       saveStoredClient(newClient as any)
 
-      // Register client account for login
+      // Register client account for login in background
       recordUserAccount({
         id: `usr_cli_${lead.id}`,
         name: lead.primaryContact || lead.name,
-        email: emailNorm,
+        email: internalEmail,
         role: "Clients",
         companyId: companyId || "tech",
         companyName: clientName,
@@ -230,6 +251,14 @@ export async function checkAndAutoConvertLeadToClient(lead: Lead, companyId?: st
 export const addLead = async (leadData: Omit<Lead, "id">, companyId?: string): Promise<Lead> => {
   const current = await fetchModuleDataFromDB<Lead[]>("leads", [], companyId)
   
+  let activeBranch: string | undefined = undefined
+  if (typeof window !== "undefined") {
+    try {
+      const { useAuthStore } = require("@/store/useAuthStore")
+      activeBranch = useAuthStore.getState().activeBranchId || useAuthStore.getState().user?.branchId || undefined
+    } catch {}
+  }
+
   // Unique collision-free ID generation
   const timestamp = Date.now()
   const randomSuffix = Math.random().toString(36).substring(2, 6)
@@ -238,6 +267,7 @@ export const addLead = async (leadData: Omit<Lead, "id">, companyId?: string): P
   const newLead: Lead = {
     ...leadData,
     id: newId,
+    branchId: (leadData as any).branchId || activeBranch || undefined,
     createdAt: leadData.createdAt || `${new Date().toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' })}`,
     service: leadData.service !== undefined ? leadData.service : "",
     source: leadData.source || "Social Media",
@@ -260,17 +290,21 @@ export const updateLead = async (id: string, updates: Partial<Lead>, userRole?: 
 
   const target = current[idx]
   const isSuperOrAdmin = userRole === "Super Admin" || userRole === "Admin"
+  const isMovingToWonOrLost = updates.status === "Won" || updates.status === "Lost"
 
-  // Prevent callers/teams from updating a locked lead unless being explicitly unlocked by Admin
-  if (target.isLocked && !isSuperOrAdmin && updates.isLocked !== false) {
+  // Prevent callers/teams from updating a locked lead unless being explicitly unlocked by Admin or moving to Won/Lost
+  if (target.isLocked && !isSuperOrAdmin && updates.isLocked !== false && !isMovingToWonOrLost) {
     throw new Error("This lead is locked due to missing daily updates. Only an Admin or Super Admin can unlock it.")
   }
 
-  // If status or reminderDate is updated to future, clear auto-lock
+  // If status is Won/Lost or reminderDate is updated to future, clear auto-lock
   let nextIsLocked = updates.isLocked !== undefined ? updates.isLocked : target.isLocked
   let nextReason = updates.lockedReason !== undefined ? updates.lockedReason : target.lockedReason
 
-  if (updates.reminderDate && !isReminderDateOverdue(updates.reminderDate)) {
+  if (isMovingToWonOrLost) {
+    nextIsLocked = false
+    nextReason = undefined
+  } else if (updates.reminderDate && !isReminderDateOverdue(updates.reminderDate)) {
     nextIsLocked = false
     nextReason = undefined
   }

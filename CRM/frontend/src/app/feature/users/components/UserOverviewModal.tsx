@@ -218,7 +218,7 @@ export function UserOverviewModal({
             <div className="p-3.5 rounded-2xl bg-surface-hover/20 border border-border/60 space-y-1.5">
               <div className="flex items-center gap-2 text-muted-foreground font-semibold">
                 <MapPin size={14} className="text-primary" />
-                <span>Sub-Branch / Location Hub</span>
+                <span>Branch / Location Hub</span>
               </div>
               <p className="text-sm font-bold text-foreground">
                 {user.branchName || (user.branchId ? `Branch (${user.branchId})` : "Headquarters / All Branches")}

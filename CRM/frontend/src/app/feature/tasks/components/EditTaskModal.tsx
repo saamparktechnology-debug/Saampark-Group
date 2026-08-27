@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { X, Check, Paperclip, Mic, HelpCircle, Trash2 } from "lucide-react"
+import { X, Check, Paperclip, Mic, HelpCircle, Trash2, Plus, Tag } from "lucide-react"
 import { Task, TaskStatus, TaskPriority } from "../types"
 import { taskService } from "../services/taskService"
 import { useAuthStore } from "@/store/useAuthStore"
@@ -18,19 +18,27 @@ interface EditTaskModalProps {
 }
 
 export function EditTaskModal({ isOpen, task, onClose, onTaskUpdated, onDeleteTask }: EditTaskModalProps) {
-  const { user } = useAuthStore()
+  const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
   const canDeleteTask = canPerformAction(user, "Tasks", "delete")
 
   const [teamMembers, setTeamMembers] = React.useState<{ id: string; name: string; role?: string }[]>([])
   const [title, setTitle] = React.useState("")
   const [description, setDescription] = React.useState("")
-  const [relatedTo, setRelatedTo] = React.useState("-")
+  const [selectedRelatedTo, setSelectedRelatedTo] = React.useState<string[]>([])
+  const [customRelatedInput, setCustomRelatedInput] = React.useState("")
+  const [availableRelatedOptions, setAvailableRelatedOptions] = React.useState<string[]>([
+    "Website Development",
+    "Software Development",
+    "Android/iOS",
+    "Digital Marketing",
+    "Domain & Hosting",
+  ])
   const [points, setPoints] = React.useState("1 Point")
   const [assignedTo, setAssignedTo] = React.useState("")
-  const [collaborators, setCollaborators] = React.useState("")
   const [status, setStatus] = React.useState<TaskStatus>("To do")
   const [priority, setPriority] = React.useState<TaskPriority | "Priority">("Priority")
+  const [milestone, setMilestone] = React.useState("New")
   const [labels, setLabels] = React.useState("")
   const [startDate, setStartDate] = React.useState("")
   const [deadline, setDeadline] = React.useState("")
@@ -39,38 +47,94 @@ export function EditTaskModal({ isOpen, task, onClose, onTaskUpdated, onDeleteTa
 
   React.useEffect(() => {
     if (isOpen) {
-      getUsers("all").then((list) => {
-        const isSuperAdmin = user?.role === "Super Admin"
-        const userCompIds = user?.companyIds || (user?.companyId ? [user?.companyId] : ["tech"])
-
-        const filteredByCompany = isSuperAdmin
-          ? (list || [])
-          : (list || []).filter((u) => {
-              if (u.role === "Super Admin") return false
-              const uComps = u.companyIds || (u.companyId ? [u.companyId] : [])
-              return uComps.some((c) => userCompIds.includes(c))
-            })
-
-        const teamOnly = filteredByCompany.filter((u) => {
-          const r = (u.role || "").toLowerCase().trim()
-          return (r === "teams" || r === "team" || r.includes("team")) && !r.includes("admin") && !r.includes("client")
+      // 1. Fetch available projects and leads for Related To multi-select
+      Promise.all([
+        import("@/app/feature/projects/services/projectService").then(m => m.getProjects()).catch(() => []),
+        import("@/app/feature/leads/services/leadService").then(m => m.getLeads()).catch(() => []),
+      ]).then(([projs, lds]) => {
+        const extraOptions: string[] = []
+        if (Array.isArray(projs)) {
+          projs.forEach(p => { if (p.title) extraOptions.push(`Project: ${p.title}`) })
+        }
+        if (Array.isArray(lds)) {
+          lds.forEach(l => { if (l.name) extraOptions.push(`Lead: ${l.name}`) })
+        }
+        setAvailableRelatedOptions(prev => {
+          const set = new Set(prev)
+          extraOptions.forEach(opt => set.add(opt))
+          return Array.from(set)
         })
-        const members = (teamOnly.length > 0 ? teamOnly : filteredByCompany.filter(u => u.role !== "Clients")).map((u) => ({ id: u.id, name: u.name, role: u.role }))
+      })
+
+      // 2. Fetch users strictly scoped to the active company and branch
+      getUsers("all").then((list) => {
+        const targetComp = (task?.companyId || activeCompanyId || user?.companyId || "").toLowerCase().trim()
+        const targetBranch = task?.branchId || activeBranchId || user?.branchId
+
+        let filtered = list || []
+
+        // Filter by Company
+        if (targetComp && targetComp !== "all") {
+          filtered = filtered.filter((u) => {
+            const uCompIds = (u.companyIds && u.companyIds.length > 0)
+              ? u.companyIds.map(id => String(id).toLowerCase().trim())
+              : [String(u.companyId || "tech").toLowerCase().trim()]
+            return uCompIds.includes(targetComp)
+          })
+        }
+
+        // Filter by Branch
+        if (targetBranch) {
+          const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === targetBranch.toLowerCase())
+          const targetBranchId = String(targetBranchObj?.id || targetBranch).toLowerCase().trim()
+          const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
+
+          filtered = filtered.filter((u) => {
+            const uBranchIds = (u.branchIds && u.branchIds.length > 0)
+              ? u.branchIds.map(id => String(id).toLowerCase().trim())
+              : (u.branchId ? [String(u.branchId).toLowerCase().trim()] : [])
+            const uBranchName = String(u.branchName || "").toLowerCase().trim()
+
+            return (
+              uBranchIds.includes(targetBranchId) ||
+              (targetBranchName && uBranchIds.includes(targetBranchName)) ||
+              String(u.branchId || "").toLowerCase().trim() === targetBranchId ||
+              (targetBranchName && (uBranchName === targetBranchName || String(u.branchId || "").toLowerCase().trim() === targetBranchName))
+            )
+          })
+        }
+
+        // Strictly team members only — Super Admin and Admin excluded
+        const members = filtered
+          .filter((u) => {
+            const r = (u.role || "").toLowerCase().trim()
+            return !r.includes("admin") && !r.includes("super") && !r.includes("client") && r !== "owner" && u.status !== "Inactive"
+          })
+          .map((u) => ({ id: u.id, name: u.name, role: u.role }))
+
         setTeamMembers(members)
       })
     }
-  }, [isOpen, user])
+  }, [isOpen, user, task, activeCompanyId, activeBranchId, branches])
 
   React.useEffect(() => {
     if (task) {
       setTitle(task.title || "")
       setDescription(task.description || "")
-      setRelatedTo(task.relatedTo || "-")
+      
+      // Parse relatedTo string to array
+      if (task.relatedTo && task.relatedTo !== "-") {
+        const parts = task.relatedTo.split(/,\s*/).filter(Boolean)
+        setSelectedRelatedTo(parts)
+      } else {
+        setSelectedRelatedTo([])
+      }
+
       setPoints(task.points || "1 Point")
       setAssignedTo(task.assignedTo || "")
-      setCollaborators(task.collaborators || "")
       setStatus(task.status || "To do")
       setPriority(task.priority || "Priority")
+      setMilestone(task.milestone || "New")
       setLabels((task.labels || []).join(", "))
       setStartDate(task.startDate || "")
       setDeadline(task.deadline || "")
@@ -98,20 +162,26 @@ export function EditTaskModal({ isOpen, task, onClose, onTaskUpdated, onDeleteTa
       else if (priority === "Urgent") priorityIcon = "exclamation"
       else if (priority === "Low") priorityIcon = "down"
 
+      const finalRelatedTo = selectedRelatedTo.length > 0 ? selectedRelatedTo.join(", ") : undefined
+
       const updated = await taskService.updateTask(task.id, {
         title,
         description,
-        relatedTo: relatedTo === "-" ? undefined : relatedTo,
+        relatedTo: finalRelatedTo,
         points,
         assignedTo,
-        collaborators: collaborators || "-",
+        assignedToAvatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${assignedTo.replace(/\s/g, "")}`,
         status,
+        milestone: milestone || "New",
         priority: priority === "Priority" ? "Normal" : (priority as TaskPriority),
         priorityIcon,
         labels: parsedLabels,
-        startDate,
-        deadline,
+        startDate: startDate || "-",
+        deadline: deadline || "30-06-2026",
         isRecurring,
+        branchId: task.branchId || activeBranchId || user?.branchId || undefined,
+        branchName: task.branchName || user?.branchName || undefined,
+        companyId: task.companyId || activeCompanyId || user?.companyId || "tech",
       })
 
       onTaskUpdated(updated)
@@ -130,7 +200,7 @@ export function EditTaskModal({ isOpen, task, onClose, onTaskUpdated, onDeleteTa
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800">
           <div className="flex items-center gap-2">
-            <h2 className="text-base font-semibold text-zinc-800 dark:text-zinc-100">Edit task #{task.id}</h2>
+            <h2 className="text-base font-semibold text-zinc-800 dark:text-zinc-100">Edit Task</h2>
             <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300">
               {status}
             </span>
@@ -187,19 +257,116 @@ export function EditTaskModal({ isOpen, task, onClose, onTaskUpdated, onDeleteTa
           </div>
 
           {/* Related to */}
+          {/* Related to Multi-Select & Custom Tag Addition */}
+          <div className="grid grid-cols-4 items-start gap-4">
+            <label className="text-zinc-500 font-medium pt-2 flex items-center gap-1">
+              <Tag size={13} className="text-zinc-400" />
+              <span>Related to</span>
+            </label>
+            <div className="col-span-3 space-y-2">
+              {/* Selected Pills */}
+              {selectedRelatedTo.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 p-2 bg-zinc-50 dark:bg-zinc-800/60 rounded-lg border border-zinc-200 dark:border-zinc-700">
+                  {selectedRelatedTo.map((item) => (
+                    <span
+                      key={item}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200 border border-blue-200 dark:border-blue-800 shadow-2xs"
+                    >
+                      <span>{item}</span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedRelatedTo(prev => prev.filter(i => i !== item))}
+                        className="hover:text-rose-500 transition-colors ml-0.5"
+                      >
+                        <X size={12} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Selector for pre-defined & dynamically loaded items */}
+              <div className="flex items-center gap-2">
+                <select
+                  value=""
+                  onChange={(e) => {
+                    const val = e.target.value
+                    if (val && !selectedRelatedTo.includes(val)) {
+                      setSelectedRelatedTo(prev => [...prev, val])
+                    }
+                  }}
+                  className="flex-1 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 text-xs"
+                >
+                  <option value="">Select pre-defined service, project, or lead...</option>
+                  {availableRelatedOptions
+                    .filter(opt => !selectedRelatedTo.includes(opt))
+                    .map(opt => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              {/* Custom Add Input */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  placeholder="Type custom related item (e.g. Campaign, Feature, Referral)..."
+                  value={customRelatedInput}
+                  onChange={(e) => setCustomRelatedInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault()
+                      if (customRelatedInput.trim() && !selectedRelatedTo.includes(customRelatedInput.trim())) {
+                        setSelectedRelatedTo(prev => [...prev, customRelatedInput.trim()])
+                        setCustomRelatedInput("")
+                      }
+                    }
+                  }}
+                  className="flex-1 px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 text-xs placeholder-zinc-400"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (customRelatedInput.trim() && !selectedRelatedTo.includes(customRelatedInput.trim())) {
+                      setSelectedRelatedTo(prev => [...prev, customRelatedInput.trim()])
+                      setCustomRelatedInput("")
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold flex items-center gap-1 transition-colors shrink-0"
+                >
+                  <Plus size={13} />
+                  <span>Add</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Milestone (Lead Stage / Development Stage) */}
           <div className="grid grid-cols-4 items-center gap-4">
-            <label className="text-zinc-500 font-medium">Related to</label>
+            <label className="text-zinc-500 font-medium">Milestone</label>
             <select
-              value={relatedTo}
-              onChange={(e) => setRelatedTo(e.target.value)}
-              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200"
+              value={milestone}
+              onChange={(e) => setMilestone(e.target.value)}
+              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-semibold"
             >
-              <option value="-">-</option>
-              <option value="Website Development">Website Development</option>
-              <option value="Software Development">Software Development</option>
-              <option value="Android/iOS">Android/iOS</option>
-              <option value="Digital Marketing">Digital Marketing</option>
-              <option value="Domain & Hosting">Domain & Hosting</option>
+              <optgroup label="Lead Stages">
+                <option value="New">New</option>
+                <option value="Qualified">Qualified</option>
+                <option value="Discussion">Discussion</option>
+                <option value="Negotiation">Negotiation</option>
+                <option value="Store Visit">Store Visit</option>
+                <option value="Our Office Visit">Our Office Visit</option>
+                <option value="Won">Won</option>
+                <option value="Lost">Lost</option>
+              </optgroup>
+              <optgroup label="Development Stages">
+                <option value="Pending">Pending</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Review">Review</option>
+                <option value="Completed">Completed</option>
+              </optgroup>
             </select>
           </div>
 
@@ -245,17 +412,6 @@ export function EditTaskModal({ isOpen, task, onClose, onTaskUpdated, onDeleteTa
                 </>
               )}
             </select>
-          </div>
-
-          {/* Collaborators */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <label className="text-zinc-500 font-medium">Collaborators</label>
-            <input
-              type="text"
-              value={collaborators}
-              onChange={(e) => setCollaborators(e.target.value)}
-              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200"
-            />
           </div>
 
           {/* Priority */}

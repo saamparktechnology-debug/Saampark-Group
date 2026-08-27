@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { X, Plus, Check, Calendar, Clock, Wrench, FileText, User as UserIcon, Trash2 } from "lucide-react"
+import { X, Plus, Check, Calendar, Clock, Wrench, FileText, User as UserIcon, Trash2, MapPin, Building } from "lucide-react"
 import { Lead, LeadStatus, LeadType } from "../types"
 import { updateLead, unlockLead, parseLeadDate, formatLeadReminderDate, MONTH_NAMES_SHORT } from "../services/leadService"
 import { useAuthStore } from "@/store/useAuthStore"
@@ -73,8 +73,44 @@ const STANDARD_SOURCES = [
 import { getUsers } from "@/app/feature/users/services/userService"
 
 export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLead }: EditLeadModalProps) {
-  const { user } = useAuthStore()
+  const { user, companies, activeCompanyId, activeBranchId, branches } = useAuthStore()
   const isSuperOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
+
+  const allowedCompanies = React.useMemo(() => {
+    if (!companies || !Array.isArray(companies)) return []
+    if (user?.role === "Super Admin") return companies
+    if (user?.companyIds && user.companyIds.length > 0) {
+      return companies.filter((c) => user.companyIds?.includes(c.id) || user.companyIds?.includes(c.slug || ""))
+    }
+    return companies.filter((c) => c.id === user?.companyId || c.slug === user?.companyId)
+  }, [companies, user])
+
+  const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>(
+    lead?.companyId || activeCompanyId || user?.companyId || "tech"
+  )
+  const [selectedBranchId, setSelectedBranchId] = React.useState<string>(
+    lead?.branchId || activeBranchId || user?.branchId || ""
+  )
+
+  const availableBranches = React.useMemo(() => {
+    if (!branches || !Array.isArray(branches)) return []
+    const targetComp = isSuperOrAdmin ? selectedCompanyId : (lead?.companyId || activeCompanyId || user?.companyId || "tech")
+    if (targetComp && targetComp !== "all") {
+      return branches.filter((b) => b.companyId === targetComp)
+    }
+    return branches
+  }, [branches, isSuperOrAdmin, selectedCompanyId, lead?.companyId, activeCompanyId, user?.companyId])
+
+  const handleCompanyChange = (newCompId: string) => {
+    setSelectedCompanyId(newCompId)
+    const validBranches = branches.filter((b) => b.companyId === newCompId)
+    if (validBranches.length > 0) {
+      setSelectedBranchId(validBranches[0].id)
+    } else {
+      setSelectedBranchId("")
+    }
+  }
+
   const [teamMembers, setTeamMembers] = React.useState<{ id: string; name: string; role?: string }[]>([])
   const [type, setType] = React.useState<LeadType>("Organization")
   const [companyName, setCompanyName] = React.useState("")
@@ -111,6 +147,7 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
   const [vatNumber, setVatNumber] = React.useState("")
   const [gstNumber, setGstNumber] = React.useState("")
   const [currency, setCurrency] = React.useState("Keep it blank to use the default (INR - ₹)")
+  const [relatedTo, setRelatedTo] = React.useState("")
   const [isSubmitting, setIsSubmitting] = React.useState(false)
 
   const toggleService = (svc: string) => {
@@ -128,16 +165,18 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
         const filteredByCompany = isSuperAdmin
           ? (list || [])
           : (list || []).filter((u) => {
-              if (u.role === "Super Admin") return false
               const uComps = u.companyIds || (u.companyId ? [u.companyId] : [])
               return uComps.some((c) => userCompIds.includes(c))
             })
 
-        const teamOnly = filteredByCompany.filter((u) => {
-          const r = (u.role || "").toLowerCase().trim()
-          return (r === "teams" || r === "team" || r.includes("team")) && !r.includes("admin") && !r.includes("client")
-        })
-        const members = (teamOnly.length > 0 ? teamOnly : filteredByCompany.filter(u => u.role !== "Clients")).map((u) => ({ id: u.id, name: u.name, role: u.role }))
+        // Strictly team members / employees only — Super Admin and Admin cannot be assigned as team members
+        const members = filteredByCompany
+          .filter((u) => {
+            const r = (u.role || "").toLowerCase().trim()
+            return !r.includes("admin") && !r.includes("super") && !r.includes("client") && r !== "owner" && u.status !== "Inactive"
+          })
+          .map((u) => ({ id: u.id, name: u.name, role: u.role }))
+
         setTeamMembers(members)
       })
     }
@@ -155,6 +194,9 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
       setSecondaryPhone(lead.secondaryPhone || "")
       setEmail(lead.email || "")
       setStatus(lead.status || "New")
+      setRelatedTo(lead.relatedTo || "")
+      setSelectedCompanyId(lead.companyId || activeCompanyId || user?.companyId || "tech")
+      setSelectedBranchId(lead.branchId || activeBranchId || user?.branchId || "")
 
       // Multi-service initialization
       const rawSvcs = (lead.service || "Website Devlopment").split(/,\s*/).filter(Boolean)
@@ -239,6 +281,11 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
     const finalReminderDate = isNoReminder ? "None" : (reminderDate || "None")
     const finalReminderTime = (isNoReminder || finalReminderDate === "None") ? "None" : (reminderTime || "11:30 AM")
 
+    const finalCompanyId = isSuperOrAdmin ? (selectedCompanyId || "tech") : (lead.companyId || activeCompanyId || user?.companyId || "tech")
+    const finalBranchId = isSuperOrAdmin ? (selectedBranchId || undefined) : (lead.branchId || activeBranchId || user?.branchId || undefined)
+    const currentBranchObj = branches.find(b => b.id === finalBranchId)
+    const finalBranchName = currentBranchObj?.name || lead.branchName || user?.branchName || undefined
+
     setIsSubmitting(true)
     try {
       const updated = await updateLead(lead.id, {
@@ -268,6 +315,10 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
         vatNumber,
         gstNumber,
         currency,
+        relatedTo: relatedTo.trim() || undefined,
+        branchId: finalBranchId,
+        branchName: finalBranchName,
+        companyId: finalCompanyId,
       }, user?.role)
 
       onLeadUpdated(updated)
@@ -343,6 +394,25 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
         {/* Form Body */}
         <div className="p-6 overflow-y-auto space-y-4 text-xs flex-1">
           
+          {/* Creator & Branch Context Info */}
+          {(lead?.createdByName || lead?.createdBy || lead?.branchName || lead?.branchId) && (
+            <div className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 text-[11px] font-medium text-zinc-600 dark:text-zinc-400 flex-wrap">
+              {(lead?.createdByName || lead?.createdBy) && (
+                <span className="flex items-center gap-1">
+                  <span>👤 Added by:</span>
+                  <strong className="text-zinc-900 dark:text-zinc-100">{lead.createdByName || lead.createdBy} {lead.createdByRole ? `(${lead.createdByRole})` : ""}</strong>
+                </span>
+              )}
+              {(lead?.branchName || lead?.branchId) && (
+                <span className="flex items-center gap-1.5">
+                  <MapPin size={11} className="text-amber-500 shrink-0" />
+                  <span>Branch:</span>
+                  <strong className="text-blue-600 dark:text-blue-400">{lead.branchName || lead.branchId}</strong>
+                </span>
+              )}
+            </div>
+          )}
+          
           {/* Type radio buttons */}
           <div className="grid grid-cols-4 items-center gap-4">
             <label className="text-zinc-500 font-medium">Type</label>
@@ -372,6 +442,53 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
             </div>
           </div>
 
+          {/* Company & Branch Selector for Super Admin / Admin */}
+          {isSuperOrAdmin && (
+            <>
+              {/* Company Selector */}
+              <div className="grid grid-cols-4 items-center gap-4">
+                <label className="text-zinc-500 font-medium flex items-center gap-1">
+                  <Building size={12} className="text-blue-500" />
+                  <span>Company *</span>
+                </label>
+                <select
+                  value={selectedCompanyId}
+                  onChange={(e) => handleCompanyChange(e.target.value)}
+                  className="col-span-3 px-3 py-2 bg-blue-50/50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-semibold"
+                >
+                  {allowedCompanies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Branch Selector */}
+              <div className="grid grid-cols-4 items-center gap-4">
+                <label className="text-zinc-500 font-medium flex items-center gap-1">
+                  <MapPin size={12} className="text-amber-500" />
+                  <span>Branch *</span>
+                </label>
+                <select
+                  value={selectedBranchId}
+                  onChange={(e) => setSelectedBranchId(e.target.value)}
+                  className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-semibold"
+                >
+                  {availableBranches.length === 0 ? (
+                    <option value="">No branch configured for this company</option>
+                  ) : (
+                    availableBranches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+            </>
+          )}
+
           {/* Lead Name / Company */}
           <div className="grid grid-cols-4 items-center gap-4">
             <label className="text-zinc-500 font-medium">Lead / Company</label>
@@ -380,6 +497,18 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
               className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-semibold"
+            />
+          </div>
+
+          {/* Related to */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <label className="text-zinc-500 font-medium">Related to</label>
+            <input
+              type="text"
+              placeholder="e.g. Project / Campaign / Website / Referral"
+              value={relatedTo}
+              onChange={(e) => setRelatedTo(e.target.value)}
+              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400"
             />
           </div>
 

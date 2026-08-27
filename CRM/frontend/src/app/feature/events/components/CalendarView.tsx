@@ -7,6 +7,7 @@ import {
   addDays, startOfDay, eachHourOfInterval, startOfHour
 } from "date-fns"
 import { AnimatePresence, motion } from "framer-motion"
+import { MapPin } from "lucide-react"
 
 import { useEventStore } from "@/store/useEventStore"
 import { useCalendarNav } from "@/store/useCalendarNav"
@@ -190,7 +191,12 @@ function AgendaView({ currentDate, filteredEvents, openEventDrawer }: any) {
           <div className="flex-1">
             <p className="font-semibold">{ev.title}</p>
             <p className="text-xs mt-0.5">{ev.allDay ? "All day" : format(new Date(ev.start), "h:mm a")}</p>
-            {ev.location && <p className="text-xs mt-0.5 opacity-70">📍 {ev.location}</p>}
+            {ev.location && (
+              <p className="text-xs mt-0.5 opacity-70 flex items-center gap-1">
+                <MapPin size={11} className="text-amber-500 shrink-0" />
+                <span>{ev.location}</span>
+              </p>
+            )}
           </div>
           <span className="text-[10px] font-bold uppercase tracking-wider opacity-60">{ev.category}</span>
         </div>

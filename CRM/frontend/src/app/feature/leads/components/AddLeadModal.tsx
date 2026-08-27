@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { X, Plus, Check, Calendar, Clock, Wrench, FileText, User as UserIcon, Tag } from "lucide-react"
+import { X, Plus, Check, Calendar, Clock, Wrench, FileText, User as UserIcon, Tag, Building, MapPin } from "lucide-react"
 import { Lead, LeadStatus, LeadType } from "../types"
 import { addLead, parseLeadDate, formatLeadReminderDate, MONTH_NAMES_SHORT } from "../services/leadService"
 
@@ -71,7 +71,44 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { getUsers } from "@/app/feature/users/services/userService"
 
 export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps) {
-  const { user } = useAuthStore()
+  const { user, companies, activeCompanyId, activeBranchId, branches } = useAuthStore()
+  const isSuperOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
+
+  const allowedCompanies = React.useMemo(() => {
+    if (!companies || !Array.isArray(companies)) return []
+    if (user?.role === "Super Admin") return companies
+    if (user?.companyIds && user.companyIds.length > 0) {
+      return companies.filter((c) => user.companyIds?.includes(c.id) || user.companyIds?.includes(c.slug || ""))
+    }
+    return companies.filter((c) => c.id === user?.companyId || c.slug === user?.companyId)
+  }, [companies, user])
+
+  const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>(
+    activeCompanyId || user?.companyId || "tech"
+  )
+  const [selectedBranchId, setSelectedBranchId] = React.useState<string>(
+    activeBranchId || user?.branchId || ""
+  )
+
+  const availableBranches = React.useMemo(() => {
+    if (!branches || !Array.isArray(branches)) return []
+    const targetComp = isSuperOrAdmin ? selectedCompanyId : (activeCompanyId || user?.companyId || "tech")
+    if (targetComp && targetComp !== "all") {
+      return branches.filter((b) => b.companyId === targetComp)
+    }
+    return branches
+  }, [branches, isSuperOrAdmin, selectedCompanyId, activeCompanyId, user?.companyId])
+
+  const handleCompanyChange = (newCompId: string) => {
+    setSelectedCompanyId(newCompId)
+    const validBranches = branches.filter((b) => b.companyId === newCompId)
+    if (validBranches.length > 0) {
+      setSelectedBranchId(validBranches[0].id)
+    } else {
+      setSelectedBranchId("")
+    }
+  }
+
   const [teamMembers, setTeamMembers] = React.useState<{ id: string; name: string; role?: string }[]>([])
   const [type, setType] = React.useState<LeadType>("Organization")
   const [companyName, setCompanyName] = React.useState("")
@@ -108,6 +145,7 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
   const [vatNumber, setVatNumber] = React.useState("")
   const [gstNumber, setGstNumber] = React.useState("")
   const [currency, setCurrency] = React.useState("Keep it blank to use the default (INR - ₹)")
+  const [relatedTo, setRelatedTo] = React.useState("")
   const [isSubmitting, setIsSubmitting] = React.useState(false)
 
   const resetForm = React.useCallback(() => {
@@ -160,16 +198,18 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
         const filteredByCompany = isSuperAdmin
           ? (list || [])
           : (list || []).filter((u) => {
-              if (u.role === "Super Admin") return false
               const uComps = u.companyIds || (u.companyId ? [u.companyId] : [])
               return uComps.some((c) => userCompIds.includes(c))
             })
 
-        const teamOnly = filteredByCompany.filter((u) => {
-          const r = (u.role || "").toLowerCase().trim()
-          return (r === "teams" || r === "team" || r.includes("team")) && !r.includes("admin") && !r.includes("client")
-        })
-        const members = (teamOnly.length > 0 ? teamOnly : filteredByCompany.filter(u => u.role !== "Clients")).map((u) => ({ id: u.id, name: u.name, role: u.role }))
+        // Strictly team members / employees only — Super Admin and Admin cannot be assigned as team members
+        const members = filteredByCompany
+          .filter((u) => {
+            const r = (u.role || "").toLowerCase().trim()
+            return !r.includes("admin") && !r.includes("super") && !r.includes("client") && r !== "owner" && u.status !== "Inactive"
+          })
+          .map((u) => ({ id: u.id, name: u.name, role: u.role }))
+
         setTeamMembers(members)
 
         setCaller("None")
@@ -195,6 +235,11 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
     const finalReminderDate = isNoReminder ? "None" : (reminderDate || "None")
     const finalReminderTime = (isNoReminder || finalReminderDate === "None") ? "None" : (reminderTime || "11:30 AM")
 
+    const finalCompanyId = isSuperOrAdmin ? (selectedCompanyId || "tech") : (activeCompanyId || user?.companyId || "tech")
+    const finalBranchId = isSuperOrAdmin ? (selectedBranchId || undefined) : (activeBranchId || user?.branchId || undefined)
+    const currentBranchObj = branches.find(b => b.id === finalBranchId)
+    const finalBranchName = currentBranchObj?.name || user?.branchName || undefined
+
     setIsSubmitting(true)
     try {
       const created = await addLead({
@@ -218,6 +263,9 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
         createdByName: user?.name || user?.email || "User",
         createdByEmail: user?.email || "",
         createdByRole: user?.role || "Teams",
+        branchId: finalBranchId,
+        branchName: finalBranchName,
+        companyId: finalCompanyId,
         isClientPrivate: user?.role === "Clients",
         ownerAvatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${companyName}`,
         managers: secondaryContact || managers,
@@ -231,6 +279,7 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
         vatNumber,
         gstNumber,
         currency,
+        relatedTo: relatedTo.trim() || undefined,
         labels: user?.role !== "Super Admin" && user?.role !== "Admin" ? ["My Leads", "Call this week"] : ["Call this week"],
         createdAt: `${new Date().toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' })}`,
       })
@@ -292,6 +341,53 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
             </div>
           </div>
 
+          {/* Company & Branch Selector for Super Admin / Admin */}
+          {isSuperOrAdmin && (
+            <>
+              {/* Company Selector */}
+              <div className="grid grid-cols-4 items-center gap-4">
+                <label className="text-zinc-500 font-medium flex items-center gap-1">
+                  <Building size={12} className="text-blue-500" />
+                  <span>Company *</span>
+                </label>
+                <select
+                  value={selectedCompanyId}
+                  onChange={(e) => handleCompanyChange(e.target.value)}
+                  className="col-span-3 px-3 py-2 bg-blue-50/50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-semibold"
+                >
+                  {allowedCompanies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Branch Selector */}
+              <div className="grid grid-cols-4 items-center gap-4">
+                <label className="text-zinc-500 font-medium flex items-center gap-1">
+                  <MapPin size={12} className="text-amber-500" />
+                  <span>Branch *</span>
+                </label>
+                <select
+                  value={selectedBranchId}
+                  onChange={(e) => setSelectedBranchId(e.target.value)}
+                  className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-semibold"
+                >
+                  {availableBranches.length === 0 ? (
+                    <option value="">No branch configured for this company</option>
+                  ) : (
+                    availableBranches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+            </>
+          )}
+
           {/* Lead / Company name */}
           <div className="grid grid-cols-4 items-center gap-4">
             <label className="text-zinc-500 font-medium">Lead / Company</label>
@@ -300,6 +396,18 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
               placeholder="e.g. Sarah Cole / Gibson PLC"
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
+              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400"
+            />
+          </div>
+
+          {/* Related to */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <label className="text-zinc-500 font-medium">Related to</label>
+            <input
+              type="text"
+              placeholder="e.g. Project / Campaign / Website / Referral"
+              value={relatedTo}
+              onChange={(e) => setRelatedTo(e.target.value)}
               className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400"
             />
           </div>

@@ -1,8 +1,9 @@
 "use client"
 
 import * as React from "react"
-import { Search, ChevronDown, FileSpreadsheet, Printer, LayoutGrid, SlidersHorizontal, Edit3, X, Eye, ChevronLeft, ChevronRight, User, FolderPlus } from "lucide-react"
+import { Search, ChevronDown, FileSpreadsheet, Printer, LayoutGrid, SlidersHorizontal, Edit3, X, Eye, ChevronLeft, ChevronRight, User, FolderPlus, MapPin } from "lucide-react"
 import { ClientItem } from "../types"
+import { formatDisplayEmail } from "../services/clientService"
 
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
@@ -185,7 +186,7 @@ export function ClientsTableView({
                   idx + 1,
                   c.name,
                   c.primaryContact,
-                  c.email || "-",
+                  formatDisplayEmail(c.email) || "-",
                   c.phone,
                   c.projectsCount,
                   c.totalInvoiced,
@@ -209,7 +210,7 @@ export function ClientsTableView({
                   idx + 1,
                   c.name,
                   c.primaryContact,
-                  c.email || "-",
+                  formatDisplayEmail(c.email) || "-",
                   c.phone,
                   c.projectsCount,
                   c.totalInvoiced,
@@ -284,8 +285,8 @@ export function ClientsTableView({
                         <span>{client.companyId === 'digital' ? 'Digital' : 'Tech'}</span>
                       </span>
                       {client.branchName && (
-                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700">
-                          <span>📍</span>
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700">
+                          <MapPin size={10} className="text-amber-500 shrink-0" />
                           <span>{client.branchName}</span>
                         </span>
                       )}

@@ -580,18 +580,16 @@ export default function LoginPage() {
                 {/* Email */}
                 <div>
                   <label className="block text-xs font-medium mb-1">Email Address *</label>
-                  <div className="relative">
-                    <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      id="login-email"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="pl-10 h-11 bg-surface"
-                      placeholder="e.g. user@saampark.in"
-                      required
-                    />
-                  </div>
+                  <Input
+                    id="login-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="h-11 bg-surface"
+                    placeholder="e.g. user@saampark.in"
+                    leftIcon={<Mail size={18} />}
+                    required
+                  />
                 </div>
 
                 {/* Password */}
@@ -606,25 +604,26 @@ export default function LoginPage() {
                       Forgot password?
                     </button>
                   </div>
-                  <div className="relative">
-                    <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      id="login-password"
-                      type={showPassword ? "text" : "password"}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="pl-10 pr-10 h-11 bg-surface"
-                      placeholder="••••••••"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((v) => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
-                    >
-                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
-                  </div>
+                  <Input
+                    id="login-password"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="h-11 bg-surface"
+                    placeholder="••••••••"
+                    leftIcon={<Lock size={18} />}
+                    rightIcon={
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((v) => !v)}
+                        className="text-muted-foreground hover:text-foreground cursor-pointer flex items-center justify-center transition-colors"
+                        tabIndex={-1}
+                      >
+                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    }
+                    required
+                  />
                 </div>
 
                 {error && (
@@ -741,17 +740,15 @@ export default function LoginPage() {
                 <form onSubmit={handleSendForgotOTP} className="space-y-4">
                   <div>
                     <label className="block text-xs font-semibold mb-1.5">Registered Email *</label>
-                    <div className="relative">
-                      <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        type="email"
-                        required
-                        value={forgotEmail}
-                        onChange={(e) => setForgotEmail(e.target.value)}
-                        placeholder="your@email.com"
-                        className="pl-9 bg-background"
-                      />
-                    </div>
+                    <Input
+                      type="email"
+                      required
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      placeholder="your@email.com"
+                      className="bg-background"
+                      leftIcon={<Mail size={16} />}
+                    />
                   </div>
                   {forgotError && <p className="text-xs text-danger font-medium">{forgotError}</p>}
                   <div className="flex gap-2 pt-1">
@@ -800,31 +797,27 @@ export default function LoginPage() {
                 <form onSubmit={handleResetPassword} className="space-y-4">
                   <div>
                     <label className="block text-xs font-semibold mb-1.5">New Password *</label>
-                    <div className="relative">
-                      <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        type="password"
-                        required
-                        value={forgotNewPass}
-                        onChange={(e) => setForgotNewPass(e.target.value)}
-                        placeholder="Min 6 characters"
-                        className="pl-9 bg-background"
-                      />
-                    </div>
+                    <Input
+                      type="password"
+                      required
+                      value={forgotNewPass}
+                      onChange={(e) => setForgotNewPass(e.target.value)}
+                      placeholder="Min 6 characters"
+                      className="bg-background"
+                      leftIcon={<Lock size={16} />}
+                    />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold mb-1.5">Confirm Password *</label>
-                    <div className="relative">
-                      <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        type="password"
-                        required
-                        value={forgotConfirmPass}
-                        onChange={(e) => setForgotConfirmPass(e.target.value)}
-                        placeholder="Repeat new password"
-                        className="pl-9 bg-background"
-                      />
-                    </div>
+                    <Input
+                      type="password"
+                      required
+                      value={forgotConfirmPass}
+                      onChange={(e) => setForgotConfirmPass(e.target.value)}
+                      placeholder="Repeat new password"
+                      className="bg-background"
+                      leftIcon={<Lock size={16} />}
+                    />
                   </div>
                   {forgotError && <p className="text-xs text-danger font-medium">{forgotError}</p>}
                   <Button type="submit" variant="primary" className="w-full h-11 font-bold" disabled={forgotLoading}>

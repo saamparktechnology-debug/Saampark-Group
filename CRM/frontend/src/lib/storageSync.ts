@@ -34,37 +34,60 @@ export async function markGlobalItemDeleted(id: string | number, moduleName?: st
   }
 }
 
+// In-memory deleted cache & deduplication
+let deletedCache: string[] = []
+let lastDeletedSyncTime = 0
+let inFlightDeletedSync: Promise<string[]> | null = null
+const DELETED_CACHE_TTL_MS = 15000 // 15 seconds cache
+
 // Fetch all deleted item IDs from MySQL DB to ensure cross-browser synchronization
 export async function syncGlobalDeletedIds(): Promise<string[]> {
+  const now = Date.now()
+  if (deletedCache.length > 0 && now - lastDeletedSyncTime < DELETED_CACHE_TTL_MS) {
+    return deletedCache
+  }
+
+  if (inFlightDeletedSync) {
+    return inFlightDeletedSync
+  }
+
   const local = getLocalDeletedIds()
-  try {
-    const res = await api.get("/deleted")
-    if (res && res.status !== "error" && !res.error && res.data !== undefined && res.data !== null) {
-      const serverIds: string[] = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : [])
-      if (serverIds.length > 0) {
+  inFlightDeletedSync = (async () => {
+    try {
+      const res = await api.get("/deleted")
+      if (res && res.status !== "error" && !res.error && res.data !== undefined && res.data !== null) {
+        const serverIds: string[] = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : [])
         const merged = Array.from(new Set([...local, ...serverIds.map((s) => String(s).toLowerCase().trim())]))
+        deletedCache = merged
+        lastDeletedSyncTime = Date.now()
         if (typeof window !== "undefined") {
           localStorage.setItem(UNIVERSAL_DELETED_KEY, JSON.stringify(merged))
         }
         return merged
       }
+    } catch (err) {
+      console.warn("Backend deleted sync fetch warning:", err)
+    } finally {
+      inFlightDeletedSync = null
     }
-  } catch (err) {
-    console.warn("Backend deleted sync fetch warning:", err)
-  }
-  return local
+    deletedCache = local
+    lastDeletedSyncTime = Date.now()
+    return local
+  })()
+
+  return inFlightDeletedSync
 }
 
 export function isGlobalItemDeleted(id: string | number, deletedIds?: string[]): boolean {
   if (!id) return false
   const strId = String(id).toLowerCase().trim()
-  const list = deletedIds || getLocalDeletedIds()
+  const list = deletedIds || (deletedCache.length > 0 ? deletedCache : getLocalDeletedIds())
   return list.includes(strId)
 }
 
 export function filterGlobalDeletedItems<T extends { id: string | number }>(items: T[], deletedIds?: string[]): T[] {
   if (!Array.isArray(items)) return []
-  const list = deletedIds || getLocalDeletedIds()
+  const list = deletedIds || (deletedCache.length > 0 ? deletedCache : getLocalDeletedIds())
   if (!list.length) return items
   return items.filter((item) => item?.id && !list.includes(String(item.id).toLowerCase().trim()))
 }
@@ -72,16 +95,16 @@ export function filterGlobalDeletedItems<T extends { id: string | number }>(item
 // In-memory micro-cache & in-flight promise deduplication
 const inFlightRequests = new Map<string, Promise<any>>()
 const cacheStore = new Map<string, { data: any; timestamp: number }>()
-const CACHE_TTL_MS = 1200 // 1.2s micro-cache to prevent duplicate concurrent queries
+const CACHE_TTL_MS = 800 // 800ms micro-cache to prevent duplicate concurrent queries
 
 export function invalidateModuleCache(moduleKey?: string) {
   if (moduleKey) {
-    for (const k of cacheStore.keys()) {
+    for (const k of Array.from(cacheStore.keys())) {
       if (k.startsWith(moduleKey)) {
         cacheStore.delete(k)
       }
     }
-    for (const k of inFlightRequests.keys()) {
+    for (const k of Array.from(inFlightRequests.keys())) {
       if (k.startsWith(moduleKey)) {
         inFlightRequests.delete(k)
       }
@@ -89,16 +112,15 @@ export function invalidateModuleCache(moduleKey?: string) {
   } else {
     cacheStore.clear()
     inFlightRequests.clear()
+    lastDeletedSyncTime = 0
   }
 }
-
 
 /**
  * Fetch module data from MySQL DB with company isolation.
  * MySQL is the single source of truth.
  */
 export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: T, companyId?: string): Promise<T> {
-  const localDeleted = await syncGlobalDeletedIds()
   let targetCompany = companyId
 
   try {
@@ -115,7 +137,7 @@ export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: 
 
     if (cached && now - cached.timestamp < CACHE_TTL_MS) {
       if (Array.isArray(cached.data)) {
-        return filterGlobalDeletedItems(cached.data as any, localDeleted) as any
+        return filterGlobalDeletedItems(cached.data as any) as any
       }
       return cached.data as any
     }
@@ -125,7 +147,7 @@ export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: 
       const pendingRes = await inFlightRequests.get(cacheKey)
       if (pendingRes !== undefined && pendingRes !== null) {
         if (Array.isArray(pendingRes)) {
-          return filterGlobalDeletedItems(pendingRes as any, localDeleted) as any
+          return filterGlobalDeletedItems(pendingRes as any) as any
         }
         return pendingRes as any
       }
@@ -147,12 +169,17 @@ export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: 
     })
 
     inFlightRequests.set(cacheKey, requestPromise)
+
+    // Trigger deleted sync in parallel if not cached
+    syncGlobalDeletedIds().catch(() => {})
+
     const serverData = await requestPromise
 
     if (serverData !== null && serverData !== undefined) {
       if (Array.isArray(serverData)) {
-        return filterGlobalDeletedItems(serverData as any, localDeleted) as any
+        return filterGlobalDeletedItems(serverData as any) as any
       }
+      return serverData as any
     }
 
   } catch (err) {

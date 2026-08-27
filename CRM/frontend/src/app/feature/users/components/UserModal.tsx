@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, User, Mail, Shield, Building, Phone, Lock, UserCheck, ShieldCheck, Check, Info, Crown } from "lucide-react"
+import { X, User, Mail, Shield, Building, Phone, Lock, UserCheck, ShieldCheck, Check, Info, Crown, MapPin } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { UserItem as UserType, UserRole, UserStatus } from "../types"
 import { useAuthStore } from "@/store/useAuthStore"
@@ -496,11 +496,11 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
               </div>
             </div>
 
-            {/* Sub-Branch Selector */}
+            {/* Branch Selector */}
             <div>
               <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
-                  <span>📍</span> Assigned Sub-Branch / Location
+                  <MapPin size={13} className="text-amber-500 shrink-0" /> Assigned Branch / Location
                 </span>
                 <span className="text-[10px] text-zinc-400 font-normal">
                   {availableBranches.length} branches available
@@ -509,7 +509,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
               
               {availableBranches.length === 0 ? (
                 <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-dashed border-zinc-200 dark:border-zinc-700 text-center">
-                  <p className="text-xs text-zinc-400">No sub-branches created for this company yet.</p>
+                  <p className="text-xs text-zinc-400">No branches created for this company yet.</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

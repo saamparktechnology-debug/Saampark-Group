@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { 
   Menu, CheckSquare, LayoutGrid, Briefcase, Monitor, Calendar, Command, CheckCircle, Check,
   Search, Plus, Clock, Bell, Mail,
-  Settings, LogOut, User, Sun, Moon, X, Building2, CreditCard
+  Settings, LogOut, User, Sun, Moon, X, Building2, CreditCard, MapPin
 } from "lucide-react"
 import { useTheme } from "next-themes"
 import Link from "next/link"
@@ -55,8 +55,24 @@ export function Topbar() {
   }, [user, canPerformAction])
 
   React.useEffect(() => {
-    fetchCompanies()
-    fetchBranches()
+    const handleSync = () => {
+      fetchCompanies()
+      fetchBranches()
+    }
+
+    handleSync()
+    window.addEventListener("focus", handleSync)
+    window.addEventListener("storage", handleSync)
+    window.addEventListener("saampark_data_synced", handleSync)
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") handleSync()
+    })
+
+    return () => {
+      window.removeEventListener("focus", handleSync)
+      window.removeEventListener("storage", handleSync)
+      window.removeEventListener("saampark_data_synced", handleSync)
+    }
   }, [fetchCompanies, fetchBranches])
 
   // Real-time synchronization of current user session with latest database record
@@ -107,6 +123,9 @@ export function Topbar() {
               role: dbRecord.role,
               companyId: nextActive || "tech",
               companyIds: freshCompanyIds,
+              branchId: dbRecord.branchId,
+              branchIds: dbRecord.branchIds,
+              branchName: dbRecord.branchName,
               department: dbRecord.department,
               phone: dbRecord.phone,
               allowedModules: freshAllowedMods,
@@ -123,9 +142,11 @@ export function Topbar() {
     syncUserSession()
     window.addEventListener("focus", syncUserSession)
     window.addEventListener("storage", syncUserSession)
+    window.addEventListener("saampark_data_synced", syncUserSession)
     return () => {
       window.removeEventListener("focus", syncUserSession)
       window.removeEventListener("storage", syncUserSession)
+      window.removeEventListener("saampark_data_synced", syncUserSession)
     }
   }, [user?.email])
 
@@ -245,7 +266,7 @@ export function Topbar() {
                   type="button"
                   onClick={(e) => { stop(e); setShowCompanyMenu(v => !v); setShowProfileMenu(false); setShowQuickAdd(false); setShowNotifications(false) }}
                   className="flex items-center gap-2 px-3 py-1.5 bg-surface-pressed border border-primary/30 hover:border-primary/60 rounded-full text-xs font-semibold text-foreground transition-all cursor-pointer shadow-2xs"
-                  title="Click to switch active company or sub-branch"
+                  title="Click to switch active company or branch"
                 >
                   <span className="text-sm">{activeCompany.logo || "🏢"}</span>
                   <span className="truncate max-w-[140px] sm:max-w-[180px]">{activeCompany.name}</span>
@@ -260,15 +281,15 @@ export function Topbar() {
 
               {/* Active Branch Badge */}
               {activeBranchId && (
-                <div className="hidden md:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                  <span>📍</span>
+                <div className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10.5px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shadow-2xs">
+                  <MapPin size={12} className="text-amber-500 shrink-0" />
                   <span className="truncate max-w-[120px]">
                     {branches.find(b => b.id === activeBranchId)?.name || 'Branch'}
                   </span>
                   <button
                     type="button"
                     onClick={(e) => { stop(e); switchBranch(null) }}
-                    className="hover:text-rose-500 ml-0.5 cursor-pointer"
+                    className="hover:text-rose-500 ml-0.5 cursor-pointer text-xs leading-none"
                     title="Clear branch filter (view all branches)"
                   >
                     ×
@@ -313,11 +334,11 @@ export function Topbar() {
                             {isActive && <Check size={14} className="shrink-0" />}
                           </button>
 
-                          {/* Sub-branches for this company */}
+                          {/* Branches for this company */}
                           {isActive && compBranches.length > 0 && (
                             <div className="pl-6 pr-2 py-1 space-y-1 border-l-2 border-primary/20 ml-4 my-1">
                               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                                Sub-Branches
+                                Branches
                               </p>
                               <button
                                 type="button"
@@ -341,7 +362,10 @@ export function Topbar() {
                                       : "text-muted-foreground hover:text-foreground hover:bg-surface-hover"
                                   }`}
                                 >
-                                  <span className="truncate">📍 {b.name}</span>
+                                  <span className="flex items-center gap-1.5 truncate">
+                                    <MapPin size={12} className="text-primary shrink-0" />
+                                    {b.name}
+                                  </span>
                                   {activeBranchId === b.id && <Check size={12} className="shrink-0" />}
                                 </button>
                               ))}

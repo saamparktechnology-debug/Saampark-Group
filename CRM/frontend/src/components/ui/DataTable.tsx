@@ -22,12 +22,14 @@ interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
   searchKey?: string
+  isLoading?: boolean
 }
 
 export function DataTable<TData, TValue>({
   columns,
   data,
   searchKey,
+  isLoading = false,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
@@ -87,7 +89,24 @@ export function DataTable<TData, TValue>({
             </thead>
             <tbody className="[&_tr:last-child]:border-0">
               <AnimatePresence>
-                {table.getRowModel().rows?.length ? (
+                {isLoading ? (
+                  <tr>
+                    <td
+                      colSpan={columns.length}
+                      className="h-36 text-center"
+                    >
+                      <div className="flex flex-col items-center justify-center gap-2.5 py-6">
+                        <div className="relative flex items-center justify-center">
+                          <div className="absolute w-8 h-8 rounded-full bg-primary/20 blur-md animate-pulse" />
+                          <div className="w-8 h-8 rounded-full border-[3px] border-primary/20 border-t-primary animate-spin shadow-sm" />
+                        </div>
+                        <p className="text-xs text-muted-foreground font-semibold tracking-wide animate-pulse">
+                          Loading table records...
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : table.getRowModel().rows?.length ? (
                   table.getRowModel().rows.map((row) => (
                     <motion.tr
                       key={row.id}

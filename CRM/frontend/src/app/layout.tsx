@@ -20,9 +20,9 @@ export const metadata: Metadata = {
   title: "SAAMPARK - Enterprise Workspace",
   description: "Enterprise ERP, CRM, and Workspace",
   icons: {
-    icon: "/logo.png",
-    shortcut: "/logo.png",
-    apple: "/logo.png",
+    icon: "/saampark-logo.png",
+    shortcut: "/saampark-logo.png",
+    apple: "/saampark-logo.png",
   },
 };
 

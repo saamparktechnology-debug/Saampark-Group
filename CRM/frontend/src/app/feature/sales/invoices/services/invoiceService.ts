@@ -164,10 +164,19 @@ export const addInvoice = async (invoice: Omit<InvoiceItem, "id"> & { id?: strin
     nextId = generateInvoiceNumber(allCurrent, isNaN(billDateObj.getTime()) ? new Date() : billDateObj)
   }
 
+  let activeBranch: string | undefined = undefined
+  if (typeof window !== "undefined") {
+    try {
+      const { useAuthStore } = require("@/store/useAuthStore")
+      activeBranch = useAuthStore.getState().activeBranchId || useAuthStore.getState().user?.branchId || undefined
+    } catch {}
+  }
+
   const newInvoice: InvoiceItem = { 
     ...invoice, 
     id: nextId,
-    companyId: effectiveComp
+    companyId: effectiveComp,
+    branchId: invoice.branchId || activeBranch || undefined
   }
 
   const currentScoped = await fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], effectiveComp)

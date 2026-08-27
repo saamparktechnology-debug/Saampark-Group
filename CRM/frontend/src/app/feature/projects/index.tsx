@@ -9,9 +9,10 @@ import { AddProjectModal } from "./components/AddProjectModal"
 import { EditProjectModal } from "./components/EditProjectModal"
 import { ProjectDetailView } from "./components/ProjectDetailView"
 import { useAuthStore } from "@/store/useAuthStore"
+import { ThreeDotLoader } from "@/components/ui/ThreeDotLoader"
 
 export default function ProjectsMain() {
-  const { user, activeCompanyId } = useAuthStore()
+  const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
   
   const roleLower = (user?.role || "").toLowerCase().trim()
   const isSuperAdmin = roleLower.includes("super") || roleLower === "super admin" || roleLower === "superadmin"
@@ -34,56 +35,75 @@ export default function ProjectsMain() {
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false)
   const [editingProject, setEditingProject] = React.useState<Project | null>(null)
 
+  const [isLoading, setIsLoading] = React.useState(true)
+
   React.useEffect(() => {
-    let targetComp = "all"
-    if (isSuperAdmin) {
-      targetComp = activeCompanyId || "all"
-    } else if (isAdmin) {
+    let targetComp = activeCompanyId || user?.companyId || "tech"
+    if (!isSuperAdmin && isAdmin) {
       targetComp = user?.companyId || activeCompanyId || "tech"
-    } else {
-      targetComp = user?.companyId || activeCompanyId || "all"
     }
 
-    const fetchFreshProjects = () => {
-      getProjects(targetComp).then((data) => {
-        setProjects(data)
-        if (data.length > 0 && !selectedProject) {
+    const fetchFreshProjects = async (showLoading = false) => {
+      if (showLoading) setIsLoading(true)
+      try {
+        const data = await getProjects(targetComp)
+        setProjects(data || [])
+        if (data && data.length > 0 && !selectedProject) {
           setSelectedProject(data[0])
-        } else if (data.length === 0) {
+        } else if (!data || data.length === 0) {
           setSelectedProject(null)
         }
-      })
+      } finally {
+        if (showLoading) setIsLoading(false)
+      }
     }
-    fetchFreshProjects()
-    const interval = setInterval(fetchFreshProjects, 3000)
-    const handleReload = () => fetchFreshProjects()
+    fetchFreshProjects(true)
+    const handleReload = () => fetchFreshProjects(false)
     window.addEventListener("storage", handleReload)
     window.addEventListener("saampark_company_switched", handleReload)
+    window.addEventListener("saampark_branch_switched", handleReload)
     window.addEventListener("saampark_projects_updated", handleReload)
     window.addEventListener("saampark_data_synced", handleReload)
     return () => {
-      clearInterval(interval)
       window.removeEventListener("storage", handleReload)
       window.removeEventListener("saampark_company_switched", handleReload)
+      window.removeEventListener("saampark_branch_switched", handleReload)
       window.removeEventListener("saampark_projects_updated", handleReload)
       window.removeEventListener("saampark_data_synced", handleReload)
     }
-  }, [activeCompanyId, user?.companyId, isSuperAdmin, isAdmin])
+  }, [activeCompanyId, activeBranchId, user?.companyId, isSuperAdmin, isAdmin])
 
   const visibleProjects = React.useMemo(() => {
     if (!user) return []
     
-    // 1. Super Admin: sees all loaded projects in current scope
-    if (isSuperAdmin) return projects
+    const userComp = (activeCompanyId || user?.companyId || "").toLowerCase().trim()
+    const targetBranch = activeBranchId
 
-    // 2. Company Admin: sees only projects belonging to their specific company
-    if (isAdmin) {
-      const userComp = (user.companyId || activeCompanyId || "").toLowerCase().trim()
-      if (!userComp || userComp === "all") return projects
-      return projects.filter((p) => {
-        const pComp = (p.companyId || (p as any).company || "tech").toLowerCase().trim()
-        return pComp === userComp || (userComp === "tech" && !p.companyId)
-      })
+    const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
+    const targetBranchId = String(targetBranchObj?.id || targetBranch || "").toLowerCase().trim()
+    const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
+
+    const checkBranch = (p: any) => {
+      if (!targetBranch) return true
+      const pBranch = String(p.branchId || p.branch_id || "").toLowerCase().trim()
+      const pBranchName = String(p.branchName || p.branch_name || "").toLowerCase().trim()
+      return (pBranch && (pBranch === targetBranchId || (targetBranchName && pBranch === targetBranchName))) ||
+             (pBranchName && (pBranchName === targetBranchName || pBranchName === targetBranchId))
+    }
+
+    // 1. Super Admin & Company Admin: filter strictly by active company and branch
+    if (isSuperAdmin || isAdmin) {
+      let filtered = projects
+      if (userComp && userComp !== "all") {
+        filtered = filtered.filter((p) => {
+          const pComp = (p.companyId || (p as any).company || "tech").toLowerCase().trim()
+          return pComp === userComp || (userComp === "tech" && !p.companyId)
+        })
+      }
+      if (targetBranch) {
+        filtered = filtered.filter((p) => checkBranch(p))
+      }
+      return filtered
     }
 
     const normName = (user.name || "").toLowerCase().trim()
@@ -93,6 +113,8 @@ export default function ProjectsMain() {
     // 3. Client: ONLY projects created for / assigned to this client
     if (isClient) {
       return projects.filter((p) => {
+        if (!checkBranch(p)) return false
+
         const clientName = (p.client || "").toLowerCase().trim()
         const pClientId = String((p as any).clientId || "").toLowerCase().trim()
         const pCreatorId = String((p as any).createdById || "").toLowerCase().trim()
@@ -111,6 +133,8 @@ export default function ProjectsMain() {
 
     // 4. Team Member (Staff / Developer / Employee): ONLY projects assigned to them or created by them
     return projects.filter((p) => {
+      if (!checkBranch(p)) return false
+
       const pCreatorId = String((p as any).createdById || "").toLowerCase().trim()
       const pCreatorEmail = ((p as any).createdByEmail || "").toLowerCase().trim()
       const pBilledBy = String(p.billedBy || "").toLowerCase().trim()
@@ -133,7 +157,7 @@ export default function ProjectsMain() {
         )
       })
     })
-  }, [projects, user, isSuperAdmin, isAdmin, isClient])
+  }, [projects, user, isSuperAdmin, isAdmin, isClient, activeCompanyId, activeBranchId, branches])
 
 
 
@@ -164,6 +188,10 @@ export default function ProjectsMain() {
   const handleSelectProjectDetail = (p: Project) => {
     setSelectedProject(p)
     setViewMode("detail")
+  }
+
+  if (isLoading) {
+    return <ThreeDotLoader text="Loading projects & workflows..." fullScreen={false} />
   }
 
   return (

@@ -33,9 +33,10 @@ import { getUsers } from "@/app/feature/users/services/userService"
 
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
+import { ThreeDotLoader } from "@/components/ui/ThreeDotLoader"
 
 export default function ClientsMain() {
-  const { user } = useAuthStore()
+  const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
 
   const canAddClient = canPerformAction(user, "Clients", "add")
@@ -60,20 +61,65 @@ export default function ClientsMain() {
 
   const [isHistoryModalOpen, setIsHistoryModalOpen] = React.useState(false)
   const [selectedClientForHistory, setSelectedClientForHistory] = React.useState<ClientItem | null>(null)
+  const [isLoading, setIsLoading] = React.useState(true)
 
   // Sync real client users from userService with local client store
-  const loadClientData = React.useCallback(async () => {
+  const loadClientData = React.useCallback(async (showLoading = false) => {
+    if (showLoading) setIsLoading(true)
     try {
-      const allUsers = await getUsers()
-      const clientUsers = allUsers.filter((u) => u.role === "Clients")
-      const [storedClients, storedContacts, storedLabels, allProjects, allInvoices, allPayments] = await Promise.all([
-        getClients(),
+      const targetComp = (activeCompanyId || user?.companyId || "").toLowerCase().trim()
+      const targetBranch = activeBranchId
+
+      const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
+      const targetBranchId = String(targetBranchObj?.id || targetBranch || "").toLowerCase().trim()
+      const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
+
+      const checkBranch = (c: any) => {
+        if (!targetBranch) return true
+        const cBranch = String(c.branchId || c.branch_id || "").toLowerCase().trim()
+        const cBranchName = String(c.branchName || c.branch_name || "").toLowerCase().trim()
+        const uBranchIds = (c.branchIds && c.branchIds.length > 0)
+          ? c.branchIds.map((id: any) => String(id).toLowerCase().trim())
+          : []
+        return (cBranch && (cBranch === targetBranchId || (targetBranchName && cBranch === targetBranchName))) ||
+               (cBranchName && (cBranchName === targetBranchName || cBranchName === targetBranchId)) ||
+               uBranchIds.includes(targetBranchId)
+      }
+
+      const allUsers = await getUsers("all")
+      const clientUsers = allUsers.filter((u) => {
+        if (u.role !== "Clients") return false
+        if (targetComp && targetComp !== "all") {
+          const uCompIds = (u.companyIds && u.companyIds.length > 0)
+            ? u.companyIds.map(id => String(id).toLowerCase().trim())
+            : [String(u.companyId || "tech").toLowerCase().trim()]
+          if (!uCompIds.includes(targetComp)) return false
+        }
+        if (targetBranch && !checkBranch(u)) {
+          return false
+        }
+        return true
+      })
+
+      const [storedClientsRaw, storedContacts, storedLabels, allProjects, allInvoices, allPayments] = await Promise.all([
+        getClients(targetComp && targetComp !== "all" ? targetComp : undefined),
         getStoredContacts(),
         getStoredClientLabels(),
-        getProjects("all").catch(() => []),
-        getInvoices("all").catch(() => []),
-        getPayments("all").catch(() => []),
+        getProjects(targetComp && targetComp !== "all" ? targetComp : "all").catch(() => []),
+        getInvoices(targetComp && targetComp !== "all" ? targetComp : "all").catch(() => []),
+        getPayments(targetComp && targetComp !== "all" ? targetComp : "all").catch(() => []),
       ])
+
+      let storedClients = storedClientsRaw
+      if (targetComp && targetComp !== "all") {
+        storedClients = storedClients.filter(c => {
+          const cComp = (c.companyId || (c as any).company || "tech").toLowerCase().trim()
+          return cComp === targetComp || (targetComp === "tech" && !c.companyId)
+        })
+      }
+      if (targetBranch) {
+        storedClients = storedClients.filter(c => checkBranch(c))
+      }
 
       const userClientsMap = new Map<string, ClientItem>()
 
@@ -246,22 +292,26 @@ export default function ClientsMain() {
       setLabels(storedLabels)
     } catch (err) {
       console.warn("Client sync warning:", err)
+    } finally {
+      if (showLoading) setIsLoading(false)
     }
-  }, [])
+  }, [activeCompanyId, user?.companyId, activeBranchId, branches])
 
   React.useEffect(() => {
-    loadClientData()
-    const handleStorage = () => loadClientData()
+    loadClientData(true)
+    const handleStorage = () => loadClientData(false)
     window.addEventListener("storage", handleStorage)
     window.addEventListener("saampark_data_synced", handleStorage)
     window.addEventListener("saampark_clients_updated", handleStorage)
-    const interval = setInterval(loadClientData, 4000)
+    window.addEventListener("saampark_company_switched", handleStorage)
+    window.addEventListener("saampark_branch_switched", handleStorage)
 
     return () => {
       window.removeEventListener("storage", handleStorage)
       window.removeEventListener("saampark_data_synced", handleStorage)
       window.removeEventListener("saampark_clients_updated", handleStorage)
-      clearInterval(interval)
+      window.removeEventListener("saampark_company_switched", handleStorage)
+      window.removeEventListener("saampark_branch_switched", handleStorage)
     }
   }, [loadClientData])
 
@@ -422,33 +472,39 @@ export default function ClientsMain() {
       </div>
 
       {/* Tab Views Content */}
-      {activeTab === "overview" && (
-        <OverviewView totalClients={clients.length} totalContacts={contacts.length} />
-      )}
+      {isLoading ? (
+        <ThreeDotLoader text="Loading client accounts & contacts..." fullScreen={false} />
+      ) : (
+        <>
+          {activeTab === "overview" && (
+            <OverviewView totalClients={clients.length} totalContacts={contacts.length} />
+          )}
 
-      {activeTab === "clients" && (
-        <ClientsTableView
-          clients={clients}
-          onDeleteClient={handleDeleteClient}
-          onEditClient={(client) => {
-            setSelectedClientForEdit(client)
-            setIsAddClientModalOpen(true)
-          }}
-          onAddProjectClient={(client) => {
-            setSelectedClientForProject(client)
-            setIsAddProjectModalOpen(true)
-          }}
-          onViewClientHistory={(client) => {
-            setSelectedClientForHistory(client)
-            setIsHistoryModalOpen(true)
-          }}
-        />
-      )}
-      {activeTab === "contacts" && (
-        <ContactsTableView
-          contacts={contacts}
-          onDeleteContact={handleDeleteContact}
-        />
+          {activeTab === "clients" && (
+            <ClientsTableView
+              clients={clients}
+              onDeleteClient={handleDeleteClient}
+              onEditClient={(client) => {
+                setSelectedClientForEdit(client)
+                setIsAddClientModalOpen(true)
+              }}
+              onAddProjectClient={(client) => {
+                setSelectedClientForProject(client)
+                setIsAddProjectModalOpen(true)
+              }}
+              onViewClientHistory={(client) => {
+                setSelectedClientForHistory(client)
+                setIsHistoryModalOpen(true)
+              }}
+            />
+          )}
+          {activeTab === "contacts" && (
+            <ContactsTableView
+              contacts={contacts}
+              onDeleteContact={handleDeleteContact}
+            />
+          )}
+        </>
       )}
 
       {/* Add Client Modal */}

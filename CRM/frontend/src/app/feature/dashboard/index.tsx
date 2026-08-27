@@ -71,20 +71,52 @@ export default function DashboardMain() {
       const cleanOrders = filterGlobalDeletedItems(ordList)
       const cleanExpenses = filterGlobalDeletedItems(expList)
 
-      // Apply branch scoping if active branch is selected or user has branch restriction
-      const branchFilter = (item: any) => {
-        if (!targetBranch) return true
-        const bId = item.branchId || item.branch_id
-        return !bId || bId === targetBranch
+      // Apply company scoping
+      const companyFilter = (item: any) => {
+        if (!targetComp || targetComp === "all") return true
+        const cId = (item.companyId || item.company || "tech").toLowerCase().trim()
+        const tComp = targetComp.toLowerCase().trim()
+        return cId === tComp || (tComp === "tech" && !item.companyId)
       }
 
-      const scopedUsers = cleanUsers.filter(branchFilter)
-      const scopedTasks = cleanTasks.filter(branchFilter)
-      const scopedProjects = cleanProjects.filter(branchFilter)
-      const scopedLeads = cleanLeads.filter(branchFilter)
-      const scopedInvoices = cleanInvoices.filter(branchFilter)
-      const scopedOrders = cleanOrders.filter(branchFilter)
-      const scopedExpenses = cleanExpenses.filter(branchFilter)
+      // Apply branch scoping if active branch is selected
+      const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
+      const targetBranchId = String(targetBranchObj?.id || targetBranch || "").toLowerCase().trim()
+      const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
+
+      const branchFilter = (item: any) => {
+        if (!targetBranch) return true
+        const bId = String(item.branchId || item.assignedBranchId || item.branch_id || "").toLowerCase().trim()
+        const bName = String(item.branchName || item.assignedBranchName || item.branch_name || "").toLowerCase().trim()
+        if (item.branchIds && Array.isArray(item.branchIds)) {
+          const ids = item.branchIds.map((s: string) => String(s).toLowerCase().trim())
+          if (ids.includes(targetBranchId)) return true
+        }
+        return (bId && (bId === targetBranchId || (targetBranchName && bId === targetBranchName))) ||
+               (bName && (bName === targetBranchName || bName === targetBranchId))
+      }
+
+      const userCompanyFilter = (u: any) => {
+        if (!targetComp || targetComp === "all") return true
+        if (u.role === "Super Admin") return true
+        const uCompIds = (u.companyIds && u.companyIds.length > 0)
+          ? u.companyIds.map((id: string) => String(id).toLowerCase().trim())
+          : [String(u.companyId || "tech").toLowerCase().trim()]
+        return uCompIds.includes(targetComp.toLowerCase().trim())
+      }
+
+      const scopedUsers = cleanUsers.filter(userCompanyFilter).filter((u: any) => {
+        if (!targetBranch) return true
+        if (u.role === "Super Admin") return true
+        return branchFilter(u)
+      })
+
+      const scopedTasks = cleanTasks.filter(companyFilter).filter(branchFilter)
+      const scopedProjects = cleanProjects.filter(companyFilter).filter(branchFilter)
+      const scopedLeads = cleanLeads.filter(companyFilter).filter(branchFilter)
+      const scopedInvoices = cleanInvoices.filter(companyFilter).filter(branchFilter)
+      const scopedOrders = cleanOrders.filter(companyFilter).filter(branchFilter)
+      const scopedExpenses = cleanExpenses.filter(companyFilter).filter(branchFilter)
 
       setRealUsers(scopedUsers)
       if (scopedUsers.length > 0 && !selectedUserEmail) {
@@ -302,8 +334,9 @@ export default function DashboardMain() {
               <span className="text-base">{currentCompanyObj.logo || "🏢"}</span>
               <span>{currentCompanyObj.name}</span>
               {currentBranchObj && (
-                <span className="px-2 py-0.5 rounded-md bg-primary/10 text-primary text-[11px] font-bold">
-                  📍 {currentBranchObj.name}
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary/10 text-primary text-[11px] font-bold">
+                  <MapPin size={11} className="text-primary shrink-0" />
+                  <span>{currentBranchObj.name}</span>
                 </span>
               )}
             </div>
@@ -436,8 +469,9 @@ export default function DashboardMain() {
               <span className="text-base">{currentCompanyObj.logo || "🏢"}</span>
               <span>{currentCompanyObj.name}</span>
               {currentBranchObj && (
-                <span className="px-2 py-0.5 rounded-md bg-primary/10 text-primary text-[11px] font-bold">
-                  📍 {currentBranchObj.name}
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary/10 text-primary text-[11px] font-bold">
+                  <MapPin size={11} className="text-primary shrink-0" />
+                  <span>{currentBranchObj.name}</span>
                 </span>
               )}
             </div>
@@ -527,7 +561,7 @@ export default function DashboardMain() {
               </span>
             ) : (
               <span className="px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-[10px] font-semibold">
-                🏢 All Sub-Branches / Main HQ
+                🏢 All Branches / Main HQ
               </span>
             )}
           </div>

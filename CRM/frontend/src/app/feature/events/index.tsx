@@ -46,12 +46,15 @@ export default function EventsMain() {
     setLabels(lbls)
   }, [targetComp])
 
-  // Load events and labels from MySQL on mount & on company switch
   React.useEffect(() => {
     loadData()
+    window.addEventListener("storage", loadData)
+    window.addEventListener("saampark_data_synced", loadData)
     window.addEventListener("saampark_company_switched", loadData)
     window.addEventListener("saampark_branch_switched", loadData)
     return () => {
+      window.removeEventListener("storage", loadData)
+      window.removeEventListener("saampark_data_synced", loadData)
       window.removeEventListener("saampark_company_switched", loadData)
       window.removeEventListener("saampark_branch_switched", loadData)
     }

@@ -38,9 +38,7 @@ export function EditProjectModal({
       getUsers().then((allUsers) => {
         const onlyTeam = allUsers.filter((u) => {
           const role = (u.role || "").toLowerCase().trim()
-          const isTeam = role === "teams" || role === "team" || role === "employee" || role === "developer" || role === "staff"
-          const isAdminOrClient = role.includes("admin") || role.includes("client")
-          return isTeam && !isAdminOrClient && u.status !== "Inactive"
+          return !role.includes("admin") && !role.includes("super") && !role.includes("client") && role !== "owner" && u.status !== "Inactive"
         })
         setTeamMembers(onlyTeam)
       }).catch(() => {})

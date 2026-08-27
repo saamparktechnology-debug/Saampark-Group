@@ -11,13 +11,14 @@ import { EditTaskModal } from "./components/EditTaskModal"
 import { ManageTaskLabelsModal } from "./components/ManageTaskLabelsModal"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
+import { ThreeDotLoader } from "@/components/ui/ThreeDotLoader"
 
 export default function TasksMain() {
   const [tasks, setTasks] = React.useState<Task[]>([])
   const [activeViewTab, setActiveViewTab] = React.useState<"list" | "kanban" | "gantt">("list")
   const [isAddModalOpen, setIsAddModalOpen] = React.useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false)
-  const { user, activeCompanyId } = useAuthStore()
+  const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
   const [selectedTask, setSelectedTask] = React.useState<Task | null>(null)
   const [isManageLabelsOpen, setIsManageLabelsOpen] = React.useState(false)
   const [isLoading, setIsLoading] = React.useState(true)
@@ -27,48 +28,47 @@ export default function TasksMain() {
   const isAdmin = !isSuperAdmin && (
     roleLower.includes("admin") || 
     roleLower.includes("owner") || 
+    roleLower.includes("director") || 
+    roleLower.includes("ceo") || 
+    roleLower.includes("head") || 
     roleLower.includes("manager") ||
-    roleLower.includes("management") ||
-    roleLower === "admin"
+    roleLower.includes("leader")
   )
   const isClient = roleLower.includes("client")
 
-  const loadTasks = React.useCallback(async (showLoading = false) => {
+  const fetchTasks = React.useCallback(async (showLoading = false) => {
     if (showLoading) setIsLoading(true)
     try {
-      let targetComp = "all"
-      if (isSuperAdmin) {
-        targetComp = activeCompanyId || "all"
-      } else if (isAdmin) {
-        targetComp = user?.companyId || activeCompanyId || "tech"
-      } else {
-        targetComp = user?.companyId || activeCompanyId || "all"
-      }
+      const targetComp = activeCompanyId || user?.companyId || "tech"
+      try {
+        const { getLeads } = await import("@/app/feature/leads/services/leadService")
+        await getLeads(targetComp)
+      } catch {}
       const data = await taskService.getTasks(targetComp)
-      setTasks(data)
+      setTasks(data || [])
     } catch (err) {
       console.error("Error loading tasks:", err)
     } finally {
       if (showLoading) setIsLoading(false)
     }
-  }, [activeCompanyId, user?.companyId, isSuperAdmin, isAdmin])
+  }, [activeCompanyId, user?.companyId])
 
   React.useEffect(() => {
-    loadTasks(true)                              // first load: show spinner
-    const interval = setInterval(() => loadTasks(false), 3000)  // background polls: silent
-    const handleReload = () => loadTasks(false)
+    fetchTasks(true)
+    const handleReload = () => fetchTasks(false)
     window.addEventListener("storage", handleReload)
     window.addEventListener("saampark_company_switched", handleReload)
+    window.addEventListener("saampark_branch_switched", handleReload)
     window.addEventListener("saampark_tasks_updated", handleReload)
     window.addEventListener("saampark_data_synced", handleReload)
     return () => {
-      clearInterval(interval)
       window.removeEventListener("storage", handleReload)
       window.removeEventListener("saampark_company_switched", handleReload)
+      window.removeEventListener("saampark_branch_switched", handleReload)
       window.removeEventListener("saampark_tasks_updated", handleReload)
       window.removeEventListener("saampark_data_synced", handleReload)
     }
-  }, [loadTasks])
+  }, [fetchTasks])
 
   const handleTaskAdded = (newTask: Task) => {
     setTasks((prev) => [newTask, ...prev])
@@ -85,7 +85,6 @@ export default function TasksMain() {
   }
 
   const handleUpdateTaskStatus = async (id: string, newStatus: TaskStatus) => {
-    // 1. Optimistic update
     setTasks((prev) =>
       prev.map((t) =>
         String(t.id).toLowerCase().trim() === String(id).toLowerCase().trim()
@@ -93,7 +92,6 @@ export default function TasksMain() {
           : t
       )
     )
-    // 2. Persist to DB
     try {
       await taskService.updateTask(id, { status: newStatus })
     } catch (err) {
@@ -111,7 +109,6 @@ export default function TasksMain() {
 
     if (confirm("Are you sure you want to delete this task?")) {
       const strId = String(id).toLowerCase().trim()
-      // Optimistically remove from state immediately
       setTasks((prev) => prev.filter((t) => String(t.id).toLowerCase().trim() !== strId))
       try {
         await taskService.deleteTask(id)
@@ -129,26 +126,42 @@ export default function TasksMain() {
   const visibleTasks = React.useMemo(() => {
     if (!user) return []
 
-    // 1. Super Admin: sees all tasks in current company/all scope
-    if (isSuperAdmin) return tasks
+    const userComp = (activeCompanyId || user?.companyId || "").toLowerCase().trim()
+    const targetBranch = activeBranchId
 
-    // 2. Company Admin: sees only tasks belonging to their specific company
-    if (isAdmin) {
-      const userComp = (user.companyId || activeCompanyId || "").toLowerCase().trim()
-      if (!userComp || userComp === "all") return tasks
-      return tasks.filter((t) => {
-        const tComp = (t.companyId || (t as any).company || "tech").toLowerCase().trim()
-        return tComp === userComp || (userComp === "tech" && !t.companyId)
-      })
+    const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
+    const targetBranchId = String(targetBranchObj?.id || targetBranch || "").toLowerCase().trim()
+    const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
+
+    const checkBranch = (t: any) => {
+      if (!targetBranch) return true
+      const tBranch = String(t.branchId || t.branch_id || "").toLowerCase().trim()
+      const tBranchName = String(t.branchName || t.branch_name || "").toLowerCase().trim()
+      return (tBranch && (tBranch === targetBranchId || (targetBranchName && tBranch === targetBranchName))) ||
+             (tBranchName && (tBranchName === targetBranchName || tBranchName === targetBranchId))
+    }
+
+    if (isSuperAdmin || isAdmin) {
+      let filtered = tasks
+      if (userComp && userComp !== "all") {
+        filtered = filtered.filter((t) => {
+          const tComp = (t.companyId || (t as any).company || "tech").toLowerCase().trim()
+          return tComp === userComp || (userComp === "tech" && !t.companyId)
+        })
+      }
+      if (targetBranch) {
+        filtered = filtered.filter((t) => checkBranch(t))
+      }
+      return filtered
     }
 
     const normName = (user.name || (user as any).full_name || "").toLowerCase().trim()
     const normEmail = (user.email || "").toLowerCase().trim()
     const normId = String(user.id || "").toLowerCase().trim()
 
-    // 3. Client Role: sees tasks created for or by this client
     if (isClient) {
       return tasks.filter((t) => {
+        if (!checkBranch(t)) return false
         const tClient = (t.client || (t as any).clientName || "").toLowerCase().trim()
         const tEmail = ((t as any).clientEmail || (t as any).createdByEmail || "").toLowerCase().trim()
         return (
@@ -160,9 +173,9 @@ export default function TasksMain() {
       })
     }
 
-    // 4. Team Member (Staff / Developer / Employee): ONLY tasks assigned to them, collaborated on, or created by them
     return tasks.filter((t) => {
       if (!t) return false
+      if (!checkBranch(t)) return false
 
       const assigned = (t.assignedTo || (t as any).assigned_to || (t as any).assignee || "").toLowerCase().trim()
       const assignedEmail = ((t as any).assignedToEmail || "").toLowerCase().trim()
@@ -187,7 +200,11 @@ export default function TasksMain() {
 
       return checkMatch(assigned) || checkMatch(collab) || checkMatch(createdBy)
     })
-  }, [tasks, user, isSuperAdmin, isAdmin, isClient, activeCompanyId])
+  }, [tasks, user, isSuperAdmin, isAdmin, isClient, activeCompanyId, activeBranchId, branches])
+
+  if (isLoading) {
+    return <ThreeDotLoader text="Loading task board & assignees..." fullScreen={false} />
+  }
 
   return (
     <div className="p-4 sm:p-6 max-w-[1600px] mx-auto space-y-6">
@@ -231,6 +248,7 @@ export default function TasksMain() {
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         onTaskAdded={handleTaskAdded}
+        onSelectTask={handleSelectTask}
       />
 
       {/* Edit Task Modal */}

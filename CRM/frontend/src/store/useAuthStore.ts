@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { AuthService } from '@/services/apiServices'
 import { api, setAuthToken } from '@/lib/api'
-import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted } from '@/lib/storageSync'
+import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted, invalidateModuleCache } from '@/lib/storageSync'
 
 export type Role = 'Super Admin' | 'Admin' | 'Clients' | 'Teams'
 export type CompanyId = string
@@ -38,8 +38,8 @@ export interface User {
   role: Role
   companyId: string
   companyIds?: string[] // Assigned companies list
-  branchId?: string     // Assigned specific sub-branch
-  branchIds?: string[]    // Assigned multiple sub-branches
+  branchId?: string     // Assigned specific branch
+  branchIds?: string[]    // Assigned multiple branches
   branchName?: string   // Human-readable branch name
   avatar: string
   phone?: string
@@ -103,10 +103,12 @@ export const useAuthStore = create<AuthState>()(
 
       fetchCompanies: async () => {
         try {
+          // 1. Try fetching from MySQL companies table
+          let fetchedList: Company[] = []
           const res: any = await api.get('/companies').catch(() => null)
           if (res && (Array.isArray(res.data) || Array.isArray(res))) {
             const list = Array.isArray(res.data) ? res.data : res
-            const formatted: Company[] = list.map((c: any) => ({
+            fetchedList = list.map((c: any) => ({
               id: c.slug || String(c.id),
               name: c.name,
               slug: c.slug || String(c.id),
@@ -115,10 +117,27 @@ export const useAuthStore = create<AuthState>()(
               currency: c.currency || 'INR',
               currency_symbol: c.currency_symbol || '₹',
             }))
-            if (formatted.length > 0) {
-              set({ companies: formatted })
-              return formatted
-            }
+          }
+
+          // 2. Fetch companies from MySQL module data store
+          const dbCompanies = await fetchModuleDataFromDB<Company[]>('companies', [], 'all').catch(() => [])
+          if (Array.isArray(dbCompanies) && dbCompanies.length > 0) {
+            const map = new Map<string, Company>()
+            DEFAULT_COMPANIES.forEach(c => map.set(c.id, c))
+            fetchedList.forEach(c => map.set(c.id, c))
+            dbCompanies.forEach(c => map.set(c.id, c))
+            const combined = Array.from(map.values())
+            set({ companies: combined })
+            return combined
+          }
+
+          if (fetchedList.length > 0) {
+            const map = new Map<string, Company>()
+            DEFAULT_COMPANIES.forEach(c => map.set(c.id, c))
+            fetchedList.forEach(c => map.set(c.id, c))
+            const combined = Array.from(map.values())
+            set({ companies: combined })
+            return combined
           }
         } catch {}
         return get().companies
@@ -162,12 +181,16 @@ export const useAuthStore = create<AuthState>()(
             currency_symbol: newComp.currency_symbol || '₹',
           }
 
-          set((state) => ({
-            companies: [...state.companies.filter(c => c.id !== created.id), created]
-          }))
+          const current = get().companies
+          const updated = [...current.filter(c => c.id !== created.id), created]
+          set({ companies: updated })
+
+          // Persist to MySQL database single source of truth
+          await saveModuleDataToDB('companies', updated, 'all').catch(() => {})
 
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new Event('storage'))
+            window.dispatchEvent(new CustomEvent('saampark_data_synced'))
           }
 
           return created
@@ -191,7 +214,7 @@ export const useAuthStore = create<AuthState>()(
         const remainingCompanies = companies.filter(c => c.id !== companyId && c.slug !== companyId)
         const remainingBranches = branches.filter(b => b.companyId !== companyId)
 
-        // Clean up deleted company from all users in the database and localStorage
+        // Clean up deleted company from all users in the database
         try {
           const currentUsers = await fetchModuleDataFromDB<any[]>('users', [], 'all')
           if (Array.isArray(currentUsers)) {
@@ -224,6 +247,7 @@ export const useAuthStore = create<AuthState>()(
           branches: remainingBranches,
           activeCompanyId: newActiveCompany,
         })
+        saveModuleDataToDB('companies', remainingCompanies, 'all').catch(() => {})
         saveModuleDataToDB('branches', remainingBranches, 'all').catch(() => {})
 
         if (typeof window !== 'undefined') {
@@ -248,7 +272,7 @@ export const useAuthStore = create<AuthState>()(
         const newBranch: Branch = {
           id: branchData.id || `branch_${Date.now()}`,
           companyId: targetCompanyId,
-          name: branchData.name || 'New Sub-Branch',
+          name: branchData.name || 'New Branch',
           code: branchData.code || `BR-${Math.floor(100 + Math.random() * 900)}`,
           city: branchData.city || '',
           address: branchData.address || '',
@@ -259,32 +283,26 @@ export const useAuthStore = create<AuthState>()(
           createdAt: new Date().toISOString().split('T')[0],
         }
 
-        try {
-          await api.post(`/companies/${newBranch.companyId}/branches`, newBranch).catch(() => {})
-        } catch {}
-
         const updated = [...branches.filter(b => b.id !== newBranch.id), newBranch]
         set({ branches: updated })
-        saveModuleDataToDB('branches', updated, 'all').catch(() => {})
+        await saveModuleDataToDB('branches', updated, 'all').catch(() => {})
 
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new Event('storage'))
+          window.dispatchEvent(new CustomEvent('saampark_data_synced'))
         }
         return newBranch
       },
 
       updateBranch: async (branchId: string, updates: Partial<Branch>) => {
         const { branches } = get()
-        try {
-          await api.put(`/branches/${branchId}`, updates).catch(() => {})
-        } catch {}
-
         const updated = branches.map(b => b.id === branchId ? { ...b, ...updates } : b)
         set({ branches: updated })
-        saveModuleDataToDB('branches', updated, 'all').catch(() => {})
+        await saveModuleDataToDB('branches', updated, 'all').catch(() => {})
 
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new Event('storage'))
+          window.dispatchEvent(new CustomEvent('saampark_data_synced'))
         }
       },
 
@@ -294,12 +312,14 @@ export const useAuthStore = create<AuthState>()(
           await api.delete(`/branches/${branchId}`).catch(() => {})
         } catch {}
 
+        markGlobalItemDeleted(branchId, 'branches')
         const updated = branches.filter(b => b.id !== branchId)
         set({ branches: updated })
-        saveModuleDataToDB('branches', updated, 'all').catch(() => {})
+        await saveModuleDataToDB('branches', updated, 'all').catch(() => {})
 
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new Event('storage'))
+          window.dispatchEvent(new CustomEvent('saampark_data_synced'))
         }
         return true
       },
@@ -316,9 +336,11 @@ export const useAuthStore = create<AuthState>()(
           (user.branchIds && user.branchIds.includes(branchId))
 
         if (canSwitch) {
+          invalidateModuleCache()
           set({ activeBranchId: branchId })
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('saampark_branch_switched', { detail: branchId }))
+            window.dispatchEvent(new CustomEvent('saampark_data_synced'))
             window.dispatchEvent(new Event('storage'))
           }
         }
@@ -475,6 +497,7 @@ export const useAuthStore = create<AuthState>()(
           String(user.companyId).toLowerCase().trim() === targetNorm
 
         if (canSwitch) {
+          invalidateModuleCache()
           set({
             activeCompanyId: effectiveId,
             activeBranchId: null,
@@ -482,6 +505,8 @@ export const useAuthStore = create<AuthState>()(
           })
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('saampark_company_switched', { detail: effectiveId }))
+            window.dispatchEvent(new CustomEvent('saampark_branch_switched', { detail: null }))
+            window.dispatchEvent(new CustomEvent('saampark_data_synced'))
             window.dispatchEvent(new Event('storage'))
           }
         }
@@ -489,6 +514,13 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'saampark-auth-v3',
+      partialize: (state) => ({
+        isAuthenticated: state.isAuthenticated,
+        token: state.token,
+        user: state.user,
+        activeCompanyId: state.activeCompanyId,
+        activeBranchId: state.activeBranchId,
+      }),
     }
   )
 )

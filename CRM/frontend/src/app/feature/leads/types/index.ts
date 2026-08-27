@@ -59,6 +59,7 @@ export interface Lead {
   branchName?: string
   assignedBranchId?: string
   assignedBranchName?: string
+  relatedTo?: string
   transferredBy?: string
   transferredByRole?: string
   transferredAt?: string

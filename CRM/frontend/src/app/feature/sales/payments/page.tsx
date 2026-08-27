@@ -31,7 +31,7 @@ import { getInvoices, InvoiceItem } from "../invoices/services/invoiceService"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 
 export default function PaymentsPage() {
-  const { user } = useAuthStore()
+  const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
   const isClientRole = user?.role === "Clients"
   const clientEmailNorm = (user?.email || "").toLowerCase().trim()
   const clientNameNorm = (user?.name || "").toLowerCase().trim()
@@ -43,8 +43,8 @@ export default function PaymentsPage() {
   const [selectedPayment, setSelectedPayment] = React.useState<PaymentItem | null>(null)
   const [toastMessage, setToastMessage] = React.useState<string | null>(null)
 
-  // Add Payment form state
-  const [selectedInvoiceId, setSelectedInvoiceId] = React.useState<string>("")
+  // Add Payment Form State
+  const [selectedInvoiceId, setSelectedInvoiceId] = React.useState("")
   const [client, setClient] = React.useState("")
   const [clientEmail, setClientEmail] = React.useState("")
   const [project, setProject] = React.useState("")
@@ -60,27 +60,28 @@ export default function PaymentsPage() {
   }
 
   const loadData = React.useCallback(async () => {
+    const targetComp = activeCompanyId || user?.companyId || "tech"
     const [pList, invList] = await Promise.all([
-      getPayments(),
-      getInvoices()
+      getPayments(targetComp),
+      getInvoices(targetComp)
     ])
     setPayments(pList)
     setInvoices(invList)
-  }, [])
+  }, [activeCompanyId, user?.companyId])
 
   React.useEffect(() => {
     loadData()
-    const interval = setInterval(loadData, 4000)
     window.addEventListener("saampark_data_synced", loadData)
     window.addEventListener("saampark_payments_updated", loadData)
     window.addEventListener("saampark_company_switched", loadData)
+    window.addEventListener("saampark_branch_switched", loadData)
     return () => {
-      clearInterval(interval)
       window.removeEventListener("saampark_data_synced", loadData)
       window.removeEventListener("saampark_payments_updated", loadData)
       window.removeEventListener("saampark_company_switched", loadData)
+      window.removeEventListener("saampark_branch_switched", loadData)
     }
-  }, [loadData, useAuthStore.getState().activeCompanyId])
+  }, [loadData])
 
 
   const handleInvoiceChange = (invId: string) => {
@@ -141,17 +142,46 @@ export default function PaymentsPage() {
   }
 
   const displayedPayments = React.useMemo(() => {
-    if (!isClientRole) return payments
-    return payments.filter((p) => {
-      const pEmail = (p.clientEmail || "").toLowerCase().trim()
-      const pName = (p.client || "").toLowerCase().trim()
-      return (
-        (clientEmailNorm && pEmail === clientEmailNorm) ||
-        (clientNameNorm && pName === clientNameNorm) ||
-        (clientNameNorm && (pName.includes(clientNameNorm) || clientNameNorm.includes(pName)))
-      )
-    })
-  }, [payments, isClientRole, clientEmailNorm, clientNameNorm])
+    const userComp = (activeCompanyId || user?.companyId || "").toLowerCase().trim()
+    const targetBranch = activeBranchId
+
+    const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
+    const targetBranchId = String(targetBranchObj?.id || targetBranch || "").toLowerCase().trim()
+    const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
+
+    const checkBranch = (p: any) => {
+      if (!targetBranch) return true
+      const pBranch = String(p.branchId || p.branch_id || "").toLowerCase().trim()
+      const pBranchName = String(p.branchName || p.branch_name || "").toLowerCase().trim()
+      return (pBranch && (pBranch === targetBranchId || (targetBranchName && pBranch === targetBranchName))) ||
+             (pBranchName && (pBranchName === targetBranchName || pBranchName === targetBranchId))
+    }
+
+    let filtered = payments
+    if (isClientRole) {
+      filtered = filtered.filter((p) => {
+        if (!checkBranch(p)) return false
+        const pEmail = (p.clientEmail || "").toLowerCase().trim()
+        const pName = (p.client || "").toLowerCase().trim()
+        return (
+          (clientEmailNorm && pEmail === clientEmailNorm) ||
+          (clientNameNorm && pName === clientNameNorm) ||
+          (clientNameNorm && (pName.includes(clientNameNorm) || clientNameNorm.includes(pName)))
+        )
+      })
+    } else {
+      if (userComp && userComp !== "all") {
+        filtered = filtered.filter((p) => {
+          const pComp = (p.companyId || (p as any).company || "tech").toLowerCase().trim()
+          return pComp === userComp || (userComp === "tech" && !p.companyId)
+        })
+      }
+      if (targetBranch) {
+        filtered = filtered.filter((p) => checkBranch(p))
+      }
+    }
+    return filtered
+  }, [payments, isClientRole, clientEmailNorm, clientNameNorm, activeCompanyId, activeBranchId, branches, user?.companyId])
 
   const totalAmountNum = displayedPayments.reduce((sum, p) => sum + (p.amountNum || (parseInt(p.amount.replace(/[^0-9]/g, "")) || 0)), 0)
   const totalTransactions = displayedPayments.length

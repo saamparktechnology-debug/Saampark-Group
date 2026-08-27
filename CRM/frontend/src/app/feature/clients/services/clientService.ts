@@ -43,8 +43,17 @@ export function getStoredClients(): ClientItem[] {
 
 /** Save (add or update) a client to MySQL */
 export async function saveStoredClient(client: ClientItem, companyId?: string): Promise<ClientItem[]> {
+  let activeBranch: string | undefined = undefined
+  if (typeof window !== "undefined") {
+    try {
+      const { useAuthStore } = require("@/store/useAuthStore")
+      activeBranch = useAuthStore.getState().activeBranchId || useAuthStore.getState().user?.branchId || undefined
+    } catch {}
+  }
+
   const enrichedClient: ClientItem = {
     ...client,
+    branchId: (client as any).branchId || activeBranch || undefined,
     createdAt: client.createdAt || Date.now(),
   }
 
@@ -71,7 +80,7 @@ export async function saveStoredClient(client: ClientItem, companyId?: string): 
       name: enrichedClient.primaryContact || enrichedClient.name,
       clientName: enrichedClient.name,
       jobTitle: "Primary Contact",
-      email: clientEmailNorm,
+      email: enrichedClient.email ? enrichedClient.email.trim() : "",
       phone: enrichedClient.phone || "N/A",
       avatarSeed: enrichedClient.primaryContact || enrichedClient.name,
     },
@@ -180,6 +189,23 @@ export async function deleteStoredClientLabel(id: string, companyId?: string): P
   const updated = current.filter((l) => l.id !== id)
   await saveModuleDataToDB("client_labels", updated, companyId)
   return updated
+}
+
+/** Format display email to hide background dummy identifiers (e.g. lead_123@...) */
+export function formatDisplayEmail(email?: string): string {
+  if (!email) return ""
+  const clean = email.trim()
+  const lower = clean.toLowerCase()
+  if (
+    lower.startsWith("lead_") ||
+    lower.includes("@crm.saampark") ||
+    lower.includes("@saampark-client.com") ||
+    (lower.startsWith("lead_") && lower.endsWith("@saampark.in")) ||
+    lower.includes("lead_lead_")
+  ) {
+    return ""
+  }
+  return clean
 }
 
 

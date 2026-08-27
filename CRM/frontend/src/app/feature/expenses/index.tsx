@@ -26,7 +26,7 @@ export interface ExpenseItem {
 }
 
 export default function ExpensesMain() {
-  const { user, activeCompanyId } = useAuthStore()
+  const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
   
   const targetComp = activeCompanyId || user?.companyId || "tech"
@@ -61,11 +61,15 @@ export default function ExpensesMain() {
 
   React.useEffect(() => {
     loadExpenses()
-    const interval = setInterval(loadExpenses, 4000)
+    window.addEventListener("storage", loadExpenses)
+    window.addEventListener("saampark_data_synced", loadExpenses)
     window.addEventListener("saampark_company_switched", loadExpenses)
+    window.addEventListener("saampark_branch_switched", loadExpenses)
     return () => {
-      clearInterval(interval)
+      window.removeEventListener("storage", loadExpenses)
+      window.removeEventListener("saampark_data_synced", loadExpenses)
       window.removeEventListener("saampark_company_switched", loadExpenses)
+      window.removeEventListener("saampark_branch_switched", loadExpenses)
     }
   }, [loadExpenses])
 
@@ -78,10 +82,24 @@ export default function ExpensesMain() {
         e.amount.toLowerCase().includes(searchQuery.toLowerCase())
 
       if (!matchSearch) return false
+      if (activeBranchId) {
+        const targetBranchObj = branches.find(b => b.id === activeBranchId || b.name.toLowerCase() === activeBranchId.toLowerCase())
+        const targetBranchId = String(targetBranchObj?.id || activeBranchId).toLowerCase().trim()
+        const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
+
+        const eBranch = String((e as any).branchId || (e as any).branch_id || "").toLowerCase().trim()
+        const eBranchName = String((e as any).branchName || (e as any).branch_name || "").toLowerCase().trim()
+
+        const isMatch =
+          (eBranch && (eBranch === targetBranchId || (targetBranchName && eBranch === targetBranchName))) ||
+          (eBranchName && (eBranchName === targetBranchName || eBranchName === targetBranchId))
+
+        if (!isMatch) return false
+      }
       if (selectedCategory === "all") return true
       return e.category === selectedCategory
     })
-  }, [expenses, searchQuery, selectedCategory])
+  }, [expenses, searchQuery, selectedCategory, activeBranchId, branches])
 
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault()

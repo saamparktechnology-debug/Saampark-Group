@@ -358,7 +358,7 @@ export function TaskKanban({
                         className="w-5 h-5 rounded-full border border-zinc-200 object-cover shrink-0 mt-0.5"
                       />
                       <span className="text-xs font-medium text-zinc-800 dark:text-zinc-200 hover:text-blue-600 dark:hover:text-blue-400 leading-snug">
-                        {t.id}. {t.title}
+                        {t.title.replace(/^Follow-up Call:\s*/i, "").replace(/^Follow-up:\s*/i, "")}
                       </span>
                     </div>
 
@@ -381,10 +381,10 @@ export function TaskKanban({
                           <span
                             key={lbl}
                             className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
-                              labelBadgeStyles[lbl] || "bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300"
+                              labelBadgeStyles[lbl] || "bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800"
                             }`}
                           >
-                            {lbl}
+                            {lbl === "Follow-up" ? "Follow-up Call" : lbl}
                           </span>
                         ))}
                       </div>

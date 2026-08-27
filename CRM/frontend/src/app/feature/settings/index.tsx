@@ -470,7 +470,7 @@ export default function SettingsMain() {
     if (isSuperAdmin || user?.role === "Admin") {
       base.push(
         { id: "payments", label: "💳 Invoice Payment QR & Bank", icon: QrCode },
-        { id: "organization", label: "🏢 Companies & Sub-Branches", icon: Building2 }
+        { id: "organization", label: "🏢 Companies & Branches", icon: Building2 }
       )
     }
     if (isSuperAdmin) {
@@ -534,7 +534,7 @@ export default function SettingsMain() {
         })}
       </div>
 
-      {/* ── TAB: COMPANIES & SUB-BRANCHES (Super Admin & Admin) ──────────────── */}
+      {/* ── TAB: COMPANIES & BRANCHES (Super Admin & Admin) ──────────────────── */}
       {activeTab === "organization" && (isSuperAdmin || user?.role === "Admin") && (
         <CompanyBranchSettings />
       )}

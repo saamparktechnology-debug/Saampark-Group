@@ -22,6 +22,14 @@ export const taskService = {
   },
 
   addTask: async (taskData: Omit<Task, "id"> & { id?: string }, companyId?: string): Promise<Task> => {
+    let activeBranch: string | undefined = undefined
+    if (typeof window !== "undefined") {
+      try {
+        const { useAuthStore } = require("@/store/useAuthStore")
+        activeBranch = useAuthStore.getState().activeBranchId || useAuthStore.getState().user?.branchId || undefined
+      } catch {}
+    }
+
     const current = await taskService.getTasks(companyId)
     let nextId = taskData.id
     if (!nextId) {
@@ -31,7 +39,11 @@ export const taskService = {
       }, 3650)
       nextId = (maxIdNum + 1).toString()
     }
-    const newTask: Task = { ...taskData, id: nextId }
+    const newTask: Task = { 
+      ...taskData, 
+      id: nextId,
+      branchId: (taskData as any).branchId || activeBranch || undefined
+    }
     const updated = [newTask, ...current.filter(t => String(t.id).toLowerCase().trim() !== String(nextId).toLowerCase().trim())]
     await saveModuleDataToDB("tasks", updated, companyId)
     return newTask

@@ -16,9 +16,10 @@ import { ModulePermissionsModal } from "./components/ModulePermissionsModal"
 import { CompanyModal } from "./components/CompanyModal"
 
 import { usePermissionStore } from "@/store/usePermissionStore"
+import { ThreeDotLoader } from "@/components/ui/ThreeDotLoader"
 
 export default function UsersMain() {
-  const { activeCompanyId, user } = useAuthStore()
+  const { activeCompanyId, activeBranchId, branches, user } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
 
   const canAddUser = user?.role === "Super Admin" || canPerformAction(user, "Users", "add")
@@ -51,35 +52,83 @@ export default function UsersMain() {
   const [editingUser, setEditingUser] = React.useState<UserItem | null>(null)
   const [selectedUserForOverview, setSelectedUserForOverview] = React.useState<UserItem | null>(null)
   const [isOverviewModalOpen, setIsOverviewModalOpen] = React.useState(false)
+  const [isLoading, setIsLoading] = React.useState(true)
 
   const isSuperAdminLoggedIn = user?.role === "Super Admin"
 
-  const loadUsers = React.useCallback(async () => {
-    const list = await getUsers(isSuperAdminLoggedIn ? "all" : (activeCompanyId || "all"))
-    setUsers(list)
-  }, [activeCompanyId, isSuperAdminLoggedIn])
+  const loadUsers = React.useCallback(async (showLoading = false) => {
+    if (showLoading) setIsLoading(true)
+    try {
+      const list = await getUsers("all")
+      setUsers(list || [])
+    } finally {
+      if (showLoading) setIsLoading(false)
+    }
+  }, [])
 
   React.useEffect(() => {
-    loadUsers()
+    loadUsers(true)
 
     const handleStorageChange = () => {
-      loadUsers()
+      loadUsers(false)
     }
 
     window.addEventListener("storage", handleStorageChange)
     window.addEventListener("saampark_company_switched", handleStorageChange)
+    window.addEventListener("saampark_branch_switched", handleStorageChange)
+    window.addEventListener("saampark_data_synced", handleStorageChange)
 
     return () => {
       window.removeEventListener("storage", handleStorageChange)
       window.removeEventListener("saampark_company_switched", handleStorageChange)
+      window.removeEventListener("saampark_branch_switched", handleStorageChange)
+      window.removeEventListener("saampark_data_synced", handleStorageChange)
     }
   }, [loadUsers])
 
-  // Super Admin users are only visible when logged in as Super Admin
+  // Strictly isolate visible users based on active company and active branch
   const visibleUsers = React.useMemo(() => {
-    if (isSuperAdminLoggedIn) return users
-    return users.filter((u) => u.role !== "Super Admin")
-  }, [users, isSuperAdminLoggedIn])
+    const targetComp = (activeCompanyId || user?.companyId || "").toLowerCase().trim()
+    const targetBranch = activeBranchId
+
+    let filtered = users
+    if (!isSuperAdminLoggedIn) {
+      filtered = filtered.filter((u) => u.role !== "Super Admin")
+    }
+
+    if (targetComp && targetComp !== "all") {
+      filtered = filtered.filter((u) => {
+        if (u.role === "Super Admin") return true // Super Admin account remains accessible
+        const uCompIds = (u.companyIds && u.companyIds.length > 0)
+          ? u.companyIds.map(id => String(id).toLowerCase().trim())
+          : [String(u.companyId || "tech").toLowerCase().trim()]
+        return uCompIds.includes(targetComp)
+      })
+    }
+
+    if (targetBranch) {
+      const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === targetBranch.toLowerCase())
+      const targetBranchId = String(targetBranchObj?.id || targetBranch).toLowerCase().trim()
+      const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
+
+      filtered = filtered.filter((u) => {
+        if (u.role === "Super Admin") return true
+        const uBranchIds = (u.branchIds && u.branchIds.length > 0)
+          ? u.branchIds.map(id => String(id).toLowerCase().trim())
+          : (u.branchId ? [String(u.branchId).toLowerCase().trim()] : [])
+        const uBranchName = String(u.branchName || "").toLowerCase().trim()
+
+        return (
+          uBranchIds.includes(targetBranchId) ||
+          (targetBranchName && uBranchIds.includes(targetBranchName)) ||
+          String(u.branchId || "").toLowerCase().trim() === targetBranchId ||
+          (targetBranchName && (uBranchName === targetBranchName || String(u.branchId || "").toLowerCase().trim() === targetBranchName))
+        )
+      })
+    }
+
+    return filtered
+  }, [users, isSuperAdminLoggedIn, activeCompanyId, activeBranchId, branches, user?.companyId])
 
   // Metric counts based on visible users
   const totalUsers = visibleUsers.length
@@ -202,8 +251,8 @@ export default function UsersMain() {
       }
       saveModuleDataToDB("users", nextList, "all")
       if (typeof window !== "undefined") {
-        try { localStorage.setItem("saampark_registered_accounts", JSON.stringify(nextList)); } catch {}
         window.dispatchEvent(new Event("storage"))
+        window.dispatchEvent(new CustomEvent("saampark_data_synced"))
       }
       return nextList
     })
@@ -340,16 +389,20 @@ export default function UsersMain() {
       </div>
 
       {/* Users Table Component */}
-      <UserList
-        users={visibleUsers}
-        onEdit={handleOpenEditModal}
-        onToggleStatus={handleToggleStatus}
-        onDelete={handleDeleteUser}
-        onViewOverview={(targetUser) => {
-          setSelectedUserForOverview(targetUser)
-          setIsOverviewModalOpen(true)
-        }}
-      />
+      {isLoading ? (
+        <ThreeDotLoader text="Loading team members & users..." fullScreen={false} />
+      ) : (
+        <UserList
+          users={visibleUsers}
+          onEdit={handleOpenEditModal}
+          onToggleStatus={handleToggleStatus}
+          onDelete={handleDeleteUser}
+          onViewOverview={(targetUser) => {
+            setSelectedUserForOverview(targetUser)
+            setIsOverviewModalOpen(true)
+          }}
+        />
+      )}
 
       {/* User Account Overview & KYC Review Modal */}
       <UserOverviewModal

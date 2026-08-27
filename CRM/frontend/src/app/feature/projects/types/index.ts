@@ -74,5 +74,7 @@ export interface Project {
   taskBreakdown?: TaskBreakdown
   activityLogs?: ActivityItem[]
   companyId?: string
+  branchId?: string
+  branchName?: string
 }
 

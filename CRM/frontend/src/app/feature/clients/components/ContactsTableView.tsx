@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Search, FileSpreadsheet, Printer, LayoutGrid, ChevronDown, X, User, ChevronLeft, ChevronRight } from "lucide-react"
 import { ContactItem } from "../types"
+import { formatDisplayEmail } from "../services/clientService"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 
 interface ContactsTableViewProps {
@@ -175,7 +176,9 @@ export function ContactsTableView({
                   </td>
                   <td className="py-3 px-3 font-medium text-slate-800 dark:text-slate-200">{contact.clientName}</td>
                   <td className="py-3 px-3 text-slate-600 dark:text-slate-400">{contact.jobTitle}</td>
-                  <td className="py-3 px-3 text-blue-500 hover:underline cursor-pointer">{contact.email}</td>
+                  <td className="py-3 px-3 text-blue-500 hover:underline cursor-pointer">
+                    {formatDisplayEmail(contact.email) || "-"}
+                  </td>
                   <td className="py-3 px-3 text-slate-600 dark:text-slate-400">{contact.phone}</td>
                   <td className="py-3 px-3 text-right">
                     <button
