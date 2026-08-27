@@ -61,9 +61,13 @@ export default function ClientsMain() {
     try {
       const allUsers = await getUsers()
       const clientUsers = allUsers.filter((u) => u.role === "Clients")
-      const storedClients = await getClients()
-      const storedContacts = await getStoredContacts()
-      const storedLabels = await getStoredClientLabels()
+      const [storedClients, storedContacts, storedLabels, allProjects, allInvoices] = await Promise.all([
+        getClients(),
+        getStoredContacts(),
+        getStoredClientLabels(),
+        import("@/app/feature/projects/services/projectService").then(m => m.getProjects("all")).catch(() => []),
+        import("@/app/feature/sales/invoices/services/invoiceService").then(m => m.getInvoices("all")).catch(() => []),
+      ])
 
       const userClientsMap = new Map<string, ClientItem>()
 
@@ -101,7 +105,62 @@ export default function ClientsMain() {
         }
       })
 
-      const mergedClients = Array.from(new Set(userClientsMap.values())).sort(
+      // 3. Enrich each client with live projects count and financial ledger totals
+      const mergedClients = Array.from(new Set(userClientsMap.values())).map(c => {
+        const cId = (c.id || "").toLowerCase().trim()
+        const cName = (c.name || "").toLowerCase().trim()
+        const cEmail = (c.email || "").toLowerCase().trim()
+        const cPrimary = (c.primaryContact || "").toLowerCase().trim()
+
+        // Match Invoices
+        const matchedInvoices = allInvoices.filter(i => {
+          const iClient = (i.client || "").toLowerCase().trim()
+          const iEmail = (i.clientEmail || "").toLowerCase().trim()
+          return (
+            (cName && (iClient === cName || iClient.includes(cName) || cName.includes(iClient))) ||
+            (cEmail && (iEmail === cEmail || iClient.includes(cEmail))) ||
+            (cPrimary && (iClient === cPrimary || iClient.includes(cPrimary)))
+          )
+        })
+
+        const invProjectNames = new Set(matchedInvoices.map(i => (i.project || "").toLowerCase().trim()))
+
+        // Match Projects
+        const matchedProjects = allProjects.filter(p => {
+          const pClient = (p.client || "").toLowerCase().trim()
+          const pClientId = (p.clientId || "").toLowerCase().trim()
+          const pEmail = (p.createdByEmail || "").toLowerCase().trim()
+          const pTitle = (p.title || "").toLowerCase().trim()
+          return (
+            (cId && pClientId === cId) ||
+            (cName && (pClient === cName || pClient.includes(cName) || cName.includes(pClient))) ||
+            (cEmail && (pEmail === cEmail || pClient.includes(cEmail))) ||
+            (cPrimary && (pClient === cPrimary || pClient.includes(cPrimary))) ||
+            (pTitle && invProjectNames.has(pTitle))
+          )
+        })
+
+        let totalInvoicedNum = 0
+        let totalReceivedNum = 0
+        let totalDueNum = 0
+
+        matchedInvoices.forEach(i => {
+          const invVal = parseInt((i.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
+          const recVal = parseInt((i.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
+          const dueVal = parseInt((i.due || "0").replace(/[^0-9]/g, "")) || 0
+          totalInvoicedNum += invVal
+          totalReceivedNum += recVal
+          totalDueNum += dueVal
+        })
+
+        return {
+          ...c,
+          projectsCount: Math.max(c.projectsCount || 0, matchedProjects.length),
+          totalInvoiced: totalInvoicedNum > 0 ? `₹${totalInvoicedNum.toLocaleString("en-IN")}` : c.totalInvoiced || "₹0",
+          paymentReceived: totalReceivedNum > 0 ? `₹${totalReceivedNum.toLocaleString("en-IN")}` : c.paymentReceived || "₹0",
+          due: totalDueNum > 0 ? `₹${totalDueNum.toLocaleString("en-IN")}` : totalInvoicedNum > 0 && totalReceivedNum >= totalInvoicedNum ? "₹0" : c.due || "₹0",
+        }
+      }).sort(
         (a, b) => getClientTimestamp(b) - getClientTimestamp(a)
       )
       setClients(mergedClients)

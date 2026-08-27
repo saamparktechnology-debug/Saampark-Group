@@ -50,16 +50,28 @@ export const addPayment = async (paymentData: Omit<PaymentItem, "id"> & { id?: s
       const invoices = await getInvoices()
       const targetInv = invoices.find(i => i.id.toLowerCase().trim() === paymentData.invoiceId.toLowerCase().trim())
       if (targetInv) {
-        const invTotalNum = parseInt(targetInv.totalInvoiced.replace(/[^0-9]/g, "")) || 0
-        const prevPaidNum = parseInt(targetInv.paymentReceived.replace(/[^0-9]/g, "")) || 0
-        const newPaidNum = prevPaidNum + numAmount
-        const remainingDue = Math.max(0, invTotalNum - newPaidNum)
+        const invTotalNum = parseInt((targetInv.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
+        
+        // Aggregate all completed payments for this specific invoice
+        const invPayments = updated.filter(p => 
+          p.invoiceId && 
+          p.invoiceId.toLowerCase().trim() === targetInv.id.toLowerCase().trim() && 
+          p.status === "Completed"
+        )
+        const totalCompletedPaid = invPayments.reduce((sum, p) => sum + (p.amountNum || 0), 0)
+        const effectivePaid = Math.min(invTotalNum, totalCompletedPaid)
+        const remainingDue = Math.max(0, invTotalNum - effectivePaid)
 
-        const newStatus = remainingDue === 0 ? "Fully paid" : "Partially paid"
+        const newStatus = remainingDue === 0 
+          ? "Fully paid" 
+          : effectivePaid > 0 
+            ? "Partially paid" 
+            : "Not paid"
+
         await updateInvoiceStatus(
           targetInv.id,
           newStatus,
-          `₹${newPaidNum.toLocaleString("en-IN")}`,
+          `₹${effectivePaid.toLocaleString("en-IN")}`,
           `₹${remainingDue.toLocaleString("en-IN")}`
         )
       }
