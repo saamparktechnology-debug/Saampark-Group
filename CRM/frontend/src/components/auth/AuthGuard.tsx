@@ -59,10 +59,11 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   // Prevent rendering protected content before hydration completes
   if (!isMounted) return null
 
-  // If on login page, allow rendering login screen
-  if (pathname === "/login") return <>{children}</>
+  // If on login or public unauthenticated verification page, render directly
+  const isPublicPage = pathname === "/login" || pathname?.startsWith("/public") || pathname?.startsWith("/verify-invoice")
+  if (isPublicPage) return <>{children}</>
 
-  // If not authenticated and not on login page, render nothing while redirecting
+  // If not authenticated and not on public page, render nothing while redirecting
   if (!isAuthenticated || !user) return null
 
   // Authenticated user on protected page

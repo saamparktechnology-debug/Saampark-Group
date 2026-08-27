@@ -471,12 +471,8 @@ export function InvoiceModal({
               <div className="flex flex-col sm:flex-row justify-between items-stretch gap-4 border-b border-zinc-200 pb-3">
                 {/* Left: Saampark Brand & Company Info with Large Crest Logo Badge */}
                 <div className="flex items-start gap-3.5 flex-1 min-w-0">
-                  {/* Top-Left Curved Logo Badge with Big Centered Emblem Only */}
-                  <div className={`w-28 h-24 p-2 rounded-tl-2xl rounded-tr-xs rounded-br-[32px] rounded-bl-xs ${
-                    isGstInvoice 
-                      ? "bg-gradient-to-b from-emerald-600 via-emerald-700 to-teal-950" 
-                      : "bg-gradient-to-b from-blue-700 via-blue-800 to-indigo-950"
-                  } text-white flex items-center justify-center text-center shadow-md shrink-0 border border-white/20`}>
+                  {/* Top-Left Curved Logo Badge Matching Theme Palette */}
+                  <div className={`w-28 h-24 p-2 rounded-tl-2xl rounded-tr-xs rounded-br-[32px] rounded-bl-xs ${theme.cardHeaderGradient} text-white flex items-center justify-center text-center shadow-md shrink-0 border border-white/20`}>
                     <img 
                       src="/saampark-logo.png" 
                       alt="Saampark Logo" 
