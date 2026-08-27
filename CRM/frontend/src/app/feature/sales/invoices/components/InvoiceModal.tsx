@@ -460,31 +460,23 @@ export function InvoiceModal({
             const page1Items = isMultiPage ? finalRenderedRows.slice(0, 5) : finalRenderedRows
             const page2Items = isMultiPage ? finalRenderedRows.slice(5) : []
 
+            const hasDue = parsedDue > 0
+
             const renderTopHeader = (pageNumber?: number) => (
               <div className="flex flex-col sm:flex-row justify-between items-stretch gap-4 border-b border-zinc-200 pb-3">
-                {/* Left: Saampark Brand & Company Info with Curved Crest Emblem Badge */}
+                {/* Left: Saampark Brand & Company Info with Large Crest Logo Badge */}
                 <div className="flex items-start gap-3.5 flex-1 min-w-0">
-                  {/* Top-Left Curved Logo Badge Matching Example Gold Shop Invoice */}
-                  <div className={`w-28 py-3 px-2 rounded-tl-2xl rounded-tr-xs rounded-br-[32px] rounded-bl-xs ${
+                  {/* Top-Left Curved Logo Badge with Big Centered Emblem Only */}
+                  <div className={`w-28 h-24 p-2 rounded-tl-2xl rounded-tr-xs rounded-br-[32px] rounded-bl-xs ${
                     isGstInvoice 
                       ? "bg-gradient-to-b from-emerald-600 via-emerald-700 to-teal-950" 
                       : "bg-gradient-to-b from-blue-700 via-blue-800 to-indigo-950"
-                  } text-white flex flex-col items-center justify-center text-center shadow-md shrink-0 border border-white/20`}>
+                  } text-white flex items-center justify-center text-center shadow-md shrink-0 border border-white/20`}>
                     <img 
                       src="/saampark-logo.png" 
                       alt="Saampark Logo" 
-                      className="w-12 h-12 object-contain drop-shadow-md brightness-110" 
+                      className="w-20 h-20 object-contain drop-shadow-md brightness-110" 
                     />
-                    <span className="font-black text-xs tracking-wider uppercase mt-1 leading-none text-white font-sans">
-                      SAAMPARK
-                    </span>
-                    <div className="w-full flex items-center justify-center gap-1 my-1 opacity-70">
-                      <div className="h-[0.5px] w-2.5 bg-white" />
-                      <span className="text-[7px] font-bold tracking-widest uppercase text-white">
-                        TECHNOLOGY
-                      </span>
-                      <div className="h-[0.5px] w-2.5 bg-white" />
-                    </div>
                   </div>
 
                   {/* Title, Subtitle, Legal IDs & Registered Office Coordinates */}
@@ -566,7 +558,7 @@ export function InvoiceModal({
                       <span className="text-white/80 flex items-center gap-1">
                         <span>📅</span> NEXT DUE DATE
                       </span>
-                      <strong className="text-white font-mono">{invoice.dueDate || "-"}</strong>
+                      <strong className="text-white font-mono">{hasDue ? (invoice.dueDate || "-") : "-"}</strong>
                     </div>
                   </div>
                 </div>
@@ -828,7 +820,7 @@ export function InvoiceModal({
 
                       <div className="flex justify-between pt-0.5 text-[9.5px] text-zinc-500">
                         <span>Next Due Date</span>
-                        <span className="font-mono font-bold text-zinc-800">{invoice.dueDate || "-"}</span>
+                        <span className="font-mono font-bold text-zinc-800">{hasDue ? (invoice.dueDate || "-") : "-"}</span>
                       </div>
                     </div>
                   </div>
