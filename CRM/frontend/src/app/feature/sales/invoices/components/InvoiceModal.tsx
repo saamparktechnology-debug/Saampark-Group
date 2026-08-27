@@ -337,7 +337,7 @@ export function InvoiceModal({
   return (
     <div className="fixed inset-0 top-14 sm:top-0 z-[99999] flex items-start sm:items-center justify-center bg-black/85 backdrop-blur-md p-2 sm:p-4 overflow-y-auto print:p-0 print:bg-white print:static print:block">
 
-      <div className="bg-white border border-zinc-200 rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden max-h-[92vh] sm:max-h-[96vh] my-auto print:max-h-none print:shadow-none print:border-none print:w-full print:rounded-none">
+      <div className="bg-white border border-zinc-200 rounded-2xl shadow-2xl w-full max-w-[850px] flex flex-col overflow-hidden max-h-[92vh] sm:max-h-[96vh] my-auto print:max-h-none print:shadow-none print:border-none print:w-full print:rounded-none">
         
         {/* Top Floating Action Header Bar (No Print) */}
         <div className="no-print flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-3 border-b border-zinc-200 bg-zinc-50/95 backdrop-blur-md shrink-0">
@@ -397,10 +397,12 @@ export function InvoiceModal({
               <X size={18} />
             </button>
           </div>
-        </div>        {/* ── PRINTABLE INVOICE CANVAS ────────────────────────────────────── */}
+        </div>
+
+        {/* ── PRINTABLE INVOICE CANVAS ────────────────────────────────────── */}
         <div 
           id="printable-invoice" 
-          className="flex-1 overflow-y-auto p-3 sm:p-5 bg-white text-zinc-900 font-sans text-xs leading-normal select-text"
+          className="flex-1 overflow-y-auto p-4 sm:p-6 bg-white text-zinc-900 font-sans text-xs leading-normal select-text"
         >
           {(() => {
             const rawItems: any[] = (invoice.items && invoice.items.length > 0)
@@ -459,71 +461,71 @@ export function InvoiceModal({
             const page2Items = isMultiPage ? finalRenderedRows.slice(5) : []
 
             const renderTopHeader = (pageNumber?: number) => (
-              <div className="flex flex-col sm:flex-row justify-between items-start gap-3 border-b border-zinc-200 pb-2.5">
+              <div className="flex flex-col sm:flex-row justify-between items-stretch gap-4 border-b border-zinc-200 pb-3">
                 {/* Left: Saampark Brand & Company Info with Curved Crest Emblem Badge */}
-                <div className="flex items-start gap-3 flex-1 min-w-0">
+                <div className="flex items-start gap-3.5 flex-1 min-w-0">
                   {/* Top-Left Curved Logo Badge Matching Example Gold Shop Invoice */}
-                  <div className={`w-24 py-2 px-1.5 rounded-tl-xl rounded-tr-xs rounded-br-[26px] rounded-bl-xs ${
+                  <div className={`w-28 py-3 px-2 rounded-tl-2xl rounded-tr-xs rounded-br-[32px] rounded-bl-xs ${
                     isGstInvoice 
-                      ? "bg-gradient-to-b from-emerald-600 via-emerald-700 to-teal-900" 
-                      : "bg-gradient-to-b from-blue-600 via-blue-700 to-indigo-950"
-                  } text-white flex flex-col items-center justify-center text-center shadow-sm shrink-0 border border-white/20`}>
+                      ? "bg-gradient-to-b from-emerald-600 via-emerald-700 to-teal-950" 
+                      : "bg-gradient-to-b from-blue-700 via-blue-800 to-indigo-950"
+                  } text-white flex flex-col items-center justify-center text-center shadow-md shrink-0 border border-white/20`}>
                     <img 
                       src="/saampark-logo.png" 
                       alt="Saampark Logo" 
-                      className="w-10 h-10 object-contain drop-shadow-md brightness-105" 
+                      className="w-12 h-12 object-contain drop-shadow-md brightness-110" 
                     />
-                    <span className="font-black text-[10px] tracking-wider uppercase mt-1 leading-none text-white font-sans">
+                    <span className="font-black text-xs tracking-wider uppercase mt-1 leading-none text-white font-sans">
                       SAAMPARK
                     </span>
-                    <div className="w-full flex items-center justify-center gap-1 my-0.5 opacity-60">
-                      <div className="h-[0.5px] w-2 bg-white" />
-                      <span className="text-[6px] font-bold tracking-widest uppercase text-white">
+                    <div className="w-full flex items-center justify-center gap-1 my-1 opacity-70">
+                      <div className="h-[0.5px] w-2.5 bg-white" />
+                      <span className="text-[7px] font-bold tracking-widest uppercase text-white">
                         TECHNOLOGY
                       </span>
-                      <div className="h-[0.5px] w-2 bg-white" />
+                      <div className="h-[0.5px] w-2.5 bg-white" />
                     </div>
                   </div>
 
                   {/* Title, Subtitle, Legal IDs & Registered Office Coordinates */}
-                  <div className="space-y-0.5 flex-1 min-w-0 pt-0.5">
+                  <div className="space-y-1 flex-1 min-w-0 pt-0.5">
                     <div>
-                      <h1 className="text-base sm:text-lg font-black tracking-tight text-zinc-950 leading-none">
+                      <h1 className="text-xl sm:text-2xl font-black tracking-tight text-zinc-950 leading-none">
                         SAAMPARK TECHNOLOGY
                       </h1>
-                      <h2 className="text-[10px] sm:text-[11px] font-bold text-zinc-700 tracking-wider uppercase mt-0.5">
+                      <h2 className="text-xs sm:text-sm font-bold text-zinc-700 tracking-wider uppercase mt-1">
                         AND RESEARCH PRIVATE LIMITED
                       </h2>
                     </div>
 
-                    <p className="text-[8.5px] font-semibold text-zinc-600 font-mono pt-0.5">
+                    <p className="text-[10px] font-semibold text-zinc-600 font-mono pt-0.5">
                       CIN: <span className="text-zinc-800 font-bold">U72900WB2024PTC271234</span>
                       {isGstInvoice && (
                         <> | GSTIN: <span className="text-zinc-900 font-black">19ABFCS1234D1ZS</span></>
                       )}
                     </p>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-0.5 text-[8.5px] text-zinc-700 pt-0.5">
-                      <div className="flex items-start gap-1">
-                        <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center text-[7px] shrink-0 mt-0.5`}>📍</span>
-                        <div className="leading-tight">
-                          <strong className="text-zinc-900 block text-[8.5px]">Registered Office:</strong>
-                          <span className="text-zinc-600 text-[8px]">Madinipur, Kolkata, Durgapur, West Bengal, India - 721101</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[9.5px] text-zinc-700 pt-1">
+                      <div className="flex items-start gap-1.5">
+                        <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center text-[8px] shrink-0 mt-0.5`}>📍</span>
+                        <div className="leading-snug">
+                          <strong className="text-zinc-900 block text-[9.5px]">Registered Office:</strong>
+                          <span className="text-zinc-600 text-[9px]">Madinipur, Kolkata, Durgapur, West Bengal, India - 721101</span>
                         </div>
                       </div>
 
                       <div className="space-y-0.5">
-                        <p className="flex items-center gap-1">
-                          <span className={`w-3 h-3 rounded-full ${theme.primaryBg} text-white flex items-center justify-center text-[6.5px] shrink-0`}>📞</span>
-                          <span className="font-mono text-zinc-800 font-semibold text-[8px]">+91 9901518567 / +91 9901518569</span>
+                        <p className="flex items-center gap-1.5">
+                          <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center text-[7px] shrink-0`}>📞</span>
+                          <span className="font-mono text-zinc-800 font-semibold text-[9px]">+91 9901518567 / +91 9901518569</span>
                         </p>
-                        <p className="flex items-center gap-1">
-                          <span className={`w-3 h-3 rounded-full ${theme.primaryBg} text-white flex items-center justify-center text-[6.5px] shrink-0`}>🌐</span>
-                          <span className="text-zinc-700 text-[8px]">www.saamparktechnology.com</span>
+                        <p className="flex items-center gap-1.5">
+                          <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center text-[7px] shrink-0`}>🌐</span>
+                          <span className="text-zinc-700 text-[9px]">www.saamparktechnology.com</span>
                         </p>
-                        <p className="flex items-center gap-1">
-                          <span className={`w-3 h-3 rounded-full ${theme.primaryBg} text-white flex items-center justify-center text-[6.5px] shrink-0`}>✉️</span>
-                          <span className="text-zinc-700 text-[8px]">info@saamparktechnology.com</span>
+                        <p className="flex items-center gap-1.5">
+                          <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center text-[7px] shrink-0`}>✉️</span>
+                          <span className="text-zinc-700 text-[9px]">info@saamparktechnology.com</span>
                         </p>
                       </div>
                     </div>
@@ -531,12 +533,12 @@ export function InvoiceModal({
                 </div>
 
                 {/* Right: Curved Header Card with Status Badge & Details */}
-                <div className={`w-full sm:w-52 rounded-xl ${theme.cardHeaderGradient} text-white p-2.5 shadow-xs shrink-0 flex flex-col justify-between`}>
-                  <div className="flex items-center justify-between border-b border-white/20 pb-1">
-                    <span className="font-black text-[11px] tracking-wider uppercase">
+                <div className={`w-full sm:w-56 rounded-2xl ${theme.cardHeaderGradient} text-white p-3 shadow-md shrink-0 flex flex-col justify-between`}>
+                  <div className="flex items-center justify-between border-b border-white/20 pb-1.5">
+                    <span className="font-black text-xs tracking-wider uppercase">
                       {theme.invoiceTypeLabel} {pageNumber ? `(P.${pageNumber}/2)` : ''}
                     </span>
-                    <span className={`px-1.5 py-0.2 rounded-full text-[8.5px] font-black tracking-wider uppercase ${
+                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black tracking-wider uppercase ${
                       isFullyPaid 
                         ? "bg-white text-emerald-800" 
                         : isPartPaid 
@@ -547,17 +549,23 @@ export function InvoiceModal({
                     </span>
                   </div>
 
-                  <div className="space-y-1 pt-1.5 text-[9.5px]">
-                    <div className="flex justify-between">
-                      <span className="text-white/80">INVOICE NO.</span>
-                      <strong className="font-mono text-white text-[10px]">{invoice.id}</strong>
+                  <div className="space-y-1.5 pt-2 text-[10px]">
+                    <div className="flex justify-between items-center">
+                      <span className="text-white/80 flex items-center gap-1">
+                        <span>📄</span> INVOICE NO.
+                      </span>
+                      <strong className="font-mono text-white text-[11px]">{invoice.id}</strong>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-white/80">INVOICE DATE</span>
+                    <div className="flex justify-between items-center">
+                      <span className="text-white/80 flex items-center gap-1">
+                        <span>📅</span> INVOICE DATE
+                      </span>
                       <strong className="text-white font-mono">{invoice.billDate}</strong>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-white/80">NEXT DUE DATE</span>
+                    <div className="flex justify-between items-center">
+                      <span className="text-white/80 flex items-center gap-1">
+                        <span>📅</span> NEXT DUE DATE
+                      </span>
                       <strong className="text-white font-mono">{invoice.dueDate || "-"}</strong>
                     </div>
                   </div>
@@ -566,47 +574,47 @@ export function InvoiceModal({
             )
 
             const renderInfoCards = () => (
-              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 pt-0.5">
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-1">
                 {/* Box 1: BILL TO (5 cols) */}
-                <div className={`sm:col-span-5 p-2 rounded-lg ${theme.lightBg} border ${theme.lightBorder} space-y-0.5`}>
-                  <div className="flex items-center gap-1 text-[9.5px] font-black uppercase tracking-wider text-zinc-700">
-                    <span className={theme.primaryText}>👤</span>
+                <div className={`sm:col-span-5 p-3 rounded-2xl ${theme.lightBg} border ${theme.lightBorder} space-y-1 shadow-2xs`}>
+                  <div className="flex items-center gap-1.5 text-[10.5px] font-black uppercase tracking-wider text-zinc-700">
+                    <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center text-[8px]`}>👤</span>
                     <span>BILL TO</span>
                   </div>
-                  <p className="font-extrabold text-[11px] text-zinc-900 leading-tight">{invoice.client}</p>
-                  <p className="text-[9.5px] text-zinc-600">
+                  <p className="font-black text-xs text-zinc-900 leading-tight">{invoice.client}</p>
+                  <p className="text-[10px] text-zinc-600 leading-tight">
                     <strong>Address:</strong> {clientDetails?.address || (invoice.clientEmail ? `${clientDetails?.address || 'Corporate Center'}` : 'Head Office')}
                   </p>
-                  <p className="text-[9.5px] text-zinc-600">
+                  <p className="text-[10px] text-zinc-600">
                     <strong>State:</strong> {clientDetails?.state || 'West Bengal - 721101'}
                   </p>
                   {isGstInvoice && clientDetails?.gstNumber && (
-                    <p className="text-[9px] font-mono font-bold text-zinc-800">
+                    <p className="text-[9.5px] font-mono font-bold text-zinc-800">
                       GSTIN: {clientDetails.gstNumber}
                     </p>
                   )}
                 </div>
 
                 {/* Box 2: PLACE OF SUPPLY (4 cols) */}
-                <div className={`sm:col-span-4 p-2 rounded-lg ${theme.lightBg} border ${theme.lightBorder} space-y-0.5`}>
-                  <div className="flex items-center gap-1 text-[9.5px] font-black uppercase tracking-wider text-zinc-700">
-                    <span className={theme.primaryText}>📍</span>
+                <div className={`sm:col-span-4 p-3 rounded-2xl ${theme.lightBg} border ${theme.lightBorder} space-y-1 shadow-2xs`}>
+                  <div className="flex items-center gap-1.5 text-[10.5px] font-black uppercase tracking-wider text-zinc-700">
+                    <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center text-[8px]`}>📍</span>
                     <span>PLACE OF SUPPLY</span>
                   </div>
-                  <p className="text-[9.5px] text-zinc-700">
+                  <p className="text-[10px] text-zinc-700">
                     <strong>Ph No:</strong> {clientDetails?.phone || (invoice.billedBy ? `${clientDetails?.phone || '+91 9901518567'}` : '+91 9901518567')}
                   </p>
-                  <p className="text-[9.5px] text-zinc-600 leading-tight">
+                  <p className="text-[10px] text-zinc-600 leading-snug">
                     Madinipur, Kolkata, Durgapur, West Bengal, India
                   </p>
-                  <p className="text-[9px] font-semibold text-zinc-700">
+                  <p className="text-[9.5px] font-semibold text-zinc-700">
                     West Bengal (State Code: 19)
                   </p>
                 </div>
 
                 {/* Box 3: SCAN TO DIRECTLY VIEW INVOICE (3 cols) */}
-                <div className={`sm:col-span-3 p-1.5 rounded-lg ${theme.lightBg} border ${theme.lightBorder} flex flex-col items-center justify-center text-center space-y-0.5`}>
-                  <span className="text-[8.5px] font-black tracking-wider uppercase text-zinc-700">
+                <div className={`sm:col-span-3 p-2 rounded-2xl ${theme.lightBg} border ${theme.lightBorder} flex flex-col items-center justify-center text-center space-y-1 shadow-2xs`}>
+                  <span className="text-[9px] font-black tracking-wider uppercase text-zinc-700">
                     SCAN TO VERIFY
                   </span>
                   <a 
@@ -619,10 +627,10 @@ export function InvoiceModal({
                     <img 
                       src={verifyQrCodeUrl} 
                       alt={`QR code for invoice ${invoice.id}`} 
-                      className="w-12 h-12 object-contain rounded bg-white p-0.5 border border-zinc-200 shadow-2xs" 
+                      className="w-14 h-14 object-contain rounded-lg bg-white p-0.5 border border-zinc-200 shadow-2xs" 
                     />
                   </a>
-                  <span className="text-[8px] font-mono font-bold text-zinc-600 truncate max-w-full">
+                  <span className="text-[8.5px] font-mono font-bold text-zinc-600 truncate max-w-full">
                     {invoice.id}
                   </span>
                 </div>
@@ -630,30 +638,30 @@ export function InvoiceModal({
             )
 
             const renderTable = (itemsList: typeof finalRenderedRows, startIndex: number, showSubtotal: boolean) => (
-              <div className="rounded-lg overflow-hidden border border-zinc-200 shadow-2xs">
-                <table className="w-full text-left text-[10px] border-collapse">
+              <div className="rounded-xl overflow-hidden border border-zinc-200 shadow-2xs">
+                <table className="w-full text-left text-xs border-collapse">
                   <thead>
-                    <tr className={`${theme.tableHeaderBg} font-bold text-[9.5px]`}>
-                      <th className="py-1.5 px-2.5 w-8 text-center">NO.</th>
-                      <th className="py-1.5 px-2.5">SERVICES / PRODUCT NAME</th>
-                      <th className="py-1.5 px-2 text-center">QTY</th>
-                      <th className="py-1.5 px-2 text-center">UNIT</th>
-                      <th className="py-1.5 px-2.5 text-right">RATE (₹)</th>
-                      <th className="py-1.5 px-2.5 text-right">TAX (₹)</th>
-                      <th className="py-1.5 px-2.5 text-right">AMOUNT (₹)</th>
+                    <tr className={`${theme.tableHeaderBg} font-bold text-[10.5px]`}>
+                      <th className="py-2 px-3 w-9 text-center">NO.</th>
+                      <th className="py-2 px-3">SERVICES / PRODUCT NAME</th>
+                      <th className="py-2 px-2.5 text-center">QTY</th>
+                      <th className="py-2 px-2.5 text-center">UNIT</th>
+                      <th className="py-2 px-3 text-right">RATE (₹)</th>
+                      <th className="py-2 px-3 text-right">TAX (₹)</th>
+                      <th className="py-2 px-3 text-right">AMOUNT (₹)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-200 bg-white font-medium text-zinc-800">
                     {itemsList.map((item, idx) => (
                       <tr key={item.id || idx}>
-                        <td className="py-1.5 px-2 text-center font-bold text-zinc-500">{startIndex + idx + 1}</td>
-                        <td className="py-1.5 px-2.5">
-                          <div className="space-y-0.2">
-                            <p className="font-bold text-zinc-900 text-[10.5px] leading-tight">{item.serviceName}</p>
+                        <td className="py-2.5 px-3 text-center font-bold text-zinc-500">{startIndex + idx + 1}</td>
+                        <td className="py-2.5 px-3">
+                          <div className="space-y-0.5">
+                            <p className="font-extrabold text-zinc-900 text-xs leading-tight">{item.serviceName}</p>
                             {item.charges && item.charges.length > 0 && (
-                              <div className="space-y-0.2">
+                              <div className="space-y-0.5 pt-0.5">
                                 {item.charges.map((chg: any) => (
-                                  <p key={chg.id} className="text-[8.5px] text-zinc-500 flex items-center gap-1">
+                                  <p key={chg.id} className="text-[9px] text-zinc-500 flex items-center gap-1">
                                     <span>+ {chg.name}:</span>
                                     <strong className="font-mono text-zinc-700">₹{(chg.amount || 0).toLocaleString("en-IN")}</strong>
                                   </p>
@@ -661,26 +669,26 @@ export function InvoiceModal({
                               </div>
                             )}
                             {invoice.billedBy && idx === 0 && startIndex === 0 && (
-                              <p className="text-[8px] text-zinc-400 font-mono">Billed By: {invoice.billedBy}</p>
+                              <p className="text-[8.5px] text-zinc-400 font-mono">Billed By: {invoice.billedBy}</p>
                             )}
                           </div>
                         </td>
-                        <td className="py-1.5 px-2 text-center font-mono text-[10px]">{item.itemQty}</td>
-                        <td className="py-1.5 px-2 text-center text-zinc-600 text-[10px]">{item.unit || "Service"}</td>
-                        <td className="py-1.5 px-2.5 text-right font-mono font-semibold">
+                        <td className="py-2.5 px-2.5 text-center font-mono text-[11px]">{item.itemQty}</td>
+                        <td className="py-2.5 px-2.5 text-center text-zinc-600 text-[11px]">{item.unit || "Service"}</td>
+                        <td className="py-2.5 px-3 text-right font-mono font-semibold">
                           ₹{item.itemRate.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                         </td>
-                        <td className="py-1.5 px-2.5 text-right font-mono text-zinc-700">
+                        <td className="py-2.5 px-3 text-right font-mono text-zinc-700">
                           {item.gstRate > 0 && item.rowTax > 0 ? (
                             <div>
                               <span>₹{item.rowTax.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-                              <span className="text-[8px] text-zinc-500 block">({item.gstRate}%)</span>
+                              <span className="text-[8.5px] text-zinc-500 block">({item.gstRate}%)</span>
                             </div>
                           ) : (
                             <span>₹0.00</span>
                           )}
                         </td>
-                        <td className="py-1.5 px-2.5 text-right font-mono font-black text-zinc-900">
+                        <td className="py-2.5 px-3 text-right font-mono font-black text-zinc-900">
                           ₹{item.rowTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                         </td>
                       </tr>
@@ -688,19 +696,19 @@ export function InvoiceModal({
                   </tbody>
                   {showSubtotal && (
                     <tfoot>
-                      <tr className={`${theme.tableSubtotalBg} font-bold text-[10px] border-t border-zinc-200`}>
-                        <td colSpan={2} className="py-1.5 px-2.5 uppercase tracking-wider">
+                      <tr className={`${theme.tableSubtotalBg} font-bold text-[10.5px] border-t border-zinc-200`}>
+                        <td colSpan={2} className="py-2 px-3 uppercase tracking-wider">
                           SUBTOTAL SERVICES & BASE AMOUNT
                         </td>
-                        <td className="py-1.5 px-2 text-center font-mono">{totalTableQty}</td>
-                        <td className="py-1.5 px-2 text-center">Items</td>
-                        <td className="py-1.5 px-2.5 text-right font-mono">
+                        <td className="py-2 px-2.5 text-center font-mono">{totalTableQty}</td>
+                        <td className="py-2 px-2.5 text-center">Items</td>
+                        <td className="py-2 px-3 text-right font-mono">
                           ₹{totalTableBase.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                         </td>
-                        <td className="py-1.5 px-2.5 text-right font-mono">
+                        <td className="py-2 px-3 text-right font-mono">
                           ₹{totalTableGst.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                         </td>
-                        <td className="py-1.5 px-2.5 text-right font-mono font-black">
+                        <td className="py-2 px-3 text-right font-mono font-black">
                           ₹{totalTableGross.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                         </td>
                       </tr>
@@ -713,97 +721,112 @@ export function InvoiceModal({
             const renderFinancialsAndFooter = () => (
               <>
                 {/* 4. TOTAL AMOUNT IN WORDS + TERMS & CONDITIONS (LEFT) & FINANCIAL BREAKDOWN (RIGHT) */}
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-0.5">
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5 pt-1">
                   {/* Left 6 Columns: Amount in Words & Terms */}
-                  <div className="sm:col-span-6 space-y-1.5">
-                    <div className={`p-2 rounded-lg ${theme.lightBg} border ${theme.lightBorder} space-y-0.2`}>
-                      <span className="font-black text-[9px] uppercase tracking-wider text-zinc-600 flex items-center gap-1">
+                  <div className="sm:col-span-6 space-y-2">
+                    <div className={`p-2.5 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-0.5 shadow-2xs`}>
+                      <span className="font-black text-[9.5px] uppercase tracking-wider text-zinc-600 flex items-center gap-1">
                         <span>📝</span> TOTAL AMOUNT IN WORDS
                       </span>
-                      <p className="font-bold text-zinc-900 italic text-[10px] leading-tight">
+                      <p className="font-bold text-zinc-900 italic text-[10.5px] leading-tight">
                         {numberToIndianWords(totalVal)}
                       </p>
                     </div>
 
-                    <div className="p-2 rounded-lg bg-zinc-50 border border-zinc-200 space-y-0.5">
-                      <span className="font-black text-[9px] uppercase tracking-wider text-zinc-700 block border-b border-zinc-200 pb-0.2">
+                    <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200 space-y-1 shadow-2xs">
+                      <span className="font-black text-[10px] uppercase tracking-wider text-zinc-700 block border-b border-zinc-200 pb-1">
                         TERMS & CONDITIONS
                       </span>
-                      <ol className="space-y-0.2 text-[8px] text-zinc-700 font-medium leading-tight list-decimal list-inside">
-                        <li>E.& O.E.</li>
-                        <li>Total payment due to be paid within due date to avoid suspension/cancellation.</li>
-                        <li>Please include the invoice number in your payment notes.</li>
-                        <li>All disputes are subject to Paschim Medinipur jurisdiction only.</li>
-                        <li>For payment & refund related queries, read our Refund & Return Policy on website.</li>
-                      </ol>
+                      <ul className="space-y-1 text-[9px] text-zinc-700 font-medium leading-tight">
+                        <li className="flex items-start gap-1.5">
+                          <span className={`${theme.primaryText} font-bold`}>✔</span>
+                          <span>1. E.& O.E.</span>
+                        </li>
+                        <li className="flex items-start gap-1.5">
+                          <span className={`${theme.primaryText} font-bold`}>✔</span>
+                          <span>2. Total payment due to be paid within due date to avoid suspension/cancellation.</span>
+                        </li>
+                        <li className="flex items-start gap-1.5">
+                          <span className={`${theme.primaryText} font-bold`}>✔</span>
+                          <span>3. Please include the invoice number in your payment notes.</span>
+                        </li>
+                        <li className="flex items-start gap-1.5">
+                          <span className={`${theme.primaryText} font-bold`}>✔</span>
+                          <span>4. All disputes are subject to Paschim Medinipur jurisdiction only.</span>
+                        </li>
+                        <li className="flex items-start gap-1.5">
+                          <span className={`${theme.primaryText} font-bold`}>✔</span>
+                          <span>5. For payment & refund related queries, read our Refund & Return Policy on website.</span>
+                        </li>
+                      </ul>
                     </div>
                   </div>
 
                   {/* Right 6 Columns: Financial Computation Matrix */}
-                  <div className="sm:col-span-6 space-y-0.5 text-[9.5px]">
-                    <div className="p-2 rounded-lg bg-zinc-50 border border-zinc-200 space-y-0.5 text-zinc-700">
-                      <div className="flex justify-between py-0.1">
+                  <div className="sm:col-span-6 space-y-1 text-[10.5px]">
+                    <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200 space-y-0.5 text-zinc-700 shadow-2xs">
+                      <div className="flex justify-between py-0.5">
                         <span>Total Services Value</span>
                         <span className="font-mono font-semibold">₹{baseNum.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
                       </div>
-                      <div className="flex justify-between py-0.1">
+                      <div className="flex justify-between py-0.5">
                         <span>Platform / Setup Charge</span>
                         <span className="font-mono">₹{setupCharge.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
                       </div>
 
                       {invoice.discountsList && invoice.discountsList.length > 0 ? (
                         invoice.discountsList.map((d: any) => (
-                          <div key={d.id} className="flex justify-between py-0.1 text-zinc-500">
+                          <div key={d.id} className="flex justify-between py-0.5 text-zinc-500">
                             <span>Less: {d.name}</span>
                             <span className="font-mono">(-) ₹{(d.amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
                           </div>
                         ))
                       ) : (
-                        <div className="flex justify-between py-0.1 text-zinc-500">
+                        <div className="flex justify-between py-0.5 text-zinc-500">
                           <span>Less: Promotional Discount</span>
                           <span className="font-mono">(-) ₹{discount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
                         </div>
                       )}
 
-                      <div className="flex justify-between py-0.2 border-t border-zinc-200 font-bold text-zinc-900">
+                      <div className="flex justify-between py-1 border-t border-zinc-200 font-bold text-zinc-900">
                         <span>Taxable Base Amount</span>
                         <span className="font-mono">₹{taxableBase.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
                       </div>
 
                       {isGstInvoice && (
                         <>
-                          <div className="flex justify-between py-0.1 text-zinc-600">
+                          <div className="flex justify-between py-0.5 text-zinc-600">
                             <span>CGST ({(gstRate / 2).toFixed(1)}%)</span>
                             <span className="font-mono">₹{cgstAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
                           </div>
-                          <div className="flex justify-between py-0.1 text-zinc-600">
+                          <div className="flex justify-between py-0.5 text-zinc-600">
                             <span>SGST ({(gstRate / 2).toFixed(1)}%)</span>
                             <span className="font-mono">₹{sgstAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
                           </div>
                         </>
                       )}
 
-                      <div className={`flex justify-between p-1.5 rounded ${theme.grandTotalBg} font-black text-[11px] tracking-wide my-0.5 shadow-xs`}>
+                      <div className={`flex justify-between p-2 rounded-lg ${theme.grandTotalBg} font-black text-xs tracking-wide my-1 shadow-xs`}>
                         <span>GRAND TOTAL (NET PAYABLE)</span>
-                        <span className="font-mono text-xs">₹{totalVal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                        <span className="font-mono text-sm">₹{totalVal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
                       </div>
 
-                      <div className="flex justify-between py-0.2 text-emerald-700 font-bold">
+                      <div className="flex justify-between py-0.5 text-emerald-700 font-bold">
                         <span>Received Amount</span>
                         <span className="font-mono">₹{parsedReceived.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
                       </div>
 
-                      <div className="flex justify-between py-0.1 text-zinc-500">
+                      <div className="flex justify-between py-0.5 text-zinc-500">
                         <span>Previous Balance</span>
                         <span className="font-mono">₹0.00</span>
                       </div>
 
-                      <div className="flex justify-between py-0.2 border-t border-zinc-200 font-black text-[10px] text-rose-600">
+                      <div className="flex justify-between py-1 border-t border-zinc-200 font-black text-[11px] text-rose-600">
                         <span>Current Balance (Total Due)</span>
                         <span className="font-mono">₹{parsedDue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
                       </div>
 
-                      <div className="flex justify-between pt-0.1 text-[8.5px] text-zinc-500">
+                      <div className="flex justify-between pt-0.5 text-[9.5px] text-zinc-500">
                         <span>Next Due Date</span>
                         <span className="font-mono font-bold text-zinc-800">{invoice.dueDate || "-"}</span>
                       </div>
@@ -812,53 +835,53 @@ export function InvoiceModal({
                 </div>
 
                 {/* 5. PAYMENT & BANK TRANSFER DETAILS */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
-                  <div className={`p-2 rounded-lg ${theme.lightBg} border ${theme.lightBorder} space-y-0.5`}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div className={`p-2.5 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-1 shadow-2xs`}>
                     <div className="flex items-center justify-between">
-                      <span className="font-black text-[9px] uppercase tracking-wider text-zinc-800 flex items-center gap-1">
+                      <span className="font-black text-[10px] uppercase tracking-wider text-zinc-800 flex items-center gap-1">
                         <span>📱</span> UPI & DIGITAL PAYMENT
                       </span>
-                      <span className="text-[8px] font-bold text-emerald-700">Instant Settlement</span>
+                      <span className="text-[8.5px] font-bold text-emerald-700">Instant Settlement</span>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2.5">
                       {customPaymentQrUrl ? (
                         <img 
                           src={customPaymentQrUrl} 
                           alt="Payment QR Code" 
-                          className="w-11 h-11 rounded bg-white p-0.5 border border-zinc-200 shrink-0 object-contain" 
+                          className="w-13 h-13 rounded-lg bg-white p-0.5 border border-zinc-200 shrink-0 object-contain shadow-2xs" 
                         />
                       ) : (
-                        <div className="w-9 h-9 rounded bg-white border border-zinc-200 flex flex-col items-center justify-center text-center p-0.5 shrink-0 text-zinc-500">
-                          <span className="text-xs">⚡</span>
-                          <span className="text-[6.5px] font-bold">UPI PAY</span>
+                        <div className="w-11 h-11 rounded-lg bg-white border border-zinc-200 flex flex-col items-center justify-center text-center p-0.5 shrink-0 text-zinc-500">
+                          <span className="text-sm">⚡</span>
+                          <span className="text-[7.5px] font-bold">UPI PAY</span>
                         </div>
                       )}
                       
-                      <div className="space-y-0.2 text-[8px] flex-1">
+                      <div className="space-y-0.5 text-[9px] flex-1">
                         <div className="flex justify-between">
                           <span className="text-zinc-600">UPI ID:</span>
                           <strong className="font-mono text-zinc-900 font-bold">{paySettings.upiId || "saampark@sbi"}</strong>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-zinc-600">Account Holder:</span>
-                          <strong className="text-zinc-900 font-bold truncate max-w-[120px]">{paySettings.accountHolderName || "Saampark Technology Pvt. Ltd."}</strong>
+                          <strong className="text-zinc-900 font-bold truncate max-w-[130px]">{paySettings.accountHolderName || "Saampark Technology Pvt. Ltd."}</strong>
                         </div>
-                        <div className="flex items-center gap-1 flex-wrap pt-0.1 font-bold text-zinc-600 text-[7.5px]">
-                          <span className="px-1 py-0.1 rounded bg-white border border-zinc-200">GPay</span>
-                          <span className="px-1 py-0.1 rounded bg-white border border-zinc-200">PhonePe</span>
-                          <span className="px-1 py-0.1 rounded bg-white border border-zinc-200">Paytm</span>
-                          <span className="px-1 py-0.1 rounded bg-white border border-zinc-200">BHIM UPI</span>
+                        <div className="flex items-center gap-1 flex-wrap pt-0.5 font-bold text-zinc-600 text-[8px]">
+                          <span className="px-1.5 py-0.2 rounded bg-white border border-zinc-200">GPay</span>
+                          <span className="px-1.5 py-0.2 rounded bg-white border border-zinc-200">PhonePe</span>
+                          <span className="px-1.5 py-0.2 rounded bg-white border border-zinc-200">Paytm</span>
+                          <span className="px-1.5 py-0.2 rounded bg-white border border-zinc-200">BHIM UPI</span>
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className={`p-2 rounded-lg ${theme.lightBg} border ${theme.lightBorder} space-y-0.2`}>
-                    <span className="font-black text-[9px] uppercase tracking-wider text-zinc-800 flex items-center gap-1">
-                      <span>🏛️</span> BANK TRANSFER (NEFT / RTGS / IMPS)
+                  <div className={`p-2.5 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-0.5 shadow-2xs`}>
+                    <span className="font-black text-[10px] uppercase tracking-wider text-zinc-800 flex items-center gap-1">
+                      <span>🏛️</span> BANK DETAILS
                     </span>
-                    <div className="space-y-0.1 text-[8px] text-zinc-700">
+                    <div className="space-y-0.5 text-[9px] text-zinc-700">
                       <div className="flex justify-between">
                         <span>Bank Name:</span>
                         <strong className="text-zinc-900 font-bold">{paySettings.bankName || "State Bank of India"}</strong>
@@ -880,41 +903,41 @@ export function InvoiceModal({
                 </div>
 
                 {/* 6. SIGNATURES & OFFICIAL SEAL ROW */}
-                <div className="flex flex-row justify-between items-center gap-2 pt-1 border-t border-zinc-200">
-                  <div className="text-center space-y-0.2">
-                    <div className="h-5 flex items-end justify-center">
-                      <span className="font-serif italic text-zinc-500 text-[10px]">Customer Signature</span>
+                <div className="flex flex-row justify-between items-center gap-3 pt-2 border-t border-zinc-200">
+                  <div className="text-center space-y-0.5">
+                    <div className="h-6 flex items-end justify-center">
+                      <span className="font-serif italic text-zinc-500 text-xs">Customer Signature</span>
                     </div>
-                    <div className="w-28 border-t border-zinc-400 pt-0.1">
-                      <p className="text-[7.5px] font-black uppercase text-zinc-600">CUSTOMER SIGNATURE</p>
+                    <div className="w-32 border-t border-zinc-400 pt-0.5">
+                      <p className="text-[8px] font-black uppercase text-zinc-600">CUSTOMER SIGNATURE</p>
                     </div>
                   </div>
 
-                  <div className={`px-2.5 py-0.5 rounded-lg ${theme.lightBg} border ${theme.lightBorder} text-center space-y-0.1`}>
-                    <p className="font-extrabold text-[9.5px] text-zinc-900">
+                  <div className={`px-3 py-1 rounded-xl ${theme.lightBg} border ${theme.lightBorder} text-center space-y-0.5`}>
+                    <p className="font-extrabold text-[10.5px] text-zinc-900">
                       💬 Thank you for your business!
                     </p>
-                    <p className="text-[8px] text-zinc-500">
+                    <p className="text-[9px] text-zinc-500">
                       We look forward to serving you again.
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <div className="text-center space-y-0.2">
-                      <div className="h-5 flex items-end justify-center">
-                        <span className="font-serif italic text-zinc-700 text-[10px] font-bold">Saampark Authorised</span>
+                  <div className="flex items-center gap-2.5">
+                    <div className="text-center space-y-0.5">
+                      <div className="h-6 flex items-end justify-center">
+                        <span className="font-serif italic text-zinc-700 text-xs font-bold">Saampark Authorised</span>
                       </div>
-                      <div className="w-28 border-t border-zinc-400 pt-0.1">
-                        <p className="text-[7.5px] font-black uppercase text-zinc-700">AUTHORISED SIGNATORY</p>
+                      <div className="w-32 border-t border-zinc-400 pt-0.5">
+                        <p className="text-[8px] font-black uppercase text-zinc-700">AUTHORISED SIGNATORY</p>
                       </div>
                     </div>
 
-                    <div className={`w-10 h-10 rounded-full border-2 border-dashed ${theme.sealColor} flex flex-col items-center justify-center text-center p-0.1 shadow-2xs shrink-0 select-none`}>
-                      <span className="text-[4px] font-black tracking-tighter uppercase leading-none">
+                    <div className={`w-12 h-12 rounded-full border-2 border-dashed ${theme.sealColor} flex flex-col items-center justify-center text-center p-0.5 shadow-2xs shrink-0 select-none`}>
+                      <span className="text-[4.5px] font-black tracking-tighter uppercase leading-none">
                         SAAMPARK TECH
                       </span>
-                      <span className="text-[5px] font-black my-0.1">★ SEAL ★</span>
-                      <span className="text-[4px] font-bold tracking-tighter uppercase leading-none">
+                      <span className="text-[5.5px] font-black my-0.2">★ SEAL ★</span>
+                      <span className="text-[4.5px] font-bold tracking-tighter uppercase leading-none">
                         AUTHORISED
                       </span>
                     </div>
@@ -922,17 +945,17 @@ export function InvoiceModal({
                 </div>
 
                 {/* 7. BOTTOM BANNER */}
-                <div className={`rounded-lg ${theme.headerGradient} text-white p-1 text-[8px] font-medium flex flex-wrap items-center justify-between gap-1 shadow-xs`}>
+                <div className={`rounded-xl ${theme.headerGradient} text-white p-1.5 text-[8.5px] font-medium flex flex-wrap items-center justify-between gap-1 shadow-xs`}>
                   <p className="flex items-center gap-1">
-                    <MapPin size={8} />
+                    <MapPin size={10} />
                     <span>Madinipur, Kolkata, Durgapur, West Bengal, India - 721101</span>
                   </p>
                   <p className="flex items-center gap-1 font-mono">
-                    <Phone size={8} />
+                    <Phone size={10} />
                     <span>+91 9901518567, +91 9901518569</span>
                   </p>
                   <p className="flex items-center gap-1">
-                    <Globe size={8} />
+                    <Globe size={10} />
                     <span>www.saamparktechnology.com</span>
                   </p>
                 </div>
