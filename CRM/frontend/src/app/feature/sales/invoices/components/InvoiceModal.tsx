@@ -189,21 +189,79 @@ export function InvoiceModal({
       return
     }
 
-    // Remove any previous temporary print frames
-    const oldFrame = document.getElementById("saampark-print-frame")
-    if (oldFrame) {
-      oldFrame.remove()
+    // 1. Try dedicated high-resolution popup print window
+    try {
+      const printWin = window.open("", "_blank", "width=850,height=950")
+      if (printWin) {
+        const headHtml = document.head.innerHTML
+        printWin.document.open()
+        printWin.document.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>Tax_Invoice_${invoice.id}</title>
+              <meta charset="utf-8" />
+              <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+              ${headHtml}
+              <style>
+                @page {
+                  size: A4 portrait;
+                  margin: 6mm 6mm;
+                }
+                html, body {
+                  background: white !important;
+                  color: black !important;
+                  margin: 0 !important;
+                  padding: 10px !important;
+                  overflow: visible !important;
+                  -webkit-print-color-adjust: exact !important;
+                  print-color-adjust: exact !important;
+                }
+                * {
+                  -webkit-print-color-adjust: exact !important;
+                  print-color-adjust: exact !important;
+                }
+                .no-print {
+                  display: none !important;
+                }
+              </style>
+            </head>
+            <body class="bg-white text-zinc-900">
+              <div style="width: 100%; max-width: 800px; margin: 0 auto;">
+                ${invoiceEl.outerHTML}
+              </div>
+              <script>
+                window.onload = function() {
+                  setTimeout(function() {
+                    window.focus();
+                    window.print();
+                  }, 300);
+                };
+              </script>
+            </body>
+          </html>
+        `)
+        printWin.document.close()
+        return
+      }
+    } catch (e) {
+      console.warn("Popup print fallback to iframe:", e)
     }
+
+    // 2. Iframe print with full layout dimensions (avoids 0x0 clipping)
+    const oldFrame = document.getElementById("saampark-print-frame")
+    if (oldFrame) oldFrame.remove()
 
     const printFrame = document.createElement("iframe")
     printFrame.id = "saampark-print-frame"
     printFrame.style.position = "fixed"
-    printFrame.style.right = "0"
-    printFrame.style.bottom = "0"
-    printFrame.style.width = "0"
-    printFrame.style.height = "0"
-    printFrame.style.border = "0"
-    printFrame.style.zIndex = "-9999"
+    printFrame.style.left = "0"
+    printFrame.style.top = "0"
+    printFrame.style.width = "820px"
+    printFrame.style.height = "1160px"
+    printFrame.style.opacity = "0"
+    printFrame.style.pointerEvents = "none"
+    printFrame.style.zIndex = "-999"
     document.body.appendChild(printFrame)
 
     const doc = printFrame.contentWindow?.document
@@ -212,32 +270,22 @@ export function InvoiceModal({
       return
     }
 
-    // Collect all loaded stylesheets and inline styles
-    const styles = Array.from(document.querySelectorAll("link[rel='stylesheet'], style"))
-      .map(s => s.outerHTML)
-      .join("\n")
-
     doc.open()
     doc.write(`
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Invoice_${invoice.id}</title>
+          <title>Tax_Invoice_${invoice.id}</title>
           <meta charset="utf-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <script src="https://cdn.tailwindcss.com"></script>
-          ${styles}
+          ${document.head.innerHTML}
           <style>
-            @page {
-              size: A4 portrait;
-              margin: 6mm 8mm;
-            }
-            body {
+            @page { size: A4 portrait; margin: 6mm 6mm; }
+            html, body {
               background: white !important;
               color: black !important;
               margin: 0 !important;
-              padding: 0 !important;
-              font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+              padding: 10px !important;
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
             }
@@ -245,14 +293,12 @@ export function InvoiceModal({
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
             }
-            .no-print {
-              display: none !important;
-            }
+            .no-print { display: none !important; }
           </style>
         </head>
-        <body class="bg-white p-2 text-zinc-900">
-          <div class="w-full max-w-[820px] mx-auto bg-white">
-            ${invoiceEl.innerHTML}
+        <body class="bg-white text-zinc-900">
+          <div style="width: 100%; max-width: 800px; margin: 0 auto;">
+            ${invoiceEl.outerHTML}
           </div>
         </body>
       </html>
@@ -268,7 +314,7 @@ export function InvoiceModal({
       }
       setTimeout(() => {
         printFrame.remove()
-      }, 3000)
+      }, 5000)
     }, 400)
   }
 
