@@ -2,10 +2,11 @@
 
 import * as React from "react"
 import { 
-  X, Check, DollarSign, Calculator, UserCheck, Calendar, Briefcase, FileText, 
+  X, Check, DollarSign, Calculator, UserCheck, Users, Calendar, Briefcase, FileText, 
   Coins, RefreshCw, Layers, CreditCard, Building2, Mail, Phone, MapPin, 
   Plus, Trash2, Tag, ChevronDown, Sparkles
 } from "lucide-react"
+
 import { ClientItem } from "../types"
 import { getUsers } from "@/app/feature/users/services/userService"
 import { addProject } from "@/app/feature/projects/services/projectService"
@@ -16,6 +17,7 @@ import { addSubscription } from "@/app/feature/subscriptions/services/subscripti
 import { taskService } from "@/app/feature/tasks/services/taskService"
 import { saveStoredClient, getClients } from "../services/clientService"
 import { useAuthStore } from "@/store/useAuthStore"
+import { sendInvoiceDetailsEmailNotification, sendPaymentReceiptEmailNotification } from "@/services/emailNotificationService"
 
 interface AddClientProjectModalProps {
   isOpen: boolean
@@ -112,7 +114,7 @@ export function AddClientProjectModal({
   const [clientGst, setClientGst] = React.useState(client?.gstNumber || client?.vatNumber || "")
 
   const [adminsList, setAdminsList] = React.useState<{ id: string; name: string }[]>([])
-  const [teamsList, setTeamsList] = React.useState<{ id: string; name: string; role?: string }[]>([])
+  const [teamsList, setTeamsList] = React.useState<{ id: string; name: string; email?: string; role?: string; avatar?: string }[]>([])
 
   React.useEffect(() => {
     if (isOpen && client) {
@@ -158,7 +160,13 @@ export function AddClientProjectModal({
             const isAdminOrClient = role.includes("admin") || role.includes("client")
             return isTeam && !isAdminOrClient && u.status !== "Inactive"
           })
-          .map(u => ({ id: u.id, name: u.name, role: u.department || "Developer" }))
+          .map(u => ({ 
+            id: u.id, 
+            name: u.name, 
+            email: u.email,
+            role: u.department || "Developer",
+            avatar: (u as any).avatar || (u as any).avatarUrl || `https://api.dicebear.com/7.x/notionists/svg?seed=${u.name}`
+          }))
 
         setAdminsList(admins)
         setTeamsList(teams)
@@ -171,6 +179,7 @@ export function AddClientProjectModal({
         }
       })
     }
+
   }, [isOpen, user, client])
 
   const handleModeChange = (mode: "project_and_invoice" | "invoice_only") => {
@@ -377,14 +386,16 @@ export function AddClientProjectModal({
       let createdProject: any = null
       if (creationMode === "project_and_invoice") {
         const projectMembers = assignedMembers.map(m => {
-          const matched = teamsList.find(t => t.name.toLowerCase().trim() === m.toLowerCase().trim())
+          const matched = teamsList.find(t => t.name.toLowerCase().trim() === m.toLowerCase().trim() || String(t.id) === String(m))
           return {
             id: matched?.id ? String(matched.id) : `mem_${m}`,
-            name: m,
-            role: matched?.role || "Specialist",
-            avatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${m}`,
+            name: matched?.name || m,
+            role: matched?.role || "Developer",
+            email: matched?.email || "",
+            avatar: matched?.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${matched?.name || m}`,
           }
         })
+
 
         const computedProjectStatus = remainingDue === 0 
           ? "In Progress" 
@@ -520,6 +531,19 @@ export function AddClientProjectModal({
           status: "Completed",
           companyId: targetCompany,
         })
+
+        // Dispatch Payment Receipt Email
+        sendPaymentReceiptEmailNotification({
+          invoice: createdInvoice,
+          paidAmount: formattedAdvance,
+          remainingDue: formattedDue,
+          nextDueDate: deadline,
+          paymentMethod: paymentModel === "advance" ? "Advance (Initial Deposit)" : "Initial Milestone / Part Payment",
+          recipientEmail: client.email,
+        }).catch(() => null)
+      } else {
+        // Dispatch Invoice Details Email
+        sendInvoiceDetailsEmailNotification(createdInvoice, client.email).catch(() => null)
       }
 
       // 5. Update Stored Client Record with Latest Contact Info
@@ -697,6 +721,59 @@ export function AddClientProjectModal({
               />
             </div>
           </div>
+
+          {/* Assign Team (Team Members ONLY) */}
+          {creationMode === "project_and_invoice" && (
+            <div className="p-3.5 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/80 space-y-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                <label className="font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5 text-xs">
+                  <Users size={14} className="text-blue-600 shrink-0" />
+                  Assign Team Members ({assignedMembers.length} Selected)
+                </label>
+                <span className="text-[10px] text-zinc-500 font-medium">Selected team members will see this project in their workspace</span>
+              </div>
+
+              {teamsList.length === 0 ? (
+                <div className="p-3 rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 text-zinc-400 text-center text-[11px]">
+                  No team members found. (Team members can be added under Users management)
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-44 overflow-y-auto p-1.5 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                  {teamsList.map((tm) => {
+                    const isSelected = assignedMembers.includes(tm.name)
+                    return (
+                      <button
+                        key={tm.id}
+                        type="button"
+                        onClick={() => {
+                          setAssignedMembers((prev) =>
+                            prev.includes(tm.name) ? prev.filter((n) => n !== tm.name) : [...prev, tm.name]
+                          )
+                        }}
+                        className={`flex items-center gap-2 p-2 rounded-lg text-left transition-all border cursor-pointer ${
+                          isSelected
+                            ? "bg-blue-50 dark:bg-blue-950/60 border-blue-400 dark:border-blue-600 shadow-2xs"
+                            : "bg-zinc-50/50 dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-700 hover:border-zinc-300"
+                        }`}
+                      >
+                        <img
+                          src={tm.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${tm.name}`}
+                          alt={tm.name}
+                          className="w-7 h-7 rounded-full object-cover shrink-0 bg-zinc-200"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-[11px] text-zinc-800 dark:text-zinc-200 truncate">{tm.name}</p>
+                          <p className="text-[10px] text-zinc-400 truncate">{tm.role || "Developer"}</p>
+                        </div>
+                        {isSelected && <UserCheck size={14} className="text-blue-600 shrink-0" />}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
 
           {/* ---------------- MULTI-SERVICE ITEM BUILDER ---------------- */}
           <div className="p-4 rounded-2xl bg-blue-50/50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/60 space-y-4">

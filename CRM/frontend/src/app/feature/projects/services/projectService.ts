@@ -1,5 +1,6 @@
 import { Project, ProjectMilestone, ActivityItem } from "../types"
 import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted, filterGlobalDeletedItems } from "@/lib/storageSync"
+import { sendProjectCompletionEmailNotification } from "@/services/emailNotificationService"
 
 export const initialProjects: Project[] = []
 
@@ -80,10 +81,18 @@ export const updateProject = async (id: string, updates: Partial<Project>, compa
     const updatedProj = { id: String(id), title: "Project", ...updates } as Project
     const nextList = [updatedProj, ...current]
     await saveModuleDataToDB("projects", nextList, companyId)
+    if (updates.status === "Completed") {
+      sendProjectCompletionEmailNotification(updatedProj).catch(() => null)
+    }
     return updatedProj
   }
+  const prevStatus = current[idx].status
   current[idx] = { ...current[idx], ...updates }
   await saveModuleDataToDB("projects", current, companyId)
+
+  if (updates.status === "Completed" && prevStatus !== "Completed") {
+    sendProjectCompletionEmailNotification(current[idx]).catch(() => null)
+  }
   return { ...current[idx] }
 }
 
@@ -133,8 +142,14 @@ export const addOrUpdateProjectMilestone = async (
 
   current[idx] = updatedProj
   await saveModuleDataToDB("projects", current, companyId)
+
+  if (newStatus === "Completed" && target.status !== "Completed") {
+    sendProjectCompletionEmailNotification(updatedProj).catch(() => null)
+  }
+
   return updatedProj
 }
+
 
 export const deleteProject = async (id: string, companyId?: string): Promise<boolean> => {
   const strId = String(id).toLowerCase().trim()

@@ -6,6 +6,8 @@ import { X, Check, HelpCircle, User } from "lucide-react"
 import { ClientItem } from "../types"
 import { getUsers } from "@/app/feature/users/services/userService"
 import { useAuthStore } from "@/store/useAuthStore"
+import { sendClientWelcomeEmailNotification } from "@/services/emailNotificationService"
+
 
 interface AddClientModalProps {
   isOpen: boolean
@@ -106,7 +108,7 @@ export function AddClientModal({
     e.preventDefault()
     if (!companyName.trim()) return
 
-    onSave({
+    const newClient: ClientItem = {
       id: initialData ? initialData.id : `cli_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       name: companyName.trim(),
       primaryContact: companyName.trim(),
@@ -119,7 +121,7 @@ export function AddClientModal({
       paymentReceived: initialData?.paymentReceived || "₹0.00",
       due: initialData?.due || "₹0.00",
       type,
-      owner: owner || user?.name || "Admin",
+      owner: owner || "Admin",
       managers,
       address,
       city,
@@ -132,10 +134,18 @@ export function AddClientModal({
       disableOnlinePayment,
       website,
       createdAt: initialData?.createdAt || Date.now(),
-    })
+    }
+
+    onSave(newClient)
+
+    if (!initialData && newClient.email) {
+      sendClientWelcomeEmailNotification(newClient).catch(() => null)
+    }
 
     onClose()
   }
+
+
 
   return (
     <AnimatePresence>

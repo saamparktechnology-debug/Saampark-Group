@@ -1,5 +1,6 @@
 import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted, filterGlobalDeletedItems } from "@/lib/storageSync"
 import { getClients, saveStoredClient } from "@/app/feature/clients/services/clientService"
+import { sendPaymentReceiptEmailNotification, sendPaymentDueReminderEmailNotification } from "@/services/emailNotificationService"
 
 export type InvoiceStatus = "Draft" | "Partially paid" | "Fully paid" | "Not paid" | "Credited" | "Payment Pending"
 
@@ -265,6 +266,15 @@ export const recordPartialPayment = async (
         })
       }
     }
+
+    // Dispatch real email payment receipt
+    sendPaymentReceiptEmailNotification({
+      invoice: updated,
+      paidAmount: `₹${paidAmountNum.toLocaleString("en-IN")}`,
+      remainingDue: `₹${newDueNum.toLocaleString("en-IN")}`,
+      paymentMethod,
+      txnRef: transactionRef,
+    }).catch(() => null)
   } catch (err) {
     console.warn("Error updating payment entry in recordPartialPayment:", err)
   }
@@ -306,25 +316,17 @@ export const markPaymentCompleted = async (
       totalAmount: target.totalInvoiced,
       totalAmountNum,
     })
+
+    // Dispatch full settlement email
+    sendPaymentReceiptEmailNotification({
+      invoice: updated,
+      paidAmount: target.totalInvoiced,
+      remainingDue: "₹0",
+      paymentMethod,
+      txnRef: transactionRef,
+    }).catch(() => null)
   } catch (err) {
     console.warn("Error settling payment entry in markPaymentCompleted:", err)
-  }
-
-  // 3. Notify Client of payment confirmation
-  if (typeof window !== "undefined" && target.clientEmail) {
-    try {
-      const notifKey = `saampark_notifications_${target.clientEmail.toLowerCase().trim()}`
-      const prevRaw = localStorage.getItem(notifKey)
-      const prevNotifs = prevRaw ? JSON.parse(prevRaw) : []
-      const newNotif = {
-        id: Date.now(),
-        title: `Payment Received for ${target.id}`,
-        message: `Your payment of ${target.totalInvoiced} for ${target.project} has been verified and marked Fully Paid. Thank you!`,
-        timestamp: new Date().toLocaleString(),
-        read: false,
-      }
-      localStorage.setItem(notifKey, JSON.stringify([newNotif, ...prevNotifs]))
-    } catch {}
   }
 
   return updated
@@ -343,18 +345,12 @@ export const sendPaymentReminder = async (invoiceId: string): Promise<{ success:
   await saveModuleDataToDB("invoices", current)
 
   if (target.clientEmail) {
-    const { sendPaymentReminderNotification } = await import("@/app/feature/sales/payments/services/paymentService")
-    return await sendPaymentReminderNotification(
-      target.clientEmail,
-      target.client,
-      target.id,
-      target.due || target.totalInvoiced,
-      target.dueDate
-    )
+    return await sendPaymentDueReminderEmailNotification(target)
   }
 
   return { success: true, message: `Payment reminder logged for ${target.client}.` }
 }
+
 
 export const deleteInvoice = async (id: string, companyId?: string): Promise<boolean> => {
   const strId = String(id).toLowerCase().trim()

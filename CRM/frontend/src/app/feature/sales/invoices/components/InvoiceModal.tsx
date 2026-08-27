@@ -11,6 +11,8 @@ import { getProjects } from "@/app/feature/projects/services/projectService"
 import { Project } from "@/app/feature/projects/types"
 import { getClients } from "@/app/feature/clients/services/clientService"
 import { ClientItem } from "@/app/feature/clients/types"
+import { sendInvoiceDetailsEmailNotification } from "@/services/emailNotificationService"
+
 
 interface InvoiceModalProps {
   isOpen: boolean
@@ -318,14 +320,17 @@ export function InvoiceModal({
     }, 400)
   }
 
-  const handleSend = () => {
+  const handleSend = async () => {
+    if (!invoice) return
     setIsSending(true)
-    setTimeout(() => {
-      setIsSending(false)
+    try {
+      await sendInvoiceDetailsEmailNotification(invoice)
       setSentSuccess(true)
       if (onSendToClient) onSendToClient(invoice)
       setTimeout(() => setSentSuccess(false), 3000)
-    }, 800)
+    } finally {
+      setIsSending(false)
+    }
   }
 
   const handleCopyLink = () => {
