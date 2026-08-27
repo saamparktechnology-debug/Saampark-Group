@@ -4,8 +4,9 @@ import * as React from "react"
 import { 
   X, Check, DollarSign, Calculator, UserCheck, Users, Calendar, Briefcase, FileText, 
   Coins, RefreshCw, Layers, CreditCard, Building2, Mail, Phone, MapPin, 
-  Plus, Trash2, Tag, ChevronDown, Sparkles
+  Plus, Trash2, Tag, ChevronDown, ChevronUp, Sparkles, Search
 } from "lucide-react"
+
 
 import { ClientItem } from "../types"
 import { getUsers } from "@/app/feature/users/services/userService"
@@ -115,10 +116,38 @@ export function AddClientProjectModal({
 
   const [adminsList, setAdminsList] = React.useState<{ id: string; name: string }[]>([])
   const [teamsList, setTeamsList] = React.useState<{ id: string; name: string; email?: string; role?: string; avatar?: string }[]>([])
+  
+  // Searchable Team Dropdown State
+  const [isTeamDropdownOpen, setIsTeamDropdownOpen] = React.useState(false)
+  const [teamSearchQuery, setTeamSearchQuery] = React.useState("")
+  const teamDropdownRef = React.useRef<HTMLDivElement>(null)
+
+  React.useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (teamDropdownRef.current && !teamDropdownRef.current.contains(e.target as Node)) {
+        setIsTeamDropdownOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
+
+  const filteredTeamsList = React.useMemo(() => {
+    if (!teamSearchQuery.trim()) return teamsList
+    const q = teamSearchQuery.toLowerCase().trim()
+    return teamsList.filter(
+      (t) =>
+        t.name.toLowerCase().includes(q) ||
+        (t.role && t.role.toLowerCase().includes(q)) ||
+        (t.email && t.email.toLowerCase().includes(q))
+    )
+  }, [teamsList, teamSearchQuery])
 
   React.useEffect(() => {
     if (isOpen && client) {
       setCreationMode("project_and_invoice")
+      setIsTeamDropdownOpen(false)
+      setTeamSearchQuery("")
       setServiceItems([
         {
           id: `svc_${Date.now()}`,
@@ -179,6 +208,7 @@ export function AddClientProjectModal({
         }
       })
     }
+
 
   }, [isOpen, user, client])
 
@@ -722,53 +752,169 @@ export function AddClientProjectModal({
             </div>
           </div>
 
-          {/* Assign Team (Team Members ONLY) */}
+          {/* Assign Team (Searchable Dropdown Menu) */}
           {creationMode === "project_and_invoice" && (
-            <div className="p-3.5 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/80 space-y-2">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                <label className="font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5 text-xs">
+            <div className="relative space-y-1.5" ref={teamDropdownRef}>
+              <div className="flex items-center justify-between">
+                <label className="block font-semibold text-zinc-700 dark:text-zinc-300 text-xs flex items-center gap-1.5">
                   <Users size={14} className="text-blue-600 shrink-0" />
-                  Assign Team Members ({assignedMembers.length} Selected)
+                  Assign Team Members
                 </label>
-                <span className="text-[10px] text-zinc-500 font-medium">Selected team members will see this project in their workspace</span>
+                <span className="text-[10px] text-zinc-400">
+                  {assignedMembers.length > 0 ? `${assignedMembers.length} member${assignedMembers.length > 1 ? "s" : ""} assigned` : "No members assigned"}
+                </span>
               </div>
 
-              {teamsList.length === 0 ? (
-                <div className="p-3 rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 text-zinc-400 text-center text-[11px]">
-                  No team members found. (Team members can be added under Users management)
+              {/* Dropdown Trigger Button */}
+              <div
+                onClick={() => setIsTeamDropdownOpen(!isTeamDropdownOpen)}
+                className="w-full min-h-[42px] px-3 py-1.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 hover:border-blue-400 dark:hover:border-blue-500 transition-colors flex items-center justify-between gap-2 cursor-pointer"
+              >
+                <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0 py-0.5">
+                  {assignedMembers.length === 0 ? (
+                    <span className="text-zinc-400 text-xs font-normal">Click to search & assign team members...</span>
+                  ) : (
+                    assignedMembers.map((mName) => {
+                      const tm = teamsList.find(t => t.name.toLowerCase().trim() === mName.toLowerCase().trim())
+                      return (
+                        <span
+                          key={mName}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100/80 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200 rounded-lg text-[11px] font-semibold border border-blue-200 dark:border-blue-700/60"
+                        >
+                          <img
+                            src={tm?.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${mName}`}
+                            alt={mName}
+                            className="w-4 h-4 rounded-full object-cover shrink-0"
+                          />
+                          <span className="truncate max-w-[110px]">{mName}</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setAssignedMembers(prev => prev.filter(n => n !== mName))
+                            }}
+                            className="hover:text-red-500 rounded-full p-0.5 transition-colors cursor-pointer"
+                          >
+                            <X size={11} />
+                          </button>
+                        </span>
+                      )
+                    })
+                  )}
                 </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-44 overflow-y-auto p-1.5 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
-                  {teamsList.map((tm) => {
-                    const isSelected = assignedMembers.includes(tm.name)
-                    return (
+
+                <div className="flex items-center gap-2 shrink-0 text-zinc-400">
+                  {assignedMembers.length > 0 && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 dark:bg-zinc-700 text-blue-600 dark:text-blue-300">
+                      {assignedMembers.length}
+                    </span>
+                  )}
+                  {isTeamDropdownOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </div>
+              </div>
+
+              {/* Popover Dropdown with Live Search */}
+              {isTeamDropdownOpen && (
+                <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-2xl overflow-hidden p-2.5 space-y-2 animate-in fade-in slide-in-from-top-2 duration-150">
+                  {/* Search Input Box */}
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+                    <input
+                      type="text"
+                      autoFocus
+                      placeholder="Search team member by name, role or email..."
+                      value={teamSearchQuery}
+                      onChange={(e) => setTeamSearchQuery(e.target.value)}
+                      className="w-full pl-8 pr-7 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    {teamSearchQuery && (
                       <button
-                        key={tm.id}
                         type="button"
-                        onClick={() => {
-                          setAssignedMembers((prev) =>
-                            prev.includes(tm.name) ? prev.filter((n) => n !== tm.name) : [...prev, tm.name]
-                          )
-                        }}
-                        className={`flex items-center gap-2 p-2 rounded-lg text-left transition-all border cursor-pointer ${
-                          isSelected
-                            ? "bg-blue-50 dark:bg-blue-950/60 border-blue-400 dark:border-blue-600 shadow-2xs"
-                            : "bg-zinc-50/50 dark:bg-zinc-800/40 border-zinc-200 dark:border-zinc-700 hover:border-zinc-300"
-                        }`}
+                        onClick={() => setTeamSearchQuery("")}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 p-0.5 cursor-pointer"
                       >
-                        <img
-                          src={tm.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${tm.name}`}
-                          alt={tm.name}
-                          className="w-7 h-7 rounded-full object-cover shrink-0 bg-zinc-200"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold text-[11px] text-zinc-800 dark:text-zinc-200 truncate">{tm.name}</p>
-                          <p className="text-[10px] text-zinc-400 truncate">{tm.role || "Developer"}</p>
-                        </div>
-                        {isSelected && <UserCheck size={14} className="text-blue-600 shrink-0" />}
+                        <X size={12} />
                       </button>
-                    )
-                  })}
+                    )}
+                  </div>
+
+                  {/* Header Actions */}
+                  <div className="flex items-center justify-between px-1 text-[11px] text-zinc-500">
+                    <span>
+                      {filteredTeamsList.length} member{filteredTeamsList.length !== 1 ? "s" : ""} available
+                    </span>
+                    <div className="flex items-center gap-3 font-semibold">
+                      <button
+                        type="button"
+                        onClick={() => setAssignedMembers(teamsList.map(t => t.name))}
+                        className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                      >
+                        Select All
+                      </button>
+                      <span>•</span>
+                      <button
+                        type="button"
+                        onClick={() => setAssignedMembers([])}
+                        className="text-red-500 hover:underline cursor-pointer"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Scrollable Members List */}
+                  <div className="max-h-52 overflow-y-auto space-y-1 pr-0.5">
+                    {filteredTeamsList.length === 0 ? (
+                      <div className="py-6 text-center text-zinc-400 text-xs">
+                        {teamsList.length === 0
+                          ? "No team members found in system."
+                          : `No team member matching "${teamSearchQuery}"`}
+                      </div>
+                    ) : (
+                      filteredTeamsList.map((tm) => {
+                        const isSelected = assignedMembers.includes(tm.name)
+                        return (
+                          <div
+                            key={tm.id}
+                            onClick={() => {
+                              setAssignedMembers((prev) =>
+                                prev.includes(tm.name) ? prev.filter((n) => n !== tm.name) : [...prev, tm.name]
+                              )
+                            }}
+                            className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all ${
+                              isSelected
+                                ? "bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/80"
+                                : "hover:bg-zinc-50 dark:hover:bg-zinc-800/60 border border-transparent"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <img
+                                src={tm.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${tm.name}`}
+                                alt={tm.name}
+                                className="w-7 h-7 rounded-full object-cover shrink-0 bg-zinc-200"
+                              />
+                              <div className="min-w-0">
+                                <p className="font-semibold text-xs text-zinc-800 dark:text-zinc-200 truncate">
+                                  {tm.name}
+                                </p>
+                                <p className="text-[10.5px] text-zinc-400 truncate">
+                                  {tm.role || "Developer"} {tm.email ? `• ${tm.email}` : ""}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${
+                              isSelected
+                                ? "bg-blue-600 border-blue-600 text-white"
+                                : "border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800"
+                            }`}>
+                              {isSelected && <Check size={12} className="stroke-[3]" />}
+                            </div>
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
                 </div>
               )}
             </div>

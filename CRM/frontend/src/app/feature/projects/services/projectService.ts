@@ -30,8 +30,18 @@ export const getProjects = async (companyId?: string): Promise<Project[]> => {
 }
 
 export const addProject = async (project: Omit<Project, "id">, companyId?: string): Promise<Project> => {
-  const current = await fetchModuleDataFromDB<Project[]>("projects", [], companyId || "all")
-  const newId = (Math.max(...current.map(p => parseInt(p.id) || 0), 0) + 1).toString()
+  const targetComp = companyId || "all"
+  const current = await fetchModuleDataFromDB<Project[]>("projects", [], targetComp)
+  const allMaster = await fetchModuleDataFromDB<Project[]>("projects", [], "all")
+  
+  const allExisting = [...current, ...allMaster]
+  const numericIds = allExisting.map(p => {
+    const raw = String(p?.id || "").replace(/\D/g, "")
+    const num = parseInt(raw, 10)
+    return isNaN(num) ? 0 : num
+  })
+  const nextNum = (Math.max(...numericIds, 0) + 1).toString()
+  const newId = nextNum || String(Date.now())
   
   const newProject: Project = {
     ...project,
@@ -51,18 +61,18 @@ export const addProject = async (project: Omit<Project, "id">, companyId?: strin
       }
     ]
   }
-  const updated = [newProject, ...current]
-  await saveModuleDataToDB("projects", updated, companyId || "all")
   
-  // Also sync to master "all" and active company if distinct
-  if (companyId && companyId !== "all") {
-    const allList = await fetchModuleDataFromDB<Project[]>("projects", [], "all")
-    const mergedAll = [newProject, ...allList.filter(p => String(p.id) !== String(newId))]
+  const updatedCurrent = [newProject, ...current.filter(p => String(p?.id) !== String(newId))]
+  await saveModuleDataToDB("projects", updatedCurrent, targetComp)
+  
+  // Also sync to master "all"
+  if (targetComp !== "all") {
+    const mergedAll = [newProject, ...allMaster.filter(p => String(p?.id) !== String(newId))]
     await saveModuleDataToDB("projects", mergedAll, "all")
   } else {
-    // Also save to default tech/digital company
+    // Also save to default tech company
     const techList = await fetchModuleDataFromDB<Project[]>("projects", [], "tech")
-    await saveModuleDataToDB("projects", [newProject, ...techList.filter(p => String(p.id) !== String(newId))], "tech")
+    await saveModuleDataToDB("projects", [newProject, ...techList.filter(p => String(p?.id) !== String(newId))], "tech")
   }
 
   if (typeof window !== "undefined") {

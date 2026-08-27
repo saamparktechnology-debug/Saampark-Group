@@ -40,11 +40,16 @@ export default function ProjectsMain() {
     const handleReload = () => fetchFreshProjects()
     window.addEventListener("storage", handleReload)
     window.addEventListener("saampark_company_switched", handleReload)
+    window.addEventListener("saampark_projects_updated", handleReload)
+    window.addEventListener("saampark_data_synced", handleReload)
     return () => {
       clearInterval(interval)
       window.removeEventListener("storage", handleReload)
       window.removeEventListener("saampark_company_switched", handleReload)
+      window.removeEventListener("saampark_projects_updated", handleReload)
+      window.removeEventListener("saampark_data_synced", handleReload)
     }
+
   }, [activeCompanyId, user?.companyId, selectedProject])
 
   const visibleProjects = React.useMemo(() => {
