@@ -560,7 +560,8 @@ export function AddClientProjectModal({
           amountNum: effectiveAdvance,
           status: "Completed",
           companyId: targetCompany,
-        })
+        }, targetCompany)
+
 
         // Dispatch Payment Receipt Email
         sendPaymentReceiptEmailNotification({

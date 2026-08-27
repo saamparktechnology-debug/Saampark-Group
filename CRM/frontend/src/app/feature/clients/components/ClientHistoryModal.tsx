@@ -59,7 +59,7 @@ export function ClientHistoryModal({
         getProjects("all").catch(() => []),
         getInvoices("all").catch(() => []),
         fetchModuleDataFromDB<any[]>("orders", [], "all").catch(() => []),
-        getPayments().catch(() => []),
+        getPayments("all").catch(() => []),
       ])
       const allOrders = Array.isArray(allOrdersRaw) ? filterGlobalDeletedItems(allOrdersRaw) : []
 
@@ -126,8 +126,17 @@ export function ClientHistoryModal({
   React.useEffect(() => {
     if (isOpen && client) {
       loadHistory()
+      window.addEventListener("saampark_data_synced", loadHistory)
+      window.addEventListener("saampark_projects_updated", loadHistory)
+      window.addEventListener("saampark_payments_updated", loadHistory)
+      return () => {
+        window.removeEventListener("saampark_data_synced", loadHistory)
+        window.removeEventListener("saampark_projects_updated", loadHistory)
+        window.removeEventListener("saampark_payments_updated", loadHistory)
+      }
     }
   }, [isOpen, client, loadHistory])
+
 
   if (!isOpen || !client) return null
 

@@ -81,10 +81,17 @@ export function invalidateModuleCache(moduleKey?: string) {
         cacheStore.delete(k)
       }
     }
+    for (const k of inFlightRequests.keys()) {
+      if (k.startsWith(moduleKey)) {
+        inFlightRequests.delete(k)
+      }
+    }
   } else {
     cacheStore.clear()
+    inFlightRequests.clear()
   }
 }
+
 
 /**
  * Fetch module data from MySQL DB with company isolation.
