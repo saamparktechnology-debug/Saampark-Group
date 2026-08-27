@@ -184,6 +184,9 @@ export async function saveModuleDataToDB<T>(moduleKey: string, data: T, companyI
       data, 
       company_id: targetCompany && targetCompany !== "all" ? targetCompany : undefined 
     })
+
+    // Invalidate micro-cache AFTER save completes to ensure subsequent fetches retrieve fresh data
+    invalidateModuleCache(moduleKey)
   } catch (err) {
     console.warn(`MySQL save warning for module ${moduleKey}:`, err)
   }

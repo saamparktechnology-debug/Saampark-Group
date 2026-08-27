@@ -22,10 +22,28 @@ export default function TasksMain() {
   const [isManageLabelsOpen, setIsManageLabelsOpen] = React.useState(false)
   const [isLoading, setIsLoading] = React.useState(true)
 
+  const roleLower = (user?.role || "").toLowerCase().trim()
+  const isSuperAdmin = roleLower.includes("super") || roleLower === "super admin" || roleLower === "superadmin"
+  const isAdmin = !isSuperAdmin && (
+    roleLower.includes("admin") || 
+    roleLower.includes("owner") || 
+    roleLower.includes("manager") ||
+    roleLower.includes("management") ||
+    roleLower === "admin"
+  )
+  const isClient = roleLower.includes("client")
+
   const loadTasks = React.useCallback(async (showLoading = false) => {
     if (showLoading) setIsLoading(true)
     try {
-      const targetComp = activeCompanyId || user?.companyId || "tech"
+      let targetComp = "all"
+      if (isSuperAdmin) {
+        targetComp = activeCompanyId || "all"
+      } else if (isAdmin) {
+        targetComp = user?.companyId || activeCompanyId || "tech"
+      } else {
+        targetComp = user?.companyId || activeCompanyId || "all"
+      }
       const data = await taskService.getTasks(targetComp)
       setTasks(data)
     } catch (err) {
@@ -33,7 +51,7 @@ export default function TasksMain() {
     } finally {
       if (showLoading) setIsLoading(false)
     }
-  }, [activeCompanyId, user?.companyId])
+  }, [activeCompanyId, user?.companyId, isSuperAdmin, isAdmin])
 
   React.useEffect(() => {
     loadTasks(true)                              // first load: show spinner
@@ -41,14 +59,16 @@ export default function TasksMain() {
     const handleReload = () => loadTasks(false)
     window.addEventListener("storage", handleReload)
     window.addEventListener("saampark_company_switched", handleReload)
+    window.addEventListener("saampark_tasks_updated", handleReload)
+    window.addEventListener("saampark_data_synced", handleReload)
     return () => {
       clearInterval(interval)
       window.removeEventListener("storage", handleReload)
       window.removeEventListener("saampark_company_switched", handleReload)
+      window.removeEventListener("saampark_tasks_updated", handleReload)
+      window.removeEventListener("saampark_data_synced", handleReload)
     }
   }, [loadTasks])
-
-
 
   const handleTaskAdded = (newTask: Task) => {
     setTasks((prev) => [newTask, ...prev])
@@ -106,21 +126,53 @@ export default function TasksMain() {
     setIsEditModalOpen(true)
   }
 
-  const isSuperOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
-
   const visibleTasks = React.useMemo(() => {
-    if (!user || isSuperOrAdmin) return tasks
+    if (!user) return []
+
+    // 1. Super Admin: sees all tasks in current company/all scope
+    if (isSuperAdmin) return tasks
+
+    // 2. Company Admin: sees only tasks belonging to their specific company
+    if (isAdmin) {
+      const userComp = (user.companyId || activeCompanyId || "").toLowerCase().trim()
+      if (!userComp || userComp === "all") return tasks
+      return tasks.filter((t) => {
+        const tComp = (t.companyId || (t as any).company || "tech").toLowerCase().trim()
+        return tComp === userComp || (userComp === "tech" && !t.companyId)
+      })
+    }
 
     const normName = (user.name || (user as any).full_name || "").toLowerCase().trim()
     const normEmail = (user.email || "").toLowerCase().trim()
     const normId = String(user.id || "").toLowerCase().trim()
 
+    // 3. Client Role: sees tasks created for or by this client
+    if (isClient) {
+      return tasks.filter((t) => {
+        const tClient = (t.client || (t as any).clientName || "").toLowerCase().trim()
+        const tEmail = ((t as any).clientEmail || (t as any).createdByEmail || "").toLowerCase().trim()
+        return (
+          tClient === normName ||
+          tEmail === normEmail ||
+          (normName && tClient.includes(normName)) ||
+          (normEmail && tEmail.includes(normEmail))
+        )
+      })
+    }
+
+    // 4. Team Member (Staff / Developer / Employee): ONLY tasks assigned to them, collaborated on, or created by them
     return tasks.filter((t) => {
       if (!t) return false
 
       const assigned = (t.assignedTo || (t as any).assigned_to || (t as any).assignee || "").toLowerCase().trim()
+      const assignedEmail = ((t as any).assignedToEmail || "").toLowerCase().trim()
+      const assignedId = String((t as any).assignedToId || "").toLowerCase().trim()
       const collab = (t.collaborators || (t as any).members || "").toLowerCase().trim()
       const createdBy = ((t as any).createdBy || (t as any).created_by || "").toLowerCase().trim()
+      const createdEmail = ((t as any).createdByEmail || "").toLowerCase().trim()
+
+      if (normId && (assignedId === normId)) return true
+      if (normEmail && (assignedEmail === normEmail || createdEmail === normEmail)) return true
 
       const checkMatch = (fieldStr: string) => {
         if (!fieldStr || fieldStr === "unassigned" || fieldStr === "none") return false
@@ -135,7 +187,7 @@ export default function TasksMain() {
 
       return checkMatch(assigned) || checkMatch(collab) || checkMatch(createdBy)
     })
-  }, [tasks, user])
+  }, [tasks, user, isSuperAdmin, isAdmin, isClient, activeCompanyId])
 
   return (
     <div className="p-4 sm:p-6 max-w-[1600px] mx-auto space-y-6">

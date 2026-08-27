@@ -183,17 +183,12 @@ export function AddClientProjectModal({
         }
 
         const teams = users
-          .filter(u => {
-            const role = (u.role || "").toLowerCase().trim()
-            const isTeam = role === "teams" || role === "team" || role === "employee" || role === "developer" || role === "staff"
-            const isAdminOrClient = role.includes("admin") || role.includes("client")
-            return isTeam && !isAdminOrClient && u.status !== "Inactive"
-          })
+          .filter(u => u.role !== "Clients" && u.status !== "Inactive")
           .map(u => ({ 
-            id: u.id, 
+            id: String(u.id), 
             name: u.name, 
-            email: u.email,
-            role: u.department || "Developer",
+            email: u.email || "",
+            role: u.department || u.role || "Developer",
             avatar: (u as any).avatar || (u as any).avatarUrl || `https://api.dicebear.com/7.x/notionists/svg?seed=${u.name}`
           }))
 
@@ -498,6 +493,31 @@ export function AddClientProjectModal({
           members: projectMembers,
           milestones: starterMilestones,
         }, targetCompany)
+
+        // Generate Tasks for assigned project team members
+        if (projectMembers.length > 0) {
+          try {
+            const taskItems: any[] = projectMembers.map((m: any, idx: number) => ({
+              id: `tsk_${Date.now()}_${idx}`,
+              title: `[${projectTitle}] - Milestone & Core Deliverables`,
+              description: `Task for project "${projectTitle}". Client: ${client.name}. Category: ${category}. Assigned to: ${m.name}.`,
+              startDate: startDate || new Date().toISOString().split("T")[0],
+              deadline: deadline || "30-06-2026",
+              status: "In progress",
+              priority: "High",
+              assignedTo: m.name,
+              assignedToEmail: m.email || "",
+              assignedToId: m.id || "",
+              createdBy: billedByAdmin,
+              companyId: targetCompany,
+              projectName: projectTitle,
+              tags: [category, "Project Task"],
+            }))
+            await taskService.addTasks(taskItems, targetCompany)
+          } catch (err) {
+            console.warn("Could not generate tasks for project members:", err)
+          }
+        }
       }
 
       // 2. Generate Invoice with globally unique ascending number INV(DATE)0001-0002...
@@ -512,7 +532,8 @@ export function AddClientProjectModal({
       const createdInvoice = await addInvoice({
         id: invoiceId,
         client: client.name,
-        clientEmail: client.email,
+        clientEmail: clientEmail.trim() || client.email,
+        clientId: client.id,
         project: projectTitle,
         billDate: startDate,
         dueDate: deadline,
@@ -528,12 +549,14 @@ export function AddClientProjectModal({
         billedBy: billedByAdmin,
         items: finalInvoiceItems,
         discountsList: finalDiscounts,
-      }, targetCompany)
+      } as any, targetCompany)
+
 
       // 3. Automatically create Order in Sales Order List
       await addOrder({
         client: client.name,
         clientEmail: client.email,
+        clientId: client.id,
         project: projectTitle,
         orderDate: startDate || new Date().toISOString().split("T")[0],
         deliveryDate: deadline || "30-06-2026",
@@ -543,7 +566,8 @@ export function AddClientProjectModal({
         status: effectiveAdvance > 0 ? "Processing" : "Pending",
         notes: description || `Order for: ${projectTitle}. Services: ${serviceItems.map(s => s.serviceName).join(", ")}.`,
         invoiceId: invoiceId,
-      }, targetCompany)
+      } as any, targetCompany)
+
 
       // 4. Record Initial Payment (if advance paid)
       if (effectiveAdvance > 0) {
@@ -604,9 +628,20 @@ export function AddClientProjectModal({
         console.warn("Could not sync client record:", err)
       }
 
+      // Dispatch all update events so all sections reload
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("saampark_clients_updated"))
+        window.dispatchEvent(new CustomEvent("saampark_projects_updated"))
+        window.dispatchEvent(new CustomEvent("saampark_invoices_updated"))
+        window.dispatchEvent(new CustomEvent("saampark_payments_updated"))
+        window.dispatchEvent(new CustomEvent("saampark_tasks_updated"))
+        window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+      }
+
       onProjectCreated()
       if (onInvoiceCreated) onInvoiceCreated(createdInvoice)
       onClose()
+
     } catch (err) {
       console.error(err)
       alert("An error occurred while creating the project and invoice.")
@@ -674,6 +709,117 @@ export function AddClientProjectModal({
               >
                 📄 Only Invoice
               </button>
+            </div>
+          </div>
+
+          {/* ── Client Details Card (pre-filled & editable) ── */}
+          <div className="p-4 rounded-2xl bg-violet-50/60 dark:bg-violet-950/20 border border-violet-200 dark:border-violet-800/60 space-y-3">
+            <div className="flex items-center gap-2 border-b border-violet-200/80 dark:border-violet-800/60 pb-2">
+              <UserCheck size={15} className="text-violet-600 shrink-0" />
+              <span className="font-extrabold text-violet-900 dark:text-violet-200 text-xs uppercase tracking-wider">
+                Client Details
+              </span>
+              <span className="ml-auto text-[10px] text-violet-500 font-medium">Pre-filled · editable</span>
+            </div>
+
+            {/* Row 1: Name (read-only) + Email + Phone */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              <div>
+                <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1 flex items-center gap-1">
+                  <UserCheck size={12} /> Client Name
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  value={client.name}
+                  className="w-full px-3 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-400 font-semibold text-xs cursor-not-allowed"
+                />
+              </div>
+              <div>
+                <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1 flex items-center gap-1">
+                  <Mail size={12} /> Email
+                </label>
+                <input
+                  type="email"
+                  placeholder="client@example.com"
+                  value={clientEmail}
+                  onChange={(e) => setClientEmail(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-medium text-xs focus:outline-none focus:ring-2 focus:ring-violet-500"
+                />
+              </div>
+              <div>
+                <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1 flex items-center gap-1">
+                  <Phone size={12} /> Phone
+                </label>
+                <input
+                  type="tel"
+                  placeholder="+91 98765 43210"
+                  value={clientPhone}
+                  onChange={(e) => setClientPhone(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-medium text-xs focus:outline-none focus:ring-2 focus:ring-violet-500"
+                />
+              </div>
+            </div>
+
+            {/* Row 2: Address + City + State + GST */}
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+              <div className="sm:col-span-2">
+                <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1 flex items-center gap-1">
+                  <MapPin size={12} /> Address
+                </label>
+                <input
+                  type="text"
+                  placeholder="Street / Building"
+                  value={clientAddress}
+                  onChange={(e) => setClientAddress(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-medium text-xs focus:outline-none focus:ring-2 focus:ring-violet-500"
+                />
+              </div>
+              <div>
+                <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1 flex items-center gap-1">
+                  <MapPin size={12} /> City
+                </label>
+                <input
+                  type="text"
+                  placeholder="City"
+                  value={clientCity}
+                  onChange={(e) => setClientCity(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-medium text-xs focus:outline-none focus:ring-2 focus:ring-violet-500"
+                />
+              </div>
+              <div>
+                <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1 flex items-center gap-1">
+                  <MapPin size={12} /> State
+                </label>
+                <input
+                  type="text"
+                  placeholder="State"
+                  value={clientState}
+                  onChange={(e) => setClientState(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-medium text-xs focus:outline-none focus:ring-2 focus:ring-violet-500"
+                />
+              </div>
+            </div>
+
+            {/* Row 3: GST + Company name (for invoice) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div>
+                <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1 flex items-center gap-1">
+                  <Building2 size={12} /> GSTIN / Tax ID
+                </label>
+                <input
+                  type="text"
+                  placeholder="22AAAAA0000A1Z5"
+                  value={clientGst}
+                  onChange={(e) => setClientGst(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-mono font-bold text-xs focus:outline-none focus:ring-2 focus:ring-violet-500 uppercase"
+                />
+              </div>
+              <div className="flex items-end">
+                <p className="text-[10px] text-violet-600 dark:text-violet-400 font-medium leading-relaxed">
+                  ℹ️ These details appear on the invoice and are saved back to the client record automatically.
+                </p>
+              </div>
             </div>
           </div>
 

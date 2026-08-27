@@ -66,8 +66,14 @@ export const addProject = async (project: Omit<Project, "id">, companyId?: strin
     const num = parseInt(raw, 10)
     return isNaN(num) ? 0 : num
   })
-  const nextNum = (Math.max(...numericIds, 0) + 1).toString()
-  const newId = nextNum || String(Date.now())
+  const maxNum = Math.max(...numericIds, 0)
+  const nextNum = maxNum > 0 ? (maxNum + 1).toString() : String(Date.now()).slice(-6)
+  
+  // Guarantee ID is unique across all existing projects and non-empty
+  let newId = nextNum
+  if (allExisting.some(p => String(p.id).toLowerCase().trim() === newId.toLowerCase().trim())) {
+    newId = `PRJ_${Date.now().toString().slice(-6)}`
+  }
   
   const newProject: Project = {
     ...project,

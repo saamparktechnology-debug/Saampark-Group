@@ -95,6 +95,7 @@ export default function InvoicesPage() {
   const [customClientPhone, setCustomClientPhone] = React.useState("")
   const [customClientAddress, setCustomClientAddress] = React.useState("")
   const [customClientCity, setCustomClientCity] = React.useState("")
+  const [customClientState, setCustomClientState] = React.useState("")
   const [customClientGst, setCustomClientGst] = React.useState("")
 
   const [projectSelectionMode, setProjectSelectionMode] = React.useState<"existing" | "custom">("existing")
@@ -226,12 +227,14 @@ export default function InvoicesPage() {
     window.addEventListener("storage", loadInvoices)
     window.addEventListener("saampark_data_synced", loadInvoices)
     window.addEventListener("saampark_company_switched", loadInvoices)
+    window.addEventListener("saampark_invoices_updated", loadInvoices)
 
     return () => {
       clearInterval(interval)
       window.removeEventListener("storage", loadInvoices)
       window.removeEventListener("saampark_data_synced", loadInvoices)
       window.removeEventListener("saampark_company_switched", loadInvoices)
+      window.removeEventListener("saampark_invoices_updated", loadInvoices)
     }
   }, [loadInvoices, useAuthStore.getState().activeCompanyId])
 
@@ -1185,23 +1188,33 @@ export default function InvoicesPage() {
                               className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 text-xs"
                             />
                           </div>
-                          <div>
+                          <div className="sm:col-span-2">
                             <label className="block text-[10px] font-semibold text-zinc-500 mb-0.5">Billing Address</label>
                             <input
                               type="text"
-                              placeholder="Office / Street Address"
+                              placeholder="Office / Street / Building"
                               value={clientAddress}
                               onChange={(e) => setClientAddress(e.target.value)}
                               className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 text-xs"
                             />
                           </div>
                           <div>
-                            <label className="block text-[10px] font-semibold text-zinc-500 mb-0.5">City / State</label>
+                            <label className="block text-[10px] font-semibold text-zinc-500 mb-0.5">City</label>
                             <input
                               type="text"
-                              placeholder="City, State"
+                              placeholder="City"
                               value={clientCity}
                               onChange={(e) => setClientCity(e.target.value)}
+                              className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 text-xs"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-zinc-500 mb-0.5">State</label>
+                            <input
+                              type="text"
+                              placeholder="State"
+                              value={clientState}
+                              onChange={(e) => setClientState(e.target.value)}
                               className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 text-xs"
                             />
                           </div>
@@ -1245,18 +1258,27 @@ export default function InvoicesPage() {
                           onChange={(e) => setCustomClientPhone(e.target.value)}
                           className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200"
                         />
+                        <div className="sm:col-span-2">
+                          <input
+                            type="text"
+                            placeholder="Billing Address (Optional)"
+                            value={customClientAddress}
+                            onChange={(e) => setCustomClientAddress(e.target.value)}
+                            className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200"
+                          />
+                        </div>
                         <input
                           type="text"
-                          placeholder="Billing Address (Optional)"
-                          value={customClientAddress}
-                          onChange={(e) => setCustomClientAddress(e.target.value)}
+                          placeholder="City (Optional)"
+                          value={customClientCity}
+                          onChange={(e) => setCustomClientCity(e.target.value)}
                           className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200"
                         />
                         <input
                           type="text"
-                          placeholder="City / State (Optional)"
-                          value={customClientCity}
-                          onChange={(e) => setCustomClientCity(e.target.value)}
+                          placeholder="State (Optional)"
+                          value={customClientState}
+                          onChange={(e) => setCustomClientState(e.target.value)}
                           className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200"
                         />
                         <div className="sm:col-span-2">

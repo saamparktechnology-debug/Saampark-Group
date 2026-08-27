@@ -10,6 +10,8 @@ export interface Task {
   relatedTo?: string
   assignedTo: string
   assignedToAvatar?: string
+  assignedToEmail?: string
+  assignedToId?: string
   collaborators?: string
   status: TaskStatus
   priority?: TaskPriority
@@ -18,4 +20,10 @@ export interface Task {
   points?: string
   description?: string
   isRecurring?: boolean
+  companyId?: string
+  client?: string
+  clientEmail?: string
+  createdBy?: string
+  createdByEmail?: string
+  projectName?: string
 }

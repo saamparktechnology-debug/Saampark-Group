@@ -53,7 +53,15 @@ export function ClientHistoryModal({
     const cName = (client.name || "").toLowerCase().trim()
     const cEmail = (client.email || "").toLowerCase().trim()
     const cPrimary = (client.primaryContact || "").toLowerCase().trim()
-    const cCompany = (client.companyName || "").toLowerCase().trim()
+
+    // Helper: strict matching - clientId exact > email exact > name exact (NO substring fuzzy matching)
+    const matchesClient = (recordClientId: string, recordClient: string, recordEmail: string) => {
+      if (cId && recordClientId && recordClientId === cId) return true
+      if (cEmail && recordEmail && recordEmail === cEmail) return true
+      if (cName && recordClient && recordClient === cName) return true
+      if (cPrimary && recordClient && recordClient === cPrimary) return true
+      return false
+    }
 
     try {
       const [allProjects, allInvoices, allOrdersRaw, allPayments] = await Promise.all([
@@ -64,48 +72,65 @@ export function ClientHistoryModal({
       ])
       const allOrders = Array.isArray(allOrdersRaw) ? filterGlobalDeletedItems(allOrdersRaw) : []
 
-      const filteredInv = allInvoices.filter((i) => {
+      // Pass 1: Direct matches
+      let filteredProj = allProjects.filter((p) => {
+        const pClient = (p.client || "").toLowerCase().trim()
+        const pClientId = String(p.clientId || "").toLowerCase().trim()
+        const pEmail = ((p as any).clientEmail || (p as any).createdByEmail || "").toLowerCase().trim()
+        return matchesClient(pClientId, pClient, pEmail)
+      })
+
+      let filteredInv = allInvoices.filter((i) => {
         const iClient = (i.client || "").toLowerCase().trim()
         const iEmail = (i.clientEmail || "").toLowerCase().trim()
         const iClientId = String((i as any).clientId || "").toLowerCase().trim()
+        return matchesClient(iClientId, iClient, iEmail)
+      })
+
+      // Pass 2: Bidirectional cross-linking by project title
+      const initialProjTitles = new Set(filteredProj.map(p => (p.title || "").toLowerCase().trim()).filter(Boolean))
+
+      // Expand invoices using direct matched project titles
+      filteredInv = allInvoices.filter((i) => {
+        const iClient = (i.client || "").toLowerCase().trim()
+        const iEmail = (i.clientEmail || "").toLowerCase().trim()
+        const iClientId = String((i as any).clientId || "").toLowerCase().trim()
+        const iProject = (i.project || "").toLowerCase().trim()
         return (
-          (cId && iClientId && iClientId === cId) ||
-          (cName && iClient && (iClient === cName || iClient.includes(cName) || cName.includes(iClient))) ||
-          (cEmail && iEmail && (iEmail === cEmail || iClient.includes(cEmail) || iEmail.includes(cEmail))) ||
-          (cPrimary && iClient && (iClient === cPrimary || iClient.includes(cPrimary) || cPrimary.includes(iClient))) ||
-          (cCompany && iClient && (iClient === cCompany || iClient.includes(cCompany) || cCompany.includes(iClient)))
+          matchesClient(iClientId, iClient, iEmail) ||
+          (iProject && initialProjTitles.has(iProject))
         )
       })
 
-      const invProjectNames = new Set(filteredInv.map(i => (i.project || "").toLowerCase().trim()))
+      const expandedInvTitles = new Set(filteredInv.map(i => (i.project || "").toLowerCase().trim()).filter(Boolean))
 
-      const filteredProj = allProjects.filter((p) => {
+      // Expand projects using matched invoice project titles
+      filteredProj = allProjects.filter((p) => {
         const pClient = (p.client || "").toLowerCase().trim()
         const pClientId = String(p.clientId || "").toLowerCase().trim()
-        const pEmail = ((p as any).createdByEmail || (p as any).clientEmail || "").toLowerCase().trim()
+        const pEmail = ((p as any).clientEmail || (p as any).createdByEmail || "").toLowerCase().trim()
         const pTitle = (p.title || "").toLowerCase().trim()
         return (
-          (cId && pClientId && pClientId === cId) ||
-          (cName && pClient && (pClient === cName || pClient.includes(cName) || cName.includes(pClient))) ||
-          (cEmail && pEmail && (pEmail === cEmail || pClient.includes(cEmail) || pEmail.includes(cEmail))) ||
-          (cPrimary && pClient && (pClient === cPrimary || pClient.includes(cPrimary) || cPrimary.includes(pClient))) ||
-          (cCompany && pClient && (pClient === cCompany || pClient.includes(cCompany) || cCompany.includes(pClient))) ||
-          (pTitle && invProjectNames.has(pTitle))
+          matchesClient(pClientId, pClient, pEmail) ||
+          (pTitle && expandedInvTitles.has(pTitle))
         )
       })
 
-      const projectTitles = new Set(filteredProj.map(p => (p.title || "").toLowerCase().trim()))
+      const allMatchedProjectTitles = new Set([
+        ...filteredProj.map(p => (p.title || "").toLowerCase().trim()).filter(Boolean),
+        ...expandedInvTitles
+      ])
 
       const filteredOrd = allOrders.filter((o) => {
         const oClient = (o.client || "").toLowerCase().trim()
         const oEmail = (o.clientEmail || "").toLowerCase().trim()
+        const oClientId = String(o.clientId || "").toLowerCase().trim()
         const oProject = (o.project || "").toLowerCase().trim()
+        const oInvId = (o.invoiceId || "").toLowerCase().trim()
         return (
-          (cName && oClient && (oClient === cName || oClient.includes(cName) || cName.includes(oClient))) ||
-          (cEmail && oEmail && (oEmail === cEmail || oClient.includes(cEmail) || oEmail.includes(cEmail))) ||
-          (cCompany && oClient && (oClient === cCompany || oClient.includes(cCompany) || cCompany.includes(oClient))) ||
-          (oProject && projectTitles.has(oProject)) ||
-          filteredInv.some(i => i.id.toLowerCase().trim() === (o.invoiceId || "").toLowerCase().trim())
+          matchesClient(oClientId, oClient, oEmail) ||
+          (oProject && allMatchedProjectTitles.has(oProject)) ||
+          (oInvId && filteredInv.some(i => i.id.toLowerCase().trim() === oInvId))
         )
       })
 
@@ -113,14 +138,14 @@ export function ClientHistoryModal({
         const payClient = (pay.client || "").toLowerCase().trim()
         const payEmail = (pay.clientEmail || "").toLowerCase().trim()
         const payProj = (pay.project || "").toLowerCase().trim()
+        const payInvId = (pay.invoiceId || "").toLowerCase().trim()
         return (
-          (cName && payClient && (payClient === cName || payClient.includes(cName) || cName.includes(payClient))) ||
-          (cEmail && payEmail && (payEmail === cEmail || payClient.includes(cEmail) || payEmail.includes(cEmail))) ||
-          (cCompany && payClient && (payClient === cCompany || payClient.includes(cCompany) || cCompany.includes(payClient))) ||
-          (payProj && projectTitles.has(payProj)) ||
-          filteredInv.some(i => i.id.toLowerCase().trim() === (pay.invoiceId || "").toLowerCase().trim())
+          matchesClient("", payClient, payEmail) ||
+          (payProj && allMatchedProjectTitles.has(payProj)) ||
+          (payInvId && filteredInv.some(i => i.id.toLowerCase().trim() === payInvId))
         )
       })
+
 
       setClientProjects(filteredProj)
       setClientInvoices(filteredInv)

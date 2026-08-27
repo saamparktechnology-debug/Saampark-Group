@@ -1,4 +1,4 @@
-import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted, filterGlobalDeletedItems } from "@/lib/storageSync"
+import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted, filterGlobalDeletedItems, getLocalDeletedIds } from "@/lib/storageSync"
 import { getClients, saveStoredClient } from "@/app/feature/clients/services/clientService"
 import { sendPaymentReceiptEmailNotification, sendPaymentDueReminderEmailNotification } from "@/services/emailNotificationService"
 
@@ -64,10 +64,24 @@ export const generateInvoiceNumber = (existingInvoices: InvoiceItem[] = [], date
   const y = String(dateObj.getFullYear()).slice(-2)
   const datePrefix = `INV${d}${m}${y}`
 
+  const deletedIds = getLocalDeletedIds()
+
   let maxSeq = 0
   for (const inv of existingInvoices) {
     if (!inv || !inv.id) continue
     const cleanId = String(inv.id).replace(/[^a-zA-Z0-9]/g, "").toUpperCase()
+    if (cleanId.startsWith(datePrefix)) {
+      const suffix = cleanId.substring(datePrefix.length)
+      const num = parseInt(suffix, 10)
+      if (!isNaN(num) && num > maxSeq) {
+        maxSeq = num
+      }
+    }
+  }
+
+  // Also check deleted IDs so invoice sequence never collides with a previously deleted ID
+  for (const delId of deletedIds) {
+    const cleanId = String(delId).replace(/[^a-zA-Z0-9]/g, "").toUpperCase()
     if (cleanId.startsWith(datePrefix)) {
       const suffix = cleanId.substring(datePrefix.length)
       const num = parseInt(suffix, 10)
@@ -137,7 +151,18 @@ export const addInvoice = async (invoice: Omit<InvoiceItem, "id"> & { id?: strin
   const effectiveComp = (!targetComp || targetComp === "all") ? "tech" : targetComp
 
   const allCurrent = await getInvoices("all")
-  const nextId = invoice.id || generateInvoiceNumber(allCurrent)
+  const deletedIds = getLocalDeletedIds()
+  let nextId = (invoice.id || "").trim()
+
+  // If no ID provided or if requested ID already exists or is in deleted list, calculate next unique ID
+  if (
+    !nextId || 
+    allCurrent.some(i => String(i.id).toUpperCase().trim() === nextId.toUpperCase()) ||
+    deletedIds.includes(nextId.toLowerCase().trim())
+  ) {
+    const billDateObj = invoice.billDate ? new Date(invoice.billDate) : new Date()
+    nextId = generateInvoiceNumber(allCurrent, isNaN(billDateObj.getTime()) ? new Date() : billDateObj)
+  }
 
   const newInvoice: InvoiceItem = { 
     ...invoice, 
