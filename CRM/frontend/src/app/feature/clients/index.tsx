@@ -61,12 +61,13 @@ export default function ClientsMain() {
     try {
       const allUsers = await getUsers()
       const clientUsers = allUsers.filter((u) => u.role === "Clients")
-      const [storedClients, storedContacts, storedLabels, allProjects, allInvoices] = await Promise.all([
+      const [storedClients, storedContacts, storedLabels, allProjects, allInvoices, allPayments] = await Promise.all([
         getClients(),
         getStoredContacts(),
         getStoredClientLabels(),
         import("@/app/feature/projects/services/projectService").then(m => m.getProjects("all")).catch(() => []),
         import("@/app/feature/sales/invoices/services/invoiceService").then(m => m.getInvoices("all")).catch(() => []),
+        import("@/app/feature/sales/payments/services/paymentService").then(m => m.getPayments()).catch(() => []),
       ])
 
       const userClientsMap = new Map<string, ClientItem>()
@@ -142,23 +143,29 @@ export default function ClientsMain() {
 
         let totalInvoicedNum = 0
         let totalReceivedNum = 0
-        let totalDueNum = 0
 
         matchedInvoices.forEach(i => {
           const invVal = parseInt((i.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
           const recVal = parseInt((i.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
-          const dueVal = parseInt((i.due || "0").replace(/[^0-9]/g, "")) || 0
           totalInvoicedNum += invVal
           totalReceivedNum += recVal
-          totalDueNum += dueVal
         })
+
+        const clientPays = allPayments.filter(pay => {
+          const payClient = (pay.client || "").toLowerCase().trim()
+          const payEmail = (pay.clientEmail || "").toLowerCase().trim()
+          return (cName && (payClient === cName || payClient.includes(cName))) || (cEmail && payEmail === cEmail)
+        })
+        const directPaidSum = clientPays.reduce((s, p) => (p.status !== "Failed" ? s + (p.amountNum || parseInt((p.amount || "0").replace(/[^0-9]/g, "")) || 0) : s), 0)
+        const finalPaidNum = Math.max(totalReceivedNum, directPaidSum)
+        const finalDueNum = Math.max(0, totalInvoicedNum - finalPaidNum)
 
         return {
           ...c,
-          projectsCount: Math.max(c.projectsCount || 0, matchedProjects.length),
-          totalInvoiced: totalInvoicedNum > 0 ? `₹${totalInvoicedNum.toLocaleString("en-IN")}` : c.totalInvoiced || "₹0",
-          paymentReceived: totalReceivedNum > 0 ? `₹${totalReceivedNum.toLocaleString("en-IN")}` : c.paymentReceived || "₹0",
-          due: totalDueNum > 0 ? `₹${totalDueNum.toLocaleString("en-IN")}` : totalInvoicedNum > 0 && totalReceivedNum >= totalInvoicedNum ? "₹0" : c.due || "₹0",
+          projectsCount: matchedProjects.length,
+          totalInvoiced: `₹${totalInvoicedNum.toLocaleString("en-IN")}`,
+          paymentReceived: `₹${finalPaidNum.toLocaleString("en-IN")}`,
+          due: `₹${finalDueNum.toLocaleString("en-IN")}`,
         }
       }).sort(
         (a, b) => getClientTimestamp(b) - getClientTimestamp(a)

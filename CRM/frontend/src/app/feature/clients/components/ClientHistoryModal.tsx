@@ -163,22 +163,25 @@ export function ClientHistoryModal({
     }
   }
 
-  // Calculate live financial numbers
+  // Calculate live financial numbers purely from active client records
   const calculatedInvoiced = clientInvoices.reduce((acc, inv) => {
     return acc + (parseInt((inv.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0)
   }, 0)
 
-  const calculatedPaid = clientInvoices.reduce((acc, inv) => {
-    return acc + (parseInt((inv.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0)
-  }, 0)
+  const calculatedPaid = clientPayments.length > 0
+    ? clientPayments.reduce((acc, pay) => {
+        if (pay.status === "Failed" || pay.status === "Pending") return acc
+        return acc + (pay.amountNum || parseInt((pay.amount || "0").replace(/[^0-9]/g, "")) || 0)
+      }, 0)
+    : clientInvoices.reduce((acc, inv) => {
+        return acc + (parseInt((inv.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0)
+      }, 0)
 
-  const calculatedDue = clientInvoices.reduce((acc, inv) => {
-    return acc + (parseInt((inv.due || "0").replace(/[^0-9]/g, "")) || 0)
-  }, 0)
+  const calculatedDue = Math.max(0, calculatedInvoiced - calculatedPaid)
 
-  const displayInvoiced = calculatedInvoiced > 0 ? `₹${calculatedInvoiced.toLocaleString("en-IN")}` : (client.totalInvoiced || "₹0")
-  const displayPaid = calculatedPaid > 0 ? `₹${calculatedPaid.toLocaleString("en-IN")}` : (client.paymentReceived || "₹0")
-  const displayDue = calculatedDue > 0 ? `₹${calculatedDue.toLocaleString("en-IN")}` : (client.due || "₹0")
+  const displayInvoiced = `₹${calculatedInvoiced.toLocaleString("en-IN")}`
+  const displayPaid = `₹${calculatedPaid.toLocaleString("en-IN")}`
+  const displayDue = `₹${calculatedDue.toLocaleString("en-IN")}`
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
