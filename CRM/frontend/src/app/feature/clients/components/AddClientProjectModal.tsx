@@ -459,9 +459,9 @@ export function AddClientProjectModal({
         }, targetCompany)
       }
 
-      // 2. Generate Invoice
-      const existingInvoices = await getInvoices(targetCompany)
-      const invoiceId = generateInvoiceNumber(existingInvoices)
+      // 2. Generate Invoice with globally unique ascending number INV(DATE)0001-0002...
+      const existingInvoices = await getInvoices("all")
+      const invoiceId = generateInvoiceNumber(existingInvoices, new Date(startDate || Date.now()))
       const invoiceStatus = remainingDue === 0 
         ? "Fully paid" 
         : effectiveAdvance > 0 

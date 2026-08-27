@@ -63,26 +63,88 @@ export const generateInvoiceNumber = (existingInvoices: InvoiceItem[] = [], date
   const y = String(dateObj.getFullYear()).slice(-2)
   const datePrefix = `INV${d}${m}${y}`
 
-  const matching = existingInvoices.filter(i => {
-    const cleanId = (i.id || "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase()
-    return cleanId.startsWith(datePrefix)
-  })
-  const nextSeq = matching.length + 1
-  const seqStr = String(nextSeq).padStart(3, "0")
+  let maxSeq = 0
+  for (const inv of existingInvoices) {
+    if (!inv || !inv.id) continue
+    const cleanId = String(inv.id).replace(/[^a-zA-Z0-9]/g, "").toUpperCase()
+    if (cleanId.startsWith(datePrefix)) {
+      const suffix = cleanId.substring(datePrefix.length)
+      const num = parseInt(suffix, 10)
+      if (!isNaN(num) && num > maxSeq) {
+        maxSeq = num
+      }
+    }
+  }
+
+  const nextSeq = maxSeq + 1
+  const seqStr = String(nextSeq).padStart(4, "0")
   return `${datePrefix}${seqStr}`
 }
 
 export const getInvoices = async (companyId?: string): Promise<InvoiceItem[]> => {
-  const data = await fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], companyId)
-  return Array.isArray(data) ? filterGlobalDeletedItems(data) : []
+  let targetComp = companyId
+  if (!targetComp && typeof window !== "undefined") {
+    try {
+      const { useAuthStore } = require("@/store/useAuthStore")
+      targetComp = useAuthStore.getState().activeCompanyId || undefined
+    } catch {}
+  }
+
+  const scopedData = await fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], targetComp || "all")
+  
+  let allMaster: InvoiceItem[] = []
+  if (!targetComp || targetComp === "all") {
+    const knownCompanies = ["all", "tech", "infotech", "fashion", "digital", "consultancy", "jewellers"]
+    const results = await Promise.all(
+      knownCompanies.map(c => fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], c).catch(() => []))
+    )
+    allMaster = results.flat()
+  } else {
+    const globalData = await fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], "all").catch(() => [])
+    allMaster = Array.isArray(globalData) ? globalData : []
+  }
+
+  const map = new Map<string, InvoiceItem>()
+  for (const inv of (Array.isArray(allMaster) ? allMaster : [])) {
+    if (inv && inv.id) {
+      map.set(String(inv.id).toUpperCase().trim(), inv)
+    }
+  }
+  for (const inv of (Array.isArray(scopedData) ? scopedData : [])) {
+    if (inv && inv.id) {
+      map.set(String(inv.id).toUpperCase().trim(), inv)
+    }
+  }
+
+  return filterGlobalDeletedItems(Array.from(map.values()))
 }
 
 export const addInvoice = async (invoice: Omit<InvoiceItem, "id"> & { id?: string }, companyId?: string): Promise<InvoiceItem> => {
-  const current = await getInvoices(companyId)
-  const nextId = invoice.id || generateInvoiceNumber(current)
-  const newInvoice: InvoiceItem = { ...invoice, id: nextId }
-  const updated = [newInvoice, ...current]
-  await saveModuleDataToDB("invoices", updated, companyId)
+  const allCurrent = await getInvoices("all")
+  const nextId = invoice.id || generateInvoiceNumber(allCurrent)
+  const targetComp = companyId || "all"
+
+  const newInvoice: InvoiceItem = { 
+    ...invoice, 
+    id: nextId,
+    companyId: targetComp && targetComp !== "all" ? targetComp : (invoice.companyId || "all")
+  }
+
+  const currentScoped = await fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], targetComp)
+  const updatedScoped = [newInvoice, ...(Array.isArray(currentScoped) ? currentScoped.filter(i => String(i.id).toUpperCase().trim() !== nextId.toUpperCase().trim()) : [])]
+  await saveModuleDataToDB("invoices", updatedScoped, targetComp)
+
+  if (targetComp !== "all") {
+    const currentAll = await fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], "all")
+    const updatedAll = [newInvoice, ...(Array.isArray(currentAll) ? currentAll.filter(i => String(i.id).toUpperCase().trim() !== nextId.toUpperCase().trim()) : [])]
+    await saveModuleDataToDB("invoices", updatedAll, "all")
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("saampark_data_synced"))
+    window.dispatchEvent(new Event("storage"))
+  }
+
   return newInvoice
 }
 
@@ -94,8 +156,8 @@ export const updateInvoiceStatus = async (
   companyId?: string
 ): Promise<InvoiceItem | null> => {
   const current = await getInvoices(companyId)
-  const strId = String(id).toLowerCase().trim()
-  const idx = current.findIndex((i) => String(i.id).toLowerCase().trim() === strId)
+  const strId = String(id).toUpperCase().trim()
+  const idx = current.findIndex((i) => String(i.id).toUpperCase().trim() === strId)
   if (idx === -1) return null
   const target = current[idx]
   current[idx] = {
@@ -104,7 +166,16 @@ export const updateInvoiceStatus = async (
     paymentReceived: paymentReceived !== undefined ? paymentReceived : (status === "Fully paid" ? target.totalInvoiced : target.paymentReceived),
     due: due !== undefined ? due : (status === "Fully paid" ? "₹0" : target.due),
   }
-  await saveModuleDataToDB("invoices", current, companyId)
+  const targetComp = companyId || target.companyId || "all"
+  await saveModuleDataToDB("invoices", current, targetComp)
+  if (targetComp !== "all") {
+    await saveModuleDataToDB("invoices", current, "all")
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("saampark_data_synced"))
+    window.dispatchEvent(new Event("storage"))
+  }
   return current[idx]
 }
 
@@ -116,8 +187,8 @@ export const recordPartialPayment = async (
   companyId?: string
 ): Promise<InvoiceItem | null> => {
   const current = await getInvoices(companyId)
-  const strId = String(invoiceId).toLowerCase().trim()
-  const idx = current.findIndex((i) => String(i.id).toLowerCase().trim() === strId)
+  const strId = String(invoiceId).toUpperCase().trim()
+  const idx = current.findIndex((i) => String(i.id).toUpperCase().trim() === strId)
   if (idx === -1) return null
 
   const target = current[idx]
@@ -136,7 +207,16 @@ export const recordPartialPayment = async (
   }
 
   current[idx] = updated
-  await saveModuleDataToDB("invoices", current, companyId)
+  const targetComp = companyId || target.companyId || "all"
+  await saveModuleDataToDB("invoices", current, targetComp)
+  if (targetComp !== "all") {
+    await saveModuleDataToDB("invoices", current, "all")
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("saampark_data_synced"))
+    window.dispatchEvent(new Event("storage"))
+  }
 
   // Record or update payment entry
   try {

@@ -424,7 +424,8 @@ export default function InvoicesPage() {
     const dueNum = Math.max(0, totalAmount - receivedNum)
     const formattedReceived = `₹${receivedNum.toLocaleString("en-IN")}`
     const formattedDue = `₹${dueNum.toLocaleString("en-IN")}`
-    const invoiceId = generateInvoiceNumber(invoices)
+    const allInvoices = await getInvoices("all")
+    const invoiceId = generateInvoiceNumber(allInvoices)
     const calculatedDueDate = dueDate || new Date(Date.now() + 14 * 86400000).toLocaleDateString("en-GB")
 
     const finalInvoiceItems: InvoiceLineItem[] = finalItemCalculations.map(it => ({
