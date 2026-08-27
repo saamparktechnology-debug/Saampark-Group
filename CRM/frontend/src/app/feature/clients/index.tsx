@@ -25,6 +25,10 @@ import {
   deleteStoredClientLabel,
   getClientTimestamp,
 } from "./services/clientService"
+import { getProjects } from "@/app/feature/projects/services/projectService"
+import { getInvoices } from "@/app/feature/sales/invoices/services/invoiceService"
+import { getPayments } from "@/app/feature/sales/payments/services/paymentService"
+
 import { getUsers } from "@/app/feature/users/services/userService"
 
 import { useAuthStore } from "@/store/useAuthStore"
@@ -46,6 +50,7 @@ export default function ClientsMain() {
   const [isAddClientModalOpen, setIsAddClientModalOpen] = React.useState(false)
   const [isManageLabelsModalOpen, setIsManageLabelsModalOpen] = React.useState(false)
   const [selectedClientForEdit, setSelectedClientForEdit] = React.useState<ClientItem | null>(null)
+
   
   const [isAddProjectModalOpen, setIsAddProjectModalOpen] = React.useState(false)
   const [selectedClientForProject, setSelectedClientForProject] = React.useState<ClientItem | null>(null)
@@ -65,9 +70,9 @@ export default function ClientsMain() {
         getClients(),
         getStoredContacts(),
         getStoredClientLabels(),
-        import("@/app/feature/projects/services/projectService").then(m => m.getProjects("all")).catch(() => []),
-        import("@/app/feature/sales/invoices/services/invoiceService").then(m => m.getInvoices("all")).catch(() => []),
-        import("@/app/feature/sales/payments/services/paymentService").then(m => m.getPayments()).catch(() => []),
+        getProjects("all").catch(() => []),
+        getInvoices("all").catch(() => []),
+        getPayments("all").catch(() => []),
       ])
 
       const userClientsMap = new Map<string, ClientItem>()
@@ -112,15 +117,19 @@ export default function ClientsMain() {
         const cName = (c.name || "").toLowerCase().trim()
         const cEmail = (c.email || "").toLowerCase().trim()
         const cPrimary = (c.primaryContact || "").toLowerCase().trim()
+        const cCompany = (c.companyName || "").toLowerCase().trim()
 
         // Match Invoices
         const matchedInvoices = allInvoices.filter(i => {
           const iClient = (i.client || "").toLowerCase().trim()
           const iEmail = (i.clientEmail || "").toLowerCase().trim()
+          const iClientId = String((i as any).clientId || "").toLowerCase().trim()
           return (
-            (cName && (iClient === cName || iClient.includes(cName) || cName.includes(iClient))) ||
-            (cEmail && (iEmail === cEmail || iClient.includes(cEmail))) ||
-            (cPrimary && (iClient === cPrimary || iClient.includes(cPrimary)))
+            (cId && iClientId && iClientId === cId) ||
+            (cName && iClient && (iClient === cName || iClient.includes(cName) || cName.includes(iClient))) ||
+            (cEmail && iEmail && (iEmail === cEmail || iClient.includes(cEmail) || iEmail.includes(cEmail))) ||
+            (cPrimary && iClient && (iClient === cPrimary || iClient.includes(cPrimary) || cPrimary.includes(iClient))) ||
+            (cCompany && iClient && (iClient === cCompany || iClient.includes(cCompany) || cCompany.includes(iClient)))
           )
         })
 
@@ -129,14 +138,15 @@ export default function ClientsMain() {
         // Match Projects
         const matchedProjects = allProjects.filter(p => {
           const pClient = (p.client || "").toLowerCase().trim()
-          const pClientId = (p.clientId || "").toLowerCase().trim()
-          const pEmail = (p.createdByEmail || "").toLowerCase().trim()
+          const pClientId = String(p.clientId || "").toLowerCase().trim()
+          const pEmail = ((p as any).createdByEmail || (p as any).clientEmail || "").toLowerCase().trim()
           const pTitle = (p.title || "").toLowerCase().trim()
           return (
-            (cId && pClientId === cId) ||
-            (cName && (pClient === cName || pClient.includes(cName) || cName.includes(pClient))) ||
-            (cEmail && (pEmail === cEmail || pClient.includes(cEmail))) ||
-            (cPrimary && (pClient === cPrimary || pClient.includes(cPrimary))) ||
+            (cId && pClientId && pClientId === cId) ||
+            (cName && pClient && (pClient === cName || pClient.includes(cName) || cName.includes(pClient))) ||
+            (cEmail && pEmail && (pEmail === cEmail || pClient.includes(cEmail) || pEmail.includes(cEmail))) ||
+            (cPrimary && pClient && (pClient === cPrimary || pClient.includes(cPrimary) || cPrimary.includes(pClient))) ||
+            (cCompany && pClient && (pClient === cCompany || pClient.includes(cCompany) || cCompany.includes(pClient))) ||
             (pTitle && invProjectNames.has(pTitle))
           )
         })
@@ -154,20 +164,29 @@ export default function ClientsMain() {
         const clientPays = allPayments.filter(pay => {
           const payClient = (pay.client || "").toLowerCase().trim()
           const payEmail = (pay.clientEmail || "").toLowerCase().trim()
-          return (cName && (payClient === cName || payClient.includes(cName))) || (cEmail && payEmail === cEmail)
+          const payProj = (pay.project || "").toLowerCase().trim()
+          return (
+            (cName && payClient && (payClient === cName || payClient.includes(cName) || cName.includes(payClient))) ||
+            (cEmail && payEmail && (payEmail === cEmail || payClient.includes(cEmail) || payEmail.includes(cEmail))) ||
+            (cCompany && payClient && (payClient === cCompany || payClient.includes(cCompany) || cCompany.includes(payClient))) ||
+            (payProj && invProjectNames.has(payProj)) ||
+            matchedInvoices.some(i => i.id.toLowerCase().trim() === (pay.invoiceId || "").toLowerCase().trim())
+          )
         })
+
         const directPaidSum = clientPays.reduce((s, p) => (p.status !== "Failed" ? s + (p.amountNum || parseInt((p.amount || "0").replace(/[^0-9]/g, "")) || 0) : s), 0)
         const finalPaidNum = Math.max(totalReceivedNum, directPaidSum)
         const finalDueNum = Math.max(0, totalInvoicedNum - finalPaidNum)
 
         return {
           ...c,
-          projectsCount: matchedProjects.length,
-          totalInvoiced: `₹${totalInvoicedNum.toLocaleString("en-IN")}`,
+          projectsCount: matchedProjects.length > 0 ? matchedProjects.length : (c.projectsCount || 0),
+          totalInvoiced: totalInvoicedNum > 0 ? `₹${totalInvoicedNum.toLocaleString("en-IN")}` : (c.totalInvoiced || "₹0"),
           paymentReceived: `₹${finalPaidNum.toLocaleString("en-IN")}`,
-          due: `₹${finalDueNum.toLocaleString("en-IN")}`,
+          due: totalInvoicedNum > 0 ? `₹${finalDueNum.toLocaleString("en-IN")}` : (c.due || "₹0"),
         }
-      }).sort(
+      })
+.sort(
         (a, b) => getClientTimestamp(b) - getClientTimestamp(a)
       )
       setClients(mergedClients)
