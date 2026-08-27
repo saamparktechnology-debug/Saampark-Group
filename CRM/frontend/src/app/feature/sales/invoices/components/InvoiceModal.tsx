@@ -98,22 +98,21 @@ export function InvoiceModal({
   )
 
   // Theme configuration based on GST vs Non-GST
-  // Green Theme for GST Bills, Blue Theme for Non-GST Bills
   const theme = isGstInvoice
     ? {
-        name: "gst-green",
-        headerGradient: "bg-gradient-to-r from-[#004d40] via-[#00695c] to-[#00796b]",
-        cardHeaderGradient: "bg-gradient-to-br from-[#004d40] via-[#00695c] to-[#00796b]",
-        primaryBg: "bg-[#004d40]",
-        primaryText: "text-[#004d40]",
-        lightBg: "bg-emerald-50/60 dark:bg-emerald-950/30",
-        lightBorder: "border-emerald-200/80 dark:border-emerald-800/60",
-        tableHeaderBg: "bg-[#004d40] text-white",
-        tableSubtotalBg: "bg-[#e0f2f1] text-[#004d40] dark:bg-[#004d40]/40 dark:text-emerald-300",
-        grandTotalBg: "bg-[#004d40] text-white",
-        badgeBg: "bg-emerald-50 text-emerald-800 border-emerald-300",
-        accentRing: "ring-emerald-500",
-        sealColor: "text-[#004d40] border-[#004d40]",
+        name: "gst-teal",
+        headerGradient: "bg-gradient-to-r from-[#005f69] via-[#007380] to-[#008a99]",
+        cardHeaderGradient: "bg-gradient-to-br from-[#005f69] via-[#007380] to-[#008a99]",
+        primaryBg: "bg-[#005f69]",
+        primaryText: "text-[#005f69]",
+        lightBg: "bg-cyan-50/60 dark:bg-cyan-950/30",
+        lightBorder: "border-cyan-200/80 dark:border-cyan-800/60",
+        tableHeaderBg: "bg-[#005f69] text-white",
+        tableSubtotalBg: "bg-[#e0f7fa] text-[#005f69] dark:bg-[#005f69]/40 dark:text-cyan-300",
+        grandTotalBg: "bg-[#005f69] text-white",
+        badgeBg: "bg-cyan-50 text-cyan-800 border-cyan-300",
+        accentRing: "ring-[#005f69]",
+        sealColor: "text-[#005f69] border-[#005f69]",
         invoiceTypeLabel: "TAX INVOICE",
       }
     : {
@@ -590,6 +589,14 @@ export function InvoiceModal({
                       GSTIN: {clientDetails.gstNumber}
                     </p>
                   )}
+                  {invoice.project && (
+                    <div className="pt-1 border-t border-zinc-200/70 mt-1">
+                      <p className="text-[10px] text-blue-700 font-bold flex items-center gap-1">
+                        <span>📁</span>
+                        <span>Project: {invoice.project}</span>
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Box 2: PLACE OF SUPPLY (4 cols) */}
@@ -599,7 +606,7 @@ export function InvoiceModal({
                     <span>PLACE OF SUPPLY</span>
                   </div>
                   <p className="text-[10px] text-zinc-700">
-                    <strong>Ph No:</strong> {clientDetails?.phone || (invoice.billedBy ? `${clientDetails?.phone || '+91 9901518567'}` : '+91 9901518567')}
+                    <strong>Ph No:</strong> {clientDetails?.phone || '+91 9901518567'}
                   </p>
                   <p className="text-[10px] text-zinc-600 leading-snug">
                     Madinipur, Kolkata, Durgapur, West Bengal, India
@@ -664,9 +671,6 @@ export function InvoiceModal({
                                   </p>
                                 ))}
                               </div>
-                            )}
-                            {invoice.billedBy && idx === 0 && startIndex === 0 && (
-                              <p className="text-[8.5px] text-zinc-400 font-mono">Billed By: {invoice.billedBy}</p>
                             )}
                           </div>
                         </td>

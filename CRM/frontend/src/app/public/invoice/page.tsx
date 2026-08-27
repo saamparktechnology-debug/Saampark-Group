@@ -127,6 +127,34 @@ function PublicInvoiceContent() {
   const isFullyPaid = invoice.status === "Fully paid" || (parsedDue <= 0 && parsedReceived >= totalVal && totalVal > 0)
   const isPartPaid = invoice.status === "Partially paid" || (parsedReceived > 0 && parsedDue > 0)
 
+  const isGstInvoice = Boolean(
+    (typeof invoice.gstRate === "number" && invoice.gstRate > 0) ||
+    (typeof invoice.gstAmount === "number" && invoice.gstAmount > 0) ||
+    (clientDetails?.gstNumber && clientDetails.gstNumber.trim().length > 4)
+  )
+
+  const theme = isGstInvoice
+    ? {
+        name: "gst-teal",
+        primaryColor: "#005f69",
+        primaryBg: "bg-[#005f69]",
+        primaryText: "text-[#005f69]",
+        badgeBg: "bg-cyan-50 text-cyan-800 border-cyan-300",
+        tableHeaderBg: "bg-[#005f69] text-white",
+        grandTotalBg: "bg-[#005f69] text-white",
+        invoiceTypeLabel: "TAX INVOICE",
+      }
+    : {
+        name: "non-gst-blue",
+        primaryColor: "#0d47a1",
+        primaryBg: "bg-[#0d47a1]",
+        primaryText: "text-[#0d47a1]",
+        badgeBg: "bg-blue-50 text-blue-800 border-blue-300",
+        tableHeaderBg: "bg-[#0d47a1] text-white",
+        grandTotalBg: "bg-[#0d47a1] text-white",
+        invoiceTypeLabel: "INVOICE",
+      }
+
   const itemsList: InvoiceLineItem[] = invoice.items && invoice.items.length > 0
     ? invoice.items
     : [
@@ -148,7 +176,7 @@ function PublicInvoiceContent() {
       {/* Top Action Toolbar */}
       <div className="w-full max-w-4xl flex items-center justify-between gap-3 mb-4 print:hidden">
         <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-sm">
+          <div className={`w-9 h-9 rounded-xl ${theme.primaryBg} text-white flex items-center justify-center shadow-sm`}>
             <Building2 size={18} />
           </div>
           <div>
@@ -175,7 +203,7 @@ function PublicInvoiceContent() {
           <button
             type="button"
             onClick={handlePrint}
-            className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-blue-500/20 cursor-pointer"
+            className={`px-3.5 py-1.5 rounded-xl ${theme.primaryBg} hover:opacity-90 text-white text-xs font-bold flex items-center gap-1.5 shadow-md cursor-pointer`}
           >
             <Printer size={14} />
             <span>Print / Save PDF</span>
@@ -207,9 +235,9 @@ function PublicInvoiceContent() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-800 pb-5">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-black tracking-tight text-blue-600 dark:text-blue-400">SAAMPARK GROUP</h1>
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                TAX INVOICE
+              <h1 className={`text-2xl font-black tracking-tight ${theme.primaryText}`}>SAAMPARK GROUP</h1>
+              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${theme.badgeBg}`}>
+                {theme.invoiceTypeLabel}
               </span>
             </div>
             <p className="text-xs text-zinc-500 font-medium">Saampark Technology & Enterprise Solutions</p>
@@ -255,10 +283,18 @@ function PublicInvoiceContent() {
               <MapPin size={13} className="text-rose-500 shrink-0" />
               <span>{clientDetails?.address || "West Bengal, India"}</span>
             </p>
+            {invoice.project && (
+              <div className="pt-2 border-t border-zinc-200 dark:border-zinc-700/80 mt-1">
+                <p className="text-xs text-blue-600 dark:text-blue-400 font-bold flex items-center gap-1.5">
+                  <span>📁</span>
+                  <span>Project: {invoice.project}</span>
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-800 space-y-1.5">
-            <span className="font-extrabold text-[10px] uppercase tracking-wider text-zinc-500 block">Billed By:</span>
+            <span className="font-extrabold text-[10px] uppercase tracking-wider text-zinc-500 block">Service Provider / Issuer:</span>
             <h2 className="font-extrabold text-base text-zinc-900 dark:text-zinc-100">Saampark Technology Pvt. Ltd.</h2>
             <p className="text-zinc-600 dark:text-zinc-400 flex items-center gap-1.5">
               <Mail size={13} className="text-blue-500" />
@@ -279,7 +315,7 @@ function PublicInvoiceContent() {
         <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="bg-zinc-100 dark:bg-zinc-800 font-bold text-zinc-700 dark:text-zinc-300 text-[11px] uppercase tracking-wider">
+              <tr className={`${theme.tableHeaderBg} font-bold text-[11px] uppercase tracking-wider`}>
                 <th className="py-2.5 px-3 w-10 text-center">#</th>
                 <th className="py-2.5 px-3">Service / Description</th>
                 <th className="py-2.5 px-3 text-center">Qty</th>
@@ -319,8 +355,8 @@ function PublicInvoiceContent() {
           
           {/* Payment & Bank Details */}
           <div className="space-y-3">
-            <div className="p-4 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/60 space-y-2">
-              <span className="font-extrabold text-xs uppercase tracking-wider text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
+            <div className={`p-4 rounded-xl ${isGstInvoice ? "bg-cyan-50/50 dark:bg-cyan-950/20 border-cyan-200 dark:border-cyan-800/60" : "bg-blue-50/50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800/60"} border space-y-2`}>
+              <span className={`font-extrabold text-xs uppercase tracking-wider ${theme.primaryText} flex items-center gap-1.5`}>
                 <CreditCard size={15} />
                 <span>UPI & Digital Payment</span>
               </span>
@@ -390,7 +426,7 @@ function PublicInvoiceContent() {
               <span className="font-mono">₹{(gstAmt / 2).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
             </div>
 
-            <div className="flex justify-between p-2.5 rounded-lg bg-blue-600 text-white font-extrabold text-sm my-2 shadow-sm">
+            <div className={`flex justify-between p-2.5 rounded-lg ${theme.grandTotalBg} text-white font-extrabold text-sm my-2 shadow-sm`}>
               <span>GRAND TOTAL:</span>
               <span className="font-mono">₹{totalVal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
             </div>
