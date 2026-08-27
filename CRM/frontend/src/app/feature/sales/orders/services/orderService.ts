@@ -21,18 +21,57 @@ export interface OrderItem {
 }
 
 export const getOrders = async (companyId?: string): Promise<OrderItem[]> => {
-  const data = await fetchModuleDataFromDB<OrderItem[]>("orders", [], companyId)
-  return Array.isArray(data) ? filterGlobalDeletedItems(data) : []
+  let targetComp = companyId
+  if (!targetComp && typeof window !== "undefined") {
+    try {
+      const { useAuthStore } = require("@/store/useAuthStore")
+      targetComp = useAuthStore.getState().activeCompanyId || undefined
+    } catch {}
+  }
+
+  if (!targetComp || targetComp === "all") {
+    const knownCompanies = ["all", "tech", "infotech", "fashion", "digital", "consultancy", "jewellers"]
+    const results = await Promise.all(
+      knownCompanies.map(c => fetchModuleDataFromDB<OrderItem[]>("orders", [], c).catch(() => []))
+    )
+    const map = new Map<string, OrderItem>()
+    for (const o of results.flat()) {
+      if (o && o.id) map.set(String(o.id).toLowerCase().trim(), o)
+    }
+    return filterGlobalDeletedItems(Array.from(map.values()))
+  }
+
+  const scopedData = await fetchModuleDataFromDB<OrderItem[]>("orders", [], targetComp)
+  const allMaster = await fetchModuleDataFromDB<OrderItem[]>("orders", [], "all").catch(() => [])
+
+  const map = new Map<string, OrderItem>()
+  for (const o of (Array.isArray(allMaster) ? allMaster : [])) {
+    if (o && o.id) map.set(String(o.id).toLowerCase().trim(), o)
+  }
+  for (const o of (Array.isArray(scopedData) ? scopedData : [])) {
+    if (o && o.id) map.set(String(o.id).toLowerCase().trim(), o)
+  }
+
+  return filterGlobalDeletedItems(Array.from(map.values()))
 }
 
 export const addOrder = async (orderData: Omit<OrderItem, "id" | "orderNumber"> & { id?: string; orderNumber?: string }, companyId?: string): Promise<OrderItem> => {
-  const current = await getOrders(companyId)
+  let targetComp = companyId
+  if (!targetComp && typeof window !== "undefined") {
+    try {
+      const { useAuthStore } = require("@/store/useAuthStore")
+      targetComp = useAuthStore.getState().activeCompanyId || undefined
+    } catch {}
+  }
+  const effectiveComp = (!targetComp || targetComp === "all") ? "tech" : targetComp
+
+  const currentScoped = await getOrders(effectiveComp)
+  const currentAll = await getOrders("all")
   const nextId = orderData.id || `ord_${Date.now()}`
   
-  // Calculate next Order number if not provided
   let orderNumber = orderData.orderNumber
   if (!orderNumber) {
-    const maxNum = current.reduce((max, o) => {
+    const maxNum = [...currentScoped, ...currentAll].reduce((max, o) => {
       const num = parseInt(String(o.orderNumber || "").replace(/[^0-9]/g, "")) || 0
       return Math.max(max, num)
     }, 1080)
@@ -48,8 +87,24 @@ export const addOrder = async (orderData: Omit<OrderItem, "id" | "orderNumber"> 
     status: orderData.status || (orderData.paymentStatus === "Paid" ? "Completed" : "Processing"),
   }
 
-  const updated = [newOrder, ...current.filter(o => o.id !== nextId)]
-  await saveModuleDataToDB("orders", updated, companyId)
+  const updatedScoped = [newOrder, ...currentScoped.filter(o => String(o.id).toLowerCase().trim() !== nextId.toLowerCase().trim())]
+  await saveModuleDataToDB("orders", updatedScoped, effectiveComp)
+
+  if (effectiveComp !== "tech") {
+    const currentTech = await fetchModuleDataFromDB<OrderItem[]>("orders", [], "tech").catch(() => [])
+    const updatedTech = [newOrder, ...currentTech.filter(o => String(o.id).toLowerCase().trim() !== nextId.toLowerCase().trim())]
+    await saveModuleDataToDB("orders", updatedTech, "tech")
+  }
+
+  const updatedAll = [newOrder, ...currentAll.filter(o => String(o.id).toLowerCase().trim() !== nextId.toLowerCase().trim())]
+  await saveModuleDataToDB("orders", updatedAll, "all")
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("storage"))
+    window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+    window.dispatchEvent(new CustomEvent("saampark_orders_updated"))
+  }
+
   return newOrder
 }
 

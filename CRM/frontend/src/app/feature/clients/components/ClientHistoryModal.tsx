@@ -53,6 +53,7 @@ export function ClientHistoryModal({
     const cName = (client.name || "").toLowerCase().trim()
     const cEmail = (client.email || "").toLowerCase().trim()
     const cPrimary = (client.primaryContact || "").toLowerCase().trim()
+    const cCompany = (client.companyName || "").toLowerCase().trim()
 
     try {
       const [allProjects, allInvoices, allOrdersRaw, allPayments] = await Promise.all([
@@ -66,10 +67,13 @@ export function ClientHistoryModal({
       const filteredInv = allInvoices.filter((i) => {
         const iClient = (i.client || "").toLowerCase().trim()
         const iEmail = (i.clientEmail || "").toLowerCase().trim()
+        const iClientId = String((i as any).clientId || "").toLowerCase().trim()
         return (
-          (cName && (iClient === cName || iClient.includes(cName) || cName.includes(iClient))) ||
-          (cEmail && (iEmail === cEmail || iClient.includes(cEmail))) ||
-          (cPrimary && (iClient === cPrimary || iClient.includes(cPrimary)))
+          (cId && iClientId && iClientId === cId) ||
+          (cName && iClient && (iClient === cName || iClient.includes(cName) || cName.includes(iClient))) ||
+          (cEmail && iEmail && (iEmail === cEmail || iClient.includes(cEmail) || iEmail.includes(cEmail))) ||
+          (cPrimary && iClient && (iClient === cPrimary || iClient.includes(cPrimary) || cPrimary.includes(iClient))) ||
+          (cCompany && iClient && (iClient === cCompany || iClient.includes(cCompany) || cCompany.includes(iClient)))
         )
       })
 
@@ -77,14 +81,15 @@ export function ClientHistoryModal({
 
       const filteredProj = allProjects.filter((p) => {
         const pClient = (p.client || "").toLowerCase().trim()
-        const pClientId = (p.clientId || "").toLowerCase().trim()
-        const pEmail = (p.createdByEmail || "").toLowerCase().trim()
+        const pClientId = String(p.clientId || "").toLowerCase().trim()
+        const pEmail = ((p as any).createdByEmail || (p as any).clientEmail || "").toLowerCase().trim()
         const pTitle = (p.title || "").toLowerCase().trim()
         return (
-          (cId && pClientId === cId) ||
-          (cName && (pClient === cName || pClient.includes(cName) || cName.includes(pClient))) ||
-          (cEmail && (pEmail === cEmail || pClient.includes(cEmail))) ||
-          (cPrimary && (pClient === cPrimary || pClient.includes(cPrimary))) ||
+          (cId && pClientId && pClientId === cId) ||
+          (cName && pClient && (pClient === cName || pClient.includes(cName) || cName.includes(pClient))) ||
+          (cEmail && pEmail && (pEmail === cEmail || pClient.includes(cEmail) || pEmail.includes(cEmail))) ||
+          (cPrimary && pClient && (pClient === cPrimary || pClient.includes(cPrimary) || cPrimary.includes(pClient))) ||
+          (cCompany && pClient && (pClient === cCompany || pClient.includes(cCompany) || cCompany.includes(pClient))) ||
           (pTitle && invProjectNames.has(pTitle))
         )
       })
@@ -96,9 +101,11 @@ export function ClientHistoryModal({
         const oEmail = (o.clientEmail || "").toLowerCase().trim()
         const oProject = (o.project || "").toLowerCase().trim()
         return (
-          (cName && (oClient === cName || oClient.includes(cName) || cName.includes(oClient))) ||
-          (cEmail && (oEmail === cEmail || oClient.includes(cEmail))) ||
-          (oProject && projectTitles.has(oProject))
+          (cName && oClient && (oClient === cName || oClient.includes(cName) || cName.includes(oClient))) ||
+          (cEmail && oEmail && (oEmail === cEmail || oClient.includes(cEmail) || oEmail.includes(cEmail))) ||
+          (cCompany && oClient && (oClient === cCompany || oClient.includes(cCompany) || cCompany.includes(oClient))) ||
+          (oProject && projectTitles.has(oProject)) ||
+          filteredInv.some(i => i.id.toLowerCase().trim() === (o.invoiceId || "").toLowerCase().trim())
         )
       })
 
@@ -107,8 +114,9 @@ export function ClientHistoryModal({
         const payEmail = (pay.clientEmail || "").toLowerCase().trim()
         const payProj = (pay.project || "").toLowerCase().trim()
         return (
-          (cName && (payClient === cName || payClient.includes(cName) || cName.includes(payClient))) ||
-          (cEmail && (payEmail === cEmail || payClient.includes(cEmail))) ||
+          (cName && payClient && (payClient === cName || payClient.includes(cName) || cName.includes(payClient))) ||
+          (cEmail && payEmail && (payEmail === cEmail || payClient.includes(cEmail) || payEmail.includes(cEmail))) ||
+          (cCompany && payClient && (payClient === cCompany || payClient.includes(cCompany) || cCompany.includes(payClient))) ||
           (payProj && projectTitles.has(payProj)) ||
           filteredInv.some(i => i.id.toLowerCase().trim() === (pay.invoiceId || "").toLowerCase().trim())
         )
@@ -118,6 +126,7 @@ export function ClientHistoryModal({
       setClientInvoices(filteredInv)
       setClientOrders(filteredOrd)
       setClientPayments(filteredPay)
+
     } finally {
       setIsLoading(false)
     }

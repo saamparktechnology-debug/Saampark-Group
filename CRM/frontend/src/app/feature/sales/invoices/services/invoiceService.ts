@@ -91,24 +91,30 @@ export const getInvoices = async (companyId?: string): Promise<InvoiceItem[]> =>
     } catch {}
   }
 
-  const scopedData = await fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], targetComp || "all")
-  
-  let allMaster: InvoiceItem[] = []
   if (!targetComp || targetComp === "all") {
     const knownCompanies = ["all", "tech", "infotech", "fashion", "digital", "consultancy", "jewellers"]
     const results = await Promise.all(
       knownCompanies.map(c => fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], c).catch(() => []))
     )
-    allMaster = results.flat()
-  } else {
-    const globalData = await fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], "all").catch(() => [])
-    allMaster = Array.isArray(globalData) ? globalData : []
+    const map = new Map<string, InvoiceItem>()
+    for (const list of results) {
+      for (const inv of (Array.isArray(list) ? list : [])) {
+        if (inv && inv.id) map.set(String(inv.id).toUpperCase().trim(), inv)
+      }
+    }
+    return filterGlobalDeletedItems(Array.from(map.values()))
   }
+
+  const scopedData = await fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], targetComp)
+  const allMaster = await fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], "all").catch(() => [])
 
   const map = new Map<string, InvoiceItem>()
   for (const inv of (Array.isArray(allMaster) ? allMaster : [])) {
     if (inv && inv.id) {
-      map.set(String(inv.id).toUpperCase().trim(), inv)
+      const invComp = inv.companyId || (inv as any).company || "tech"
+      if (invComp === targetComp || (targetComp === "tech" && !inv.companyId)) {
+        map.set(String(inv.id).toUpperCase().trim(), inv)
+      }
     }
   }
   for (const inv of (Array.isArray(scopedData) ? scopedData : [])) {
@@ -121,29 +127,43 @@ export const getInvoices = async (companyId?: string): Promise<InvoiceItem[]> =>
 }
 
 export const addInvoice = async (invoice: Omit<InvoiceItem, "id"> & { id?: string }, companyId?: string): Promise<InvoiceItem> => {
+  let targetComp = companyId
+  if (!targetComp && typeof window !== "undefined") {
+    try {
+      const { useAuthStore } = require("@/store/useAuthStore")
+      targetComp = useAuthStore.getState().activeCompanyId || undefined
+    } catch {}
+  }
+  const effectiveComp = (!targetComp || targetComp === "all") ? "tech" : targetComp
+
   const allCurrent = await getInvoices("all")
   const nextId = invoice.id || generateInvoiceNumber(allCurrent)
-  const targetComp = companyId || "all"
 
   const newInvoice: InvoiceItem = { 
     ...invoice, 
     id: nextId,
-    companyId: targetComp && targetComp !== "all" ? targetComp : (invoice.companyId || "all")
+    companyId: effectiveComp
   }
 
-  const currentScoped = await fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], targetComp)
+  const currentScoped = await fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], effectiveComp)
+  const currentTech = effectiveComp !== "tech" ? await fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], "tech") : []
+  const currentAll = await fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], "all")
+
   const updatedScoped = [newInvoice, ...(Array.isArray(currentScoped) ? currentScoped.filter(i => String(i.id).toUpperCase().trim() !== nextId.toUpperCase().trim()) : [])]
-  await saveModuleDataToDB("invoices", updatedScoped, targetComp)
+  await saveModuleDataToDB("invoices", updatedScoped, effectiveComp)
 
-  if (targetComp !== "all") {
-    const currentAll = await fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], "all")
-    const updatedAll = [newInvoice, ...(Array.isArray(currentAll) ? currentAll.filter(i => String(i.id).toUpperCase().trim() !== nextId.toUpperCase().trim()) : [])]
-    await saveModuleDataToDB("invoices", updatedAll, "all")
+  if (effectiveComp !== "tech") {
+    const updatedTech = [newInvoice, ...(Array.isArray(currentTech) ? currentTech.filter(i => String(i.id).toUpperCase().trim() !== nextId.toUpperCase().trim()) : [])]
+    await saveModuleDataToDB("invoices", updatedTech, "tech")
   }
+
+  const updatedAll = [newInvoice, ...(Array.isArray(currentAll) ? currentAll.filter(i => String(i.id).toUpperCase().trim() !== nextId.toUpperCase().trim()) : [])]
+  await saveModuleDataToDB("invoices", updatedAll, "all")
 
   if (typeof window !== "undefined") {
-    window.dispatchEvent(new Event("saampark_data_synced"))
     window.dispatchEvent(new Event("storage"))
+    window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+    window.dispatchEvent(new CustomEvent("saampark_invoices_updated"))
   }
 
   return newInvoice

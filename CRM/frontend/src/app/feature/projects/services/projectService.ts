@@ -14,14 +14,12 @@ export const getProjects = async (companyId?: string): Promise<Project[]> => {
   }
   
   if (!targetComp || targetComp === "all") {
-    // Super Admin / All Companies view: aggregate across master and companies
-    const allMaster = await fetchModuleDataFromDB<Project[]>("projects", [], "all")
-    const techData = await fetchModuleDataFromDB<Project[]>("projects", [], "tech")
-    const printData = await fetchModuleDataFromDB<Project[]>("projects", [], "print")
-    const mediaData = await fetchModuleDataFromDB<Project[]>("projects", [], "media")
-    
+    const knownCompanies = ["all", "tech", "infotech", "fashion", "digital", "consultancy", "jewellers"]
+    const results = await Promise.all(
+      knownCompanies.map(c => fetchModuleDataFromDB<Project[]>("projects", [], c).catch(() => []))
+    )
     const map = new Map<string, Project>()
-    for (const list of [allMaster, techData, printData, mediaData]) {
+    for (const list of results) {
       for (const p of (Array.isArray(list) ? list : [])) {
         if (p && p.id) map.set(String(p.id).toLowerCase().trim(), p)
       }
@@ -29,12 +27,10 @@ export const getProjects = async (companyId?: string): Promise<Project[]> => {
     return filterGlobalDeletedItems(Array.from(map.values()))
   }
 
-  // Specific Company view (Company Admin / Team scoped to specific company):
   const scopedData = await fetchModuleDataFromDB<Project[]>("projects", [], targetComp)
-  const allMaster = await fetchModuleDataFromDB<Project[]>("projects", [], "all")
+  const allMaster = await fetchModuleDataFromDB<Project[]>("projects", [], "all").catch(() => [])
   
   const map = new Map<string, Project>()
-  // Include projects from master that belong to this company
   for (const p of (Array.isArray(allMaster) ? allMaster : [])) {
     if (p && p.id) {
       const pComp = p.companyId || (p as any).company || "tech"
@@ -43,7 +39,6 @@ export const getProjects = async (companyId?: string): Promise<Project[]> => {
       }
     }
   }
-  // Include scoped records
   for (const p of (Array.isArray(scopedData) ? scopedData : [])) {
     if (p && p.id) map.set(String(p.id).toLowerCase().trim(), p)
   }
@@ -59,12 +54,13 @@ export const addProject = async (project: Omit<Project, "id">, companyId?: strin
       targetComp = useAuthStore.getState().activeCompanyId || undefined
     } catch {}
   }
-  targetComp = targetComp || "tech"
+  const effectiveComp = (!targetComp || targetComp === "all") ? "tech" : targetComp
 
-  const current = await fetchModuleDataFromDB<Project[]>("projects", [], targetComp)
-  const allMaster = await fetchModuleDataFromDB<Project[]>("projects", [], "all")
+  const currentScoped = await fetchModuleDataFromDB<Project[]>("projects", [], effectiveComp)
+  const currentTech = effectiveComp !== "tech" ? await fetchModuleDataFromDB<Project[]>("projects", [], "tech") : []
+  const currentAll = await fetchModuleDataFromDB<Project[]>("projects", [], "all")
   
-  const allExisting = [...current, ...allMaster]
+  const allExisting = [...currentScoped, ...currentTech, ...currentAll]
   const numericIds = allExisting.map(p => {
     const raw = String(p?.id || "").replace(/\D/g, "")
     const num = parseInt(raw, 10)
@@ -76,7 +72,7 @@ export const addProject = async (project: Omit<Project, "id">, companyId?: strin
   const newProject: Project = {
     ...project,
     id: newId,
-    companyId: targetComp,
+    companyId: effectiveComp,
     starred: false,
     totalHours: 0,
     members: project.members || [],
@@ -93,14 +89,19 @@ export const addProject = async (project: Omit<Project, "id">, companyId?: strin
     ]
   }
   
-  // Save to target company
-  const updatedCurrent = [newProject, ...current.filter(p => String(p?.id) !== String(newId))]
-  await saveModuleDataToDB("projects", updatedCurrent, targetComp)
+  // Save to effective company
+  const updatedScoped = [newProject, ...currentScoped.filter(p => String(p?.id) !== String(newId))]
+  await saveModuleDataToDB("projects", updatedScoped, effectiveComp)
   
-  // Save to master "all"
-  const mergedAll = [newProject, ...allMaster.filter(p => String(p?.id) !== String(newId))]
-  await saveModuleDataToDB("projects", mergedAll, "all")
+  // Save to default tech company
+  if (effectiveComp !== "tech") {
+    const updatedTech = [newProject, ...currentTech.filter(p => String(p?.id) !== String(newId))]
+    await saveModuleDataToDB("projects", updatedTech, "tech")
+  }
 
+  // Save to master "all"
+  const updatedAll = [newProject, ...currentAll.filter(p => String(p?.id) !== String(newId))]
+  await saveModuleDataToDB("projects", updatedAll, "all")
 
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("storage"))
@@ -109,6 +110,7 @@ export const addProject = async (project: Omit<Project, "id">, companyId?: strin
   }
   return newProject
 }
+
 
 export const updateProject = async (id: string, updates: Partial<Project>, companyId?: string): Promise<Project> => {
   const strId = String(id).toLowerCase().trim()

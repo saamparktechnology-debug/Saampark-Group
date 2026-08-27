@@ -136,8 +136,10 @@ export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: 
     const requestPromise = api.get(`/store/${moduleKey}${queryStr}`).then((res) => {
       const isError = !res || res.status === "error" || res.error === true
       if (!isError && res?.data !== undefined && res?.data !== null) {
-        cacheStore.set(cacheKey, { data: res.data, timestamp: Date.now() })
-        return res.data
+        const rawData = res.data
+        const arrayData = Array.isArray(rawData) ? rawData : (Array.isArray(rawData?.data) ? rawData.data : [])
+        cacheStore.set(cacheKey, { data: arrayData, timestamp: Date.now() })
+        return arrayData
       }
       return null
     }).finally(() => {
@@ -150,10 +152,9 @@ export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: 
     if (serverData !== null && serverData !== undefined) {
       if (Array.isArray(serverData)) {
         return filterGlobalDeletedItems(serverData as any, localDeleted) as any
-      } else if (typeof serverData === "object" && Object.keys(serverData).length > 0) {
-        return serverData as any
       }
     }
+
   } catch (err) {
     console.warn(`MySQL fetch warning for module ${moduleKey}:`, err)
   }

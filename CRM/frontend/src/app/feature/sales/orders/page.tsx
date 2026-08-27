@@ -34,10 +34,14 @@ import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted, filte
 import { useAuthStore } from "@/store/useAuthStore"
 import { addInvoice, getInvoices, InvoiceItem } from "../invoices/services/invoiceService"
 import { InvoiceModal } from "../invoices/components/InvoiceModal"
-import { addPayment, settleOrUpdatePaymentToCompleted, sendPaymentReminderNotification } from "../payments/services/paymentService"
+import { addPayment } from "../payments/services/paymentService"
+import { sendPaymentDueReminderEmailNotification } from "@/services/emailNotificationService"
+import { getOrders, addOrder, updateOrder, deleteOrder } from "./services/orderService"
+
 import { getClients } from "@/app/feature/clients/services/clientService"
 import { getProjects } from "@/app/feature/projects/services/projectService"
 import { Project, ProjectMilestone } from "@/app/feature/projects/types"
+
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 
 type OrderStatus = "Pending" | "Processing" | "Completed" | "Cancelled"
@@ -101,12 +105,13 @@ export default function OrderListPage() {
   }
 
   const loadOrders = React.useCallback(async () => {
-    const data = await fetchModuleDataFromDB<OrderItem[]>("orders", [])
+    const data = await getOrders()
     setOrders(Array.isArray(data) ? filterGlobalDeletedItems(data) : [])
 
     getProjects().then((projs) => setProjectsList(projs)).catch(() => {})
     getInvoices().then((invs) => setInvoicesList(invs)).catch(() => {})
   }, [])
+
 
   React.useEffect(() => {
     loadOrders()
@@ -180,15 +185,22 @@ export default function OrderListPage() {
     setOrders(updated)
     await saveModuleDataToDB("orders", updated)
 
-    if (ord.clientEmail) {
-      await sendPaymentReminderNotification(
-        ord.clientEmail,
-        ord.client,
-        ord.orderNumber,
-        ord.totalAmount,
-        ord.deliveryDate
-      )
-    }
+      await sendPaymentDueReminderEmailNotification({
+        id: ord.invoiceId || ord.orderNumber,
+        client: ord.client,
+        clientEmail: ord.clientEmail,
+        project: ord.project,
+        billDate: ord.orderDate,
+        dueDate: ord.deliveryDate,
+        totalInvoiced: ord.totalAmount,
+        paymentReceived: "₹0",
+        due: ord.totalAmount,
+        status: "Not paid",
+        billedBy: "Admin",
+        items: [],
+
+      }, ord.clientEmail).catch(() => null)
+
 
     showToast(`🔔 Payment reminder sent to ${ord.client} for ${ord.totalAmount}!`)
   }
@@ -199,8 +211,7 @@ export default function OrderListPage() {
     await saveModuleDataToDB("orders", updated)
 
     const numAmount = parseInt(ord.totalAmount.replace(/[^0-9]/g, "")) || 0
-    await settleOrUpdatePaymentToCompleted({
-      orderNumber: ord.orderNumber,
+    await addPayment({
       invoiceId: ord.invoiceId || ord.orderNumber,
       client: ord.client,
       clientEmail: ord.clientEmail,
@@ -208,9 +219,12 @@ export default function OrderListPage() {
       paymentDate: new Date().toLocaleDateString("en-GB"),
       paymentMethod: "UPI / Net Banking",
       transactionRef: `ORD_PAY_${Date.now()}`,
-      totalAmount: ord.totalAmount,
-      totalAmountNum: numAmount,
-    })
+      note: `Payment completed for ${ord.orderNumber}`,
+      amount: ord.totalAmount,
+      amountNum: numAmount,
+      status: "Completed",
+    }).catch(() => null)
+
 
     showToast(`✅ Payment converted to Full Paid for ${ord.orderNumber}! Synced to Payments.`)
     loadOrders()
