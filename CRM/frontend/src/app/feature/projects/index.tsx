@@ -12,16 +12,18 @@ import { useAuthStore } from "@/store/useAuthStore"
 
 export default function ProjectsMain() {
   const { user, activeCompanyId } = useAuthStore()
+  
   const roleLower = (user?.role || "").toLowerCase().trim()
-  const isSuperOrAdmin = 
+  const isSuperAdmin = roleLower.includes("super") || roleLower === "super admin" || roleLower === "superadmin"
+  const isAdmin = !isSuperAdmin && (
     roleLower.includes("admin") || 
-    roleLower.includes("super") || 
     roleLower.includes("owner") || 
     roleLower.includes("manager") ||
     roleLower.includes("management") ||
-    roleLower === "admin" ||
-    roleLower === "super admin"
-
+    roleLower === "admin"
+  )
+  const isClient = roleLower.includes("client")
+  const isTeam = !isSuperAdmin && !isAdmin && !isClient
 
   const [projects, setProjects] = React.useState<Project[]>([])
   const [viewMode, setViewMode] = React.useState<"table" | "detail">("table")
@@ -33,7 +35,15 @@ export default function ProjectsMain() {
   const [editingProject, setEditingProject] = React.useState<Project | null>(null)
 
   React.useEffect(() => {
-    const targetComp = activeCompanyId || user?.companyId || "tech"
+    let targetComp = "all"
+    if (isSuperAdmin) {
+      targetComp = activeCompanyId || "all"
+    } else if (isAdmin) {
+      targetComp = user?.companyId || activeCompanyId || "tech"
+    } else {
+      targetComp = user?.companyId || activeCompanyId || "all"
+    }
+
     const fetchFreshProjects = () => {
       getProjects(targetComp).then((data) => {
         setProjects(data)
@@ -58,26 +68,35 @@ export default function ProjectsMain() {
       window.removeEventListener("saampark_projects_updated", handleReload)
       window.removeEventListener("saampark_data_synced", handleReload)
     }
-
-  }, [activeCompanyId, user?.companyId, selectedProject])
+  }, [activeCompanyId, user?.companyId, isSuperAdmin, isAdmin])
 
   const visibleProjects = React.useMemo(() => {
     if (!user) return []
-    if (isSuperOrAdmin) return projects
+    
+    // 1. Super Admin: sees all loaded projects in current scope
+    if (isSuperAdmin) return projects
+
+    // 2. Company Admin: sees only projects belonging to their specific company
+    if (isAdmin) {
+      const userComp = (user.companyId || activeCompanyId || "").toLowerCase().trim()
+      if (!userComp || userComp === "all") return projects
+      return projects.filter((p) => {
+        const pComp = (p.companyId || (p as any).company || "tech").toLowerCase().trim()
+        return pComp === userComp || (userComp === "tech" && !p.companyId)
+      })
+    }
 
     const normName = (user.name || "").toLowerCase().trim()
     const normEmail = (user.email || "").toLowerCase().trim()
     const uId = String(user.id || "").toLowerCase().trim()
-    const roleStr = String(user.role || "").toLowerCase()
-    const isClient = roleStr.includes("client")
 
-    return projects.filter((p) => {
-      const pCreatorId = String((p as any).createdById || "").toLowerCase().trim()
-      const pCreatorEmail = ((p as any).createdByEmail || "").toLowerCase().trim()
-
-      if (isClient) {
+    // 3. Client: ONLY projects created for / assigned to this client
+    if (isClient) {
+      return projects.filter((p) => {
         const clientName = (p.client || "").toLowerCase().trim()
         const pClientId = String((p as any).clientId || "").toLowerCase().trim()
+        const pCreatorId = String((p as any).createdById || "").toLowerCase().trim()
+        const pCreatorEmail = ((p as any).createdByEmail || "").toLowerCase().trim()
 
         return (
           clientName === normName ||
@@ -87,17 +106,26 @@ export default function ProjectsMain() {
           (uId && pCreatorId === uId) ||
           (normEmail && pCreatorEmail === normEmail)
         )
-      }
+      })
+    }
 
-      // For team members: check if creator, lead, or member of project
+    // 4. Team Member (Staff / Developer / Employee): ONLY projects assigned to them or created by them
+    return projects.filter((p) => {
+      const pCreatorId = String((p as any).createdById || "").toLowerCase().trim()
+      const pCreatorEmail = ((p as any).createdByEmail || "").toLowerCase().trim()
+      const pBilledBy = String(p.billedBy || "").toLowerCase().trim()
+
       if (uId && pCreatorId === uId) return true
       if (normEmail && pCreatorEmail === normEmail) return true
+      if (normName && pBilledBy === normName) return true
 
       const members = p.members || []
       return members.some((m) => {
         const mName = (m.name || "").toLowerCase().trim()
         const mEmail = (m.email || "").toLowerCase().trim()
+        const mId = String(m.id || "").toLowerCase().trim()
         return (
+          (uId && mId === uId) ||
           mName === normName ||
           mEmail === normEmail ||
           (normName && (mName.includes(normName) || normName.includes(mName))) ||
@@ -105,7 +133,8 @@ export default function ProjectsMain() {
         )
       })
     })
-  }, [projects, user, isSuperOrAdmin])
+  }, [projects, user, isSuperAdmin, isAdmin, isClient])
+
 
 
   const handleProjectAdded = (newProject: Project) => {

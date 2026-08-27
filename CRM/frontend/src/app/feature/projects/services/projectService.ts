@@ -13,22 +13,37 @@ export const getProjects = async (companyId?: string): Promise<Project[]> => {
     } catch {}
   }
   
-  const scopedData = await fetchModuleDataFromDB<Project[]>("projects", [], targetComp || "all")
-  const allMaster = (targetComp && targetComp !== "all") 
-    ? await fetchModuleDataFromDB<Project[]>("projects", [], "all")
-    : []
-  
-  const techData = (targetComp !== "tech")
-    ? await fetchModuleDataFromDB<Project[]>("projects", [], "tech")
-    : []
+  if (!targetComp || targetComp === "all") {
+    // Super Admin / All Companies view: aggregate across master and companies
+    const allMaster = await fetchModuleDataFromDB<Project[]>("projects", [], "all")
+    const techData = await fetchModuleDataFromDB<Project[]>("projects", [], "tech")
+    const printData = await fetchModuleDataFromDB<Project[]>("projects", [], "print")
+    const mediaData = await fetchModuleDataFromDB<Project[]>("projects", [], "media")
+    
+    const map = new Map<string, Project>()
+    for (const list of [allMaster, techData, printData, mediaData]) {
+      for (const p of (Array.isArray(list) ? list : [])) {
+        if (p && p.id) map.set(String(p.id).toLowerCase().trim(), p)
+      }
+    }
+    return filterGlobalDeletedItems(Array.from(map.values()))
+  }
+
+  // Specific Company view (Company Admin / Team scoped to specific company):
+  const scopedData = await fetchModuleDataFromDB<Project[]>("projects", [], targetComp)
+  const allMaster = await fetchModuleDataFromDB<Project[]>("projects", [], "all")
   
   const map = new Map<string, Project>()
+  // Include projects from master that belong to this company
   for (const p of (Array.isArray(allMaster) ? allMaster : [])) {
-    if (p && p.id) map.set(String(p.id).toLowerCase().trim(), p)
+    if (p && p.id) {
+      const pComp = p.companyId || (p as any).company || "tech"
+      if (pComp === targetComp || (targetComp === "tech" && !p.companyId)) {
+        map.set(String(p.id).toLowerCase().trim(), p)
+      }
+    }
   }
-  for (const p of (Array.isArray(techData) ? techData : [])) {
-    if (p && p.id) map.set(String(p.id).toLowerCase().trim(), p)
-  }
+  // Include scoped records
   for (const p of (Array.isArray(scopedData) ? scopedData : [])) {
     if (p && p.id) map.set(String(p.id).toLowerCase().trim(), p)
   }
@@ -48,9 +63,8 @@ export const addProject = async (project: Omit<Project, "id">, companyId?: strin
 
   const current = await fetchModuleDataFromDB<Project[]>("projects", [], targetComp)
   const allMaster = await fetchModuleDataFromDB<Project[]>("projects", [], "all")
-  const techList = await fetchModuleDataFromDB<Project[]>("projects", [], "tech")
   
-  const allExisting = [...current, ...allMaster, ...techList]
+  const allExisting = [...current, ...allMaster]
   const numericIds = allExisting.map(p => {
     const raw = String(p?.id || "").replace(/\D/g, "")
     const num = parseInt(raw, 10)
@@ -62,6 +76,7 @@ export const addProject = async (project: Omit<Project, "id">, companyId?: strin
   const newProject: Project = {
     ...project,
     id: newId,
+    companyId: targetComp,
     starred: false,
     totalHours: 0,
     members: project.members || [],
@@ -86,11 +101,6 @@ export const addProject = async (project: Omit<Project, "id">, companyId?: strin
   const mergedAll = [newProject, ...allMaster.filter(p => String(p?.id) !== String(newId))]
   await saveModuleDataToDB("projects", mergedAll, "all")
 
-  // Also save to tech if different
-  if (targetComp !== "tech") {
-    const mergedTech = [newProject, ...techList.filter(p => String(p?.id) !== String(newId))]
-    await saveModuleDataToDB("projects", mergedTech, "tech")
-  }
 
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("storage"))

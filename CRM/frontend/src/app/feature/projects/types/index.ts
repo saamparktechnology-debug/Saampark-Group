@@ -73,4 +73,6 @@ export interface Project {
   milestones?: ProjectMilestone[]
   taskBreakdown?: TaskBreakdown
   activityLogs?: ActivityItem[]
+  companyId?: string
 }
+
