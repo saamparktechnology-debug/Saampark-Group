@@ -1374,7 +1374,10 @@ export function LeadList({
                           <div className="inline-flex items-center gap-1 px-1.5 py-0.5 w-fit rounded bg-indigo-500/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 text-[9.5px] font-semibold ml-8 mt-0.5">
                             <UserIcon size={9} />
                             <span className="inline-flex items-center gap-1">
-                              Added by: {l.createdByName || l.createdBy} {l.createdByRole ? `(${l.createdByRole})` : ""}
+                              Added by: {l.createdByName || l.createdBy}
+                              {l.createdByRole && !String(l.createdByName || l.createdBy).includes(l.createdByRole)
+                                ? ` (${l.createdByRole})`
+                                : ""}
                               {(l.branchName || l.branchId) && (
                                 <>
                                   <span className="opacity-50">•</span>

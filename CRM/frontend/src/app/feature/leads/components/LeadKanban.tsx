@@ -1278,68 +1278,103 @@ export function LeadKanban({
                     >
                       {/* Blurred Card Content when Locked */}
                       <div className={`space-y-2 transition-all ${isLocked ? "blur-[1.5px] opacity-40 select-none pointer-events-none" : ""}`}>
-                        {/* Line 1: Business Lead Title & Date */}
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <Building2 size={13} className="text-blue-500 shrink-0" />
-                            <span className={`font-semibold text-xs truncate ${isLocked ? "text-rose-700 dark:text-rose-300 line-through" : "text-blue-600 dark:text-blue-400 hover:underline"}`}>
+                        {/* Line 1: Business Lead Title, Tiny Creator Info Tooltip & Date */}
+                        <div className="flex items-start justify-between gap-1.5">
+                          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                            <Building2 size={13} className="text-blue-500 shrink-0 mt-0.5" />
+                            <span
+                              onClick={() => onSelectLeadDetail(l)}
+                              className={`font-bold text-xs truncate cursor-pointer ${
+                                isLocked
+                                  ? "text-rose-700 dark:text-rose-300 line-through"
+                                  : "text-blue-600 dark:text-blue-400 hover:underline"
+                              }`}
+                              title={l.name}
+                            >
                               {l.name}
                             </span>
                           </div>
-                          <span className="text-[11px] text-zinc-400 shrink-0">
-                            {l.createdAt || "06 Aug 2025"}
-                          </span>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {/* Tiny Creator Info Icon with Hover/Click Tooltip */}
+                            {(l.createdByName || l.createdBy || l.branchName || l.transferredBy) && (
+                              <div className="relative group/creator">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    onSelectLeadDetail(l)
+                                  }}
+                                  className="w-4 h-4 rounded-full bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/80 dark:hover:bg-indigo-900 text-indigo-600 dark:text-indigo-400 border border-indigo-200/80 dark:border-indigo-800 flex items-center justify-center text-[10px] cursor-pointer transition-colors shadow-2xs"
+                                  title="Creator & Branch Details"
+                                >
+                                  ℹ️
+                                </button>
+                                
+                                {/* Hover Tooltip Card */}
+                                <div className="absolute right-0 top-full mt-1.5 hidden group-hover/creator:block z-50 w-52 p-2.5 bg-zinc-900/95 dark:bg-zinc-800 text-white rounded-xl shadow-xl border border-zinc-700 text-[10.5px] pointer-events-none space-y-1 backdrop-blur-sm">
+                                  {(l.createdByName || l.createdBy) && (
+                                    <div className="flex items-center gap-1 text-indigo-300 font-bold">
+                                      <UserIcon size={11} className="shrink-0" />
+                                      <span>
+                                        Added by: {l.createdByName || l.createdBy}
+                                        {l.createdByRole && !String(l.createdByName || l.createdBy).includes(l.createdByRole)
+                                          ? ` (${l.createdByRole})`
+                                          : ""}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {(l.branchName || l.assignedBranchName || l.branchId) && (
+                                    <div className="flex items-center gap-1 text-zinc-300">
+                                      <MapPin size={11} className="text-amber-400 shrink-0" />
+                                      <span>Branch: {l.branchName || l.assignedBranchName || `Branch (${l.branchId})`}</span>
+                                    </div>
+                                  )}
+                                  {l.transferredBy && (
+                                    <div className="flex items-center gap-1 text-emerald-300 font-semibold pt-0.5 border-t border-zinc-700/60">
+                                      <span>🚀 Sent by: {l.transferredBy}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            <span className="text-[10.5px] text-zinc-400 font-medium shrink-0">
+                              {l.createdAt || "Recent"}
+                            </span>
+                          </div>
                         </div>
 
-                        {/* Badges: Added By Creator, Branch, and Sent by Admin */}
-                        <div className="flex items-center gap-1 flex-wrap">
-                          {(l.createdByName || l.createdBy) && (
-                            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/70 text-[9px] font-semibold">
-                              <UserIcon size={9} />
-                              <span className="inline-flex items-center gap-1">
-                                Added by: {l.createdByName || l.createdBy} {l.createdByRole ? `(${l.createdByRole})` : ""}
-                                {(l.branchName || l.branchId) && (
-                                  <>
-                                    <span className="opacity-50">•</span>
-                                    <MapPin size={9} className="text-amber-500 inline" />
-                                    <span>{l.branchName || `Branch (${l.branchId})`}</span>
-                                  </>
-                                )}
-                              </span>
-                            </div>
-                          )}
+                        {/* Line 2: Customer / Primary Contact Name */}
+                        {l.primaryContact && (
+                          <div className="flex items-center gap-1.5 text-[11px] text-zinc-700 dark:text-zinc-200">
+                            <UserIcon size={12} className="text-emerald-500 shrink-0" />
+                            <span className="truncate">
+                              Customer: <strong className="font-semibold text-zinc-900 dark:text-zinc-100">{l.primaryContact}</strong>
+                            </span>
+                          </div>
+                        )}
 
-                          {(l.branchName || l.assignedBranchName) && (
-                            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/70 text-[9px] font-semibold">
-                              <MapPin size={9} />
-                              <span>Branch: {l.branchName || l.assignedBranchName}</span>
-                            </div>
-                          )}
-
-                          {l.transferredBy && (
-                            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/70 text-[9px] font-semibold">
-                              <span>🚀 Sent by: {l.transferredBy}</span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Line 2: Phone & Secondary Contact */}
+                        {/* Line 3: Phone & Secondary Manager */}
                         <div className="space-y-1 text-[11px]">
                           <div className="flex items-center justify-between text-zinc-600 dark:text-zinc-300">
                             <div className="flex items-center gap-1.5 min-w-0">
                               <Phone size={12} className="text-blue-500 shrink-0" />
-                              <span className="truncate">{l.phone}</span>
+                              <span className="truncate font-mono font-medium text-zinc-800 dark:text-zinc-200">{l.phone}</span>
                             </div>
                             {l.secondaryPhone && (
-                              <span className="text-[9.5px] font-sans font-medium px-1.5 py-0.2 rounded bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shrink-0">
+                              <span className="text-[9px] font-sans font-bold px-1.5 py-0.2 rounded bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shrink-0">
                                 2 Contacts
                               </span>
                             )}
                           </div>
                           {l.secondaryPhone && (
-                            <div className="flex items-center gap-1 text-zinc-500 dark:text-zinc-400 text-[10px]">
-                              <UserIcon size={10} className="text-purple-400 shrink-0" />
-                              <span className="truncate">Mgr: {l.secondaryContact ? `${l.secondaryContact} • ` : ""}{l.secondaryPhone}</span>
+                            <div className="flex items-center gap-1 text-zinc-500 dark:text-zinc-400 text-[10px] pl-0.5">
+                              <span className="text-purple-600 dark:text-purple-400 font-bold text-[9.5px]">Mgr:</span>
+                              <span className="truncate font-medium text-zinc-700 dark:text-zinc-300">
+                                {l.secondaryContact ? `${l.secondaryContact} • ` : ""}
+                                <span className="font-mono">{l.secondaryPhone}</span>
+                              </span>
                             </div>
                           )}
                         </div>
