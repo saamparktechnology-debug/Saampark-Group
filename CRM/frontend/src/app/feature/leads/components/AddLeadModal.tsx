@@ -101,12 +101,7 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
 
   const handleCompanyChange = (newCompId: string) => {
     setSelectedCompanyId(newCompId)
-    const validBranches = branches.filter((b) => b.companyId === newCompId)
-    if (validBranches.length > 0) {
-      setSelectedBranchId(validBranches[0].id)
-    } else {
-      setSelectedBranchId("")
-    }
+    setSelectedBranchId("")
   }
 
   const [teamMembers, setTeamMembers] = React.useState<{ id: string; name: string; role?: string }[]>([])
@@ -236,9 +231,9 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
     const finalReminderTime = (isNoReminder || finalReminderDate === "None") ? "None" : (reminderTime || "11:30 AM")
 
     const finalCompanyId = isSuperOrAdmin ? (selectedCompanyId || "tech") : (activeCompanyId || user?.companyId || "tech")
-    const finalBranchId = isSuperOrAdmin ? (selectedBranchId || undefined) : (activeBranchId || user?.branchId || undefined)
-    const currentBranchObj = branches.find(b => b.id === finalBranchId)
-    const finalBranchName = currentBranchObj?.name || user?.branchName || undefined
+    const finalBranchId = isSuperOrAdmin ? (selectedBranchId.trim() ? selectedBranchId : undefined) : (activeBranchId || user?.branchId || undefined)
+    const currentBranchObj = finalBranchId ? branches.find(b => b.id === finalBranchId) : undefined
+    const finalBranchName = currentBranchObj?.name || (finalBranchId ? user?.branchName : undefined)
 
     setIsSubmitting(true)
     try {
@@ -342,18 +337,19 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
           </div>
 
           {/* Company & Branch Selector for Super Admin / Admin */}
+          {/* Company & Branch Selector side-by-side horizontally */}
           {isSuperOrAdmin && (
-            <>
-              {/* Company Selector */}
-              <div className="grid grid-cols-4 items-center gap-4">
-                <label className="text-zinc-500 font-medium flex items-center gap-1">
-                  <Building size={12} className="text-blue-500" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-zinc-50/80 dark:bg-zinc-800/40 rounded-xl border border-zinc-200/80 dark:border-zinc-700/60">
+              {/* Company */}
+              <div className="space-y-1">
+                <label className="text-zinc-600 dark:text-zinc-300 font-semibold flex items-center gap-1.5 text-[11px]">
+                  <Building size={13} className="text-blue-500" />
                   <span>Company *</span>
                 </label>
                 <select
                   value={selectedCompanyId}
                   onChange={(e) => handleCompanyChange(e.target.value)}
-                  className="col-span-3 px-3 py-2 bg-blue-50/50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-semibold"
+                  className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-blue-200 dark:border-blue-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-semibold cursor-pointer shadow-2xs"
                 >
                   {allowedCompanies.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -363,29 +359,26 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
                 </select>
               </div>
 
-              {/* Branch Selector */}
-              <div className="grid grid-cols-4 items-center gap-4">
-                <label className="text-zinc-500 font-medium flex items-center gap-1">
-                  <MapPin size={12} className="text-amber-500" />
-                  <span>Branch *</span>
+              {/* Branch */}
+              <div className="space-y-1">
+                <label className="text-zinc-600 dark:text-zinc-300 font-semibold flex items-center gap-1.5 text-[11px]">
+                  <MapPin size={13} className="text-amber-500" />
+                  <span>Branch (Optional)</span>
                 </label>
                 <select
                   value={selectedBranchId}
                   onChange={(e) => setSelectedBranchId(e.target.value)}
-                  className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-semibold"
+                  className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-semibold cursor-pointer shadow-2xs"
                 >
-                  {availableBranches.length === 0 ? (
-                    <option value="">No branch configured for this company</option>
-                  ) : (
-                    availableBranches.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name}
-                      </option>
-                    ))
-                  )}
+                  <option value="">-- No Branch (Company Wide) --</option>
+                  {availableBranches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
                 </select>
               </div>
-            </>
+            </div>
           )}
 
           {/* Lead / Company name */}
