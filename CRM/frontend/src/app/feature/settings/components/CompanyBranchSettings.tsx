@@ -172,10 +172,10 @@ export function CompanyBranchSettings() {
     setEditingCompany(null)
     setCompanyModalTab("basic")
     setCompanyBrandName("SAAMPARK")
-    setCompanyDivisionName("CONSULTANCY")
-    setCompanyName("SAAMPARK CONSULTANCY")
-    setCompanySubtitle("AND RESEARCH PRIVATE LIMITED")
-    setCompanySlug("consultancy")
+    setCompanyDivisionName("")
+    setCompanyName("SAAMPARK")
+    setCompanySubtitle("")
+    setCompanySlug("saampark")
     setCompanyLogo("🏢")
     setCompanyLogoUrl("/saampark-logo.png")
     setCompanyCurrency("INR")
@@ -206,8 +206,8 @@ export function CompanyBranchSettings() {
     setEditingCompany(company)
     setCompanyModalTab("basic")
 
-    const brand = company.brand_name || (company.name ? company.name.split(" ")[0] : "SAAMPARK")
-    const division = company.division_name || (company.name ? company.name.split(" ").slice(1).join(" ") : "")
+    const brand = company.brand_name || company.name || "SAAMPARK"
+    const division = company.division_name !== undefined ? company.division_name : ""
     
     setCompanyBrandName(brand)
     setCompanyDivisionName(division)
@@ -752,11 +752,15 @@ export function CompanyBranchSettings() {
                         <div>
                           <div className="text-base font-black tracking-tight leading-none text-foreground flex items-center gap-1.5 flex-wrap">
                             <span className="text-primary uppercase">{companyBrandName || "SAAMPARK"}</span>
-                            <span className="text-foreground uppercase">{companyDivisionName || "TECHNOLOGY / CONSULTANCY"}</span>
+                            {companyDivisionName?.trim() && (
+                              <span className="text-foreground uppercase">{companyDivisionName.trim()}</span>
+                            )}
                           </div>
-                          <div className="text-[11px] font-bold text-muted-foreground tracking-wider uppercase mt-0.5">
-                            {companySubtitle || "AND RESEARCH PRIVATE LIMITED"}
-                          </div>
+                          {companySubtitle?.trim() && (
+                            <div className="text-[11px] font-bold text-muted-foreground tracking-wider uppercase mt-1">
+                              {companySubtitle.trim()}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -779,17 +783,16 @@ export function CompanyBranchSettings() {
 
                       <div>
                         <label className="block font-bold text-foreground mb-1">
-                          Division / Business Unit *
+                          Division / Business Unit (Optional)
                         </label>
                         <input
                           type="text"
-                          required
                           value={companyDivisionName}
                           onChange={(e) => updateBrandOrDivision(companyBrandName, e.target.value)}
-                          placeholder="e.g. Technology, Consultancy, Digital Marketing"
+                          placeholder="e.g. Technology, Consultancy, Digital Marketing (Optional)"
                           className="w-full px-3.5 py-2.5 rounded-xl bg-surface border border-border text-xs focus:outline-hidden focus:border-primary font-bold text-foreground"
                         />
-                        <p className="text-[10px] text-muted-foreground mt-0.5">e.g. Consultancy, Technology, Infra, Logistics</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">Leave blank if this company has no separate division</p>
                       </div>
 
                       <div className="sm:col-span-2">

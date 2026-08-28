@@ -245,8 +245,10 @@ export function OfficialInvoiceDocument({
         <div className="space-y-1 flex-1 min-w-0 pt-0.5">
           <div>
             {(() => {
-              const brandPart = activeCompany?.brand_name || (activeCompany?.name ? activeCompany.name.split(" ")[0] : "SAAMPARK")
-              const divisionPart = activeCompany?.division_name || (activeCompany?.name ? activeCompany.name.split(" ").slice(1).join(" ") : "")
+              const brandPart = activeCompany?.brand_name || activeCompany?.name || "SAAMPARK"
+              const divisionPart = (activeCompany?.division_name !== undefined && activeCompany?.division_name !== null)
+                ? activeCompany.division_name.trim()
+                : ""
               return (
                 <h1 className="text-xl sm:text-2xl font-black tracking-tight leading-none">
                   <span className="text-zinc-950 uppercase">{brandPart}</span>{" "}
