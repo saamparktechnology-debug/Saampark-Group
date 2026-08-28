@@ -29,6 +29,8 @@ import { Lead, LeadStatus } from "../types"
 import { LeadFiltersDropdown } from "./LeadFiltersDropdown"
 import { updateLead, parseLeadDate, formatLeadReminderDate } from "../services/leadService"
 import { LabelItem } from "./ManageLabelsModal"
+import { WhatsAppTemplateModal } from "./WhatsAppTemplateModal"
+import { CallOutcomeModal } from "./CallOutcomeModal"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { getUsers } from "@/app/feature/users/services/userService"
@@ -90,8 +92,8 @@ function parseReminderTimestamp(dateStr?: string, timeStr?: string): number {
 
 function getCallerAvatar(
   lead: Lead,
-  allUsers: { id: string; name: string; avatar?: string }[],
-  currentUser?: { name?: string; avatar?: string } | null
+  allUsers: { id: string; name: string; avatar?: string; avatarUrl?: string; email?: string }[],
+  currentUser?: { name?: string; avatar?: string; avatarUrl?: string } | null
 ) {
   const callerName =
     (lead.assignedTo && lead.assignedTo !== "None" && lead.assignedTo !== "Unassigned")
@@ -113,17 +115,22 @@ function getCallerAvatar(
 
   // 2. Current logged in user profile image
   if (currentUser && currentUser.name && currentUser.name.trim().toLowerCase() === callerName.trim().toLowerCase()) {
-    if (currentUser.avatar && currentUser.avatar.trim() && !currentUser.avatar.includes("dicebear")) {
-      return { type: "image" as const, src: currentUser.avatar, name: callerName }
+    const curAvatar = (currentUser as any).avatarUrl || currentUser.avatar
+    if (curAvatar && curAvatar.trim() && !curAvatar.includes("dicebear")) {
+      return { type: "image" as const, src: curAvatar, name: callerName }
     }
   }
 
   // 3. Matched user from allUsers database
   const matchedUser = allUsers.find(
-    (u) => u.name && u.name.trim().toLowerCase() === callerName.trim().toLowerCase()
+    (u) => (u.name && u.name.trim().toLowerCase() === callerName.trim().toLowerCase()) ||
+           (u.email && u.email.trim().toLowerCase() === callerName.trim().toLowerCase())
   )
-  if (matchedUser && matchedUser.avatar && matchedUser.avatar.trim() && !matchedUser.avatar.includes("dicebear")) {
-    return { type: "image" as const, src: matchedUser.avatar, name: callerName }
+  if (matchedUser) {
+    const uAvatar = matchedUser.avatarUrl || matchedUser.avatar
+    if (uAvatar && uAvatar.trim() && !uAvatar.includes("dicebear")) {
+      return { type: "image" as const, src: uAvatar, name: callerName }
+    }
   }
 
   // 4. If user exists with name, show initials badge
@@ -263,6 +270,8 @@ export function LeadKanban({
   const [selectedMemberStage, setSelectedMemberStage] = React.useState<string>("all")
   const [isMemberDropdownOpen, setIsMemberDropdownOpen] = React.useState(false)
   const [memberSearchQuery, setMemberSearchQuery] = React.useState("")
+  const [whatsAppModalLead, setWhatsAppModalLead] = React.useState<Lead | null>(null)
+  const [callOutcomeModalLead, setCallOutcomeModalLead] = React.useState<Lead | null>(null)
 
   React.useEffect(() => {
     getUsers("all").then((list) => {
@@ -1233,7 +1242,8 @@ export function LeadKanban({
                 className="p-2 space-y-2.5 flex-1 overflow-y-auto max-h-[75vh]"
               >
                 {columnLeads.map((l) => {
-                  const isLocked = !!l.isLocked
+                  const isWonOrLost = (l.status || "").toLowerCase().trim() === "won" || (l.status || "").toLowerCase().trim() === "lost"
+                  const isLocked = !isWonOrLost && !!l.isLocked
 
                   return (
                     <div
@@ -1477,13 +1487,14 @@ export function LeadKanban({
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     window.open(`tel:${targetNum.replace(/[^0-9+]/g, "")}`)
+                                    setCallOutcomeModalLead(l)
                                   }}
                                   className={`w-7 h-7 min-w-[28px] min-h-[28px] rounded-lg flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-2xs ${
                                     isSec
                                       ? "bg-purple-100 hover:bg-purple-200 text-purple-700 dark:bg-purple-950 dark:hover:bg-purple-900 dark:text-purple-300"
                                       : "bg-blue-100/80 hover:bg-blue-200 text-blue-700 dark:bg-blue-950 dark:hover:bg-blue-900 dark:text-blue-300"
                                   }`}
-                                  title={`Call ${targetLabel}: ${targetNum}`}
+                                  title={`Call & Log Outcome: ${targetLabel} (${targetNum})`}
                                 >
                                   <Phone size={13} className="pointer-events-none" />
                                 </button>
@@ -1501,10 +1512,10 @@ export function LeadKanban({
                                   onMouseDown={(e) => e.stopPropagation()}
                                   onClick={(e) => {
                                     e.stopPropagation()
-                                    window.open(`https://wa.me/${targetNum.replace(/[^0-9]/g, "")}`)
+                                    setWhatsAppModalLead(l)
                                   }}
                                   className="w-7 h-7 min-w-[28px] min-h-[28px] rounded-lg bg-emerald-100/80 hover:bg-emerald-200 text-emerald-700 dark:bg-emerald-950 dark:hover:bg-emerald-900 dark:text-emerald-300 flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-2xs"
-                                  title={`WhatsApp ${targetLabel}: ${targetNum}`}
+                                  title={`1-Click WhatsApp ${targetLabel}: ${targetNum}`}
                                 >
                                   <WhatsAppIcon size={14} className="pointer-events-none" />
                                 </button>
@@ -1649,6 +1660,23 @@ export function LeadKanban({
           </div>
         </div>
       )}
+
+      {/* 1-Click WhatsApp Message Generator Modal */}
+      <WhatsAppTemplateModal
+        isOpen={Boolean(whatsAppModalLead)}
+        onClose={() => setWhatsAppModalLead(null)}
+        lead={whatsAppModalLead}
+      />
+
+      {/* Telecalling Log Outcome Modal */}
+      <CallOutcomeModal
+        isOpen={Boolean(callOutcomeModalLead)}
+        onClose={() => setCallOutcomeModalLead(null)}
+        lead={callOutcomeModalLead}
+        onLeadUpdated={(updated) => {
+          onLeadUpdated(updated)
+        }}
+      />
 
     </div>
   )

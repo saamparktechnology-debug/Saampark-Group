@@ -339,6 +339,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
       phone,
       password,
       status,
+      avatarUrl: editingUser?.avatarUrl || (editingUser as any)?.avatar || undefined,
     }
 
     if (editingUser) {

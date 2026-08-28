@@ -93,7 +93,7 @@ export function EditProjectModal({
           id: String(m.id),
           name: m.name,
           role: m.department || "Developer",
-          avatar: m.avatar || m.avatarUrl || `https://api.dicebear.com/7.x/notionists/svg?seed=${m.name}`,
+          avatar: m.avatarUrl || m.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${m.name}`,
           email: m.email,
         }))
 

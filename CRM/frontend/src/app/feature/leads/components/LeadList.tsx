@@ -30,6 +30,8 @@ import { LeadFiltersDropdown } from "./LeadFiltersDropdown"
 import { formatLeadReminderDate, transferLeadsToBranch, parseLeadDate } from "../services/leadService"
 import { LabelItem } from "./ManageLabelsModal"
 import { LabelSelectorPopover } from "./LabelSelectorPopover"
+import { WhatsAppTemplateModal } from "./WhatsAppTemplateModal"
+import { CallOutcomeModal } from "./CallOutcomeModal"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { getUsers } from "@/app/feature/users/services/userService"
@@ -128,6 +130,8 @@ export function LeadList({
   const [isStageDropdownOpen, setIsStageDropdownOpen] = React.useState(false)
   const [selectedReminderFilter, setSelectedReminderFilter] = React.useState<string>("all")
   const [isReminderDropdownOpen, setIsReminderDropdownOpen] = React.useState(false)
+  const [whatsAppModalLead, setWhatsAppModalLead] = React.useState<Lead | null>(null)
+  const [callOutcomeModalLead, setCallOutcomeModalLead] = React.useState<Lead | null>(null)
 
   React.useEffect(() => {
     getUsers("all").then((list) => {
@@ -1341,7 +1345,8 @@ export function LeadList({
             </thead>
             <tbody className="divide-y divide-zinc-200/80 dark:divide-zinc-800">
               {paginatedLeads.map((l) => {
-                const isLocked = l.isLocked === true
+                const isWonOrLost = (l.status || "").toLowerCase().trim() === "won" || (l.status || "").toLowerCase().trim() === "lost"
+                const isLocked = !isWonOrLost && l.isLocked === true
 
                 return (
                   <tr
@@ -1411,9 +1416,10 @@ export function LeadList({
                             onClick={(e) => {
                               e.stopPropagation()
                               window.open(`tel:${l.phone.replace(/[^0-9+]/g, "")}`)
+                              setCallOutcomeModalLead(l)
                             }}
                             className="w-6 h-6 min-w-[24px] min-h-[24px] rounded-md bg-blue-100/80 hover:bg-blue-200 dark:bg-blue-950 dark:hover:bg-blue-900 text-blue-700 dark:text-blue-300 flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-2xs"
-                            title={`Call Primary: ${l.primaryContact} (${l.phone})`}
+                            title={`Call Primary & Log Outcome: ${l.primaryContact} (${l.phone})`}
                           >
                             <Phone size={12} className="pointer-events-none" />
                           </button>
@@ -1421,10 +1427,10 @@ export function LeadList({
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation()
-                              window.open(`https://wa.me/${l.phone.replace(/[^0-9]/g, "")}`)
+                              setWhatsAppModalLead(l)
                             }}
                             className="w-6 h-6 min-w-[24px] min-h-[24px] rounded-md bg-emerald-100/80 hover:bg-emerald-200 dark:bg-emerald-950 dark:hover:bg-emerald-900 text-emerald-700 dark:text-emerald-300 flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-2xs"
-                            title={`WhatsApp Primary: ${l.primaryContact} (${l.phone})`}
+                            title={`1-Click WhatsApp: ${l.primaryContact} (${l.phone})`}
                           >
                             <WhatsAppIcon size={13} className="pointer-events-none" />
                           </button>
@@ -1439,9 +1445,10 @@ export function LeadList({
                               onClick={(e) => {
                                 e.stopPropagation()
                                 window.open(`tel:${l.secondaryPhone!.replace(/[^0-9+]/g, "")}`)
+                                setCallOutcomeModalLead(l)
                               }}
                               className="w-5 h-5 rounded bg-purple-100 hover:bg-purple-200 dark:bg-purple-950 dark:hover:bg-purple-900 text-purple-700 dark:text-purple-300 flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95"
-                              title={`Call Manager: ${l.secondaryContact || "Manager"} (${l.secondaryPhone})`}
+                              title={`Call Manager & Log Outcome: ${l.secondaryContact || "Manager"} (${l.secondaryPhone})`}
                             >
                               <Phone size={10} className="pointer-events-none" />
                             </button>
@@ -1449,10 +1456,10 @@ export function LeadList({
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation()
-                                window.open(`https://wa.me/${l.secondaryPhone!.replace(/[^0-9]/g, "")}`)
+                                setWhatsAppModalLead(l)
                               }}
                               className="w-5 h-5 rounded bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950 dark:hover:bg-emerald-900 text-emerald-700 dark:text-emerald-300 flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95"
-                              title={`WhatsApp Manager: ${l.secondaryContact || "Manager"} (${l.secondaryPhone})`}
+                              title={`1-Click WhatsApp Manager: ${l.secondaryContact || "Manager"} (${l.secondaryPhone})`}
                             >
                               <WhatsAppIcon size={11} className="pointer-events-none" />
                             </button>
@@ -1508,13 +1515,14 @@ export function LeadList({
                           userMeta?.role ||
                           (assignedPerson.toLowerCase().includes("admin") ? "Administration" : "Telecaller / Sales")
 
+                        const realOwnerImg = l.ownerAvatar && !l.ownerAvatar.includes("dicebear") ? l.ownerAvatar : null
+                        const realUserImg = userMeta?.avatarUrl || (userMeta as any)?.avatar || 
+                          ((user && (assignedPerson.toLowerCase().trim() === user.name.toLowerCase().trim() || assignedPerson.toLowerCase().trim() === user.email.toLowerCase().trim())) 
+                            ? ((user as any).avatarUrl || user.avatar) 
+                            : null)
+
                         const avatarSrc = !isUnassigned
-                          ? (l.ownerAvatar ||
-                              userMeta?.avatarUrl ||
-                              (user?.avatar && (assignedPerson === user.name || assignedPerson === user.email)
-                                ? user.avatar
-                                : null) ||
-                              `https://api.dicebear.com/7.x/notionists/svg?seed=${encodeURIComponent(assignedPerson)}`)
+                          ? (realOwnerImg || realUserImg || `https://api.dicebear.com/7.x/notionists/svg?seed=${encodeURIComponent(assignedPerson)}`)
                           : null
 
                         return (
@@ -1901,6 +1909,23 @@ export function LeadList({
           </div>
         </div>
       )}
+
+      {/* 1-Click WhatsApp Message Generator Modal */}
+      <WhatsAppTemplateModal
+        isOpen={Boolean(whatsAppModalLead)}
+        onClose={() => setWhatsAppModalLead(null)}
+        lead={whatsAppModalLead}
+      />
+
+      {/* Telecalling Log Outcome Modal */}
+      <CallOutcomeModal
+        isOpen={Boolean(callOutcomeModalLead)}
+        onClose={() => setCallOutcomeModalLead(null)}
+        lead={callOutcomeModalLead}
+        onLeadUpdated={(updated) => {
+          onLeadUpdated(updated)
+        }}
+      />
 
     </div>
   )

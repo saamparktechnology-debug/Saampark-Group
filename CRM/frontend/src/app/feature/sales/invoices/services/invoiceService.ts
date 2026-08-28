@@ -222,6 +222,67 @@ export const addInvoice = async (invoice: Omit<InvoiceItem, "id"> & { id?: strin
   return newInvoice
 }
 
+export const updateInvoice = async (
+  updatedInvoice: InvoiceItem,
+  companyId?: string
+): Promise<InvoiceItem> => {
+  const targetComp = companyId || updatedInvoice.companyId || "all"
+  const current = await getInvoices(targetComp)
+  const strId = String(updatedInvoice.id).toUpperCase().trim()
+  const idx = current.findIndex((i) => String(i.id).toUpperCase().trim() === strId)
+
+  let nextList: InvoiceItem[]
+  if (idx !== -1) {
+    const oldInv = current[idx]
+    const merged = { ...oldInv, ...updatedInvoice }
+    current[idx] = merged
+    nextList = [...current]
+  } else {
+    nextList = [updatedInvoice, ...current]
+  }
+
+  await saveModuleDataToDB("invoices", nextList, targetComp)
+  if (targetComp !== "all") {
+    await saveModuleDataToDB("invoices", nextList, "all")
+  }
+
+  // Update client billing stats
+  try {
+    const clients = await getClients(targetComp)
+    const clientIdx = clients.findIndex(c => 
+      (c.name && c.name.toLowerCase().trim() === (updatedInvoice.client || "").toLowerCase().trim()) ||
+      (updatedInvoice.clientEmail && c.email && c.email.toLowerCase().trim() === updatedInvoice.clientEmail.toLowerCase().trim())
+    )
+    if (clientIdx !== -1) {
+      const c = clients[clientIdx]
+      const clientInvoices = nextList.filter(inv => 
+        (inv.client && inv.client.toLowerCase().trim() === c.name.toLowerCase().trim()) ||
+        (inv.clientEmail && c.email && inv.clientEmail.toLowerCase().trim() === c.email.toLowerCase().trim())
+      )
+      const sumInvoiced = clientInvoices.reduce((sum, i) => sum + (parseInt((i.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0), 0)
+      const sumReceived = clientInvoices.reduce((sum, i) => sum + (parseInt((i.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0), 0)
+      const sumDue = clientInvoices.reduce((sum, i) => sum + (parseInt((i.due || "0").replace(/[^0-9]/g, "")) || 0), 0)
+
+      await saveStoredClient({
+        ...c,
+        totalInvoiced: `₹${sumInvoiced.toLocaleString("en-IN")}`,
+        paymentReceived: `₹${sumReceived.toLocaleString("en-IN")}`,
+        due: `₹${sumDue.toLocaleString("en-IN")}`,
+      })
+    }
+  } catch (err) {
+    console.warn("Error updating client balance after invoice update:", err)
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("saampark_data_synced"))
+    window.dispatchEvent(new Event("saampark_invoices_updated"))
+    window.dispatchEvent(new Event("storage"))
+  }
+
+  return updatedInvoice
+}
+
 export const updateInvoiceStatus = async (
   id: string, 
   status: InvoiceStatus, 

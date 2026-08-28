@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/Input"
 import { useAuthStore } from "@/store/useAuthStore"
 import { useTheme } from "next-themes"
 import { fetchModuleDataFromDB, saveModuleDataToDB } from "@/lib/storageSync"
-import { getUsers, recordUserAccount } from "@/app/feature/users/services/userService"
+import { getUsers, recordUserAccount, cascadeUserAvatarChange } from "@/app/feature/users/services/userService"
 import { CompanyBranchSettings } from "./components/CompanyBranchSettings"
 import { uploadToImgBB } from "@/lib/imgbbUpload"
 import { KycData, KycStatus } from "@/app/feature/users/types"
@@ -182,6 +182,7 @@ export default function SettingsMain() {
             avatarUrl: uploadResult.url,
             id: String(user.id),
           })
+          cascadeUserAvatarChange(user.name, user.email, uploadResult.url).catch(() => {})
         }
 
         setSuccessMsg("📸 Profile picture uploaded permanently to Cloud! Live synced across CRM.")
@@ -306,6 +307,10 @@ export default function SettingsMain() {
         role: (user?.role as any) || "Admin",
         status: "Active",
       })
+
+      if (avatar && user) {
+        cascadeUserAvatarChange(updatedUserData.name, updatedUserData.email, avatar).catch(() => {})
+      }
 
       // Clear password fields
       setCurrentPassword("")

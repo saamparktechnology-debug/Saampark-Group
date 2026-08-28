@@ -110,6 +110,18 @@ export default function LoginPage() {
     }
   }, [resendCooldown])
 
+  // Check for inactive session logout redirect notice
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      const notice = sessionStorage.getItem("saampark_inactive_logout")
+      const searchParamError = new URLSearchParams(window.location.search).get("error")
+      if (notice || searchParamError === "inactive") {
+        setError("Your account is on inactive stage, please contact your administration.")
+        sessionStorage.removeItem("saampark_inactive_logout")
+      }
+    }
+  }, [])
+
   const handleSelectRole = (choice: RoleChoice) => {
     setSelectedRoleChoice(choice)
     setError("")
@@ -230,6 +242,14 @@ export default function LoginPage() {
       if (!matchedAccount || !matchedRole) {
         setIsLoading(false)
         setError("Account does not exist. Please contact your System Administrator.")
+        return
+      }
+
+      // ── INACTIVE ACCOUNT STATUS CHECK ───────────────────────────────────────
+      const rawStatus = (matchedAccount.status || dbAccount?.status || "").toString().toLowerCase().trim()
+      if (rawStatus === "inactive" || matchedAccount.is_active === false || (dbAccount as any)?.is_active === false) {
+        setIsLoading(false)
+        setError("Your account is on inactive stage, please contact your administration.")
         return
       }
 

@@ -10,8 +10,10 @@ import {
   AlertCircle,
   ArrowDownCircle,
 } from "lucide-react"
-import { Task, TaskStatus } from "../types"
+import { Task, TaskStatus, getTaskCountdownChip } from "../types"
 import { taskService } from "../services/taskService"
+import { getUsers, getUserAvatar } from "@/app/feature/users/services/userService"
+import { UserItem } from "@/app/feature/users/types"
 
 interface TaskKanbanProps {
   tasks: Task[]
@@ -46,7 +48,13 @@ export function TaskKanban({
 }: TaskKanbanProps) {
   const [searchQuery, setSearchQuery] = React.useState("")
   const [activeFilterPill, setActiveFilterPill] = React.useState("All tasks")
+  const [sourceFilter, setSourceFilter] = React.useState<"all" | "leads" | "projects" | "direct">("all")
   const [draggedTaskId, setDraggedTaskId] = React.useState<string | null>(null)
+  const [allUsers, setAllUsers] = React.useState<UserItem[]>([])
+
+  React.useEffect(() => {
+    getUsers("all").then(setAllUsers).catch(() => {})
+  }, [])
 
   const filteredTasks = React.useMemo(() => {
     const list = tasks || []
@@ -71,25 +79,40 @@ export function TaskKanban({
         assignStr.toLowerCase().includes(searchQuery.toLowerCase()) ||
         idStr.includes(searchQuery)
 
+      if (!matchesSearch) return false
+
+      // Source Filter check
+      if (sourceFilter === "leads") {
+        const isFromLead = t.source === "leads" || relStr.toLowerCase().includes("lead") || idStr.startsWith("lead_task_")
+        if (!isFromLead) return false
+      } else if (sourceFilter === "projects") {
+        const isFromProject = t.source === "projects" || relStr.toLowerCase().includes("project") || Boolean(t.projectName)
+        if (!isFromProject) return false
+      } else if (sourceFilter === "direct") {
+        const isFromLead = t.source === "leads" || relStr.toLowerCase().includes("lead") || idStr.startsWith("lead_task_")
+        const isFromProject = t.source === "projects" || relStr.toLowerCase().includes("project") || Boolean(t.projectName)
+        if (isFromLead || isFromProject) return false
+      }
+
       if (activeFilterPill === "All tasks" || activeFilterPill === "My tasks" || activeFilterPill === "Recently updated") {
-        return matchesSearch
+        return true
       }
 
       if (activeFilterPill === "Bug") {
-        return matchesSearch && (t.labels || []).includes("Bug")
+        return (t.labels || []).includes("Bug")
       }
 
       if (activeFilterPill === "exclamation") {
-        return matchesSearch && (t.priorityIcon === "exclamation" || t.priority === "Urgent")
+        return (t.priorityIcon === "exclamation" || t.priority === "Urgent")
       }
 
       if (activeFilterPill === "up") {
-        return matchesSearch && (t.priorityIcon === "up" || t.priority === "High")
+        return (t.priorityIcon === "up" || t.priority === "High")
       }
 
-      return matchesSearch
+      return true
     })
-  }, [tasks, searchQuery, activeFilterPill])
+  }, [tasks, searchQuery, activeFilterPill, sourceFilter])
 
   // Drag & drop handlers
   const handleDragStart = (id: string) => {
@@ -223,6 +246,57 @@ export function TaskKanban({
             <Plus size={14} />
           </button>
 
+          {/* Source Filter Group (All / From Leads / From Projects / Direct) */}
+          <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-800/80 p-0.5 rounded-lg border border-zinc-200/80 dark:border-zinc-700/80 text-[11px] font-semibold">
+            <button
+              type="button"
+              onClick={() => setSourceFilter("all")}
+              className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                sourceFilter === "all"
+                  ? "bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-xs"
+                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+              }`}
+            >
+              All Sources
+            </button>
+            <button
+              type="button"
+              onClick={() => setSourceFilter("leads")}
+              className={`px-2.5 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1 ${
+                sourceFilter === "leads"
+                  ? "bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-xs font-bold"
+                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+              }`}
+            >
+              <span>🎯</span>
+              <span>From Leads</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSourceFilter("projects")}
+              className={`px-2.5 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1 ${
+                sourceFilter === "projects"
+                  ? "bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-xs font-bold"
+                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+              }`}
+            >
+              <span>🚀</span>
+              <span>From Projects</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSourceFilter("direct")}
+              className={`px-2.5 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1 ${
+                sourceFilter === "direct"
+                  ? "bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-xs font-bold"
+                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+              }`}
+            >
+              <span>📝</span>
+              <span>Direct Tasks</span>
+            </button>
+          </div>
+
           {/* Filter Pills */}
           <div className="flex items-center gap-1.5 text-xs ml-1 flex-wrap">
             <button
@@ -350,10 +424,7 @@ export function TaskKanban({
                     {/* Header: User Avatar + Task ID. Title */}
                     <div className="flex items-start gap-2">
                       <img
-                        src={
-                          t.assignedToAvatar ||
-                          `https://api.dicebear.com/7.x/notionists/svg?seed=${t.assignedTo.replace(/\s/g, "")}`
-                        }
+                        src={getUserAvatar(t.assignedTo, allUsers, t.assignedTo)}
                         alt={t.assignedTo}
                         className="w-5 h-5 rounded-full border border-zinc-200 object-cover shrink-0 mt-0.5"
                       />
@@ -389,6 +460,23 @@ export function TaskKanban({
                         ))}
                       </div>
                     )}
+
+                    {/* Deadline & Remaining Days Countdown Chip */}
+                    {(() => {
+                      const chip = getTaskCountdownChip(t.deadline, t.dueTime, t.status)
+                      return (
+                        <div className="flex items-center justify-between pt-1 border-t border-zinc-100 dark:border-zinc-700/50 text-[10.5px]">
+                          <span className="text-zinc-500 dark:text-zinc-400 font-mono">
+                            {t.deadline}{t.dueTime ? ` (${t.dueTime})` : ''}
+                          </span>
+                          {chip && (
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9.5px] border ${chip.colorClass}`}>
+                              {chip.label}
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })()}
                   </div>
                 ))}
 

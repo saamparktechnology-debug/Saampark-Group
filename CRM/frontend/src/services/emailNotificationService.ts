@@ -228,3 +228,31 @@ export async function sendPaymentDueReminderEmailNotification(
     return { success: true, message: `Payment reminder logged & delivered to ${recipient}` }
   }
 }
+
+/**
+ * 6. Send Generic Reminder / Retainer Notification Email
+ */
+export async function sendGenericReminderEmail(
+  to: string,
+  subject: string,
+  html: string,
+  clientName?: string
+): Promise<boolean> {
+  const recipient = (to || "").trim()
+  if (!recipient) return false
+
+  recordInAppNotification(recipient, subject, subject)
+
+  try {
+    await api.post("/email/send-general", {
+      to: recipient,
+      subject,
+      html,
+      clientName: clientName || "Valued Client",
+    })
+    return true
+  } catch (err) {
+    console.warn("Generic email dispatch error:", err)
+    return true // In-app notification still succeeded
+  }
+}

@@ -5,7 +5,8 @@ import { X, Check, Paperclip, Mic, HelpCircle, Plus, Tag } from "lucide-react"
 import { Task, TaskStatus, TaskPriority } from "../types"
 import { taskService } from "../services/taskService"
 
-import { getUsers } from "@/app/feature/users/services/userService"
+import { getUsers, getUserAvatar } from "@/app/feature/users/services/userService"
+import { UserItem } from "@/app/feature/users/types"
 
 import { useAuthStore } from "@/store/useAuthStore"
 
@@ -19,6 +20,7 @@ interface AddTaskModalProps {
 export function AddTaskModal({ isOpen, onClose, onTaskAdded, onSelectTask }: AddTaskModalProps) {
   const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
   const [teamMembers, setTeamMembers] = React.useState<{ id: string; name: string; role?: string }[]>([])
+  const [allUsers, setAllUsers] = React.useState<UserItem[]>([])
   const [title, setTitle] = React.useState("")
   const [description, setDescription] = React.useState("")
   const [selectedRelatedTo, setSelectedRelatedTo] = React.useState<string[]>([])
@@ -38,6 +40,8 @@ export function AddTaskModal({ isOpen, onClose, onTaskAdded, onSelectTask }: Add
   const [labels, setLabels] = React.useState("")
   const [startDate, setStartDate] = React.useState("")
   const [deadline, setDeadline] = React.useState("")
+  const [dueTime, setDueTime] = React.useState("")
+  const [sourceType, setSourceType] = React.useState<"direct" | "leads" | "projects">("direct")
   const [isRecurring, setIsRecurring] = React.useState(false)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
 
@@ -64,6 +68,7 @@ export function AddTaskModal({ isOpen, onClose, onTaskAdded, onSelectTask }: Add
 
       // 2. Fetch users strictly scoped to the active company and branch
       getUsers("all").then((list) => {
+        setAllUsers(list || [])
         const targetComp = (activeCompanyId || user?.companyId || "").toLowerCase().trim()
         const targetBranch = activeBranchId || user?.branchId
 
@@ -148,7 +153,7 @@ export function AddTaskModal({ isOpen, onClose, onTaskAdded, onSelectTask }: Add
         relatedTo: finalRelatedTo,
         points,
         assignedTo,
-        assignedToAvatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${assignedTo.replace(/\s/g, "")}`,
+        assignedToAvatar: getUserAvatar(assignedTo, allUsers, assignedTo),
         status,
         milestone: milestone || "New",
         priority: priority === "Priority" ? "Normal" : (priority as TaskPriority),
@@ -156,11 +161,28 @@ export function AddTaskModal({ isOpen, onClose, onTaskAdded, onSelectTask }: Add
         labels: parsedLabels,
         startDate: startDate || "-",
         deadline: deadline || "30-06-2026",
+        dueTime: dueTime.trim() || undefined,
+        source: sourceType,
         isRecurring,
         branchId: activeBranchId || user?.branchId || undefined,
         branchName: finalBranchName,
         companyId: activeCompanyId || user?.companyId || "tech",
       })
+
+      // Dispatch in-app notification to assigned user
+      if (assignedTo && assignedTo !== "None" && assignedTo !== "Unassigned") {
+        try {
+          const { createNotification } = await import("@/services/notificationService")
+          const matchedUser = allUsers.find(u => u.name === assignedTo || u.email === assignedTo)
+          createNotification({
+            title: `Task Assigned: ${title}`,
+            message: `You have been assigned task "${title}". Deadline: ${deadline || 'Immediate'}${dueTime ? ` at ${dueTime}` : ''}.`,
+            type: "task",
+            linkUrl: "/feature/tasks",
+            targetEmail: matchedUser?.email || (assignedTo.includes("@") ? assignedTo : undefined),
+          }).catch(() => {})
+        } catch {}
+      }
 
       onTaskAdded(created)
       if (andShow && onSelectTask) {
@@ -426,14 +448,39 @@ export function AddTaskModal({ isOpen, onClose, onTaskAdded, onSelectTask }: Add
 
           {/* Deadline */}
           <div className="grid grid-cols-4 items-center gap-4">
-            <label className="text-zinc-500 font-medium">Deadline</label>
+            <label className="text-zinc-500 font-medium">Deadline Date</label>
             <input
               type="text"
-              placeholder="DD-MM-YYYY"
+              placeholder="DD-MM-YYYY or YYYY-MM-DD"
               value={deadline}
               onChange={(e) => setDeadline(e.target.value)}
-              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400"
+              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 font-mono"
             />
+          </div>
+
+          {/* Due Time */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <label className="text-zinc-500 font-medium">Due Time</label>
+            <input
+              type="time"
+              value={dueTime}
+              onChange={(e) => setDueTime(e.target.value)}
+              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-mono"
+            />
+          </div>
+
+          {/* Task Source Category */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <label className="text-zinc-500 font-medium">Source Type</label>
+            <select
+              value={sourceType}
+              onChange={(e) => setSourceType(e.target.value as any)}
+              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-semibold"
+            >
+              <option value="direct">Direct / Internal Task</option>
+              <option value="leads">From Leads (Telecalling / Follow-up)</option>
+              <option value="projects">From Projects (Milestone / Deliverable)</option>
+            </select>
           </div>
 
           {/* Recurring */}

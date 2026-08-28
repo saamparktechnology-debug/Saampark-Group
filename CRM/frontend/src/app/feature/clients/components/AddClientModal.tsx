@@ -65,6 +65,7 @@ export function AddClientModal({
       if (initialData) {
         setCompanyName(initialData.name || "")
         setPhone(initialData.phone || "")
+        setEmail(initialData.email || "")
         setClientGroup(initialData.group || "VIP")
         setLabel(initialData.label || "Corporate")
         setOwner(initialData.owner || user?.name || "")
@@ -82,6 +83,7 @@ export function AddClientModal({
       } else {
         setCompanyName("")
         setPhone("")
+        setEmail("")
         setCountry("India")
         setCity("")
         setState("")
@@ -323,6 +325,18 @@ export function AddClientModal({
                   className="flex-1 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+            </div>
+
+            {/* Email */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
+              <label className="text-slate-600 dark:text-slate-400 font-medium">Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="client@company.com"
+                className="md:col-span-3 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
             </div>
 
             {/* Website */}

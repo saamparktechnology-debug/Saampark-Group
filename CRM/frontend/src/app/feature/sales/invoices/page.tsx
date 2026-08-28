@@ -23,7 +23,8 @@ import {
   UserPlus,
   FolderPlus,
   Calculator,
-  Tag
+  Tag,
+  Pencil
 } from "lucide-react"
 import { ColumnDef } from "@tanstack/react-table"
 
@@ -39,6 +40,7 @@ import {
   getInvoices, 
   generateInvoiceNumber,
   addInvoice, 
+  updateInvoice,
   deleteInvoice, 
   updateInvoiceStatus, 
   markPaymentCompleted,
@@ -210,6 +212,237 @@ export default function InvoicesPage() {
 
   const handleUpdateInvDiscount = (id: string, field: string, value: any) => {
     setInvoiceDiscounts(prev => prev.map(d => d.id === id ? { ...d, [field]: value } : d))
+  }
+
+  // ---------------- EDIT INVOICE STATE & HANDLERS ----------------
+  const [isEditModalOpen, setIsEditModalOpen] = React.useState(false)
+  const [editingInvoice, setEditingInvoice] = React.useState<InvoiceItem | null>(null)
+  const [editClientName, setEditClientName] = React.useState("")
+  const [editClientEmail, setEditClientEmail] = React.useState("")
+  const [editProjectName, setEditProjectName] = React.useState("")
+  const [editBillDate, setEditBillDate] = React.useState("")
+  const [editDueDate, setEditDueDate] = React.useState("")
+  const [editStatus, setEditStatus] = React.useState<InvoiceStatus>("Not paid")
+  const [editPaymentReceived, setEditPaymentReceived] = React.useState<number | "">("")
+  const [editServiceItems, setEditServiceItems] = React.useState<any[]>([])
+  const [editDiscounts, setEditDiscounts] = React.useState<{ id: string; name: string; amount: number | "" }[]>([])
+
+  const handleOpenEditInvoice = (inv: InvoiceItem) => {
+    setEditingInvoice(inv)
+    setEditClientName(inv.client || "")
+    setEditClientEmail(inv.clientEmail || "")
+    setEditProjectName(inv.project || "")
+    setEditBillDate(inv.billDate || new Date().toLocaleDateString("en-GB"))
+    setEditDueDate(inv.dueDate || "")
+    setEditStatus(inv.status || "Not paid")
+    
+    const recNum = parseInt((inv.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
+    setEditPaymentReceived(recNum > 0 ? recNum : "")
+
+    if (inv.items && inv.items.length > 0) {
+      setEditServiceItems(inv.items.map(it => ({
+        id: it.id || `svc_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        serviceName: it.serviceName || inv.project || "Enterprise Service",
+        sacCode: it.sacCode || "998313",
+        qty: it.qty || 1,
+        unit: it.unit || "Project",
+        rate: it.rate !== undefined ? it.rate : 0,
+        charges: (it.charges || []).map((c: any) => ({
+          id: c.id || `chg_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
+          name: c.name || "Additional Setup",
+          amount: c.amount || 0,
+        })),
+        gstRate: it.gstRate !== undefined ? it.gstRate : 18,
+      })))
+    } else {
+      const baseNum = inv.baseAmount || parseInt((inv.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
+      setEditServiceItems([{
+        id: `svc_${Date.now()}`,
+        serviceName: inv.project || "Custom Service",
+        sacCode: "998313",
+        qty: 1,
+        unit: "Project",
+        rate: baseNum,
+        charges: inv.setupCharge ? [{ id: "c1", name: "Platform / Setup Fee", amount: inv.setupCharge }] : [],
+        gstRate: inv.gstRate !== undefined ? inv.gstRate : 18,
+      }])
+    }
+
+    if (inv.discountsList && inv.discountsList.length > 0) {
+      setEditDiscounts(inv.discountsList.map(d => ({
+        id: d.id || `disc_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
+        name: d.name || "Discount",
+        amount: d.amount || 0,
+      })))
+    } else if (inv.discount && inv.discount > 0) {
+      setEditDiscounts([{
+        id: `disc_${Date.now()}`,
+        name: "Promotional Discount",
+        amount: inv.discount,
+      }])
+    } else {
+      setEditDiscounts([])
+    }
+
+    setIsInvoiceModalOpen(false)
+    setIsEditModalOpen(true)
+  }
+
+  const handleAddEditService = () => {
+    setEditServiceItems(prev => [
+      ...prev,
+      {
+        id: `svc_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        serviceName: "",
+        sacCode: "998313",
+        qty: 1,
+        unit: "Project",
+        rate: "",
+        charges: [],
+        gstRate: 18,
+      }
+    ])
+  }
+
+  const handleRemoveEditService = (id: string) => {
+    if (editServiceItems.length <= 1) {
+      alert("At least one service line item is required on the invoice.")
+      return
+    }
+    setEditServiceItems(prev => prev.filter(s => s.id !== id))
+  }
+
+  const handleUpdateEditService = (id: string, field: string, value: any) => {
+    setEditServiceItems(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s))
+  }
+
+  const handleAddEditCharge = (serviceId: string) => {
+    setEditServiceItems(prev => prev.map(s => {
+      if (s.id === serviceId) {
+        return {
+          ...s,
+          charges: [...(s.charges || []), { id: `chg_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`, name: "", amount: "" }]
+        }
+      }
+      return s
+    }))
+  }
+
+  const handleRemoveEditCharge = (serviceId: string, chargeId: string) => {
+    setEditServiceItems(prev => prev.map(s => {
+      if (s.id === serviceId) {
+        return { ...s, charges: (s.charges || []).filter((c: any) => c.id !== chargeId) }
+      }
+      return s
+    }))
+  }
+
+  const handleUpdateEditCharge = (serviceId: string, chargeId: string, field: string, value: any) => {
+    setEditServiceItems(prev => prev.map(s => {
+      if (s.id === serviceId) {
+        return {
+          ...s,
+          charges: (s.charges || []).map((c: any) => c.id === chargeId ? { ...c, [field]: value } : c)
+        }
+      }
+      return s
+    }))
+  }
+
+  const handleAddEditDiscount = () => {
+    setEditDiscounts(prev => [
+      ...prev,
+      { id: `disc_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`, name: "Promotional Discount", amount: "" }
+    ])
+  }
+
+  const handleRemoveEditDiscount = (id: string) => {
+    setEditDiscounts(prev => prev.filter(d => d.id !== id))
+  }
+
+  const handleUpdateEditDiscount = (id: string, field: string, value: any) => {
+    setEditDiscounts(prev => prev.map(d => d.id === id ? { ...d, [field]: value } : d))
+  }
+
+  const handleSaveEditInvoice = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingInvoice) return
+
+    const finalClient = editClientName.trim() || editingInvoice.client
+    const finalProject = editProjectName.trim() || editingInvoice.project
+
+    const finalItems = editServiceItems.map(it => {
+      const rate = typeof it.rate === "number" ? it.rate : parseFloat(String(it.rate || "0")) || 0
+      const qty = it.qty > 0 ? it.qty : 1
+      const chargesSum = (it.charges || []).reduce((sum: number, c: any) => sum + (Number(c.amount) || 0), 0)
+      const rowBase = (rate * qty) + chargesSum
+      const rowGst = Math.round(rowBase * ((Number(it.gstRate) || 0) / 100))
+      const rowTotal = rowBase + rowGst
+      return {
+        id: it.id,
+        serviceName: it.serviceName.trim() || finalProject,
+        sacCode: it.sacCode || "998313",
+        qty,
+        unit: it.unit || "Unit",
+        rate,
+        charges: (it.charges || []).map((c: any) => ({
+          id: c.id,
+          name: c.name.trim() || "Additional Setup",
+          amount: Number(c.amount) || 0,
+        })),
+        gstRate: Number(it.gstRate) || 0,
+        gstAmount: rowGst,
+        totalAmount: rowTotal,
+      }
+    })
+
+    const baseSum = finalItems.reduce((sum, it) => sum + (it.rate * it.qty), 0)
+    const setupSum = finalItems.reduce((sum, it) => sum + (it.charges || []).reduce((s: number, c: any) => s + (Number(c.amount) || 0), 0), 0)
+    const discountsSum = editDiscounts.reduce((sum, d) => sum + (Number(d.amount) || 0), 0)
+    const taxableBase = Math.max(0, baseSum + setupSum - discountsSum)
+
+    const totalGst = finalItems.reduce((sum, it) => sum + it.gstAmount, 0)
+    const grandTotal = taxableBase + totalGst
+
+    const receivedNum = typeof editPaymentReceived === "number" 
+      ? editPaymentReceived 
+      : parseFloat(String(editPaymentReceived || "0")) || 0
+
+    const dueNum = Math.max(0, grandTotal - receivedNum)
+
+    let calculatedStatus: InvoiceStatus = editStatus
+    if (dueNum === 0 && receivedNum > 0) {
+      calculatedStatus = "Fully paid"
+    } else if (receivedNum > 0 && dueNum > 0) {
+      calculatedStatus = "Partially paid"
+    } else if (receivedNum === 0 && calculatedStatus === "Fully paid") {
+      calculatedStatus = "Not paid"
+    }
+
+    const payload: InvoiceItem = {
+      ...editingInvoice,
+      client: finalClient,
+      clientEmail: editClientEmail.trim() || editingInvoice.clientEmail,
+      project: finalProject,
+      billDate: editBillDate || editingInvoice.billDate,
+      dueDate: editDueDate || editingInvoice.dueDate,
+      baseAmount: baseSum,
+      setupCharge: setupSum,
+      discount: discountsSum,
+      discountsList: editDiscounts.filter(d => Number(d.amount) > 0).map(d => ({ id: d.id, name: d.name, amount: Number(d.amount) })),
+      items: finalItems,
+      totalInvoiced: `₹${grandTotal.toLocaleString("en-IN")}`,
+      paymentReceived: `₹${receivedNum.toLocaleString("en-IN")}`,
+      due: `₹${dueNum.toLocaleString("en-IN")}`,
+      status: calculatedStatus,
+    }
+
+    await updateInvoice(payload)
+    showToast(`✅ Invoice ${payload.id} updated successfully!`)
+    setIsEditModalOpen(false)
+    setSelectedInvoice(payload)
+    setIsInvoiceModalOpen(true)
+    loadInvoices()
   }
 
   const [isLoading, setIsLoading] = React.useState(true)
@@ -791,13 +1024,24 @@ export default function InvoicesPage() {
               </button>
             )}
 
+            {!isClientRole && (
+              <button
+                type="button"
+                onClick={() => handleOpenEditInvoice(inv)}
+                className="p-1 text-zinc-500 hover:text-amber-600 transition-colors cursor-pointer"
+                title="Edit Invoice (Services, Rates, Client)"
+              >
+                <Pencil size={14} />
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => {
                 setSelectedInvoice(inv)
                 setIsInvoiceModalOpen(true)
               }}
-              className="p-1 text-zinc-500 hover:text-blue-600 transition-colors"
+              className="p-1 text-zinc-500 hover:text-blue-600 transition-colors cursor-pointer"
               title="View Invoice"
             >
               <Eye size={14} />
@@ -807,7 +1051,7 @@ export default function InvoicesPage() {
               <button
                 type="button"
                 onClick={() => handleDeleteInvoice(inv.id)}
-                className="p-1 text-zinc-400 hover:text-rose-600 transition-colors"
+                className="p-1 text-zinc-400 hover:text-rose-600 transition-colors cursor-pointer"
                 title="Delete Invoice"
               >
                 <Trash2 size={14} />
@@ -981,6 +1225,7 @@ export default function InvoicesPage() {
           setIsInvoiceModalOpen(false)
           setSelectedInvoice(null)
         }}
+        onEditInvoice={!isClientRole ? (inv) => handleOpenEditInvoice(inv) : undefined}
       />
 
       {/* ---------------- RECORD PAYMENT / MARK PAID MODAL ---------------- */}
@@ -1923,6 +2168,442 @@ export default function InvoicesPage() {
                     className="px-5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm"
                   >
                     Generate Invoice
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ---------------- EDIT INVOICE MODAL ---------------- */}
+      <AnimatePresence>
+        {isEditModalOpen && editingInvoice && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden my-auto max-h-[92vh] flex flex-col"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/40 shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                    <Pencil size={16} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                      <span>Edit Invoice:</span>
+                      <span className="font-mono bg-zinc-200 dark:bg-zinc-800 px-2 py-0.5 rounded text-xs text-zinc-800 dark:text-zinc-200 font-bold">
+                        {editingInvoice.id}
+                      </span>
+                    </h3>
+                    <p className="text-[11px] text-zinc-500">
+                      Modify services, unit prices, billing dates, client details, and payment settlement.
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  type="button" 
+                  onClick={() => setIsEditModalOpen(false)} 
+                  className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Form Body */}
+              <form onSubmit={handleSaveEditInvoice} className="p-6 space-y-4 overflow-y-auto text-xs flex-1">
+                {/* 1. Client & Project Details */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-zinc-50 dark:bg-zinc-800/40 rounded-2xl border border-zinc-100 dark:border-zinc-800">
+                  <div>
+                    <label className="block text-zinc-600 dark:text-zinc-400 font-bold mb-1">
+                      Client / Company Name *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={editClientName}
+                      onChange={(e) => setEditClientName(e.target.value)}
+                      placeholder="e.g. Acme Corp"
+                      className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-800 dark:text-zinc-200 font-semibold focus:outline-hidden focus:border-blue-600"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-zinc-600 dark:text-zinc-400 font-bold mb-1">
+                      Client Email Address
+                    </label>
+                    <input
+                      type="email"
+                      value={editClientEmail}
+                      onChange={(e) => setEditClientEmail(e.target.value)}
+                      placeholder="client@example.com"
+                      className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-800 dark:text-zinc-200 focus:outline-hidden focus:border-blue-600"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block text-zinc-600 dark:text-zinc-400 font-bold mb-1">
+                      Project / Contract Title *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={editProjectName}
+                      onChange={(e) => setEditProjectName(e.target.value)}
+                      placeholder="e.g. Enterprise Portal Development"
+                      className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-800 dark:text-zinc-200 font-semibold focus:outline-hidden focus:border-blue-600"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-zinc-600 dark:text-zinc-400 font-bold mb-1">
+                      Invoice Date
+                    </label>
+                    <input
+                      type="text"
+                      value={editBillDate}
+                      onChange={(e) => setEditBillDate(e.target.value)}
+                      placeholder="DD/MM/YYYY"
+                      className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-800 dark:text-zinc-200 font-mono text-center focus:outline-hidden focus:border-blue-600"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-zinc-600 dark:text-zinc-400 font-bold mb-1">
+                      Payment Due Date
+                    </label>
+                    <input
+                      type="text"
+                      value={editDueDate}
+                      onChange={(e) => setEditDueDate(e.target.value)}
+                      placeholder="DD/MM/YYYY"
+                      className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-800 dark:text-zinc-200 font-mono text-center focus:outline-hidden focus:border-blue-600"
+                    />
+                  </div>
+                </div>
+
+                {/* 2. Services & Line Items */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+                      <Tag size={13} className="text-blue-600" />
+                      <span>Itemized Services & Deliverables ({editServiceItems.length})</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleAddEditService}
+                      className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-blue-50 dark:bg-blue-950/50 text-blue-600 hover:bg-blue-100 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus size={12} />
+                      <span>Add Service Item</span>
+                    </button>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {editServiceItems.map((svc, idx) => {
+                      const numRate = typeof svc.rate === "number" ? svc.rate : parseFloat(String(svc.rate || "0")) || 0
+                      const numQty = svc.qty > 0 ? svc.qty : 1
+                      const chargesTotal = (svc.charges || []).reduce((s: number, c: any) => s + (Number(c.amount) || 0), 0)
+                      const itemBase = (numRate * numQty) + chargesTotal
+                      const itemGst = Math.round(itemBase * ((Number(svc.gstRate) || 0) / 100))
+                      const itemGross = itemBase + itemGst
+
+                      return (
+                        <div
+                          key={svc.id}
+                          className="p-3 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-700 shadow-2xs space-y-2.5"
+                        >
+                          <div className="flex items-center justify-between gap-2 border-b border-zinc-100 dark:border-zinc-800 pb-2">
+                            <span className="text-[11px] font-bold text-zinc-600 dark:text-zinc-400">
+                              Item #{idx + 1}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-mono font-bold text-zinc-900 dark:text-zinc-100">
+                                Total: ₹{itemGross.toLocaleString("en-IN")}
+                              </span>
+                              {editServiceItems.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveEditService(svc.id)}
+                                  className="text-rose-500 hover:text-rose-700 p-1 cursor-pointer"
+                                  title="Remove Service"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                            <div className="sm:col-span-6">
+                              <label className="block text-[10px] font-semibold text-zinc-500 mb-0.5">
+                                Service Name / Description *
+                              </label>
+                              <input
+                                type="text"
+                                required
+                                value={svc.serviceName}
+                                onChange={(e) => handleUpdateEditService(svc.id, "serviceName", e.target.value)}
+                                placeholder="e.g. Website UI/UX Design"
+                                className="w-full px-2.5 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-semibold"
+                              />
+                            </div>
+
+                            <div className="sm:col-span-2">
+                              <label className="block text-[10px] font-semibold text-zinc-500 mb-0.5">
+                                SAC / HSN
+                              </label>
+                              <input
+                                type="text"
+                                value={svc.sacCode || ""}
+                                onChange={(e) => handleUpdateEditService(svc.id, "sacCode", e.target.value)}
+                                placeholder="998313"
+                                className="w-full px-2 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-mono text-center"
+                              />
+                            </div>
+
+                            <div className="sm:col-span-2">
+                              <label className="block text-[10px] font-semibold text-zinc-500 mb-0.5">
+                                Qty
+                              </label>
+                              <input
+                                type="number"
+                                min={1}
+                                value={svc.qty}
+                                onChange={(e) => handleUpdateEditService(svc.id, "qty", Number(e.target.value))}
+                                className="w-full px-2 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 text-center font-bold"
+                              />
+                            </div>
+
+                            <div className="sm:col-span-2">
+                              <label className="block text-[10px] font-semibold text-zinc-500 mb-0.5">
+                                Unit Rate (₹) *
+                              </label>
+                              <input
+                                type="number"
+                                required
+                                min={0}
+                                value={svc.rate}
+                                onChange={(e) => handleUpdateEditService(svc.id, "rate", e.target.value === "" ? "" : Number(e.target.value))}
+                                placeholder="50000"
+                                className="w-full px-2 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-bold text-center"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-3 pt-1">
+                            <div className="flex items-center gap-2">
+                              <label className="text-[10.5px] font-semibold text-zinc-500">GST Rate:</label>
+                              <select
+                                value={svc.gstRate !== undefined ? svc.gstRate : 18}
+                                onChange={(e) => handleUpdateEditService(svc.id, "gstRate", Number(e.target.value))}
+                                className="px-2 py-1 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-semibold text-[11px]"
+                              >
+                                <option value={0}>0% (Tax Exempt / SEZ)</option>
+                                <option value={5}>5%</option>
+                                <option value={12}>12%</option>
+                                <option value={18}>18% (Standard Services)</option>
+                                <option value={28}>28%</option>
+                              </select>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleAddEditCharge(svc.id)}
+                              className="text-[10.5px] font-semibold text-blue-600 hover:text-blue-800 cursor-pointer"
+                            >
+                              + Add Setup / Additional Fee
+                            </button>
+                          </div>
+
+                          {/* Extra Charges for this Service */}
+                          {svc.charges && svc.charges.length > 0 && (
+                            <div className="space-y-1.5 pt-1 border-t border-dashed border-zinc-200 dark:border-zinc-700">
+                              {svc.charges.map((chg: any) => (
+                                <div key={chg.id} className="flex items-center gap-2">
+                                  <input
+                                    type="text"
+                                    placeholder="Fee description (e.g. Hosting, Domain, SSL)"
+                                    value={chg.name}
+                                    onChange={(e) => handleUpdateEditCharge(svc.id, chg.id, "name", e.target.value)}
+                                    className="flex-1 px-2 py-1 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-[11px]"
+                                  />
+                                  <input
+                                    type="number"
+                                    placeholder="Amount (₹)"
+                                    value={chg.amount}
+                                    onChange={(e) => handleUpdateEditCharge(svc.id, chg.id, "amount", e.target.value === "" ? "" : Number(e.target.value))}
+                                    className="w-24 px-2 py-1 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-[11px] font-mono font-bold"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveEditCharge(svc.id, chg.id)}
+                                    className="text-rose-500 hover:text-rose-700 p-1 cursor-pointer"
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* 3. Discounts Section */}
+                <div className="p-3 bg-zinc-50 dark:bg-zinc-800/40 rounded-2xl border border-zinc-100 dark:border-zinc-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
+                      Discounts & Concessions ({editDiscounts.length})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleAddEditDiscount}
+                      className="px-2 py-0.5 text-[11px] font-bold rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 hover:bg-emerald-100 cursor-pointer"
+                    >
+                      + Add Discount
+                    </button>
+                  </div>
+
+                  {editDiscounts.length > 0 && (
+                    <div className="space-y-1.5">
+                      {editDiscounts.map((disc) => (
+                        <div key={disc.id} className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            placeholder="Discount label (e.g. Promotional Rebate)"
+                            value={disc.name}
+                            onChange={(e) => handleUpdateEditDiscount(disc.id, "name", e.target.value)}
+                            className="flex-1 px-2.5 py-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-[11px]"
+                          />
+                          <input
+                            type="number"
+                            min={0}
+                            placeholder="Discount (₹)"
+                            value={disc.amount}
+                            onChange={(e) => handleUpdateEditDiscount(disc.id, "amount", e.target.value === "" ? "" : Number(e.target.value))}
+                            className="w-28 px-2.5 py-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-[11px] font-bold text-emerald-600 font-mono"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveEditDiscount(disc.id)}
+                            className="text-rose-500 hover:text-rose-700 p-1 cursor-pointer"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 4. Payment Settlement & Status */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-zinc-50 dark:bg-zinc-800/40 rounded-2xl border border-zinc-100 dark:border-zinc-800">
+                  <div>
+                    <label className="block text-zinc-600 dark:text-zinc-400 font-bold mb-1">
+                      Payment Received (₹)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={editPaymentReceived}
+                      onChange={(e) => setEditPaymentReceived(e.target.value === "" ? "" : Number(e.target.value))}
+                      placeholder="0"
+                      className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-800 dark:text-zinc-200 font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-zinc-600 dark:text-zinc-400 font-bold mb-1">
+                      Invoice Status
+                    </label>
+                    <select
+                      value={editStatus}
+                      onChange={(e) => setEditStatus(e.target.value as any)}
+                      className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-800 dark:text-zinc-200 font-semibold"
+                    >
+                      <option value="Not paid">Not paid (Payment Pending)</option>
+                      <option value="Partially paid">Partially paid</option>
+                      <option value="Fully paid">Fully paid</option>
+                      <option value="Draft">Draft</option>
+                      <option value="Credited">Credited</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* 5. Live Summary Totals */}
+                {(() => {
+                  const finalItems = editServiceItems.map(it => {
+                    const rate = typeof it.rate === "number" ? it.rate : parseFloat(String(it.rate || "0")) || 0
+                    const qty = it.qty > 0 ? it.qty : 1
+                    const chargesSum = (it.charges || []).reduce((sum: number, c: any) => sum + (Number(c.amount) || 0), 0)
+                    const rowBase = (rate * qty) + chargesSum
+                    const rowGst = Math.round(rowBase * ((Number(it.gstRate) || 0) / 100))
+                    return { rowBase, rowGst, total: rowBase + rowGst }
+                  })
+
+                  const baseSum = finalItems.reduce((s, it) => s + it.rowBase, 0)
+                  const discountsSum = editDiscounts.reduce((s, d) => s + (Number(d.amount) || 0), 0)
+                  const taxable = Math.max(0, baseSum - discountsSum)
+                  const totalGst = finalItems.reduce((s, it) => s + it.rowGst, 0)
+                  const grandTotal = taxable + totalGst
+
+                  const recNum = typeof editPaymentReceived === "number" ? editPaymentReceived : parseFloat(String(editPaymentReceived || "0")) || 0
+                  const dueBalance = Math.max(0, grandTotal - recNum)
+
+                  return (
+                    <div className="bg-zinc-900 text-white p-3.5 rounded-2xl space-y-1.5 text-xs shadow-inner">
+                      <div className="flex justify-between text-zinc-400">
+                        <span>Services Subtotal:</span>
+                        <span className="font-semibold text-white">₹{baseSum.toLocaleString("en-IN")}</span>
+                      </div>
+                      {discountsSum > 0 && (
+                        <div className="flex justify-between text-emerald-400">
+                          <span>Applied Discounts:</span>
+                          <span className="font-semibold">- ₹{discountsSum.toLocaleString("en-IN")}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-zinc-400">
+                        <span>Applicable GST:</span>
+                        <span className="font-semibold text-white">₹{totalGst.toLocaleString("en-IN")}</span>
+                      </div>
+                      <div className="flex justify-between text-sm font-bold text-white border-t border-zinc-800 pt-1.5">
+                        <span>Grand Total Payable:</span>
+                        <span>₹{grandTotal.toLocaleString("en-IN")}</span>
+                      </div>
+                      <div className="flex justify-between text-xs font-semibold text-emerald-400">
+                        <span>Amount Received:</span>
+                        <span>₹{recNum.toLocaleString("en-IN")}</span>
+                      </div>
+                      <div className="flex justify-between text-sm font-extrabold border-t border-zinc-700 pt-1.5">
+                        <span>Balance Due:</span>
+                        <span className={dueBalance > 0 ? "text-amber-400" : "text-emerald-400"}>
+                          ₹{dueBalance.toLocaleString("en-IN")}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {/* Actions */}
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditModalOpen(false)}
+                    className="px-4 py-2 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl shadow-md transition-all cursor-pointer"
+                  >
+                    Save Changes & Update Invoice
                   </button>
                 </div>
               </form>

@@ -68,10 +68,8 @@ const ALL_NAV_ITEMS: NavItem[] = [
     ]
   },
   { name: "Estimates", href: "/feature/estimates", icon: Calculator },
-  { name: "Proposals", href: "/feature/proposals", icon: File },
   { name: "Notes", href: "/feature/notes", icon: Book },
   { name: "Messages", href: "/feature/messages", icon: MessageSquare },
-  { name: "Team", href: "/feature/team", icon: UserCheck },
   { name: "Users", href: "/feature/users", icon: Users },
   { name: "Tickets", href: "/feature/tickets", icon: HeadphonesIcon, badge: 21 },
   { name: "Knowledge base", href: "/feature/knowledge-base", icon: LifeBuoy },

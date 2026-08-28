@@ -4,7 +4,9 @@ import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
   Building2, Plus, Pencil, Trash2, Shield, MapPin, Phone, Mail, 
-  User, Check, X, AlertTriangle, Layers, ChevronDown, ChevronRight 
+  User, Check, X, AlertTriangle, Layers, ChevronDown, ChevronRight,
+  Globe, CreditCard, FileText, QrCode, Sparkles, Lock, UploadCloud,
+  Image as ImageIcon, CheckCircle2
 } from "lucide-react"
 import { useAuthStore, Company, Branch } from "@/store/useAuthStore"
 import { getUsers } from "@/app/feature/users/services/userService"
@@ -14,10 +16,10 @@ export function CompanyBranchSettings() {
     user, 
     companies, 
     branches, 
-    activeCompanyId, 
     fetchCompanies, 
     fetchBranches, 
     addCompany, 
+    updateCompany,
     deleteCompany, 
     addBranch, 
     updateBranch, 
@@ -39,13 +41,47 @@ export function CompanyBranchSettings() {
 
   // Modal States
   const [isCompanyModalOpen, setIsCompanyModalOpen] = React.useState(false)
+  const [companyModalTab, setCompanyModalTab] = React.useState<"basic" | "tax" | "contact" | "bank" | "invoice">("basic")
   const [editingCompany, setEditingCompany] = React.useState<Company | null>(null)
+
+  // Company Form States (All invoice & enterprise configuration fields)
+  const [companyBrandName, setCompanyBrandName] = React.useState("SAAMPARK")
+  const [companyDivisionName, setCompanyDivisionName] = React.useState("")
   const [companyName, setCompanyName] = React.useState("")
+  const [companySubtitle, setCompanySubtitle] = React.useState("")
   const [companySlug, setCompanySlug] = React.useState("")
   const [companyLogo, setCompanyLogo] = React.useState("🏢")
+  const [companyLogoUrl, setCompanyLogoUrl] = React.useState("")
   const [companyCurrency, setCompanyCurrency] = React.useState("INR")
   const [companyCurrencySymbol, setCompanyCurrencySymbol] = React.useState("₹")
 
+  // Legal & Tax
+  const [companyCin, setCompanyCin] = React.useState("")
+  const [companyGstin, setCompanyGstin] = React.useState("")
+  const [companyPan, setCompanyPan] = React.useState("")
+
+  // Address & Contact
+  const [companyAddress, setCompanyAddress] = React.useState("")
+  const [companyPhone, setCompanyPhone] = React.useState("")
+  const [companyEmail, setCompanyEmail] = React.useState("")
+  const [companyWebsite, setCompanyWebsite] = React.useState("")
+
+  // Banking & UPI
+  const [companyUpiId, setCompanyUpiId] = React.useState("")
+  const [companyAccountHolder, setCompanyAccountHolder] = React.useState("")
+  const [companyBankName, setCompanyBankName] = React.useState("")
+  const [companyAccountNumber, setCompanyAccountNumber] = React.useState("")
+  const [companyIfscCode, setCompanyIfscCode] = React.useState("")
+  const [companyBankBranch, setCompanyBankBranch] = React.useState("")
+  const [companyPaymentQrUrl, setCompanyPaymentQrUrl] = React.useState("")
+
+  // Terms & Signatory
+  const [companyTermsConditions, setCompanyTermsConditions] = React.useState("")
+  const [companySignatoryName, setCompanySignatoryName] = React.useState("")
+  const [companySignatoryDesignation, setCompanySignatoryDesignation] = React.useState("")
+  const [companySignatureImageUrl, setCompanySignatureImageUrl] = React.useState("")
+
+  // Branch Modal States
   const [isBranchModalOpen, setIsBranchModalOpen] = React.useState(false)
   const [targetCompanyIdForBranch, setTargetCompanyIdForBranch] = React.useState<string>("tech")
   const [editingBranch, setEditingBranch] = React.useState<Branch | null>(null)
@@ -57,6 +93,10 @@ export function CompanyBranchSettings() {
   const [branchEmail, setBranchEmail] = React.useState("")
   const [branchManager, setBranchManager] = React.useState("")
   const [branchStatus, setBranchStatus] = React.useState<"Active" | "Inactive">("Active")
+
+  // Refs for file uploads
+  const logoFileInputRef = React.useRef<HTMLInputElement>(null)
+  const signatureFileInputRef = React.useRef<HTMLInputElement>(null)
 
   React.useEffect(() => {
     fetchCompanies()
@@ -77,39 +117,190 @@ export function CompanyBranchSettings() {
     )
   }
 
-  // ── COMPANY HANDLERS (Super Admin) ──────────────────────────────────────────
+  // Handle Logo Upload
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 5 * 1024 * 1024) {
+      alert("Logo image size should not exceed 5MB.")
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setCompanyLogoUrl(reader.result)
+      }
+    }
+    reader.readAsDataURL(file)
+  }
+
+  // Handle Signature Upload
+  const handleSignatureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 5 * 1024 * 1024) {
+      alert("Signature image size should not exceed 5MB.")
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setCompanySignatureImageUrl(reader.result)
+      }
+    }
+    reader.readAsDataURL(file)
+  }
+
+  // Sync composed company name when brand or division changes
+  const updateBrandOrDivision = (newBrand: string, newDivision: string) => {
+    setCompanyBrandName(newBrand)
+    setCompanyDivisionName(newDivision)
+    const composed = [newBrand.trim(), newDivision.trim()].filter(Boolean).join(" ")
+    setCompanyName(composed)
+    if (!editingCompany) {
+      const generatedSlug = (newDivision.trim() || newBrand.trim())
+        .toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9-]/g, '')
+      setCompanySlug(generatedSlug)
+    }
+  }
+
+  // ── COMPANY HANDLERS (Super Admin Only) ──────────────────────────────────────
   const handleOpenCreateCompany = () => {
+    if (!isSuperAdmin) return
     setEditingCompany(null)
-    setCompanyName("")
-    setCompanySlug("")
+    setCompanyModalTab("basic")
+    setCompanyBrandName("SAAMPARK")
+    setCompanyDivisionName("CONSULTANCY")
+    setCompanyName("SAAMPARK CONSULTANCY")
+    setCompanySubtitle("AND RESEARCH PRIVATE LIMITED")
+    setCompanySlug("consultancy")
     setCompanyLogo("🏢")
+    setCompanyLogoUrl("/saampark-logo.png")
     setCompanyCurrency("INR")
     setCompanyCurrencySymbol("₹")
+    setCompanyCin("")
+    setCompanyGstin("")
+    setCompanyPan("")
+    setCompanyAddress("")
+    setCompanyPhone("")
+    setCompanyEmail("")
+    setCompanyWebsite("")
+    setCompanyUpiId("")
+    setCompanyAccountHolder("")
+    setCompanyBankName("")
+    setCompanyAccountNumber("")
+    setCompanyIfscCode("")
+    setCompanyBankBranch("")
+    setCompanyPaymentQrUrl("")
+    setCompanyTermsConditions("1. E.& O.E.\n2. Total payment due within due date to avoid suspension/cancellation.\n3. Please include invoice number in payment notes.\n4. All disputes subject to jurisdiction.")
+    setCompanySignatoryName("Authorized Signatory")
+    setCompanySignatoryDesignation("Managing Director")
+    setCompanySignatureImageUrl("")
+    setIsCompanyModalOpen(true)
+  }
+
+  const handleOpenEditCompany = (company: Company) => {
+    if (!isSuperAdmin) return
+    setEditingCompany(company)
+    setCompanyModalTab("basic")
+
+    const brand = company.brand_name || (company.name ? company.name.split(" ")[0] : "SAAMPARK")
+    const division = company.division_name || (company.name ? company.name.split(" ").slice(1).join(" ") : "")
+    
+    setCompanyBrandName(brand)
+    setCompanyDivisionName(division)
+    setCompanyName(company.name || [brand, division].filter(Boolean).join(" "))
+    setCompanySubtitle(company.subtitle || "")
+    setCompanySlug(company.slug || company.id || "")
+    setCompanyLogo(company.logo || "🏢")
+    setCompanyLogoUrl(company.logo_url || "")
+    setCompanyCurrency(company.currency || "INR")
+    setCompanyCurrencySymbol(company.currency_symbol || "₹")
+    setCompanyCin(company.cin || "")
+    setCompanyGstin(company.gstin || "")
+    setCompanyPan(company.pan || "")
+    setCompanyAddress(company.address || "")
+    setCompanyPhone(company.phone || "")
+    setCompanyEmail(company.email || "")
+    setCompanyWebsite(company.website || "")
+    setCompanyUpiId(company.upi_id || "")
+    setCompanyAccountHolder(company.account_holder || "")
+    setCompanyBankName(company.bank_name || "")
+    setCompanyAccountNumber(company.account_number || "")
+    setCompanyIfscCode(company.ifsc_code || "")
+    setCompanyBankBranch(company.bank_branch || "")
+    setCompanyPaymentQrUrl(company.payment_qr_url || "")
+    setCompanyTermsConditions(company.terms_conditions || "")
+    setCompanySignatoryName(company.signatory_name || "Authorized Signatory")
+    setCompanySignatoryDesignation(company.signatory_designation || "")
+    setCompanySignatureImageUrl(company.signature_image_url || "")
     setIsCompanyModalOpen(true)
   }
 
   const handleSaveCompany = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!companyName.trim()) return
+    if (!isSuperAdmin) {
+      alert("Only Super Admin can modify or create company records.")
+      return
+    }
 
-    const slug = companySlug.trim() || companyName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
-    await addCompany({
-      name: companyName.trim(),
+    const finalName = companyName.trim() || [companyBrandName.trim(), companyDivisionName.trim()].filter(Boolean).join(" ")
+    if (!finalName) return
+
+    const slug = companySlug.trim() || finalName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+    const payload: Partial<Company> = {
+      name: finalName,
+      brand_name: companyBrandName.trim() || "SAAMPARK",
+      division_name: companyDivisionName.trim(),
+      subtitle: companySubtitle.trim(),
       slug,
       logo: companyLogo || "🏢",
-      currency: companyCurrency,
-      currency_symbol: companyCurrencySymbol,
-    })
+      logo_url: companyLogoUrl.trim(),
+      currency: companyCurrency.trim() || "INR",
+      currency_symbol: companyCurrencySymbol.trim() || "₹",
+      cin: companyCin.trim(),
+      gstin: companyGstin.trim(),
+      pan: companyPan.trim(),
+      address: companyAddress.trim(),
+      phone: companyPhone.trim(),
+      email: companyEmail.trim(),
+      website: companyWebsite.trim(),
+      upi_id: companyUpiId.trim(),
+      account_holder: companyAccountHolder.trim(),
+      bank_name: companyBankName.trim(),
+      account_number: companyAccountNumber.trim(),
+      ifsc_code: companyIfscCode.trim(),
+      bank_branch: companyBankBranch.trim(),
+      payment_qr_url: companyPaymentQrUrl.trim(),
+      terms_conditions: companyTermsConditions.trim(),
+      signatory_name: companySignatoryName.trim(),
+      signatory_designation: companySignatoryDesignation.trim(),
+      signature_image_url: companySignatureImageUrl.trim(),
+    }
 
+    if (editingCompany) {
+      await updateCompany(editingCompany.id, payload)
+    } else {
+      await addCompany(payload)
+    }
+
+    await fetchCompanies().catch(() => {})
     setIsCompanyModalOpen(false)
   }
 
   const handleDeleteCompany = async (compId: string, compName: string) => {
+    if (!isSuperAdmin) {
+      alert("Only Super Admin can delete companies.")
+      return
+    }
     if (!confirm(`Are you sure you want to permanently delete company "${compName}" and all its branches?`)) {
       return
     }
     try {
       await deleteCompany(compId)
+      await fetchCompanies().catch(() => {})
     } catch (err: any) {
       alert(err?.message || "Failed to delete company.")
     }
@@ -182,6 +373,7 @@ export function CompanyBranchSettings() {
       })
     }
 
+    await fetchBranches().catch(() => {})
     setIsBranchModalOpen(false)
   }
 
@@ -190,25 +382,24 @@ export function CompanyBranchSettings() {
       return
     }
     await deleteBranch(branchId)
+    await fetchBranches().catch(() => {})
   }
 
   return (
     <div className="space-y-6">
-      {/* Header Info */}
+      {/* Header Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-surface p-6 rounded-3xl border border-border shadow-xs">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="p-2 rounded-xl bg-primary/10 text-primary">
-              <Building2 size={20} />
-            </span>
-            <h2 className="text-xl font-bold text-foreground">
-              Company & Branch Organization
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+              <Layers size={18} />
+            </div>
+            <h2 className="text-xl font-black tracking-tight text-foreground">
+              Company Entities & Branch Hubs
             </h2>
           </div>
-          <p className="text-xs text-muted-foreground max-w-xl">
-            {isSuperAdmin
-              ? "Super Admin Master Panel: Create and manage top-level companies, or configure branches and location hubs."
-              : "Company Admin Panel: Create and manage branches, and assign specific team members and clients to branch locations."}
+          <p className="text-xs text-muted-foreground">
+            Configure enterprise legal entities, registered tax IDs, invoice branding, company signatures, and regional branch networks.
           </p>
         </div>
 
@@ -228,12 +419,20 @@ export function CompanyBranchSettings() {
       {/* Companies & Branches Accordion List */}
       <div className="space-y-4">
         {visibleCompanies.map((company) => {
-          const compBranches = branches.filter((b) => b.companyId === company.id || b.companyId === company.slug)
+          const compBranches = branches.filter((b) => 
+            (b.companyId && b.companyId.toLowerCase() === company.id.toLowerCase()) || 
+            (company.slug && b.companyId && b.companyId.toLowerCase() === company.slug.toLowerCase())
+          )
           const compUsers = allUsers.filter((u) => {
             const cIds = u.companyIds || (u.companyId ? [u.companyId] : [])
-            return cIds.includes(company.id) || cIds.includes(company.slug || "")
+            return cIds.some((id: string) => 
+              id.toLowerCase() === company.id.toLowerCase() || 
+              (company.slug && id.toLowerCase() === company.slug.toLowerCase())
+            )
           })
           const isExpanded = expandedCompanyIds.includes(company.id)
+          const brandPart = company.brand_name || (company.name ? company.name.split(" ")[0] : "SAAMPARK")
+          const divisionPart = company.division_name || (company.name ? company.name.split(" ").slice(1).join(" ") : "")
 
           return (
             <div
@@ -249,28 +448,63 @@ export function CompanyBranchSettings() {
                   <button type="button" className="text-muted-foreground">
                     {isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
                   </button>
-                  <div className="w-12 h-12 rounded-2xl bg-surface border border-border shadow-xs flex items-center justify-center text-2xl shrink-0">
-                    {company.logo || "🏢"}
+                  <div className="w-12 h-12 rounded-2xl bg-surface border border-border shadow-xs flex items-center justify-center text-2xl shrink-0 overflow-hidden">
+                    {company.logo_url ? (
+                      <img src={company.logo_url} alt={company.name} className="w-9 h-9 object-contain" />
+                    ) : (
+                      company.logo || "🏢"
+                    )}
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-base font-bold text-foreground">{company.name}</h3>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-base font-bold text-foreground">
+                        <span className="text-primary font-black">{brandPart}</span>
+                        {divisionPart && <span className="ml-1.5 font-extrabold">{divisionPart}</span>}
+                      </h3>
+                      {company.subtitle && (
+                        <span className="text-xs font-semibold text-muted-foreground hidden md:inline">
+                          • {company.subtitle}
+                        </span>
+                      )}
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary border border-primary/20">
                         {compBranches.length} Branch{compBranches.length === 1 ? "" : "es"}
                       </span>
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5 flex-wrap">
                       <span>Slug: <code className="font-mono text-[11px] text-foreground">{company.slug || company.id}</code></span>
-                      <span>•</span>
-                      <span>Currency: {company.currency_symbol || "₹"} ({company.currency || "INR"})</span>
-                      <span>•</span>
-                      <span>{compUsers.length} Team Members & Clients</span>
+                      {company.gstin && <span>• GST: <strong className="font-mono text-foreground">{company.gstin}</strong></span>}
+                      {company.cin && <span>• CIN: <strong className="font-mono text-foreground">{company.cin}</strong></span>}
+                      {company.signature_image_url && (
+                        <span className="text-emerald-600 font-semibold flex items-center gap-0.5 text-[10.5px]">
+                          • <CheckCircle2 size={11} /> Signature Uploaded
+                        </span>
+                      )}
+                      <span>• Currency: {company.currency_symbol || "₹"} ({company.currency || "INR"})</span>
+                      <span>• {compUsers.length} Users</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Company Action Buttons */}
-                <div className="flex items-center gap-2 ml-auto">
+                <div className="flex items-center gap-2 ml-auto flex-wrap">
+                  {/* Super Admin Edit Company & Invoice Details Button */}
+                  {isSuperAdmin ? (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEditCompany(company)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-xs font-bold hover:bg-amber-100 transition-colors cursor-pointer shadow-2xs"
+                      title="Modify company, tax, signature, and invoice branding"
+                    >
+                      <Pencil size={13} />
+                      <span>Edit Entity & Signature</span>
+                    </button>
+                  ) : (
+                    <span className="text-[10.5px] text-muted-foreground flex items-center gap-1 px-2 py-1 bg-surface-pressed/40 rounded-lg border border-border/50">
+                      <Lock size={11} className="text-amber-500" />
+                      <span>Super Admin Locked</span>
+                    </span>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => handleOpenCreateBranch(company.id)}
@@ -315,82 +549,73 @@ export function CompanyBranchSettings() {
                       </button>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-                      {compBranches.map((branch) => {
-                        const branchUsers = allUsers.filter((u) => u.branchId === branch.id || (u as any).branch_id === branch.id)
-                        
-                        return (
-                          <div
-                            key={branch.id}
-                            className="bg-surface p-4 rounded-2xl border border-border shadow-2xs space-y-3 hover:border-primary/40 transition-all flex flex-col justify-between"
-                          >
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {compBranches.map((branch) => (
+                        <div
+                          key={branch.id}
+                          className="bg-surface p-4 rounded-2xl border border-border shadow-xs hover:border-primary/40 transition-all space-y-3"
+                        >
+                          <div className="flex items-start justify-between gap-2">
                             <div>
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="font-bold text-sm text-foreground">{branch.name}</span>
-                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                                  branch.status === "Active"
-                                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
-                                    : "bg-zinc-500/10 text-zinc-500 border border-zinc-500/20"
-                                }`}>
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-bold text-xs text-foreground">{branch.name}</h4>
+                                <span
+                                  className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
+                                    branch.status === "Active"
+                                      ? "bg-emerald-500/10 text-emerald-600"
+                                      : "bg-zinc-500/10 text-zinc-500"
+                                  }`}
+                                >
                                   {branch.status}
                                 </span>
                               </div>
-
                               {branch.code && (
-                                <span className="inline-block mt-1 font-mono text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                                <span className="font-mono text-[10px] text-muted-foreground">
                                   Code: {branch.code}
                                 </span>
                               )}
-
-                              <div className="mt-2.5 space-y-1 text-xs text-muted-foreground">
-                                {branch.city && (
-                                  <div className="flex items-center gap-1.5">
-                                    <MapPin size={12} className="text-zinc-400 shrink-0" />
-                                    <span>{branch.city}{branch.address ? `, ${branch.address}` : ""}</span>
-                                  </div>
-                                )}
-                                {branch.phone && (
-                                  <div className="flex items-center gap-1.5">
-                                    <Phone size={12} className="text-zinc-400 shrink-0" />
-                                    <span>{branch.phone}</span>
-                                  </div>
-                                )}
-                                {branch.managerName && (
-                                  <div className="flex items-center gap-1.5">
-                                    <User size={12} className="text-zinc-400 shrink-0" />
-                                    <span>Manager: {branch.managerName}</span>
-                                  </div>
-                                )}
-                              </div>
                             </div>
 
-                            {/* Branch Footer */}
-                            <div className="pt-2.5 border-t border-border/50 flex items-center justify-between text-xs">
-                              <span className="text-[11px] font-semibold text-muted-foreground">
-                                👥 {branchUsers.length} Assigned Staff/Clients
-                              </span>
-                              <div className="flex items-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenEditBranch(branch)}
-                                  className="p-1.5 text-zinc-500 hover:text-foreground hover:bg-surface-hover rounded-lg transition-colors cursor-pointer"
-                                  title="Edit Branch"
-                                >
-                                  <Pencil size={13} />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteBranch(branch.id, branch.name)}
-                                  className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors cursor-pointer"
-                                  title="Delete Branch"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
-                              </div>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditBranch(branch)}
+                                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors"
+                              >
+                                <Pencil size={13} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteBranch(branch.id, branch.name)}
+                                className="p-1.5 rounded-lg text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+                              >
+                                <Trash2 size={13} />
+                              </button>
                             </div>
                           </div>
-                        )
-                      })}
+
+                          <div className="space-y-1 text-[11px] text-muted-foreground border-t border-border/40 pt-2.5">
+                            {branch.city && (
+                              <div className="flex items-center gap-1.5">
+                                <MapPin size={12} className="text-primary/70 shrink-0" />
+                                <span className="truncate">{branch.city}</span>
+                              </div>
+                            )}
+                            {branch.phone && (
+                              <div className="flex items-center gap-1.5">
+                                <Phone size={12} className="text-emerald-500/70 shrink-0" />
+                                <span className="font-mono">{branch.phone}</span>
+                              </div>
+                            )}
+                            {branch.managerName && (
+                              <div className="flex items-center gap-1.5">
+                                <User size={12} className="text-blue-500/70 shrink-0" />
+                                <span>Manager: {branch.managerName}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -400,91 +625,603 @@ export function CompanyBranchSettings() {
         })}
       </div>
 
-      {/* ── CREATE / EDIT COMPANY MODAL (Super Admin Only) ────────────────────── */}
+      {/* ── CREATE / EDIT COMPANY & INVOICE CUSTOMIZATION MODAL (Super Admin Only) ── */}
       <AnimatePresence>
-        {isCompanyModalOpen && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+        {isCompanyModalOpen && isSuperAdmin && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm overflow-y-auto">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md bg-surface p-6 rounded-3xl border border-border shadow-2xl space-y-4"
+              className="w-full max-w-3xl bg-surface p-6 rounded-3xl border border-border shadow-2xl space-y-4 my-8 max-h-[90vh] flex flex-col"
             >
-              <div className="flex items-center justify-between border-b border-border/50 pb-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-xl">🏢</span>
-                  <h3 className="font-bold text-base text-foreground">Create Top-Level Company</h3>
+              {/* Modal Header */}
+              <div className="flex items-center justify-between border-b border-border/50 pb-3 shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center text-xl shrink-0 overflow-hidden">
+                    {companyLogoUrl ? (
+                      <img src={companyLogoUrl} alt="Logo" className="w-7 h-7 object-contain" />
+                    ) : (
+                      companyLogo || "🏢"
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-base text-foreground">
+                      {editingCompany ? `Modify Entity: ${editingCompany.name}` : "Create New Company Entity"}
+                    </h3>
+                    <p className="text-[11px] text-muted-foreground">
+                      Customize branding names (e.g. SAAMPARK + Technology/Consultancy), upload official signatures & stamps, and invoice settings.
+                    </p>
+                  </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setIsCompanyModalOpen(false)}
-                  className="p-1 rounded-lg text-muted-foreground hover:text-foreground"
+                  className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
                 >
                   <X size={18} />
                 </button>
               </div>
 
-              <form onSubmit={handleSaveCompany} className="space-y-3.5 text-xs">
-                <div>
-                  <label className="block font-semibold text-foreground mb-1">Company Name *</label>
-                  <input
-                    type="text"
-                    required
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    placeholder="e.g. SAAMPARK Logistics & Freight"
-                    className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden focus:border-primary"
-                  />
-                </div>
+              {/* Navigation Tabs */}
+              <div className="flex items-center gap-1.5 p-1 bg-surface-hover rounded-2xl border border-border shrink-0 overflow-x-auto">
+                <button
+                  type="button"
+                  onClick={() => setCompanyModalTab("basic")}
+                  className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                    companyModalTab === "basic"
+                      ? "bg-surface text-primary shadow-xs border border-primary/20"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Building2 size={13} />
+                  <span>1. Brand & Division Names</span>
+                </button>
 
-                <div>
-                  <label className="block font-semibold text-foreground mb-1">Company Slug / Identifier</label>
-                  <input
-                    type="text"
-                    value={companySlug}
-                    onChange={(e) => setCompanySlug(e.target.value)}
-                    placeholder="e.g. logistics (auto-generated if empty)"
-                    className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden focus:border-primary"
-                  />
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setCompanyModalTab("invoice")}
+                  className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                    companyModalTab === "invoice"
+                      ? "bg-surface text-primary shadow-xs border border-primary/20"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <FileText size={13} />
+                  <span>2. Signature & Stamp Upload</span>
+                </button>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-semibold text-foreground mb-1">Emoji / Logo</label>
-                    <input
-                      type="text"
-                      value={companyLogo}
-                      onChange={(e) => setCompanyLogo(e.target.value)}
-                      placeholder="e.g. 🏢, 💻, 📈"
-                      className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs text-center text-lg focus:outline-hidden"
-                    />
+                <button
+                  type="button"
+                  onClick={() => setCompanyModalTab("tax")}
+                  className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                    companyModalTab === "tax"
+                      ? "bg-surface text-primary shadow-xs border border-primary/20"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Shield size={13} />
+                  <span>3. Legal & Tax IDs</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCompanyModalTab("contact")}
+                  className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                    companyModalTab === "contact"
+                      ? "bg-surface text-primary shadow-xs border border-primary/20"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <MapPin size={13} />
+                  <span>4. Address & Contacts</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCompanyModalTab("bank")}
+                  className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                    companyModalTab === "bank"
+                      ? "bg-surface text-primary shadow-xs border border-primary/20"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <CreditCard size={13} />
+                  <span>5. Bank & UPI Pay</span>
+                </button>
+              </div>
+
+              {/* Form Content */}
+              <form onSubmit={handleSaveCompany} className="space-y-4 text-xs overflow-y-auto flex-1 pr-1">
+                {/* TAB 1: BRANDING & STRUCTURED NAME */}
+                {companyModalTab === "basic" && (
+                  <div className="space-y-4">
+                    {/* Live Brand Header Preview Box */}
+                    <div className="p-3.5 rounded-2xl bg-primary/5 border border-primary/20 space-y-1.5">
+                      <span className="text-[10px] font-bold text-primary uppercase tracking-wider block">
+                        Live Invoice Header Preview:
+                      </span>
+                      <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-xl overflow-hidden shrink-0">
+                          {companyLogoUrl ? (
+                            <img src={companyLogoUrl} alt="Logo" className="w-9 h-9 object-contain" />
+                          ) : (
+                            companyLogo || "🏢"
+                          )}
+                        </div>
+                        <div>
+                          <div className="text-base font-black tracking-tight leading-none text-foreground flex items-center gap-1.5 flex-wrap">
+                            <span className="text-primary uppercase">{companyBrandName || "SAAMPARK"}</span>
+                            <span className="text-foreground uppercase">{companyDivisionName || "TECHNOLOGY / CONSULTANCY"}</span>
+                          </div>
+                          <div className="text-[11px] font-bold text-muted-foreground tracking-wider uppercase mt-0.5">
+                            {companySubtitle || "AND RESEARCH PRIVATE LIMITED"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div>
+                        <label className="block font-bold text-foreground mb-1">
+                          Main Brand Name *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={companyBrandName}
+                          onChange={(e) => updateBrandOrDivision(e.target.value, companyDivisionName)}
+                          placeholder="e.g. SAAMPARK"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-surface border border-border text-xs focus:outline-hidden focus:border-primary font-bold text-foreground uppercase"
+                        />
+                        <p className="text-[10px] text-muted-foreground mt-0.5">Primary brand prefix (e.g. SAAMPARK)</p>
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-foreground mb-1">
+                          Division / Business Unit *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={companyDivisionName}
+                          onChange={(e) => updateBrandOrDivision(companyBrandName, e.target.value)}
+                          placeholder="e.g. Technology, Consultancy, Digital Marketing"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-surface border border-border text-xs focus:outline-hidden focus:border-primary font-bold text-foreground"
+                        />
+                        <p className="text-[10px] text-muted-foreground mt-0.5">e.g. Consultancy, Technology, Infra, Logistics</p>
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <label className="block font-bold text-foreground mb-1">
+                          Legal Suffix / Tagline (Appears under title in Invoice)
+                        </label>
+                        <input
+                          type="text"
+                          value={companySubtitle}
+                          onChange={(e) => setCompanySubtitle(e.target.value)}
+                          placeholder="e.g. AND RESEARCH PRIVATE LIMITED or CONSULTING SERVICES (Leave blank if none)"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden focus:border-primary uppercase"
+                        />
+                      </div>
+
+                      {/* Logo File Upload Section */}
+                      <div className="sm:col-span-2 p-3 rounded-2xl bg-surface-hover/50 border border-border space-y-2">
+                        <label className="block font-bold text-foreground">
+                          Company Logo / Crest Image
+                        </label>
+                        <div className="flex items-center gap-3">
+                          <div className="w-14 h-14 rounded-2xl bg-surface border border-border flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                            {companyLogoUrl ? (
+                              <img src={companyLogoUrl} alt="Logo" className="w-12 h-12 object-contain" />
+                            ) : (
+                              <span className="text-2xl">{companyLogo || "🏢"}</span>
+                            )}
+                          </div>
+                          <div className="space-y-1.5 flex-1 min-w-0">
+                            <input 
+                              type="file" 
+                              ref={logoFileInputRef}
+                              accept="image/*"
+                              onChange={handleLogoUpload}
+                              className="hidden" 
+                            />
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => logoFileInputRef.current?.click()}
+                                className="px-3 py-1.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs flex items-center gap-1.5 hover:bg-primary/90 transition-all cursor-pointer shadow-xs"
+                              >
+                                <UploadCloud size={13} />
+                                <span>Upload Logo Image</span>
+                              </button>
+                              {companyLogoUrl && (
+                                <button
+                                  type="button"
+                                  onClick={() => setCompanyLogoUrl("")}
+                                  className="px-2.5 py-1.5 rounded-xl border border-border text-rose-600 hover:bg-rose-50 font-semibold text-xs cursor-pointer"
+                                >
+                                  Clear Image
+                                </button>
+                              )}
+                            </div>
+                            <input
+                              type="text"
+                              value={companyLogoUrl}
+                              onChange={(e) => setCompanyLogoUrl(e.target.value)}
+                              placeholder="Or paste direct image URL (e.g. /saampark-logo.png)"
+                              className="w-full px-3 py-1.5 rounded-lg bg-surface border border-border text-[11px] font-mono focus:outline-hidden"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-foreground mb-1">Company Slug / Identifier</label>
+                        <input
+                          type="text"
+                          value={companySlug}
+                          onChange={(e) => setCompanySlug(e.target.value)}
+                          placeholder="e.g. consultancy, tech"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden focus:border-primary"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block font-bold text-foreground mb-1">Currency Code</label>
+                          <input
+                            type="text"
+                            value={companyCurrency}
+                            onChange={(e) => setCompanyCurrency(e.target.value)}
+                            placeholder="INR"
+                            className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs text-center font-bold"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-foreground mb-1">Currency Symbol</label>
+                          <input
+                            type="text"
+                            value={companyCurrencySymbol}
+                            onChange={(e) => setCompanyCurrencySymbol(e.target.value)}
+                            placeholder="₹"
+                            className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-bold text-center"
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block font-semibold text-foreground mb-1">Currency Symbol</label>
-                    <input
-                      type="text"
-                      value={companyCurrencySymbol}
-                      onChange={(e) => setCompanyCurrencySymbol(e.target.value)}
-                      placeholder="₹"
-                      className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-bold text-center focus:outline-hidden"
-                    />
-                  </div>
-                </div>
+                )}
 
-                <div className="flex items-center justify-end gap-2 pt-3 border-t border-border/50">
-                  <button
-                    type="button"
-                    onClick={() => setIsCompanyModalOpen(false)}
-                    className="px-4 py-2 rounded-xl border border-border text-muted-foreground hover:text-foreground font-semibold"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-5 py-2 rounded-xl bg-primary text-primary-foreground font-bold shadow-md hover:bg-primary/90"
-                  >
-                    Save Company
-                  </button>
+                {/* TAB 2: SIGNATURE & STAMP UPLOAD */}
+                {companyModalTab === "invoice" && (
+                  <div className="space-y-4">
+                    {/* Live Signature Preview Card */}
+                    <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/20 space-y-2">
+                      <span className="text-[10.5px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider block">
+                        Official Authorized Signature Preview:
+                      </span>
+                      <div className="flex items-center justify-between border-t border-amber-500/20 pt-3">
+                        <div className="text-center space-y-1">
+                          <div className="h-12 flex items-end justify-center">
+                            {companySignatureImageUrl ? (
+                              <img 
+                                src={companySignatureImageUrl} 
+                                alt="Signature" 
+                                className="max-h-12 max-w-[150px] object-contain drop-shadow-sm" 
+                              />
+                            ) : (
+                              <span className="font-serif italic text-zinc-400 text-xs">
+                                No Signature Uploaded (Blank)
+                              </span>
+                            )}
+                          </div>
+                          <div className="w-40 border-t border-zinc-400 pt-0.5">
+                            <p className="text-[8.5px] font-black uppercase text-zinc-800">
+                              {companySignatoryName || "AUTHORISED SIGNATORY"}
+                            </p>
+                            {companySignatoryDesignation && (
+                              <p className="text-[8px] text-zinc-500 font-medium">
+                                {companySignatoryDesignation}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="text-[11px] text-muted-foreground max-w-[280px]">
+                          <p>Upload a clean transparent PNG or JPG of the company stamp / director signature. It will be printed directly above the Authorised Signatory line on all generated invoices.</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Signature File Upload Form */}
+                    <div className="p-3.5 rounded-2xl bg-surface-hover/50 border border-border space-y-3">
+                      <div>
+                        <label className="block font-bold text-foreground mb-1">
+                          Upload Company Stamp / Signature Image
+                        </label>
+                        <input 
+                          type="file" 
+                          ref={signatureFileInputRef}
+                          accept="image/*"
+                          onChange={handleSignatureUpload}
+                          className="hidden" 
+                        />
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => signatureFileInputRef.current?.click()}
+                            className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md shadow-amber-600/20"
+                          >
+                            <UploadCloud size={14} />
+                            <span>Upload Signature File</span>
+                          </button>
+                          {companySignatureImageUrl && (
+                            <button
+                              type="button"
+                              onClick={() => setCompanySignatureImageUrl("")}
+                              className="px-3 py-2 rounded-xl border border-border text-rose-600 hover:bg-rose-50 font-semibold text-xs cursor-pointer"
+                            >
+                              Remove Signature
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">
+                          Or Direct Image URL
+                        </label>
+                        <input
+                          type="text"
+                          value={companySignatureImageUrl}
+                          onChange={(e) => setCompanySignatureImageUrl(e.target.value)}
+                          placeholder="https://... (Direct image link to signature)"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-bold text-foreground mb-1">Authorized Signatory Name / Title</label>
+                        <input
+                          type="text"
+                          value={companySignatoryName}
+                          onChange={(e) => setCompanySignatoryName(e.target.value)}
+                          placeholder="e.g. Authorized Signatory"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-foreground mb-1">Signatory Designation</label>
+                        <input
+                          type="text"
+                          value={companySignatoryDesignation}
+                          onChange={(e) => setCompanySignatoryDesignation(e.target.value)}
+                          placeholder="e.g. Managing Director / Partner"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <label className="block font-bold text-foreground mb-1">Default Terms & Conditions (Multiline)</label>
+                        <textarea
+                          rows={3}
+                          value={companyTermsConditions}
+                          onChange={(e) => setCompanyTermsConditions(e.target.value)}
+                          placeholder="1. E.& O.E.&#10;2. Payment due within invoice due date.&#10;3. All disputes subject to jurisdiction."
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 3: LEGAL & TAX CREDENTIALS */}
+                {companyModalTab === "tax" && (
+                  <div className="space-y-3">
+                    <p className="text-[11px] text-muted-foreground">
+                      These numbers appear on official tax invoices. If left empty, that specific badge/row will remain completely blank.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-bold text-foreground mb-1">CIN (Corporate Identification Number)</label>
+                        <input
+                          type="text"
+                          value={companyCin}
+                          onChange={(e) => setCompanyCin(e.target.value)}
+                          placeholder="e.g. U72900WB2024PTC271234 (Leave blank if none)"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-surface border border-border text-xs font-mono uppercase focus:outline-hidden focus:border-primary"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-foreground mb-1">GSTIN / Tax ID Number</label>
+                        <input
+                          type="text"
+                          value={companyGstin}
+                          onChange={(e) => setCompanyGstin(e.target.value)}
+                          placeholder="e.g. 19ABFCS1234D1ZS (Leave blank if none)"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-surface border border-border text-xs font-mono uppercase focus:outline-hidden focus:border-primary"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <label className="block font-bold text-foreground mb-1">PAN Number</label>
+                        <input
+                          type="text"
+                          value={companyPan}
+                          onChange={(e) => setCompanyPan(e.target.value)}
+                          placeholder="e.g. ABFCS1234D (Leave blank if none)"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-surface border border-border text-xs font-mono uppercase focus:outline-hidden focus:border-primary"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 4: REGISTERED OFFICE & CONTACTS */}
+                {companyModalTab === "contact" && (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block font-bold text-foreground mb-1">Registered Office Address (Printed on Invoice Header)</label>
+                      <textarea
+                        rows={2}
+                        value={companyAddress}
+                        onChange={(e) => setCompanyAddress(e.target.value)}
+                        placeholder="e.g. Madinipur, Kolkata, Durgapur, West Bengal, India - 721101 (Leave blank to omit address block)"
+                        className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden focus:border-primary"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-bold text-foreground mb-1">Support / Billing Phone(s)</label>
+                        <input
+                          type="text"
+                          value={companyPhone}
+                          onChange={(e) => setCompanyPhone(e.target.value)}
+                          placeholder="+91 9901518567 / +91 9901518569"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-foreground mb-1">Official Email Address</label>
+                        <input
+                          type="email"
+                          value={companyEmail}
+                          onChange={(e) => setCompanyEmail(e.target.value)}
+                          placeholder="info@saamparktechnology.com"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <label className="block font-bold text-foreground mb-1">Company Website URL</label>
+                        <input
+                          type="text"
+                          value={companyWebsite}
+                          onChange={(e) => setCompanyWebsite(e.target.value)}
+                          placeholder="www.saamparktechnology.com"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 5: BANKING & DIGITAL UPI PAY */}
+                {companyModalTab === "bank" && (
+                  <div className="space-y-3">
+                    <p className="text-[11px] text-muted-foreground">
+                      Bank and UPI details printed on invoices for client payments. If bank details are left blank, the Bank Box is omitted.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-bold text-foreground mb-1">UPI ID (e.g. GPay, PhonePe, Paytm)</label>
+                        <input
+                          type="text"
+                          value={companyUpiId}
+                          onChange={(e) => setCompanyUpiId(e.target.value)}
+                          placeholder="e.g. saampark@sbi (Leave blank if none)"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold focus:outline-hidden"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-foreground mb-1">Bank Account Holder Name</label>
+                        <input
+                          type="text"
+                          value={companyAccountHolder}
+                          onChange={(e) => setCompanyAccountHolder(e.target.value)}
+                          placeholder="e.g. Saampark Technology & Research Pvt. Ltd."
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-semibold focus:outline-hidden"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-foreground mb-1">Bank Name</label>
+                        <input
+                          type="text"
+                          value={companyBankName}
+                          onChange={(e) => setCompanyBankName(e.target.value)}
+                          placeholder="e.g. State Bank of India"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-foreground mb-1">Account Number</label>
+                        <input
+                          type="text"
+                          value={companyAccountNumber}
+                          onChange={(e) => setCompanyAccountNumber(e.target.value)}
+                          placeholder="e.g. 40912384759"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-foreground mb-1">IFSC Code</label>
+                        <input
+                          type="text"
+                          value={companyIfscCode}
+                          onChange={(e) => setCompanyIfscCode(e.target.value)}
+                          placeholder="e.g. SBIN0001234"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono uppercase focus:outline-hidden"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-foreground mb-1">Branch Name</label>
+                        <input
+                          type="text"
+                          value={companyBankBranch}
+                          onChange={(e) => setCompanyBankBranch(e.target.value)}
+                          placeholder="e.g. Balichak Station Road"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <label className="block font-bold text-foreground mb-1">Custom Payment QR Image Link</label>
+                        <input
+                          type="text"
+                          value={companyPaymentQrUrl}
+                          onChange={(e) => setCompanyPaymentQrUrl(e.target.value)}
+                          placeholder="https://... (Direct image URL of UPI QR Code to show on invoice)"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Modal Action Buttons */}
+                <div className="flex items-center justify-between pt-4 border-t border-border/60 shrink-0">
+                  <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <Sparkles size={13} className="text-teal-500" />
+                    <span>Branding and signature changes reflect dynamically on all invoices.</span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsCompanyModalOpen(false)}
+                      className="px-4 py-2 rounded-xl border border-border text-muted-foreground hover:text-foreground font-semibold cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2 rounded-xl bg-primary text-primary-foreground font-bold shadow-md hover:bg-primary/90 cursor-pointer"
+                    >
+                      {editingCompany ? "Save Entity & Signature" : "Create Company Entity"}
+                    </button>
+                  </div>
                 </div>
               </form>
             </motion.div>
@@ -654,13 +1391,13 @@ export function CompanyBranchSettings() {
                   <button
                     type="button"
                     onClick={() => setIsBranchModalOpen(false)}
-                    className="px-4 py-2 rounded-xl border border-border text-muted-foreground hover:text-foreground font-semibold"
+                    className="px-4 py-2 rounded-xl border border-border text-muted-foreground hover:text-foreground font-semibold cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 rounded-xl bg-primary text-primary-foreground font-bold shadow-md hover:bg-primary/90"
+                    className="px-5 py-2 rounded-xl bg-primary text-primary-foreground font-bold shadow-md hover:bg-primary/90 cursor-pointer"
                   >
                     {editingBranch ? "Update Branch" : "Create Branch"}
                   </button>

@@ -14,7 +14,7 @@ import { addProject } from "@/app/feature/projects/services/projectService"
 import { addInvoice, getInvoices, generateInvoiceNumber, InvoiceLineItem, AppliedDiscount } from "@/app/feature/sales/invoices/services/invoiceService"
 import { addOrder } from "@/app/feature/sales/orders/services/orderService"
 import { addPayment } from "@/app/feature/sales/payments/services/paymentService"
-import { addSubscription } from "@/app/feature/subscriptions/services/subscriptionService"
+import { addSubscription, saveInstallmentRecord } from "@/app/feature/subscriptions/services/subscriptionService"
 import { taskService } from "@/app/feature/tasks/services/taskService"
 import { saveStoredClient, getClients } from "../services/clientService"
 import { useAuthStore } from "@/store/useAuthStore"
@@ -301,8 +301,6 @@ export function AddClientProjectModal({
     setDiscountsList(prev => prev.map(d => d.id === id ? { ...d, [field]: value } : d))
   }
 
-  if (!isOpen || !client) return null
-
   // --- Combined Mathematical Calculations ---
   const itemCalculations = serviceItems.map((item) => {
     const numRate = typeof item.rate === "number" ? item.rate : 0
@@ -383,6 +381,7 @@ export function AddClientProjectModal({
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!client) return
     if (!projectTitle.trim()) {
       alert("Please enter a project title.")
       return
@@ -623,16 +622,80 @@ export function AddClientProjectModal({
         sendInvoiceDetailsEmailNotification(createdInvoice, client.email).catch(() => null)
       }
 
-      // 4. Automatically add to Recurring Subscriptions if Part Payment is selected
+      // 4. Automatically add to Installments & Subscriptions if Part Payment is selected
       if (paymentModel === "part") {
+        const scheduleItems = []
+        const baseDate = startDate ? new Date(startDate) : new Date()
+        const validBase = isNaN(baseDate.getTime()) ? new Date() : baseDate
+
+        for (let i = 1; i <= subscriptionMonths; i++) {
+          const instDueDate = new Date(validBase)
+          instDueDate.setMonth(instDueDate.getMonth() + i)
+          const dueDateStr = instDueDate.toISOString().split("T")[0]
+          const isCovered = (effectiveAdvance >= (perInstallment * i)) || (remainingDue === 0)
+          
+          scheduleItems.push({
+            installmentNumber: i,
+            amount: perInstallment,
+            formattedAmount: `₹${perInstallment.toLocaleString("en-IN")}`,
+            dueDate: dueDateStr,
+            status: isCovered ? ("Paid" as const) : ("Pending" as const),
+            paidDate: isCovered ? (startDate || new Date().toISOString().split("T")[0]) : undefined,
+            paidAmount: isCovered ? perInstallment : 0,
+          })
+        }
+
+        const overallStatus = remainingDue === 0 ? ("Paid" as const) : effectiveAdvance > 0 ? ("Partially Paid" as const) : ("Pending" as const)
+
+        const currentProjId = createdProject?.id || String(Date.now())
+
         followUpTasks.push(
-          addSubscription({
+          saveInstallmentRecord({
+            id: `inst_proj_${currentProjId}`,
+            projectId: currentProjId,
+            clientId: client.id,
+            invoiceId: invoiceId,
             clientName: client.name,
-            planName: `${projectTitle} (${subscriptionMonths}-Month Subscription / Part Payment)`,
+            clientEmail: client.email || clientEmail,
+            clientPhone: client.phone || clientPhone,
+            clientCompany: client.companyName || client.name,
+            clientGst: client.gstNumber || clientGst,
+            projectTitle: projectTitle,
+            totalContractValue: totalAmount,
+            totalAdvancePaid: effectiveAdvance,
+            totalPaid: effectiveAdvance,
+            remainingBalance: remainingDue,
+            totalInstallments: subscriptionMonths,
+            currentInstallmentNumber: effectiveAdvance > 0 ? 2 : 1,
+            currentInstallmentAmount: perInstallment,
+            currentDueDate: effectiveDeadline,
+            status: overallStatus,
+            schedule: scheduleItems,
+            companyId: targetCompany,
+            assignedMembers: assignedMembers,
+            billedBy: billedByAdmin,
+            createdById: user?.id ? String(user.id) : undefined,
+            createdAt: startDate || new Date().toISOString().split("T")[0],
+          }, targetCompany),
+
+          addSubscription({
+            clientId: client.id,
+            clientName: client.name,
+            clientEmail: client.email || clientEmail,
+            clientPhone: client.phone || clientPhone,
+            clientCompany: client.companyName || client.name,
+            planName: `${projectTitle} (${subscriptionMonths}-Month Part Payment / EMI)`,
             status: "Active",
             amount: `₹${perInstallment.toLocaleString("en-IN")}`,
+            numericAmount: perInstallment,
             billingCycle: "Monthly",
+            startDate: startDate || new Date().toISOString().split("T")[0],
             nextBillingDate: effectiveDeadline,
+            autoRenew: true,
+            assignedMembers: assignedMembers,
+            billedBy: billedByAdmin,
+            createdById: user?.id ? String(user.id) : undefined,
+            createdProjectId: currentProjId,
           }, targetCompany)
         )
       }
@@ -687,6 +750,8 @@ export function AddClientProjectModal({
       setIsSubmitting(false)
     }
   }
+
+  if (!isOpen || !client) return null
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-start sm:items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto">

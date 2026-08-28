@@ -11,7 +11,7 @@ export const MONTH_NAMES_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul
 
 export function parseLeadDate(dateStr?: string): Date | null {
   if (!dateStr || typeof dateStr !== "string") return null
-  const clean = dateStr.trim().toLowerCase()
+  let clean = dateStr.trim().toLowerCase()
   if (
     clean === "none" ||
     clean === "-" ||
@@ -22,44 +22,58 @@ export function parseLeadDate(dateStr?: string): Date | null {
     return null
   }
 
-  // 1. ISO or YYYY-MM-DD format (e.g. "2026-08-25")
-  if (/^\d{4}-\d{2}-\d{2}/.test(clean)) {
-    const [y, m, d] = clean.split("T")[0].split("-").map(Number)
+  // Strip anything in parentheses like "(04:00 pm)" or time suffix
+  clean = clean.replace(/\(.*\)/g, "").trim()
+
+  // 1. ISO format (e.g. "2026-08-28")
+  const isoMatch = clean.match(/^(\d{4})[-\/\.,](\d{1,2})[-\/\.,](\d{1,2})/)
+  if (isoMatch) {
+    const y = parseInt(isoMatch[1], 10)
+    const m = parseInt(isoMatch[2], 10)
+    const d = parseInt(isoMatch[3], 10)
     if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
       return new Date(y, m - 1, d, 0, 0, 0, 0)
     }
   }
 
-  // 2. Delimited formats (e.g. "25,08,2026", "25-08-2026", "25/08/2026", "25.08.2026", "25 Aug 2026")
-  const parts = clean.split(/[\s\-\/\,\.]+/)
-  if (parts.length === 3) {
-    // Check if middle part is month name (e.g. "25 Aug 2026")
-    const monthIdx = MONTH_NAMES_SHORT.findIndex((m) => m.toLowerCase() === parts[1].toLowerCase())
-    if (monthIdx !== -1) {
-      const day = parseInt(parts[0], 10)
-      const year = parseInt(parts[2], 10)
-      if (!isNaN(day) && !isNaN(year)) {
-        return new Date(year, monthIdx, day, 0, 0, 0, 0)
+  // 2. Text month format (e.g. "28 Aug 2026", "28 August 2026")
+  for (let i = 0; i < MONTH_NAMES_SHORT.length; i++) {
+    const mName = MONTH_NAMES_SHORT[i].toLowerCase()
+    if (clean.includes(mName)) {
+      const nums = clean.replace(/[^\d\s]/g, " ").split(/\s+/).filter(Boolean).map(Number)
+      if (nums.length >= 2) {
+        let day = nums[0]
+        let year = nums[1]
+        if (year < 100) year += 2000
+        if (day > 1000) {
+          const temp = day
+          day = year
+          year = temp
+        }
+        return new Date(year, i, day, 0, 0, 0, 0)
       }
     }
+  }
 
-    // Check if all parts are numeric (e.g. "25,08,2026" or "2026,08,25")
+  // 3. Delimited formats (e.g. "28-08-2026", "28/08/2026", "28,08,2026")
+  const parts = clean.split(/[\s\-\/\,\.]+/)
+  if (parts.length >= 3) {
     const p0 = parseInt(parts[0], 10)
     const p1 = parseInt(parts[1], 10)
     const p2 = parseInt(parts[2], 10)
 
     if (!isNaN(p0) && !isNaN(p1) && !isNaN(p2)) {
-      if (parts[2].length === 4) {
-        // "DD-MM-YYYY" (e.g. 25,08,2026)
+      if (parts[2].length === 4 || p2 > 1000) {
+        // "DD-MM-YYYY"
         return new Date(p2, p1 - 1, p0, 0, 0, 0, 0)
-      } else if (parts[0].length === 4) {
+      } else if (parts[0].length === 4 || p0 > 1000) {
         // "YYYY-MM-DD"
         return new Date(p0, p1 - 1, p2, 0, 0, 0, 0)
       }
     }
   }
 
-  // 3. Fallback standard JavaScript Date parse
+  // 4. Fallback standard JavaScript Date parse
   const parsed = new Date(dateStr)
   if (!isNaN(parsed.getTime())) {
     return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 0, 0, 0, 0)
@@ -81,10 +95,12 @@ export function formatLeadReminderDate(dateStr?: string): string {
 export function isReminderDateOverdue(dateStr?: string): boolean {
   const parsed = parseLeadDate(dateStr)
   if (!parsed) return false
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  // If reminder date is before today's 12:00 AM midnight, it is expired/overdue and must be locked
-  return parsed.getTime() < today.getTime()
+  const now = new Date()
+  
+  // Set parsed to the very end of that reminder date (23:59:59.999)
+  // The lead remains active during the reminder day and locks once the date ends (at midnight)
+  parsed.setHours(23, 59, 59, 999)
+  return now.getTime() > parsed.getTime()
 }
 
 export async function syncLeadReminderTask(lead: Lead): Promise<void> {
@@ -159,11 +175,37 @@ export const getLeads = async (companyId?: string): Promise<Lead[]> => {
   const dbData = await fetchModuleDataFromDB<Lead[]>("leads", [], companyId)
   const list = Array.isArray(dbData) ? filterGlobalDeletedItems(dbData) : []
 
-  // Auto-lock leads if daily update or reminder date was missed (overdue)
+  // Auto-lock leads if reminder date is overdue (locks at the end of the reminder date)
   // Leads in "Won" or "Lost" stages are NEVER locked
   let hasChanges = false
   const processed = list.map((lead) => {
-    if ((lead.status === "Won" || lead.status === "Lost") && lead.isLocked) {
+    const statusLower = (lead.status || "").toLowerCase().trim()
+    const isWonOrLost = statusLower === "won" || statusLower === "lost"
+
+    // 1. Won or Lost leads are NEVER locked
+    if (isWonOrLost) {
+      if (lead.isLocked) {
+        hasChanges = true
+        return {
+          ...lead,
+          isLocked: false,
+          lockedReason: undefined,
+        }
+      }
+      return lead
+    }
+
+    // 2. Active leads: check if reminder date is overdue (passed end of date 23:59:59)
+    const overdue = isReminderDateOverdue(lead.reminderDate)
+    if (overdue && !lead.isLocked) {
+      hasChanges = true
+      return {
+        ...lead,
+        isLocked: true,
+        lockedReason: "Overdue: Lead reminder date expired without updates.",
+      }
+    } else if (!overdue && lead.isLocked && !lead.lockedReason?.includes("Manually locked")) {
+      // If reminder date was updated to valid/future date, automatically unlock
       hasChanges = true
       return {
         ...lead,
@@ -172,19 +214,6 @@ export const getLeads = async (companyId?: string): Promise<Lead[]> => {
       }
     }
 
-    if (
-      !lead.isLocked &&
-      lead.status !== "Won" &&
-      lead.status !== "Lost" &&
-      isReminderDateOverdue(lead.reminderDate)
-    ) {
-      hasChanges = true
-      return {
-        ...lead,
-        isLocked: true,
-        lockedReason: "Overdue: Lead status or reminder date was not updated daily by caller.",
-      }
-    }
     return lead
   })
 
@@ -290,23 +319,35 @@ export const updateLead = async (id: string, updates: Partial<Lead>, userRole?: 
 
   const target = current[idx]
   const isSuperOrAdmin = userRole === "Super Admin" || userRole === "Admin"
-  const isMovingToWonOrLost = updates.status === "Won" || updates.status === "Lost"
+  
+  const finalStatus = updates.status !== undefined ? updates.status : target.status
+  const statusLower = (finalStatus || "").toLowerCase().trim()
+  const isWonOrLost = statusLower === "won" || statusLower === "lost"
 
   // Prevent callers/teams from updating a locked lead unless being explicitly unlocked by Admin or moving to Won/Lost
-  if (target.isLocked && !isSuperOrAdmin && updates.isLocked !== false && !isMovingToWonOrLost) {
+  if (target.isLocked && !isSuperOrAdmin && updates.isLocked !== false && !isWonOrLost) {
     throw new Error("This lead is locked due to missing daily updates. Only an Admin or Super Admin can unlock it.")
   }
 
-  // If status is Won/Lost or reminderDate is updated to future, clear auto-lock
+  const finalReminderDate = updates.reminderDate !== undefined ? updates.reminderDate : target.reminderDate
+
   let nextIsLocked = updates.isLocked !== undefined ? updates.isLocked : target.isLocked
   let nextReason = updates.lockedReason !== undefined ? updates.lockedReason : target.lockedReason
 
-  if (isMovingToWonOrLost) {
+  // 1. Won or Lost leads are NEVER locked
+  if (isWonOrLost) {
     nextIsLocked = false
     nextReason = undefined
-  } else if (updates.reminderDate && !isReminderDateOverdue(updates.reminderDate)) {
-    nextIsLocked = false
-    nextReason = undefined
+  } else if (finalReminderDate && !isReminderDateOverdue(finalReminderDate)) {
+    // 2. If reminder date is set to a future / valid date, unlock
+    if (updates.isLocked !== true) {
+      nextIsLocked = false
+      nextReason = undefined
+    }
+  } else if (isReminderDateOverdue(finalReminderDate)) {
+    // 3. If reminder date is expired/overdue, lock at end of date
+    nextIsLocked = true
+    nextReason = "Overdue: Lead reminder date expired."
   }
 
   current[idx] = {

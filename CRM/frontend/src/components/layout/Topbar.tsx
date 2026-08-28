@@ -152,22 +152,24 @@ export function Topbar() {
 
   React.useEffect(() => {
     if (!user) return
-    const loadNotifs = () => {
+    const loadNotifs = async () => {
       try {
-        const notifKey = `saampark_notifications_${(user.email || '').toLowerCase().trim()}`
-        const raw = localStorage.getItem(notifKey)
-        if (raw) {
-          setNotifications(JSON.parse(raw))
-        } else {
-          setNotifications([])
-        }
+        const { getUserNotifications } = await import("@/services/notificationService")
+        const list = await getUserNotifications(user.email, user.role)
+        setNotifications(list || [])
       } catch {
         setNotifications([])
       }
     }
     loadNotifs()
-    const interval = setInterval(loadNotifs, 3000)
-    return () => clearInterval(interval)
+    window.addEventListener("saampark_notifications_updated", loadNotifs)
+    window.addEventListener("storage", loadNotifs)
+    const interval = setInterval(loadNotifs, 5000)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener("saampark_notifications_updated", loadNotifs)
+      window.removeEventListener("storage", loadNotifs)
+    }
   }, [user])
 
   // Close all dropdowns on outside click
@@ -466,28 +468,52 @@ export function Topbar() {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 8, scale: 0.95 }}
                 transition={{ duration: 0.13 }}
-                className="absolute right-0 top-full mt-2 w-72 sm:w-80 bg-surface border border-border shadow-xl rounded-2xl overflow-hidden z-50 max-h-[85vh] flex flex-col"
+                className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-surface border border-border shadow-2xl rounded-3xl overflow-hidden z-50 max-h-[85vh] flex flex-col"
               >
-                <div className="p-4 border-b border-border/50 flex items-center justify-between">
-                  <span className="font-semibold text-sm">Notifications</span>
-                  <span className="text-[10px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-full">
+                <div className="p-4 border-b border-border/50 flex items-center justify-between bg-surface-hover/30">
+                  <div className="flex items-center gap-2">
+                    <Bell size={16} className="text-primary" />
+                    <span className="font-bold text-sm text-foreground">Notifications</span>
+                  </div>
+                  <span className="text-[10px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-full border border-primary/20">
                     {notifications.filter(n => !n.read).length} New
                   </span>
                 </div>
 
                 <div className="flex-1 overflow-y-auto divide-y divide-border/40 max-h-80">
                   {notifications.length === 0 ? (
-                    <div className="py-8 text-center text-xs text-muted-foreground">
-                      No new notifications.
+                    <div className="py-10 text-center text-xs text-muted-foreground space-y-1">
+                      <p className="text-2xl">🔔</p>
+                      <p className="font-medium">No new notifications</p>
+                      <p className="text-[11px] opacity-75">You're all caught up!</p>
                     </div>
                   ) : (
                     notifications.map((n, idx) => (
-                      <div key={n.id || idx} className={`px-4 py-3 flex items-start gap-3 hover:bg-surface-hover cursor-pointer ${!n.read ? 'bg-primary/5' : ''}`}>
+                      <div
+                        key={n.id || idx}
+                        onClick={async () => {
+                          const { markNotificationAsRead } = await import("@/services/notificationService")
+                          if (n.id) await markNotificationAsRead(n.id, user?.email)
+                          if (n.linkUrl) {
+                            setShowNotifications(false)
+                            window.location.href = n.linkUrl
+                          }
+                        }}
+                        className={`px-4 py-3 flex items-start gap-3 hover:bg-surface-hover cursor-pointer transition-colors ${
+                          !n.read ? 'bg-primary/5' : 'opacity-80'
+                        }`}
+                      >
                         <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${!n.read ? 'bg-primary' : 'bg-transparent'}`} />
-                        <div>
-                          <p className="text-sm font-medium">{n.title || n.text}</p>
-                          {n.message && <p className="text-xs text-muted-foreground mt-0.5">{n.message}</p>}
-                          <p className="text-[10px] text-muted-foreground mt-1">{n.timestamp || n.time || "Just now"}</p>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-foreground leading-snug">{n.title || n.text}</p>
+                          {n.message && (
+                            <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">
+                              {n.message}
+                            </p>
+                          )}
+                          <p className="text-[10px] text-muted-foreground mt-1 font-mono">
+                            {n.timestampFormatted || n.timestamp || n.time || "Just now"}
+                          </p>
                         </div>
                       </div>
                     ))
@@ -495,17 +521,14 @@ export function Topbar() {
                 </div>
 
                 {notifications.length > 0 && (
-                  <div className="p-2 text-center border-t border-border/50 bg-surface">
+                  <div className="p-2.5 text-center border-t border-border/50 bg-surface flex items-center justify-center">
                     <button 
-                      onClick={() => {
-                        if (user) {
-                          const notifKey = `saampark_notifications_${(user.email || '').toLowerCase().trim()}`
-                          const marked = notifications.map(n => ({ ...n, read: true }))
-                          setNotifications(marked)
-                          try { localStorage.setItem(notifKey, JSON.stringify(marked)) } catch {}
-                        }
+                      onClick={async () => {
+                        const { markAllNotificationsAsRead } = await import("@/services/notificationService")
+                        await markAllNotificationsAsRead(user?.email)
+                        setNotifications(prev => prev.map(n => ({ ...n, read: true })))
                       }}
-                      className="text-xs text-primary hover:underline font-semibold cursor-pointer"
+                      className="text-xs text-primary hover:underline font-bold cursor-pointer"
                     >
                       Mark all as read
                     </button>

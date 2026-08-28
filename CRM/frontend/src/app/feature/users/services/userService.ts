@@ -254,6 +254,126 @@ export async function cascadeUserNameChange(oldName: string, email: string, newN
   }
 }
 
+// Helper: dynamically look up a user's real uploaded cloud avatar from the users database
+export function getUserAvatar(
+  userIdentifier?: string | null,
+  allUsers?: UserItem[],
+  fallbackSeed?: string
+): string {
+  if (!userIdentifier || !userIdentifier.trim()) {
+    return fallbackSeed ? `https://api.dicebear.com/7.x/notionists/svg?seed=${encodeURIComponent(fallbackSeed)}` : "";
+  }
+  const norm = userIdentifier.toLowerCase().trim();
+
+  if (Array.isArray(allUsers) && allUsers.length > 0) {
+    const matched = allUsers.find((u) => {
+      const uEmail = (u.email || "").toLowerCase().trim();
+      const uName = (u.name || "").toLowerCase().trim();
+      const uId = String(u.id || "").toLowerCase().trim();
+      return uEmail === norm || uName === norm || uId === norm;
+    });
+
+    if (matched) {
+      const realAvatar = matched.avatarUrl || (matched as any).avatar;
+      if (realAvatar && realAvatar.trim() && !realAvatar.includes("dicebear")) {
+        return realAvatar;
+      }
+    }
+  }
+
+  // If userIdentifier is already a real valid image URL
+  if (userIdentifier.startsWith("http://") || userIdentifier.startsWith("https://") || userIdentifier.startsWith("data:")) {
+    if (!userIdentifier.includes("dicebear")) {
+      return userIdentifier;
+    }
+  }
+
+  return `https://api.dicebear.com/7.x/notionists/svg?seed=${encodeURIComponent(fallbackSeed || userIdentifier)}`;
+}
+
+// Cascade user avatar change across assigned Tasks, Leads, and Projects
+export async function cascadeUserAvatarChange(name: string, email: string, newAvatarUrl: string): Promise<void> {
+  if (!newAvatarUrl) return;
+  const oNameNorm = (name || "").trim().toLowerCase();
+  const emailNorm = (email || "").trim().toLowerCase();
+
+  // 1. Tasks
+  try {
+    const tasks = await fetchModuleDataFromDB<any[]>("tasks", [], "all");
+    let changed = false;
+    const updated = tasks.map((t) => {
+      const assignedTo = (t.assignedTo || "").toLowerCase().trim();
+      const assignedToEmail = (t.assignedToEmail || "").toLowerCase().trim();
+      if (assignedTo === oNameNorm || assignedTo === emailNorm || assignedToEmail === emailNorm) {
+        changed = true;
+        return { ...t, assignedToAvatar: newAvatarUrl };
+      }
+      return t;
+    });
+    if (changed) {
+      await saveModuleDataToDB("tasks", updated, "all");
+    }
+  } catch (err) {
+    console.warn("Cascade avatar tasks warning:", err);
+  }
+
+  // 2. Leads
+  try {
+    const leads = await fetchModuleDataFromDB<any[]>("leads", [], "all");
+    let changed = false;
+    const updated = leads.map((l) => {
+      const assignedTo = (l.assignedTo || "").toLowerCase().trim();
+      const caller = (l.caller || "").toLowerCase().trim();
+      const owner = (l.owner || "").toLowerCase().trim();
+      if (assignedTo === oNameNorm || assignedTo === emailNorm || caller === oNameNorm || owner === oNameNorm) {
+        changed = true;
+        return { ...l, ownerAvatar: newAvatarUrl, assignedToAvatar: newAvatarUrl };
+      }
+      return l;
+    });
+    if (changed) {
+      await saveModuleDataToDB("leads", updated, "all");
+    }
+  } catch (err) {
+    console.warn("Cascade avatar leads warning:", err);
+  }
+
+  // 3. Projects
+  try {
+    const projects = await fetchModuleDataFromDB<any[]>("projects", [], "all");
+    let changed = false;
+    const updated = projects.map((p) => {
+      if (Array.isArray(p.members)) {
+        let memberChanged = false;
+        const updatedMembers = p.members.map((m: any) => {
+          const mName = typeof m === "string" ? m : m.name;
+          const mEmail = typeof m === "string" ? "" : (m.email || "");
+          if ((mName && mName.toLowerCase().trim() === oNameNorm) || (mEmail && mEmail.toLowerCase().trim() === emailNorm)) {
+            memberChanged = true;
+            return typeof m === "string" ? { name: m, avatar: newAvatarUrl } : { ...m, avatar: newAvatarUrl, avatarUrl: newAvatarUrl };
+          }
+          return m;
+        });
+        if (memberChanged) {
+          changed = true;
+          return { ...p, members: updatedMembers };
+        }
+      }
+      return p;
+    });
+    if (changed) {
+      await saveModuleDataToDB("projects", updated, "all");
+    }
+  } catch (err) {
+    console.warn("Cascade avatar projects warning:", err);
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("storage"));
+    window.dispatchEvent(new CustomEvent("saampark_data_synced"));
+  }
+}
+
 // Delete user permanently
 export async function deleteUser(id: string, email?: string): Promise<boolean> {
   const normEmail = email ? email.toLowerCase().trim() : (id.includes("@") ? id.toLowerCase().trim() : "");

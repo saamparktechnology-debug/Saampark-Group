@@ -2,7 +2,15 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { AuthService } from '@/services/apiServices'
 import { api, setAuthToken } from '@/lib/api'
-import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted, invalidateModuleCache } from '@/lib/storageSync'
+import { 
+  fetchModuleDataFromDB, 
+  saveModuleDataToDB, 
+  markGlobalItemDeleted, 
+  syncGlobalDeletedIds, 
+  isGlobalItemDeleted, 
+  getLocalDeletedIds, 
+  invalidateModuleCache 
+} from '@/lib/storageSync'
 
 export type Role = 'Super Admin' | 'Admin' | 'Clients' | 'Teams'
 export type CompanyId = string
@@ -24,11 +32,42 @@ export interface Branch {
 export interface Company {
   id: string
   name: string
+  brand_name?: string
+  division_name?: string
+  subtitle?: string
   slug?: string
   logo?: string
   logo_url?: string
   currency?: string
   currency_symbol?: string
+  // Legal & Registration IDs
+  cin?: string
+  gstin?: string
+  pan?: string
+  // Address & Contact Information
+  address?: string
+  city?: string
+  state?: string
+  zip?: string
+  country?: string
+  phone?: string
+  email?: string
+  website?: string
+  // Bank & Payment Gateway Details
+  upi_id?: string
+  account_holder?: string
+  bank_name?: string
+  account_number?: string
+  ifsc_code?: string
+  bank_branch?: string
+  swift_code?: string
+  payment_qr_url?: string
+  // Invoice Customization
+  terms_conditions?: string
+  invoice_notes?: string
+  signatory_name?: string
+  signatory_designation?: string
+  signature_image_url?: string
 }
 
 export interface User {
@@ -48,11 +87,66 @@ export interface User {
   permissions?: any
   kycStatus?: "Pending" | "Processing" | "Verified" | "Rejected"
   kycData?: any
+  status?: "Active" | "Inactive" | "Pending"
 }
 
 export const DEFAULT_COMPANIES: Company[] = [
-  { id: 'tech', name: 'SAAMPARK Technology', logo: '💻', slug: 'tech', currency_symbol: '₹' },
-  { id: 'digital', name: 'SAAMPARK Digital Marketing & Research', logo: '📈', slug: 'digital', currency_symbol: '₹' },
+  { 
+    id: 'tech', 
+    brand_name: 'SAAMPARK',
+    division_name: 'TECHNOLOGY',
+    name: 'SAAMPARK TECHNOLOGY', 
+    subtitle: 'AND RESEARCH PRIVATE LIMITED',
+    logo: '💻', 
+    logo_url: '/saampark-logo.png',
+    slug: 'tech', 
+    currency: 'INR',
+    currency_symbol: '₹',
+    cin: 'U72900WB2024PTC271234',
+    gstin: '19ABFCS1234D1ZS',
+    pan: 'ABFCS1234D',
+    address: 'Madinipur, Kolkata, Durgapur, West Bengal, India - 721101',
+    phone: '+91 9901518567 / +91 9901518569',
+    email: 'info@saamparktechnology.com',
+    website: 'www.saamparktechnology.com',
+    upi_id: 'saampark@sbi',
+    account_holder: 'Saampark Technology & Research Pvt. Ltd.',
+    bank_name: 'State Bank of India',
+    account_number: '40912384759',
+    ifsc_code: 'SBIN0001234',
+    bank_branch: 'Balichak Station Road',
+    terms_conditions: '1. E.& O.E.\n2. Total payment due to be paid within due date to avoid suspension/cancellation.\n3. Please include the invoice number in your payment notes.\n4. All disputes are subject to Paschim Medinipur jurisdiction only.\n5. For payment & refund related queries, read our Refund & Return Policy on website.',
+    signatory_name: 'Authorized Signatory',
+    signatory_designation: 'Managing Director'
+  },
+  { 
+    id: 'digital', 
+    brand_name: 'SAAMPARK',
+    division_name: 'DIGITAL MARKETING',
+    name: 'SAAMPARK DIGITAL MARKETING', 
+    subtitle: 'RESEARCH & CREATIVE MEDIA AGENCY',
+    logo: '📈', 
+    logo_url: '/saampark-logo.png',
+    slug: 'digital', 
+    currency: 'INR',
+    currency_symbol: '₹',
+    cin: 'U74999WB2024PTC271890',
+    gstin: '19AAGCS5678E1ZT',
+    pan: 'AAGCS5678E',
+    address: 'Salt Lake Sector V, Bidhannagar, Kolkata, West Bengal - 700091',
+    phone: '+91 9901518570',
+    email: 'digital@saampark.in',
+    website: 'www.saamparkdigital.com',
+    upi_id: 'saamparkdigital@icici',
+    account_holder: 'Saampark Digital Marketing & Research',
+    bank_name: 'ICICI Bank',
+    account_number: '123405009876',
+    ifsc_code: 'ICIC0001234',
+    bank_branch: 'Sector V Kolkata',
+    terms_conditions: '1. All marketing campaigns will be initiated after advance retainer clearance.\n2. Advertising budget spend is billed directly via client ad account.\n3. All disputes are subject to Kolkata jurisdiction only.',
+    signatory_name: 'Authorized Signatory',
+    signatory_designation: 'Agency Head'
+  },
 ]
 
 export const DEFAULT_BRANCHES: Branch[] = []
@@ -84,6 +178,7 @@ interface AuthState {
   fetchCompanies: () => Promise<Company[]>
   fetchBranches: () => Promise<Branch[]>
   addCompany: (company: Partial<Company>) => Promise<Company | null>
+  updateCompany: (companyId: string, updates: Partial<Company>) => Promise<Company | null>
   deleteCompany: (companyId: string) => Promise<boolean>
   addBranch: (branch: Partial<Branch>) => Promise<Branch | null>
   updateBranch: (branchId: string, updates: Partial<Branch>) => Promise<void>
@@ -103,12 +198,17 @@ export const useAuthStore = create<AuthState>()(
 
       fetchCompanies: async () => {
         try {
-          // 1. Try fetching from MySQL companies table
-          let fetchedList: Company[] = []
+          const deletedIds = await syncGlobalDeletedIds().catch(() => getLocalDeletedIds())
+
+          // 1. Fetch companies from MySQL module data store (primary single source of truth)
+          const dbCompanies = await fetchModuleDataFromDB<Company[]>('companies', [], 'all').catch(() => [])
+
+          // 2. Fetch from backend API if available
+          let apiList: Company[] = []
           const res: any = await api.get('/companies').catch(() => null)
           if (res && (Array.isArray(res.data) || Array.isArray(res))) {
             const list = Array.isArray(res.data) ? res.data : res
-            fetchedList = list.map((c: any) => ({
+            apiList = list.map((c: any) => ({
               id: c.slug || String(c.id),
               name: c.name,
               slug: c.slug || String(c.id),
@@ -119,48 +219,82 @@ export const useAuthStore = create<AuthState>()(
             }))
           }
 
-          // 2. Fetch companies from MySQL module data store
-          const dbCompanies = await fetchModuleDataFromDB<Company[]>('companies', [], 'all').catch(() => [])
-          if (Array.isArray(dbCompanies) && dbCompanies.length > 0) {
-            const map = new Map<string, Company>()
-            DEFAULT_COMPANIES.forEach(c => map.set(c.id, c))
-            fetchedList.forEach(c => map.set(c.id, c))
-            dbCompanies.forEach(c => map.set(c.id, c))
-            const combined = Array.from(map.values())
-            set({ companies: combined })
-            return combined
+          const map = new Map<string, Company>()
+
+          // Only add DEFAULT_COMPANIES if DB is completely empty and item was NEVER deleted
+          if ((!Array.isArray(dbCompanies) || dbCompanies.length === 0) && apiList.length === 0) {
+            DEFAULT_COMPANIES.forEach(c => {
+              if (!isGlobalItemDeleted(c.id, deletedIds) && !isGlobalItemDeleted(c.slug || '', deletedIds)) {
+                map.set(c.id, c)
+              }
+            })
           }
 
-          if (fetchedList.length > 0) {
-            const map = new Map<string, Company>()
-            DEFAULT_COMPANIES.forEach(c => map.set(c.id, c))
-            fetchedList.forEach(c => map.set(c.id, c))
-            const combined = Array.from(map.values())
+          apiList.forEach(c => {
+            if (!isGlobalItemDeleted(c.id, deletedIds) && !isGlobalItemDeleted(c.slug || '', deletedIds)) {
+              map.set(c.id, c)
+            }
+          })
+
+          if (Array.isArray(dbCompanies) && dbCompanies.length > 0) {
+            dbCompanies.forEach(c => {
+              if (!isGlobalItemDeleted(c.id, deletedIds) && !isGlobalItemDeleted(c.slug || '', deletedIds)) {
+                map.set(c.id, c)
+              }
+            })
+          }
+
+          const combined = Array.from(map.values())
+          if (combined.length > 0) {
             set({ companies: combined })
             return combined
           }
-        } catch {}
-        return get().companies
+        } catch (err) {
+          console.warn("fetchCompanies warning:", err)
+        }
+
+        const localDeleted = getLocalDeletedIds()
+        const currentFiltered = get().companies.filter(c => 
+          !isGlobalItemDeleted(c.id, localDeleted) && 
+          !isGlobalItemDeleted(c.slug || '', localDeleted)
+        )
+        set({ companies: currentFiltered })
+        return currentFiltered
       },
 
       fetchBranches: async () => {
         try {
+          const deletedIds = await syncGlobalDeletedIds().catch(() => getLocalDeletedIds())
           const dbBranches = await fetchModuleDataFromDB<Branch[]>('branches', [], 'all').catch(() => null)
-          if (Array.isArray(dbBranches)) {
-            set({ branches: dbBranches })
-            return dbBranches
+          
+          let list: Branch[] = []
+          if (Array.isArray(dbBranches) && dbBranches.length > 0) {
+            list = dbBranches
+          } else {
+            const res: any = await api.get('/branches').catch(() => null)
+            if (res && (Array.isArray(res.data) || Array.isArray(res))) {
+              list = Array.isArray(res.data) ? res.data : res
+            }
           }
-          const res: any = await api.get('/branches').catch(() => null)
-          if (res && (Array.isArray(res.data) || Array.isArray(res))) {
-            const list = Array.isArray(res.data) ? res.data : res
-            set({ branches: list })
-            return list
-          }
-        } catch {}
-        return get().branches
+
+          const filtered = list.filter(b => !isGlobalItemDeleted(b.id, deletedIds))
+          set({ branches: filtered })
+          return filtered
+        } catch (err) {
+          console.warn("fetchBranches warning:", err)
+        }
+        const localDeleted = getLocalDeletedIds()
+        const currentFiltered = get().branches.filter(b => !isGlobalItemDeleted(b.id, localDeleted))
+        set({ branches: currentFiltered })
+        return currentFiltered
       },
 
       addCompany: async (newComp: Partial<Company>) => {
+        const { user, companies } = get()
+        if (user?.role !== 'Super Admin') {
+          throw new Error('Only Super Admin can create companies.')
+        }
+
         try {
           const compSlug = newComp.slug || newComp.name?.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || `comp_${Date.now()}`
           await api.post('/companies', {
@@ -176,13 +310,42 @@ export const useAuthStore = create<AuthState>()(
           const created: Company = {
             id: compSlug,
             name: newComp.name || 'New Company',
+            brand_name: newComp.brand_name || 'SAAMPARK',
+            division_name: newComp.division_name || '',
+            subtitle: newComp.subtitle || '',
             slug: compSlug,
             logo: newComp.logo || '🏢',
+            logo_url: newComp.logo_url || '',
+            currency: newComp.currency || 'INR',
             currency_symbol: newComp.currency_symbol || '₹',
+            cin: newComp.cin || '',
+            gstin: newComp.gstin || '',
+            pan: newComp.pan || '',
+            address: newComp.address || '',
+            city: newComp.city || '',
+            state: newComp.state || '',
+            zip: newComp.zip || '',
+            country: newComp.country || 'India',
+            phone: newComp.phone || '',
+            email: newComp.email || '',
+            website: newComp.website || '',
+            upi_id: newComp.upi_id || '',
+            account_holder: newComp.account_holder || '',
+            bank_name: newComp.bank_name || '',
+            account_number: newComp.account_number || '',
+            ifsc_code: newComp.ifsc_code || '',
+            bank_branch: newComp.bank_branch || '',
+            swift_code: newComp.swift_code || '',
+            payment_qr_url: newComp.payment_qr_url || '',
+            terms_conditions: newComp.terms_conditions || '',
+            invoice_notes: newComp.invoice_notes || '',
+            signatory_name: newComp.signatory_name || '',
+            signatory_designation: newComp.signatory_designation || '',
+            signature_image_url: newComp.signature_image_url || '',
           }
 
           const current = get().companies
-          const updated = [...current.filter(c => c.id !== created.id), created]
+          const updated = [...current.filter(c => c.id !== created.id && c.slug !== created.slug), created]
           set({ companies: updated })
 
           // Persist to MySQL database single source of truth
@@ -199,20 +362,77 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
+      updateCompany: async (companyId: string, updates: Partial<Company>) => {
+        const { user, companies } = get()
+        if (user?.role !== 'Super Admin') {
+          throw new Error('Only Super Admin can modify company details.')
+        }
+
+        const compIndex = companies.findIndex(c => c.id === companyId || c.slug === companyId)
+        if (compIndex === -1) return null
+
+        const target = companies[compIndex]
+        const merged: Company = {
+          ...target,
+          ...updates,
+        }
+
+        // Try backend API update if available
+        try {
+          await api.put(`/companies/${target.id}`, {
+            name: merged.name,
+            slug: merged.slug || merged.id,
+            currency: merged.currency,
+            currency_symbol: merged.currency_symbol,
+            logo_url: merged.logo_url,
+          }).catch(() => {})
+        } catch {}
+
+        const updated = [...companies]
+        updated[compIndex] = merged
+        set({ companies: updated })
+
+        // Persist to MySQL module data store
+        await saveModuleDataToDB('companies', updated, 'all').catch(() => {})
+
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('storage'))
+          window.dispatchEvent(new CustomEvent('saampark_data_synced'))
+          window.dispatchEvent(new CustomEvent('saampark_company_updated', { detail: merged }))
+        }
+
+        return merged
+      },
+
       deleteCompany: async (companyId: string) => {
         const { user, companies, branches, activeCompanyId } = get()
         if (user?.role !== 'Super Admin') {
           throw new Error('Only Super Admin can delete companies.')
         }
 
+        const compToDelete = companies.find(c => c.id === companyId || c.slug === companyId)
+        const targetSlug = compToDelete?.slug || companyId
+
+        // Mark deleted in universal tombstone registry
+        markGlobalItemDeleted(companyId, 'companies')
+        markGlobalItemDeleted(targetSlug, 'companies')
+
         try {
           await api.delete(`/companies/${companyId}`).catch(() => {})
         } catch {}
 
-        markGlobalItemDeleted(companyId, 'companies')
-
-        const remainingCompanies = companies.filter(c => c.id !== companyId && c.slug !== companyId)
-        const remainingBranches = branches.filter(b => b.companyId !== companyId)
+        const remainingCompanies = companies.filter(c => 
+          c.id !== companyId && 
+          c.slug !== companyId && 
+          c.id !== targetSlug && 
+          c.slug !== targetSlug
+        )
+        const remainingBranches = branches.filter(b => 
+          b.companyId !== companyId && 
+          b.companyId !== targetSlug &&
+          b.companyId?.toLowerCase() !== companyId.toLowerCase() &&
+          b.companyId?.toLowerCase() !== targetSlug.toLowerCase()
+        )
 
         // Clean up deleted company from all users in the database
         try {
@@ -220,15 +440,17 @@ export const useAuthStore = create<AuthState>()(
           if (Array.isArray(currentUsers)) {
             const updatedUsers = currentUsers.map((u: any) => {
               const uCompIds: string[] = Array.isArray(u.companyIds) ? u.companyIds : (u.companyId ? [u.companyId] : ['tech'])
-              const cleanedIds = uCompIds.filter((id: string) => id !== companyId && id !== companyId.toLowerCase())
-              const validIds = cleanedIds.length > 0 ? cleanedIds : [remainingCompanies[0]?.id || 'tech']
+              const cleanedIds = uCompIds.filter((id: string) => 
+                id !== companyId && 
+                id !== targetSlug && 
+                id.toLowerCase() !== companyId.toLowerCase()
+              )
+              const fallbackId = remainingCompanies[0]?.id || remainingCompanies[0]?.slug || 'tech'
+              const validIds = cleanedIds.length > 0 ? cleanedIds : [fallbackId]
               return {
                 ...u,
                 companyIds: validIds,
                 companyId: validIds[0],
-                companyName: (validIds.includes('digital') && validIds.includes('tech')) 
-                  ? 'SAAMPARK Group (Multiple)' 
-                  : (validIds[0] === 'digital' ? 'SAAMPARK Digital Marketing' : 'SAAMPARK Technology'),
               }
             })
             await saveModuleDataToDB('users', updatedUsers, 'all')
@@ -238,8 +460,8 @@ export const useAuthStore = create<AuthState>()(
         }
 
         let newActiveCompany = activeCompanyId
-        if (activeCompanyId === companyId || activeCompanyId === companyId.toLowerCase()) {
-          newActiveCompany = remainingCompanies[0]?.id || 'tech'
+        if (activeCompanyId === companyId || activeCompanyId === targetSlug || activeCompanyId?.toLowerCase() === companyId.toLowerCase()) {
+          newActiveCompany = remainingCompanies[0]?.id || remainingCompanies[0]?.slug || 'tech'
         }
 
         set({
@@ -247,8 +469,11 @@ export const useAuthStore = create<AuthState>()(
           branches: remainingBranches,
           activeCompanyId: newActiveCompany,
         })
-        saveModuleDataToDB('companies', remainingCompanies, 'all').catch(() => {})
-        saveModuleDataToDB('branches', remainingBranches, 'all').catch(() => {})
+        
+        await Promise.all([
+          saveModuleDataToDB('companies', remainingCompanies, 'all'),
+          saveModuleDataToDB('branches', remainingBranches, 'all'),
+        ]).catch(() => {})
 
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new Event('storage'))
@@ -264,7 +489,8 @@ export const useAuthStore = create<AuthState>()(
         let targetCompanyId = branchData.companyId || 'tech'
         if (user && user.role !== 'Super Admin') {
           const allowedCompIds = user.companyIds || (user.companyId ? [user.companyId] : ['tech'])
-          if (!allowedCompIds.includes(targetCompanyId)) {
+          const matches = allowedCompIds.some(id => id.toLowerCase() === targetCompanyId.toLowerCase())
+          if (!matches) {
             targetCompanyId = allowedCompIds[0] || 'tech'
           }
         }
@@ -282,6 +508,10 @@ export const useAuthStore = create<AuthState>()(
           status: branchData.status || 'Active',
           createdAt: new Date().toISOString().split('T')[0],
         }
+
+        try {
+          await api.post('/branches', newBranch).catch(() => {})
+        } catch {}
 
         const updated = [...branches.filter(b => b.id !== newBranch.id), newBranch]
         set({ branches: updated })

@@ -58,7 +58,7 @@ export default function TeamMembersPage() {
           return {
             id: String(u.id || u._id || idx),
             name: mName,
-            avatarUrl: u.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${mName}`,
+            avatarUrl: (u as any).avatarUrl || u.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${mName}`,
             jobTitle: u.role_name || u.role || "Technical Lead",
             email: u.email || "-",
             phone: u.phone || "+91 98765 43210",

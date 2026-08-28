@@ -182,7 +182,7 @@ const login = async (req, res, next) => {
     }
 
     if (user.status && user.status.toLowerCase() === 'inactive') {
-      return errorResponse(res, 403, 'Your account is deactivated. Please contact your administrator.');
+      return errorResponse(res, 403, 'Your account is on inactive stage, please contact your administration.');
     }
 
     const isMatch = await comparePassword(password, user.password_hash);

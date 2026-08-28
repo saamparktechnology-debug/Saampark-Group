@@ -31,28 +31,65 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     }
   }, [isAuthenticated, user, pathname, router, isMounted])
 
-  // Explicit session revocation listener (triggered only when an admin explicitly deletes this active user)
+  // Explicit session revocation & Inactive account status listener
   React.useEffect(() => {
     if (!isMounted) return
 
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "saampark_session_revoked" && e.newValue) {
-        const state = useAuthStore.getState()
-        if (state.user?.email) {
-          const currentEmail = state.user.email.toLowerCase().trim()
-          const revokedMsg = e.newValue.toLowerCase().trim()
-          if (revokedMsg.includes(currentEmail)) {
-            console.warn("Session revoked by Admin for current user:", currentEmail)
-            state.logout()
-            router.replace("/login")
+    const forceInactiveLogout = (email: string) => {
+      const state = useAuthStore.getState()
+      if (state.user?.email) {
+        const currentEmail = state.user.email.toLowerCase().trim()
+        if (email.toLowerCase().trim().includes(currentEmail)) {
+          console.warn("User account set to Inactive by Admin. Terminating session:", currentEmail)
+          if (typeof window !== "undefined") {
+            sessionStorage.setItem("saampark_inactive_logout", "true")
           }
+          state.logout()
+          router.replace("/login")
         }
       }
     }
 
+    const checkActiveUserStatus = async () => {
+      const state = useAuthStore.getState()
+      if (!state.isAuthenticated || !state.user?.email) return
+      const currentEmail = state.user.email.toLowerCase().trim()
+
+      try {
+        const { getStoredUserAccountsAsync } = await import("@/app/feature/users/services/userService")
+        const accounts = await getStoredUserAccountsAsync()
+        const myAcc = accounts.find((a) => a.email.toLowerCase().trim() === currentEmail)
+        if (myAcc && myAcc.status === "Inactive") {
+          forceInactiveLogout(currentEmail)
+        }
+      } catch {}
+    }
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "saampark_session_revoked" && e.newValue) {
+        forceInactiveLogout(e.newValue)
+      }
+    }
+
+    const handleCustomRevoke = (e: any) => {
+      if (e.detail?.email) {
+        forceInactiveLogout(e.detail.email)
+      }
+    }
+
+    // Check on mount and periodically every 3 seconds
+    checkActiveUserStatus()
+    const interval = setInterval(checkActiveUserStatus, 3000)
+
     window.addEventListener("storage", handleStorageChange)
+    window.addEventListener("saampark_session_revoked", handleCustomRevoke)
+    window.addEventListener("saampark_user_status_changed", handleCustomRevoke)
+
     return () => {
+      clearInterval(interval)
       window.removeEventListener("storage", handleStorageChange)
+      window.removeEventListener("saampark_session_revoked", handleCustomRevoke)
+      window.removeEventListener("saampark_user_status_changed", handleCustomRevoke)
     }
   }, [isMounted, router])
 

@@ -6,14 +6,13 @@ import { Users as UsersIcon, UserPlus, ShieldCheck, UserCheck, Briefcase, Downlo
 
 import { Button } from "@/components/ui/Button"
 import { useAuthStore } from "@/store/useAuthStore"
-import { UserItem } from "./types"
+import { UserItem, UserStatus } from "./types"
 import { getUsers, recordUserAccount, deleteUser } from "./services/userService"
 import { saveModuleDataToDB } from "@/lib/storageSync"
 import { UserList } from "./components/UserList"
 import { UserModal } from "./components/UserModal"
 import { UserOverviewModal } from "./components/UserOverviewModal"
 import { ModulePermissionsModal } from "./components/ModulePermissionsModal"
-import { CompanyModal } from "./components/CompanyModal"
 
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { ThreeDotLoader } from "@/components/ui/ThreeDotLoader"
@@ -48,7 +47,6 @@ export default function UsersMain() {
   const [users, setUsers] = React.useState<UserItem[]>([])
   const [isModalOpen, setIsModalOpen] = React.useState(false)
   const [isPermissionsModalOpen, setIsPermissionsModalOpen] = React.useState(false)
-  const [isCompanyModalOpen, setIsCompanyModalOpen] = React.useState(false)
   const [editingUser, setEditingUser] = React.useState<UserItem | null>(null)
   const [selectedUserForOverview, setSelectedUserForOverview] = React.useState<UserItem | null>(null)
   const [isOverviewModalOpen, setIsOverviewModalOpen] = React.useState(false)
@@ -228,6 +226,12 @@ export default function UsersMain() {
       })
     }
 
+    if (saved.status === "Inactive") {
+      const inactiveEmail = saved.email.toLowerCase().trim()
+      localStorage.setItem("saampark_session_revoked", `${inactiveEmail}_inactive_${Date.now()}`)
+      window.dispatchEvent(new CustomEvent("saampark_session_revoked", { detail: { email: inactiveEmail, reason: "inactive" } }))
+    }
+
     setUsers((prev) => {
       let nextList: UserItem[] = []
       if (editingUser) {
@@ -269,15 +273,29 @@ export default function UsersMain() {
       await UserService.toggleStatus(id).catch((err) => console.warn("Status toggle warning:", err))
     } catch {}
 
-    setUsers((prev) =>
-      prev.map((u) => {
+    setUsers((prev) => {
+      const updatedList: UserItem[] = prev.map((u) => {
         if (u.id === id) {
-          const nextStatus = u.status === "Active" ? "Inactive" : "Active"
-          return { ...u, status: nextStatus }
+          const nextStatus: UserStatus = u.status === "Active" ? "Inactive" : "Active"
+          const updatedUser: UserItem = { ...u, status: nextStatus }
+          recordUserAccount(updatedUser, false)
+
+          if (nextStatus === "Inactive") {
+            const inactiveEmail = u.email.toLowerCase().trim()
+            localStorage.setItem("saampark_session_revoked", `${inactiveEmail}_inactive_${Date.now()}`)
+            window.dispatchEvent(new CustomEvent("saampark_session_revoked", { detail: { email: inactiveEmail, reason: "inactive" } }))
+          }
+
+          return updatedUser
         }
         return u
       })
-    )
+      saveModuleDataToDB("users", updatedList, "all")
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("storage"))
+      }
+      return updatedList
+    })
   }
 
 
@@ -307,16 +325,6 @@ export default function UsersMain() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {user?.role === "Super Admin" && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsCompanyModalOpen(true)}
-              className="gap-2 border-purple-500/40 text-purple-400 hover:bg-purple-500/10 cursor-pointer"
-            >
-              🏢 Create Company
-            </Button>
-          )}
 
           {canConfigureModulePermissions && (
             <Button
@@ -435,12 +443,6 @@ export default function UsersMain() {
       <ModulePermissionsModal
         isOpen={isPermissionsModalOpen}
         onClose={() => setIsPermissionsModalOpen(false)}
-      />
-
-      {/* Super Admin Create Company Modal */}
-      <CompanyModal
-        isOpen={isCompanyModalOpen}
-        onClose={() => setIsCompanyModalOpen(false)}
       />
     </motion.div>
   )

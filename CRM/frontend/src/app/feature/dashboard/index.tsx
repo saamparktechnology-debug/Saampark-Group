@@ -24,10 +24,17 @@ import { Task } from "../tasks/types"
 import { Project } from "../projects/types"
 import { filterGlobalDeletedItems, fetchModuleDataFromDB } from "@/lib/storageSync"
 import { normalizeRole } from "@/store/usePermissionStore"
+import { ClientDashboard } from "./components/ClientDashboard"
 
 export default function DashboardMain() {
   const { activeCompanyId, activeBranchId, companies, branches, user } = useAuthStore()
   if (!user) return null
+
+  // If logged in as Client, display dedicated Client Portal Dashboard
+  if (user.role === "Clients" || (user.role as string) === "Client") {
+    return <ClientDashboard />
+  }
+
   const { isClockedIn, clockIn, clockOut, secondsElapsed, tick } = useTimerStore()
 
   // Real registered users list from user management service

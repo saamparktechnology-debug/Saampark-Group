@@ -7,7 +7,8 @@ import { taskService } from "../services/taskService"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 
-import { getUsers } from "@/app/feature/users/services/userService"
+import { getUsers, getUserAvatar } from "@/app/feature/users/services/userService"
+import { UserItem } from "@/app/feature/users/types"
 
 interface EditTaskModalProps {
   isOpen: boolean
@@ -23,6 +24,7 @@ export function EditTaskModal({ isOpen, task, onClose, onTaskUpdated, onDeleteTa
   const canDeleteTask = canPerformAction(user, "Tasks", "delete")
 
   const [teamMembers, setTeamMembers] = React.useState<{ id: string; name: string; role?: string }[]>([])
+  const [allUsers, setAllUsers] = React.useState<UserItem[]>([])
   const [title, setTitle] = React.useState("")
   const [description, setDescription] = React.useState("")
   const [selectedRelatedTo, setSelectedRelatedTo] = React.useState<string[]>([])
@@ -68,6 +70,7 @@ export function EditTaskModal({ isOpen, task, onClose, onTaskUpdated, onDeleteTa
 
       // 2. Fetch users strictly scoped to the active company and branch
       getUsers("all").then((list) => {
+        setAllUsers(list || [])
         const targetComp = (task?.companyId || activeCompanyId || user?.companyId || "").toLowerCase().trim()
         const targetBranch = task?.branchId || activeBranchId || user?.branchId
 
@@ -170,7 +173,7 @@ export function EditTaskModal({ isOpen, task, onClose, onTaskUpdated, onDeleteTa
         relatedTo: finalRelatedTo,
         points,
         assignedTo,
-        assignedToAvatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${assignedTo.replace(/\s/g, "")}`,
+        assignedToAvatar: getUserAvatar(assignedTo, allUsers, assignedTo),
         status,
         milestone: milestone || "New",
         priority: priority === "Priority" ? "Normal" : (priority as TaskPriority),
