@@ -207,6 +207,28 @@ export async function recordUserAccountAsync(user: Partial<UserItem>, isNewRegis
     }
 
     await saveUserAccounts(updatedList);
+
+    // ── CRITICAL FIX: also clean old/new email from company-specific scopes ──
+    // getUsers() reads from "tech" and "digital" too; ghost records there cause duplicates.
+    const scopesToClean = ["tech", "digital"];
+    for (const scope of scopesToClean) {
+      try {
+        const scopeAccounts = await fetchModuleDataFromDB<UserItem[]>("users", [], scope);
+        if (!Array.isArray(scopeAccounts) || scopeAccounts.length === 0) continue;
+        const targetId = String(user.id || "").toLowerCase().trim();
+        const scopeCleaned = scopeAccounts.filter((acc) => {
+          const accId = String(acc.id || "").toLowerCase().trim();
+          const accEmail = (acc.email || "").toLowerCase().trim();
+          if (targetId && accId === targetId) return false;
+          if (accEmail === normalizedEmail) return false;
+          if (prevEmail && accEmail === prevEmail) return false;
+          return true;
+        });
+        if (scopeCleaned.length !== scopeAccounts.length) {
+          await saveModuleDataToDB("users", scopeCleaned, scope);
+        }
+      } catch {}
+    }
   } catch (err) {
     console.warn("recordUserAccountAsync error:", err);
   }
@@ -519,6 +541,26 @@ export async function deleteUser(id: string, email?: string): Promise<boolean> {
   });
 
   await saveModuleDataToDB("users", filtered, "all");
+
+  // ── CRITICAL FIX: also remove from company-specific scopes ──
+  // getUsers() reads from "tech" and "digital" scopes too;
+  // without cleaning those, the deleted user reappears on next reload.
+  const scopesToClean = ["tech", "digital"];
+  for (const scope of scopesToClean) {
+    try {
+      const scopeAccounts = await fetchModuleDataFromDB<any[]>("users", [], scope);
+      if (!Array.isArray(scopeAccounts) || scopeAccounts.length === 0) continue;
+      const targetId = String(id).toLowerCase().trim();
+      const scopeFiltered = scopeAccounts.filter((acc) => {
+        const accEmail = (acc.email || "").toLowerCase().trim();
+        const accId = String(acc.id || "").toLowerCase().trim();
+        return accId !== targetId && (!normEmail || accEmail !== normEmail);
+      });
+      if (scopeFiltered.length !== scopeAccounts.length) {
+        await saveModuleDataToDB("users", scopeFiltered, scope);
+      }
+    } catch {}
+  }
 
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("storage"));
