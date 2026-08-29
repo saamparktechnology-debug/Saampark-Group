@@ -172,8 +172,15 @@ export async function syncLeadReminderTask(lead: Lead): Promise<void> {
 }
 
 export const getLeads = async (companyId?: string): Promise<Lead[]> => {
-  const dbData = await fetchModuleDataFromDB<Lead[]>("leads", [], companyId)
-  const list = Array.isArray(dbData) ? filterGlobalDeletedItems(dbData) : []
+  let dbData = await fetchModuleDataFromDB<Lead[]>("leads", [], companyId)
+  let list = Array.isArray(dbData) ? dbData : []
+
+  if (list.length === 0 && companyId && companyId !== "all") {
+    const master = await fetchModuleDataFromDB<Lead[]>("leads", [], "all").catch(() => [])
+    if (Array.isArray(master) && master.length > 0) {
+      list = master
+    }
+  }
 
   // Auto-lock leads if reminder date is overdue (locks at the end of the reminder date)
   // Leads in "Won" or "Lost" stages are NEVER locked

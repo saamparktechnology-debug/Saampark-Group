@@ -43,7 +43,13 @@ export const getProjects = async (companyId?: string): Promise<Project[]> => {
     if (p && p.id) map.set(String(p.id).toLowerCase().trim(), p)
   }
   
-  return filterGlobalDeletedItems(Array.from(map.values()))
+  if (map.size === 0 && Array.isArray(allMaster) && allMaster.length > 0) {
+    for (const p of allMaster) {
+      if (p && p.id) map.set(String(p.id).toLowerCase().trim(), p)
+    }
+  }
+
+  return Array.from(map.values())
 }
 
 export const addProject = async (project: Omit<Project, "id">, companyId?: string): Promise<Project> => {

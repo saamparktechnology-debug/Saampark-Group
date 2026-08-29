@@ -163,16 +163,16 @@ export default function TasksMain() {
 
     if (isSuperAdmin || isAdmin) {
       let filtered = tasks
-      if (userComp && userComp !== "all") {
+      if (userComp && userComp !== "all" && !isSuperAdmin) {
         filtered = filtered.filter((t) => {
           const tComp = (t.companyId || (t as any).company || "tech").toLowerCase().trim()
           return tComp === userComp || (userComp === "tech" && !t.companyId)
         })
       }
-      if (targetBranch) {
+      if (targetBranch && !isSuperAdmin) {
         filtered = filtered.filter((t) => checkBranch(t))
       }
-      return filtered
+      return filtered.length > 0 ? filtered : tasks
     }
 
     const normName = (user.name || (user as any).full_name || "").toLowerCase().trim()

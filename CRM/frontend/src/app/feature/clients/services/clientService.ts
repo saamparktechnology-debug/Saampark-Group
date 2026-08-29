@@ -30,8 +30,14 @@ export function getClientTimestamp(c: ClientItem): number {
 
 /** Fetch all clients from MySQL */
 export async function getClients(companyId?: string): Promise<ClientItem[]> {
-  const data = await fetchModuleDataFromDB<ClientItem[]>("clients", [], companyId)
-  const list = filterGlobalDeletedItems<ClientItem>(Array.isArray(data) ? data : [])
+  let data = await fetchModuleDataFromDB<ClientItem[]>("clients", [], companyId)
+  let list = Array.isArray(data) ? data : []
+  if (list.length === 0 && companyId && companyId !== "all") {
+    const master = await fetchModuleDataFromDB<ClientItem[]>("clients", [], "all").catch(() => [])
+    if (Array.isArray(master) && master.length > 0) {
+      list = master
+    }
+  }
   return list.sort((a, b) => getClientTimestamp(b) - getClientTimestamp(a))
 }
 

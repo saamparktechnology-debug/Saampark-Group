@@ -1,7 +1,7 @@
 const pool = require('../config/db');
 const { successResponse, errorResponse } = require('../utils/apiResponse');
 
-// Get module data stored in MySQL database (with strict company_id isolation)
+// Get module data stored in MySQL database (with seamless company isolation & full fallback)
 const getStoreData = async (req, res, next) => {
   try {
     const { key } = req.params;
@@ -14,38 +14,53 @@ const getStoreData = async (req, res, next) => {
       if (compRows.length > 0) {
         try {
           const parsedComp = JSON.parse(compRows[0].data_json);
-          return successResponse(res, 200, 'Company-isolated module data fetched from MySQL', parsedComp);
+          if (Array.isArray(parsedComp) && parsedComp.length > 0) {
+            return successResponse(res, 200, 'Company-isolated module data fetched from MySQL', parsedComp);
+          }
         } catch {}
       }
 
-      // Initial migration fallback for default primary company 'tech'
-      if (companyId === 'tech') {
-        const [defaultRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = ?', [key]);
-        if (defaultRows.length > 0) {
-          try {
-            const parsed = JSON.parse(defaultRows[0].data_json);
-            return successResponse(res, 200, 'Primary company initial data fetched', parsed);
-          } catch {}
-        }
+      // Fallback: check base key and tech key
+      const [defaultRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = ? OR module_key = ?', [key, `${key}_tech`]);
+      if (defaultRows.length > 0) {
+        try {
+          const bestRow = defaultRows.sort((a, b) => (b.data_json?.length || 0) - (a.data_json?.length || 0))[0];
+          const parsed = JSON.parse(bestRow.data_json);
+          return successResponse(res, 200, 'Company module data fetched from MySQL', parsed);
+        } catch {}
       }
 
-      // For any other company without records, return empty array [] (BLANK!)
-      return successResponse(res, 200, 'Company module data is empty / blank', []);
+      return successResponse(res, 200, 'Company module data fetched', []);
     }
 
-    // 2. Query default / global module key (when companyId is 'all' or omitted)
-    const [rows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = ?', [key]);
+    // 2. Query all matching module keys when companyId is 'all' or omitted
+    const [rows] = await pool.execute(
+      'SELECT module_key, data_json FROM app_data WHERE module_key = ? OR module_key LIKE ?',
+      [key, `${key}_%`]
+    );
     
     if (rows.length === 0) {
       return successResponse(res, 200, 'No data found for module', []);
     }
     
-    let parsed = [];
-    try {
-      parsed = JSON.parse(rows[0].data_json);
-    } catch {}
+    const itemsMap = new Map();
+    for (const r of rows) {
+      try {
+        const parsed = JSON.parse(r.data_json);
+        if (Array.isArray(parsed)) {
+          for (const item of parsed) {
+            if (item && item.id) {
+              itemsMap.set(String(item.id).toLowerCase().trim(), item);
+            }
+          }
+        } else if (parsed && typeof parsed === 'object' && itemsMap.size === 0) {
+          return successResponse(res, 200, 'Module data fetched from MySQL', parsed);
+        }
+      } catch {}
+    }
 
-    return successResponse(res, 200, 'Module data fetched from MySQL', parsed);
+    const mergedList = Array.from(itemsMap.values());
+    return successResponse(res, 200, 'Module data fetched from MySQL', mergedList);
   } catch (err) {
     next(err);
   }

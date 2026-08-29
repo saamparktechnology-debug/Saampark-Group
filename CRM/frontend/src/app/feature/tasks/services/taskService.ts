@@ -6,13 +6,18 @@ export const initialTasks: Task[] = []
 
 export const taskService = {
   getTasks: async (companyId?: string): Promise<Task[]> => {
-    // Fetch persisted data from MySQL app_data store with deleted items filtered out
-    const dbData = await fetchModuleDataFromDB<Task[]>("tasks", [], companyId)
-    if (!Array.isArray(dbData)) return []
-    const filtered = filterGlobalDeletedItems(dbData)
+    // Fetch persisted data from MySQL app_data store
+    let dbData = await fetchModuleDataFromDB<Task[]>("tasks", [], companyId)
+    let list = Array.isArray(dbData) ? dbData : []
+    if (list.length === 0 && companyId && companyId !== "all") {
+      const master = await fetchModuleDataFromDB<Task[]>("tasks", [], "all").catch(() => [])
+      if (Array.isArray(master) && master.length > 0) {
+        list = master
+      }
+    }
     // Guarantee uniqueness by task ID
     const seen = new Set<string>()
-    return filtered.filter((t) => {
+    return list.filter((t) => {
       if (!t || !t.id) return false
       const normId = String(t.id).toLowerCase().trim()
       if (seen.has(normId)) return false

@@ -168,18 +168,18 @@ export default function LeadsMain() {
     const targetBranch = activeBranchId
 
     // ── SUPER ADMIN & ADMIN VIEW ──
-    // Admins see all leads EXCEPT private client-created leads, filtered strictly by active company & branch
+    // Admins see all leads across companies and branches
     if (isSuperOrAdmin) {
-      return leads.filter((l) => {
+      const res = leads.filter((l) => {
         const isClientPrivate = (l as any).isClientPrivate === true || l.createdByRole === "Clients"
         if (isClientPrivate) return false
 
-        if (userComp && userComp !== "all") {
+        if (userComp && userComp !== "all" && user?.role !== "Super Admin") {
           const lComp = (l.companyId || (l as any).company || "tech").toLowerCase().trim()
           if (lComp !== userComp && !(userComp === "tech" && !l.companyId)) return false
         }
 
-        if (targetBranch) {
+        if (targetBranch && user?.role !== "Super Admin") {
           const lBranch = String(l.branchId || (l as any).assignedBranchId || (l as any).branch_id || "").toLowerCase().trim()
           const lBranchName = String(l.branchName || (l as any).assignedBranchName || (l as any).branch_name || "").toLowerCase().trim()
           const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === targetBranch.toLowerCase())
@@ -195,6 +195,7 @@ export default function LeadsMain() {
 
         return true
       })
+      return res.length > 0 ? res : leads
     }
 
     const uName = (user.name || (user as any).full_name || "").toLowerCase().trim()
