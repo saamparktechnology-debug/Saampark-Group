@@ -40,7 +40,9 @@ export default function TasksMain() {
   const fetchTasks = React.useCallback(async (showLoading = false) => {
     if (showLoading) setIsLoading(true)
     try {
-      const targetComp = activeCompanyId || user?.companyId || "tech"
+      // Read fresh from store — avoids stale closure on company switch
+      const { activeCompanyId: freshCompanyId, user: freshUser } = useAuthStore.getState()
+      const targetComp = freshCompanyId || freshUser?.companyId || "tech"
       try {
         const { getLeads } = await import("@/app/feature/leads/services/leadService")
         await getLeads(targetComp)
@@ -52,7 +54,7 @@ export default function TasksMain() {
     } finally {
       if (showLoading) setIsLoading(false)
     }
-  }, [activeCompanyId, user?.companyId])
+  }, [])
 
   React.useEffect(() => {
     fetchTasks(true)

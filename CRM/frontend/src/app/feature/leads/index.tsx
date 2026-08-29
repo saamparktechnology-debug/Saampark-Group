@@ -68,10 +68,12 @@ export default function LeadsMain() {
   const [isLoading, setIsLoading] = React.useState(true)
 
   React.useEffect(() => {
-    const targetComp = activeCompanyId || user?.companyId || "tech"
     const fetchFreshLeads = async (showLoading = false) => {
       if (showLoading) setIsLoading(true)
       try {
+        // Read fresh from store at call time — avoids stale closure on company switch
+        const { activeCompanyId: freshCompanyId, user: freshUser } = useAuthStore.getState()
+        const targetComp = freshCompanyId || freshUser?.companyId || "tech"
         const data = await getLeads(targetComp)
         if (Array.isArray(data)) {
           setLeads(data)
@@ -94,7 +96,7 @@ export default function LeadsMain() {
       window.removeEventListener("saampark_branch_switched", storageHandler)
       window.removeEventListener("saampark_data_synced", storageHandler)
     }
-  }, [activeCompanyId, user?.companyId])
+  }, [])
 
   const handleLeadAdded = (newLead: Lead) => {
     setLeads((prev) => [newLead, ...prev])

@@ -40,14 +40,17 @@ export default function ProjectsMain() {
   const [isLoading, setIsLoading] = React.useState(true)
 
   React.useEffect(() => {
-    let targetComp = activeCompanyId || user?.companyId || "tech"
-    if (!isSuperAdmin && isAdmin) {
-      targetComp = user?.companyId || activeCompanyId || "tech"
-    }
-
     const fetchFreshProjects = async (showLoading = false) => {
       if (showLoading) setIsLoading(true)
       try {
+        // Read fresh from store — avoids stale closure on company switch
+        const { activeCompanyId: freshCompanyId, user: freshUser } = useAuthStore.getState()
+        const freshIsSuperAdmin = freshUser?.role === "Super Admin"
+        const freshIsAdmin = freshUser?.role === "Admin"
+        let targetComp = freshCompanyId || freshUser?.companyId || "tech"
+        if (!freshIsSuperAdmin && freshIsAdmin) {
+          targetComp = freshUser?.companyId || freshCompanyId || "tech"
+        }
         const data = await getProjects(targetComp)
         setProjects(data || [])
         if (data && data.length > 0 && !selectedProject) {
@@ -73,7 +76,7 @@ export default function ProjectsMain() {
       window.removeEventListener("saampark_projects_updated", handleReload)
       window.removeEventListener("saampark_data_synced", handleReload)
     }
-  }, [activeCompanyId, activeBranchId, user?.companyId, isSuperAdmin, isAdmin])
+  }, [])
 
   const visibleProjects = React.useMemo(() => {
     if (!user) return []

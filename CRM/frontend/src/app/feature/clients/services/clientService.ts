@@ -28,10 +28,20 @@ export function getClientTimestamp(c: ClientItem): number {
 
 // ── Clients ─────────────────────────────────────────────────────────────────
 
-/** Fetch all clients from MySQL across all keys */
+/** Fetch all clients from MySQL for the given company scope */
 export async function getClients(companyId?: string): Promise<ClientItem[]> {
+  // When a specific company is requested, fetch only that scope
+  // (avoid cross-company data leakage by NOT merging other company scopes)
+  const scopeId = companyId || "all"
+  
+  if (scopeId !== "all") {
+    const data = await fetchModuleDataFromDB<ClientItem[]>("clients", [], scopeId).catch(() => [])
+    return Array.isArray(data) ? data.sort((a, b) => getClientTimestamp(b) - getClientTimestamp(a)) : []
+  }
+
+  // For "all" scope (Super Admin): merge across all company scopes
   const [dbData, techData] = await Promise.all([
-    fetchModuleDataFromDB<ClientItem[]>("clients", [], companyId || "all").catch(() => []),
+    fetchModuleDataFromDB<ClientItem[]>("clients", [], "all").catch(() => []),
     fetchModuleDataFromDB<ClientItem[]>("clients", [], "tech").catch(() => [])
   ])
   const map = new Map<string, ClientItem>()

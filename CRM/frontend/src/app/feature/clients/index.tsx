@@ -68,10 +68,12 @@ export default function ClientsMain() {
   const loadClientData = React.useCallback(async (showLoading = false) => {
     if (showLoading) setIsLoading(true)
     try {
-      const targetComp = (activeCompanyId || user?.companyId || "").toLowerCase().trim()
-      const targetBranch = activeBranchId
+      // Always read fresh from store — avoids stale closure after company/branch switch
+      const { activeCompanyId: freshCompanyId, activeBranchId: freshBranchId, branches: freshBranches, user: freshUser } = useAuthStore.getState()
+      const targetComp = (freshCompanyId || freshUser?.companyId || "").toLowerCase().trim()
+      const targetBranch = freshBranchId
 
-      const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
+      const targetBranchObj = freshBranches.find(b => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
       const targetBranchId = String(targetBranchObj?.id || targetBranch || "").toLowerCase().trim()
       const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
 
@@ -296,7 +298,7 @@ export default function ClientsMain() {
     } finally {
       if (showLoading) setIsLoading(false)
     }
-  }, [activeCompanyId, user?.companyId, activeBranchId, branches])
+  }, [])
 
   React.useEffect(() => {
     loadClientData(true)
