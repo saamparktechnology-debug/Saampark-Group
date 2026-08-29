@@ -155,26 +155,13 @@ export function getCompanyFullName(company?: Partial<Company> | null): string {
   const rawSubtitle = (company.subtitle || "").trim()
   const rawName = (company.name || "").trim()
 
-  // 1. If division is present, format as Brand + Division
+  // 1. If division is explicitly set, ALWAYS format as Brand + Division
   if (rawDivision) {
-    const brand = rawBrand || (rawName ? rawName.split(" ")[0] : "SAAMPARK")
-    if (rawName && rawName.toLowerCase().includes(rawDivision.toLowerCase())) {
-      return rawName
-    }
+    const brand = rawBrand || "SAAMPARK"
     return `${brand} ${rawDivision}`
   }
 
-  // 2. If explicit name has multiple words or full name beyond just "SAAMPARK"
-  if (rawName && rawName.toLowerCase() !== "saampark" && rawName.toLowerCase() !== "saampark group") {
-    return rawName
-  }
-
-  // 3. If brand is distinctive
-  if (rawBrand && rawBrand.toLowerCase() !== "saampark" && rawBrand.toLowerCase() !== "saampark group") {
-    return rawBrand
-  }
-
-  // 4. If subtitle is present (e.g. user entered "CONSULTANCY" or "Consultancy Services" in legal suffix/tagline)
+  // 2. If subtitle is present and division is empty
   if (rawSubtitle) {
     const brand = rawBrand || "SAAMPARK"
     if (rawSubtitle.toLowerCase().startsWith("and ") || rawSubtitle.toLowerCase().startsWith("& ")) {
@@ -187,6 +174,16 @@ export function getCompanyFullName(company?: Partial<Company> | null): string {
     if (cleanSub) {
       return `${brand} ${cleanSub}`
     }
+  }
+
+  // 3. If explicit name has multiple words or full name beyond just "SAAMPARK"
+  if (rawName && rawName.toLowerCase() !== "saampark" && rawName.toLowerCase() !== "saampark group") {
+    return rawName
+  }
+
+  // 4. If brand is distinctive
+  if (rawBrand && rawBrand.toLowerCase() !== "saampark" && rawBrand.toLowerCase() !== "saampark group") {
+    return rawBrand
   }
 
   // 5. Fallback inspection based on slug / id
@@ -375,6 +372,9 @@ export const useAuthStore = create<AuthState>()(
               map.set(key, {
                 ...existing,
                 ...c,
+                brand_name: existing?.brand_name || c.brand_name || c.name,
+                division_name: existing?.division_name !== undefined ? existing.division_name : (c.division_name || ''),
+                subtitle: existing?.subtitle !== undefined ? existing.subtitle : (c.subtitle || ''),
                 name: getCompanyFullName({ ...existing, ...c }),
               })
             }
@@ -389,23 +389,29 @@ export const useAuthStore = create<AuthState>()(
                 map.set(key, {
                   ...existing,
                   ...c,
+                  brand_name: c.brand_name || existing?.brand_name || 'SAAMPARK',
+                  division_name: c.division_name !== undefined ? c.division_name : (existing?.division_name || ''),
+                  subtitle: c.subtitle !== undefined ? c.subtitle : (existing?.subtitle || ''),
                   name: getCompanyFullName({ ...existing, ...c }),
                 })
               }
             })
           }
 
-          // 4. Also preserve any companies currently in state (so newly added companies are never dropped)
+          // 4. Also preserve any companies currently in state (so newly added or edited companies are never dropped)
           const currentStoreCompanies = get().companies || []
           currentStoreCompanies.forEach(c => {
             if (!isGlobalItemDeleted(c.id, deletedIds) && !isGlobalItemDeleted(c.slug || '', deletedIds)) {
               const key = String(c.slug || c.id).toLowerCase()
-              if (!map.has(key)) {
-                map.set(key, {
-                  ...c,
-                  name: getCompanyFullName(c),
-                })
-              }
+              const existing = map.get(key) || map.get(String(c.id).toLowerCase())
+              map.set(key, {
+                ...existing,
+                ...c,
+                brand_name: c.brand_name || existing?.brand_name || 'SAAMPARK',
+                division_name: c.division_name !== undefined ? c.division_name : (existing?.division_name || ''),
+                subtitle: c.subtitle !== undefined ? c.subtitle : (existing?.subtitle || ''),
+                name: getCompanyFullName({ ...existing, ...c }),
+              })
             }
           })
 
@@ -602,13 +608,21 @@ export const useAuthStore = create<AuthState>()(
           throw new Error('Only Super Admin can modify company details.')
         }
 
-        const compIndex = companies.findIndex(c => c.id === companyId || c.slug === companyId)
+        const compIndex = companies.findIndex(c => 
+          String(c.id).toLowerCase() === String(companyId).toLowerCase() || 
+          String(c.slug || '').toLowerCase() === String(companyId).toLowerCase() ||
+          isMatchingCompany(c, companyId)
+        )
         if (compIndex === -1) return null
 
         const target = companies[compIndex]
         const merged: Company = {
           ...target,
           ...updates,
+          brand_name: updates.brand_name !== undefined ? updates.brand_name : (target.brand_name || 'SAAMPARK'),
+          division_name: updates.division_name !== undefined ? updates.division_name : (target.division_name || ''),
+          subtitle: updates.subtitle !== undefined ? updates.subtitle : (target.subtitle || ''),
+          name: updates.name || getCompanyFullName({ ...target, ...updates }),
         }
 
         // Try backend API update if available
@@ -626,6 +640,8 @@ export const useAuthStore = create<AuthState>()(
         updated[compIndex] = merged
         set({ companies: updated })
 
+        invalidateModuleCache('companies')
+
         // Persist to MySQL module data store
         await saveModuleDataToDB('companies', updated, 'all').catch(() => {})
 
@@ -633,6 +649,7 @@ export const useAuthStore = create<AuthState>()(
           window.dispatchEvent(new Event('storage'))
           window.dispatchEvent(new CustomEvent('saampark_data_synced'))
           window.dispatchEvent(new CustomEvent('saampark_company_updated', { detail: merged }))
+          window.dispatchEvent(new CustomEvent('saampark_company_switched', { detail: { companyId: merged.id } }))
         }
 
         return merged
