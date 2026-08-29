@@ -8,7 +8,7 @@ import {
   Globe, CreditCard, FileText, QrCode, Sparkles, Lock, UploadCloud,
   Image as ImageIcon, CheckCircle2
 } from "lucide-react"
-import { useAuthStore, Company, Branch, SubBranch } from "@/store/useAuthStore"
+import { useAuthStore, Company, Branch, SubBranch, getCompanyFullName, getCompanyLogoUrl, isMatchingCompany } from "@/store/useAuthStore"
 import { getUsers } from "@/app/feature/users/services/userService"
 import { executeWithFeedback, useActionFeedbackStore } from "@/store/useActionFeedbackStore"
 
@@ -41,7 +41,7 @@ export function CompanyBranchSettings() {
   const visibleCompanies = React.useMemo(() => {
     if (isSuperAdmin) return companies
     const adminCompanyIds = user?.companyIds || (user?.companyId ? [user.companyId] : ["tech"])
-    return companies.filter((c) => adminCompanyIds.includes(c.id) || adminCompanyIds.includes(c.slug || ""))
+    return companies.filter((c) => adminCompanyIds.some(id => isMatchingCompany(c, id)))
   }, [isSuperAdmin, companies, user])
 
   const [expandedCompanyIds, setExpandedCompanyIds] = React.useState<string[]>([])
@@ -344,7 +344,7 @@ export function CompanyBranchSettings() {
       return
     }
 
-    const finalName = companyName.trim() || [companyBrandName.trim(), companyDivisionName.trim()].filter(Boolean).join(" ")
+    const finalName = [companyBrandName.trim(), companyDivisionName.trim()].filter(Boolean).join(" ") || companyName.trim() || "SAAMPARK"
     if (!finalName) return
 
     const slug = companySlug.trim() || finalName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
@@ -733,8 +733,9 @@ export function CompanyBranchSettings() {
             )
           })
           const isExpanded = expandedCompanyIds.includes(company.id)
-          const brandPart = company.brand_name || (company.name ? company.name.split(" ")[0] : "SAAMPARK")
-          const divisionPart = company.division_name || (company.name ? company.name.split(" ").slice(1).join(" ") : "")
+          const compFullName = getCompanyFullName(company)
+          const compLogoUrl = getCompanyLogoUrl(company)
+          const isActive = isMatchingCompany(company, activeCompanyId)
 
           return (
             <div
@@ -751,8 +752,8 @@ export function CompanyBranchSettings() {
                     {isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
                   </button>
                   <div className="w-12 h-12 rounded-2xl bg-surface border border-border shadow-xs flex items-center justify-center text-2xl shrink-0 overflow-hidden">
-                    {company.logo_url ? (
-                      <img src={company.logo_url} alt={company.name} className="w-9 h-9 object-contain" />
+                    {compLogoUrl ? (
+                      <img src={compLogoUrl} alt={compFullName} className="w-9 h-9 object-contain" />
                     ) : (
                       company.logo || "🏢"
                     )}
@@ -760,8 +761,7 @@ export function CompanyBranchSettings() {
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="text-base font-bold text-foreground">
-                        <span className="text-primary font-black">{brandPart}</span>
-                        {divisionPart && <span className="ml-1.5 font-extrabold">{divisionPart}</span>}
+                        <span className="text-primary font-black">{compFullName}</span>
                       </h3>
                       {company.subtitle && (
                         <span className="text-xs font-semibold text-muted-foreground hidden md:inline">
@@ -790,25 +790,22 @@ export function CompanyBranchSettings() {
                 {/* Company Action Buttons */}
                 <div className="flex items-center gap-2 ml-auto flex-wrap">
                   {/* Direct Switch Company Button / Active Badge */}
-                  {(() => {
-                    const isActive = activeCompanyId === company.id || activeCompanyId === company.slug
-                    return isActive ? (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-bold shadow-2xs">
-                        <CheckCircle2 size={13} />
-                        <span>Active Workspace</span>
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => switchCompany(company.id)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-bold transition-all shadow-xs cursor-pointer"
-                        title={`Switch active CRM workspace to ${company.name}`}
-                      >
-                        <Building2 size={13} />
-                        <span>Switch to this Company</span>
-                      </button>
-                    )
-                  })()}
+                  {isActive ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-bold shadow-2xs">
+                      <CheckCircle2 size={13} />
+                      <span>Active Workspace</span>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => switchCompany(company.id)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-bold transition-all shadow-xs cursor-pointer"
+                      title={`Switch active CRM workspace to ${compFullName}`}
+                    >
+                      <Building2 size={13} />
+                      <span>Switch to this Company</span>
+                    </button>
+                  )}
 
                   {/* Super Admin Edit Company & Invoice Details Button */}
                   {isSuperAdmin ? (

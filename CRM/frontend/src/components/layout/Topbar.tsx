@@ -12,7 +12,7 @@ import Link from "next/link"
 
 import { Button } from "../ui/Button"
 import { useUIStore } from "@/store/useUIStore"
-import { useAuthStore, COMPANIES, getCompanyLogoUrl } from "@/store/useAuthStore"
+import { useAuthStore, COMPANIES, getCompanyLogoUrl, getCompanyFullName, isMatchingCompany } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 
 // Quick-Add Dropdown options with module keys
@@ -220,16 +220,16 @@ export function Topbar() {
       ? user.companyIds
       : (user.companyId ? [user.companyId] : ['tech'])
     return companies.filter(c => {
-      const cId = String(c.id).toLowerCase().trim()
-      const cSlug = String(c.slug || '').toLowerCase().trim()
-      return userCompIds.some(id => {
-        const norm = String(id).toLowerCase().trim()
-        return norm === cId || norm === cSlug
-      })
+      return userCompIds.some(id => isMatchingCompany(c, id))
     })
   }, [user.companyIds, user.companyId, user.role, companies])
 
-  const activeCompany = companies.find(c => c.id === activeCompanyId || c.slug === activeCompanyId) || allowedCompanies[0] || companies[0]
+  const activeCompany = companies.find(c => isMatchingCompany(c, activeCompanyId)) ||
+    companies.find(c => isMatchingCompany(c, user.companyId)) ||
+    allowedCompanies[0] ||
+    companies[0]
+
+  const activeCompanyName = getCompanyFullName(activeCompany)
 
   return (
     <header
@@ -287,21 +287,21 @@ export function Topbar() {
                   title="Click to switch active company or branch"
                 >
                   {getCompanyLogoUrl(activeCompany) ? (
-                    <img src={getCompanyLogoUrl(activeCompany)!} alt={activeCompany.name} className="w-5 h-5 rounded-full object-contain shrink-0 bg-white/10" />
+                    <img src={getCompanyLogoUrl(activeCompany)!} alt={activeCompanyName} className="w-5 h-5 rounded-full object-contain shrink-0 bg-white/10" />
                   ) : (
                     <span className="text-sm">{activeCompany.logo || "🏢"}</span>
                   )}
-                  <span className="truncate max-w-[140px] sm:max-w-[180px]">{activeCompany.name}</span>
+                  <span className="truncate max-w-[160px] sm:max-w-[220px] font-bold">{activeCompanyName}</span>
                   <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-bold">Switch ▾</span>
                 </button>
               ) : (
                 <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-surface-pressed border border-border rounded-full text-xs font-medium text-muted-foreground">
                   {getCompanyLogoUrl(activeCompany) ? (
-                    <img src={getCompanyLogoUrl(activeCompany)!} alt={activeCompany.name} className="w-4 h-4 rounded-full object-contain shrink-0 bg-white/10" />
+                    <img src={getCompanyLogoUrl(activeCompany)!} alt={activeCompanyName} className="w-4 h-4 rounded-full object-contain shrink-0 bg-white/10" />
                   ) : (
                     <span className="text-sm">{activeCompany.logo || "🏢"}</span>
                   )}
-                  <span className="truncate max-w-[160px]">{activeCompany.name}</span>
+                  <span className="truncate max-w-[180px] font-bold">{activeCompanyName}</span>
                 </div>
               )}
 
@@ -339,9 +339,10 @@ export function Topbar() {
                   </p>
                   <div className="space-y-1 px-2 max-h-72 overflow-y-auto">
                     {allowedCompanies.map((comp) => {
-                      const isActive = activeCompanyId === comp.id || activeCompanyId === comp.slug
-                      const compBranches = branches.filter(b => b.companyId === comp.id || b.companyId === comp.slug)
+                      const isCurrentActive = isMatchingCompany(comp, activeCompanyId || activeCompany?.id || activeCompany?.slug)
+                      const compBranches = branches.filter(b => isMatchingCompany(comp, b.companyId))
                       const compLogoUrl = getCompanyLogoUrl(comp)
+                      const compFullName = getCompanyFullName(comp)
 
                       return (
                         <div key={comp.id} className="space-y-1">
@@ -349,24 +350,27 @@ export function Topbar() {
                             type="button"
                             onClick={() => { switchCompany(comp.id); switchBranch(null); setShowCompanyMenu(false) }}
                             className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-xl transition-all cursor-pointer ${
-                              isActive
+                              isCurrentActive
                                 ? "bg-primary text-primary-foreground font-bold shadow-xs"
                                 : "text-muted-foreground hover:bg-surface-hover hover:text-foreground"
                             }`}
                           >
                             <div className="flex items-center gap-2.5 truncate">
                               {compLogoUrl ? (
-                                <img src={compLogoUrl} alt={comp.name} className="w-5 h-5 rounded-full object-contain shrink-0 bg-white/20" />
+                                <img src={compLogoUrl} alt={compFullName} className="w-5 h-5 rounded-full object-contain shrink-0 bg-white/20" />
                               ) : (
                                 <span className="text-base">{comp.logo || "🏢"}</span>
                               )}
-                              <span className="truncate">{comp.name}</span>
+                              <div className="truncate text-left">
+                                <span className="block truncate font-bold text-xs">{compFullName}</span>
+                                {comp.subtitle && <span className="block text-[9.5px] opacity-75 truncate">{comp.subtitle}</span>}
+                              </div>
                             </div>
-                            {isActive && <Check size={14} className="shrink-0" />}
+                            {isCurrentActive && <Check size={14} className="shrink-0 ml-2" />}
                           </button>
 
                           {/* Branches for this company */}
-                          {isActive && compBranches.length > 0 && (
+                          {isCurrentActive && compBranches.length > 0 && (
                             <div className="pl-6 pr-2 py-1 space-y-1 border-l-2 border-primary/20 ml-4 my-1">
                               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                                 Branches
@@ -669,21 +673,31 @@ export function Topbar() {
                   <div className="border-t border-border/50 py-2 shrink-0">
                     <p className="px-4 text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Switch Company</p>
                     <div className="max-h-40 overflow-y-auto hide-scrollbar space-y-0.5 px-2">
-                      {allowedCompanies.map(comp => (
-                        <button
-                          key={comp.id}
-                          onClick={() => { switchCompany(comp.id); setShowProfileMenu(false) }}
-                          className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-lg transition-colors text-left cursor-pointer ${
-                            activeCompanyId === comp.id || activeCompanyId === comp.slug ? "bg-primary/10 text-primary font-bold" : "text-muted-foreground hover:bg-surface-hover hover:text-foreground"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5 truncate">
-                            <span className="text-base">{comp.logo || "🏢"}</span>
-                            <span className="truncate">{comp.name}</span>
-                          </div>
-                          {(activeCompanyId === comp.id || activeCompanyId === comp.slug) && <Check size={12} />}
-                        </button>
-                      ))}
+                      {allowedCompanies.map(comp => {
+                        const isCurrentActive = isMatchingCompany(comp, activeCompanyId || activeCompany?.id || activeCompany?.slug)
+                        const compFullName = getCompanyFullName(comp)
+                        const compLogoUrl = getCompanyLogoUrl(comp)
+
+                        return (
+                          <button
+                            key={comp.id}
+                            onClick={() => { switchCompany(comp.id); setShowProfileMenu(false) }}
+                            className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-lg transition-colors text-left cursor-pointer ${
+                              isCurrentActive ? "bg-primary/10 text-primary font-bold" : "text-muted-foreground hover:bg-surface-hover hover:text-foreground"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 truncate">
+                              {compLogoUrl ? (
+                                <img src={compLogoUrl} alt={compFullName} className="w-4 h-4 rounded-full object-contain shrink-0" />
+                              ) : (
+                                <span className="text-sm">{comp.logo || "🏢"}</span>
+                              )}
+                              <span className="truncate">{compFullName}</span>
+                            </div>
+                            {isCurrentActive && <Check size={12} />}
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
                 )}

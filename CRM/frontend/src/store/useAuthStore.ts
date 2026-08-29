@@ -147,6 +147,56 @@ export function getCompanyLogoUrl(company?: Partial<Company> | null): string | n
   return null
 }
 
+export function getCompanyFullName(company?: Partial<Company> | null): string {
+  if (!company) return "SAAMPARK"
+  const rawBrand = (company.brand_name || "").trim()
+  const rawDivision = (company.division_name || "").trim()
+  const rawName = (company.name || "").trim()
+
+  // 1. If division is present, format as Brand + Division
+  if (rawDivision) {
+    const brand = rawBrand || (rawName ? rawName.split(" ")[0] : "SAAMPARK")
+    if (rawName && rawName.toLowerCase().includes(rawDivision.toLowerCase())) {
+      return rawName
+    }
+    return `${brand} ${rawDivision}`
+  }
+
+  // 2. If explicit name has multiple words or full name
+  if (rawName && rawName.toLowerCase() !== "saampark") {
+    return rawName
+  }
+
+  // 3. If brand is distinctive
+  if (rawBrand && rawBrand.toLowerCase() !== "saampark") {
+    return rawBrand
+  }
+
+  // 4. Fallback inspection based on slug / id
+  const slugOrId = String(company.slug || company.id || "").toLowerCase()
+  if (slugOrId === "tech" || slugOrId.includes("tech")) return "SAAMPARK TECHNOLOGY"
+  if (slugOrId === "digital" || slugOrId.includes("digital")) return "SAAMPARK DIGITAL MARKETING"
+  if (slugOrId.includes("consult")) return "SAAMPARK CONSULTANCY"
+  if (slugOrId.includes("print")) return "SAAMPARK PRINT SPACE"
+  if (slugOrId.includes("media")) return "SAAMPARK MEDIA"
+
+  return rawName || rawBrand || "SAAMPARK"
+}
+
+export function isMatchingCompany(
+  comp: Partial<Company> | null | undefined, 
+  targetIdOrSlug: string | number | null | undefined
+): boolean {
+  if (!comp || targetIdOrSlug === null || targetIdOrSlug === undefined) return false
+  const target = String(targetIdOrSlug).toLowerCase().trim()
+  if (!target) return false
+  return (
+    String(comp.id || "").toLowerCase().trim() === target ||
+    String(comp.slug || "").toLowerCase().trim() === target ||
+    String(comp.name || "").toLowerCase().trim() === target
+  )
+}
+
 export const DEFAULT_COMPANIES: Company[] = [
   { 
     id: 'tech', 
@@ -290,30 +340,49 @@ export const useAuthStore = create<AuthState>()(
 
           const map = new Map<string, Company>()
 
-          // Only add DEFAULT_COMPANIES if DB is completely empty and item was NEVER deleted
-          if ((!Array.isArray(dbCompanies) || dbCompanies.length === 0) && apiList.length === 0) {
-            DEFAULT_COMPANIES.forEach(c => {
-              if (!isGlobalItemDeleted(c.id, deletedIds) && !isGlobalItemDeleted(c.slug || '', deletedIds)) {
-                map.set(c.id, c)
-              }
-            })
-          }
-
-          apiList.forEach(c => {
+          // 1. First add DEFAULT_COMPANIES as baseline
+          DEFAULT_COMPANIES.forEach(c => {
             if (!isGlobalItemDeleted(c.id, deletedIds) && !isGlobalItemDeleted(c.slug || '', deletedIds)) {
-              map.set(c.id, c)
+              map.set(String(c.id).toLowerCase(), {
+                ...c,
+                name: getCompanyFullName(c),
+              })
             }
           })
 
+          // 2. Overlay API list
+          apiList.forEach(c => {
+            if (!isGlobalItemDeleted(c.id, deletedIds) && !isGlobalItemDeleted(c.slug || '', deletedIds)) {
+              const key = String(c.slug || c.id).toLowerCase()
+              const existing = map.get(key) || map.get(String(c.id).toLowerCase())
+              map.set(key, {
+                ...existing,
+                ...c,
+                name: getCompanyFullName({ ...existing, ...c }),
+              })
+            }
+          })
+
+          // 3. Overlay DB module store (user created/updated companies)
           if (Array.isArray(dbCompanies) && dbCompanies.length > 0) {
             dbCompanies.forEach(c => {
               if (!isGlobalItemDeleted(c.id, deletedIds) && !isGlobalItemDeleted(c.slug || '', deletedIds)) {
-                map.set(c.id, c)
+                const key = String(c.slug || c.id).toLowerCase()
+                const existing = map.get(key) || map.get(String(c.id).toLowerCase())
+                map.set(key, {
+                  ...existing,
+                  ...c,
+                  name: getCompanyFullName({ ...existing, ...c }),
+                })
               }
             })
           }
 
-          const combined = Array.from(map.values())
+          const combined = Array.from(map.values()).map(c => ({
+            ...c,
+            name: getCompanyFullName(c),
+          }))
+
           if (combined.length > 0) {
             set({ companies: combined })
             return combined
@@ -405,7 +474,7 @@ export const useAuthStore = create<AuthState>()(
 
           const created: Company = {
             id: compSlug,
-            name: newComp.name || 'New Company',
+            name: getCompanyFullName(newComp),
             brand_name: newComp.brand_name || 'SAAMPARK',
             division_name: newComp.division_name || '',
             subtitle: newComp.subtitle || '',
@@ -443,7 +512,7 @@ export const useAuthStore = create<AuthState>()(
           const current = get().companies
           const updated = [...current.filter(c => c.id !== created.id && c.slug !== created.slug), created]
           
-          // Ensure Super Admin and creator has the newly created company in their companyIds
+          // Ensure Super Admin and creator has the newly created company in their companyIds and immediately activate it
           const currentUser = get().user
           let updatedUser = currentUser
           if (currentUser) {
@@ -451,12 +520,16 @@ export const useAuthStore = create<AuthState>()(
             const newCompIds = Array.from(new Set([...currentCompIds, created.id, created.slug].filter(Boolean))) as string[]
             updatedUser = {
               ...currentUser,
+              companyId: created.id as any,
               companyIds: newCompIds,
             }
           }
 
           set({ 
             companies: updated,
+            activeCompanyId: created.id,
+            activeBranchId: null,
+            activeSubBranchId: null,
             user: updatedUser,
           })
 
