@@ -37,10 +37,11 @@ export interface ChatContact {
   lastTime?: string
   unreadCount?: number
   companyName?: string
+  branchName?: string
 }
 
 export default function MessagesMain() {
-  const { user, activeCompanyId } = useAuthStore()
+  const { user, activeCompanyId, branches } = useAuthStore()
   const { canPerformAction, isModuleAllowed } = usePermissionStore()
 
   const currentUserEmail = (user?.email || "").toLowerCase().trim()
@@ -160,6 +161,10 @@ export default function MessagesMain() {
           })
         }
 
+        const resolveBranchName = (entity: any) => {
+          return entity.branchName || (entity as any).branch || (entity as any).branch_name || (entity.branchId ? branches.find(b => b.id === entity.branchId)?.name : "") || (entity.role === "Super Admin" ? "Global HQ" : "Main Office")
+        }
+
         // ── Process System Users Filtered by Active Company ───────────────
         userList.filter(userBelongsToCompany).forEach((u: any) => {
           const uEmail = (u.email || "").toLowerCase().trim()
@@ -167,6 +172,7 @@ export default function MessagesMain() {
           if (!uEmail || uEmail === currentUserEmail) return
 
           const uRole = u.role || "Teams"
+          const uBranch = resolveBranchName(u)
 
           // Super Admin can message everyone in the active company
           if (isSuperAdmin) {
@@ -176,6 +182,7 @@ export default function MessagesMain() {
               email: uEmail,
               role: uRole,
               companyName: u.companyName || "SAAMPARK Group",
+              branchName: uBranch,
               avatar: u.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${u.name || "user"}`,
               status: "Online",
             })
@@ -190,6 +197,7 @@ export default function MessagesMain() {
               email: uEmail,
               role: uRole,
               companyName: u.companyName || "SAAMPARK Group",
+              branchName: uBranch,
               avatar: u.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${u.name || "user"}`,
               status: "Online",
             })
@@ -205,6 +213,7 @@ export default function MessagesMain() {
                 email: uEmail,
                 role: uRole,
                 companyName: u.companyName || "SAAMPARK",
+                branchName: uBranch,
                 avatar: u.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${u.name || "user"}`,
                 status: "Online",
               })
@@ -217,6 +226,7 @@ export default function MessagesMain() {
                   email: uEmail,
                   role: "Clients",
                   companyName: u.companyName || "Client Account",
+                  branchName: uBranch,
                   avatar: u.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${u.name || "client"}`,
                   status: "Online",
                 })
@@ -234,6 +244,7 @@ export default function MessagesMain() {
                 email: uEmail,
                 role: uRole,
                 companyName: u.companyName || "Management",
+                branchName: uBranch,
                 avatar: u.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${u.name || "admin"}`,
                 status: "Online",
               })
@@ -245,6 +256,7 @@ export default function MessagesMain() {
                   email: uEmail,
                   role: "Teams",
                   companyName: u.companyName || "SAAMPARK Team",
+                  branchName: uBranch,
                   avatar: u.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${u.name || "team"}`,
                   status: "Online",
                 })
@@ -258,6 +270,7 @@ export default function MessagesMain() {
           const cEmail = (c.email || "").toLowerCase().trim()
           const cName = (c.name || "").toLowerCase().trim()
           if (!cEmail || cEmail === currentUserEmail) return
+          const cBranch = resolveBranchName(c)
 
           // Super Admin and Company Admin can message all clients of this company
           if (isSuperAdmin || isCompanyAdmin) {
@@ -268,6 +281,7 @@ export default function MessagesMain() {
                 email: cEmail,
                 role: "Clients",
                 companyName: c.name || "Client Account",
+                branchName: cBranch,
                 avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${c.name || "client"}`,
                 status: "Online",
               })
@@ -282,6 +296,7 @@ export default function MessagesMain() {
                   email: cEmail,
                   role: "Clients",
                   companyName: c.name || "Client Account",
+                  branchName: cBranch,
                   avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${c.name || "client"}`,
                   status: "Online",
                 })
@@ -552,11 +567,18 @@ export default function MessagesMain() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1">
                         <span className="font-semibold text-xs text-zinc-900 dark:text-zinc-100 truncate">{c.name}</span>
-                        <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase ${roleColor}`}>
+                        <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase shrink-0 ${roleColor}`}>
                           {c.role}
                         </span>
                       </div>
-                      <p className="text-[11px] text-zinc-400 truncate mt-0.5">{c.companyName || c.email}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5 text-[10.5px] text-zinc-400 truncate">
+                        {c.branchName && (
+                          <span className="px-1.5 py-0.2 rounded bg-zinc-200/80 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-semibold text-[8.5px] shrink-0">
+                            🏢 {c.branchName}
+                          </span>
+                        )}
+                        <span className="truncate">{c.companyName || c.email}</span>
+                      </div>
                     </div>
                   </button>
                 )
@@ -589,13 +611,27 @@ export default function MessagesMain() {
                     <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white dark:border-zinc-900" />
                   </div>
                   <div className="min-w-0">
-                    <h2 className="font-bold text-xs sm:text-sm text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5 truncate">
+                    <h2 className="font-bold text-xs sm:text-sm text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5 truncate flex-wrap">
                       <span className="truncate">{selectedContact.name}</span>
-                      <span className="text-[9px] font-semibold px-1.5 py-0.2 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 shrink-0">
-                        {selectedContact.role}
-                      </span>
+                      {(() => {
+                        let headerRoleColor = "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
+                        if (selectedContact.role === "Super Admin" || selectedContact.role === "Admin") headerRoleColor = "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300"
+                        if (selectedContact.role === "Clients") headerRoleColor = "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
+                        if (selectedContact.role === "Teams") headerRoleColor = "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+
+                        return (
+                          <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded uppercase shrink-0 ${headerRoleColor}`}>
+                            {selectedContact.role}
+                          </span>
+                        )
+                      })()}
+                      {selectedContact.branchName && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 shrink-0 border border-zinc-200/60 dark:border-zinc-700/60">
+                          🏢 {selectedContact.branchName}
+                        </span>
+                      )}
                     </h2>
-                    <p className="text-[10.5px] text-zinc-400 truncate">{selectedContact.companyName || selectedContact.email}</p>
+                    <p className="text-[10.5px] text-zinc-400 truncate mt-0.5">{selectedContact.companyName || selectedContact.email}</p>
                   </div>
                 </div>
 
