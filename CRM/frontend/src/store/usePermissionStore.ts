@@ -10,6 +10,7 @@ export const ALL_NAV_MODULES = [
   'Tasks',
   'Leads',
   'Subscriptions',
+  'EMI',
   'Sales',
   'Estimates',
   'Notes',
@@ -31,6 +32,7 @@ export const CONFIGURABLE_MODULES = [
   'Tasks',
   'Leads',
   'Subscriptions',
+  'EMI',
   'Sales',
   'Estimates',
   'Notes',
@@ -62,6 +64,7 @@ export const MODULE_ACTION_CONFIG: Record<string, { hasAdd: boolean; hasEdit: bo
   Tasks: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage deliverables, kanban & status" },
   Leads: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage sales pipeline & telecalling" },
   Subscriptions: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage recurring retainers & billing cycles" },
+  EMI: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage part-payment contracts & milestone installments" },
   Sales: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage tax invoices, orders & payments" },
   Estimates: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage dynamic itemized service quotes" },
   Notes: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage global broadcasts & scratchpads" },
@@ -105,12 +108,12 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, ModuleName[]> = {
   'Admin': [...ALL_NAV_MODULES],
   'Teams': [
     'Dashboard', 'Events', 'Clients', 'Projects', 'Tasks',
-    'Leads', 'Subscriptions', 'Sales', 'Estimates', 'Notes',
+    'Leads', 'Subscriptions', 'EMI', 'Sales', 'Estimates', 'Notes',
     'Messages', 'Tickets', 'Knowledge base', 'Files',
     'Expenses', 'Reports', 'Settings'
   ],
   'Clients': [
-    'Dashboard', 'Projects', 'Subscriptions', 'Sales', 'Estimates', 'Messages', 'Tickets', 'Files', 'Settings'
+    'Dashboard', 'Projects', 'Subscriptions', 'EMI', 'Sales', 'Estimates', 'Messages', 'Tickets', 'Files', 'Settings'
   ]
 }
 

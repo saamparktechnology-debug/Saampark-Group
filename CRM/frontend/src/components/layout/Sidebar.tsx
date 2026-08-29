@@ -24,6 +24,7 @@ import {
   HeadphonesIcon,
   MessageSquare,
   CreditCard,
+  Receipt,
   UserCheck,
   ChevronDown,
   ShoppingBag,
@@ -57,6 +58,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { name: "Tasks", href: "/feature/tasks", icon: CheckSquare },
   { name: "Leads", href: "/feature/leads", icon: Target },
   { name: "Subscriptions", href: "/feature/subscriptions", icon: CreditCard },
+  { name: "EMI", href: "/feature/emi", icon: Receipt },
   { 
     name: "Sales", 
     href: "/feature/sales/invoices", 
