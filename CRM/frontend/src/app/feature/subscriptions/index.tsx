@@ -34,6 +34,7 @@ import { RenewSubscriptionModal } from "./components/RenewSubscriptionModal"
 import { getClients } from "@/app/feature/clients/services/clientService"
 import { ThreeDotLoader } from "@/components/ui/ThreeDotLoader"
 import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
+import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 
 export default function SubscriptionsMain() {
   const { activeCompanyId, activeBranchId, branches, user } = useAuthStore()
@@ -526,8 +527,61 @@ export default function SubscriptionsMain() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <Button variant="secondary" size="sm" leftIcon={<Download size={14} />} onClick={() => window.print()}>
-            Print / Export
+          <Button
+            variant="secondary"
+            size="sm"
+            leftIcon={<Download size={14} />}
+            onClick={() => {
+              exportToExcel({
+                filename: "subscriptions_register",
+                title: "Subscriptions & Recurring Retainers Portfolio",
+                subtitle: `Portfolio Register (${tabFilteredSubscriptions.length} Subscriptions)`,
+                headers: ["Plan Name", "Model", "Client", "Billing Cycle", "Amount (INR)", "Start Date", "Next Renewal", "Branch", "Status"],
+                rows: tabFilteredSubscriptions.map((s: Subscription) => [
+                  s.planName,
+                  s.subscriptionType === "package" ? "Package Wise" : s.subscriptionType === "emi" ? "EMI Subscription" : "Regular Retainer",
+                  s.clientName,
+                  s.billingCycle,
+                  s.amount,
+                  s.startDate,
+                  s.nextBillingDate,
+                  s.branchName || "-",
+                  s.status,
+                ]),
+              })
+            }}
+          >
+            Export Excel
+          </Button>
+
+          <Button
+            variant="secondary"
+            size="sm"
+            leftIcon={<FileText size={14} />}
+            onClick={() => {
+              printPDFReport({
+                title: "Subscriptions & Recurring Retainers Audit Report",
+                subtitle: `Active Subscriptions Directory (${tabFilteredSubscriptions.length} Records)`,
+                metaItems: [
+                  { label: "Total MRR", value: `₹${kpis.totalMRR.toLocaleString("en-IN")}/mo` },
+                  { label: "ARR Run-Rate", value: `₹${kpis.totalARR.toLocaleString("en-IN")}` },
+                ],
+                headers: ["Plan Name", "Model", "Client", "Billing Cycle", "Amount", "Start Date", "Next Renewal", "Branch", "Status"],
+                rows: tabFilteredSubscriptions.map((s: Subscription) => [
+                  s.planName,
+                  s.subscriptionType === "package" ? "Package" : s.subscriptionType === "emi" ? "EMI" : "Retainer",
+                  s.clientName,
+                  s.billingCycle,
+                  s.amount,
+                  s.startDate,
+                  s.nextBillingDate,
+                  s.branchName || "-",
+                  s.status,
+                ]),
+              })
+            }}
+          >
+            PDF Print
           </Button>
 
           {canAddSubscription && !isClient && (

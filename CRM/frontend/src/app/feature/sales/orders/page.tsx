@@ -42,7 +42,7 @@ import { getClients } from "@/app/feature/clients/services/clientService"
 import { getProjects } from "@/app/feature/projects/services/projectService"
 import { Project, ProjectMilestone } from "@/app/feature/projects/types"
 
-import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
+import { exportToExcel, printPDFReport, exportToCSV } from "@/lib/exportUtils"
 import { getUserAvatar } from "@/app/feature/users/services/userService"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
 import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
@@ -386,18 +386,22 @@ export default function OrderListPage() {
   }
 
   const handleExportCSV = () => {
-    const headers = ["Order Number,Client,Project,Order Date,Delivery Date,Total Amount,Payment Status,Order Status"]
-    const rows = filteredOrders.map(
-      (o) => `"${o.orderNumber}","${o.client}","${o.project}",${o.orderDate},${o.deliveryDate},"${o.totalAmount}",${o.paymentStatus},${o.status}`
-    )
-    const csvContent = "data:text/csv;charset=utf-8," + [headers, ...rows].join("\n")
-    const encodedUri = encodeURI(csvContent)
-    const link = document.createElement("a")
-    link.setAttribute("href", encodedUri)
-    link.setAttribute("download", `orders_export_${Date.now()}.csv`)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    exportToCSV({
+      filename: "orders_export",
+      title: "Sales Orders Directory",
+      subtitle: `Orders Directory (${filteredOrders.length} records)`,
+      headers: ["Order Number", "Client", "Project", "Order Date", "Delivery Date", "Total Amount", "Payment Status", "Order Status"],
+      rows: filteredOrders.map((o) => [
+        o.orderNumber,
+        o.client,
+        o.project,
+        o.orderDate,
+        o.deliveryDate,
+        o.totalAmount,
+        o.paymentStatus,
+        o.status,
+      ]),
+    })
   }
 
   const totalValue = displayedOrders.reduce((sum, o) => {

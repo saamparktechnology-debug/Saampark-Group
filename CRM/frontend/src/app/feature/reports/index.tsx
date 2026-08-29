@@ -23,6 +23,7 @@ import { Lead } from "../leads/types"
 import { getSubscriptions } from "../subscriptions/services/subscriptionService"
 import { Subscription, BillingCycle } from "../subscriptions/types"
 import { Repeat, Package, Zap, CalendarDays, RefreshCw } from "lucide-react"
+import { resolveExportScope } from "@/lib/exportUtils"
 
 type ReportTab = "revenue" | "subscriptions" | "gst_analytics" | "sub_branches" | "leads" | "productivity" | "attendance" | "expenses"
 type InvoiceFilterType = "all" | "gst" | "non_gst" | "due" | "paid" | "partially_paid"
@@ -728,11 +729,31 @@ export default function ReportsMain() {
       ]
     }
 
-    const csvContent = "data:text/csv;charset=utf-8," + rows.map((e) => e.map((val) => `"${val}"`).join(",")).join("\n")
+    const scope = resolveExportScope(selectedCompanyId, selectedBranchId)
+    const dateStr = new Date().toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+
+    const headerMetaLines: string[] = [
+      `"${scope.name.toUpperCase()} - BUSINESS INTELLIGENCE & AUDIT REPORT"`,
+      `"Company: ${scope.name} | GSTIN: ${scope.gstin || 'N/A'} | CIN: ${scope.cin || 'N/A'}"`,
+      scope.branchDisplay ? `"${scope.branchDisplay}"` : "",
+      scope.subBranchDisplay ? `"${scope.subBranchDisplay}"` : "",
+      `"Report Module: ${activeTab.toUpperCase()} | Generated On: ${dateStr}"`,
+      `""`, // empty row
+    ].filter(Boolean)
+
+    const tableDataLines = rows.map((e) => e.map((val) => `"${String(val || '').replace(/"/g, '""')}"`).join(","))
+    const csvContent = "data:text/csv;charset=utf-8," + [...headerMetaLines, ...tableDataLines].join("\n")
     const encodedUri = encodeURI(csvContent)
     const link = document.createElement("a")
+    const cleanComp = scope.name.replace(/[^a-zA-Z0-9_-]/g, "_")
     link.setAttribute("href", encodedUri)
-    link.setAttribute("download", filename)
+    link.setAttribute("download", `${cleanComp}_${filename}`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
