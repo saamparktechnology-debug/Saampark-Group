@@ -166,25 +166,27 @@ export default function LeadsMain() {
 
   const visibleLeads = React.useMemo(() => {
     if (!user) return []
-    const userComp = (activeCompanyId || user?.companyId || "").toLowerCase().trim()
-    const targetBranch = activeBranchId
+    // Read fresh from store to avoid stale closure after company/branch switch
+    const { activeCompanyId: freshCompanyId, activeBranchId: freshBranchId, branches: freshBranches, user: freshUser } = useAuthStore.getState()
+    const userComp = (freshCompanyId || freshUser?.companyId || "").toLowerCase().trim()
+    const targetBranch = freshBranchId
 
-    // ── SUPER ADMIN & ADMIN VIEW ──
+
     // Admins see all leads across companies and branches
     if (isSuperOrAdmin) {
       const res = leads.filter((l) => {
         const isClientPrivate = (l as any).isClientPrivate === true || l.createdByRole === "Clients"
         if (isClientPrivate) return false
 
-        if (userComp && userComp !== "all" && user?.role !== "Super Admin") {
+        if (userComp && userComp !== "all" && freshUser?.role !== "Super Admin") {
           const lComp = (l.companyId || (l as any).company || "tech").toLowerCase().trim()
           if (lComp !== userComp && !(userComp === "tech" && !l.companyId)) return false
         }
 
-        if (targetBranch && user?.role !== "Super Admin") {
+        if (targetBranch && freshUser?.role !== "Super Admin") {
           const lBranch = String(l.branchId || (l as any).assignedBranchId || (l as any).branch_id || "").toLowerCase().trim()
           const lBranchName = String(l.branchName || (l as any).assignedBranchName || (l as any).branch_name || "").toLowerCase().trim()
-          const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === targetBranch.toLowerCase())
+          const targetBranchObj = freshBranches.find(b => b.id === targetBranch || b.name.toLowerCase() === targetBranch.toLowerCase())
           const targetBranchId = String(targetBranchObj?.id || targetBranch).toLowerCase().trim()
           const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
 
@@ -215,7 +217,7 @@ export default function LeadsMain() {
         if (targetBranch) {
           const lBranch = String(l.branchId || (l as any).assignedBranchId || (l as any).branch_id || "").toLowerCase().trim()
           const lBranchName = String(l.branchName || (l as any).assignedBranchName || (l as any).branch_name || "").toLowerCase().trim()
-          const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === targetBranch.toLowerCase())
+          const targetBranchObj = freshBranches.find(b => b.id === targetBranch || b.name.toLowerCase() === targetBranch.toLowerCase())
           const targetBranchId = String(targetBranchObj?.id || targetBranch).toLowerCase().trim()
           const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
 

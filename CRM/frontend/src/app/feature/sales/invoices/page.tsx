@@ -485,13 +485,15 @@ export default function InvoicesPage() {
   const loadInvoices = React.useCallback(async (showLoading = false) => {
     if (showLoading) setIsLoading(true)
     try {
-      const targetComp = activeCompanyId || user?.companyId || "tech"
+      // Read fresh from store — avoids stale closure on company switch
+      const { activeCompanyId: freshCompanyId, user: freshUser } = useAuthStore.getState()
+      const targetComp = freshCompanyId || freshUser?.companyId || "tech"
       const data = await getInvoices(targetComp)
       setInvoices(data || [])
     } finally {
       if (showLoading) setIsLoading(false)
     }
-  }, [activeCompanyId, user?.companyId])
+  }, [])
 
   React.useEffect(() => {
     loadInvoices(true)
