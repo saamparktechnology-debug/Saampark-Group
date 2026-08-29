@@ -20,9 +20,13 @@ import { taskService } from "../tasks/services/taskService"
 import { Task } from "../tasks/types"
 import { getLeads } from "../leads/services/leadService"
 import { Lead } from "../leads/types"
+import { getSubscriptions } from "../subscriptions/services/subscriptionService"
+import { Subscription, BillingCycle } from "../subscriptions/types"
+import { Repeat, Package, Zap, CalendarDays, RefreshCw } from "lucide-react"
 
-type ReportTab = "revenue" | "gst_analytics" | "sub_branches" | "leads" | "productivity" | "attendance" | "expenses"
+type ReportTab = "revenue" | "subscriptions" | "gst_analytics" | "sub_branches" | "leads" | "productivity" | "attendance" | "expenses"
 type InvoiceFilterType = "all" | "gst" | "non_gst" | "due" | "paid" | "partially_paid"
+type SubscriptionFilterType = "all" | "package" | "regular" | "emi" | "active" | "expiring_soon" | "past_due" | "canceled"
 
 export default function ReportsMain() {
   const { user, branches, subBranches, fetchSubBranches, activeCompanyId, activeBranchId } = useAuthStore()
@@ -74,7 +78,9 @@ export default function ReportsMain() {
 
   const [activeTab, setActiveTab] = React.useState<ReportTab>("revenue")
   const [invoiceSubFilter, setInvoiceSubFilter] = React.useState<InvoiceFilterType>("all")
+  const [subscriptionSubFilter, setSubscriptionSubFilter] = React.useState<SubscriptionFilterType>("all")
   const [invoiceSearchQuery, setInvoiceSearchQuery] = React.useState("")
+  const [subscriptionSearchQuery, setSubscriptionSearchQuery] = React.useState("")
   const [dateRange, setDateRange] = React.useState("all_time")
 
   const [users, setUsers] = React.useState<any[]>([])
@@ -84,12 +90,13 @@ export default function ReportsMain() {
   const [expenses, setExpenses] = React.useState<any[]>([])
   const [tasks, setTasks] = React.useState<Task[]>([])
   const [leads, setLeads] = React.useState<Lead[]>([])
+  const [subscriptions, setSubscriptions] = React.useState<Subscription[]>([])
 
   const targetComp = selectedCompanyId || activeCompanyId || user?.companyId || "tech"
 
   const loadData = React.useCallback(async () => {
     try {
-      const [uList, invList, payList, cliList, expList, tList, lList] = await Promise.all([
+      const [uList, invList, payList, cliList, expList, tList, lList, subList] = await Promise.all([
         getUsers("all").catch(() => []),
         getInvoices(targetComp).catch(() => []),
         getPayments(targetComp).catch(() => []),
@@ -97,6 +104,7 @@ export default function ReportsMain() {
         fetchModuleDataFromDB<any[]>("expenses", [], targetComp).catch(() => []),
         taskService.getTasks(targetComp).catch(() => []),
         getLeads(targetComp).catch(() => []),
+        getSubscriptions(targetComp).catch(() => []),
       ])
       setUsers(uList || [])
       setInvoices(invList || [])
@@ -105,6 +113,7 @@ export default function ReportsMain() {
       setExpenses(expList || [])
       setTasks(tList || [])
       setLeads(lList || [])
+      setSubscriptions(subList || [])
     } catch (err) {
       console.error("Error loading reports data:", err)
     }
@@ -223,6 +232,107 @@ export default function ReportsMain() {
       return true
     })
   }, [leads, selectedCompanyId, selectedBranchId, isTeamOrBranchAdmin, userAssignedBranchId, availableBranches])
+
+  // Helper to normalize amount to Monthly Recurring Revenue (MRR)
+  const getSubscriptionMRR = (sub: Subscription): number => {
+    const rawAmt = sub.numericAmount || parseInt(String(sub.amount || "0").replace(/[^0-9]/g, "")) || 0
+    if (rawAmt <= 0) return 0
+    switch (sub.billingCycle) {
+      case "Daily": return Math.round(rawAmt * 30)
+      case "Weekly": return Math.round(rawAmt * 4.33)
+      case "Monthly": return rawAmt
+      case "Quarterly": return Math.round(rawAmt / 3)
+      case "Half-Yearly": return Math.round(rawAmt / 6)
+      case "Annually": return Math.round(rawAmt / 12)
+      case "Custom Days": return Math.round((rawAmt / (sub.customDaysCount || 30)) * 30)
+      default: return rawAmt
+    }
+  }
+
+  // ── Scoped Subscriptions Filter ───────────────────────────────────────────
+  const scopedSubscriptions = React.useMemo(() => {
+    return subscriptions.filter((s) => {
+      if (selectedCompanyId && selectedCompanyId !== "all") {
+        const sComp = s.companyId || (s as any).company || "tech"
+        if (sComp !== selectedCompanyId) return false
+      }
+      if (isTeamOrBranchAdmin && userAssignedBranchId) {
+        const sBranch = s.branchId || (clientMap[(s.clientName || "").toLowerCase().trim()]?.branchId)
+        if (sBranch && sBranch !== userAssignedBranchId) return false
+      } else if (selectedBranchId !== "all") {
+        const targetBranchObj = availableBranches.find((b) => b.id === selectedBranchId || b.name.toLowerCase() === selectedBranchId.toLowerCase())
+        const targetBranchId = String(targetBranchObj?.id || selectedBranchId).toLowerCase().trim()
+        const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
+
+        const sBranch = String(s.branchId || (clientMap[(s.clientName || "").toLowerCase().trim()]?.branchId) || "").toLowerCase().trim()
+        const sBranchName = String(s.branchName || (clientMap[(s.clientName || "").toLowerCase().trim()]?.branchName) || "").toLowerCase().trim()
+
+        const isMatch =
+          (sBranch && (sBranch === targetBranchId || (targetBranchName && sBranch === targetBranchName))) ||
+          (sBranchName && (sBranchName === targetBranchName || sBranchName === targetBranchId))
+
+        if (!isMatch) return false
+      }
+      return true
+    })
+  }, [subscriptions, selectedCompanyId, selectedBranchId, isTeamOrBranchAdmin, userAssignedBranchId, availableBranches, clientMap])
+
+  // Subscriptions KPIs
+  const totalSubsCount = scopedSubscriptions.length
+  const activeSubs = scopedSubscriptions.filter(s => s.status === "Active")
+  const activeSubsCount = activeSubs.length
+  const expiringSoonSubsCount = scopedSubscriptions.filter(s => s.status === "Expiring Soon").length
+  const pastDueSubsCount = scopedSubscriptions.filter(s => s.status === "Past Due").length
+  const canceledSubsCount = scopedSubscriptions.filter(s => s.status === "Canceled").length
+
+  // Subscriptions by Model
+  const packageSubs = scopedSubscriptions.filter(s => s.subscriptionType === "package")
+  const regularSubs = scopedSubscriptions.filter(s => !s.subscriptionType || s.subscriptionType === "regular")
+  const emiSubs = scopedSubscriptions.filter(s => s.subscriptionType === "emi")
+
+  // MRR & ARR Calculations
+  const totalMRR = activeSubs.reduce((sum, s) => sum + getSubscriptionMRR(s), 0)
+  const totalARR = totalMRR * 12
+  const totalSubContractValue = scopedSubscriptions.reduce((sum, s) => {
+    return sum + (s.numericAmount || parseInt(String(s.amount || "0").replace(/[^0-9]/g, "")) || 0)
+  }, 0)
+
+  // Renewals in next 30 days
+  const upcomingRenewals = scopedSubscriptions.filter(s => {
+    if (!s.nextBillingDate) return false
+    const now = Date.now()
+    const dMs = new Date(s.nextBillingDate).getTime()
+    return !isNaN(dMs) && dMs >= now - (24 * 60 * 60 * 1000) && dMs <= now + 30 * 24 * 60 * 60 * 1000
+  })
+  const upcomingRenewalsAmount = upcomingRenewals.reduce((sum, s) => {
+    return sum + (s.numericAmount || parseInt(String(s.amount || "0").replace(/[^0-9]/g, "")) || 0)
+  }, 0)
+
+  // Filtered Subscriptions for Table
+  const filteredTableSubscriptions = React.useMemo(() => {
+    return scopedSubscriptions.filter((sub) => {
+      if (subscriptionSubFilter === "package" && sub.subscriptionType !== "package") return false
+      if (subscriptionSubFilter === "regular" && (sub.subscriptionType && sub.subscriptionType !== "regular")) return false
+      if (subscriptionSubFilter === "emi" && sub.subscriptionType !== "emi") return false
+      if (subscriptionSubFilter === "active" && sub.status !== "Active") return false
+      if (subscriptionSubFilter === "expiring_soon" && sub.status !== "Expiring Soon") return false
+      if (subscriptionSubFilter === "past_due" && sub.status !== "Past Due") return false
+      if (subscriptionSubFilter === "canceled" && sub.status !== "Canceled") return false
+
+      if (subscriptionSearchQuery.trim()) {
+        const q = subscriptionSearchQuery.toLowerCase().trim()
+        const match =
+          (sub.planName || "").toLowerCase().includes(q) ||
+          (sub.clientName || "").toLowerCase().includes(q) ||
+          (sub.clientCompany || "").toLowerCase().includes(q) ||
+          (sub.clientEmail || "").toLowerCase().includes(q) ||
+          (sub.branchName || "").toLowerCase().includes(q) ||
+          (sub.packageCategory || "").toLowerCase().includes(q)
+        if (!match) return false
+      }
+      return true
+    })
+  }, [scopedSubscriptions, subscriptionSubFilter, subscriptionSearchQuery])
 
   // ── GST vs Non-GST Invoices Categorization & Metrics ──────────────────────
   const gstInvoices = React.useMemo(() => {
@@ -547,6 +657,41 @@ export default function ReportsMain() {
           ]
         }),
       ]
+    } else if (activeTab === "subscriptions") {
+      rows = [
+        [
+          "Subscription ID",
+          "Plan / Package Name",
+          "Model Type",
+          "Client Name",
+          "Client Company",
+          "Client Phone",
+          "Billing Cycle",
+          "Cycle Amount (INR)",
+          "MRR Equivalent (INR)",
+          "Start Date",
+          "Next Renewal Date",
+          "Status",
+          "Branch",
+          "Company",
+        ],
+        ...filteredTableSubscriptions.map((s) => [
+          s.id,
+          s.planName,
+          s.subscriptionType === "package" ? "Package Wise" : s.subscriptionType === "emi" ? "EMI Subscription" : "Regular Retainer",
+          s.clientName || "-",
+          s.clientCompany || "-",
+          s.clientPhone || "-",
+          s.billingCycle || "Monthly",
+          String(s.numericAmount || parseInt(String(s.amount || "0").replace(/[^0-9]/g, "")) || 0),
+          String(getSubscriptionMRR(s)),
+          s.startDate || "-",
+          s.nextBillingDate || "-",
+          s.status,
+          s.branchName || "-",
+          s.companyId || "tech",
+        ]),
+      ]
     } else if (activeTab === "leads") {
       rows = [
         ["Lead Name", "Primary Contact", "Phone", "Service", "Assigned Owner", "Branch", "Status"],
@@ -610,7 +755,7 @@ export default function ReportsMain() {
             <span>Billing & Financial Reports Studio</span>
           </h1>
           <p className="text-xs text-muted-foreground mt-1">
-            GST & Non-GST tax metrics, payment dues, revenue realization, and branch-level analytics for SAAMPARK Group.
+            GST & Non-GST tax metrics, recurring subscriptions & MRR, payment dues, revenue realization, and branch-level analytics.
           </p>
         </div>
 
@@ -676,6 +821,7 @@ export default function ReportsMain() {
       <div className="flex items-center gap-2 border-b border-border/60 pb-px overflow-x-auto">
         {[
           { id: "revenue", label: "Financial & Tax Overview", icon: DollarSign },
+          { id: "subscriptions", label: `📦 Subscriptions & Retainers (${scopedSubscriptions.length})`, icon: Repeat },
           { id: "gst_analytics", label: "GST & Tax Slab Audit", icon: Landmark },
           { id: "sub_branches", label: "🌿 Sub-Branch Revenue Share (% Wise)", icon: Percent },
           { id: "leads", label: "Leads & Conversion", icon: Target },
@@ -705,78 +851,93 @@ export default function ReportsMain() {
       {/* ── TAB 1 & 2: REVENUE & GST BILLS OVERVIEW ────────────────────────── */}
       {(activeTab === "revenue" || activeTab === "gst_analytics") && (
         <div className="space-y-6 animate-in fade-in duration-200">
-          {/* Top 5 Key Performance Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+          {/* Top 6 Key Performance Cards (Direct Billing + Recurring Subscriptions) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3.5">
             {/* Card 1: Total Bills */}
             <div className="p-4 rounded-2xl bg-surface border border-border shadow-2xs space-y-2 hover:border-primary/40 transition-all">
               <div className="flex items-center justify-between text-xs text-muted-foreground font-semibold">
-                <span>Total Bills Invoiced</span>
+                <span>Total Invoiced</span>
                 <Receipt size={16} className="text-primary" />
               </div>
-              <p className="text-2xl font-black text-foreground">₹{totalInvoicedSum.toLocaleString("en-IN")}</p>
+              <p className="text-xl font-black text-foreground">₹{totalInvoicedSum.toLocaleString("en-IN")}</p>
               <div className="flex items-center justify-between text-[11px] text-muted-foreground font-medium pt-0.5">
-                <span className="text-primary font-bold">{totalBillsCount} Registered Invoices</span>
-                <span>100% Vol</span>
+                <span className="text-primary font-bold">{totalBillsCount} Invoices</span>
+                <span>Direct</span>
               </div>
             </div>
 
-            {/* Card 2: GST Bills */}
+            {/* Card 2: Recurring MRR Run-Rate */}
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-50/50 to-pink-50/20 dark:from-purple-950/30 dark:to-pink-950/10 border border-purple-200/80 dark:border-purple-800/60 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between text-xs text-purple-700 dark:text-purple-300 font-bold">
+                <span>Recurring MRR</span>
+                <Repeat size={16} className="text-purple-600 dark:text-purple-400" />
+              </div>
+              <p className="text-xl font-black text-purple-700 dark:text-purple-300">
+                ₹{totalMRR.toLocaleString("en-IN")}<span className="text-[10px] font-normal text-muted-foreground">/mo</span>
+              </p>
+              <div className="flex items-center justify-between text-[11px] text-purple-600 dark:text-purple-400 font-semibold pt-0.5">
+                <span>{activeSubsCount} Active Subs</span>
+                <span>ARR: ₹{totalARR.toLocaleString("en-IN")}</span>
+              </div>
+            </div>
+
+            {/* Card 3: GST Bills */}
             <div className="p-4 rounded-2xl bg-gradient-to-br from-indigo-50/50 to-blue-50/20 dark:from-indigo-950/30 dark:to-blue-950/10 border border-indigo-200/80 dark:border-indigo-800/60 shadow-2xs space-y-2">
               <div className="flex items-center justify-between text-xs text-indigo-700 dark:text-indigo-300 font-bold">
-                <span>GST Taxable Bills</span>
+                <span>GST Taxable</span>
                 <ShieldCheck size={16} className="text-indigo-600 dark:text-indigo-400" />
               </div>
-              <p className="text-2xl font-black text-indigo-700 dark:text-indigo-300">
+              <p className="text-xl font-black text-indigo-700 dark:text-indigo-300">
                 ₹{totalGstInvoicedSum.toLocaleString("en-IN")}
               </p>
               <div className="flex items-center justify-between text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold pt-0.5">
-                <span>{totalGstBillsCount} GST Invoices</span>
+                <span>{totalGstBillsCount} GST Bills</span>
                 <span>Tax: ₹{totalGstTaxAmountSum.toLocaleString("en-IN")}</span>
               </div>
             </div>
 
-            {/* Card 3: Non-GST Bills */}
+            {/* Card 4: Non-GST Bills */}
             <div className="p-4 rounded-2xl bg-surface border border-border shadow-2xs space-y-2 hover:border-zinc-400 dark:hover:border-zinc-600 transition-all">
               <div className="flex items-center justify-between text-xs text-muted-foreground font-semibold">
                 <span>Non-GST Bills</span>
                 <FileText size={16} className="text-zinc-500" />
               </div>
-              <p className="text-2xl font-black text-zinc-800 dark:text-zinc-200">
+              <p className="text-xl font-black text-zinc-800 dark:text-zinc-200">
                 ₹{totalNonGstInvoicedSum.toLocaleString("en-IN")}
               </p>
               <div className="flex items-center justify-between text-[11px] text-muted-foreground font-medium pt-0.5">
-                <span className="font-semibold text-zinc-700 dark:text-zinc-300">{totalNonGstBillsCount} Exempted / 0%</span>
-                <span>No Tax</span>
+                <span className="font-semibold text-zinc-700 dark:text-zinc-300">{totalNonGstBillsCount} Exempt</span>
+                <span>0% Tax</span>
               </div>
             </div>
 
-            {/* Card 4: Payments Received */}
+            {/* Card 5: Payments Received */}
             <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-50/50 to-teal-50/20 dark:from-emerald-950/30 dark:to-teal-950/10 border border-emerald-200/80 dark:border-emerald-800/60 shadow-2xs space-y-2">
               <div className="flex items-center justify-between text-xs text-emerald-700 dark:text-emerald-300 font-bold">
-                <span>Payment Collected</span>
+                <span>Collected</span>
                 <TrendingUp size={16} className="text-emerald-600 dark:text-emerald-400" />
               </div>
-              <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+              <p className="text-xl font-black text-emerald-600 dark:text-emerald-400">
                 ₹{totalCollectedSum.toLocaleString("en-IN")}
               </p>
               <div className="flex items-center justify-between text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold pt-0.5">
-                <span>{fullyPaidCount} Fully Settled</span>
-                <span>{totalInvoicedSum > 0 ? `${Math.round((totalCollectedSum / totalInvoicedSum) * 100)}% Realized` : "100%"}</span>
+                <span>{fullyPaidCount} Settled</span>
+                <span>{totalInvoicedSum > 0 ? `${Math.round((totalCollectedSum / totalInvoicedSum) * 100)}%` : "100%"}</span>
               </div>
             </div>
 
-            {/* Card 5: Payment Due */}
+            {/* Card 6: Payment Due */}
             <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-50/50 to-rose-50/20 dark:from-amber-950/30 dark:to-rose-950/10 border border-amber-200/80 dark:border-amber-800/60 shadow-2xs space-y-2">
               <div className="flex items-center justify-between text-xs text-amber-700 dark:text-amber-300 font-bold">
-                <span>Total Payment Due</span>
+                <span>Payment Due</span>
                 <AlertCircle size={16} className="text-amber-600 dark:text-amber-400" />
               </div>
-              <p className="text-2xl font-black text-amber-600 dark:text-amber-400">
+              <p className="text-xl font-black text-amber-600 dark:text-amber-400">
                 ₹{totalDueSum.toLocaleString("en-IN")}
               </p>
               <div className="flex items-center justify-between text-[11px] text-amber-700 dark:text-amber-300 font-semibold pt-0.5">
-                <span>{paymentPendingCount} Pending Invoices</span>
-                <span className="text-rose-600 dark:text-rose-400">{partiallyPaidCount} Part-paid</span>
+                <span>{paymentPendingCount} Pending</span>
+                <span className="text-rose-600 dark:text-rose-400">{partiallyPaidCount} Part</span>
               </div>
             </div>
           </div>
@@ -790,10 +951,11 @@ export default function ReportsMain() {
                   <span>GST Tax Compliance & Slab Breakdown</span>
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Automated computation of Taxable Base Value, CGST (Central), SGST (State), and total collections across tax slabs.
+                  Output tax liability breakdown across standard Indian GST slabs (18%, 12%, 5%, 0%).
                 </p>
               </div>
-              <div className="flex items-center gap-2 text-xs font-semibold">
+
+              <div className="flex items-center gap-2 text-xs font-mono font-bold">
                 <span className="px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
                   CGST: ₹{cgstCollected.toLocaleString("en-IN")}
                 </span>
@@ -955,118 +1117,110 @@ export default function ReportsMain() {
               })}
             </div>
 
-            {/* Detailed Invoices Table */}
-            <div className="overflow-x-auto rounded-xl border border-border/80">
+            {/* Invoices Table */}
+            <div className="overflow-x-auto">
               <table className="w-full text-xs text-left border-collapse">
                 <thead>
                   <tr className="border-b border-border text-muted-foreground font-semibold bg-surface-hover/40">
-                    <th className="py-3 px-3.5">Invoice #</th>
+                    <th className="py-3 px-3.5">Invoice Ref</th>
                     <th className="py-3 px-3.5">Client & GSTIN</th>
-                    <th className="py-3 px-3.5">Project / Service</th>
+                    <th className="py-3 px-3.5">Project / Item</th>
+                    <th className="py-3 px-3.5">Bill Type & Rate</th>
                     <th className="py-3 px-3.5 text-right">Taxable Base</th>
-                    <th className="py-3 px-3.5 text-center">GST Rate</th>
-                    <th className="py-3 px-3.5 text-right">GST Tax</th>
-                    <th className="py-3 px-3.5 text-right">Total Bill</th>
-                    <th className="py-3 px-3.5 text-right">Paid</th>
-                    <th className="py-3 px-3.5 text-right">Due</th>
-                    <th className="py-3 px-3.5">Branch / Origin</th>
+                    <th className="py-3 px-3.5 text-right">GST Output Tax</th>
+                    <th className="py-3 px-3.5 text-right">Gross Total</th>
+                    <th className="py-3 px-3.5 text-right">Received</th>
+                    <th className="py-3 px-3.5 text-right">Balance Due</th>
+                    <th className="py-3 px-3.5">Branch Hub</th>
                     <th className="py-3 px-3.5 text-center">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-border/50 font-medium">
+                <tbody className="divide-y divide-border/40 font-medium">
                   {filteredTableInvoices.length === 0 ? (
                     <tr>
                       <td colSpan={11} className="py-10 text-center text-muted-foreground">
-                        <div className="flex flex-col items-center justify-center gap-1.5">
-                          <Receipt size={24} className="text-muted-foreground/60" />
-                          <p className="font-semibold text-xs text-foreground">No invoices match current filter criteria</p>
-                          <p className="text-[11px]">Adjust your branch, company, or search keyword above.</p>
-                        </div>
+                        No invoices match the selected scoping and filter criteria.
                       </td>
                     </tr>
                   ) : (
                     filteredTableInvoices.map((inv) => {
-                      const isGst =
-                        (typeof inv.gstRate === "number" && inv.gstRate > 0) ||
-                        (typeof inv.gstAmount === "number" && inv.gstAmount > 0) ||
-                        Boolean(clientMap[inv.client.toLowerCase().trim()]?.gstNumber)
+                      const isGst = (typeof inv.gstRate === "number" && inv.gstRate > 0) || (typeof inv.gstAmount === "number" && inv.gstAmount > 0) || Boolean(clientMap[inv.client.toLowerCase().trim()]?.gstNumber)
                       const rate = inv.gstRate || (isGst ? 18 : 0)
                       const totalNum = parseInt((inv.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
-                      const taxNum =
-                        typeof inv.gstAmount === "number" && inv.gstAmount > 0
-                          ? inv.gstAmount
-                          : rate > 0
-                          ? Math.round(totalNum - totalNum / (1 + rate / 100))
-                          : 0
+                      const taxNum = typeof inv.gstAmount === "number" && inv.gstAmount > 0 
+                        ? inv.gstAmount 
+                        : rate > 0 ? Math.round(totalNum - totalNum / (1 + rate / 100)) : 0
                       const baseNum = totalNum - taxNum
-                      const clientObj = clientMap[inv.client.toLowerCase().trim()]
-                      const clientGst = clientObj?.gstNumber
-                      const branchDisplay = inv.branchName || clientObj?.branchName || "-"
+                      const clientGst = clientMap[inv.client.toLowerCase().trim()]?.gstNumber
+                      const branchDisplay = inv.branchName || clientMap[inv.client.toLowerCase().trim()]?.branchName || branchMap[inv.branchId || ""] || "-"
 
                       const statusColors: Record<string, string> = {
-                        "Fully paid": "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800",
-                        "Partially paid": "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800",
-                        "Not paid": "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800",
-                        "Payment Pending": "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800",
+                        "Fully paid": "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+                        "Partially paid": "bg-amber-500/10 text-amber-600 border-amber-500/20",
+                        "Payment Pending": "bg-rose-500/10 text-rose-600 border-rose-500/20",
+                        "Not paid": "bg-rose-500/10 text-rose-600 border-rose-500/20",
+                        Draft: "bg-zinc-500/10 text-zinc-600 border-zinc-500/20",
                       }
 
                       return (
-                        <tr key={inv.id} className="hover:bg-surface-hover/60 transition-colors">
-                          {/* Invoice # & Type */}
+                        <tr key={inv.id} className="hover:bg-surface-hover/50 transition-colors">
+                          {/* Invoice Ref */}
                           <td className="py-3 px-3.5">
-                            <div className="flex flex-col gap-0.5">
-                              <span className="font-bold text-foreground">{inv.id}</span>
-                              <span
-                                className={`w-fit px-1.5 py-0.2 text-[9.5px] font-bold rounded ${
-                                  isGst
-                                    ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800"
-                                    : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700"
-                                }`}
-                              >
-                                {isGst ? `GST ${rate}%` : "NON-GST"}
-                              </span>
-                            </div>
+                            <span className="font-mono font-bold text-primary block">{inv.id}</span>
+                            <span className="text-[10px] text-muted-foreground">{inv.billDate || "-"}</span>
                           </td>
 
                           {/* Client & GSTIN */}
                           <td className="py-3 px-3.5">
-                            <div className="flex flex-col gap-0.5">
-                              <span className="font-bold text-foreground">{inv.client}</span>
-                              {clientGst ? (
-                                <span className="font-mono text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold">
-                                  GST: {clientGst}
-                                </span>
-                              ) : (
-                                <span className="text-[10px] text-muted-foreground italic">Unregistered</span>
-                              )}
-                            </div>
+                            <span className="font-bold text-foreground block">{inv.client}</span>
+                            {clientGst ? (
+                              <span className="font-mono text-[10.5px] text-indigo-600 dark:text-indigo-400 font-semibold flex items-center gap-1">
+                                <ShieldCheck size={11} /> {clientGst}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground italic">Unregistered Buyer</span>
+                            )}
                           </td>
 
                           {/* Project */}
-                          <td className="py-3 px-3.5 text-muted-foreground">{inv.project || "General Project"}</td>
+                          <td className="py-3 px-3.5 text-muted-foreground">
+                            {inv.project ? (
+                              <span className="font-semibold text-foreground">{inv.project}</span>
+                            ) : (
+                              <span className="italic text-zinc-400">-</span>
+                            )}
+                          </td>
+
+                          {/* Bill Type */}
+                          <td className="py-3 px-3.5">
+                            {isGst ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-bold text-[10.5px] border border-indigo-200 dark:border-indigo-800">
+                                <span>GST ({rate}%)</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-bold text-[10.5px]">
+                                <span>Non-GST</span>
+                              </span>
+                            )}
+                          </td>
 
                           {/* Taxable Base */}
-                          <td className="py-3 px-3.5 text-right font-mono font-semibold text-foreground">
+                          <td className="py-3 px-3.5 text-right font-mono font-medium text-foreground">
                             ₹{baseNum.toLocaleString("en-IN")}
                           </td>
 
-                          {/* GST Rate */}
-                          <td className="py-3 px-3.5 text-center font-mono text-muted-foreground">
-                            {isGst ? `${rate}%` : "0%"}
-                          </td>
-
-                          {/* GST Tax */}
-                          <td className="py-3 px-3.5 text-right font-mono font-semibold text-indigo-600 dark:text-indigo-400">
+                          {/* Tax Amount */}
+                          <td className="py-3 px-3.5 text-right font-mono font-bold text-indigo-600 dark:text-indigo-400">
                             {taxNum > 0 ? `₹${taxNum.toLocaleString("en-IN")}` : "₹0"}
                           </td>
 
-                          {/* Total Bill */}
-                          <td className="py-3 px-3.5 text-right font-mono font-extrabold text-foreground">
+                          {/* Gross Total */}
+                          <td className="py-3 px-3.5 text-right font-mono font-black text-foreground">
                             ₹{totalNum.toLocaleString("en-IN")}
                           </td>
 
-                          {/* Paid */}
-                          <td className="py-3 px-3.5 text-right font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
+                          {/* Received */}
+                          <td className="py-3 px-3.5 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
                             {inv.paymentReceived || "₹0"}
                           </td>
 
@@ -1091,6 +1245,368 @@ export default function ReportsMain() {
                               }`}
                             >
                               {inv.status}
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TAB: SUBSCRIPTIONS & RECURRING REVENUE REPORT ───────────────────── */}
+      {activeTab === "subscriptions" && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Top 5 Key Performance Cards for Subscriptions */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+            {/* Card 1: Total MRR & ARR */}
+            <div className="p-5 rounded-2xl bg-gradient-to-br from-purple-50/50 to-indigo-50/20 dark:from-purple-950/30 dark:to-indigo-950/10 border border-purple-200/80 dark:border-purple-800/60 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between text-xs text-purple-700 dark:text-purple-300 font-bold">
+                <span>Monthly Recurring Revenue (MRR)</span>
+                <Repeat size={16} className="text-purple-600 dark:text-purple-400" />
+              </div>
+              <p className="text-2xl font-black text-purple-700 dark:text-purple-300">
+                ₹{totalMRR.toLocaleString("en-IN")}<span className="text-xs font-normal text-muted-foreground">/mo</span>
+              </p>
+              <div className="flex items-center justify-between text-[11px] text-purple-600 dark:text-purple-400 font-semibold pt-0.5">
+                <span>ARR Run-Rate: ₹{totalARR.toLocaleString("en-IN")}</span>
+                <span>{activeSubsCount} Active Subs</span>
+              </div>
+            </div>
+
+            {/* Card 2: Package-Wise Subscriptions */}
+            <div className="p-5 rounded-2xl bg-gradient-to-br from-blue-50/50 to-indigo-50/20 dark:from-blue-950/30 dark:to-indigo-950/10 border border-blue-200/80 dark:border-blue-800/60 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between text-xs text-blue-700 dark:text-blue-300 font-bold">
+                <span>Package Subscriptions</span>
+                <Package size={16} className="text-blue-600 dark:text-blue-400" />
+              </div>
+              <p className="text-2xl font-black text-blue-700 dark:text-blue-300">
+                {packageSubs.length} <span className="text-xs font-normal text-muted-foreground">Subscribers</span>
+              </p>
+              <div className="flex items-center justify-between text-[11px] text-blue-600 dark:text-blue-400 font-semibold pt-0.5">
+                <span>Value: ₹{packageSubs.reduce((sum, s) => sum + getSubscriptionMRR(s), 0).toLocaleString("en-IN")}/mo</span>
+                <span>Tier Bundles</span>
+              </div>
+            </div>
+
+            {/* Card 3: Regular Retainers */}
+            <div className="p-5 rounded-2xl bg-gradient-to-br from-teal-50/50 to-emerald-50/20 dark:from-teal-950/30 dark:to-emerald-950/10 border border-teal-200/80 dark:border-teal-800/60 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between text-xs text-teal-700 dark:text-teal-300 font-bold">
+                <span>Regular Retainers</span>
+                <RefreshCw size={16} className="text-teal-600 dark:text-teal-400" />
+              </div>
+              <p className="text-2xl font-black text-teal-700 dark:text-teal-300">
+                {regularSubs.length} <span className="text-xs font-normal text-muted-foreground">Retainers</span>
+              </p>
+              <div className="flex items-center justify-between text-[11px] text-teal-600 dark:text-teal-400 font-semibold pt-0.5">
+                <span>Yield: ₹{regularSubs.reduce((sum, s) => sum + getSubscriptionMRR(s), 0).toLocaleString("en-IN")}/mo</span>
+                <span>Custom Billing</span>
+              </div>
+            </div>
+
+            {/* Card 4: EMI Subscriptions */}
+            <div className="p-5 rounded-2xl bg-gradient-to-br from-amber-50/50 to-orange-50/20 dark:from-amber-950/30 dark:to-orange-950/10 border border-amber-200/80 dark:border-amber-800/60 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between text-xs text-amber-700 dark:text-amber-300 font-bold">
+                <span>EMI Subscriptions</span>
+                <Zap size={16} className="text-amber-600 dark:text-amber-400" />
+              </div>
+              <p className="text-2xl font-black text-amber-700 dark:text-amber-300">
+                {emiSubs.length} <span className="text-xs font-normal text-muted-foreground">Financed</span>
+              </p>
+              <div className="flex items-center justify-between text-[11px] text-amber-700 dark:text-amber-300 font-semibold pt-0.5">
+                <span>Monthly: ₹{emiSubs.reduce((sum, s) => sum + getSubscriptionMRR(s), 0).toLocaleString("en-IN")}</span>
+                <span>Tenure Plans</span>
+              </div>
+            </div>
+
+            {/* Card 5: Renewals Due (Next 30 Days) */}
+            <div className="p-5 rounded-2xl bg-surface border border-border shadow-2xs space-y-2 hover:border-primary/40 transition-all">
+              <div className="flex items-center justify-between text-xs text-muted-foreground font-semibold">
+                <span>30-Day Renewal Pipeline</span>
+                <CalendarDays size={16} className="text-primary" />
+              </div>
+              <p className="text-2xl font-black text-foreground">
+                ₹{upcomingRenewalsAmount.toLocaleString("en-IN")}
+              </p>
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground font-medium pt-0.5">
+                <span className="text-primary font-bold">{upcomingRenewals.length} Renewals Due</span>
+                <span>{pastDueSubsCount} Past Due</span>
+              </div>
+            </div>
+          </div>
+
+          {/* ── 3 MODEL BREAKDOWN CARDS ────────────────────────────────────── */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Model 1: Package-Wise Model */}
+            <div className="p-4 rounded-2xl bg-surface border border-border space-y-3 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center font-bold">
+                    📦
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-xs text-foreground">Package-Wise Subscriptions</h4>
+                    <span className="text-[10px] text-muted-foreground">Fixed deliverables with recurring cycles</span>
+                  </div>
+                </div>
+                <span className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 text-xs font-bold font-mono">
+                  {packageSubs.length}
+                </span>
+              </div>
+              <div className="space-y-1.5 text-xs text-muted-foreground pt-1">
+                <div className="flex justify-between">
+                  <span>Active Contracts:</span>
+                  <strong className="text-foreground font-mono">{packageSubs.filter(s => s.status === "Active").length}</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span>Monthly MRR:</span>
+                  <strong className="text-blue-600 dark:text-blue-400 font-mono">
+                    ₹{packageSubs.reduce((sum, s) => sum + getSubscriptionMRR(s), 0).toLocaleString("en-IN")}
+                  </strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Model 2: Regular Retainer Model */}
+            <div className="p-4 rounded-2xl bg-surface border border-border space-y-3 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-teal-500/10 text-teal-600 flex items-center justify-center font-bold">
+                    🔁
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-xs text-foreground">Regular Retainers</h4>
+                    <span className="text-[10px] text-muted-foreground">Flexible monthly / quarterly client maintenance</span>
+                  </div>
+                </div>
+                <span className="px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-600 text-xs font-bold font-mono">
+                  {regularSubs.length}
+                </span>
+              </div>
+              <div className="space-y-1.5 text-xs text-muted-foreground pt-1">
+                <div className="flex justify-between">
+                  <span>Active Retainers:</span>
+                  <strong className="text-foreground font-mono">{regularSubs.filter(s => s.status === "Active").length}</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span>Monthly MRR:</span>
+                  <strong className="text-teal-600 dark:text-teal-400 font-mono">
+                    ₹{regularSubs.reduce((sum, s) => sum + getSubscriptionMRR(s), 0).toLocaleString("en-IN")}
+                  </strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Model 3: EMI Subscription Model */}
+            <div className="p-4 rounded-2xl bg-surface border border-border space-y-3 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold">
+                    💳
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-xs text-foreground">EMI Subscriptions</h4>
+                    <span className="text-[10px] text-muted-foreground">Tenure installment plans (3 / 6 / 12 / 24 mo)</span>
+                  </div>
+                </div>
+                <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 text-xs font-bold font-mono">
+                  {emiSubs.length}
+                </span>
+              </div>
+              <div className="space-y-1.5 text-xs text-muted-foreground pt-1">
+                <div className="flex justify-between">
+                  <span>Active EMI Plans:</span>
+                  <strong className="text-foreground font-mono">{emiSubs.filter(s => s.status === "Active").length}</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span>Monthly EMI Collections:</span>
+                  <strong className="text-amber-600 dark:text-amber-400 font-mono">
+                    ₹{emiSubs.reduce((sum, s) => sum + getSubscriptionMRR(s), 0).toLocaleString("en-IN")}
+                  </strong>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── DETAILED SUBSCRIPTIONS REGISTER & AUDIT TABLE ──────────────── */}
+          <div className="bg-surface border border-border rounded-2xl p-5 space-y-4 shadow-2xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
+                  <Repeat size={16} className="text-purple-600" />
+                  <span>Subscriptions & Recurring Retainers Register</span>
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Showing {filteredTableSubscriptions.length} subscriptions across package-wise, regular retainers, and EMI agreements.
+                </p>
+              </div>
+
+              {/* Search Bar */}
+              <div className="relative w-full sm:w-72">
+                <input
+                  type="text"
+                  placeholder="Search plan, client, company, branch..."
+                  value={subscriptionSearchQuery}
+                  onChange={(e) => setSubscriptionSearchQuery(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 text-xs bg-surface-hover/60 border border-border rounded-xl focus:outline-hidden focus:ring-1 focus:ring-primary text-foreground placeholder-muted-foreground"
+                />
+                <Search size={13} className="absolute left-2.5 top-2.5 text-muted-foreground" />
+              </div>
+            </div>
+
+            {/* Sub-Filter Pills */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              {[
+                { id: "all", label: `All (${totalSubsCount})` },
+                { id: "package", label: `📦 Package Wise (${packageSubs.length})` },
+                { id: "regular", label: `🔁 Regular Retainers (${regularSubs.length})` },
+                { id: "emi", label: `💳 EMI Subscriptions (${emiSubs.length})` },
+                { id: "active", label: `🟢 Active (${activeSubsCount})` },
+                { id: "expiring_soon", label: `⏰ Expiring Soon (${expiringSoonSubsCount})` },
+                { id: "past_due", label: `⚠️ Past Due (${pastDueSubsCount})` },
+                { id: "canceled", label: `⛔ Canceled (${canceledSubsCount})` },
+              ].map((pill) => {
+                const isSelected = subscriptionSubFilter === pill.id
+                return (
+                  <button
+                    key={pill.id}
+                    onClick={() => setSubscriptionSubFilter(pill.id as SubscriptionFilterType)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                      isSelected
+                        ? "bg-purple-600 text-white shadow-xs"
+                        : "bg-surface-hover/70 text-muted-foreground hover:text-foreground border border-border"
+                    }`}
+                  >
+                    {pill.label}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Subscriptions Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-border text-muted-foreground font-semibold bg-surface-hover/40">
+                    <th className="py-3 px-3.5">Plan / Package Name</th>
+                    <th className="py-3 px-3.5">Client & Company</th>
+                    <th className="py-3 px-3.5">Model Type</th>
+                    <th className="py-3 px-3.5">Billing Cycle</th>
+                    <th className="py-3 px-3.5 text-right">Cycle Amount</th>
+                    <th className="py-3 px-3.5 text-right">Monthly MRR</th>
+                    <th className="py-3 px-3.5">Start Date</th>
+                    <th className="py-3 px-3.5">Next Renewal</th>
+                    <th className="py-3 px-3.5">Branch Hub</th>
+                    <th className="py-3 px-3.5 text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/40 font-medium">
+                  {filteredTableSubscriptions.length === 0 ? (
+                    <tr>
+                      <td colSpan={10} className="py-10 text-center text-muted-foreground">
+                        No subscriptions match the selected scoping and filter criteria.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredTableSubscriptions.map((sub) => {
+                      const mrr = getSubscriptionMRR(sub)
+                      const rawAmt = sub.numericAmount || parseInt(String(sub.amount || "0").replace(/[^0-9]/g, "")) || 0
+                      const branchDisplay = sub.branchName || clientMap[(sub.clientName || "").toLowerCase().trim()]?.branchName || branchMap[sub.branchId || ""] || "-"
+
+                      const modelBadge = sub.subscriptionType === "package" ? (
+                        <span className="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-600 font-bold text-[10px] border border-blue-500/20">
+                          📦 Package
+                        </span>
+                      ) : sub.subscriptionType === "emi" ? (
+                        <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 font-bold text-[10px] border border-amber-500/20">
+                          💳 EMI Plan
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-md bg-teal-500/10 text-teal-600 font-bold text-[10px] border border-teal-500/20">
+                          🔁 Retainer
+                        </span>
+                      )
+
+                      const statusColors: Record<string, string> = {
+                        Active: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+                        "Expiring Soon": "bg-amber-500/10 text-amber-600 border-amber-500/20",
+                        "Past Due": "bg-rose-500/10 text-rose-600 border-rose-500/20",
+                        Canceled: "bg-zinc-500/10 text-zinc-600 border-zinc-500/20",
+                        Trial: "bg-blue-500/10 text-blue-600 border-blue-500/20",
+                      }
+
+                      return (
+                        <tr key={sub.id} className="hover:bg-surface-hover/50 transition-colors">
+                          {/* Plan Name */}
+                          <td className="py-3 px-3.5">
+                            <span className="font-bold text-foreground block">{sub.planName}</span>
+                            {sub.packageCategory && (
+                              <span className="text-[10px] text-muted-foreground">{sub.packageCategory}</span>
+                            )}
+                          </td>
+
+                          {/* Client & Company */}
+                          <td className="py-3 px-3.5">
+                            <span className="font-semibold text-foreground block">{sub.clientName}</span>
+                            {sub.clientCompany ? (
+                              <span className="text-[10px] text-muted-foreground">{sub.clientCompany}</span>
+                            ) : sub.clientEmail ? (
+                              <span className="text-[10px] text-muted-foreground font-mono">{sub.clientEmail}</span>
+                            ) : null}
+                          </td>
+
+                          {/* Model Type */}
+                          <td className="py-3 px-3.5">
+                            {modelBadge}
+                          </td>
+
+                          {/* Billing Cycle */}
+                          <td className="py-3 px-3.5 font-medium text-foreground">
+                            {sub.billingCycle || "Monthly"}
+                          </td>
+
+                          {/* Cycle Amount */}
+                          <td className="py-3 px-3.5 text-right font-mono font-bold text-foreground">
+                            ₹{rawAmt.toLocaleString("en-IN")}
+                          </td>
+
+                          {/* Monthly MRR */}
+                          <td className="py-3 px-3.5 text-right font-mono font-bold text-purple-600 dark:text-purple-400">
+                            ₹{mrr.toLocaleString("en-IN")}
+                          </td>
+
+                          {/* Start Date */}
+                          <td className="py-3 px-3.5 text-muted-foreground font-mono text-[11px]">
+                            {sub.startDate || "-"}
+                          </td>
+
+                          {/* Next Renewal */}
+                          <td className="py-3 px-3.5">
+                            <span className="font-mono font-semibold text-[11px] text-foreground block">
+                              {sub.nextBillingDate || "-"}
+                            </span>
+                          </td>
+
+                          {/* Branch */}
+                          <td className="py-3 px-3.5">
+                            <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground font-medium">
+                              <MapPin size={11} className="text-blue-500 shrink-0" />
+                              <span>{branchDisplay}</span>
+                            </span>
+                          </td>
+
+                          {/* Status */}
+                          <td className="py-3 px-3.5 text-center">
+                            <span
+                              className={`inline-block px-2 py-0.5 rounded-md text-[10.5px] font-bold border ${
+                                statusColors[sub.status] || "bg-zinc-100 text-zinc-700"
+                              }`}
+                            >
+                              {sub.status}
                             </span>
                           </td>
                         </tr>
