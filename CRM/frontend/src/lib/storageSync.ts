@@ -34,6 +34,18 @@ export async function markGlobalItemDeleted(id: string | number, moduleName?: st
   }
 }
 
+// Global function to unmark/restore an item if created/re-added
+export function unmarkGlobalItemDeleted(id: string | number): void {
+  if (!id) return
+  const strId = String(id).toLowerCase().trim()
+  const local = getLocalDeletedIds().filter(d => d !== strId)
+  if (typeof window !== "undefined") {
+    localStorage.setItem(UNIVERSAL_DELETED_KEY, JSON.stringify(local))
+  }
+  deletedCache = deletedCache.filter(d => d !== strId)
+  lastDeletedSyncTime = 0
+}
+
 // In-memory deleted cache & deduplication
 let deletedCache: string[] = []
 let lastDeletedSyncTime = 0

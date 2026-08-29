@@ -69,6 +69,8 @@ export function Topbar() {
     window.addEventListener("focus", handleSync)
     window.addEventListener("storage", handleSync)
     window.addEventListener("saampark_data_synced", handleSync)
+    window.addEventListener("saampark_company_switched", handleSync)
+    window.addEventListener("saampark_company_updated", handleSync)
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") handleSync()
     })
@@ -77,6 +79,8 @@ export function Topbar() {
       window.removeEventListener("focus", handleSync)
       window.removeEventListener("storage", handleSync)
       window.removeEventListener("saampark_data_synced", handleSync)
+      window.removeEventListener("saampark_company_switched", handleSync)
+      window.removeEventListener("saampark_company_updated", handleSync)
     }
   }, [fetchCompanies, fetchBranches])
 

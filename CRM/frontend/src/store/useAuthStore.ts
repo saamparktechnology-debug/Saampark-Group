@@ -6,6 +6,7 @@ import {
   fetchModuleDataFromDB, 
   saveModuleDataToDB, 
   markGlobalItemDeleted, 
+  unmarkGlobalItemDeleted,
   syncGlobalDeletedIds, 
   isGlobalItemDeleted, 
   getLocalDeletedIds, 
@@ -394,6 +395,20 @@ export const useAuthStore = create<AuthState>()(
             })
           }
 
+          // 4. Also preserve any companies currently in state (so newly added companies are never dropped)
+          const currentStoreCompanies = get().companies || []
+          currentStoreCompanies.forEach(c => {
+            if (!isGlobalItemDeleted(c.id, deletedIds) && !isGlobalItemDeleted(c.slug || '', deletedIds)) {
+              const key = String(c.slug || c.id).toLowerCase()
+              if (!map.has(key)) {
+                map.set(key, {
+                  ...c,
+                  name: getCompanyFullName(c),
+                })
+              }
+            }
+          })
+
           const combined = Array.from(map.values()).map(c => ({
             ...c,
             name: getCompanyFullName(c),
@@ -478,6 +493,9 @@ export const useAuthStore = create<AuthState>()(
 
         try {
           const compSlug = newComp.slug || newComp.name?.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || `comp_${Date.now()}`
+          unmarkGlobalItemDeleted(compSlug)
+          unmarkGlobalItemDeleted(newComp.name || '')
+
           await api.post('/companies', {
             name: newComp.name,
             slug: compSlug,
@@ -525,6 +543,8 @@ export const useAuthStore = create<AuthState>()(
             signature_image_url: newComp.signature_image_url || '',
           }
 
+          unmarkGlobalItemDeleted(created.id)
+
           const current = get().companies
           const updated = [...current.filter(c => c.id !== created.id && c.slug !== created.slug), created]
           
@@ -549,6 +569,8 @@ export const useAuthStore = create<AuthState>()(
             user: updatedUser,
           })
 
+          invalidateModuleCache('companies')
+
           // Persist to MySQL database single source of truth
           await saveModuleDataToDB('companies', updated, 'all').catch(() => {})
           if (updatedUser) {
@@ -563,10 +585,13 @@ export const useAuthStore = create<AuthState>()(
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new Event('storage'))
             window.dispatchEvent(new CustomEvent('saampark_data_synced'))
+            window.dispatchEvent(new CustomEvent('saampark_company_switched', { detail: { companyId: created.id } }))
+            window.dispatchEvent(new CustomEvent('saampark_company_updated', { detail: created }))
           }
 
           return created
-        } catch {
+        } catch (err) {
+          console.error("addCompany error:", err)
           return null
         }
       },
