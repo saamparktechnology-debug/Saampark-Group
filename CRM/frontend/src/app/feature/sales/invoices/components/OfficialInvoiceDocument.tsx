@@ -362,19 +362,37 @@ export function OfficialInvoiceDocument({
     <div className="flex flex-col sm:flex-row justify-between items-stretch gap-4 border-b border-zinc-200 pb-3">
       {/* Left: Company Brand & Entity Info with Logo */}
       <div className="flex items-start gap-3.5 flex-1 min-w-0">
-        {resolvedLogoUrl ? (
-          <div className="w-28 h-24 flex items-center justify-center shrink-0 overflow-hidden bg-transparent">
-            <img 
-              src={resolvedLogoUrl} 
-              alt={activeCompany?.name || "Company Logo"} 
-              className="max-w-full max-h-full object-contain" 
-            />
-          </div>
-        ) : (
-          <div className={`w-28 h-24 p-2 rounded-tl-2xl rounded-tr-xs rounded-br-[32px] rounded-bl-xs ${theme.cardHeaderGradient} text-white flex items-center justify-center text-center shadow-md shrink-0 border border-white/20 overflow-hidden`}>
-            <span className="text-4xl">{activeCompany?.logo || "🏢"}</span>
-          </div>
-        )}
+        {/* Top-Left Premium Branded Logo Card with layered teal swooshes */}
+        <div className="relative w-28 h-32 sm:w-32 sm:h-36 rounded-2xl overflow-hidden shadow-md shrink-0 border border-teal-900/30 bg-gradient-to-b from-[#004e59] via-[#005c68] to-[#003840] flex flex-col items-center justify-center p-2.5">
+          {/* Layered Organic Bottom Wave Curves */}
+          <svg className="absolute bottom-0 left-0 right-0 w-full h-14 pointer-events-none" viewBox="0 0 100 45" preserveAspectRatio="none">
+            <path d="M0,28 C25,38 65,18 100,24 L100,45 L0,45 Z" fill="#008a99" fillOpacity="0.45" />
+            <path d="M0,34 C35,42 70,22 100,12 L100,45 L0,45 Z" fill="#0d9488" fillOpacity="0.7" />
+            <path d="M0,40 C30,44 75,28 100,4 L100,45 L0,45 Z" fill="#2dd4bf" fillOpacity="0.85" />
+            <path d="M55,45 C75,32 90,18 100,0 L100,45 Z" fill="#a7f3d0" fillOpacity="0.95" />
+          </svg>
+
+          {/* Logo Content */}
+          {resolvedLogoUrl ? (
+            <div className="relative z-10 w-full h-full flex flex-col items-center justify-center">
+              <img 
+                src={resolvedLogoUrl} 
+                alt={activeCompany?.name || "Company Logo"} 
+                className="max-w-full max-h-20 object-contain drop-shadow-md brightness-110" 
+              />
+            </div>
+          ) : (
+            <div className="relative z-10 w-full h-full flex flex-col items-center justify-center text-center text-white pb-2">
+              <div className="text-3xl mb-1 drop-shadow-sm">🚀</div>
+              <div className="font-black text-xs tracking-wider uppercase leading-tight font-sans">
+                {activeCompany?.brand_name || activeCompany?.name || "SAAMPARK"}
+              </div>
+              <div className="text-[7.5px] font-bold text-teal-200 tracking-widest uppercase mt-0.5">
+                {activeCompany?.division_name || "TECHNOLOGY"}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Title, Subtitle, Legal IDs & Registered Office Coordinates */}
         <div className="space-y-1 flex-1 min-w-0 pt-0.5">
