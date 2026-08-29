@@ -428,11 +428,7 @@ export const useAuthStore = create<AuthState>()(
           console.warn("fetchCompanies warning:", err)
         }
 
-        const localDeleted = getLocalDeletedIds()
-        const currentFiltered = get().companies.filter(c => 
-          !isGlobalItemDeleted(c.id, localDeleted) && 
-          !isGlobalItemDeleted(c.slug || '', localDeleted)
-        )
+        const currentFiltered = (get().companies && get().companies.length > 0) ? get().companies : DEFAULT_COMPANIES
         set({ companies: currentFiltered })
         return currentFiltered
       },
