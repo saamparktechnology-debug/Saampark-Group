@@ -61,6 +61,8 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
 
   const [name, setName] = React.useState("")
   const [email, setEmail] = React.useState("")
+  const [emailError, setEmailError] = React.useState<string | null>(null)
+  const [isCheckingEmail, setIsCheckingEmail] = React.useState(false)
   const [role, setRole] = React.useState<UserRole>("Teams")
   const [selectedCompanyIds, setSelectedCompanyIds] = React.useState<string[]>(["tech"])
   const [selectedBranchId, setSelectedBranchId] = React.useState<string>("")
@@ -179,6 +181,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
     } else {
       setName("")
       setEmail("")
+      setEmailError(null)
       setRole("Teams")
       const defaultComp = (activeCompanyId && availableCompanies.some(c => c.id === activeCompanyId || c.slug === activeCompanyId))
         ? activeCompanyId
@@ -316,8 +319,63 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
     }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Check email uniqueness when blurring the field (only on create)
+  const handleEmailBlur = async () => {
+    if (editingUser) return // Only check on create
+    const normEmail = email.toLowerCase().trim()
+    if (!normEmail) return
+    // Basic format check
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(normEmail)) {
+      setEmailError("Please enter a valid email address.")
+      return
+    }
+    setIsCheckingEmail(true)
+    try {
+      const { getUsers } = await import("../services/userService")
+      const allUsers = await getUsers("all")
+      const exists = allUsers.some(u => (u.email || "").toLowerCase().trim() === normEmail)
+      if (exists) {
+        setEmailError(`⚠️ An account already exists with this email. Each email can only have one account.`)
+      } else {
+        setEmailError(null)
+      }
+    } catch {
+      setEmailError(null)
+    } finally {
+      setIsCheckingEmail(false)
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    const normEmail = email.toLowerCase().trim()
+
+    // Block if email is blank
+    if (!normEmail) {
+      setEmailError("Email address is required.")
+      return
+    }
+
+    // Block if known error already flagged
+    if (emailError) return
+
+    // On create: check uniqueness one final time before saving
+    if (!editingUser) {
+      setIsCheckingEmail(true)
+      try {
+        const { getUsers } = await import("../services/userService")
+        const allUsers = await getUsers("all")
+        const duplicate = allUsers.find(u => (u.email || "").toLowerCase().trim() === normEmail)
+        if (duplicate) {
+          setEmailError(`⚠️ Email "${normEmail}" is already registered as a ${duplicate.role}. One email = one account only.`)
+          setIsCheckingEmail(false)
+          return
+        }
+      } catch {}
+      setIsCheckingEmail(false)
+    }
 
     const primaryCompanyId = selectedCompanyIds[0] || "tech"
     const companyNamesList = companies
@@ -331,7 +389,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
 
     const payload: Partial<UserType> = {
       name,
-      email: email.toLowerCase().trim(),
+      email: normEmail,
       role,
       companyId: primaryCompanyId,
       companyIds: selectedCompanyIds,
@@ -368,7 +426,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
     })
 
     const userIdStr = String(editingUser?.id || payload.id || `usr_${Date.now()}`)
-    const emailNorm = email.toLowerCase().trim()
+    const emailNorm = normEmail
 
     setUserPermissions(userIdStr, finalAllowedModules)
     setUserAllModuleActions(userIdStr, finalActionMatrix)
@@ -508,9 +566,14 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
                     type="email"
                     required
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => { setEmail(e.target.value); setEmailError(null) }}
+                    onBlur={handleEmailBlur}
                     placeholder="e.g. rahul@saampark.in"
-                    className="flex-1 min-w-0 px-3.5 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs focus:outline-hidden focus:ring-1 focus:ring-blue-500"
+                    className={`flex-1 min-w-0 px-3.5 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800 border text-xs focus:outline-hidden focus:ring-1 ${
+                      emailError
+                        ? "border-rose-400 focus:ring-rose-400"
+                        : "border-zinc-200 dark:border-zinc-700 focus:ring-blue-500"
+                    }`}
                   />
                   {editingUser && (
                     <button
@@ -534,6 +597,18 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
                     </button>
                   )}
                 </div>
+                {/* Inline duplicate / format error */}
+                {isCheckingEmail && (
+                  <p className="mt-1 text-[11px] text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                    <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                    Checking email availability...
+                  </p>
+                )}
+                {emailError && !isCheckingEmail && (
+                  <p className="mt-1 text-[11px] text-rose-600 dark:text-rose-400 font-semibold bg-rose-50 dark:bg-rose-950/30 px-2.5 py-1.5 rounded-lg border border-rose-200 dark:border-rose-800">
+                    {emailError}
+                  </p>
+                )}
               </div>
             </div>
 
