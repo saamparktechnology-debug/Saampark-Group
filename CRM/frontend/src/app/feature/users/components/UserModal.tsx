@@ -515,24 +515,19 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
                   {editingUser && (
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={(e) => {
                         if (!email || !email.includes("@")) {
                           alert("Please enter a valid email address.")
                           return
                         }
-                        const isChanged = email.toLowerCase().trim() !== (editingUser.email || "").toLowerCase().trim()
-                        if (isChanged) {
-                          alert(`Email updated to ${email.toLowerCase().trim()}. Click 'Save Changes' below to apply across all databases.`)
-                        } else {
-                          alert("Email is unchanged.")
-                        }
+                        handleSubmit(e as any)
                       }}
                       className={`px-3 py-2 rounded-xl text-xs font-bold shrink-0 transition-all cursor-pointer shadow-xs flex items-center gap-1 ${
                         email.toLowerCase().trim() !== (editingUser.email || "").toLowerCase().trim()
                           ? "bg-blue-600 hover:bg-blue-700 text-white animate-pulse"
                           : "bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-300"
                       }`}
-                      title="Update email for this single account"
+                      title="Update email for this account now"
                     >
                       <Check size={13} />
                       <span>Update</span>

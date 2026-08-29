@@ -219,8 +219,14 @@ export default function UsersMain() {
       ? [...editingUser.previousEmails]
       : (editingUser?.previousEmail ? [editingUser.previousEmail] : [])
 
-    if (isEmailTransfer && oldEmail && !prevEmailsList.includes(oldEmail)) {
-      prevEmailsList.push(oldEmail)
+    if (isEmailTransfer && oldEmail) {
+      if (!prevEmailsList.includes(oldEmail)) {
+        prevEmailsList.push(oldEmail)
+      }
+      try {
+        const { markGlobalItemDeleted } = await import("@/lib/storageSync")
+        await markGlobalItemDeleted(oldEmail, "users")
+      } catch {}
     }
 
     const saved = recordUserAccount(

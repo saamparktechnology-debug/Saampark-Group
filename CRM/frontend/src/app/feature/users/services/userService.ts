@@ -545,8 +545,13 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
     if (Array.isArray(rawData) && rawData.length > 0) {
       rawData.forEach((u: any) => {
         const emailNorm = (u.email || "").toLowerCase().trim();
-        if (emailNorm && !HIDDEN_MASTER_EMAILS.includes(emailNorm)) {
-          const existingIdx = dbUsers.findIndex((du) => du.email.toLowerCase().trim() === emailNorm);
+        const rawIdStr = String(u.id || "").toLowerCase().trim();
+        if (emailNorm && !HIDDEN_MASTER_EMAILS.includes(emailNorm) && !deletedEmails.includes(emailNorm)) {
+          const existingIdx = dbUsers.findIndex((du) => 
+            (rawIdStr && String(du.id).toLowerCase().trim() === rawIdStr) ||
+            du.email.toLowerCase().trim() === emailNorm ||
+            (Array.isArray(du.previousEmails) && du.previousEmails.map(e => e.toLowerCase().trim()).includes(emailNorm))
+          );
           const existingItem = existingIdx >= 0 ? dbUsers[existingIdx] : null;
           const mappedRole = mapRoleName(u.role_name || u.role, u.role_id);
           const finalRole = mappedRole || existingItem?.role || "Teams";
@@ -580,11 +585,14 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
             parsedCompanyIds = [u.company_id || "tech"];
           }
 
+          // If this account was already updated with a new primary email, keep the new primary email!
+          const preservedEmail = existingItem?.email || emailNorm;
+
           const item: UserItem = {
-            id: String(u.id || `usr_${Math.random()}`),
-            name: u.full_name || u.name || u.first_name || u.email || "User Account",
-            email: emailNorm,
-            role: finalRole,
+            id: String(u.id || existingItem?.id || `usr_${Math.random()}`),
+            name: existingItem?.name || u.full_name || u.name || u.first_name || u.email || "User Account",
+            email: preservedEmail,
+            role: existingItem?.role || finalRole,
             companyId: u.company_id || parsedCompanyIds[0] || "tech",
             companyIds: parsedCompanyIds,
             companyName:
@@ -605,13 +613,16 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
             allowedModules: permObj?.allowedModules || existingItem?.allowedModules,
             kycStatus: u.kyc_status || u.kycStatus || existingItem?.kycStatus || "Pending",
             kycData: u.kyc_data ? (() => { try { return typeof u.kyc_data === 'string' ? JSON.parse(u.kyc_data) : u.kyc_data } catch { return undefined } })() : existingItem?.kycData,
+            previousEmails: existingItem?.previousEmails,
+            previousEmail: existingItem?.previousEmail,
           };
 
           if (existingIdx >= 0 && existingItem) {
             dbUsers[existingIdx] = {
               ...item,
               ...existingItem,
-              id: String(u.id || existingItem.id),
+              email: preservedEmail,
+              id: String(existingItem.id || u.id),
               name: existingItem.name || item.name,
               avatarUrl: existingItem.avatarUrl || item.avatarUrl,
               companyIds: (existingItem.companyIds && existingItem.companyIds.length > 0) ? existingItem.companyIds : parsedCompanyIds,
@@ -631,6 +642,8 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
               allowedModules: existingItem.allowedModules || permObj?.allowedModules || item.allowedModules,
               kycStatus: existingItem.kycStatus || item.kycStatus,
               kycData: existingItem.kycData || item.kycData,
+              previousEmails: existingItem.previousEmails,
+              previousEmail: existingItem.previousEmail,
             };
           } else {
             dbUsers.push(item);
