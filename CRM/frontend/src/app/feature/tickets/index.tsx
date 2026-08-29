@@ -12,7 +12,6 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { fetchModuleDataFromDB, saveModuleDataToDB, filterGlobalDeletedItems, markGlobalItemDeleted } from "@/lib/storageSync"
 import { uploadToImgBB } from "@/lib/imgbbUpload"
-import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
 
 export type TicketPriority = "Low" | "Normal" | "High" | "Critical"
 export type TicketStatus = "New" | "Open" | "In Progress" | "Under Review" | "Resolved" | "Closed"
@@ -47,18 +46,17 @@ export interface DisputeTicket {
 }
 
 export default function TicketsMain() {
-  const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
-  const { canPerformAction } = usePermissionStore()
+  const { user, activeCompanyId } = useAuthStore()
 
-  const canViewTicket = canPerformAction(user, "Tickets", "view")
-  const canAddTicket = canPerformAction(user, "Tickets", "add")
-  const canEditTicket = canPerformAction(user, "Tickets", "edit")
-  const canDeleteTicket = canPerformAction(user, "Tickets", "delete")
+  // Super Admin = ONLY role with full ticket visibility + status change power
+  const roleLower = (user?.role || "").toLowerCase().trim()
+  const isSuperAdmin = roleLower === "super admin" || roleLower === "superadmin" || roleLower.includes("super")
 
-  const isSuperAdmin = user?.role === "Super Admin"
-  const isCompanyAdmin = user?.role === "Admin"
-  const isAdmin = isSuperAdmin || isCompanyAdmin
-  const canResolveTicket = canEditTicket || isAdmin
+  // Anyone can raise a ticket; only Super Admin can resolve/change status or delete
+  const canAddTicket = true
+  const canResolveTicket = isSuperAdmin
+  const canDeleteTicket = isSuperAdmin
+
   const currentUserEmail = (user?.email || "").toLowerCase().trim()
   const currentUserName = user?.name || "User"
   const targetComp = activeCompanyId || user?.companyId || "tech"
@@ -168,44 +166,30 @@ export default function TicketsMain() {
     }
   }, [loadTickets])
 
-  // Strict Access Control:
-  // 1. Super Admin & Company Admin see tickets filtered strictly by active company and active branch
-  // 2. Client or Team Member can ONLY see tickets raised by themselves (no other user can see them)
+  // Access Control Rules:
+  // Super Admin → sees ALL tickets across the company
+  // Everyone else (Admin, Team, Client) → sees ONLY tickets they personally raised
   const accessibleTickets = React.useMemo(() => {
-    const userComp = (activeCompanyId || user?.companyId || "").toLowerCase().trim()
-    const targetBranch = activeBranchId
-
-    const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
-    const targetBranchId = String(targetBranchObj?.id || targetBranch || "").toLowerCase().trim()
-    const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
-
-    const checkBranch = (t: any) => {
-      if (!targetBranch) return true
-      const tBranch = String(t.branchId || t.branch_id || "").toLowerCase().trim()
-      const tBranchName = String(t.branchName || t.branch_name || "").toLowerCase().trim()
-      return (tBranch && (tBranch === targetBranchId || (targetBranchName && tBranch === targetBranchName))) ||
-             (tBranchName && (tBranchName === targetBranchName || tBranchName === targetBranchId))
-    }
-
-    if (isSuperAdmin || isCompanyAdmin) {
+    if (isSuperAdmin) {
+      // Super Admin sees everything — filter by company context if applicable
+      const userComp = (activeCompanyId || user?.companyId || "").toLowerCase().trim()
       return tickets.filter(t => {
-        if (userComp && userComp !== "all") {
-          const tComp = (t.companyId || (t as any).company || "tech").toLowerCase().trim()
-          if (tComp !== userComp && !(userComp === "tech" && !t.companyId)) return false
-        }
-        if (targetBranch) {
-          return checkBranch(t)
-        }
-        return true
+        if (!userComp || userComp === "all") return true
+        const tComp = (t.companyId || "tech").toLowerCase().trim()
+        return tComp === userComp || (userComp === "tech" && !t.companyId)
       })
     }
+
+    // All other roles: only see their own tickets
     return tickets.filter(t => {
-      if (targetBranch && !checkBranch(t)) return false
       const cEmail = (t.creatorEmail || "").toLowerCase().trim()
       const cName = (t.createdBy || "").toLowerCase().trim()
-      return isRecordAssignedToClient(t, user) || cEmail === currentUserEmail || (currentUserEmail && cEmail.includes(currentUserEmail)) || cName === currentUserName.toLowerCase().trim()
+      return (
+        (currentUserEmail && cEmail === currentUserEmail) ||
+        (currentUserName && cName === currentUserName.toLowerCase().trim())
+      )
     })
-  }, [tickets, isSuperAdmin, isCompanyAdmin, user, currentUserEmail, currentUserName, activeCompanyId, activeBranchId, branches])
+  }, [tickets, isSuperAdmin, user, currentUserEmail, currentUserName, activeCompanyId])
 
   const filteredTickets = React.useMemo(() => {
     return accessibleTickets.filter(t => {
@@ -246,7 +230,7 @@ export default function TicketsMain() {
       creatorEmail: currentUserEmail,
       creatorRole: user?.role || "User",
       companyId: targetComp,
-      branchId: activeBranchId || user?.branchId || undefined,
+      branchId: user?.branchId || undefined,
       createdAt: new Date().toLocaleDateString("en-IN", { dateStyle: "medium", timeStyle: "short" }),
       assignedTo: "Company Admin & Super Admin",
       raisedTo: "Company Admin & Super Admin",
@@ -331,23 +315,21 @@ export default function TicketsMain() {
             <span>Support & Dispute Tickets</span>
           </h1>
           <p className="text-xs text-zinc-500 mt-1">
-            {isAdmin 
+            {isSuperAdmin 
               ? "Analyze raised disputes, investigate technical & billing inquiries, and dispatch official resolution confirmations"
-              : "Raise inquiries or dispute deliverables with dedicated management resolution and status tracking"}
+              : "Raise inquiries or dispute deliverables — only the Super Admin reviews and resolves your ticket"}
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          {canAddTicket && (
-            <button
-              type="button"
-              onClick={() => setIsRaiseModalOpen(true)}
-              className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm cursor-pointer"
-            >
-              <Plus size={14} />
-              <span>Raise Dispute / Ticket</span>
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => setIsRaiseModalOpen(true)}
+            className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm cursor-pointer"
+          >
+            <Plus size={14} />
+            <span>Raise Dispute / Ticket</span>
+          </button>
         </div>
       </div>
 
@@ -497,10 +479,10 @@ export default function TicketsMain() {
                           className="px-2.5 py-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-semibold flex items-center gap-1 cursor-pointer"
                         >
                           <Eye size={12} />
-                          <span>{canResolveTicket ? "Analyze & Resolve" : "View Status"}</span>
+                          <span>{isSuperAdmin ? "Analyze & Resolve" : "View Status"}</span>
                         </button>
 
-                        {canDeleteTicket && (
+                        {isSuperAdmin && (
                           <button
                             type="button"
                             onClick={() => handleDelete(t.id)}

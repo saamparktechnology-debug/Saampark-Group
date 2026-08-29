@@ -78,6 +78,7 @@ export default function InvoicesPage() {
   const [selectedInvoice, setSelectedInvoice] = React.useState<InvoiceItem | null>(null)
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = React.useState(false)
   const [isAddModalOpen, setIsAddModalOpen] = React.useState(false)
+  const [isGeneratingInvoice, setIsGeneratingInvoice] = React.useState(false)
   const [toastMessage, setToastMessage] = React.useState<string | null>(null)
 
   // Payment Recording / Pay Now Modal state
