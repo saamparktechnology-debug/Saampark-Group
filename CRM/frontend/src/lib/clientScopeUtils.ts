@@ -14,6 +14,7 @@ export function isRecordAssignedToClient(record: any, user?: User | null): boole
   const uId = String(user.id || "").toLowerCase().trim()
   const uEmail = (user.email || "").toLowerCase().trim()
   const uName = (user.name || "").toLowerCase().trim()
+  const uCompName = String((user as any).companyName || (user as any).company || "").toLowerCase().trim()
 
   // Collect all known aliases for the user (including previous emails)
   const userEmails: string[] = [uEmail]
@@ -28,33 +29,48 @@ export function isRecordAssignedToClient(record: any, user?: User | null): boole
     userEmails.push((user as any).previousEmail.toLowerCase().trim())
   }
 
-  // 1. Direct ID matching (clientId, client_id, customerId, userId)
-  const rClientId = String(record.clientId || record.client_id || record.customerId || record.customer_id || record.userId || "").toLowerCase().trim()
+  // Helper to check if string matches client user name or client company name
+  const matchesClientName = (target: string) => {
+    if (!target) return false
+    const t = target.toLowerCase().trim()
+    if (uName && (t === uName || t.includes(uName) || uName.includes(t))) return true
+    if (uCompName && (t === uCompName || t.includes(uCompName) || uCompName.includes(t))) return true
+    return false
+  }
+
+  // 1. Direct ID matching (clientId, client_id, customerId, userId, subscriberId, etc.)
+  const rClientId = String(record.clientId || record.client_id || record.customerId || record.customer_id || record.userId || record.subscriberId || "").toLowerCase().trim()
   if (rClientId && (rClientId === uId || userEmails.includes(rClientId))) {
     return true
   }
 
-  // 2. Email matching (clientEmail, client_email, email, customerEmail, createdByEmail)
-  const rEmail = String(record.clientEmail || record.client_email || record.email || record.customerEmail || record.createdByEmail || "").toLowerCase().trim()
+  // 2. Email matching (clientEmail, client_email, email, customerEmail, createdByEmail, billedToEmail, etc.)
+  const rEmail = String(record.clientEmail || record.client_email || record.email || record.customerEmail || record.createdByEmail || record.billedToEmail || record.recipientEmail || "").toLowerCase().trim()
   if (rEmail && userEmails.includes(rEmail)) {
     return true
   }
 
-  // 3. Name matching (client, clientName, customerName, customer, recipientName)
-  const rClientName = String(record.client || record.clientName || record.customerName || record.customer || record.recipientName || "").toLowerCase().trim()
-  if (rClientName && uName) {
-    if (rClientName === uName || rClientName.includes(uName) || uName.includes(rClientName)) {
-      return true
-    }
+  // 3. Name matching (client, clientName, customerName, customer, recipientName, subscriberName, subscriber)
+  const rClientName = String(record.client || record.clientName || record.customerName || record.customer || record.recipientName || record.subscriberName || record.subscriber || record.billedTo || "").toLowerCase().trim()
+  if (rClientName && matchesClientName(rClientName)) {
+    return true
   }
 
   // 4. Project or Sub-object client properties
   if (record.project && typeof record.project === "object") {
     const pClient = String(record.project.client || record.project.clientName || "").toLowerCase().trim()
     const pEmail = String(record.project.clientEmail || record.project.email || "").toLowerCase().trim()
+    const pClientId = String(record.project.clientId || record.project.client_id || "").toLowerCase().trim()
+    if (pClientId && (pClientId === uId || userEmails.includes(pClientId))) return true
     if (pEmail && userEmails.includes(pEmail)) return true
-    if (pClient && uName && (pClient === uName || pClient.includes(uName) || uName.includes(pClient))) return true
+    if (pClient && matchesClientName(pClient)) return true
   }
+
+  // 5. Creator matching (if client created the record themselves)
+  const cEmail = String(record.createdByEmail || "").toLowerCase().trim()
+  const cId = String(record.createdById || "").toLowerCase().trim()
+  if (cEmail && userEmails.includes(cEmail)) return true
+  if (cId && cId === uId) return true
 
   return false
 }

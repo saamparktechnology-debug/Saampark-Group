@@ -184,14 +184,8 @@ export default function TasksMain() {
     if (isClient) {
       return tasks.filter((t) => {
         if (!checkBranch(t)) return false
-        const tClient = (t.client || (t as any).clientName || "").toLowerCase().trim()
-        const tEmail = ((t as any).clientEmail || (t as any).createdByEmail || "").toLowerCase().trim()
-        return (
-          tClient === normName ||
-          tEmail === normEmail ||
-          (normName && tClient.includes(normName)) ||
-          (normEmail && tEmail.includes(normEmail))
-        )
+        const { isRecordAssignedToClient } = require("@/lib/clientScopeUtils")
+        return isRecordAssignedToClient(t, user)
       })
     }
 
