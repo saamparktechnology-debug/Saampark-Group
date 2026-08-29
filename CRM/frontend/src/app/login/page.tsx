@@ -281,6 +281,32 @@ export default function LoginPage() {
         matchedRole = "Admin"
       }
 
+      // ── STRICT PORTAL-BASED ROLE RESTRICTION ENFORCEMENT ─────────────────────
+      if (selectedRoleChoice === "Admin") {
+        if (matchedRole !== "Super Admin" && matchedRole !== "Admin") {
+          setIsLoading(false)
+          setError("Access Denied: This portal is reserved for Super Admin & System Administrators only. Please select the Team Member or Client Login portal.")
+          return
+        }
+      } else if (selectedRoleChoice === "Teams") {
+        if (matchedRole === "Super Admin" || matchedRole === "Admin") {
+          setIsLoading(false)
+          setError("Access Denied: Administrators and Super Admins must log in through the Administrator portal. Please choose the Administrator portal.")
+          return
+        }
+        if (matchedRole === "Clients") {
+          setIsLoading(false)
+          setError("Access Denied: This portal is for internal Team Members only. Clients must log in through the Client Access portal.")
+          return
+        }
+      } else if (selectedRoleChoice === "Clients") {
+        if (matchedRole !== "Clients") {
+          setIsLoading(false)
+          setError("Access Denied: This portal is reserved for Client Access only. Staff and Administrators must log in through their designated portals.")
+          return
+        }
+      }
+
       // ── SUCCESS ──────────────────────────────────────────────────────────────
       const displayName = normalizedEmail === "hiisupriya@gmail.com" 
         ? "Supriya (Super Admin)" 
