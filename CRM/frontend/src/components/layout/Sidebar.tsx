@@ -71,7 +71,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { name: "Notes", href: "/feature/notes", icon: Book },
   { name: "Messages", href: "/feature/messages", icon: MessageSquare },
   { name: "Users", href: "/feature/users", icon: Users },
-  { name: "Tickets", href: "/feature/tickets", icon: HeadphonesIcon, badge: 21 },
+  { name: "Tickets", href: "/feature/tickets", icon: HeadphonesIcon },
   { name: "Knowledge base", href: "/feature/knowledge-base", icon: LifeBuoy },
   { name: "Files", href: "/feature/files", icon: Folder },
   { name: "Expenses", href: "/feature/expenses", icon: Calculator },
@@ -82,13 +82,84 @@ const ALL_NAV_ITEMS: NavItem[] = [
 export function Sidebar() {
   const pathname = usePathname()
   const { isSidebarCollapsed, setSidebarCollapsed } = useUIStore()
-  const { user } = useAuthStore()
+  const { user, activeCompanyId } = useAuthStore()
   const { isModuleAllowed, userActionPermissions, userPermissions } = usePermissionStore()
 
-  const [rawCounts, setRawCounts] = React.useState<Record<string, number>>({
-    Tickets: 21,
-  })
+  const [rawCounts, setRawCounts] = React.useState<Record<string, number>>({})
   const [visitedCounts, setVisitedCounts] = React.useState<Record<string, number>>({})
+
+  // Request browser notification permission gracefully on mount
+  React.useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      import("@/lib/notificationService").then(({ requestNotificationPermission }) => {
+        requestNotificationPermission().catch(() => {})
+      })
+    }
+  }, [])
+
+  // Load dynamic module badges in real time
+  const loadDynamicBadges = React.useCallback(async () => {
+    if (!user || !user.email) return
+    const userEmail = user.email.toLowerCase().trim()
+    const targetComp = activeCompanyId || user.companyId || "tech"
+
+    try {
+      const { fetchModuleDataFromDB } = await import("@/lib/storageSync")
+      
+      const [allMessages, allTickets, allTasks, allLeads] = await Promise.all([
+        fetchModuleDataFromDB<any[]>("chat_messages", [], targetComp).catch(() => []),
+        fetchModuleDataFromDB<any[]>("tickets", [], targetComp).catch(() => []),
+        fetchModuleDataFromDB<any[]>("tasks", [], targetComp).catch(() => []),
+        fetchModuleDataFromDB<any[]>("leads", [], targetComp).catch(() => []),
+      ])
+
+      // 1. Unread messages for this user
+      const unreadMessagesCount = Array.isArray(allMessages)
+        ? allMessages.filter((m) => m && m.recipientEmail && m.recipientEmail.toLowerCase().trim() === userEmail && !m.read).length
+        : 0
+
+      // 2. Open tickets
+      const openTicketsCount = Array.isArray(allTickets)
+        ? allTickets.filter((t) => t && t.status && t.status !== "Resolved" && t.status !== "Closed").length
+        : 0
+
+      // 3. Pending tasks assigned to user
+      const pendingTasksCount = Array.isArray(allTasks)
+        ? allTasks.filter((t) => {
+            if (!t) return false
+            const isAssigned = String(t.assignedTo || t.assignedToEmail || "").toLowerCase().includes(userEmail)
+            const isOpen = t.status !== "Completed" && t.status !== "Done"
+            return isAssigned && isOpen
+          }).length
+        : 0
+
+      // 4. New leads
+      const newLeadsCount = Array.isArray(allLeads)
+        ? allLeads.filter((l) => l && (l.status === "New" || (l as any).isNew === true)).length
+        : 0
+
+      setRawCounts({
+        Messages: unreadMessagesCount,
+        Tickets: openTicketsCount,
+        Tasks: pendingTasksCount,
+        Leads: newLeadsCount,
+      })
+    } catch {}
+  }, [user, activeCompanyId])
+
+  React.useEffect(() => {
+    loadDynamicBadges()
+    const interval = setInterval(loadDynamicBadges, 5000)
+    window.addEventListener("storage", loadDynamicBadges)
+    window.addEventListener("saampark_data_synced", loadDynamicBadges)
+    window.addEventListener("saampark_company_switched", loadDynamicBadges)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener("storage", loadDynamicBadges)
+      window.removeEventListener("saampark_data_synced", loadDynamicBadges)
+      window.removeEventListener("saampark_company_switched", loadDynamicBadges)
+    }
+  }, [loadDynamicBadges])
 
   // Load visited counts from localStorage
   React.useEffect(() => {

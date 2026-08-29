@@ -319,11 +319,31 @@ export default function MessagesMain() {
 
   // 2. Load and poll chat messages scoped by active company
   const targetComp = activeCompanyId || user?.companyId || "tech"
+  const previousMessagesRef = React.useRef<ChatMessage[]>([])
 
   const loadChat = React.useCallback(async () => {
     const data = await fetchModuleDataFromDB<ChatMessage[]>("chat_messages", [], targetComp)
-    setMessages(Array.isArray(data) ? filterGlobalDeletedItems(data) : [])
-  }, [targetComp])
+    const list = Array.isArray(data) ? filterGlobalDeletedItems(data) : []
+    
+    // Check if new incoming message received for current user to notify
+    if (previousMessagesRef.current.length > 0 && list.length > previousMessagesRef.current.length) {
+      const prevIds = new Set(previousMessagesRef.current.map(m => m.id))
+      const brandNew = list.filter(m => !prevIds.has(m.id))
+      brandNew.forEach(m => {
+        if (m.recipientEmail.toLowerCase().trim() === currentUserEmail && m.senderEmail.toLowerCase().trim() !== currentUserEmail) {
+          import("@/lib/notificationService").then(({ sendBrowserNotification }) => {
+            sendBrowserNotification(`New Message from ${m.senderName || "Colleague"}`, {
+              body: m.text,
+              tag: `msg_${m.id}`,
+              url: "/feature/messages"
+            })
+          })
+        }
+      })
+    }
+    previousMessagesRef.current = list
+    setMessages(list)
+  }, [targetComp, currentUserEmail])
 
   React.useEffect(() => {
     loadChat()
@@ -336,6 +356,30 @@ export default function MessagesMain() {
       window.removeEventListener("saampark_company_switched", loadChat)
     }
   }, [loadChat])
+
+  // Mark incoming messages as read when viewing contact conversation
+  React.useEffect(() => {
+    if (!selectedContact || !currentUserEmail) return
+    const contactEmailNorm = selectedContact.email.toLowerCase().trim()
+
+    let hasUnread = false
+    const updated = messages.map((m) => {
+      const isIncoming = m.recipientEmail.toLowerCase().trim() === currentUserEmail
+      const isFromContact = m.senderEmail.toLowerCase().trim() === contactEmailNorm
+      if (isIncoming && isFromContact && !m.read) {
+        hasUnread = true
+        return { ...m, read: true, readAt: new Date().toISOString() }
+      }
+      return m
+    })
+
+    if (hasUnread) {
+      setMessages(updated)
+      saveModuleDataToDB("chat_messages", updated, targetComp).then(() => {
+        window.dispatchEvent(new Event("saampark_data_synced"))
+      })
+    }
+  }, [selectedContact, messages, currentUserEmail, targetComp])
 
   // Safe, isolated auto scroll for messages container (does NOT scroll outer window on mobile)
   const scrollToBottom = React.useCallback((smooth = true) => {
@@ -673,9 +717,16 @@ export default function MessagesMain() {
                               </button>
                             )}
                           </div>
-                          <div className="flex items-center gap-1 text-[10px] text-zinc-400 px-1">
+                          <div className="flex items-center gap-1.5 text-[10px] text-zinc-400 px-1">
                             <span>{msg.timestamp}</span>
-                            {isMe && <CheckCheck size={12} className="text-blue-500" />}
+                            {isMe && (
+                              <span title={msg.read ? "Read by recipient" : "Delivered"}>
+                                <CheckCheck 
+                                  size={13} 
+                                  className={msg.read ? "text-sky-400 dark:text-sky-300 font-bold stroke-[2.5]" : "text-zinc-400/80 dark:text-zinc-500"} 
+                                />
+                              </span>
+                            )}
                           </div>
                         </div>
                       </motion.div>
