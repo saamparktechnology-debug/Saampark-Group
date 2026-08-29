@@ -143,31 +143,46 @@ export default function LoginPage() {
       // 1. Fetch active registered user accounts from MySQL database
       unmarkUserAsDeleted(normalizedEmail)
       const registeredAccounts = await getStoredUserAccountsAsync()
-      let dbAccount = registeredAccounts.find((acc) => {
+
+      // Check if user is attempting to log in with an old transferred/obsolete email address
+      const obsoleteAccount = registeredAccounts.find((acc) => {
         const mainEmail = (acc.email || "").toLowerCase().trim()
         const prevEmails = Array.isArray(acc.previousEmails)
           ? acc.previousEmails.map((pe) => (pe || "").toLowerCase().trim())
           : []
         const altEmail = ((acc as any).previousEmail || "").toLowerCase().trim()
-        return mainEmail === normalizedEmail || prevEmails.includes(normalizedEmail) || altEmail === normalizedEmail
+        return mainEmail !== normalizedEmail && (prevEmails.includes(normalizedEmail) || altEmail === normalizedEmail)
       })
+
+      if (obsoleteAccount) {
+        setIsLoading(false)
+        setError(`This email address (${normalizedEmail}) has been transferred to a new email. Please log in using your updated active email address.`)
+        return
+      }
+
+      let dbAccount = registeredAccounts.find((acc) => (acc.email || "").toLowerCase().trim() === normalizedEmail)
 
       if (!dbAccount) {
         const allDbUsers = await fetchModuleDataFromDB<UserItem[]>("users", [], "all").catch(() => [])
-        dbAccount = allDbUsers.find((acc) => {
+        const obsoleteInAll = allDbUsers.find((acc) => {
           const mainEmail = (acc.email || "").toLowerCase().trim()
           const prevEmails = Array.isArray(acc.previousEmails)
             ? acc.previousEmails.map((pe) => (pe || "").toLowerCase().trim())
             : []
           const altEmail = ((acc as any).previousEmail || "").toLowerCase().trim()
-          return mainEmail === normalizedEmail || prevEmails.includes(normalizedEmail) || altEmail === normalizedEmail
+          return mainEmail !== normalizedEmail && (prevEmails.includes(normalizedEmail) || altEmail === normalizedEmail)
         })
+        if (obsoleteInAll) {
+          setIsLoading(false)
+          setError(`This email address (${normalizedEmail}) has been transferred to a new email. Please log in using your updated active email address.`)
+          return
+        }
+        dbAccount = allDbUsers.find((acc) => (acc.email || "").toLowerCase().trim() === normalizedEmail)
       }
 
       // Ensure active account is un-suppressed
-      if (dbAccount) {
-        unmarkUserAsDeleted(normalizedEmail)
-        if (dbAccount.email) unmarkUserAsDeleted(dbAccount.email.toLowerCase().trim())
+      if (dbAccount && dbAccount.email) {
+        unmarkUserAsDeleted(dbAccount.email.toLowerCase().trim())
       }
 
       let backendUser: any = null
