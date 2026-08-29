@@ -509,21 +509,21 @@ export function OfficialInvoiceDocument({
           </span>
         </div>
 
-        <div className="space-y-1 text-[10px] pt-2">
-          <div className="flex flex-col justify-start">
-            <span className="text-white/80 text-[8.5px] uppercase tracking-wider font-semibold">INVOICE NO:</span>
-            <strong className="font-mono text-white text-[11px] sm:text-xs font-bold break-all leading-tight">
+        <div className="pt-2 space-y-1 text-[10px]">
+          <div>
+            <span className="text-white/80 text-[8.5px] uppercase tracking-wider font-semibold block">INVOICE NO:</span>
+            <strong className="font-mono text-white text-xs font-bold break-all leading-tight block">
               {invoiceNumOrId}
             </strong>
           </div>
-          <div className="flex justify-between items-center pt-0.5">
-            <span className="text-white/80">DATE:</span>
+          <div className="flex items-center gap-2 pt-0.5">
+            <span className="text-white/80 text-[8.5px] uppercase font-bold tracking-wider shrink-0 w-12">DATE:</span>
             <strong className="text-white font-mono text-[9.5px]">
               {formatInvoiceDate(invoice.billDate)}
             </strong>
           </div>
-          <div className="flex justify-between items-center">
-            <span className="text-white/80">DUE:</span>
+          <div className="flex items-center gap-2">
+            <span className="text-white/80 text-[8.5px] uppercase font-bold tracking-wider shrink-0 w-12">DUE:</span>
             <strong className="text-white font-mono text-[9.5px]">
               {hasDue ? formatInvoiceDate(invoice.dueDate) : "-"}
             </strong>
@@ -576,8 +576,8 @@ export function OfficialInvoiceDocument({
           )}
         </div>
 
-        {/* Official Scan & Verify QR Code beside Project Scope */}
-        <div className="shrink-0 text-center flex flex-col items-center bg-white p-1 rounded-xl border border-zinc-200 shadow-2xs">
+        {/* Official Scan & Verify QR Code beside Project Scope - Clean Square without circular background */}
+        <div className="shrink-0 text-center flex flex-col items-center bg-white p-1.5 border border-zinc-300 shadow-2xs rounded-none">
           <a 
             href={publicInvoiceViewUrl} 
             target="_blank" 
@@ -588,11 +588,11 @@ export function OfficialInvoiceDocument({
             <img 
               src={invoiceVerificationQrUrl} 
               alt={`QR ${invoiceNumOrId}`} 
-              className="w-13 h-13 bg-white p-0.5 object-contain group-hover:scale-105 transition-transform" 
+              className="w-14 h-14 bg-white object-contain group-hover:scale-105 transition-transform" 
               style={{ imageRendering: 'pixelated' }}
             />
           </a>
-          <span className="text-[7px] font-mono font-bold text-zinc-600 mt-0.5 block leading-tight">
+          <span className="text-[7.5px] font-mono font-bold text-zinc-700 mt-0.5 block uppercase tracking-tight">
             Scan & Verify
           </span>
         </div>
