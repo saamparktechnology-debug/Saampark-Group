@@ -71,12 +71,21 @@ function PublicInvoiceContent() {
             if (matchedCli) setClientDetails(matchedCli)
 
             const targetCompId = String(target.companyId || (target as any).company || "tech").toLowerCase().trim()
+            const targetCompName = String((target as any).companyName || "").toLowerCase().trim()
             const compList = Array.isArray(allCompanies) && allCompanies.length > 0 ? allCompanies : DEFAULT_COMPANIES
-            const matchedComp = compList.find(c => 
-              c.id.toLowerCase().trim() === targetCompId || 
-              (c.slug && c.slug.toLowerCase().trim() === targetCompId) ||
-              c.name.toLowerCase().trim() === targetCompId
-            ) || compList[0] || DEFAULT_COMPANIES[0]
+            const matchedComp = compList.find(c => {
+              const cId = c.id.toLowerCase().trim()
+              const cSlug = (c.slug || "").toLowerCase().trim()
+              const cName = c.name.toLowerCase().trim()
+              const cBrand = (c.brand_name || "").toLowerCase().trim()
+              const cDivision = (c.division_name || "").toLowerCase().trim()
+              return (
+                cId === targetCompId || 
+                cSlug === targetCompId || 
+                cName === targetCompId ||
+                (targetCompName && (cName === targetCompName || cBrand === targetCompName || `${cBrand} ${cDivision}`.trim() === targetCompName))
+              )
+            }) || compList[0] || DEFAULT_COMPANIES[0]
             setResolvedCompany(matchedComp)
           }
         }

@@ -23,6 +23,7 @@ import { getInstallments } from "../../subscriptions/services/subscriptionServic
 import { Project } from "../../projects/types"
 import { InstallmentItem } from "../../subscriptions/types"
 import { InvoiceModal } from "../../sales/invoices/components/InvoiceModal"
+import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
 
 export function ClientDashboard() {
   const { user } = useAuthStore()
@@ -53,45 +54,16 @@ export function ClientDashboard() {
         const compName = ((user as any).companyName || "").toLowerCase().trim()
 
         // Filter Invoices for this client
-        const myInvs = (allInvs || []).filter((inv) => {
-          const cEmail = (inv.clientEmail || "").toLowerCase().trim()
-          const cName = (inv.client || "").toLowerCase().trim()
-          return (
-            (userEmail && cEmail === userEmail) ||
-            (userName && cName === userName) ||
-            (compName && cName.includes(compName))
-          )
-        })
+        const myInvs = (allInvs || []).filter((inv) => isRecordAssignedToClient(inv, user))
 
         // Filter Projects for this client
-        const myProjs = (allProjs || []).filter((p) => {
-          const cName = (p.client || "").toLowerCase().trim()
-          return (
-            (userName && cName.includes(userName)) ||
-            (compName && cName.includes(compName)) ||
-            (userEmail && cName.includes(userEmail))
-          )
-        })
+        const myProjs = (allProjs || []).filter((p) => isRecordAssignedToClient(p, user))
 
         // Filter Installments for this client
-        const myInsts = (allInsts || []).filter((inst) => {
-          const cName = (inst.clientName || "").toLowerCase().trim()
-          return (
-            (userName && cName.includes(userName)) ||
-            (compName && cName.includes(compName))
-          )
-        })
+        const myInsts = (allInsts || []).filter((inst) => isRecordAssignedToClient(inst, user))
 
         // Filter Tickets for this client
-        const myTkts = (allTkts || []).filter((t) => {
-          const tEmail = (t.requestedByEmail || t.clientEmail || "").toLowerCase().trim()
-          const tName = (t.client || t.clientName || "").toLowerCase().trim()
-          return (
-            (userEmail && tEmail === userEmail) ||
-            (userName && tName === userName) ||
-            (compName && tName.includes(compName))
-          )
-        })
+        const myTkts = (allTkts || []).filter((t) => isRecordAssignedToClient(t, user))
 
         setInvoices(myInvs)
         setProjects(myProjs)

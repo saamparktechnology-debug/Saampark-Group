@@ -45,6 +45,7 @@ import { Project, ProjectMilestone } from "@/app/feature/projects/types"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 import { getUserAvatar } from "@/app/feature/users/services/userService"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
+import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
 
 type OrderStatus = "Pending" | "Processing" | "Completed" | "Cancelled"
 type PaymentStatus = "Paid" | "Partially paid" | "Unpaid"
@@ -184,16 +185,8 @@ export default function OrderListPage() {
 
   const displayedOrders = React.useMemo(() => {
     if (!isClientRole) return orders
-    return orders.filter((o) => {
-      const oEmail = (o.clientEmail || "").toLowerCase().trim()
-      const oName = (o.client || "").toLowerCase().trim()
-      return (
-        (clientEmailNorm && oEmail === clientEmailNorm) ||
-        (clientNameNorm && oName === clientNameNorm) ||
-        (clientNameNorm && (oName.includes(clientNameNorm) || clientNameNorm.includes(oName)))
-      )
-    })
-  }, [orders, isClientRole, clientEmailNorm, clientNameNorm])
+    return orders.filter((o) => isRecordAssignedToClient(o, user))
+  }, [orders, isClientRole, user])
 
   const filteredOrders = React.useMemo(() => {
     return displayedOrders.filter((ord) => {

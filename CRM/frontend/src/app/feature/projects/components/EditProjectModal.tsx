@@ -35,10 +35,10 @@ export function EditProjectModal({
 
   React.useEffect(() => {
     if (isOpen) {
-      getUsers().then((allUsers) => {
-        const onlyTeam = allUsers.filter((u) => {
+      getUsers("all").then((allUsers) => {
+        const onlyTeam = (allUsers || []).filter((u) => {
           const role = (u.role || "").toLowerCase().trim()
-          return !role.includes("admin") && !role.includes("super") && !role.includes("client") && role !== "owner" && u.status !== "Inactive"
+          return !role.includes("client") && u.status !== "Inactive"
         })
         setTeamMembers(onlyTeam)
       }).catch(() => {})
@@ -56,7 +56,7 @@ export function EditProjectModal({
       setPrice(project.price || "")
       setLabelsList(project.labels || [])
       setStatus(project.status || "Open")
-      setSelectedMemberIds(project.members?.map(m => m.id) || [])
+      setSelectedMemberIds(project.members?.map(m => String(m.id)) || [])
     }
   }, [project])
 
@@ -178,11 +178,13 @@ export function EditProjectModal({
             </div>
           )}
 
-          {/* Assign Team (Team Members ONLY) */}
+          {/* Assign Team */}
           <div className="grid grid-cols-4 items-start gap-4 pt-1">
             <div className="text-zinc-500 font-medium pt-1 flex flex-col">
-              <span>Assign Team</span>
-              <span className="text-[10px] text-blue-600 font-normal">Team Members Only</span>
+              <span className="font-semibold text-zinc-700 dark:text-zinc-300">Assign Team</span>
+              <span className="text-[10px] text-blue-600 font-normal">
+                {selectedMemberIds.length} member{selectedMemberIds.length !== 1 ? "s" : ""} selected
+              </span>
             </div>
             <div className="col-span-3 space-y-2">
               {teamMembers.length === 0 ? (
@@ -190,9 +192,9 @@ export function EditProjectModal({
                   No team members found.
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto p-1 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-1.5 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700 scrollbar-thin">
                   {teamMembers.map((tm) => {
-                    const isSelected = selectedMemberIds.includes(tm.id)
+                    const isSelected = selectedMemberIds.includes(String(tm.id))
                     return (
                       <button
                         key={tm.id}
@@ -211,7 +213,7 @@ export function EditProjectModal({
                         />
                         <div className="flex-1 min-w-0">
                           <p className="font-bold text-[11px] text-zinc-800 dark:text-zinc-200 truncate">{tm.name}</p>
-                          <p className="text-[10px] text-zinc-400 truncate">{tm.department || "Developer / Team"}</p>
+                          <p className="text-[10px] text-zinc-400 truncate">{tm.department || tm.role || "Team Member"}</p>
                         </div>
                         {isSelected && <UserCheck size={14} className="text-blue-600 shrink-0" />}
                       </button>
@@ -275,16 +277,79 @@ export function EditProjectModal({
             />
           </div>
 
-          {/* Price */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <label className="text-zinc-500 font-medium">Price</label>
-            <input
-              type="text"
-              placeholder="Price"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400"
-            />
+          {/* Price & Tax Details */}
+          <div className="grid grid-cols-4 items-start gap-4">
+            <label className="text-zinc-500 font-medium pt-2">Price & Taxes</label>
+            <div className="col-span-3 space-y-2.5">
+              {/* Detailed Breakdown for Projects Created from Client Section */}
+              {(project.baseAmount !== undefined || project.gstAmount !== undefined || project.clientId || (project.items && project.items.length > 0)) ? (
+                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-zinc-800/60 border border-slate-200 dark:border-zinc-700 space-y-2 text-xs">
+                  <div className="flex items-center justify-between border-b border-slate-200 dark:border-zinc-700 pb-1.5">
+                    <span className="font-bold text-[11px] text-blue-600 dark:text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <span>🧾</span>
+                      <span>Client Billing Breakdown</span>
+                    </span>
+                    {project.items && project.items.length > 0 && (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300">
+                        {project.items.length} Itemized Service(s)
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="space-y-1 text-slate-600 dark:text-slate-300 text-[11.5px]">
+                    <div className="flex justify-between items-center">
+                      <span className="text-zinc-500 dark:text-zinc-400">Actual Base Price:</span>
+                      <span className="font-mono font-bold text-zinc-900 dark:text-zinc-100">
+                        ₹{(project.baseAmount ?? (project.totalAmount && project.gstAmount ? project.totalAmount - project.gstAmount : (parseFloat(String(price).replace(/[^0-9.]/g, "")) || 0))).toLocaleString("en-IN")}
+                      </span>
+                    </div>
+
+                    {(project.setupCharge || 0) > 0 && (
+                      <div className="flex justify-between items-center text-indigo-600 dark:text-indigo-400">
+                        <span>Additional / Setup Charges:</span>
+                        <span className="font-mono font-bold">
+                          + ₹{project.setupCharge?.toLocaleString("en-IN")}
+                        </span>
+                      </div>
+                    )}
+
+                    {(project.discount || 0) > 0 && (
+                      <div className="flex justify-between items-center text-rose-600 dark:text-rose-400">
+                        <span>Discount Applied:</span>
+                        <span className="font-mono font-bold">
+                          - ₹{project.discount?.toLocaleString("en-IN")}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between items-center text-blue-600 dark:text-blue-400">
+                      <span>GST Tax ({project.gstRate || 18}%):</span>
+                      <span className="font-mono font-bold">
+                        + ₹{(project.gstAmount ?? (project.baseAmount ? Math.round(project.baseAmount * ((project.gstRate || 18) / 100)) : 0)).toLocaleString("en-IN")}
+                      </span>
+                    </div>
+
+                    <div className="pt-1.5 border-t border-slate-200 dark:border-zinc-700 flex justify-between items-center font-extrabold text-slate-900 dark:text-slate-100">
+                      <span>Total Price (With Tax):</span>
+                      <span className="font-mono text-sm text-blue-600 dark:text-blue-400 font-black">
+                        ₹{(project.totalAmount ?? (project.baseAmount ? (project.baseAmount + (project.gstAmount || Math.round(project.baseAmount * ((project.gstRate || 18) / 100)))) : (parseFloat(String(price).replace(/[^0-9.]/g, "")) || 0))).toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Editable Input */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  placeholder="Price (e.g. ₹35,000)"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 font-mono"
+                />
+              </div>
+            </div>
           </div>
 
           {/* Labels with removable pills matching Image 4 */}

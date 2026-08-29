@@ -29,6 +29,7 @@ import { getPayments, addPayment, deletePayment, PaymentItem } from "./services/
 import { getInvoices, InvoiceItem } from "../invoices/services/invoiceService"
 
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
+import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
 
 export default function PaymentsPage() {
   const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
@@ -161,13 +162,7 @@ export default function PaymentsPage() {
     if (isClientRole) {
       filtered = filtered.filter((p) => {
         if (!checkBranch(p)) return false
-        const pEmail = (p.clientEmail || "").toLowerCase().trim()
-        const pName = (p.client || "").toLowerCase().trim()
-        return (
-          (clientEmailNorm && pEmail === clientEmailNorm) ||
-          (clientNameNorm && pName === clientNameNorm) ||
-          (clientNameNorm && (pName.includes(clientNameNorm) || clientNameNorm.includes(pName)))
-        )
+        return isRecordAssignedToClient(p, user)
       })
     } else {
       if (userComp && userComp !== "all") {

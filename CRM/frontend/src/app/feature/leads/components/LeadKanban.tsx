@@ -1004,7 +1004,6 @@ export function LeadKanban({
                     "Negotiation",
                     "Store Visit",
                     "Our Office Visit",
-                    "They come to our office",
                     "Won",
                     "Lost",
                   ].map((st) => {
@@ -1271,7 +1270,7 @@ export function LeadKanban({
                           await handleDrop(col.id, leadId)
                         }
                       }}
-                      className={`border rounded-xl p-3 shadow-2xs transition-all space-y-2 relative group overflow-hidden ${
+                      className={`border rounded-xl p-3 shadow-2xs transition-all space-y-2 relative group hover:z-20 ${
                         isLocked
                           ? "bg-rose-50/50 dark:bg-rose-950/40 border-rose-400 dark:border-rose-800"
                           : "bg-white dark:bg-zinc-800 border-zinc-200/90 dark:border-zinc-700/80 hover:shadow-md cursor-grab active:cursor-grabbing"
@@ -1303,8 +1302,8 @@ export function LeadKanban({
                                 <button
                                   type="button"
                                   onClick={(e) => {
-                                    e.stopPropagation()
-                                    onSelectLeadDetail(l)
+                                     e.stopPropagation()
+                                     onSelectLeadDetail(l)
                                   }}
                                   className="w-5 h-5 rounded-full backdrop-blur-md bg-white/80 dark:bg-zinc-800/80 hover:bg-indigo-50/90 dark:hover:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 border border-indigo-200/80 dark:border-indigo-500/30 flex items-center justify-center cursor-pointer transition-all duration-200 shadow-xs hover:shadow-md hover:shadow-indigo-500/20 hover:scale-110 active:scale-95"
                                   title="Creator & Branch Details"
@@ -1313,7 +1312,7 @@ export function LeadKanban({
                                 </button>
                                 
                                 {/* Glass Tooltip Card */}
-                                <div className="absolute right-0 top-full mt-2 hidden group-hover/creator:block z-50 w-56 p-3 bg-zinc-900/95 dark:bg-zinc-900/95 text-white rounded-2xl shadow-2xl border border-white/10 text-[11px] pointer-events-none space-y-1.5 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150">
+                                <div className="absolute left-1/2 -translate-x-[75%] top-full mt-1.5 hidden group-hover/creator:block z-50 w-56 sm:w-60 p-3 bg-zinc-900/98 dark:bg-zinc-950/98 text-white rounded-2xl shadow-2xl border border-white/15 text-[11px] pointer-events-none space-y-1.5 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150">
                                   <div className="text-[9.5px] font-bold uppercase tracking-wider text-indigo-400 border-b border-white/10 pb-1 flex items-center justify-between">
                                     <span>Lead Details</span>
                                     <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
@@ -1354,8 +1353,8 @@ export function LeadKanban({
                         {l.primaryContact && (
                           <div className="flex items-center gap-1.5 text-[11px] text-zinc-700 dark:text-zinc-200">
                             <UserIcon size={12} className="text-emerald-500 shrink-0" />
-                            <span className="truncate">
-                              Customer: <strong className="font-semibold text-zinc-900 dark:text-zinc-100">{l.primaryContact}</strong>
+                            <span className="truncate font-semibold text-zinc-900 dark:text-zinc-100">
+                              {l.primaryContact}
                             </span>
                           </div>
                         )}

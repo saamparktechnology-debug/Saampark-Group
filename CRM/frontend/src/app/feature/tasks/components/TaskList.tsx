@@ -62,9 +62,10 @@ export function TaskList({
   const { user } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
 
-  const canAddTask = canPerformAction(user, "Tasks", "add")
-  const canEditTask = canPerformAction(user, "Tasks", "edit")
-  const canDeleteTask = canPerformAction(user, "Tasks", "delete")
+  const isSuperAdmin = user?.role === "Super Admin"
+  const canAddTask = isSuperAdmin || canPerformAction(user, "Tasks", "add")
+  const canEditTask = isSuperAdmin || canPerformAction(user, "Tasks", "edit")
+  const canDeleteTask = isSuperAdmin || canPerformAction(user, "Tasks", "delete")
 
   const [searchQuery, setSearchQuery] = React.useState("")
   const [activeFilterPill, setActiveFilterPill] = React.useState("All tasks")
@@ -77,14 +78,16 @@ export function TaskList({
   }, [])
 
   const toggleSelectAll = () => {
-    if (selectedTaskIds.length === tasks.length) {
+    if (!canDeleteTask) return
+    if (selectedTaskIds.length === filteredTasks.length) {
       setSelectedTaskIds([])
     } else {
-      setSelectedTaskIds(tasks.map((t) => t.id))
+      setSelectedTaskIds(filteredTasks.map((t) => t.id))
     }
   }
 
   const toggleSelectRow = (id: string) => {
+    if (!canDeleteTask) return
     if (selectedTaskIds.includes(id)) {
       setSelectedTaskIds(selectedTaskIds.filter((item) => item !== id))
     } else {
@@ -401,6 +404,22 @@ export function TaskList({
 
         {/* Right Search & Export Controls */}
         <div className="flex items-center gap-2">
+          {canDeleteTask && selectedTaskIds.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm(`Are you sure you want to delete ${selectedTaskIds.length} selected task(s)?`)) {
+                  selectedTaskIds.forEach((id) => onDeleteTask(id))
+                  setSelectedTaskIds([])
+                }
+              }}
+              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-md text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+            >
+              <Trash2 size={13} />
+              <span>Delete Selected ({selectedTaskIds.length})</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => {
@@ -472,14 +491,16 @@ export function TaskList({
             {/* Table Header */}
             <thead>
               <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-800/40 text-zinc-500 dark:text-zinc-400 font-medium">
-                <th className="py-3 px-3 w-8 text-center">
-                  <input
-                    type="checkbox"
-                    checked={selectedTaskIds.length === filteredTasks.length && filteredTasks.length > 0}
-                    onChange={toggleSelectAll}
-                    className="w-3.5 h-3.5 rounded border-zinc-300 text-blue-600"
-                  />
-                </th>
+                {canDeleteTask && (
+                  <th className="py-3 px-3 w-8 text-center">
+                    <input
+                      type="checkbox"
+                      checked={selectedTaskIds.length === filteredTasks.length && filteredTasks.length > 0}
+                      onChange={toggleSelectAll}
+                      className="w-3.5 h-3.5 rounded border-zinc-300 text-blue-600 cursor-pointer"
+                    />
+                  </th>
+                )}
                 <th className="py-3 px-3 font-semibold text-zinc-600 dark:text-zinc-300">
                   <div className="flex items-center gap-1">
                     <span>↓</span>
@@ -509,14 +530,16 @@ export function TaskList({
                     }`}
                   >
                     {/* Checkbox */}
-                    <td className="py-3 px-3 text-center">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => toggleSelectRow(t.id)}
-                        className="w-3.5 h-3.5 rounded border-zinc-300 text-blue-600"
-                      />
-                    </td>
+                    {canDeleteTask && (
+                      <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelectRow(t.id)}
+                          className="w-3.5 h-3.5 rounded border-zinc-300 text-blue-600 cursor-pointer"
+                        />
+                      </td>
+                    )}
 
                     {/* Title with priority icons & clean label badge */}
                     <td className="py-3 px-3 max-w-xs">

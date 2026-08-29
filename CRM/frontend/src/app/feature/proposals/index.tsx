@@ -14,6 +14,7 @@ import { addProject } from "@/app/feature/projects/services/projectService"
 import { addInvoice } from "@/app/feature/sales/invoices/services/invoiceService"
 import { addOrder } from "@/app/feature/sales/orders/services/orderService"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
+import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
 
 export interface ProposalItem {
   id: string
@@ -98,16 +99,8 @@ export default function ProposalsMain() {
   // Filter for client
   const displayedProposals = React.useMemo(() => {
     if (!isClientRole) return proposals
-    return proposals.filter((p) => {
-      const pEmail = (p.clientEmail || "").toLowerCase().trim()
-      const pName = (p.client || "").toLowerCase().trim()
-      return (
-        (clientEmailNorm && pEmail === clientEmailNorm) ||
-        (clientNameNorm && pName === clientNameNorm) ||
-        (clientNameNorm && (pName.includes(clientNameNorm) || clientNameNorm.includes(pName)))
-      )
-    })
-  }, [proposals, isClientRole, clientEmailNorm, clientNameNorm])
+    return proposals.filter((p) => isRecordAssignedToClient(p, user))
+  }, [proposals, isClientRole, user])
 
   const filteredProposals = React.useMemo(() => {
     return displayedProposals.filter((p) => {

@@ -43,6 +43,8 @@ export interface UserItem {
   permissions?: any;
   kycStatus?: KycStatus;
   kycData?: KycData;
+  previousEmails?: string[];
+  previousEmail?: string;
 }
 
 export type User = UserItem;

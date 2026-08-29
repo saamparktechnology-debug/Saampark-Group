@@ -125,18 +125,40 @@ export function recordUserAccount(user: Partial<UserItem>, isNewRegistration = f
     allowedModules: (user as any).allowedModules,
     kycStatus: user.kycStatus || (user as any).kyc_status || "Pending",
     kycData: user.kycData || (user as any).kyc_data || undefined,
+    previousEmails: (user as any).previousEmails || (user as any).previousEmail ? [(user as any).previousEmail] : undefined,
+    previousEmail: (user as any).previousEmail || undefined,
   };
 
   // Save to MySQL asynchronously (fire and forget since this can be called from sync contexts)
   getStoredUserAccountsAsync().then((currentAccounts) => {
     const existingIndex = currentAccounts.findIndex(
-      (acc) => acc.email.toLowerCase().trim() === normalizedEmail
+      (acc) =>
+        (user.id && String(acc.id) === String(user.id)) ||
+        acc.email.toLowerCase().trim() === normalizedEmail
     );
     let updatedList: UserItem[];
     if (existingIndex >= 0) {
-      const prevName = currentAccounts[existingIndex].name;
+      const existing = currentAccounts[existingIndex];
+      const prevEmail = (existing.email || "").toLowerCase().trim();
+      const prevName = existing.name;
+
+      const prevEmailsList = Array.isArray(existing.previousEmails)
+        ? [...existing.previousEmails]
+        : (existing.previousEmail ? [existing.previousEmail] : []);
+
+      if (prevEmail && prevEmail !== normalizedEmail && !prevEmailsList.includes(prevEmail)) {
+        prevEmailsList.push(prevEmail);
+      }
+
+      const mergedAccount: UserItem = {
+        ...existing,
+        ...updatedAccount,
+        previousEmails: prevEmailsList.length > 0 ? prevEmailsList : existing.previousEmails,
+        previousEmail: prevEmailsList.length > 0 ? prevEmailsList[prevEmailsList.length - 1] : existing.previousEmail,
+      };
+
       updatedList = [...currentAccounts];
-      updatedList[existingIndex] = { ...currentAccounts[existingIndex], ...updatedAccount };
+      updatedList[existingIndex] = mergedAccount;
 
       if (prevName && prevName.trim() !== updatedAccount.name.trim()) {
         cascadeUserNameChange(prevName, normalizedEmail, updatedAccount.name).catch(() => {});

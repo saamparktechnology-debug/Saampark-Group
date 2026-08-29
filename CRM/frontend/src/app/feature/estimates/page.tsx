@@ -16,6 +16,7 @@ import { addInvoice } from "@/app/feature/sales/invoices/services/invoiceService
 import { addOrder } from "@/app/feature/sales/orders/services/orderService"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 import { executeWithFeedback, useActionFeedbackStore } from "@/store/useActionFeedbackStore"
+import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
 
 export default function EstimatesPage() {
   const { user, activeCompanyId } = useAuthStore()
@@ -90,16 +91,8 @@ export default function EstimatesPage() {
   // Client vs Admin filtering
   const displayedEstimates = React.useMemo(() => {
     if (!isClientRole) return estimates
-    return estimates.filter((e) => {
-      const eEmail = (e.clientEmail || "").toLowerCase().trim()
-      const eName = (e.client || "").toLowerCase().trim()
-      return (
-        (clientEmailNorm && eEmail === clientEmailNorm) ||
-        (clientNameNorm && eName === clientNameNorm) ||
-        (clientNameNorm && (eName.includes(clientNameNorm) || clientNameNorm.includes(eName)))
-      )
-    })
-  }, [estimates, isClientRole, clientEmailNorm, clientNameNorm])
+    return estimates.filter((e) => isRecordAssignedToClient(e, user))
+  }, [estimates, isClientRole, user])
 
   const filteredEstimates = React.useMemo(() => {
     return displayedEstimates.filter((e) => {

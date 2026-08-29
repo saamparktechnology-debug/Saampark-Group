@@ -37,12 +37,22 @@ export function CompanyBranchSettings() {
   const isSuperAdmin = user?.role === "Super Admin"
   const isAdmin = user?.role === "Admin"
 
-  // Filter companies visible for this user
+  // Filter companies visible for this user (Clients only see their own created entities)
+  const isClientRole = user?.role === "Clients" || (user?.role as string) === "Client"
   const visibleCompanies = React.useMemo(() => {
     if (isSuperAdmin) return companies
+    if (isClientRole && user) {
+      const uId = String(user.id || "").toLowerCase().trim()
+      const uEmail = (user.email || "").toLowerCase().trim()
+      return companies.filter((c: any) => {
+        const cOwnerId = String(c.clientId || c.createdById || c.ownerId || "").toLowerCase().trim()
+        const cOwnerEmail = String(c.clientEmail || c.createdByEmail || c.ownerEmail || "").toLowerCase().trim()
+        return (uId && cOwnerId === uId) || (uEmail && cOwnerEmail === uEmail)
+      })
+    }
     const adminCompanyIds = user?.companyIds || (user?.companyId ? [user.companyId] : ["tech"])
     return companies.filter((c) => adminCompanyIds.some(id => isMatchingCompany(c, id)))
-  }, [isSuperAdmin, companies, user])
+  }, [isSuperAdmin, isClientRole, companies, user])
 
   const [expandedCompanyIds, setExpandedCompanyIds] = React.useState<string[]>([])
   const [allUsers, setAllUsers] = React.useState<any[]>([])
@@ -387,6 +397,12 @@ export function CompanyBranchSettings() {
       smtp_pass: companySmtpPass.trim(),
       smtp_from_name: companySmtpFromName.trim() || finalName,
       smtp_from_email: companySmtpFromEmail.trim() || companySmtpUser.trim(),
+      ...(isClientRole && user ? {
+        clientId: user.id,
+        createdById: user.id,
+        createdByEmail: user.email,
+        clientEmail: user.email,
+      } : {}),
     }
 
     const isEdit = !!editingCompany

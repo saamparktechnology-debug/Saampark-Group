@@ -5,7 +5,7 @@ import { MapPin } from "lucide-react"
 import { InvoiceItem, InvoiceLineItem } from "../services/invoiceService"
 import { CompanyPaymentSettings } from "@/app/feature/settings/services/companyPaymentService"
 import { ClientItem } from "@/app/feature/clients/types"
-import { useAuthStore, Company, DEFAULT_COMPANIES } from "@/store/useAuthStore"
+import { useAuthStore, Company, DEFAULT_COMPANIES, getCompanyLogoUrl } from "@/store/useAuthStore"
 
 interface OfficialInvoiceDocumentProps {
   invoice: InvoiceItem
@@ -81,23 +81,59 @@ export function OfficialInvoiceDocument({
   companyDetails,
   paySettings,
 }: OfficialInvoiceDocumentProps) {
-  const { companies, activeCompanyId } = useAuthStore()
+  const { companies, activeCompanyId, fetchCompanies } = useAuthStore()
+
+  // Ensure companies list is fetched if not yet loaded
+  React.useEffect(() => {
+    if (!companies || companies.length === 0) {
+      fetchCompanies().catch(() => {})
+    }
+  }, [companies, fetchCompanies])
 
   // 1. Resolve Company Details dynamically based on specific invoice company
   const activeCompany = React.useMemo(() => {
     if (companyDetails) return companyDetails
 
     const targetCompId = String(invoice.companyId || (invoice as any).company || activeCompanyId || "tech").toLowerCase().trim()
-    const matched = companies.find(c => 
-      c.id.toLowerCase().trim() === targetCompId || 
-      (c.slug && c.slug.toLowerCase().trim() === targetCompId) ||
-      c.name.toLowerCase().trim() === targetCompId
-    )
+    const targetCompName = String((invoice as any).companyName || "").toLowerCase().trim()
+
+    const matched = companies.find(c => {
+      const cId = c.id.toLowerCase().trim()
+      const cSlug = (c.slug || "").toLowerCase().trim()
+      const cName = c.name.toLowerCase().trim()
+      const cBrand = (c.brand_name || "").toLowerCase().trim()
+      const cDivision = (c.division_name || "").toLowerCase().trim()
+      return (
+        cId === targetCompId || 
+        cSlug === targetCompId || 
+        cName === targetCompId ||
+        (targetCompName && (cName === targetCompName || cBrand === targetCompName || `${cBrand} ${cDivision}`.trim() === targetCompName))
+      )
+    })
     if (matched) return matched
 
     const defMatch = DEFAULT_COMPANIES.find(c => c.id.toLowerCase() === targetCompId || c.slug?.toLowerCase() === targetCompId)
     return defMatch || companies[0] || DEFAULT_COMPANIES[0]
-  }, [companyDetails, invoice.companyId, (invoice as any).company, activeCompanyId, companies])
+  }, [companyDetails, invoice.companyId, (invoice as any).company, (invoice as any).companyName, activeCompanyId, companies])
+
+  // Resolve Signature URL with all possible backend/local property aliases
+  const resolvedSignatureUrl = 
+    activeCompany?.signature_image_url ||
+    (activeCompany as any)?.signatureImageUrl ||
+    (activeCompany as any)?.signature_url ||
+    (activeCompany as any)?.signatureUrl ||
+    (activeCompany as any)?.signature ||
+    (activeCompany as any)?.stamp_url ||
+    (activeCompany as any)?.stampUrl ||
+    ""
+
+  // Resolve Company Logo across all possible property aliases and formats
+  const resolvedLogoUrl = 
+    getCompanyLogoUrl(activeCompany) || 
+    activeCompany?.logo_url || 
+    (activeCompany as any)?.logoUrl || 
+    (activeCompany?.logo && (activeCompany.logo.startsWith("http") || activeCompany.logo.startsWith("data:") || activeCompany.logo.startsWith("/")) ? activeCompany.logo : null) || 
+    ""
 
   // 2. Determine if GST (>0%) or Non-GST / 0% GST Bill
   const isExplicitNonGst = invoice.id?.toUpperCase().startsWith("NGINV") || (invoice.gstRate === 0 && (!invoice.items || invoice.items.every(it => !it.gstRate || it.gstRate === 0)))
@@ -112,7 +148,7 @@ export function OfficialInvoiceDocument({
     (typeof invoice.gstAmount === "number" && invoice.gstAmount > 0)
   )
 
-  // Theme configuration based on GST (Teal theme) vs Non-GST (Blue theme)
+  // Theme configuration based on GST (Teal theme) vs Non-GST (Light Blue theme)
   const theme = isGstInvoice
     ? {
         name: "gst-teal",
@@ -131,19 +167,19 @@ export function OfficialInvoiceDocument({
         invoiceTypeLabel: "TAX INVOICE",
       }
     : {
-        name: "non-gst-blue",
-        headerGradient: "bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-600",
-        cardHeaderGradient: "bg-gradient-to-br from-blue-700 via-blue-600 to-indigo-600",
-        primaryBg: "bg-blue-600",
-        primaryText: "text-blue-600",
-        lightBg: "bg-blue-50/70 dark:bg-blue-950/30",
-        lightBorder: "border-blue-200/80 dark:border-blue-800/60",
-        tableHeaderBg: "bg-blue-600 text-white",
-        tableSubtotalBg: "bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300",
-        grandTotalBg: "bg-blue-600 text-white",
-        badgeBg: "bg-blue-50 text-blue-800 border-blue-300",
-        accentRing: "ring-blue-600",
-        sealColor: "text-blue-600 border-blue-600",
+        name: "non-gst-light-blue",
+        headerGradient: "bg-gradient-to-r from-[#0284c7] via-[#0ea5e9] to-[#38bdf8]",
+        cardHeaderGradient: "bg-gradient-to-br from-[#0284c7] via-[#0ea5e9] to-[#38bdf8]",
+        primaryBg: "bg-[#0ea5e9]",
+        primaryText: "text-[#0284c7]",
+        lightBg: "bg-sky-50/80 dark:bg-sky-950/30",
+        lightBorder: "border-sky-200/90 dark:border-sky-800/60",
+        tableHeaderBg: "bg-[#0284c7] text-white",
+        tableSubtotalBg: "bg-[#e0f2fe] text-[#0369a1] dark:bg-sky-950/40 dark:text-sky-300",
+        grandTotalBg: "bg-[#0284c7] text-white",
+        badgeBg: "bg-sky-50 text-sky-800 border-sky-300",
+        accentRing: "ring-[#0ea5e9]",
+        sealColor: "text-[#0284c7] border-[#0284c7]",
         invoiceTypeLabel: "INVOICE",
       }
 
@@ -193,20 +229,20 @@ export function OfficialInvoiceDocument({
   const resolvedIfscCode = activeCompany?.ifsc_code || paySettings?.ifscCode || ""
   const resolvedBankBranch = activeCompany?.bank_branch || paySettings?.branch || ""
 
-  // Resolve QR Code URL: If uploaded QR code exists, use it. Otherwise generate dynamic UPI payment QR!
+  // Resolve QR Code URL: 100% scanable high-res square modules with margin
   const customPaymentQrUrl = activeCompany?.payment_qr_url || paySettings?.qrCodeUrl || (
     resolvedUpiId
-      ? `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`upi://pay?pa=${resolvedUpiId}&pn=${encodeURIComponent(resolvedAccountHolder || activeCompany?.name || "Saampark")}&am=${totalVal}&cu=INR`)}`
+      ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=1&ecc=M&data=${encodeURIComponent(`upi://pay?pa=${resolvedUpiId}&pn=${encodeURIComponent(resolvedAccountHolder || activeCompany?.name || "Saampark")}&am=${totalVal}&cu=INR`)}`
       : null
   )
 
-  // Generate Official Public Verification / View Online PDF QR Code against Invoice Number
+  // Generate Official Public Verification / View Online PDF QR Code against Invoice Number (Crisp 300x300 M-level ECC QR)
   const invoiceNumOrId = (invoice as any).invoiceNumber || (invoice as any).invoice_number || invoice.id
   const originUrl = typeof window !== "undefined" && window.location.origin
     ? window.location.origin
     : "https://saampark.com"
   const publicInvoiceViewUrl = `${originUrl}/public/invoice?id=${encodeURIComponent(invoice.id)}`
-  const invoiceVerificationQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(publicInvoiceViewUrl)}`
+  const invoiceVerificationQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=1&ecc=M&data=${encodeURIComponent(publicInvoiceViewUrl)}`
 
   // Line items
   const finalRenderedRows = (invoice.items && invoice.items.length > 0)
@@ -264,11 +300,11 @@ export function OfficialInvoiceDocument({
     <div className="flex flex-col sm:flex-row justify-between items-stretch gap-4 border-b border-zinc-200 pb-3">
       {/* Left: Company Brand & Entity Info with Logo */}
       <div className="flex items-start gap-3.5 flex-1 min-w-0">
-        {activeCompany?.logo_url ? (
+        {resolvedLogoUrl ? (
           <div className="w-28 h-24 flex items-center justify-center shrink-0 overflow-hidden bg-transparent">
             <img 
-              src={activeCompany.logo_url} 
-              alt={activeCompany.name} 
+              src={resolvedLogoUrl} 
+              alt={activeCompany?.name || "Company Logo"} 
               className="max-w-full max-h-full object-contain" 
             />
           </div>
@@ -372,7 +408,7 @@ export function OfficialInvoiceDocument({
           </span>
         </div>
 
-        <div className="flex items-center gap-2 pt-2">
+        <div className="flex items-center gap-2.5 pt-2">
           <a 
             href={publicInvoiceViewUrl} 
             target="_blank" 
@@ -383,15 +419,18 @@ export function OfficialInvoiceDocument({
             <img 
               src={invoiceVerificationQrUrl} 
               alt={`QR ${invoiceNumOrId}`} 
-              className="w-14 h-14 bg-white p-0.5 rounded-lg border border-white/40 shadow-xs object-contain group-hover:scale-105 transition-transform" 
+              className="w-14 h-14 bg-white p-1 border border-white/60 shadow-xs object-contain group-hover:scale-105 transition-transform"
+              style={{ imageRendering: 'pixelated' }}
             />
           </a>
           <div className="space-y-1 text-[10px] flex-1 min-w-0">
-            <div className="flex justify-between items-center">
-              <span className="text-white/80">INVOICE NO:</span>
-              <strong className="font-mono text-white text-[11px] truncate max-w-[95px]">{invoice.id}</strong>
+            <div className="flex flex-col justify-start">
+              <span className="text-white/80 text-[8.5px] uppercase tracking-wider font-semibold">INVOICE NO:</span>
+              <strong className="font-mono text-white text-[10px] sm:text-[11px] font-bold break-all leading-tight">
+                {invoiceNumOrId}
+              </strong>
             </div>
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center pt-0.5">
               <span className="text-white/80">DATE:</span>
               <strong className="text-white font-mono text-[9.5px]">
                 {formatInvoiceDate(invoice.billDate)}
@@ -640,13 +679,17 @@ export function OfficialInvoiceDocument({
 
               <div className="flex items-center gap-2.5">
                 {customPaymentQrUrl ? (
-                  <img 
-                    src={customPaymentQrUrl} 
-                    alt="Payment QR Code" 
-                    className="w-16 h-16 bg-white p-1 border border-zinc-300 shrink-0 object-contain shadow-xs rounded-lg" 
-                  />
+                  <div className="shrink-0 text-center space-y-0.5">
+                    <img 
+                      src={customPaymentQrUrl} 
+                      alt="UPI Payment QR Code" 
+                      className="w-16 h-16 bg-white p-1 border border-zinc-300 shadow-xs object-contain" 
+                      style={{ imageRendering: 'pixelated' }}
+                    />
+                    <span className="text-[7px] font-black text-zinc-600 block uppercase">SCAN TO PAY</span>
+                  </div>
                 ) : (
-                  <div className="w-14 h-14 rounded-lg bg-white border border-zinc-200 flex flex-col items-center justify-center text-center p-0.5 shrink-0 text-zinc-500">
+                  <div className="w-14 h-14 bg-white border border-zinc-200 flex flex-col items-center justify-center text-center p-0.5 shrink-0 text-zinc-500">
                     <span className="text-sm">⚡</span>
                     <span className="text-[7.5px] font-bold">UPI PAY</span>
                   </div>
@@ -735,7 +778,8 @@ export function OfficialInvoiceDocument({
             <img 
               src={invoiceVerificationQrUrl} 
               alt={`QR Code for Invoice #${invoiceNumOrId}`} 
-              className="w-12 h-12 bg-white p-0.5 border border-zinc-300 rounded-lg object-contain shadow-xs group-hover:scale-105 transition-transform" 
+              className="w-12 h-12 bg-white p-1 border border-zinc-300 shadow-xs object-contain group-hover:scale-105 transition-transform" 
+              style={{ imageRendering: 'pixelated' }}
             />
           </a>
           <div className="text-left space-y-0.5">
@@ -743,7 +787,7 @@ export function OfficialInvoiceDocument({
               <span className="text-[10px]">🔍</span>
               <span className="font-extrabold text-[8.5px] text-zinc-900 uppercase tracking-tight">Scan for Online PDF</span>
             </div>
-            <p className="text-[8px] font-mono text-zinc-600 font-bold leading-tight">
+            <p className="text-[8px] font-mono text-zinc-800 font-bold leading-tight break-all">
               INV #{invoiceNumOrId}
             </p>
             <p className="text-[7.5px] text-emerald-700 font-bold leading-tight flex items-center gap-0.5">
@@ -755,9 +799,9 @@ export function OfficialInvoiceDocument({
         <div className="flex items-center gap-2.5">
           <div className="text-center space-y-0.5">
             <div className="h-14 flex items-end justify-center">
-              {activeCompany?.signature_image_url ? (
+              {resolvedSignatureUrl ? (
                 <img 
-                  src={activeCompany.signature_image_url} 
+                  src={resolvedSignatureUrl} 
                   alt="Company Signature / Stamp" 
                   className="max-h-14 max-w-[150px] object-contain drop-shadow-xs" 
                 />

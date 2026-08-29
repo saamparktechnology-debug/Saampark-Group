@@ -58,6 +58,7 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { printPDFReport, exportToExcel } from "@/lib/exportUtils"
 import { executeWithFeedback, useActionFeedbackStore } from "@/store/useActionFeedbackStore"
+import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
 
 export default function InvoicesPage() {
   const { user, activeCompanyId, activeBranchId, branches, subBranches, companies } = useAuthStore()
@@ -934,13 +935,7 @@ export default function InvoicesPage() {
     if (isClientRole) {
       filtered = filtered.filter((i) => {
         if (!checkBranch(i)) return false
-        const iEmail = (i.clientEmail || "").toLowerCase().trim()
-        const iName = (i.client || "").toLowerCase().trim()
-        return (
-          (clientEmailNorm && iEmail === clientEmailNorm) ||
-          (clientNameNorm && iName === clientNameNorm) ||
-          (clientNameNorm && (iName.includes(clientNameNorm) || clientNameNorm.includes(iName)))
-        )
+        return isRecordAssignedToClient(i, user)
       })
     } else {
       if (userComp && userComp !== "all") {

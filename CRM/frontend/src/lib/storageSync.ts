@@ -171,9 +171,13 @@ export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: 
       const isError = !res || res.status === "error" || res.error === true
       if (!isError && res?.data !== undefined && res?.data !== null) {
         const rawData = res.data
-        const arrayData = Array.isArray(rawData) ? rawData : (Array.isArray(rawData?.data) ? rawData.data : [])
-        cacheStore.set(cacheKey, { data: arrayData, timestamp: Date.now() })
-        return arrayData
+        let finalData: any = rawData
+        // If wrapped in { data: ... }
+        if (typeof rawData === "object" && rawData !== null && "data" in rawData && Object.keys(rawData).length === 1) {
+          finalData = rawData.data
+        }
+        cacheStore.set(cacheKey, { data: finalData, timestamp: Date.now() })
+        return finalData
       }
       return null
     }).finally(() => {

@@ -65,8 +65,8 @@ export default function SettingsMain() {
 
   // SMTP Settings Form State (Super Admin)
   const [smtpPreset, setSmtpPreset] = React.useState<"gmail" | "zoho" | "outlook" | "custom">("gmail")
-  const [smtpUser, setSmtpUser] = React.useState("supriyogod@gmail.com")
-  const [smtpPass, setSmtpPass] = React.useState("vctonocakbbgbvib")
+  const [smtpUser, setSmtpUser] = React.useState("")
+  const [smtpPass, setSmtpPass] = React.useState("")
   const [smtpHost, setSmtpHost] = React.useState("smtp.gmail.com")
   const [smtpPort, setSmtpPort] = React.useState("587")
   const [smtpSecure, setSmtpSecure] = React.useState(false)
@@ -111,8 +111,30 @@ export default function SettingsMain() {
 
   // Load settings & user profile & payment QR settings on mount
   React.useEffect(() => {
-    fetchModuleDataFromDB("settings", null).then((saved: any) => {
-      if (saved) {
+    // 1. First load local storage cache for instant hydration
+    try {
+      const localSmtp = typeof window !== "undefined" ? localStorage.getItem("saampark_smtp_settings") : null
+      if (localSmtp) {
+        const parsed = JSON.parse(localSmtp)
+        if (parsed.smtpUser) setSmtpUser(parsed.smtpUser)
+        if (parsed.smtpPass) setSmtpPass(parsed.smtpPass)
+        if (parsed.smtpHost) {
+          setSmtpHost(parsed.smtpHost)
+          if (parsed.smtpHost.includes("gmail")) setSmtpPreset("gmail")
+          else if (parsed.smtpHost.includes("zoho")) setSmtpPreset("zoho")
+          else if (parsed.smtpHost.includes("office365") || parsed.smtpHost.includes("outlook")) setSmtpPreset("outlook")
+          else setSmtpPreset("custom")
+        }
+        if (parsed.smtpPort) setSmtpPort(parsed.smtpPort)
+        if (parsed.smtpSecure !== undefined) setSmtpSecure(parsed.smtpSecure)
+        if (parsed.smtpFromName) setSmtpFromName(parsed.smtpFromName)
+        if (parsed.smtpFromEmail) setSmtpFromEmail(parsed.smtpFromEmail)
+      }
+    } catch {}
+
+    // 2. Fetch from DB master scope
+    fetchModuleDataFromDB("settings", null, "all").then((saved: any) => {
+      if (saved && typeof saved === "object") {
         if (saved.companyName) setCompanyName(saved.companyName)
         if (saved.currency) setCurrency(saved.currency)
         if (saved.currencySymbol) setCurrencySymbol(saved.currencySymbol)
@@ -449,10 +471,40 @@ export default function SettingsMain() {
     e.preventDefault()
     if (!isSuperAdmin) return
     setLoading(true)
-    await saveModuleDataToDB("settings", {
+
+    const smtpPayload = {
       companyName, currency, currencySymbol, address, industry,
-      smtpUser, smtpPass, smtpHost, smtpPort, smtpSecure, smtpFromName, smtpFromEmail
-    })
+      smtpUser: smtpUser.trim(),
+      smtpPass: smtpPass.trim(),
+      smtpHost: smtpHost.trim(),
+      smtpPort: smtpPort.trim(),
+      smtpSecure,
+      smtpFromName: smtpFromName.trim(),
+      smtpFromEmail: smtpFromEmail.trim() || smtpUser.trim(),
+    }
+
+    // 1. Immediately cache in localStorage for instant hydration on refresh
+    if (typeof window !== "undefined") {
+      localStorage.setItem("saampark_smtp_settings", JSON.stringify(smtpPayload))
+    }
+
+    // 2. Save to MySQL database master scope
+    await saveModuleDataToDB("settings", smtpPayload, "all")
+
+    // 3. Dispatch to backend API /email/config if available
+    try {
+      const { api } = await import("@/lib/api")
+      await api.post("/email/config", {
+        host: smtpHost.trim(),
+        port: smtpPort.trim(),
+        secure: smtpSecure,
+        user: smtpUser.trim(),
+        pass: smtpPass.trim(),
+        fromName: smtpFromName.trim() || companyName || "SAAMPARK CRM",
+        fromEmail: smtpFromEmail.trim() || smtpUser.trim(),
+      }).catch(() => {})
+    } catch {}
+
     setLoading(false)
     setSuccessMsg("SMTP configurations saved and synced across all email services successfully!")
     setTimeout(() => setSuccessMsg(""), 3000)

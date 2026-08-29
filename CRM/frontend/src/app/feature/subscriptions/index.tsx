@@ -25,6 +25,7 @@ import { RecordInstallmentPaymentModal } from "./components/RecordInstallmentPay
 import { RenewSubscriptionModal } from "./components/RenewSubscriptionModal"
 import { getClients } from "@/app/feature/clients/services/clientService"
 import { ThreeDotLoader } from "@/components/ui/ThreeDotLoader"
+import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
 
 export default function SubscriptionsMain() {
   const { activeCompanyId, activeBranchId, branches, user } = useAuthStore()
@@ -161,17 +162,7 @@ export default function SubscriptionsMain() {
     if (isClient) {
       return installments.filter((item) => {
         if (!checkBranch(item)) return false
-        const clientName = (item.clientName || "").toLowerCase().trim()
-        const clientEmail = (item.clientEmail || "").toLowerCase().trim()
-        const cId = String(item.clientId || "").toLowerCase().trim()
-
-        return (
-          clientName === normName ||
-          clientEmail === normEmail ||
-          (normName && clientName.includes(normName)) ||
-          (uId && cId === uId) ||
-          (normEmail && clientEmail.includes(normEmail))
-        )
+        return isRecordAssignedToClient(item, user)
       })
     }
 
@@ -226,17 +217,7 @@ export default function SubscriptionsMain() {
     if (isClient) {
       return subscriptions.filter((sub) => {
         if (!checkBranch(sub)) return false
-        const clientName = (sub.clientName || "").toLowerCase().trim()
-        const clientEmail = (sub.clientEmail || "").toLowerCase().trim()
-        const cId = String(sub.clientId || "").toLowerCase().trim()
-
-        return (
-          clientName === normName ||
-          clientEmail === normEmail ||
-          (normName && clientName.includes(normName)) ||
-          (uId && cId === uId) ||
-          (normEmail && clientEmail.includes(normEmail))
-        )
+        return isRecordAssignedToClient(sub, user)
       })
     }
 

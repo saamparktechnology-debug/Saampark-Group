@@ -263,3 +263,73 @@ export async function sendGenericReminderEmail(
     return true // In-app notification still succeeded
   }
 }
+
+/**
+ * 7. Send User Account Email Transfer Notification
+ */
+export async function sendUserEmailTransferNotification(
+  userName: string,
+  oldEmail: string,
+  newEmail: string,
+  initiatedBy?: string
+): Promise<{ success: boolean; message: string }> {
+  const normOld = (oldEmail || "").trim().toLowerCase()
+  const normNew = (newEmail || "").trim().toLowerCase()
+
+  if (!normOld || !normNew) {
+    return { success: false, message: "Valid old and new email addresses are required." }
+  }
+
+  const subject = `Account Email Transferred to ${normNew} - SAAMPARK Group CRM`
+  const messageText = `Your CRM account profile for "${userName}" has been updated. The primary login email has been changed from ${normOld} to ${normNew}. You can now sign in using either ${normNew} or ${normOld} with your current password.`
+
+  // 1. Record In-App Notifications for both old and new addresses
+  recordInAppNotification(normOld, subject, messageText, { oldEmail: normOld, newEmail: normNew, transferTime: new Date().toISOString() })
+  recordInAppNotification(normNew, subject, messageText, { oldEmail: normOld, newEmail: normNew, transferTime: new Date().toISOString() })
+
+  // 2. Dispatch real email notifications to both emails via backend
+  try {
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
+        <h2 style="color: #2563eb; margin-bottom: 16px;">SAAMPARK Group CRM - Account Email Updated</h2>
+        <p>Hello <strong>${userName}</strong>,</p>
+        <p>This is an automated notification to confirm that your account primary email has been transferred:</p>
+        <div style="background: #f8fafc; border-left: 4px solid #2563eb; padding: 14px 18px; margin: 18px 0; border-radius: 6px;">
+          <p style="margin: 4px 0;"><strong>Previous Email:</strong> <span style="text-decoration: line-through; color: #64748b;">${normOld}</span></p>
+          <p style="margin: 4px 0;"><strong>New Primary Email:</strong> <span style="color: #16a34a; font-weight: bold;">${normNew}</span></p>
+          ${initiatedBy ? `<p style="margin: 4px 0; color: #64748b; font-size: 12px;">Updated by: ${initiatedBy}</p>` : ""}
+        </div>
+        <p><strong>Login Notice:</strong> You can continue to log in seamlessly using <em>either</em> your previous email (<code>${normOld}</code>) or your new email (<code>${normNew}</code>) along with your existing password.</p>
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
+        <p style="font-size: 11px; color: #94a3b8; margin: 0;">If you did not recognize this change, please contact your System Administrator immediately.</p>
+      </div>
+    `
+
+    await Promise.allSettled([
+      api.post("/email/send-general", {
+        to: normOld,
+        subject,
+        html: htmlBody,
+        clientName: userName,
+      }),
+      api.post("/email/send-general", {
+        to: normNew,
+        subject,
+        html: htmlBody,
+        clientName: userName,
+      })
+    ])
+
+    return { 
+      success: true, 
+      message: `Account email transferred successfully! Notification sent to ${normOld} and ${normNew}. User can now log in with either email.` 
+    }
+  } catch (err) {
+    console.warn("Email transfer notification dispatch warning:", err)
+    return { 
+      success: true, 
+      message: `Account email transferred to ${normNew}. In-app notification delivered.` 
+    }
+  }
+}
+

@@ -9,6 +9,7 @@ import {
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { fetchModuleDataFromDB, saveModuleDataToDB, filterGlobalDeletedItems, markGlobalItemDeleted } from "@/lib/storageSync"
+import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
 
 export interface CloudFileItem {
   id: string
@@ -72,7 +73,11 @@ export default function FilesPage() {
   }, [loadFiles])
 
   const filteredFiles = React.useMemo(() => {
-    return files.filter((f) => {
+    let list = files
+    if (user?.role === "Clients" || (user?.role as string) === "Client") {
+      list = list.filter(f => isRecordAssignedToClient(f, user) || (f.uploadedBy && f.uploadedBy.toLowerCase() === (user?.name || "").toLowerCase()))
+    }
+    return list.filter((f) => {
       const matchSearch =
         f.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         f.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -82,7 +87,7 @@ export default function FilesPage() {
       if (selectedCategory === "all") return true
       return f.category === selectedCategory
     })
-  }, [files, searchQuery, selectedCategory])
+  }, [files, searchQuery, selectedCategory, user])
 
   const handleAddFile = async (e: React.FormEvent) => {
     e.preventDefault()

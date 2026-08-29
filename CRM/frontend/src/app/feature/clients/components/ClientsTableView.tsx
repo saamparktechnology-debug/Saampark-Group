@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Search, ChevronDown, FileSpreadsheet, Printer, LayoutGrid, SlidersHorizontal, Edit3, X, Eye, ChevronLeft, ChevronRight, User, FolderPlus, MapPin, Info } from "lucide-react"
+import { Search, ChevronDown, FileSpreadsheet, Printer, LayoutGrid, SlidersHorizontal, Edit3, X, Eye, ChevronLeft, ChevronRight, User, FolderPlus, MapPin, Info, Trash2 } from "lucide-react"
 import { ClientItem } from "../types"
 import { formatDisplayEmail } from "../services/clientService"
 
@@ -27,14 +27,16 @@ export function ClientsTableView({
   const { user } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
 
-  const canEditClient = canPerformAction(user, "Clients", "edit")
-  const canDeleteClient = canPerformAction(user, "Clients", "delete")
+  const isSuperAdmin = user?.role === "Super Admin"
+  const canEditClient = isSuperAdmin || canPerformAction(user, "Clients", "edit")
+  const canDeleteClient = isSuperAdmin || canPerformAction(user, "Clients", "delete")
 
   const [searchText, setSearchText] = React.useState("")
   const [activeFilter, setActiveFilter] = React.useState("All clients")
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = React.useState(false)
   const [pageSize, setPageSize] = React.useState(10)
   const [currentPage, setCurrentPage] = React.useState(1)
+  const [selectedClientIds, setSelectedClientIds] = React.useState<string[]>([])
 
   const filterRef = React.useRef<HTMLDivElement>(null)
 
@@ -78,6 +80,27 @@ export function ClientsTableView({
   const startIndex = (safeCurrentPage - 1) * pageSize
   const endIndex = Math.min(startIndex + pageSize, totalItems)
   const paginatedClients = filteredClients.slice(startIndex, endIndex)
+  
+  const isAllVisibleSelected = paginatedClients.length > 0 && paginatedClients.every((c) => selectedClientIds.includes(c.id))
+  const isSomeVisibleSelected = paginatedClients.some((c) => selectedClientIds.includes(c.id)) && !isAllVisibleSelected
+
+  const handleSelectAllVisible = () => {
+    if (!canDeleteClient) return
+    if (isAllVisibleSelected) {
+      const visibleIds = new Set(paginatedClients.map((c) => c.id))
+      setSelectedClientIds((prev) => prev.filter((id) => !visibleIds.has(id)))
+    } else {
+      const next = new Set([...selectedClientIds, ...paginatedClients.map((c) => c.id)])
+      setSelectedClientIds(Array.from(next))
+    }
+  }
+
+  const handleToggleSelectClient = (id: string) => {
+    if (!canDeleteClient) return
+    setSelectedClientIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    )
+  }
 
   const handleDelete = (id: string) => {
     onDeleteClient(id)
@@ -110,9 +133,8 @@ export function ClientsTableView({
             </button>
 
             {isFilterDropdownOpen && (
-              <div className="absolute left-0 top-full mt-1.5 w-56 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl z-30 p-2 space-y-1">
-                <div className="text-xs font-semibold text-slate-400 px-3 py-1">Manage Filters</div>
-                {["All clients", "Has due", "Has open projects", "My clients", "VIP"].map((f) => {
+              <div className="absolute left-0 mt-1 w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-20 overflow-hidden py-1">
+                {["All clients", "Has due", "Has open projects", "VIP"].map((f) => {
                   const isSelected = activeFilter === f
                   return (
                     <button
@@ -122,66 +144,48 @@ export function ClientsTableView({
                         setActiveFilter(f)
                         setIsFilterDropdownOpen(false)
                       }}
-                      className={`w-full text-left px-3 py-1.5 text-sm rounded-md transition-colors ${
+                      className={`w-full text-left px-3.5 py-2 text-xs flex items-center justify-between transition-colors ${
                         isSelected
-                          ? "bg-blue-600 text-white font-medium"
-                          : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                          ? "bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-semibold"
+                          : "text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50"
                       }`}
                     >
-                      {f}
+                      <span>{f}</span>
+                      {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />}
                     </button>
                   )
                 })}
               </div>
             )}
           </div>
-
-          {/* Filter Pills */}
-          <button
-            type="button"
-            onClick={() => setActiveFilter("Has due")}
-            className={`px-3 py-1 rounded-lg border text-xs font-medium transition-colors ${
-              activeFilter === "Has due"
-                ? "bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-950/40 dark:border-blue-800"
-                : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50"
-            }`}
-          >
-            Has due
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveFilter("Has open projects")}
-            className={`px-3 py-1 rounded-lg border text-xs font-medium transition-colors ${
-              activeFilter === "Has open projects"
-                ? "bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-950/40 dark:border-blue-800"
-                : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50"
-            }`}
-          >
-            Has open projects
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveFilter("VIP")}
-            className={`px-3 py-1 rounded-lg border text-xs font-medium transition-colors ${
-              activeFilter === "VIP"
-                ? "bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-950/40 dark:border-blue-800"
-                : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50"
-            }`}
-          >
-            My Clients
-          </button>
         </div>
 
-        {/* Right Action Controls: Excel, Print, Search */}
-        <div className="flex items-center gap-2">
+        {/* Right Tools (Export, Bulk Delete, Search) */}
+        <div className="flex flex-wrap items-center gap-2">
+          {canDeleteClient && selectedClientIds.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm(`Are you sure you want to delete ${selectedClientIds.length} selected client(s)?`)) {
+                  selectedClientIds.forEach((id) => onDeleteClient(id))
+                  setSelectedClientIds([])
+                }
+              }}
+              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+            >
+              <Trash2 size={13} />
+              <span>Delete Selected ({selectedClientIds.length})</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => {
               exportToExcel({
-                filename: "SAAMPARK_Clients",
-                title: "Clients Directory",
+                filename: "SAAMPARK_Clients_Directory",
+                title: "Clients Directory Report",
                 subtitle: activeFilter || "All Clients",
-                headers: ["#", "Company / Name", "Primary Contact", "Email", "Phone", "Projects", "Total Invoiced", "Payment Received", "Due"],
+                headers: ["#", "Company / Name", "Primary Contact", "Email", "Phone", "Projects", "Total Invoiced", "Received", "Due"],
                 rows: filteredClients.map((c, idx) => [
                   idx + 1,
                   c.name,
@@ -243,6 +247,19 @@ export function ClientsTableView({
         <table className="w-full text-left text-xs">
           <thead className="bg-slate-50/70 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-100 dark:border-slate-800">
             <tr>
+              {canDeleteClient && (
+                <th className="py-3 px-3 w-8 text-center">
+                  <input
+                    type="checkbox"
+                    checked={isAllVisibleSelected}
+                    ref={(input) => {
+                      if (input) input.indeterminate = isSomeVisibleSelected
+                    }}
+                    onChange={handleSelectAllVisible}
+                    className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 cursor-pointer"
+                  />
+                </th>
+              )}
               <th className="py-3 px-3">Name</th>
               <th className="py-3 px-3">Primary Contact</th>
               <th className="py-3 px-3">Phone</th>
@@ -258,7 +275,7 @@ export function ClientsTableView({
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 text-slate-700 dark:text-slate-200">
             {filteredClients.length === 0 ? (
               <tr>
-                <td colSpan={10} className="py-12 text-center text-slate-400">
+                <td colSpan={canDeleteClient ? 11 : 10} className="py-12 text-center text-slate-400">
                   <div className="flex flex-col items-center justify-center gap-2">
                     <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center text-xl shadow-xs">
                       🏢
@@ -271,6 +288,16 @@ export function ClientsTableView({
             ) : (
               paginatedClients.map((client) => (
                 <tr key={client.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                  {canDeleteClient && (
+                    <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedClientIds.includes(client.id)}
+                        onChange={() => handleToggleSelectClient(client.id)}
+                        className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 cursor-pointer"
+                      />
+                    </td>
+                  )}
                   <td className="py-3 px-3">
                     <div 
                       onClick={() => onViewClientHistory && onViewClientHistory(client)}

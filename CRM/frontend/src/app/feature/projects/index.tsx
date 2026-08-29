@@ -11,6 +11,7 @@ import { ProjectDetailView } from "./components/ProjectDetailView"
 import { useAuthStore } from "@/store/useAuthStore"
 import { ThreeDotLoader } from "@/components/ui/ThreeDotLoader"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
+import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
 
 export default function ProjectsMain() {
   const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
@@ -115,20 +116,7 @@ export default function ProjectsMain() {
     if (isClient) {
       return projects.filter((p) => {
         if (!checkBranch(p)) return false
-
-        const clientName = (p.client || "").toLowerCase().trim()
-        const pClientId = String((p as any).clientId || "").toLowerCase().trim()
-        const pCreatorId = String((p as any).createdById || "").toLowerCase().trim()
-        const pCreatorEmail = ((p as any).createdByEmail || "").toLowerCase().trim()
-
-        return (
-          clientName === normName ||
-          clientName === normEmail ||
-          (normName && clientName.includes(normName)) ||
-          (uId && pClientId === uId) ||
-          (uId && pCreatorId === uId) ||
-          (normEmail && pCreatorEmail === normEmail)
-        )
+        return isRecordAssignedToClient(p, user)
       })
     }
 

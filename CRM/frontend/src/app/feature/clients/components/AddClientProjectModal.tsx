@@ -4,7 +4,7 @@ import * as React from "react"
 import { 
   X, Check, DollarSign, Calculator, UserCheck, Users, Calendar, Briefcase, FileText, 
   Coins, RefreshCw, Layers, CreditCard, Building2, Mail, Phone, MapPin, 
-  Plus, Trash2, Tag, ChevronDown, ChevronUp, Sparkles, Search
+  Plus, Trash2, Tag, ChevronDown, ChevronUp, Sparkles, Search, Receipt
 } from "lucide-react"
 
 
@@ -1431,49 +1431,50 @@ export function AddClientProjectModal({
           </div>
 
           {/* ---------------- LIVE FINANCIAL SUMMARY LEDGER ---------------- */}
-          <div className="p-3.5 rounded-xl bg-zinc-900 text-white space-y-2 text-xs shadow-md">
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
-              <span className="font-extrabold uppercase tracking-wider text-zinc-400 text-[10px]">
-                Consolidated Financial Summary
+          <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-zinc-800/60 border border-slate-200/90 dark:border-zinc-700/80 space-y-3 text-xs shadow-2xs">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-zinc-700 pb-2">
+              <span className="font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 text-[11px] flex items-center gap-1.5">
+                <Receipt size={13} className="text-blue-600 dark:text-blue-400" />
+                <span>Consolidated Financial Summary</span>
               </span>
-              <span className="font-bold text-zinc-300 text-[11px]">
+              <span className="font-semibold text-[10.5px] px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60">
                 {serviceItems.length} Services Itemized
               </span>
             </div>
 
-            <div className="space-y-1 text-zinc-300 text-[11px]">
+            <div className="space-y-1.5 text-slate-600 dark:text-slate-300 text-[11px]">
               <div className="flex justify-between">
                 <span>Total Services Base Value:</span>
-                <span className="font-mono font-bold text-white">₹{totalServicesBase.toLocaleString("en-IN")}</span>
+                <span className="font-mono font-bold text-slate-900 dark:text-slate-100">₹{totalServicesBase.toLocaleString("en-IN")}</span>
               </div>
 
               {totalPlatformCharges > 0 && (
-                <div className="flex justify-between text-blue-300">
+                <div className="flex justify-between text-indigo-600 dark:text-indigo-400">
                   <span>Total Additional / Setup Charges:</span>
                   <span className="font-mono font-bold">₹{totalPlatformCharges.toLocaleString("en-IN")}</span>
                 </div>
               )}
 
               {totalDiscounts > 0 && (
-                <div className="flex justify-between text-rose-400">
+                <div className="flex justify-between text-rose-600 dark:text-rose-400">
                   <span>Total Discounts Applied:</span>
                   <span className="font-mono font-bold">(-) ₹{totalDiscounts.toLocaleString("en-IN")}</span>
                 </div>
               )}
 
-              <div className="flex justify-between py-1 border-t border-zinc-800 font-bold text-white">
+              <div className="flex justify-between py-1 border-t border-slate-200 dark:border-zinc-700 font-bold text-slate-900 dark:text-slate-100">
                 <span>Taxable Base Value:</span>
                 <span className="font-mono">₹{taxableBase.toLocaleString("en-IN")}</span>
               </div>
 
-              <div className="flex justify-between text-zinc-400">
+              <div className="flex justify-between text-slate-500 dark:text-slate-400">
                 <span>Total GST Taxes:</span>
-                <span className="font-mono font-bold text-blue-400">₹{totalGstAmount.toLocaleString("en-IN")}</span>
+                <span className="font-mono font-bold text-blue-600 dark:text-blue-400">₹{totalGstAmount.toLocaleString("en-IN")}</span>
               </div>
 
-              <div className="flex justify-between py-1.5 text-base font-black text-emerald-400 border-t border-zinc-700">
-                <span>Grand Total (Net Payable):</span>
-                <span className="font-mono">₹{totalAmount.toLocaleString("en-IN")}</span>
+              <div className="mt-2.5 p-3 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/50 dark:to-indigo-950/50 border border-blue-200/80 dark:border-blue-800/80 flex items-center justify-between shadow-2xs">
+                <span className="font-extrabold text-blue-900 dark:text-blue-100 text-xs">Grand Total (Net Payable):</span>
+                <span className="font-mono font-black text-base text-blue-600 dark:text-blue-400">₹{totalAmount.toLocaleString("en-IN")}</span>
               </div>
             </div>
           </div>

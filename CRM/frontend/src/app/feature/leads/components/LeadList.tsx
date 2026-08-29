@@ -995,7 +995,6 @@ export function LeadList({
                     "Negotiation",
                     "Store Visit",
                     "Our Office Visit",
-                    "They come to our office",
                     "Won",
                     "Lost",
                   ].map((st) => {
@@ -1166,6 +1165,22 @@ export function LeadList({
             Print
           </button>
 
+          {canDeleteLead && selectedLeadIds.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm(`Are you sure you want to delete ${selectedLeadIds.length} selected lead(s)?`)) {
+                  selectedLeadIds.forEach((id) => onDeleteLead(id))
+                  setSelectedLeadIds([])
+                }
+              }}
+              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-md text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+            >
+              <Trash2 size={13} />
+              <span>Delete Selected ({selectedLeadIds.length})</span>
+            </button>
+          )}
+
           {/* Search Input */}
           <div className="relative">
             <input
@@ -1195,6 +1210,19 @@ export function LeadList({
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="border-b border-zinc-200/80 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 font-semibold bg-zinc-50/50 dark:bg-zinc-800/40">
+                {canDeleteLead && (
+                  <th className="py-3 px-3 w-8 text-center">
+                    <input
+                      type="checkbox"
+                      checked={isAllVisibleSelected}
+                      ref={(input) => {
+                        if (input) input.indeterminate = isSomeVisibleSelected
+                      }}
+                      onChange={handleToggleSelectAll}
+                      className="w-3.5 h-3.5 rounded border-zinc-300 text-blue-600 cursor-pointer"
+                    />
+                  </th>
+                )}
                 <th className="py-3 px-4">Name</th>
                 <th className="py-3 px-4">Primary contact</th>
                 <th className="py-3 px-4">Phone</th>
@@ -1225,6 +1253,16 @@ export function LeadList({
                     key={l.id}
                     className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/50 transition-colors"
                   >
+                    {canDeleteLead && (
+                      <td className="py-3.5 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={selectedLeadIds.includes(l.id)}
+                          onChange={() => handleToggleSelectLead(l.id)}
+                          className="w-3.5 h-3.5 rounded border-zinc-300 text-blue-600 cursor-pointer"
+                        />
+                      </td>
+                    )}
                     {/* Name (Business with Building Icon) */}
                     <td className="py-3.5 px-4 font-medium text-zinc-900 dark:text-zinc-100">
                       <div className="flex flex-col gap-1">

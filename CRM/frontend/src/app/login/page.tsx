@@ -140,13 +140,19 @@ export default function LoginPage() {
     try {
       // 1. Fetch active registered user accounts from MySQL database
       const registeredAccounts = await getStoredUserAccountsAsync()
-      const dbAccount = registeredAccounts.find(
-        (acc) => acc.email.toLowerCase().trim() === normalizedEmail
-      )
+      const dbAccount = registeredAccounts.find((acc) => {
+        const mainEmail = (acc.email || "").toLowerCase().trim()
+        const prevEmails = Array.isArray(acc.previousEmails)
+          ? acc.previousEmails.map((pe) => (pe || "").toLowerCase().trim())
+          : []
+        const altEmail = ((acc as any).previousEmail || "").toLowerCase().trim()
+        return mainEmail === normalizedEmail || prevEmails.includes(normalizedEmail) || altEmail === normalizedEmail
+      })
 
       // If user is actively registered in MySQL accounts, unmark from deleted cache immediately
       if (dbAccount) {
         unmarkUserAsDeleted(normalizedEmail)
+        if (dbAccount.email) unmarkUserAsDeleted(dbAccount.email.toLowerCase().trim())
       } else if (isUserDeleted(normalizedEmail)) {
         setIsLoading(false)
         setError("Account does not exist. Please contact your System Administrator.")

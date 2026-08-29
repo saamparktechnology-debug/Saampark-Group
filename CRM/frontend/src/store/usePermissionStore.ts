@@ -110,7 +110,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, ModuleName[]> = {
     'Expenses', 'Reports', 'Settings'
   ],
   'Clients': [
-    'Dashboard', 'Sales', 'Projects', 'Messages', 'Tickets', 'Settings'
+    'Dashboard', 'Projects', 'Subscriptions', 'Sales', 'Estimates', 'Messages', 'Tickets', 'Files', 'Settings'
   ]
 }
 
@@ -135,8 +135,9 @@ export const DEFAULT_ROLE_ACTION_PERMISSIONS: Record<Role, Record<string, Module
   'Clients': (() => {
     const init: Record<string, ModuleActionFlags> = {}
     CONFIGURABLE_MODULES.forEach((m) => {
-      const isClientMod = ['Sales', 'Projects', 'Messages', 'Tickets', 'Settings'].includes(m)
-      init[m] = { view: isClientMod, add: false, edit: false, delete: false }
+      const isClientMod = ['Sales', 'Projects', 'Subscriptions', 'Estimates', 'Messages', 'Tickets', 'Files', 'Settings'].includes(m)
+      const canAdd = ['Tickets', 'Messages'].includes(m)
+      init[m] = { view: isClientMod, add: canAdd, edit: false, delete: false }
     })
     return init
   })(),

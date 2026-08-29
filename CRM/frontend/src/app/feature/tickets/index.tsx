@@ -12,6 +12,7 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { fetchModuleDataFromDB, saveModuleDataToDB, filterGlobalDeletedItems, markGlobalItemDeleted } from "@/lib/storageSync"
 import { uploadToImgBB } from "@/lib/imgbbUpload"
+import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
 
 export type TicketPriority = "Low" | "Normal" | "High" | "Critical"
 export type TicketStatus = "New" | "Open" | "In Progress" | "Under Review" | "Resolved" | "Closed"
@@ -200,7 +201,7 @@ export default function TicketsMain() {
       if (targetBranch && !checkBranch(t)) return false
       const cEmail = (t.creatorEmail || "").toLowerCase().trim()
       const cName = (t.createdBy || "").toLowerCase().trim()
-      return cEmail === currentUserEmail || (currentUserEmail && cEmail.includes(currentUserEmail)) || cName === currentUserName.toLowerCase().trim()
+      return isRecordAssignedToClient(t, user) || cEmail === currentUserEmail || (currentUserEmail && cEmail.includes(currentUserEmail)) || cName === currentUserName.toLowerCase().trim()
     })
   }, [tickets, isSuperAdmin, isCompanyAdmin, user, currentUserEmail, currentUserName, activeCompanyId, activeBranchId, branches])
 
