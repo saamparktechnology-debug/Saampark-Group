@@ -99,17 +99,15 @@ export async function syncGlobalDeletedIds(): Promise<string[]> {
 }
 
 export function isGlobalItemDeleted(id: string | number, deletedIds?: string[]): boolean {
-  if (!id) return false
+  if (!id || !deletedIds || !Array.isArray(deletedIds) || deletedIds.length === 0) return false
   const strId = String(id).toLowerCase().trim()
-  const list = deletedIds || (deletedCache.length > 0 ? deletedCache : getLocalDeletedIds())
-  return list.includes(strId)
+  return deletedIds.includes(strId)
 }
 
 export function filterGlobalDeletedItems<T extends { id: string | number }>(items: T[], deletedIds?: string[]): T[] {
   if (!Array.isArray(items)) return []
-  const list = deletedIds || (deletedCache.length > 0 ? deletedCache : getLocalDeletedIds())
-  if (!list.length) return items
-  return items.filter((item) => item?.id && !list.includes(String(item.id).toLowerCase().trim()))
+  if (!deletedIds || !Array.isArray(deletedIds) || deletedIds.length === 0) return items
+  return items.filter((item) => item?.id && !deletedIds.includes(String(item.id).toLowerCase().trim()))
 }
 
 // In-memory micro-cache & in-flight promise deduplication
