@@ -344,15 +344,26 @@ export function CompanyBranchSettings() {
       return
     }
 
-    const finalName = [companyBrandName.trim(), companyDivisionName.trim()].filter(Boolean).join(" ") || companyName.trim() || "SAAMPARK"
+    let brand = companyBrandName.trim() || "SAAMPARK"
+    let division = companyDivisionName.trim()
+    let subtitle = companySubtitle.trim()
+
+    // If division is empty, but user typed a division / title keyword in subtitle (e.g. "CONSULTANCY", "Consultancy Services")
+    if (!division && subtitle) {
+      if (!subtitle.toLowerCase().includes("private limited") && !subtitle.toLowerCase().includes("pvt ltd") && !subtitle.toLowerCase().startsWith("and ") && !subtitle.toLowerCase().startsWith("& ")) {
+        division = subtitle
+      }
+    }
+
+    const finalName = [brand, division].filter(Boolean).join(" ") || companyName.trim() || "SAAMPARK"
     if (!finalName) return
 
     const slug = companySlug.trim() || finalName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
     const payload: Partial<Company> = {
       name: finalName,
-      brand_name: companyBrandName.trim() || "SAAMPARK",
-      division_name: companyDivisionName.trim(),
-      subtitle: companySubtitle.trim(),
+      brand_name: brand,
+      division_name: division,
+      subtitle: subtitle,
       slug,
       logo: companyLogo || "🏢",
       logo_url: companyLogoUrl.trim(),

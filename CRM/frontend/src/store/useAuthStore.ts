@@ -151,6 +151,7 @@ export function getCompanyFullName(company?: Partial<Company> | null): string {
   if (!company) return "SAAMPARK"
   const rawBrand = (company.brand_name || "").trim()
   const rawDivision = (company.division_name || "").trim()
+  const rawSubtitle = (company.subtitle || "").trim()
   const rawName = (company.name || "").trim()
 
   // 1. If division is present, format as Brand + Division
@@ -162,17 +163,32 @@ export function getCompanyFullName(company?: Partial<Company> | null): string {
     return `${brand} ${rawDivision}`
   }
 
-  // 2. If explicit name has multiple words or full name
-  if (rawName && rawName.toLowerCase() !== "saampark") {
+  // 2. If explicit name has multiple words or full name beyond just "SAAMPARK"
+  if (rawName && rawName.toLowerCase() !== "saampark" && rawName.toLowerCase() !== "saampark group") {
     return rawName
   }
 
   // 3. If brand is distinctive
-  if (rawBrand && rawBrand.toLowerCase() !== "saampark") {
+  if (rawBrand && rawBrand.toLowerCase() !== "saampark" && rawBrand.toLowerCase() !== "saampark group") {
     return rawBrand
   }
 
-  // 4. Fallback inspection based on slug / id
+  // 4. If subtitle is present (e.g. user entered "CONSULTANCY" or "Consultancy Services" in legal suffix/tagline)
+  if (rawSubtitle) {
+    const brand = rawBrand || "SAAMPARK"
+    if (rawSubtitle.toLowerCase().startsWith("and ") || rawSubtitle.toLowerCase().startsWith("& ")) {
+      return `${brand} ${rawSubtitle.replace(/^(&|and)\s+/i, "")}`
+    }
+    if (!rawSubtitle.toLowerCase().includes("private limited") && !rawSubtitle.toLowerCase().includes("pvt ltd")) {
+      return `${brand} ${rawSubtitle}`
+    }
+    const cleanSub = rawSubtitle.replace(/\s+(pvt\.?\s*ltd\.?|private\s+limited|llp|inc\.?)$/i, "").trim()
+    if (cleanSub) {
+      return `${brand} ${cleanSub}`
+    }
+  }
+
+  // 5. Fallback inspection based on slug / id
   const slugOrId = String(company.slug || company.id || "").toLowerCase()
   if (slugOrId === "tech" || slugOrId.includes("tech")) return "SAAMPARK TECHNOLOGY"
   if (slugOrId === "digital" || slugOrId.includes("digital")) return "SAAMPARK DIGITAL MARKETING"

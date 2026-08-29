@@ -363,7 +363,9 @@ export function Topbar() {
                               )}
                               <div className="truncate text-left">
                                 <span className="block truncate font-bold text-xs">{compFullName}</span>
-                                {comp.subtitle && <span className="block text-[9.5px] opacity-75 truncate">{comp.subtitle}</span>}
+                                {comp.subtitle && compFullName.toLowerCase() !== comp.subtitle.toLowerCase().trim() && !compFullName.toLowerCase().endsWith(comp.subtitle.toLowerCase().trim()) && (
+                                  <span className="block text-[9.5px] opacity-75 truncate">{comp.subtitle}</span>
+                                )}
                               </div>
                             </div>
                             {isCurrentActive && <Check size={14} className="shrink-0 ml-2" />}
