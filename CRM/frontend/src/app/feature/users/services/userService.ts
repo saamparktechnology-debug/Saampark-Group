@@ -839,14 +839,40 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
     }
   });
 
-  saveModuleDataToDB("users", dbUsers, "all").catch(() => {});
-
-  // 3. Filter out hidden master admin account, and strictly enforce 1:1 email uniqueness
-  const uniqueUsersMap = new Map<string, UserItem>();
+  // 3. Collect all obsolete transferred emails across all active users
+  const obsoleteEmailsSet = new Set<string>();
   dbUsers.forEach((u) => {
-    const emailNorm = (u.email || "").toLowerCase().trim();
-    if (!emailNorm || HIDDEN_MASTER_EMAILS.includes(emailNorm)) return;
+    const currentEmail = (u.email || "").toLowerCase().trim();
+    if (Array.isArray(u.previousEmails)) {
+      u.previousEmails.forEach((pe) => {
+        if (pe) {
+          const peNorm = pe.toLowerCase().trim();
+          if (peNorm !== currentEmail) {
+            obsoleteEmailsSet.add(peNorm);
+          }
+        }
+      });
+    }
+    if (u.previousEmail) {
+      const peNorm = u.previousEmail.toLowerCase().trim();
+      if (peNorm !== currentEmail) {
+        obsoleteEmailsSet.add(peNorm);
+      }
+    }
+  });
 
+  // Filter out hidden master admin account and any obsolete transferred emails
+  const activeValidUsers = dbUsers.filter((u) => {
+    const emailNorm = (u.email || "").toLowerCase().trim();
+    if (!emailNorm || HIDDEN_MASTER_EMAILS.includes(emailNorm)) return false;
+    if (obsoleteEmailsSet.has(emailNorm)) return false;
+    return true;
+  });
+
+  // Strictly enforce 1:1 email uniqueness
+  const uniqueUsersMap = new Map<string, UserItem>();
+  activeValidUsers.forEach((u) => {
+    const emailNorm = (u.email || "").toLowerCase().trim();
     if (!uniqueUsersMap.has(emailNorm)) {
       uniqueUsersMap.set(emailNorm, u);
     } else {
@@ -861,6 +887,7 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
   });
 
   const cleanUsers = Array.from(uniqueUsersMap.values());
+  saveModuleDataToDB("users", cleanUsers, "all").catch(() => {});
 
   if (!companyId || companyId === "all") {
     return cleanUsers;
