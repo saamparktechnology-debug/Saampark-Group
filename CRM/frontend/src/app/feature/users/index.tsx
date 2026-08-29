@@ -308,23 +308,20 @@ export default function UsersMain() {
     setUsers((prev) => {
       let nextList: UserItem[] = []
       if (editingUser) {
-        nextList = prev.map((u) =>
-          u.id === editingUser.id || u.email.toLowerCase().trim() === saved.email.toLowerCase().trim()
-            ? ({ 
-                ...u, 
-                ...saved, 
-                companyId: saved.companyId,
-                companyIds: saved.companyIds,
-                companyName: saved.companyName,
-                branchId: saved.branchId, 
-                branchName: saved.branchName, 
-                role: userData.role || saved.role, 
-                permissions: (userData as any).permissions,
-                previousEmails: prevEmailsList.length > 0 ? prevEmailsList : u.previousEmails,
-                previousEmail: prevEmailsList.length > 0 ? prevEmailsList[prevEmailsList.length - 1] : u.previousEmail,
-              } as UserItem)
-            : u
+        const filtered = prev.filter((u) => 
+          String(u.id) !== String(editingUser.id) &&
+          u.email.toLowerCase().trim() !== oldEmail &&
+          u.email.toLowerCase().trim() !== newEmail
         )
+        const updatedItem: UserItem = {
+          ...editingUser,
+          ...saved,
+          role: userData.role || saved.role,
+          permissions: (userData as any).permissions,
+          previousEmails: prevEmailsList.length > 0 ? prevEmailsList : editingUser.previousEmails,
+          previousEmail: prevEmailsList.length > 0 ? prevEmailsList[prevEmailsList.length - 1] : editingUser.previousEmail,
+        }
+        nextList = [updatedItem, ...filtered]
       } else {
         nextList = [saved, ...prev.filter((u) => u.email.toLowerCase().trim() !== saved.email.toLowerCase().trim())]
       }

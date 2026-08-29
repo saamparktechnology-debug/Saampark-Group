@@ -493,17 +493,52 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5 flex items-center gap-1.5">
-                  <Mail size={14} /> Email Address *
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="e.g. rahul@saampark.in"
-                  className="w-full px-3.5 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs focus:outline-hidden focus:ring-1 focus:ring-blue-500"
-                />
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+                    <Mail size={14} /> Email Address *
+                  </label>
+                  {editingUser && email.toLowerCase().trim() !== (editingUser.email || "").toLowerCase().trim() && (
+                    <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-md border border-amber-200 dark:border-amber-800">
+                      <span>⚠️</span> Email will transfer
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="e.g. rahul@saampark.in"
+                    className="flex-1 min-w-0 px-3.5 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs focus:outline-hidden focus:ring-1 focus:ring-blue-500"
+                  />
+                  {editingUser && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!email || !email.includes("@")) {
+                          alert("Please enter a valid email address.")
+                          return
+                        }
+                        const isChanged = email.toLowerCase().trim() !== (editingUser.email || "").toLowerCase().trim()
+                        if (isChanged) {
+                          alert(`Email updated to ${email.toLowerCase().trim()}. Click 'Save Changes' below to apply across all databases.`)
+                        } else {
+                          alert("Email is unchanged.")
+                        }
+                      }}
+                      className={`px-3 py-2 rounded-xl text-xs font-bold shrink-0 transition-all cursor-pointer shadow-xs flex items-center gap-1 ${
+                        email.toLowerCase().trim() !== (editingUser.email || "").toLowerCase().trim()
+                          ? "bg-blue-600 hover:bg-blue-700 text-white animate-pulse"
+                          : "bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-300"
+                      }`}
+                      title="Update email for this single account"
+                    >
+                      <Check size={13} />
+                      <span>Update</span>
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 

@@ -131,41 +131,47 @@ export function recordUserAccount(user: Partial<UserItem>, isNewRegistration = f
 
   // Save to MySQL asynchronously (fire and forget since this can be called from sync contexts)
   getStoredUserAccountsAsync().then((currentAccounts) => {
-    const existingIndex = currentAccounts.findIndex(
+    const existing = currentAccounts.find(
       (acc) =>
         (user.id && String(acc.id) === String(user.id)) ||
         acc.email.toLowerCase().trim() === normalizedEmail
     );
-    let updatedList: UserItem[];
-    if (existingIndex >= 0) {
-      const existing = currentAccounts[existingIndex];
-      const prevEmail = (existing.email || "").toLowerCase().trim();
-      const prevName = existing.name;
 
-      const prevEmailsList = Array.isArray(existing.previousEmails)
-        ? [...existing.previousEmails]
-        : (existing.previousEmail ? [existing.previousEmail] : []);
+    const prevEmail = (existing?.email || (user as any).previousEmail || "").toLowerCase().trim();
+    const prevName = existing?.name;
 
-      if (prevEmail && prevEmail !== normalizedEmail && !prevEmailsList.includes(prevEmail)) {
-        prevEmailsList.push(prevEmail);
-      }
+    const prevEmailsList = Array.isArray(existing?.previousEmails)
+      ? [...(existing?.previousEmails || [])]
+      : (existing?.previousEmail ? [existing.previousEmail] : []);
 
-      const mergedAccount: UserItem = {
-        ...existing,
-        ...updatedAccount,
-        previousEmails: prevEmailsList.length > 0 ? prevEmailsList : existing.previousEmails,
-        previousEmail: prevEmailsList.length > 0 ? prevEmailsList[prevEmailsList.length - 1] : existing.previousEmail,
-      };
-
-      updatedList = [...currentAccounts];
-      updatedList[existingIndex] = mergedAccount;
-
-      if (prevName && prevName.trim() !== updatedAccount.name.trim()) {
-        cascadeUserNameChange(prevName, normalizedEmail, updatedAccount.name).catch(() => {});
-      }
-    } else {
-      updatedList = [updatedAccount, ...currentAccounts];
+    if (prevEmail && prevEmail !== normalizedEmail && !prevEmailsList.includes(prevEmail)) {
+      prevEmailsList.push(prevEmail);
     }
+
+    const mergedAccount: UserItem = {
+      ...(existing || {}),
+      ...updatedAccount,
+      previousEmails: prevEmailsList.length > 0 ? prevEmailsList : existing?.previousEmails,
+      previousEmail: prevEmailsList.length > 0 ? prevEmailsList[prevEmailsList.length - 1] : existing?.previousEmail,
+    };
+
+    // Strict 1:1 Email Uniqueness: Remove all other rows matching this ID or this email or previous email
+    const cleaned = currentAccounts.filter((acc) => {
+      const accId = String(acc.id || "").toLowerCase().trim();
+      const targetId = String(user.id || "").toLowerCase().trim();
+      const accEmail = (acc.email || "").toLowerCase().trim();
+      if (targetId && accId === targetId) return false;
+      if (accEmail === normalizedEmail) return false;
+      if (prevEmail && accEmail === prevEmail) return false;
+      return true;
+    });
+
+    const updatedList = [mergedAccount, ...cleaned];
+
+    if (prevName && prevName.trim() !== updatedAccount.name.trim()) {
+      cascadeUserNameChange(prevName, normalizedEmail, updatedAccount.name).catch(() => {});
+    }
+
     saveUserAccounts(updatedList).catch(() => {});
   }).catch(() => {});
 
@@ -659,11 +665,26 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
 
   saveModuleDataToDB("users", dbUsers, "all").catch(() => {});
 
-  // 3. Filter out deleted user emails and hidden master admin account
-  const cleanUsers = dbUsers.filter((u) => {
+  // 3. Filter out deleted user emails and hidden master admin account, and strictly enforce 1:1 email uniqueness
+  const uniqueUsersMap = new Map<string, UserItem>();
+  dbUsers.forEach((u) => {
     const emailNorm = (u.email || "").toLowerCase().trim();
-    return !HIDDEN_MASTER_EMAILS.includes(emailNorm) && !deletedEmails.includes(emailNorm);
+    if (!emailNorm || HIDDEN_MASTER_EMAILS.includes(emailNorm) || deletedEmails.includes(emailNorm)) return;
+
+    if (!uniqueUsersMap.has(emailNorm)) {
+      uniqueUsersMap.set(emailNorm, u);
+    } else {
+      const existing = uniqueUsersMap.get(emailNorm)!;
+      uniqueUsersMap.set(emailNorm, {
+        ...existing,
+        ...u,
+        role: u.role || existing.role,
+        companyIds: (u.companyIds && u.companyIds.length > 0) ? u.companyIds : existing.companyIds,
+      });
+    }
   });
+
+  const cleanUsers = Array.from(uniqueUsersMap.values());
 
   if (!companyId || companyId === "all") {
     return cleanUsers;

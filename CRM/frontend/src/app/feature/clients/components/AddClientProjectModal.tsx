@@ -82,7 +82,7 @@ export function AddClientProjectModal({
   const [serviceItems, setServiceItems] = React.useState<ServiceFormItem[]>([
     {
       id: `svc_${Date.now()}`,
-      serviceName: "Website Development",
+      serviceName: "",
       sacCode: "998313",
       qty: 1,
       unit: "Project",
@@ -148,12 +148,20 @@ export function AddClientProjectModal({
   React.useEffect(() => {
     if (isOpen && client) {
       setCreationMode("project_and_invoice")
+      setProjectTitle("")
+      setCategory("Website Development")
+      setAssignedMembers([])
+      setDescription("")
+      setStartDate(new Date().toISOString().split("T")[0])
+      const nextMonth = new Date()
+      nextMonth.setMonth(nextMonth.getMonth() + 1)
+      setDeadline(nextMonth.toISOString().split("T")[0])
       setIsTeamDropdownOpen(false)
       setTeamSearchQuery("")
       setServiceItems([
         {
           id: `svc_${Date.now()}`,
-          serviceName: "Website Development",
+          serviceName: "",
           sacCode: "998313",
           qty: 1,
           unit: "Project",
@@ -166,6 +174,12 @@ export function AddClientProjectModal({
       setAdvanceAmount("")
       setPartInitialPayment("")
       setPaymentModel("advance")
+      setInstallmentsCount(3)
+      setSubscriptionMonths(3)
+      setPartPayTiming("pay_now")
+      setBillingCycle("Monthly")
+      setAutoCreateSubscription(true)
+      setPaymentStatus("Paid")
       setClientEmail(formatDisplayEmail(client.email) || "")
       setClientPhone(client.phone || "")
       setClientAddress(client.address || "")
@@ -497,7 +511,7 @@ export function AddClientProjectModal({
           baseAmount: totalServicesBase,
           setupCharge: totalPlatformCharges,
           discount: totalDiscounts,
-          gstRate: itemCalculations[0]?.gstRate || 18,
+          gstRate: totalGstAmount > 0 ? (itemCalculations[0]?.gstRate !== undefined ? itemCalculations[0].gstRate : 18) : 0,
           gstAmount: totalGstAmount,
           totalAmount,
           items: finalInvoiceItems,
@@ -559,8 +573,9 @@ export function AddClientProjectModal({
         baseAmount: totalServicesBase,
         setupCharge: totalPlatformCharges,
         discount: totalDiscounts,
-        gstRate: itemCalculations[0]?.gstRate || 18,
+        gstRate: totalGstAmount > 0 ? (itemCalculations[0]?.gstRate !== undefined ? itemCalculations[0].gstRate : 18) : 0,
         gstAmount: totalGstAmount,
+        invoiceType: totalGstAmount > 0 ? "gst" : "nongst",
         totalInvoiced: formattedTotal,
         paymentReceived: formattedAdvance,
         due: formattedDue,

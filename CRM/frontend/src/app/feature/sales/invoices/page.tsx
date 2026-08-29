@@ -134,7 +134,7 @@ export default function InvoicesPage() {
   const [invoiceServiceItems, setInvoiceServiceItems] = React.useState<any[]>([
     {
       id: `svc_${Date.now()}`,
-      serviceName: "Website Development",
+      serviceName: "",
       sacCode: "998313",
       qty: 1,
       unit: "Project",
@@ -528,13 +528,17 @@ export default function InvoicesPage() {
 
   React.useEffect(() => {
     if (isAddModalOpen) {
+      setProjectName("")
+      setCustomProjectName("")
+      setDueDate("")
+      setStatus("Not paid")
       setBaseAmount("")
       setSetupCharge("")
       setDiscount("")
       setInvoiceServiceItems([
         {
           id: `svc_${Date.now()}`,
-          serviceName: "Website Development",
+          serviceName: "",
           sacCode: "998313",
           qty: 1,
           unit: "Project",
@@ -553,7 +557,6 @@ export default function InvoicesPage() {
       setCustomClientAddress("")
       setCustomClientCity("")
       setCustomClientGst("")
-      setCustomProjectName("")
       getClients().then((clients) => {
         setAvailableClients(clients)
         if (clients.length > 0) {

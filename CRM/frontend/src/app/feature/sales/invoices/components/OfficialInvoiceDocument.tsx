@@ -136,7 +136,12 @@ export function OfficialInvoiceDocument({
     ""
 
   // 2. Determine if GST (>0%) or Non-GST / 0% GST Bill
-  const isExplicitNonGst = invoice.id?.toUpperCase().startsWith("NGINV") || (invoice.gstRate === 0 && (!invoice.items || invoice.items.every(it => !it.gstRate || it.gstRate === 0)))
+  const isExplicitNonGst = 
+    invoice.id?.toUpperCase().startsWith("NGINV") || 
+    (invoice as any).invoiceType === "nongst" || 
+    (invoice as any).type === "nongst" || 
+    (invoice.gstRate === 0 && (!invoice.items || invoice.items.every(it => !it.gstRate || it.gstRate === 0))) ||
+    (invoice.gstAmount === 0 && (!invoice.items || invoice.items.every(it => !it.gstAmount || it.gstAmount === 0)))
   
   const hasItemGst = Array.isArray(invoice.items) && invoice.items.length > 0
     ? invoice.items.some(it => (Number(it.gstRate) || 0) > 0 || (Number(it.gstAmount) || 0) > 0)
@@ -392,7 +397,7 @@ export function OfficialInvoiceDocument({
       </div>
 
       {/* Right: Header Card with Status Badge & Dates */}
-      <div className={`w-full sm:w-60 rounded-2xl ${theme.cardHeaderGradient} text-white p-3 shadow-md shrink-0 flex flex-col justify-between`}>
+      <div className={`w-full sm:w-56 rounded-2xl ${theme.cardHeaderGradient} text-white p-3 shadow-md shrink-0 flex flex-col justify-between`}>
         <div className="flex items-center justify-between border-b border-white/20 pb-1.5">
           <span className="font-black text-xs tracking-wider uppercase">
             {theme.invoiceTypeLabel} {pageNumber ? `(P.${pageNumber}/2)` : ''}
@@ -408,40 +413,24 @@ export function OfficialInvoiceDocument({
           </span>
         </div>
 
-        <div className="flex items-center gap-2.5 pt-2">
-          <a 
-            href={publicInvoiceViewUrl} 
-            target="_blank" 
-            rel="noopener noreferrer" 
-            className="shrink-0 group block"
-            title="Scan or click to view public invoice PDF online"
-          >
-            <img 
-              src={invoiceVerificationQrUrl} 
-              alt={`QR ${invoiceNumOrId}`} 
-              className="w-14 h-14 bg-white p-1 border border-white/60 shadow-xs object-contain group-hover:scale-105 transition-transform"
-              style={{ imageRendering: 'pixelated' }}
-            />
-          </a>
-          <div className="space-y-1 text-[10px] flex-1 min-w-0">
-            <div className="flex flex-col justify-start">
-              <span className="text-white/80 text-[8.5px] uppercase tracking-wider font-semibold">INVOICE NO:</span>
-              <strong className="font-mono text-white text-[10px] sm:text-[11px] font-bold break-all leading-tight">
-                {invoiceNumOrId}
-              </strong>
-            </div>
-            <div className="flex justify-between items-center pt-0.5">
-              <span className="text-white/80">DATE:</span>
-              <strong className="text-white font-mono text-[9.5px]">
-                {formatInvoiceDate(invoice.billDate)}
-              </strong>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-white/80">DUE:</span>
-              <strong className="text-white font-mono text-[9.5px]">
-                {hasDue ? formatInvoiceDate(invoice.dueDate) : "-"}
-              </strong>
-            </div>
+        <div className="space-y-1 text-[10px] pt-2">
+          <div className="flex flex-col justify-start">
+            <span className="text-white/80 text-[8.5px] uppercase tracking-wider font-semibold">INVOICE NO:</span>
+            <strong className="font-mono text-white text-[11px] sm:text-xs font-bold break-all leading-tight">
+              {invoiceNumOrId}
+            </strong>
+          </div>
+          <div className="flex justify-between items-center pt-0.5">
+            <span className="text-white/80">DATE:</span>
+            <strong className="text-white font-mono text-[9.5px]">
+              {formatInvoiceDate(invoice.billDate)}
+            </strong>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-white/80">DUE:</span>
+            <strong className="text-white font-mono text-[9.5px]">
+              {hasDue ? formatInvoiceDate(invoice.dueDate) : "-"}
+            </strong>
           </div>
         </div>
       </div>
@@ -450,8 +439,8 @@ export function OfficialInvoiceDocument({
 
   const renderInfoCards = () => (
     <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-1">
-      {/* Box 1: BILL TO (7 cols) */}
-      <div className={`sm:col-span-7 p-3 rounded-2xl ${theme.lightBg} border ${theme.lightBorder} space-y-1 shadow-2xs`}>
+      {/* Box 1: BILL TO (6 cols) */}
+      <div className={`sm:col-span-6 p-3 rounded-2xl ${theme.lightBg} border ${theme.lightBorder} space-y-1 shadow-2xs`}>
         <div className="flex items-center gap-1.5 text-[10.5px] font-black uppercase tracking-wider text-zinc-700">
           <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center text-[8px]`}>👤</span>
           <span>BILL TO</span>
@@ -470,19 +459,42 @@ export function OfficialInvoiceDocument({
         )}
       </div>
 
-      {/* Box 2: SERVICE / ENGAGEMENT DETAILS (5 cols) */}
-      <div className={`sm:col-span-5 p-3 rounded-2xl ${theme.lightBg} border ${theme.lightBorder} space-y-1 shadow-2xs`}>
-        <div className="flex items-center gap-1.5 text-[10.5px] font-black uppercase tracking-wider text-zinc-700">
-          <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center text-[8px]`}>💼</span>
-          <span>PROJECT / SERVICE SCOPE</span>
+      {/* Box 2: SERVICE / ENGAGEMENT DETAILS (6 cols) with embedded Official Verification QR beside it */}
+      <div className={`sm:col-span-6 p-3 rounded-2xl ${theme.lightBg} border ${theme.lightBorder} shadow-2xs flex items-center justify-between gap-2.5`}>
+        <div className="space-y-1 flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 text-[10.5px] font-black uppercase tracking-wider text-zinc-700">
+            <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center text-[8px]`}>💼</span>
+            <span>PROJECT / SERVICE SCOPE</span>
+          </div>
+          <p className="font-bold text-xs text-zinc-900 truncate">{invoice.project || "Enterprise Solutions"}</p>
+          <p className="text-[10px] text-zinc-600 font-mono">
+            <strong>Billing Scheme:</strong> {isGstInvoice ? 'GST Tax Invoice' : 'Non-GST Direct Invoice'}
+          </p>
+          <p className="text-[10px] text-zinc-600">
+            <strong>Issuing Entity:</strong> {activeCompany?.name || invoice.branchName || 'Main Office'}
+          </p>
         </div>
-        <p className="font-bold text-xs text-zinc-900 truncate">{invoice.project || "Enterprise Solutions"}</p>
-        <p className="text-[10px] text-zinc-600 font-mono">
-          <strong>Billing Scheme:</strong> {isGstInvoice ? 'GST Tax Invoice' : 'Non-GST / Direct Retainer'}
-        </p>
-        <p className="text-[10px] text-zinc-600">
-          <strong>Issuing Entity:</strong> {activeCompany?.name || invoice.branchName || 'Main Office'}
-        </p>
+
+        {/* Official Scan & Verify QR Code beside Project Scope */}
+        <div className="shrink-0 text-center flex flex-col items-center bg-white p-1 rounded-xl border border-zinc-200 shadow-2xs">
+          <a 
+            href={publicInvoiceViewUrl} 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="group block"
+            title="Scan or click to view public invoice online"
+          >
+            <img 
+              src={invoiceVerificationQrUrl} 
+              alt={`QR ${invoiceNumOrId}`} 
+              className="w-13 h-13 bg-white p-0.5 object-contain group-hover:scale-105 transition-transform" 
+              style={{ imageRendering: 'pixelated' }}
+            />
+          </a>
+          <span className="text-[7px] font-mono font-bold text-zinc-600 mt-0.5 block leading-tight">
+            Scan & Verify
+          </span>
+        </div>
       </div>
     </div>
   )
@@ -758,45 +770,15 @@ export function OfficialInvoiceDocument({
       {/* SIGNATURES & OFFICIAL SEAL ROW */}
       <div className="flex flex-row justify-between items-center gap-3 pt-2 border-t border-zinc-200">
         <div className="text-center space-y-0.5">
-          <div className="h-10 flex items-end justify-center">
+          <div className="h-14 flex items-end justify-center">
             <span className="font-serif italic text-zinc-500 text-xs">Customer Signature</span>
           </div>
-          <div className="w-32 border-t border-zinc-400 pt-0.5">
+          <div className="w-36 border-t border-zinc-400 pt-0.5">
             <p className="text-[8px] font-black uppercase text-zinc-600">CUSTOMER SIGNATURE</p>
           </div>
         </div>
 
-        {/* Official Scan to View / Verify Online PDF QR Box */}
-        <div className={`px-2.5 py-1 rounded-xl ${theme.lightBg} border ${theme.lightBorder} flex items-center gap-2 shadow-2xs`}>
-          <a 
-            href={publicInvoiceViewUrl} 
-            target="_blank" 
-            rel="noopener noreferrer" 
-            className="block shrink-0 cursor-pointer group"
-            title="Click or scan to view digital PDF copy online"
-          >
-            <img 
-              src={invoiceVerificationQrUrl} 
-              alt={`QR Code for Invoice #${invoiceNumOrId}`} 
-              className="w-12 h-12 bg-white p-1 border border-zinc-300 shadow-xs object-contain group-hover:scale-105 transition-transform" 
-              style={{ imageRendering: 'pixelated' }}
-            />
-          </a>
-          <div className="text-left space-y-0.5">
-            <div className="flex items-center gap-1">
-              <span className="text-[10px]">🔍</span>
-              <span className="font-extrabold text-[8.5px] text-zinc-900 uppercase tracking-tight">Scan for Online PDF</span>
-            </div>
-            <p className="text-[8px] font-mono text-zinc-800 font-bold leading-tight break-all">
-              INV #{invoiceNumOrId}
-            </p>
-            <p className="text-[7.5px] text-emerald-700 font-bold leading-tight flex items-center gap-0.5">
-              <span>✓</span> Public PDF (No Login)
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-3">
           <div className="text-center space-y-0.5">
             <div className="h-14 flex items-end justify-center">
               {resolvedSignatureUrl ? (
