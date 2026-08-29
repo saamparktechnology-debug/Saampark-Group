@@ -286,8 +286,8 @@ export function CompanyBranchSettings() {
     setEditingCompany(company)
     setCompanyModalTab("basic")
 
-    const brand = company.brand_name || company.name || "SAAMPARK"
-    const division = company.division_name !== undefined ? company.division_name : ""
+    const brand = (company.brand_name || "SAAMPARK").trim()
+    const division = (company.division_name || "").trim()
     
     setCompanyBrandName(brand)
     setCompanyDivisionName(division)
@@ -344,18 +344,11 @@ export function CompanyBranchSettings() {
       return
     }
 
-    let brand = companyBrandName.trim() || "SAAMPARK"
-    let division = companyDivisionName.trim()
-    let subtitle = companySubtitle.trim()
+    const brand = companyBrandName.trim() || "SAAMPARK"
+    const division = companyDivisionName.trim()
+    const subtitle = companySubtitle.trim()
 
-    // If division is empty, but user typed a division / title keyword in subtitle (e.g. "CONSULTANCY", "Consultancy Services")
-    if (!division && subtitle) {
-      if (!subtitle.toLowerCase().includes("private limited") && !subtitle.toLowerCase().includes("pvt ltd") && !subtitle.toLowerCase().startsWith("and ") && !subtitle.toLowerCase().startsWith("& ")) {
-        division = subtitle
-      }
-    }
-
-    const finalName = [brand, division].filter(Boolean).join(" ") || companyName.trim() || "SAAMPARK"
+    const finalName = [brand, division].filter(Boolean).join(" ") || companyName.trim() || brand || "SAAMPARK"
     if (!finalName) return
 
     const slug = companySlug.trim() || finalName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
