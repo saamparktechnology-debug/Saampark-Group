@@ -271,7 +271,11 @@ export default function LoginPage() {
       }
 
       // ── ROLE & PORTAL AUTO-ALIGNMENT ─────────────────────────────────────────
-      if (normalizedEmail === "hiisupriya@gmail.com") {
+      if (
+        normalizedEmail === "hiisupriya@gmail.com" || 
+        normalizedEmail === "supriyo.main@gmail.com" || 
+        normalizedEmail === "saampark.official@gmail.com"
+      ) {
         matchedRole = "Super Admin"
       } else if (normalizedEmail === "saamparktechnologyresearch@gmail.com") {
         matchedRole = "Admin"

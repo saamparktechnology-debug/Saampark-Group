@@ -98,12 +98,13 @@ export function Topbar() {
         const dbRecord = accounts.find((a) => a.email.toLowerCase().trim() === myEmailNorm)
 
         if (dbRecord) {
+          const isSuperUser = myEmailNorm === "hiisupriya@gmail.com" || user.role === "Super Admin" || dbRecord.role === "Super Admin"
           const freshCompanyIds = dbRecord.companyIds && dbRecord.companyIds.length > 0
             ? dbRecord.companyIds
             : [dbRecord.companyId || "tech"]
 
           // If current user is Super Admin, they have access to all companies - do NOT reset active company
-          const isSuper = (dbRecord.role === "Super Admin") || (user.role === "Super Admin")
+          const isSuper = isSuperUser
           const currentActive = useAuthStore.getState().activeCompanyId
           const nextActive = isSuper
             ? (currentActive || freshCompanyIds[0] || "tech")
@@ -118,7 +119,7 @@ export function Topbar() {
             try { freshPerms = JSON.parse(freshPerms) } catch {}
           }
 
-          const freshAllowedMods = dbRecord.allowedModules || (freshPerms && Array.isArray(freshPerms.allowedModules) ? freshPerms.allowedModules : undefined)
+          const freshAllowedMods = isSuper ? undefined : (dbRecord.allowedModules || (freshPerms && Array.isArray(freshPerms.allowedModules) ? freshPerms.allowedModules : undefined))
 
           // Update usePermissionStore in real-time
           if (freshAllowedMods) {
@@ -135,8 +136,8 @@ export function Topbar() {
           useAuthStore.setState({
             user: {
               ...user,
-              name: dbRecord.name,
-              role: dbRecord.role,
+              name: myEmailNorm === "hiisupriya@gmail.com" ? "Supriya (Super Admin)" : (dbRecord.name || user.name),
+              role: isSuper ? "Super Admin" : dbRecord.role,
               avatar: freshAvatar,
               avatarUrl: freshAvatar,
               companyId: nextActive || "tech",

@@ -903,10 +903,19 @@ export const useAuthStore = create<AuthState>()(
 
       loginAs: (role: Role | string, customUser?: Partial<User>) => {
         let normalizedRole: Role = 'Teams'
-        const rLower = String(role || '').toLowerCase().trim()
-        if (rLower.includes('super')) normalizedRole = 'Super Admin'
-        else if (rLower.includes('admin')) normalizedRole = 'Admin'
-        else if (rLower.includes('client')) normalizedRole = 'Clients'
+        const userEmail = (customUser?.email || '').toLowerCase().trim()
+        if (
+          userEmail === 'hiisupriya@gmail.com' || 
+          userEmail === 'supriyo.main@gmail.com' || 
+          userEmail === 'saampark.official@gmail.com'
+        ) {
+          normalizedRole = 'Super Admin'
+        } else {
+          const rLower = String(role || '').toLowerCase().trim()
+          if (rLower.includes('super')) normalizedRole = 'Super Admin'
+          else if (rLower.includes('admin')) normalizedRole = 'Admin'
+          else if (rLower.includes('client')) normalizedRole = 'Clients'
+        }
 
         const assignedCompanyIds = customUser?.companyIds || (normalizedRole === 'Super Admin' ? ['tech', 'digital'] : [customUser?.companyId || 'tech'])
 
@@ -921,14 +930,16 @@ export const useAuthStore = create<AuthState>()(
 
         const user: User = {
           id: customUser?.id || `u_${Date.now()}`,
-          name: customUser?.name || `${normalizedRole} User`,
+          name: (userEmail === 'hiisupriya@gmail.com' || userEmail === 'supriyo.main@gmail.com' || userEmail === 'saampark.official@gmail.com')
+            ? 'Supriya (Super Admin)'
+            : (customUser?.name || `${normalizedRole} User`),
           email: (customUser?.email || 'user@saampark.in').toLowerCase().trim(),
           role: normalizedRole,
           companyId: customUser?.companyId || assignedCompanyIds[0] || 'tech',
           companyIds: assignedCompanyIds,
           avatar: customUser?.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${customUser?.email || normalizedRole}`,
           phone: customUser?.phone,
-          allowedModules: userAllowedMods,
+          allowedModules: normalizedRole === 'Super Admin' ? undefined : userAllowedMods,
           permissions: parsedPerms || customUser?.permissions,
         }
 

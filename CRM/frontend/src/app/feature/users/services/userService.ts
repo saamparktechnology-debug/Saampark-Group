@@ -566,15 +566,32 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
     fetchModuleDataFromDB<UserItem[]>("users", [], "tech").catch(() => [])
   ]);
   
+  const isSuperAdminEmail = (email: string) => {
+    const e = email.toLowerCase().trim();
+    return e === "hiisupriya@gmail.com" || e === "supriyo.main@gmail.com" || e === "saampark.official@gmail.com";
+  };
+
   const userMap = new Map<string, UserItem>();
   for (const sysAcc of DEFAULT_SYSTEM_ACCOUNTS) {
     userMap.set(sysAcc.email.toLowerCase().trim(), sysAcc);
   }
   for (const u of (Array.isArray(dbUsersBase) ? dbUsersBase : [])) {
-    if (u && u.email) userMap.set(u.email.toLowerCase().trim(), u);
+    if (u && u.email) {
+      const eNorm = u.email.toLowerCase().trim();
+      if (isSuperAdminEmail(eNorm)) {
+        u.role = "Super Admin";
+      }
+      userMap.set(eNorm, u);
+    }
   }
   for (const u of (Array.isArray(dbUsersTech) ? dbUsersTech : [])) {
-    if (u && u.email) userMap.set(u.email.toLowerCase().trim(), u);
+    if (u && u.email) {
+      const eNorm = u.email.toLowerCase().trim();
+      if (isSuperAdminEmail(eNorm)) {
+        u.role = "Super Admin";
+      }
+      userMap.set(eNorm, u);
+    }
   }
   let dbUsers = Array.from(userMap.values());
 
