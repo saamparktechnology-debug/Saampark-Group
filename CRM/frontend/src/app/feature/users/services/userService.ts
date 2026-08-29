@@ -613,33 +613,59 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
     return e === "hiisupriya@gmail.com" || e === "supriyo.main@gmail.com" || e === "saampark.official@gmail.com";
   };
 
+  const deletedEmails = (await getDeletedUserEmailsAsync()).map((e) => e.toLowerCase().trim());
+
   const userMap = new Map<string, UserItem>();
-  for (const sysAcc of DEFAULT_SYSTEM_ACCOUNTS) {
-    userMap.set(sysAcc.email.toLowerCase().trim(), sysAcc);
+  const hasBaseData = Array.isArray(dbUsersBase) && dbUsersBase.length > 0;
+  if (!hasBaseData) {
+    for (const sysAcc of DEFAULT_SYSTEM_ACCOUNTS) {
+      const sysEmail = sysAcc.email.toLowerCase().trim();
+      if (!deletedEmails.includes(sysEmail)) {
+        userMap.set(sysEmail, sysAcc);
+      }
+    }
   }
+
   for (const u of (Array.isArray(dbUsersBase) ? dbUsersBase : [])) {
     if (u && u.email) {
       const eNorm = u.email.toLowerCase().trim();
-      if (isSuperAdminEmail(eNorm)) {
-        u.role = "Super Admin";
+      if (!deletedEmails.includes(eNorm)) {
+        if (isSuperAdminEmail(eNorm)) {
+          u.role = "Super Admin";
+        }
+        // Remove any previous emails of this user from userMap so old transferred emails never show up
+        if (Array.isArray(u.previousEmails)) {
+          u.previousEmails.forEach((pe) => userMap.delete((pe || "").toLowerCase().trim()));
+        }
+        if (u.previousEmail) {
+          userMap.delete(u.previousEmail.toLowerCase().trim());
+        }
+        userMap.set(eNorm, u);
       }
-      userMap.set(eNorm, u);
     }
   }
+
   for (const u of (Array.isArray(dbUsersTech) ? dbUsersTech : [])) {
     if (u && u.email) {
       const eNorm = u.email.toLowerCase().trim();
-      if (isSuperAdminEmail(eNorm)) {
-        u.role = "Super Admin";
+      if (!deletedEmails.includes(eNorm)) {
+        if (isSuperAdminEmail(eNorm)) {
+          u.role = "Super Admin";
+        }
+        if (Array.isArray(u.previousEmails)) {
+          u.previousEmails.forEach((pe) => userMap.delete((pe || "").toLowerCase().trim()));
+        }
+        if (u.previousEmail) {
+          userMap.delete(u.previousEmail.toLowerCase().trim());
+        }
+        userMap.set(eNorm, u);
       }
-      userMap.set(eNorm, u);
     }
   }
+
   let dbUsers = Array.from(userMap.values());
 
-  const deletedEmails = (await getDeletedUserEmailsAsync()).map((e) => e.toLowerCase().trim());
-
-  // Ensure currently logged-in user exists in dbUsers
+  // Ensure currently logged-in user exists in dbUsers with their active current email
   try {
     const { useAuthStore } = require("@/store/useAuthStore");
     const currentUser = useAuthStore.getState().user;

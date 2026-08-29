@@ -198,6 +198,8 @@ export default function UsersMain() {
         await api.put(`/users/${editingUser.id}`, {
           full_name: userData.name,
           email: userData.email || editingUser.email,
+          old_email: oldEmail,
+          oldEmail: oldEmail,
           phone: userData.phone,
           status: userData.status?.toLowerCase(),
           role_id,
@@ -237,7 +239,7 @@ export default function UsersMain() {
     const saved = await recordUserAccountAsync(
       {
         ...userData,
-        id: realId || userData.id,
+        id: realId || userData.id || editingUser?.id,
         companyIds: userData.companyIds || (userData.companyId ? [userData.companyId] : ["tech"]),
         permissions: (userData as any).permissions,
         previousEmails: prevEmailsList.length > 0 ? prevEmailsList : undefined,
@@ -296,16 +298,31 @@ export default function UsersMain() {
       details: isEmailTransfer ? { oldEmail, newEmail } : undefined,
     })
 
-    // If the currently logged-in user's name or companies were updated, update auth store immediately
+    // If the currently logged-in user was updated (by ID or previous/new email), update auth store immediately
     const currentUser = useAuthStore.getState().user
-    if (currentUser && (currentUser.email.toLowerCase().trim() === saved.email.toLowerCase().trim() || String(currentUser.id) === String(saved.id))) {
+    const isCurrentAccount = Boolean(
+      currentUser && (
+        (currentUser.email && currentUser.email.toLowerCase().trim() === saved.email.toLowerCase().trim()) ||
+        (oldEmail && currentUser.email && currentUser.email.toLowerCase().trim() === oldEmail) ||
+        (currentUser.id && String(currentUser.id) === String(saved.id)) ||
+        (editingUser && currentUser.id && String(currentUser.id) === String(editingUser.id))
+      )
+    )
+
+    if (isCurrentAccount && currentUser) {
       useAuthStore.setState({
         user: {
           ...currentUser,
-          name: saved.name,
-          companyIds: saved.companyIds,
+          id: saved.id || currentUser.id,
+          email: saved.email,
+          name: saved.name || currentUser.name,
+          role: (saved.role as any) || currentUser.role,
+          companyIds: saved.companyIds || currentUser.companyIds,
           companyId: (saved.companyIds && saved.companyIds[0]) || saved.companyId || currentUser.companyId,
           phone: saved.phone || currentUser.phone,
+          department: saved.department || currentUser.department,
+          avatar: saved.avatarUrl || currentUser.avatar,
+          avatarUrl: saved.avatarUrl || currentUser.avatarUrl,
         }
       })
     }

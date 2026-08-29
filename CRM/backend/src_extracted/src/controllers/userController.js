@@ -72,7 +72,9 @@ const updateUser = async (req, res, next) => {
       }
     }
 
-    const targetEmail = (email || id || '').toLowerCase().trim();
+    const newEmailVal = email ? email.toLowerCase().trim() : null;
+    const oldEmailVal = (req.body.old_email || req.body.oldEmail || '').toLowerCase().trim();
+    const targetEmail = (oldEmailVal || newEmailVal || id || '').toLowerCase().trim();
 
     // Multi-company serialization
     const compList = company_ids || companyIds || (company_id ? [company_id] : null);
@@ -83,6 +85,7 @@ const updateUser = async (req, res, next) => {
     const params = [];
 
     if (displayName !== null) { setClauses.push('full_name = COALESCE(?, full_name)'); params.push(displayName); }
+    if (newEmailVal) { setClauses.push('email = ?'); params.push(newEmailVal); }
     if (phoneVal !== null || phone === '') { setClauses.push('phone = ?'); params.push(phoneVal); }
     if (statusVal) { setClauses.push('status = ?'); params.push(statusVal); }
     if (roleIdVal) { setClauses.push('role_id = ?'); params.push(roleIdVal); }
@@ -104,15 +107,15 @@ const updateUser = async (req, res, next) => {
     const isNumericId = !isNaN(parseInt(id, 10)) && Number(id) > 0;
     
     if (isNumericId) {
-      params.push(id, targetEmail);
+      params.push(id, targetEmail, oldEmailVal || id);
       await pool.execute(
-        `UPDATE users SET ${setClauses.join(', ')} WHERE id = ? OR email = ?`,
+        `UPDATE users SET ${setClauses.join(', ')} WHERE id = ? OR email = ? OR email = ?`,
         params
       );
     } else {
-      params.push(targetEmail || id);
+      params.push(targetEmail || id, oldEmailVal || id);
       await pool.execute(
-        `UPDATE users SET ${setClauses.join(', ')} WHERE email = ?`,
+        `UPDATE users SET ${setClauses.join(', ')} WHERE email = ? OR email = ?`,
         params
       );
     }
@@ -126,9 +129,10 @@ const updateUser = async (req, res, next) => {
       }
       if (!Array.isArray(currentUsers)) currentUsers = [];
 
+      const lookupEmail = newEmailVal || targetEmail;
       const [updatedUserRows] = await pool.execute(
-        'SELECT u.*, r.name as role_name FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id = ? OR u.email = ?',
-        [id, targetEmail]
+        'SELECT u.*, r.name as role_name FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id = ? OR u.email = ? OR u.email = ?',
+        [id, lookupEmail, targetEmail]
       );
       if (updatedUserRows.length > 0) {
         const u = updatedUserRows[0];
@@ -169,17 +173,22 @@ const updateUser = async (req, res, next) => {
           allowedModules: permObj?.allowedModules,
         };
 
-        const existingIdx = currentUsers.findIndex((cu) => (cu.email || '').toLowerCase().trim() === emailNorm);
-        if (existingIdx >= 0) {
-          currentUsers[existingIdx] = { ...currentUsers[existingIdx], ...updatedItem };
-        } else {
-          currentUsers.unshift(updatedItem);
-        }
+        // Filter out any ghost record with oldEmailVal or targetId
+        const filteredUsers = currentUsers.filter((cu) => {
+          const cuEmail = (cu.email || '').toLowerCase().trim();
+          const cuId = String(cu.id || '').toLowerCase().trim();
+          if (cuId && cuId === String(u.id).toLowerCase().trim()) return false;
+          if (cuEmail === emailNorm) return false;
+          if (oldEmailVal && cuEmail === oldEmailVal) return false;
+          return true;
+        });
+
+        const newUsersList = [updatedItem, ...filteredUsers];
 
         await pool.execute(
           `INSERT INTO app_data (module_key, data_json) VALUES ('users', ?)
            ON DUPLICATE KEY UPDATE data_json = VALUES(data_json), updated_at = NOW()`,
-          [JSON.stringify(currentUsers)]
+          [JSON.stringify(newUsersList)]
         );
       }
     } catch (appErr) {
