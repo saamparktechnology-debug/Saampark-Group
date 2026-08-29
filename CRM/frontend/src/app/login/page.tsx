@@ -278,7 +278,9 @@ export default function LoginPage() {
       }
 
       // ── SUCCESS ──────────────────────────────────────────────────────────────
-      const displayName = matchedAccount.full_name || matchedAccount.name || dbAccount?.name || normalizedEmail
+      const displayName = normalizedEmail === "hiisupriya@gmail.com" 
+        ? "Supriya (Super Admin)" 
+        : (matchedAccount.full_name || matchedAccount.name || dbAccount?.name || normalizedEmail)
       recordUserAccount({ ...matchedAccount, name: displayName, lastLogin: "Just now" })
       setSuccessMessage(`Welcome back, ${displayName}! 👋`)
       setSuccess(true)

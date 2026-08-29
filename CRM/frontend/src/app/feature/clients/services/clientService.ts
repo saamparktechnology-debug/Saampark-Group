@@ -28,16 +28,20 @@ export function getClientTimestamp(c: ClientItem): number {
 
 // ── Clients ─────────────────────────────────────────────────────────────────
 
-/** Fetch all clients from MySQL */
+/** Fetch all clients from MySQL across all keys */
 export async function getClients(companyId?: string): Promise<ClientItem[]> {
-  let data = await fetchModuleDataFromDB<ClientItem[]>("clients", [], companyId)
-  let list = Array.isArray(data) ? data : []
-  if (list.length === 0 && companyId && companyId !== "all") {
-    const master = await fetchModuleDataFromDB<ClientItem[]>("clients", [], "all").catch(() => [])
-    if (Array.isArray(master) && master.length > 0) {
-      list = master
-    }
+  const [dbData, techData] = await Promise.all([
+    fetchModuleDataFromDB<ClientItem[]>("clients", [], companyId || "all").catch(() => []),
+    fetchModuleDataFromDB<ClientItem[]>("clients", [], "tech").catch(() => [])
+  ])
+  const map = new Map<string, ClientItem>()
+  for (const c of (Array.isArray(dbData) ? dbData : [])) {
+    if (c && c.id) map.set(String(c.id).toLowerCase().trim(), c)
   }
+  for (const c of (Array.isArray(techData) ? techData : [])) {
+    if (c && c.id) map.set(String(c.id).toLowerCase().trim(), c)
+  }
+  const list = Array.from(map.values())
   return list.sort((a, b) => getClientTimestamp(b) - getClientTimestamp(a))
 }
 

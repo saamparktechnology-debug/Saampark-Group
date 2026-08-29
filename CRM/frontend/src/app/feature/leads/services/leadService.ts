@@ -172,15 +172,18 @@ export async function syncLeadReminderTask(lead: Lead): Promise<void> {
 }
 
 export const getLeads = async (companyId?: string): Promise<Lead[]> => {
-  let dbData = await fetchModuleDataFromDB<Lead[]>("leads", [], companyId)
-  let list = Array.isArray(dbData) ? dbData : []
-
-  if (list.length === 0 && companyId && companyId !== "all") {
-    const master = await fetchModuleDataFromDB<Lead[]>("leads", [], "all").catch(() => [])
-    if (Array.isArray(master) && master.length > 0) {
-      list = master
-    }
+  const [dbData, techData] = await Promise.all([
+    fetchModuleDataFromDB<Lead[]>("leads", [], companyId || "all").catch(() => []),
+    fetchModuleDataFromDB<Lead[]>("leads", [], "tech").catch(() => [])
+  ])
+  const map = new Map<string, Lead>()
+  for (const l of (Array.isArray(dbData) ? dbData : [])) {
+    if (l && l.id) map.set(String(l.id).toLowerCase().trim(), l)
   }
+  for (const l of (Array.isArray(techData) ? techData : [])) {
+    if (l && l.id) map.set(String(l.id).toLowerCase().trim(), l)
+  }
+  const list = Array.from(map.values())
 
   // Auto-lock leads if reminder date is overdue (locks at the end of the reminder date)
   // Leads in "Won" or "Lost" stages are NEVER locked

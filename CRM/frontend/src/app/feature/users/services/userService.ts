@@ -99,15 +99,7 @@ export function unmarkUserAsDeleted(email: string): void {
 
 // Helper: get user accounts — reads strictly from MySQL database
 export async function getStoredUserAccountsAsync(): Promise<UserItem[]> {
-  const [dbData, deletedEmails] = await Promise.all([
-    fetchModuleDataFromDB<UserItem[]>("users", DEFAULT_SYSTEM_ACCOUNTS, "all"),
-    getDeletedUserEmailsAsync()
-  ]);
-
-  if (Array.isArray(dbData) && dbData.length > 0) {
-    return dbData;
-  }
-  return DEFAULT_SYSTEM_ACCOUNTS.filter((a) => !deletedEmails.includes(a.email.toLowerCase().trim()));
+  return getUsers("all");
 }
 
 /** @deprecated Use getStoredUserAccountsAsync() */
@@ -568,22 +560,25 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
     return "Teams";
   };
 
-  // 1. Fetch all primary user records from MySQL app_data DB (force companyId='all' so no users are filtered out prematurely)
-  let dbUsers = await fetchModuleDataFromDB<UserItem[]>("users", DEFAULT_SYSTEM_ACCOUNTS, "all");
-  if (!Array.isArray(dbUsers)) dbUsers = [];
+  // 1. Fetch all primary user records from MySQL app_data DB across all keys ('users', 'users_tech')
+  const [dbUsersBase, dbUsersTech] = await Promise.all([
+    fetchModuleDataFromDB<UserItem[]>("users", [], "all").catch(() => []),
+    fetchModuleDataFromDB<UserItem[]>("users", [], "tech").catch(() => [])
+  ]);
+  
+  const userMap = new Map<string, UserItem>();
+  for (const sysAcc of DEFAULT_SYSTEM_ACCOUNTS) {
+    userMap.set(sysAcc.email.toLowerCase().trim(), sysAcc);
+  }
+  for (const u of (Array.isArray(dbUsersBase) ? dbUsersBase : [])) {
+    if (u && u.email) userMap.set(u.email.toLowerCase().trim(), u);
+  }
+  for (const u of (Array.isArray(dbUsersTech) ? dbUsersTech : [])) {
+    if (u && u.email) userMap.set(u.email.toLowerCase().trim(), u);
+  }
+  let dbUsers = Array.from(userMap.values());
 
   const deletedEmails = (await getDeletedUserEmailsAsync()).map((e) => e.toLowerCase().trim());
-
-  // Ensure default system accounts (Super Admin, Admin, Teams) exist in dbUsers unless deleted
-  DEFAULT_SYSTEM_ACCOUNTS.forEach((sysAcc) => {
-    const sysEmail = sysAcc.email.toLowerCase().trim();
-    if (!deletedEmails.includes(sysEmail)) {
-      const idx = dbUsers.findIndex((u) => u.email.toLowerCase().trim() === sysEmail);
-      if (idx < 0) {
-        dbUsers.unshift(sysAcc);
-      }
-    }
-  });
 
   // Ensure currently logged-in user exists in dbUsers
   try {

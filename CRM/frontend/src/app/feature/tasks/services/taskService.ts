@@ -6,24 +6,19 @@ export const initialTasks: Task[] = []
 
 export const taskService = {
   getTasks: async (companyId?: string): Promise<Task[]> => {
-    // Fetch persisted data from MySQL app_data store
-    let dbData = await fetchModuleDataFromDB<Task[]>("tasks", [], companyId)
-    let list = Array.isArray(dbData) ? dbData : []
-    if (list.length === 0 && companyId && companyId !== "all") {
-      const master = await fetchModuleDataFromDB<Task[]>("tasks", [], "all").catch(() => [])
-      if (Array.isArray(master) && master.length > 0) {
-        list = master
-      }
+    // Fetch persisted data from MySQL app_data store across both keys
+    const [dbData, techData] = await Promise.all([
+      fetchModuleDataFromDB<Task[]>("tasks", [], companyId || "all").catch(() => []),
+      fetchModuleDataFromDB<Task[]>("tasks", [], "tech").catch(() => [])
+    ])
+    const map = new Map<string, Task>()
+    for (const t of (Array.isArray(dbData) ? dbData : [])) {
+      if (t && t.id) map.set(String(t.id).toLowerCase().trim(), t)
     }
-    // Guarantee uniqueness by task ID
-    const seen = new Set<string>()
-    return list.filter((t) => {
-      if (!t || !t.id) return false
-      const normId = String(t.id).toLowerCase().trim()
-      if (seen.has(normId)) return false
-      seen.add(normId)
-      return true
-    })
+    for (const t of (Array.isArray(techData) ? techData : [])) {
+      if (t && t.id) map.set(String(t.id).toLowerCase().trim(), t)
+    }
+    return Array.from(map.values())
   },
 
   addTask: async (taskData: Omit<Task, "id"> & { id?: string }, companyId?: string): Promise<Task> => {
