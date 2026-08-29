@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Search, ChevronDown, FileSpreadsheet, Printer, LayoutGrid, SlidersHorizontal, Edit3, X, Eye, ChevronLeft, ChevronRight, User, FolderPlus, MapPin } from "lucide-react"
+import { Search, ChevronDown, FileSpreadsheet, Printer, LayoutGrid, SlidersHorizontal, Edit3, X, Eye, ChevronLeft, ChevronRight, User, FolderPlus, MapPin, Info } from "lucide-react"
 import { ClientItem } from "../types"
 import { formatDisplayEmail } from "../services/clientService"
 
@@ -291,9 +291,31 @@ export function ClientsTableView({
                         </span>
                       )}
                       {(client.createdByName || client.createdBy || client.owner) && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                          <span>👤 Added by: {client.createdByName || client.createdBy || client.owner}</span>
-                        </span>
+                        <div className="relative group/clientcreator inline-flex items-center">
+                          <button
+                            type="button"
+                            className="w-5 h-5 rounded-full backdrop-blur-md bg-white/80 dark:bg-zinc-800/80 hover:bg-indigo-50/90 dark:hover:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 border border-indigo-200/80 dark:border-indigo-500/30 flex items-center justify-center cursor-pointer transition-all duration-200 shadow-xs hover:shadow-md hover:shadow-indigo-500/20 hover:scale-110 active:scale-95"
+                            title="Added By Details"
+                          >
+                            <Info size={11} className="stroke-[2.2]" />
+                          </button>
+                          <div className="absolute left-0 top-full mt-2 hidden group-hover/clientcreator:block z-50 w-56 p-3 bg-zinc-900/95 dark:bg-zinc-900/95 text-white rounded-2xl shadow-2xl border border-white/10 text-[11px] pointer-events-none space-y-1.5 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150">
+                            <div className="text-[9.5px] font-bold uppercase tracking-wider text-indigo-400 border-b border-white/10 pb-1 flex items-center justify-between">
+                              <span>Client Creator</span>
+                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
+                            </div>
+                            <div className="flex items-center gap-1.5 text-zinc-100 font-semibold">
+                              <User size={12} className="text-indigo-400 shrink-0" />
+                              <span>Added by: <strong className="text-indigo-300 font-bold">{client.createdByName || client.createdBy || client.owner}</strong></span>
+                            </div>
+                            {client.branchName && (
+                              <div className="flex items-center gap-1.5 text-zinc-300">
+                                <MapPin size={12} className="text-amber-400 shrink-0" />
+                                <span>Branch: <strong className="text-white font-medium">{client.branchName}</strong></span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       )}
                     </div>
                   </td>

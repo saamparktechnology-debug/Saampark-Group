@@ -1,6 +1,7 @@
 import { UserItem, UserRole } from "../types";
 import { api } from "@/lib/api";
 import { usePermissionStore } from "@/store/usePermissionStore";
+import { useAuthStore } from "@/store/useAuthStore";
 import { 
   filterGlobalDeletedItems, 
   markGlobalItemDeleted, 
@@ -254,7 +255,7 @@ export async function cascadeUserNameChange(oldName: string, email: string, newN
   }
 }
 
-// Helper: dynamically look up a user's real uploaded cloud avatar from the users database
+// Helper: dynamically look up a user's real uploaded cloud avatar from the users database or active auth store
 export function getUserAvatar(
   userIdentifier?: string | null,
   allUsers?: UserItem[],
@@ -265,6 +266,23 @@ export function getUserAvatar(
   }
   const norm = userIdentifier.toLowerCase().trim();
 
+  // 1. Check current logged-in user in Auth Store
+  try {
+    const curUser = useAuthStore.getState().user;
+    if (curUser) {
+      const cEmail = (curUser.email || "").toLowerCase().trim();
+      const cName = (curUser.name || "").toLowerCase().trim();
+      const cId = String(curUser.id || "").toLowerCase().trim();
+      if (norm === cEmail || norm === cName || norm === cId) {
+        const curAv = (curUser as any).avatarUrl || curUser.avatar;
+        if (curAv && curAv.trim() && !curAv.includes("dicebear")) {
+          return curAv;
+        }
+      }
+    }
+  } catch {}
+
+  // 2. Check allUsers list if provided
   if (Array.isArray(allUsers) && allUsers.length > 0) {
     const matched = allUsers.find((u) => {
       const uEmail = (u.email || "").toLowerCase().trim();
@@ -281,7 +299,7 @@ export function getUserAvatar(
     }
   }
 
-  // If userIdentifier is already a real valid image URL
+  // 3. If userIdentifier is already a real valid image URL
   if (userIdentifier.startsWith("http://") || userIdentifier.startsWith("https://") || userIdentifier.startsWith("data:")) {
     if (!userIdentifier.includes("dicebear")) {
       return userIdentifier;

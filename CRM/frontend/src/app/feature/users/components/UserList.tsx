@@ -144,17 +144,20 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
                         title="Click to view complete account overview and KYC details"
                       >
                         <div className="flex items-center gap-3 group/user">
-                          {u.avatarUrl ? (
-                            <img
-                              src={u.avatarUrl}
-                              alt={u.name}
-                              className="w-9 h-9 rounded-full object-cover border border-border shadow-2xs shrink-0 group-hover/user:ring-2 group-hover/user:ring-primary transition-all"
-                            />
-                          ) : (
-                            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-bold flex items-center justify-center text-sm shadow-sm shrink-0 group-hover/user:ring-2 group-hover/user:ring-primary transition-all">
-                              {u.name.substring(0, 2).toUpperCase()}
-                            </div>
-                          )}
+                          {(() => {
+                            const avatarSrc = u.avatarUrl || (u as any).avatar
+                            return avatarSrc && !avatarSrc.includes("dicebear") ? (
+                              <img
+                                src={avatarSrc}
+                                alt={u.name}
+                                className="w-9 h-9 rounded-full object-cover border border-border shadow-2xs shrink-0 group-hover/user:ring-2 group-hover/user:ring-primary transition-all"
+                              />
+                            ) : (
+                              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-bold flex items-center justify-center text-sm shadow-sm shrink-0 group-hover/user:ring-2 group-hover/user:ring-primary transition-all">
+                                {u.name.substring(0, 2).toUpperCase()}
+                              </div>
+                            )
+                          })()}
                           <div>
                             <div className="font-semibold text-foreground group-hover/user:text-primary transition-colors flex items-center gap-1.5">
                               <span>{u.name}</span>

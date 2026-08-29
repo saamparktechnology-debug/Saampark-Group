@@ -466,7 +466,7 @@ export function TaskKanban({
                       const chip = getTaskCountdownChip(t.deadline, t.dueTime, t.status)
                       return (
                         <div className="flex items-center justify-between pt-1 border-t border-zinc-100 dark:border-zinc-700/50 text-[10.5px]">
-                          <span className="text-zinc-500 dark:text-zinc-400 font-mono">
+                          <span className="text-red-600 dark:text-red-400 font-bold font-mono">
                             {t.deadline}{t.dueTime ? ` (${t.dueTime})` : ''}
                           </span>
                           {chip && (

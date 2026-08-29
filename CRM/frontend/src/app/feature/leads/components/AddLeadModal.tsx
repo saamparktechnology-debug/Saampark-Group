@@ -186,6 +186,14 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
   React.useEffect(() => {
     if (isOpen) {
       resetForm()
+
+      if (user?.role === "Clients") {
+        setTeamMembers([])
+        setCaller("None")
+        setOwner("None")
+        return
+      }
+
       getUsers("all").then((list) => {
         const isSuperAdmin = user?.role === "Super Admin"
         const userCompIds = user?.companyIds || (user?.companyId ? [user?.companyId] : ["tech"])
@@ -405,34 +413,42 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
             />
           </div>
 
-          {/* Services Multi-Select Tick Boxes */}
-          <div className="grid grid-cols-4 items-start gap-4">
+          {/* Services Multi-Select Compact Chips */}
+          <div className="grid grid-cols-4 items-start gap-3">
             <label className="text-zinc-500 font-medium flex items-center gap-1 pt-1">
               <Wrench size={13} className="text-zinc-400" />
               <span>Services</span>
             </label>
-            <div className="col-span-3 space-y-2 bg-zinc-50 dark:bg-zinc-800/60 p-3 rounded-lg border border-zinc-200 dark:border-zinc-700">
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                {STANDARD_SERVICES.map((s) => (
-                  <label key={s} className="flex items-center gap-2 cursor-pointer text-zinc-700 dark:text-zinc-300 hover:text-blue-600">
-                    <input
-                      type="checkbox"
-                      checked={selectedServices.includes(s)}
-                      onChange={() => toggleService(s)}
-                      className="rounded text-blue-600 focus:ring-blue-500"
-                    />
-                    <span>{s}</span>
-                  </label>
-                ))}
-                <label className="flex items-center gap-2 cursor-pointer text-zinc-700 dark:text-zinc-300 hover:text-blue-600">
-                  <input
-                    type="checkbox"
-                    checked={selectedServices.includes("Others")}
-                    onChange={() => toggleService("Others")}
-                    className="rounded text-blue-600 focus:ring-blue-500"
-                  />
-                  <span>Others</span>
-                </label>
+            <div className="col-span-3 space-y-1.5 bg-zinc-50 dark:bg-zinc-800/60 p-2 rounded-lg border border-zinc-200 dark:border-zinc-700">
+              <div className="flex flex-wrap gap-1.5 text-xs">
+                {STANDARD_SERVICES.map((s) => {
+                  const isSelected = selectedServices.includes(s)
+                  return (
+                    <button
+                      type="button"
+                      key={s}
+                      onClick={() => toggleService(s)}
+                      className={`px-2 py-0.5 rounded-md text-[11px] font-medium border transition-all cursor-pointer ${
+                        isSelected
+                          ? "bg-blue-600 text-white border-blue-600 shadow-2xs font-semibold"
+                          : "bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-zinc-400"
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  )
+                })}
+                <button
+                  type="button"
+                  onClick={() => toggleService("Others")}
+                  className={`px-2 py-0.5 rounded-md text-[11px] font-medium border transition-all cursor-pointer ${
+                    selectedServices.includes("Others")
+                      ? "bg-blue-600 text-white border-blue-600 shadow-2xs font-semibold"
+                      : "bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-zinc-400"
+                  }`}
+                >
+                  Others
+                </button>
               </div>
               {selectedServices.includes("Others") && (
                 <input
@@ -440,19 +456,19 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
                   placeholder="Type custom service name..."
                   value={customService}
                   onChange={(e) => setCustomService(e.target.value)}
-                  className="w-full mt-2 px-3 py-1.5 bg-white dark:bg-zinc-900 border border-blue-200 dark:border-blue-800 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 text-xs"
+                  className="w-full mt-1 px-2.5 py-1 bg-white dark:bg-zinc-900 border border-blue-200 dark:border-blue-800 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 text-xs"
                 />
               )}
             </div>
           </div>
 
           {/* Stage / Status Selector */}
-          <div className="grid grid-cols-4 items-center gap-4">
+          <div className="grid grid-cols-4 items-center gap-3">
             <label className="text-zinc-500 font-medium">Stage (Status)</label>
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value as LeadStatus)}
-              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-semibold"
+              className="col-span-3 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-semibold text-xs"
             >
               <option value="New">New</option>
               <option value="Qualified">Qualified</option>
@@ -466,12 +482,12 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
           </div>
 
           {/* Reminder Date & Time with None / 00,00,0000 and AM/PM format */}
-          <div className="grid grid-cols-4 items-start gap-4">
+          <div className="grid grid-cols-4 items-start gap-3">
             <label className="text-zinc-500 font-medium flex items-center gap-1 pt-1">
               <Calendar size={13} className="text-amber-500" />
               <span>Reminder Date & Time</span>
             </label>
-            <div className="col-span-3 space-y-2">
+            <div className="col-span-3 space-y-1.5">
               <div className="flex items-center gap-2">
                 <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-zinc-700 dark:text-zinc-300">
                   <input
@@ -495,7 +511,7 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
                           setReminderDate(formatDateForDisplay(e.target.value))
                         }
                       }}
-                      className="w-full pl-8 pr-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-amber-600 dark:text-amber-400 font-semibold cursor-pointer text-xs"
+                      className="w-full pl-8 pr-3 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-amber-600 dark:text-amber-400 font-semibold cursor-pointer text-xs"
                     />
                     <Calendar size={14} className="absolute left-2.5 text-amber-500 pointer-events-none" />
                   </div>
@@ -518,13 +534,13 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
                     }
 
                     return (
-                      <div className="flex items-center bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md overflow-hidden p-1 gap-1 text-xs">
-                        <Clock size={14} className="text-amber-500 shrink-0 ml-1" />
+                      <div className="flex items-center bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md overflow-hidden p-0.5 gap-1 text-xs">
+                        <Clock size={13} className="text-amber-500 shrink-0 ml-1" />
                         {/* Hour Selector */}
                         <select
                           value={hStr}
                           onChange={(e) => updateTime(e.target.value, mStr, ampmStr)}
-                          className="bg-transparent text-amber-600 dark:text-amber-400 font-bold focus:outline-none cursor-pointer py-1 text-xs"
+                          className="bg-transparent text-amber-600 dark:text-amber-400 font-bold focus:outline-none cursor-pointer py-0.5 text-xs"
                         >
                           {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0")).map((h) => (
                             <option key={h} value={h} className="bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200">
@@ -537,7 +553,7 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
                         <select
                           value={mStr}
                           onChange={(e) => updateTime(hStr, e.target.value, ampmStr)}
-                          className="bg-transparent text-amber-600 dark:text-amber-400 font-bold focus:outline-none cursor-pointer py-1 text-xs"
+                          className="bg-transparent text-amber-600 dark:text-amber-400 font-bold focus:outline-none cursor-pointer py-0.5 text-xs"
                         >
                           {["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"].map((m) => (
                             <option key={m} value={m} className="bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200">
@@ -550,12 +566,12 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
                             </option>
                           )}
                         </select>
-                        {/* AM / PM Segmented Button */}
-                        <div className="flex items-center border-l border-zinc-200 dark:border-zinc-700 ml-1 pl-1 bg-zinc-100/80 dark:bg-zinc-700/50 p-0.5 rounded text-[10px] font-bold">
+                        {/* AM/PM Switcher Buttons */}
+                        <div className="flex items-center bg-zinc-200/70 dark:bg-zinc-700/60 rounded p-0.5 text-[10px]">
                           <button
                             type="button"
                             onClick={() => updateTime(hStr, mStr, "AM")}
-                            className={`px-2 py-0.5 rounded transition-all cursor-pointer ${
+                            className={`px-1.5 py-0.5 rounded font-bold transition-all cursor-pointer ${
                               ampmStr === "AM"
                                 ? "bg-amber-500 text-white font-extrabold shadow-2xs"
                                 : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
@@ -566,7 +582,7 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
                           <button
                             type="button"
                             onClick={() => updateTime(hStr, mStr, "PM")}
-                            className={`px-2 py-0.5 rounded transition-all cursor-pointer ${
+                            className={`px-1.5 py-0.5 rounded font-bold transition-all cursor-pointer ${
                               ampmStr === "PM"
                                 ? "bg-amber-500 text-white font-extrabold shadow-2xs"
                                 : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
@@ -584,38 +600,55 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
           </div>
 
           {/* Remainder Notes */}
-          <div className="grid grid-cols-4 items-start gap-4">
-            <label className="text-zinc-500 font-medium pt-2 flex items-center gap-1">
+          <div className="grid grid-cols-4 items-start gap-3">
+            <label className="text-zinc-500 font-medium pt-1.5 flex items-center gap-1">
               <FileText size={13} className="text-zinc-400" />
               <span>Remainder Notes</span>
             </label>
             <textarea
-              rows={2}
+              rows={1}
               placeholder="Reminder note details..."
               value={reminderNotes}
               onChange={(e) => setReminderNotes(e.target.value)}
-              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 resize-none"
+              className="col-span-3 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 resize-none text-xs"
             />
           </div>
 
           {/* Assigned to / Caller Member */}
-          <div className="grid grid-cols-4 items-center gap-4">
+          <div className="grid grid-cols-4 items-center gap-3">
             <label className="text-zinc-500 font-medium flex items-center gap-1">
               <UserIcon size={13} className="text-zinc-400" />
               <span>Assigned to</span>
             </label>
-            <select
-              value={caller}
-              onChange={(e) => setCaller(e.target.value)}
-              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-semibold"
-            >
-              <option value="None">None (Unassigned)</option>
-              {teamMembers.map((m) => (
-                <option key={m.id || m.name} value={m.name}>
-                  {m.name} {m.role ? `(${m.role})` : ""}
-                </option>
-              ))}
-            </select>
+            {user?.role === "Clients" ? (
+              <input
+                type="text"
+                placeholder="Type assigned member name (Optional)..."
+                value={caller === "None" ? "" : caller}
+                onChange={(e) => {
+                  const val = e.target.value
+                  setCaller(val.trim() ? val : "None")
+                  setOwner(val.trim() ? val : "None")
+                }}
+                className="col-span-3 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 text-xs placeholder:text-zinc-400"
+              />
+            ) : (
+              <select
+                value={caller}
+                onChange={(e) => {
+                  setCaller(e.target.value)
+                  setOwner(e.target.value)
+                }}
+                className="col-span-3 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-medium text-xs"
+              >
+                <option value="None">None (Unassigned)</option>
+                {teamMembers.map((m) => (
+                  <option key={m.id || m.name} value={m.name}>
+                    {m.name} {m.role ? `(${m.role})` : ""}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           {/* Primary contact */}

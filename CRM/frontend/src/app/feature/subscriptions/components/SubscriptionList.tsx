@@ -133,7 +133,8 @@ export function SubscriptionList({
                   <th className="py-3 px-4">Client & Plan</th>
                   <th className="py-3 px-3">Recurring Rate</th>
                   <th className="py-3 px-3">Billing Cycle</th>
-                  <th className="py-3 px-3">Next Renewal</th>
+                  <th className="py-3 px-3">1st Payment Date</th>
+                  <th className="py-3 px-3">Next Payment Date</th>
                   <th className="py-3 px-3 text-center">Auto-Renew</th>
                   <th className="py-3 px-3 text-center">Status</th>
                   <th className="py-3 px-4 text-right">Actions</th>
@@ -179,17 +180,26 @@ export function SubscriptionList({
                       </span>
                     </td>
 
-                    {/* Next Renewal */}
+                    {/* 1st Payment Date */}
                     <td className="py-3.5 px-3 whitespace-nowrap">
                       <div className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-300 font-medium">
-                        <Calendar size={13} className="text-zinc-400 shrink-0" />
+                        <Calendar size={12} className="text-blue-500 shrink-0" />
+                        <span>{sub.firstPaymentDate || sub.startDate || "Initial"}</span>
+                      </div>
+                      <div className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold">
+                        1st Payment
+                      </div>
+                    </td>
+
+                    {/* Next Payment Date */}
+                    <td className="py-3.5 px-3 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5 text-zinc-900 dark:text-zinc-100 font-bold">
+                        <Calendar size={12} className="text-emerald-500 shrink-0" />
                         <span>{sub.nextBillingDate}</span>
                       </div>
-                      {sub.lastRenewedDate && (
-                        <div className="text-[10px] text-zinc-400">
-                          Renewed: {sub.lastRenewedDate}
-                        </div>
-                      )}
+                      <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                        {sub.lastRenewedDate ? `Renewed: ${sub.lastRenewedDate}` : "Next Payment Due"}
+                      </div>
                     </td>
 
                     {/* Auto-Renew Toggle */}

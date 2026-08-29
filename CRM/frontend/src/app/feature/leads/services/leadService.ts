@@ -182,8 +182,20 @@ export const getLeads = async (companyId?: string): Promise<Lead[]> => {
     const statusLower = (lead.status || "").toLowerCase().trim()
     const isWonOrLost = statusLower === "won" || statusLower === "lost"
 
-    // 1. Won or Lost leads are NEVER locked
-    if (isWonOrLost) {
+    // 1. Won leads are LOCKED by default (finalized deal, converted to client)
+    if (statusLower === "won") {
+      if (lead.isLocked !== true && !lead.lockedReason?.includes("Unlocked")) {
+        hasChanges = true
+        return {
+          ...lead,
+          isLocked: true,
+          lockedReason: "Won: Lead is finalized and converted to Client.",
+        }
+      }
+      return lead
+    }
+
+    if (statusLower === "lost") {
       if (lead.isLocked) {
         hasChanges = true
         return {
@@ -334,10 +346,20 @@ export const updateLead = async (id: string, updates: Partial<Lead>, userRole?: 
   let nextIsLocked = updates.isLocked !== undefined ? updates.isLocked : target.isLocked
   let nextReason = updates.lockedReason !== undefined ? updates.lockedReason : target.lockedReason
 
-  // 1. Won or Lost leads are NEVER locked
-  if (isWonOrLost) {
-    nextIsLocked = false
-    nextReason = undefined
+  // 1. Won leads are LOCKED by default (finalized deal)
+  if (statusLower === "won") {
+    if (updates.isLocked === false) {
+      nextIsLocked = false
+      nextReason = "Manually unlocked by Admin"
+    } else {
+      nextIsLocked = true
+      nextReason = "Won: Lead is finalized and converted to Client."
+    }
+  } else if (statusLower === "lost") {
+    if (updates.isLocked !== true) {
+      nextIsLocked = false
+      nextReason = undefined
+    }
   } else if (finalReminderDate && !isReminderDateOverdue(finalReminderDate)) {
     // 2. If reminder date is set to a future / valid date, unlock
     if (updates.isLocked !== true) {

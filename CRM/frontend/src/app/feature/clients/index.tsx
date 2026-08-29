@@ -25,6 +25,7 @@ import {
   deleteStoredClientLabel,
   getClientTimestamp,
 } from "./services/clientService"
+import { executeWithFeedback, useActionFeedbackStore } from "@/store/useActionFeedbackStore"
 import { getProjects } from "@/app/feature/projects/services/projectService"
 import { getInvoices } from "@/app/feature/sales/invoices/services/invoiceService"
 import { getPayments } from "@/app/feature/sales/payments/services/paymentService"
@@ -316,41 +317,92 @@ export default function ClientsMain() {
   }, [loadClientData])
 
   const handleSaveClient = async (newClient: ClientItem) => {
-    const updated = await saveStoredClient(newClient)
-    setClients(updated)
-    loadClientData()
+    const isEdit = clients.some((c) => c.id === newClient.id)
+    await executeWithFeedback(async () => {
+      const updated = await saveStoredClient(newClient)
+      setClients(updated)
+      loadClientData()
+    }, {
+      actionType: isEdit ? "update" : "create",
+      loadingTitle: isEdit ? "Updating Client..." : "Adding New Client...",
+      loadingMsg: isEdit ? `Saving updates for ${newClient.name}...` : `Registering ${newClient.name} into database...`,
+      successTitle: isEdit ? "Client Updated!" : "Client Created!",
+      successMsg: isEdit ? `${newClient.name} has been updated.` : `${newClient.name} was successfully registered.`,
+      errorTitle: "Client Save Failed",
+    })
   }
 
   const handleDeleteClient = async (id: string) => {
     if (!canDeleteClient) {
-      alert("Action forbidden: You do not have permission to delete clients.")
+      useActionFeedbackStore.getState().showError({
+        title: "Permission Denied",
+        message: "You do not have permission to delete clients.",
+        actionType: "delete",
+      })
       return
     }
     const target = clients.find((c) => c.id === id)
+    const clientName = target?.name || "Client"
     const email = target?.email
 
-    await deleteStoredClient(id, email)
-    await deleteStoredContact(id, email)
-    await deleteStoredContact(`cnt_${id}`, email)
+    await executeWithFeedback(async () => {
+      await deleteStoredClient(id, email)
+      await deleteStoredContact(id, email)
+      await deleteStoredContact(`cnt_${id}`, email)
 
-    setClients((prev) => prev.filter((c) => c.id !== id && (!email || c.email?.toLowerCase().trim() !== email.toLowerCase().trim())))
-    setContacts((prev) => prev.filter((cnt) => cnt.id !== id && cnt.id !== `cnt_${id}` && (!email || cnt.email?.toLowerCase().trim() !== email.toLowerCase().trim())))
+      setClients((prev) => prev.filter((c) => c.id !== id && (!email || c.email?.toLowerCase().trim() !== email.toLowerCase().trim())))
+      setContacts((prev) => prev.filter((cnt) => cnt.id !== id && cnt.id !== `cnt_${id}` && (!email || cnt.email?.toLowerCase().trim() !== email.toLowerCase().trim())))
+    }, {
+      actionType: "delete",
+      loadingTitle: "Deleting Client...",
+      loadingMsg: `Removing ${clientName} and associated records...`,
+      successTitle: "Client Deleted",
+      successMsg: `${clientName} was successfully deleted from records.`,
+      errorTitle: "Delete Failed",
+    })
   }
 
   const handleDeleteContact = async (id: string) => {
-    const updated = await deleteStoredContact(id)
-    setContacts(updated)
-    loadClientData()
+    await executeWithFeedback(async () => {
+      const updated = await deleteStoredContact(id)
+      setContacts(updated)
+      loadClientData()
+    }, {
+      actionType: "delete",
+      loadingTitle: "Deleting Contact...",
+      loadingMsg: "Removing contact from client directory...",
+      successTitle: "Contact Removed",
+      successMsg: "Contact was successfully removed.",
+      errorTitle: "Delete Failed",
+    })
   }
 
   const handleAddLabel = async (label: ClientLabelItem) => {
-    const updated = await saveStoredClientLabel(label)
-    setLabels(updated)
+    await executeWithFeedback(async () => {
+      const updated = await saveStoredClientLabel(label)
+      setLabels(updated)
+    }, {
+      actionType: "create",
+      loadingTitle: "Creating Tag Label...",
+      loadingMsg: `Adding ${label.name} tag...`,
+      successTitle: "Tag Added",
+      successMsg: `Tag ${label.name} created successfully.`,
+      errorTitle: "Tag Creation Failed",
+    })
   }
 
   const handleDeleteLabel = async (id: string) => {
-    const updated = await deleteStoredClientLabel(id)
-    setLabels(updated)
+    await executeWithFeedback(async () => {
+      const updated = await deleteStoredClientLabel(id)
+      setLabels(updated)
+    }, {
+      actionType: "delete",
+      loadingTitle: "Deleting Tag Label...",
+      loadingMsg: "Removing label from list...",
+      successTitle: "Tag Removed",
+      successMsg: "Tag label was removed.",
+      errorTitle: "Delete Failed",
+    })
   }
 
 

@@ -33,6 +33,7 @@ export interface UserItem {
   branchName?: string; // Display branch name
   status: UserStatus;
   avatarUrl?: string;
+  avatar?: string;
   department?: string;
   phone?: string;
   password?: string;

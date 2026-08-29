@@ -8,6 +8,7 @@ export const revalidate = 0
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { GlobalModals } from "@/components/modals/GlobalModals";
+import { ActionFeedbackModal } from "@/components/ui/ActionFeedbackModal";
 import { AuthGuard } from "@/components/auth/AuthGuard";
 
 const inter = Inter({
@@ -57,6 +58,7 @@ export default function RootLayout({
               {children}
             </AppLayout>
             <GlobalModals />
+            <ActionFeedbackModal />
           </AuthGuard>
         </ThemeProvider>
       </body>

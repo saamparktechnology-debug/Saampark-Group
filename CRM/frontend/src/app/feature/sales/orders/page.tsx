@@ -43,6 +43,8 @@ import { getProjects } from "@/app/feature/projects/services/projectService"
 import { Project, ProjectMilestone } from "@/app/feature/projects/types"
 
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
+import { getUserAvatar } from "@/app/feature/users/services/userService"
+import { executeWithFeedback } from "@/store/useActionFeedbackStore"
 
 type OrderStatus = "Pending" | "Processing" | "Completed" | "Cancelled"
 type PaymentStatus = "Paid" | "Partially paid" | "Unpaid"
@@ -105,23 +107,57 @@ export default function OrderListPage() {
   }
 
   const loadOrders = React.useCallback(async () => {
-    const data = await getOrders()
-    setOrders(Array.isArray(data) ? filterGlobalDeletedItems(data) : [])
+    const [data, projs, invs] = await Promise.all([
+      getOrders().catch(() => []),
+      getProjects().catch(() => []),
+      getInvoices().catch(() => []),
+    ])
 
-    getProjects().then((projs) => setProjectsList(projs)).catch(() => {})
-    getInvoices().then((invs) => setInvoicesList(invs)).catch(() => {})
+    const safeProjs = Array.isArray(projs) ? projs : []
+    setProjectsList(safeProjs)
+    setInvoicesList(Array.isArray(invs) ? invs : [])
+
+    const rawOrders = Array.isArray(data) ? filterGlobalDeletedItems(data) : []
+    const projectMap = new Map<string, string>()
+    safeProjs.forEach(p => {
+      if (p.title) projectMap.set(p.title.toLowerCase().trim(), p.status || "In Progress")
+      if (p.id) projectMap.set(String(p.id).toLowerCase().trim(), p.status || "In Progress")
+    })
+
+    const synced = rawOrders.map(ord => {
+      const pTitle = (ord.project || "").toLowerCase().trim()
+      const pStatus = projectMap.get(pTitle)
+      if (pStatus) {
+        let mapped: OrderStatus = ord.status
+        const norm = pStatus.toLowerCase().trim()
+        if (norm === "completed" || norm === "finished") mapped = "Completed"
+        else if (norm === "canceled" || norm === "cancelled") mapped = "Cancelled"
+        else if (norm === "on hold" || norm === "pending" || norm === "not started") mapped = "Pending"
+        else mapped = "Processing"
+
+        if (mapped !== ord.status) {
+          return { ...ord, status: mapped }
+        }
+      }
+      return ord
+    })
+
+    setOrders(synced)
   }, [])
-
 
   React.useEffect(() => {
     loadOrders()
     const interval = setInterval(loadOrders, 4000)
     window.addEventListener("saampark_data_synced", loadOrders)
     window.addEventListener("saampark_orders_updated", loadOrders)
+    window.addEventListener("saampark_projects_updated", loadOrders)
+    window.addEventListener("storage", loadOrders)
     return () => {
       clearInterval(interval)
       window.removeEventListener("saampark_data_synced", loadOrders)
       window.removeEventListener("saampark_orders_updated", loadOrders)
+      window.removeEventListener("saampark_projects_updated", loadOrders)
+      window.removeEventListener("storage", loadOrders)
     }
   }, [loadOrders])
 
@@ -169,21 +205,31 @@ export default function OrderListPage() {
   }, [displayedOrders, searchQuery, activeTab])
 
   const handleDeleteOrder = async (id: string) => {
-    if (confirm("Are you sure you want to delete this order?")) {
+    const ord = orders.find(o => String(o.id).toLowerCase().trim() === String(id).toLowerCase().trim())
+    const ordNum = ord?.orderNumber || "Order"
+
+    await executeWithFeedback(async () => {
       const strId = String(id).toLowerCase().trim()
       await markGlobalItemDeleted(strId, "orders")
       const updated = orders.filter((o) => String(o.id).toLowerCase().trim() !== strId)
       setOrders(updated)
       await saveModuleDataToDB("orders", updated)
-      showToast("Order removed.")
-    }
+    }, {
+      actionType: "delete",
+      loadingTitle: "Deleting Order...",
+      loadingMsg: `Removing ${ordNum} from database...`,
+      successTitle: "Order Deleted",
+      successMsg: `${ordNum} was removed successfully.`,
+      errorTitle: "Delete Failed",
+    })
   }
 
   const handleSendReminder = async (ord: OrderItem) => {
-    const now = new Date().toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })
-    const updated = orders.map(o => o.id === ord.id ? { ...o, lastReminderSent: now } : o)
-    setOrders(updated)
-    await saveModuleDataToDB("orders", updated)
+    await executeWithFeedback(async () => {
+      const now = new Date().toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })
+      const updated = orders.map(o => o.id === ord.id ? { ...o, lastReminderSent: now } : o)
+      setOrders(updated)
+      await saveModuleDataToDB("orders", updated)
 
       await sendPaymentDueReminderEmailNotification({
         id: ord.invoiceId || ord.orderNumber,
@@ -198,36 +244,47 @@ export default function OrderListPage() {
         status: "Not paid",
         billedBy: "Admin",
         items: [],
-
       }, ord.clientEmail).catch(() => null)
-
-
-    showToast(`🔔 Payment reminder sent to ${ord.client} for ${ord.totalAmount}!`)
+    }, {
+      actionType: "process",
+      loadingTitle: "Dispatching Reminder...",
+      loadingMsg: `Sending payment reminder to ${ord.client}...`,
+      successTitle: "Reminder Sent!",
+      successMsg: `Payment reminder sent to ${ord.client} for ${ord.totalAmount}.`,
+      errorTitle: "Reminder Failed",
+    })
   }
 
   const handleMarkPaymentCompleted = async (ord: OrderItem) => {
-    const updated = orders.map(o => o.id === ord.id ? { ...o, paymentStatus: "Paid" as PaymentStatus, status: "Completed" as OrderStatus } : o)
-    setOrders(updated)
-    await saveModuleDataToDB("orders", updated)
+    await executeWithFeedback(async () => {
+      const updated = orders.map(o => o.id === ord.id ? { ...o, paymentStatus: "Paid" as PaymentStatus, status: "Completed" as OrderStatus } : o)
+      setOrders(updated)
+      await saveModuleDataToDB("orders", updated)
 
-    const numAmount = parseInt(ord.totalAmount.replace(/[^0-9]/g, "")) || 0
-    await addPayment({
-      invoiceId: ord.invoiceId || ord.orderNumber,
-      client: ord.client,
-      clientEmail: ord.clientEmail,
-      project: ord.project,
-      paymentDate: new Date().toLocaleDateString("en-GB"),
-      paymentMethod: "UPI / Net Banking",
-      transactionRef: `ORD_PAY_${Date.now()}`,
-      note: `Payment completed for ${ord.orderNumber}`,
-      amount: ord.totalAmount,
-      amountNum: numAmount,
-      status: "Completed",
-    }).catch(() => null)
+      const numAmount = parseInt(ord.totalAmount.replace(/[^0-9]/g, "")) || 0
+      await addPayment({
+        invoiceId: ord.invoiceId || ord.orderNumber,
+        client: ord.client,
+        clientEmail: ord.clientEmail,
+        project: ord.project,
+        paymentDate: new Date().toLocaleDateString("en-GB"),
+        paymentMethod: "UPI / Net Banking",
+        transactionRef: `ORD_PAY_${Date.now()}`,
+        note: `Payment completed for ${ord.orderNumber}`,
+        amount: ord.totalAmount,
+        amountNum: numAmount,
+        status: "Completed",
+      }).catch(() => null)
 
-
-    showToast(`✅ Payment converted to Full Paid for ${ord.orderNumber}! Synced to Payments.`)
-    loadOrders()
+      loadOrders()
+    }, {
+      actionType: "payment",
+      loadingTitle: "Settling Order...",
+      loadingMsg: `Recording full payment for ${ord.orderNumber}...`,
+      successTitle: "Payment Completed!",
+      successMsg: `Order ${ord.orderNumber} marked as Completed & Paid.`,
+      errorTitle: "Settlement Failed",
+    })
   }
 
   const handleViewInvoice = async (ord: OrderItem) => {
@@ -285,33 +342,41 @@ export default function OrderListPage() {
     const orderNumber = `ORD #${Math.floor(1000 + Math.random() * 9000)}`
     const formattedAmount = totalAmount.startsWith("₹") ? totalAmount : `₹${totalAmount}`
 
-    const newOrder: OrderItem = {
-      id: nextId,
-      orderNumber,
-      client,
-      clientEmail: clientEmail || `${client.toLowerCase().replace(/\s+/g, '')}@example.com`,
-      project,
-      orderDate: new Date().toLocaleDateString("en-GB"),
-      deliveryDate: deliveryDate || new Date(Date.now() + 14 * 86400000).toLocaleDateString("en-GB"),
-      itemsCount: 1,
-      totalAmount: formattedAmount,
-      paymentStatus,
-      status: orderStatus,
-      notes: notes || `Order generated for ${client}.`
-    }
+    await executeWithFeedback(async () => {
+      const newOrder: OrderItem = {
+        id: nextId,
+        orderNumber,
+        client,
+        clientEmail: clientEmail || `${client.toLowerCase().replace(/\s+/g, '')}@example.com`,
+        project,
+        orderDate: new Date().toLocaleDateString("en-GB"),
+        deliveryDate: deliveryDate || new Date(Date.now() + 14 * 86400000).toLocaleDateString("en-GB"),
+        itemsCount: 1,
+        totalAmount: formattedAmount,
+        paymentStatus,
+        status: orderStatus,
+        notes: notes || `Order generated for ${client}.`
+      }
 
-    const updated = [newOrder, ...orders]
-    setOrders(updated)
-    await saveModuleDataToDB("orders", updated)
+      const updated = [newOrder, ...orders]
+      setOrders(updated)
+      await saveModuleDataToDB("orders", updated)
 
-    showToast(`✅ Order ${orderNumber} created successfully!`)
-    setClient("")
-    setClientEmail("")
-    setProject("")
-    setTotalAmount("")
-    setDeliveryDate("")
-    setNotes("")
-    setIsAddModalOpen(false)
+      setClient("")
+      setClientEmail("")
+      setProject("")
+      setTotalAmount("")
+      setDeliveryDate("")
+      setNotes("")
+      setIsAddModalOpen(false)
+    }, {
+      actionType: "create",
+      loadingTitle: "Creating Sales Order...",
+      loadingMsg: `Creating ${orderNumber} for ${client}...`,
+      successTitle: "Order Created!",
+      successMsg: `Sales Order ${orderNumber} created successfully.`,
+      errorTitle: "Order Creation Failed",
+    })
   }
 
   const handleExportCSV = () => {
@@ -775,6 +840,9 @@ export default function OrderListPage() {
                           </h4>
                           <p className="text-[10px] text-zinc-500">
                             Billed By: <strong className="text-zinc-700 dark:text-zinc-300">{linkedProject?.billedBy || "Admin In-Charge"}</strong>
+                            {linkedProject?.deadline && (
+                              <span> • Deadline: <strong className="text-red-600 dark:text-red-400 font-bold font-mono">{linkedProject.deadline}</strong></span>
+                            )}
                           </p>
                         </div>
                       </div>
@@ -830,9 +898,9 @@ export default function OrderListPage() {
                             className="flex items-center gap-3 p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800"
                           >
                             <img
-                              src={m.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${m.name}`}
+                              src={(m as any).avatarUrl || m.avatar || getUserAvatar(m.name, undefined, m.name)}
                               alt={m.name}
-                              className="w-8 h-8 rounded-full object-cover bg-amber-500 shrink-0"
+                              className="w-8 h-8 rounded-full object-cover bg-surface border border-border shrink-0"
                             />
                             <div className="min-w-0 flex-1">
                               <p className="font-bold text-xs text-zinc-800 dark:text-zinc-200 truncate">{m.name}</p>

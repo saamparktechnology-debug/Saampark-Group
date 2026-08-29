@@ -57,9 +57,10 @@ import { addOrder } from "../orders/services/orderService"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { printPDFReport, exportToExcel } from "@/lib/exportUtils"
+import { executeWithFeedback, useActionFeedbackStore } from "@/store/useActionFeedbackStore"
 
 export default function InvoicesPage() {
-  const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
+  const { user, activeCompanyId, activeBranchId, branches, subBranches, companies } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
 
   const canAddInvoice = canPerformAction(user, "Sales", "add")
@@ -117,6 +118,16 @@ export default function InvoicesPage() {
   const [installmentsCount, setInstallmentsCount] = React.useState<number>(3)
   const [billingCycle, setBillingCycle] = React.useState<"Monthly" | "Quarterly">("Monthly")
   const [autoCreateSubscription, setAutoCreateSubscription] = React.useState<boolean>(true)
+
+  // Invoice Type (GST vs Non-GST) and Issuing Company
+  const [invoiceType, setInvoiceType] = React.useState<"gst" | "nongst">("gst")
+  const [isNonGstMode, setIsNonGstMode] = React.useState(false)
+  const [invoiceCompanyId, setInvoiceCompanyId] = React.useState<string>("tech")
+  const [invoiceSubBranchId, setInvoiceSubBranchId] = React.useState<string>("")
+  const [editInvoiceType, setEditInvoiceType] = React.useState<"gst" | "nongst">("gst")
+  const [editCompanyId, setEditCompanyId] = React.useState<string>("tech")
+  const [editSubBranchId, setEditSubBranchId] = React.useState<string>("")
+  const [editIsNonGst, setEditIsNonGst] = React.useState(false)
 
   // Dynamic Multi-Services State for Invoices
   const [invoiceServiceItems, setInvoiceServiceItems] = React.useState<any[]>([
@@ -228,6 +239,9 @@ export default function InvoicesPage() {
   const [editDiscounts, setEditDiscounts] = React.useState<{ id: string; name: string; amount: number | "" }[]>([])
 
   const handleOpenEditInvoice = (inv: InvoiceItem) => {
+    const isNonGst = inv.id?.toUpperCase().startsWith("NGINV") || (inv.gstRate === 0 && (!inv.items || inv.items.every(it => !it.gstRate || it.gstRate === 0)))
+    setEditInvoiceType(isNonGst ? "nongst" : "gst")
+    setEditCompanyId(inv.companyId || activeCompanyId || "tech")
     setEditingInvoice(inv)
     setEditClientName(inv.client || "")
     setEditClientEmail(inv.clientEmail || "")
@@ -252,7 +266,7 @@ export default function InvoicesPage() {
           name: c.name || "Additional Setup",
           amount: c.amount || 0,
         })),
-        gstRate: it.gstRate !== undefined ? it.gstRate : 18,
+        gstRate: isNonGst ? 0 : (it.gstRate !== undefined ? it.gstRate : 18),
       })))
     } else {
       const baseNum = inv.baseAmount || parseInt((inv.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
@@ -263,11 +277,10 @@ export default function InvoicesPage() {
         qty: 1,
         unit: "Project",
         rate: baseNum,
-        charges: inv.setupCharge ? [{ id: "c1", name: "Platform / Setup Fee", amount: inv.setupCharge }] : [],
-        gstRate: inv.gstRate !== undefined ? inv.gstRate : 18,
+        charges: inv.setupCharge ? [{ id: "c1", name: "Platform Setup", amount: inv.setupCharge }] : [],
+        gstRate: isNonGst ? 0 : 18,
       }])
     }
-
     if (inv.discountsList && inv.discountsList.length > 0) {
       setEditDiscounts(inv.discountsList.map(d => ({
         id: d.id || `disc_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
@@ -368,6 +381,7 @@ export default function InvoicesPage() {
     e.preventDefault()
     if (!editingInvoice) return
 
+    const isEditNonGst = editInvoiceType === "nongst"
     const finalClient = editClientName.trim() || editingInvoice.client
     const finalProject = editProjectName.trim() || editingInvoice.project
 
@@ -376,8 +390,9 @@ export default function InvoicesPage() {
       const qty = it.qty > 0 ? it.qty : 1
       const chargesSum = (it.charges || []).reduce((sum: number, c: any) => sum + (Number(c.amount) || 0), 0)
       const rowBase = (rate * qty) + chargesSum
-      const rowGst = Math.round(rowBase * ((Number(it.gstRate) || 0) / 100))
-      const rowTotal = rowBase + rowGst
+      const lineGstRate = isEditNonGst ? 0 : (Number(it.gstRate) || 0)
+      const rowGst = isEditNonGst ? 0 : Math.round(rowBase * (lineGstRate / 100))
+      const rowTotal = isEditNonGst ? rowBase : (rowBase + rowGst)
       return {
         id: it.id,
         serviceName: it.serviceName.trim() || finalProject,
@@ -390,7 +405,7 @@ export default function InvoicesPage() {
           name: c.name.trim() || "Additional Setup",
           amount: Number(c.amount) || 0,
         })),
-        gstRate: Number(it.gstRate) || 0,
+        gstRate: lineGstRate,
         gstAmount: rowGst,
         totalAmount: rowTotal,
       }
@@ -401,8 +416,8 @@ export default function InvoicesPage() {
     const discountsSum = editDiscounts.reduce((sum, d) => sum + (Number(d.amount) || 0), 0)
     const taxableBase = Math.max(0, baseSum + setupSum - discountsSum)
 
-    const totalGst = finalItems.reduce((sum, it) => sum + it.gstAmount, 0)
-    const grandTotal = taxableBase + totalGst
+    const totalGst = isEditNonGst ? 0 : finalItems.reduce((sum, it) => sum + it.gstAmount, 0)
+    const grandTotal = isEditNonGst ? taxableBase : (taxableBase + totalGst)
 
     const receivedNum = typeof editPaymentReceived === "number" 
       ? editPaymentReceived 
@@ -431,18 +446,29 @@ export default function InvoicesPage() {
       discount: discountsSum,
       discountsList: editDiscounts.filter(d => Number(d.amount) > 0).map(d => ({ id: d.id, name: d.name, amount: Number(d.amount) })),
       items: finalItems,
+      gstRate: isEditNonGst ? 0 : (finalItems[0]?.gstRate || 18),
+      gstAmount: totalGst,
       totalInvoiced: `₹${grandTotal.toLocaleString("en-IN")}`,
       paymentReceived: `₹${receivedNum.toLocaleString("en-IN")}`,
       due: `₹${dueNum.toLocaleString("en-IN")}`,
       status: calculatedStatus,
+      companyId: editCompanyId || editingInvoice.companyId || activeCompanyId || "tech",
     }
 
-    await updateInvoice(payload)
-    showToast(`✅ Invoice ${payload.id} updated successfully!`)
-    setIsEditModalOpen(false)
-    setSelectedInvoice(payload)
-    setIsInvoiceModalOpen(true)
-    loadInvoices()
+    await executeWithFeedback(async () => {
+      await updateInvoice(payload)
+      setIsEditModalOpen(false)
+      setSelectedInvoice(payload)
+      setIsInvoiceModalOpen(true)
+      loadInvoices()
+    }, {
+      actionType: "update",
+      loadingTitle: `Saving Invoice ${payload.id}...`,
+      loadingMsg: "Updating financial computations and ledger...",
+      successTitle: "Invoice Updated!",
+      successMsg: `Invoice ${payload.id} was saved and synced.`,
+      errorTitle: "Invoice Update Failed",
+    })
   }
 
   const [isLoading, setIsLoading] = React.useState(true)
@@ -555,48 +581,72 @@ export default function InvoicesPage() {
   }, [isAddModalOpen])
 
   const handleSendReminder = async (invoice: InvoiceItem) => {
-    const res = await sendPaymentReminder(invoice.id)
-    if (res.success) {
-      showToast(`🔔 Payment reminder dispatched to ${invoice.client} for ${invoice.due || invoice.totalInvoiced}!`)
+    await executeWithFeedback(async () => {
+      const res = await sendPaymentReminder(invoice.id)
+      if (!res.success) throw new Error(res.message || "Failed to dispatch reminder.")
       loadInvoices()
-    } else {
-      showToast(`⚠️ ${res.message}`)
-    }
+    }, {
+      actionType: "process",
+      loadingTitle: "Dispatching Reminder...",
+      loadingMsg: `Sending notification to ${invoice.client}...`,
+      successTitle: "Reminder Dispatched!",
+      successMsg: `Payment reminder sent to ${invoice.client} for ${invoice.due || invoice.totalInvoiced}.`,
+      errorTitle: "Reminder Failed",
+    })
   }
 
   const handleConfirmPayment = async () => {
     if (!paymentModalInvoice) return
-    if (paymentTypeOption === "part" && customPartPaymentAmount > 0) {
-      const updated = await recordPartialPayment(
-        paymentModalInvoice.id,
-        customPartPaymentAmount,
-        paymentMethod,
-        paymentRef
-      )
-      if (updated) {
-        showToast(`✅ Partial installment of ₹${customPartPaymentAmount.toLocaleString("en-IN")} recorded for ${paymentModalInvoice.id}!`)
-        setPaymentModalInvoice(null)
-        setPaymentRef("")
-        setCustomPartPaymentAmount(0)
-        loadInvoices()
+    const isPart = paymentTypeOption === "part" && customPartPaymentAmount > 0
+    const invId = paymentModalInvoice.id
+
+    await executeWithFeedback(async () => {
+      if (isPart) {
+        const updated = await recordPartialPayment(
+          invId,
+          customPartPaymentAmount,
+          paymentMethod,
+          paymentRef
+        )
+        if (!updated) throw new Error("Could not record partial payment.")
+      } else {
+        const updated = await markPaymentCompleted(invId, paymentMethod, paymentRef)
+        if (!updated) throw new Error("Could not record full payment.")
       }
-    } else {
-      const updated = await markPaymentCompleted(paymentModalInvoice.id, paymentMethod, paymentRef)
-      if (updated) {
-        showToast(`✅ Payment completed! Invoice ${paymentModalInvoice.id} is now Fully Paid and synced to Payments.`)
-        setPaymentModalInvoice(null)
-        setPaymentRef("")
-        loadInvoices()
-      }
-    }
+      setPaymentModalInvoice(null)
+      setPaymentRef("")
+      setCustomPartPaymentAmount(0)
+      loadInvoices()
+    }, {
+      actionType: "payment",
+      loadingTitle: "Recording Payment...",
+      loadingMsg: `Processing ${isPart ? `₹${customPartPaymentAmount.toLocaleString("en-IN")}` : "full"} payment settlement for ${invId}...`,
+      successTitle: "Payment Recorded!",
+      successMsg: `Payment for ${invId} has been successfully recorded and synced.`,
+      errorTitle: "Payment Failed",
+    })
   }
 
   const handleDeleteInvoice = async (id: string) => {
-    if (confirm("Are you sure you want to delete this invoice?")) {
+    if (!canDeleteInvoice) {
+      useActionFeedbackStore.getState().showError({
+        title: "Permission Denied",
+        message: "You do not have permission to delete invoices.",
+        actionType: "delete",
+      })
+      return
+    }
+    await executeWithFeedback(async () => {
       await deleteInvoice(id)
       setInvoices(prev => prev.filter(i => i.id !== id))
-      showToast("Invoice deleted.")
-    }
+    }, {
+      actionType: "delete",
+      loadingTitle: `Deleting Invoice ${id}...`,
+      loadingMsg: "Removing record from financial ledger...",
+      successTitle: "Invoice Deleted",
+      successMsg: `Invoice ${id} was deleted successfully.`,
+      errorTitle: "Delete Failed",
+    })
   }
 
   const handleCreateInvoice = async (e: React.FormEvent) => {
@@ -615,15 +665,18 @@ export default function InvoicesPage() {
       alert("Please enter or select a project/service name.")
       return
     }
+    const isNonGstMode = invoiceType === "nongst"
     const itemCalculations = invoiceServiceItems.map((item) => {
       const numRate = typeof item.rate === "number" ? item.rate : 0
       const qty = item.qty > 0 ? item.qty : 1
       const itemCharges = (item.charges || []).reduce((sum: number, c: any) => sum + (typeof c.amount === "number" ? c.amount : 0), 0)
       const itemBase = (numRate * qty) + itemCharges
-      const itemGst = Math.round(itemBase * ((item.gstRate !== undefined ? item.gstRate : 18) / 100))
-      const itemTotal = itemBase + itemGst
+      const lineGstRate = isNonGstMode ? 0 : (item.gstRate !== undefined ? item.gstRate : 18)
+      const itemGst = isNonGstMode ? 0 : Math.round(itemBase * (lineGstRate / 100))
+      const itemTotal = isNonGstMode ? itemBase : (itemBase + itemGst)
       return {
         ...item,
+        gstRate: lineGstRate,
         numRate,
         qty,
         itemCharges,
@@ -642,8 +695,8 @@ export default function InvoicesPage() {
 
     const finalItemCalculations = itemCalculations.map((item) => {
       const lineTaxable = Math.round(item.itemBase * discountRatio)
-      const lineGst = Math.round(lineTaxable * ((item.gstRate !== undefined ? item.gstRate : 18) / 100))
-      const lineTotal = lineTaxable + lineGst
+      const lineGst = isNonGstMode ? 0 : Math.round(lineTaxable * (item.gstRate / 100))
+      const lineTotal = isNonGstMode ? lineTaxable : (lineTaxable + lineGst)
       return {
         ...item,
         lineTaxable,
@@ -652,8 +705,8 @@ export default function InvoicesPage() {
       }
     })
 
-    const totalGstAmount = taxableBase > 0 ? finalItemCalculations.reduce((sum, it) => sum + it.itemGst, 0) : 0
-    const totalAmount = taxableBase + totalGstAmount
+    const totalGstAmount = isNonGstMode ? 0 : (taxableBase > 0 ? finalItemCalculations.reduce((sum, it) => sum + it.itemGst, 0) : 0)
+    const totalAmount = isNonGstMode ? taxableBase : (taxableBase + totalGstAmount)
     const formattedTotal = `₹${totalAmount.toLocaleString("en-IN")}`
 
     let receivedNum = 0
@@ -674,7 +727,7 @@ export default function InvoicesPage() {
     const formattedReceived = `₹${receivedNum.toLocaleString("en-IN")}`
     const formattedDue = `₹${dueNum.toLocaleString("en-IN")}`
     const allInvoices = await getInvoices("all")
-    const invoiceId = generateInvoiceNumber(allInvoices)
+    const invoiceId = generateInvoiceNumber(allInvoices, new Date(), isNonGstMode)
     const calculatedDueDate = dueDate || new Date(Date.now() + 14 * 86400000).toLocaleDateString("en-GB")
 
     const finalInvoiceItems: InvoiceLineItem[] = finalItemCalculations.map(it => ({
@@ -702,132 +755,152 @@ export default function InvoicesPage() {
         amount: Number(d.amount),
       }))
 
-    // 1. Save or update client in database with complete billing details
-    try {
-      if (clientSelectionMode === "custom") {
-        await saveStoredClient({
-          id: `cli_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-          name: finalClientName,
-          email: finalClientEmail,
-          phone: customClientPhone.trim() || "N/A",
-          address: customClientAddress.trim(),
-          city: customClientCity.trim(),
-          gstNumber: customClientGst.trim(),
-          primaryContact: finalClientName,
-          group: "VIP",
-          label: "Corporate",
-          labelColor: "#d8b4fe",
-          projectsCount: 1,
-          totalInvoiced: formattedTotal,
-          paymentReceived: formattedReceived,
-          due: formattedDue,
-          type: "Organization",
-          owner: user?.name || "Admin",
-          createdAt: Date.now(),
-        })
-      } else {
-        const matched = availableClients.find(c => c.name === finalClientName)
-        if (matched) {
+    await executeWithFeedback(async () => {
+      // 1. Save or update client in database with complete billing details
+      try {
+        if (clientSelectionMode === "custom") {
           await saveStoredClient({
-            ...matched,
-            email: clientEmail.trim() || matched.email,
-            phone: clientPhone.trim() || matched.phone,
-            address: clientAddress.trim() || matched.address,
-            city: clientCity.trim() || matched.city,
-            state: clientState.trim() || matched.state,
-            gstNumber: clientGst.trim() || matched.gstNumber,
+            id: `cli_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            name: finalClientName,
+            email: finalClientEmail,
+            phone: customClientPhone.trim() || "N/A",
+            address: customClientAddress.trim(),
+            city: customClientCity.trim(),
+            gstNumber: customClientGst.trim(),
+            primaryContact: finalClientName,
+            group: "VIP",
+            label: "Corporate",
+            labelColor: "#d8b4fe",
+            projectsCount: 1,
+            totalInvoiced: formattedTotal,
+            paymentReceived: formattedReceived,
+            due: formattedDue,
+            type: "Organization",
+            owner: user?.name || "Admin",
+            createdAt: Date.now(),
           })
+        } else {
+          const matched = availableClients.find(c => c.name === finalClientName)
+          if (matched) {
+            await saveStoredClient({
+              ...matched,
+              email: clientEmail.trim() || matched.email,
+              phone: clientPhone.trim() || matched.phone,
+              address: clientAddress.trim() || matched.address,
+              city: clientCity.trim() || matched.city,
+              state: clientState.trim() || matched.state,
+              gstNumber: clientGst.trim() || matched.gstNumber,
+            })
+          }
         }
+      } catch (err) {
+        console.warn("Error saving client details:", err)
       }
-    } catch (err) {
-      console.warn("Error saving client details:", err)
-    }
 
-    // 2. Add Invoice
-    const newInv = await addInvoice({
-      id: invoiceId,
-      client: finalClientName,
-      clientEmail: finalClientEmail,
-      project: finalProjectName,
-      billDate: new Date().toLocaleDateString("en-GB"),
-      dueDate: calculatedDueDate,
-      baseAmount: totalServicesBase,
-      setupCharge: totalPlatformCharges,
-      discount: totalDiscounts,
-      gstRate: itemCalculations[0]?.gstRate || 18,
-      gstAmount: totalGstAmount,
-      totalInvoiced: formattedTotal,
-      paymentReceived: formattedReceived,
-      due: formattedDue,
-      status: finalStatus,
-      billedBy: user?.name || "Admin",
-      items: finalInvoiceItems,
-      discountsList: finalDiscounts,
-    })
+      const targetComp = invoiceCompanyId || activeCompanyId || "tech"
+      const selectedSb = (subBranches || []).find(sb => sb.id === invoiceSubBranchId)
 
-    // 3. Automatically create Order in Sales Order List
-    try {
-      await addOrder({
+      // 2. Add Invoice
+      const newInv = await addInvoice({
+        id: invoiceId,
         client: finalClientName,
         clientEmail: finalClientEmail,
         project: finalProjectName,
-        orderDate: new Date().toISOString().split("T")[0],
-        deliveryDate: calculatedDueDate,
-        itemsCount: invoiceServiceItems.length,
-        totalAmount: formattedTotal,
-        paymentStatus: dueNum === 0 ? "Paid" : receivedNum > 0 ? "Partially paid" : "Unpaid",
-        status: receivedNum > 0 ? "Processing" : "Pending",
-        notes: `Order for: ${finalProjectName}. Services: ${invoiceServiceItems.map(s => s.serviceName).join(", ")}.`,
-        invoiceId: invoiceId,
-      })
-    } catch (err) {
-      console.warn("Could not auto-create sales order:", err)
-    }
+        billDate: new Date().toLocaleDateString("en-GB"),
+        dueDate: calculatedDueDate,
+        baseAmount: totalServicesBase,
+        setupCharge: totalPlatformCharges,
+        discount: totalDiscounts,
+        gstRate: isNonGstMode ? 0 : 18,
+        gstAmount: totalGstAmount,
+        totalInvoiced: formattedTotal,
+        paymentReceived: formattedReceived,
+        due: formattedDue,
+        status: finalStatus,
+        billedBy: user?.name || "Admin",
+        companyId: targetComp,
+        branchId: activeBranchId || selectedSb?.parentBranchId || undefined,
+        subBranchId: selectedSb?.id,
+        subBranchName: selectedSb?.name,
+        subBranchSharePct: selectedSb?.revenueSharePct,
+        items: finalInvoiceItems,
+        discountsList: finalDiscounts,
+      }, targetComp)
 
-    // 4. Automatically record upfront / advance payment if received
-    if (receivedNum > 0) {
+      // 3. Automatically create Order in Sales Order List
       try {
-        await addPayment({
-          invoiceId: invoiceId,
+        await addOrder({
           client: finalClientName,
           clientEmail: finalClientEmail,
           project: finalProjectName,
-          paymentDate: new Date().toLocaleDateString("en-GB").replace(/\//g, "-"),
-          paymentMethod: "Bank Transfer / UPI",
-          transactionRef: `TXN-${Date.now().toString().slice(-6)}`,
-          note: paymentPlanMode === "advance" 
-            ? `Advance Down Payment received for ${finalProjectName}` 
-            : paymentPlanMode === "part"
-              ? `Initial installment received for ${finalProjectName}`
-              : `Full invoice settlement for ${finalProjectName}`,
-          amount: formattedReceived,
-          amountNum: receivedNum,
-          status: "Completed",
+          orderDate: new Date().toISOString().split("T")[0],
+          deliveryDate: calculatedDueDate,
+          itemsCount: invoiceServiceItems.length,
+          totalAmount: formattedTotal,
+          paymentStatus: dueNum === 0 ? "Paid" : receivedNum > 0 ? "Partially paid" : "Unpaid",
+          status: receivedNum > 0 ? "Processing" : "Pending",
+          notes: `Order for: ${finalProjectName}. Services: ${invoiceServiceItems.map(s => s.serviceName).join(", ")}.`,
+          invoiceId: invoiceId,
         })
       } catch (err) {
-        console.warn("Error creating payment entry:", err)
+        console.warn("Could not auto-create sales order:", err)
       }
-    }
 
-    // 5. Automatically create Recurring Part Payment Subscription if Part Payment mode is active
-    if (paymentPlanMode === "part" && autoCreateSubscription && dueNum > 0) {
-      try {
-        const perPart = Math.round(dueNum / installmentsCount)
-        await addSubscription({
-          clientName: finalClientName,
-          planName: `${finalProjectName} (Part Payment Plan)`,
-          status: "Active",
-          amount: `₹${perPart.toLocaleString("en-IN")}`,
-          billingCycle: billingCycle as any,
-          nextBillingDate: calculatedDueDate,
-        })
-      } catch (err) {
-        console.warn("Error creating subscription for part payment:", err)
+      // 4. Automatically record upfront / advance payment if received
+      if (receivedNum > 0) {
+        try {
+          await addPayment({
+            invoiceId: invoiceId,
+            client: finalClientName,
+            clientEmail: finalClientEmail,
+            project: finalProjectName,
+            paymentDate: new Date().toLocaleDateString("en-GB").replace(/\//g, "-"),
+            paymentMethod: "Bank Transfer / UPI",
+            transactionRef: `TXN-${Date.now().toString().slice(-6)}`,
+            note: paymentPlanMode === "advance" 
+              ? `Advance Down Payment received for ${finalProjectName}` 
+              : paymentPlanMode === "part"
+                ? `Initial installment received for ${finalProjectName}`
+                : `Full invoice settlement for ${finalProjectName}`,
+            amount: formattedReceived,
+            amountNum: receivedNum,
+            status: "Completed",
+          })
+        } catch (err) {
+          console.warn("Error creating payment entry:", err)
+        }
       }
-    }
 
-    showToast(`✅ Tax Invoice ${invoiceId} created successfully for ${finalClientName}!`)
-    setIsAddModalOpen(false)
+      // 5. Automatically create Recurring Part Payment Subscription if Part Payment mode is active
+      if (paymentPlanMode === "part" && autoCreateSubscription && dueNum > 0) {
+        try {
+          const perPart = Math.round(dueNum / installmentsCount)
+          await addSubscription({
+            clientName: finalClientName,
+            planName: `${finalProjectName} (Part Payment Plan)`,
+            status: "Active",
+            amount: `₹${perPart.toLocaleString("en-IN")}`,
+            billingCycle: billingCycle as any,
+            nextBillingDate: calculatedDueDate,
+          })
+        } catch (err) {
+          console.warn("Error creating subscription for part payment:", err)
+        }
+      }
+
+      setIsAddModalOpen(false)
+      setSelectedInvoice(newInv)
+      setIsInvoiceModalOpen(true)
+      loadInvoices()
+    }, {
+      actionType: "create",
+      loadingTitle: `Generating ${isNonGstMode ? "Invoice" : "Tax Invoice"}...`,
+      loadingMsg: `Creating ${invoiceId} for ${finalClientName}...`,
+      successTitle: "Invoice Created Successfully!",
+      successMsg: `Invoice ${invoiceId} has been created and synced with the ledger.`,
+      errorTitle: "Invoice Creation Failed",
+    })
+
     setCustomClientName("")
     setCustomClientEmail("")
     setCustomClientPhone("")
@@ -845,7 +918,7 @@ export default function InvoicesPage() {
     const userComp = (activeCompanyId || user?.companyId || "").toLowerCase().trim()
     const targetBranch = activeBranchId
 
-    const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
+    const targetBranchObj = (branches as any[]).find((b: any) => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
     const targetBranchId = String(targetBranchObj?.id || targetBranch || "").toLowerCase().trim()
     const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
 
@@ -933,7 +1006,7 @@ export default function InvoicesPage() {
     {
       accessorKey: "dueDate",
       header: "Due date",
-      cell: ({ row }) => <div className="text-zinc-500 text-xs font-mono">{row.getValue("dueDate")}</div>,
+      cell: ({ row }) => <div className="text-red-600 dark:text-red-400 text-xs font-mono font-bold">{row.getValue("dueDate")}</div>,
     },
     {
       accessorKey: "totalInvoiced",
@@ -1397,6 +1470,97 @@ export default function InvoicesPage() {
 
               <form onSubmit={handleCreateInvoice} className="p-6 space-y-4 text-xs max-h-[85vh] overflow-y-auto">
                 
+                {/* ---------------- 0. INVOICE TYPE & ISSUING COMPANY ---------------- */}
+                <div className="p-3 bg-zinc-50 dark:bg-zinc-800/70 rounded-2xl border border-zinc-200 dark:border-zinc-700/80 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-zinc-700 dark:text-zinc-300 font-bold flex items-center gap-1.5 text-xs">
+                      <span>🏷️</span>
+                      <span>Invoice Scheme & Type *</span>
+                    </label>
+                    <span className="text-[10px] font-bold text-zinc-400 font-mono">
+                      {invoiceType === "nongst" ? "NGINV-DDMMYYYY-XXXX" : "INV-DDMMYYYY-XXXX"}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setInvoiceType("gst")
+                        setInvoiceServiceItems(prev => prev.map(s => ({ ...s, gstRate: 18 })))
+                      }}
+                      className={`p-2.5 rounded-xl border flex flex-col items-center text-center gap-1 transition-all cursor-pointer ${
+                        invoiceType === "gst"
+                          ? "bg-teal-50 dark:bg-teal-950/40 border-teal-500 text-teal-800 dark:text-teal-200 ring-2 ring-teal-500/20 font-bold shadow-xs"
+                          : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100"
+                      }`}
+                    >
+                      <span className="text-xs">🏢 GST Tax Invoice</span>
+                      <span className="text-[10px] font-normal opacity-80">Teal Theme • 18% GST • Shows GSTIN</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setInvoiceType("nongst")
+                        setInvoiceServiceItems(prev => prev.map(s => ({ ...s, gstRate: 0 })))
+                      }}
+                      className={`p-2.5 rounded-xl border flex flex-col items-center text-center gap-1 transition-all cursor-pointer ${
+                        invoiceType === "nongst"
+                          ? "bg-blue-50 dark:bg-blue-950/40 border-blue-500 text-blue-800 dark:text-blue-200 ring-2 ring-blue-500/20 font-bold shadow-xs"
+                          : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100"
+                      }`}
+                    >
+                      <span className="text-xs">📄 Non-GST / 0% Invoice</span>
+                      <span className="text-[10px] font-normal opacity-80">Blue Theme • 0% GST • Title: INVOICE</span>
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
+                      Issuing Company Entity:
+                    </label>
+                    <select
+                      value={invoiceCompanyId || activeCompanyId || "tech"}
+                      onChange={(e) => {
+                        setInvoiceCompanyId(e.target.value)
+                        setInvoiceSubBranchId("")
+                      }}
+                      className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-800 dark:text-zinc-200 font-bold"
+                    >
+                      {(companies as any[]).map((c: any) => (
+                        <option key={c.id} value={c.id}>
+                          {c.logo || "🏢"} {c.brand_name || c.name} {c.division_name ? `(${c.division_name})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Sub-Branch Attribution (% Share Partner) */}
+                {(subBranches || []).length > 0 && (
+                  <div className="p-3 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-xl border border-emerald-200/60 dark:border-emerald-800/40 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                        <span>🌿 Sub-Branch Partner Attribution (% Share)</span>
+                      </label>
+                      <span className="text-[10px] text-muted-foreground">Optional Franchise Split</span>
+                    </div>
+                    <select
+                      value={invoiceSubBranchId}
+                      onChange={(e) => setInvoiceSubBranchId(e.target.value)}
+                      className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-emerald-300 dark:border-emerald-700 rounded-lg text-xs font-semibold text-foreground focus:outline-hidden"
+                    >
+                      <option value="">🏢 Company HQ / Direct Operating Branch (100% Company)</option>
+                      {(subBranches || []).map((sb) => (
+                        <option key={sb.id} value={sb.id}>
+                          🌿 {sb.name} — {sb.revenueSharePct}% Partner Share / {100 - (sb.revenueSharePct ?? 30)}% Company
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 {/* ---------------- 1. CLIENT SELECTION / CUSTOM NAME ---------------- */}
                 <div className="space-y-2 p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/80">
                   <div className="flex items-center justify-between">
@@ -2215,6 +2379,70 @@ export default function InvoicesPage() {
 
               {/* Form Body */}
               <form onSubmit={handleSaveEditInvoice} className="p-6 space-y-4 overflow-y-auto text-xs flex-1">
+                {/* 0. Invoice Type & Company */}
+                <div className="p-3 bg-zinc-50 dark:bg-zinc-800/70 rounded-2xl border border-zinc-200 dark:border-zinc-700/80 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-zinc-700 dark:text-zinc-300 font-bold flex items-center gap-1.5 text-xs">
+                      <span>🏷️</span>
+                      <span>Invoice Scheme & Type *</span>
+                    </label>
+                    <span className="text-[10px] font-bold text-zinc-400 font-mono">
+                      {editInvoiceType === "nongst" ? "Non-GST / 0% Tax" : "Standard GST Tax"}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditInvoiceType("gst")
+                        setEditServiceItems(prev => prev.map(s => ({ ...s, gstRate: 18 })))
+                      }}
+                      className={`p-2 rounded-xl border flex flex-col items-center text-center gap-0.5 transition-all cursor-pointer ${
+                        editInvoiceType === "gst"
+                          ? "bg-teal-50 dark:bg-teal-950/40 border-teal-500 text-teal-800 dark:text-teal-200 ring-2 ring-teal-500/20 font-bold"
+                          : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100"
+                      }`}
+                    >
+                      <span className="text-xs">🏢 GST Tax Invoice</span>
+                      <span className="text-[9.5px] opacity-75">Teal Theme • 18% GST</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditInvoiceType("nongst")
+                        setEditServiceItems(prev => prev.map(s => ({ ...s, gstRate: 0 })))
+                      }}
+                      className={`p-2 rounded-xl border flex flex-col items-center text-center gap-0.5 transition-all cursor-pointer ${
+                        editInvoiceType === "nongst"
+                          ? "bg-blue-50 dark:bg-blue-950/40 border-blue-500 text-blue-800 dark:text-blue-200 ring-2 ring-blue-500/20 font-bold"
+                          : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100"
+                      }`}
+                    >
+                      <span className="text-xs">📄 Non-GST / 0% Invoice</span>
+                      <span className="text-[9.5px] opacity-75">Blue Theme • 0% GST</span>
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
+                      Issuing Company Entity:
+                    </label>
+                    <select
+                      value={editCompanyId || activeCompanyId || "tech"}
+                      onChange={(e) => setEditCompanyId(e.target.value)}
+                      className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-800 dark:text-zinc-200 font-bold"
+                    >
+                      {(companies as any[]).map((c: any) => (
+                        <option key={c.id} value={c.id}>
+                          {c.logo || "🏢"} {c.brand_name || c.name} {c.division_name ? `(${c.division_name})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
                 {/* 1. Client & Project Details */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-zinc-50 dark:bg-zinc-800/40 rounded-2xl border border-zinc-100 dark:border-zinc-800">
                   <div>

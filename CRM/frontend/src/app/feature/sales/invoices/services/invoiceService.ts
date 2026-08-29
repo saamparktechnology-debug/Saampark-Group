@@ -53,6 +53,9 @@ export interface InvoiceItem {
   companyId?: string
   branchId?: string
   branchName?: string
+  subBranchId?: string
+  subBranchName?: string
+  subBranchSharePct?: number
   createdByName?: string
   createdByRole?: string
   items?: InvoiceLineItem[]
@@ -61,20 +64,26 @@ export interface InvoiceItem {
 
 export const INITIAL_INVOICES: InvoiceItem[] = []
 
-export const generateInvoiceNumber = (existingInvoices: InvoiceItem[] = [], dateObj: Date = new Date()): string => {
+export const generateInvoiceNumber = (
+  existingInvoices: InvoiceItem[] = [], 
+  dateObj: Date = new Date(),
+  isNonGst: boolean = false
+): string => {
   const d = String(dateObj.getDate()).padStart(2, "0")
   const m = String(dateObj.getMonth() + 1).padStart(2, "0")
-  const y = String(dateObj.getFullYear()).slice(-2)
-  const datePrefix = `INV${d}${m}${y}`
+  const y = String(dateObj.getFullYear())
+  const prefix = isNonGst ? `NGINV-${d}${m}${y}-` : `INV-${d}${m}${y}-`
 
   const deletedIds = getLocalDeletedIds()
 
   let maxSeq = 0
-  for (const inv of existingInvoices) {
+  const allExisting = [...existingInvoices]
+
+  for (const inv of allExisting) {
     if (!inv || !inv.id) continue
-    const cleanId = String(inv.id).replace(/[^a-zA-Z0-9]/g, "").toUpperCase()
-    if (cleanId.startsWith(datePrefix)) {
-      const suffix = cleanId.substring(datePrefix.length)
+    const cleanId = String(inv.id).trim().toUpperCase()
+    if (cleanId.startsWith(prefix)) {
+      const suffix = cleanId.substring(prefix.length)
       const num = parseInt(suffix, 10)
       if (!isNaN(num) && num > maxSeq) {
         maxSeq = num
@@ -84,9 +93,9 @@ export const generateInvoiceNumber = (existingInvoices: InvoiceItem[] = [], date
 
   // Also check deleted IDs so invoice sequence never collides with a previously deleted ID
   for (const delId of deletedIds) {
-    const cleanId = String(delId).replace(/[^a-zA-Z0-9]/g, "").toUpperCase()
-    if (cleanId.startsWith(datePrefix)) {
-      const suffix = cleanId.substring(datePrefix.length)
+    const cleanId = String(delId).trim().toUpperCase()
+    if (cleanId.startsWith(prefix)) {
+      const suffix = cleanId.substring(prefix.length)
       const num = parseInt(suffix, 10)
       if (!isNaN(num) && num > maxSeq) {
         maxSeq = num
@@ -96,7 +105,7 @@ export const generateInvoiceNumber = (existingInvoices: InvoiceItem[] = [], date
 
   const nextSeq = maxSeq + 1
   const seqStr = String(nextSeq).padStart(4, "0")
-  return `${datePrefix}${seqStr}`
+  return `${prefix}${seqStr}`
 }
 
 export const getInvoices = async (companyId?: string): Promise<InvoiceItem[]> => {
@@ -168,8 +177,16 @@ export const addInvoice = async (invoice: Omit<InvoiceItem, "id"> & { id?: strin
     currentAll.some(i => String(i.id).toUpperCase().trim() === nextId.toUpperCase()) ||
     deletedIds.includes(nextId.toLowerCase().trim())
   ) {
+    const hasItemGst = Array.isArray(invoice.items) && invoice.items.length > 0
+      ? invoice.items.some(it => (Number(it.gstRate) || 0) > 0 || (Number(it.gstAmount) || 0) > 0)
+      : false
+    const isGst = Boolean(
+      hasItemGst ||
+      (typeof invoice.gstRate === "number" && invoice.gstRate > 0) ||
+      (typeof invoice.gstAmount === "number" && invoice.gstAmount > 0)
+    )
     const billDateObj = invoice.billDate ? new Date(invoice.billDate) : new Date()
-    nextId = generateInvoiceNumber(currentAll, isNaN(billDateObj.getTime()) ? new Date() : billDateObj)
+    nextId = generateInvoiceNumber(currentAll, isNaN(billDateObj.getTime()) ? new Date() : billDateObj, !isGst)
   }
 
   let activeBranch: string | undefined = undefined

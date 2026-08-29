@@ -16,7 +16,7 @@ import { addOrder } from "@/app/feature/sales/orders/services/orderService"
 import { addPayment } from "@/app/feature/sales/payments/services/paymentService"
 import { addSubscription, saveInstallmentRecord } from "@/app/feature/subscriptions/services/subscriptionService"
 import { taskService } from "@/app/feature/tasks/services/taskService"
-import { saveStoredClient, getClients } from "../services/clientService"
+import { saveStoredClient, getClients, formatDisplayEmail } from "../services/clientService"
 import { useAuthStore } from "@/store/useAuthStore"
 import { sendInvoiceDetailsEmailNotification, sendPaymentReceiptEmailNotification } from "@/services/emailNotificationService"
 
@@ -166,7 +166,7 @@ export function AddClientProjectModal({
       setAdvanceAmount("")
       setPartInitialPayment("")
       setPaymentModel("advance")
-      setClientEmail(client.email || "")
+      setClientEmail(formatDisplayEmail(client.email) || "")
       setClientPhone(client.phone || "")
       setClientAddress(client.address || "")
       setClientCity(client.city || "")

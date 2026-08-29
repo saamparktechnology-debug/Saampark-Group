@@ -1,76 +1,179 @@
 const express = require('express');
 const router = express.Router();
 const {
+  testSmtpConnection,
   sendInvoiceDetailsEmail,
   sendProjectCompletionEmail,
   sendClientWelcomeEmail,
   sendPaymentReceiptEmail,
   sendPaymentDueReminderEmail,
+  sendGenericEmail,
 } = require('../utils/emailService');
 
+// ─── TEST SMTP CONNECTION ───────────────────────────────────────────────────
+router.post('/test-connection', async (req, res, next) => {
+  try {
+    const { host, port, secure, user, pass, fromName, fromEmail, testEmail, companyId, company_id } = req.body;
+    const targetCompId = companyId || company_id || null;
+
+    if (!user || !pass) {
+      return res.status(400).json({ status: 'error', message: 'SMTP Username/Email and App Password are required for testing.' });
+    }
+
+    const result = await testSmtpConnection({
+      host: host || 'smtp.gmail.com',
+      port: port || '587',
+      secure,
+      user,
+      pass,
+      fromName,
+      fromEmail,
+      testEmail,
+      companyId: targetCompId,
+    });
+
+    res.status(200).json({ status: 'success', message: result.message });
+  } catch (err) {
+    console.error('SMTP Connection Test Error:', err);
+    res.status(400).json({
+      status: 'error',
+      message: `SMTP Authentication Failed: ${err.message || 'Please check your Google App Password or Host credentials.'}`,
+    });
+  }
+});
+
+// ─── SEND INVOICE ────────────────────────────────────────────────────────────
 router.post('/send-invoice', async (req, res, next) => {
   try {
-    const { to, clientName, invoiceId, project, billDate, dueDate, totalAmount, receivedAmount, dueAmount, items, viewUrl } = req.body;
+    const { to, clientName, invoiceId, project, billDate, dueDate, totalAmount, receivedAmount, dueAmount, items, viewUrl, companyId, company_id } = req.body;
     if (!to) {
       return res.status(400).json({ status: 'error', message: 'Recipient email is required' });
     }
-    await sendInvoiceDetailsEmail({ to, clientName, invoiceId, project, billDate, dueDate, totalAmount, receivedAmount, dueAmount, items, viewUrl });
+    await sendInvoiceDetailsEmail({
+      to,
+      clientName,
+      invoiceId,
+      project,
+      billDate,
+      dueDate,
+      totalAmount,
+      receivedAmount,
+      dueAmount,
+      items,
+      viewUrl,
+      companyId: companyId || company_id || null,
+    });
     res.status(200).json({ status: 'success', message: `Invoice email successfully sent to ${to}` });
   } catch (err) {
     next(err);
   }
 });
 
+// ─── SEND PROJECT COMPLETION ────────────────────────────────────────────────
 router.post('/send-completion', async (req, res, next) => {
   try {
-    const { to, clientName, projectTitle, invoiceId } = req.body;
+    const { to, clientName, projectTitle, invoiceId, companyId, company_id } = req.body;
     if (!to) {
       return res.status(400).json({ status: 'error', message: 'Recipient email is required' });
     }
-    await sendProjectCompletionEmail({ to, clientName, projectTitle, invoiceId });
+    await sendProjectCompletionEmail({
+      to,
+      clientName,
+      projectTitle,
+      invoiceId,
+      companyId: companyId || company_id || null,
+    });
     res.status(200).json({ status: 'success', message: `Completion email successfully sent to ${to}` });
   } catch (err) {
     next(err);
   }
 });
 
+// ─── SEND WELCOME EMAIL ─────────────────────────────────────────────────────
 router.post('/send-welcome', async (req, res, next) => {
   try {
-    const { to, clientName, companyName } = req.body;
+    const { to, clientName, companyName, companyId, company_id } = req.body;
     if (!to) {
       return res.status(400).json({ status: 'error', message: 'Recipient email is required' });
     }
-    await sendClientWelcomeEmail({ to, clientName, companyName });
+    await sendClientWelcomeEmail({
+      to,
+      clientName,
+      companyName,
+      companyId: companyId || company_id || null,
+    });
     res.status(200).json({ status: 'success', message: `Welcome email successfully sent to ${to}` });
   } catch (err) {
     next(err);
   }
 });
 
+// ─── SEND PAYMENT RECEIPT ───────────────────────────────────────────────────
 router.post('/send-payment-receipt', async (req, res, next) => {
   try {
-    const { to, clientName, invoiceId, project, paidAmount, remainingDue, nextDueDate, paymentMethod, txnRef } = req.body;
+    const { to, clientName, invoiceId, project, paidAmount, remainingDue, nextDueDate, paymentMethod, txnRef, companyId, company_id } = req.body;
     if (!to) {
       return res.status(400).json({ status: 'error', message: 'Recipient email is required' });
     }
-    await sendPaymentReceiptEmail({ to, clientName, invoiceId, project, paidAmount, remainingDue, nextDueDate, paymentMethod, txnRef });
+    await sendPaymentReceiptEmail({
+      to,
+      clientName,
+      invoiceId,
+      project,
+      paidAmount,
+      remainingDue,
+      nextDueDate,
+      paymentMethod,
+      txnRef,
+      companyId: companyId || company_id || null,
+    });
     res.status(200).json({ status: 'success', message: `Payment receipt email sent to ${to}` });
   } catch (err) {
     next(err);
   }
 });
 
+// ─── SEND PAYMENT DUE REMINDER ──────────────────────────────────────────────
 router.post('/send-reminder', async (req, res, next) => {
   try {
-    const { to, clientName, invoiceId, project, dueAmount, dueDate } = req.body;
+    const { to, clientName, invoiceId, project, dueAmount, dueDate, companyId, company_id } = req.body;
     if (!to) {
       return res.status(400).json({ status: 'error', message: 'Recipient email is required' });
     }
-    await sendPaymentDueReminderEmail({ to, clientName, invoiceId, project, dueAmount, dueDate });
+    await sendPaymentDueReminderEmail({
+      to,
+      clientName,
+      invoiceId,
+      project,
+      dueAmount,
+      dueDate,
+      companyId: companyId || company_id || null,
+    });
     res.status(200).json({ status: 'success', message: `Payment due reminder email sent to ${to}` });
   } catch (err) {
     next(err);
   }
 });
 
+// ─── SEND GENERAL NOTIFICATION EMAIL ────────────────────────────────────────
+router.post('/send-general', async (req, res, next) => {
+  try {
+    const { to, subject, html, clientName, companyId, company_id } = req.body;
+    if (!to) {
+      return res.status(400).json({ status: 'error', message: 'Recipient email is required' });
+    }
+    await sendGenericEmail({
+      to,
+      subject,
+      html,
+      clientName,
+      companyId: companyId || company_id || null,
+    });
+    res.status(200).json({ status: 'success', message: `General notification email sent to ${to}` });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
+

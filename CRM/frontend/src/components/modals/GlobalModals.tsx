@@ -7,6 +7,7 @@ import { useUIStore } from "@/store/useUIStore"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { LeadService, CustomerService, TaskService, TicketService } from "@/services/apiServices"
+import { executeWithFeedback } from "@/store/useActionFeedbackStore"
 
 // ── Reusable Modal Wrapper ──────────────────────────────────────────────────
 function Modal({
@@ -155,7 +156,6 @@ export function GlobalModals() {
   const [isSubmittingTicket, setIsSubmittingTicket] = React.useState(false)
 
   const handleSaveLead = async () => {
-    setIsSubmittingLead(true)
     const newLeadObj = {
       first_name: leadContact || leadName || "Lead",
       last_name: "Contact",
@@ -167,24 +167,28 @@ export function GlobalModals() {
       assigned_to: 1,
       lead_score: 75,
     }
-    try {
+
+    setIsSubmittingLead(true)
+    await executeWithFeedback(async () => {
       await LeadService.addLead(newLeadObj)
-      show("Live Lead created successfully!")
-    } catch (err: any) {
-      show("Lead created successfully!")
-    } finally {
-      setIsSubmittingLead(false)
       window.dispatchEvent(new CustomEvent("lead_created", { detail: newLeadObj }))
       setLeadName("")
       setLeadContact("")
       setLeadEmail("")
       setLeadPhone("")
       store.closeModal("isAddLeadModalOpen")
-    }
+    }, {
+      actionType: "create",
+      loadingTitle: "Creating Lead...",
+      loadingMsg: `Saving lead "${leadName || leadContact}"...`,
+      successTitle: "Lead Created Successfully!",
+      successMsg: `Lead "${leadName || leadContact}" has been added.`,
+      errorTitle: "Lead Creation Failed",
+    })
+    setIsSubmittingLead(false)
   }
 
   const handleSaveClient = async () => {
-    setIsSubmittingClient(true)
     const newClientObj = {
       company_name: clientCompany || "New Client Corp",
       primary_contact_name: clientContact || "Contact",
@@ -192,24 +196,28 @@ export function GlobalModals() {
       phone: clientPhone || "+15553334444",
       industry: "Tech",
     }
-    try {
+
+    setIsSubmittingClient(true)
+    await executeWithFeedback(async () => {
       await CustomerService.createCustomer(newClientObj)
-      show("Live Customer created successfully!")
-    } catch (err: any) {
-      show("Customer created successfully!")
-    } finally {
-      setIsSubmittingClient(false)
       window.dispatchEvent(new CustomEvent("client_created", { detail: newClientObj }))
       setClientCompany("")
       setClientContact("")
       setClientEmail("")
       setClientPhone("")
       store.closeModal("isAddClientModalOpen")
-    }
+    }, {
+      actionType: "create",
+      loadingTitle: "Registering Client...",
+      loadingMsg: `Adding client "${clientCompany || clientContact}"...`,
+      successTitle: "Client Created Successfully!",
+      successMsg: `Client "${clientCompany || clientContact}" was created.`,
+      errorTitle: "Client Creation Failed",
+    })
+    setIsSubmittingClient(false)
   }
 
   const handleSaveTask = async () => {
-    setIsSubmittingTask(true)
     const newTaskObj = {
       title: taskTitle || "New Task",
       description: "Task description",
@@ -217,39 +225,48 @@ export function GlobalModals() {
       assigned_to: 1,
       customer_id: 1,
     }
-    try {
+
+    setIsSubmittingTask(true)
+    await executeWithFeedback(async () => {
       await TaskService.createTask(newTaskObj)
-      show("Live Task created successfully!")
-    } catch (err: any) {
-      show("Task created successfully!")
-    } finally {
-      setIsSubmittingTask(false)
       window.dispatchEvent(new CustomEvent("task_created", { detail: newTaskObj }))
       setTaskTitle("")
       store.closeModal("isAddTaskModalOpen")
-    }
+    }, {
+      actionType: "create",
+      loadingTitle: "Creating Task...",
+      loadingMsg: `Adding "${taskTitle}"...`,
+      successTitle: "Task Created Successfully!",
+      successMsg: `Task "${taskTitle}" was added.`,
+      errorTitle: "Task Creation Failed",
+    })
+    setIsSubmittingTask(false)
   }
 
   const handleSaveTicket = async () => {
-    setIsSubmittingTicket(true)
     const newTicketObj = {
       customer_id: 1,
       subject: ticketSubject || "Support Issue",
       description: ticketDesc || "Issue details",
       priority: ticketPriority as any,
     }
-    try {
+
+    setIsSubmittingTicket(true)
+    await executeWithFeedback(async () => {
       await TicketService.createTicket(newTicketObj)
-      show("Live Support Ticket created successfully!")
-    } catch (err: any) {
-      show("Ticket created successfully!")
-    } finally {
-      setIsSubmittingTicket(false)
       window.dispatchEvent(new CustomEvent("ticket_created", { detail: newTicketObj }))
       setTicketSubject("")
       setTicketDesc("")
       store.closeModal("isAddTicketModalOpen")
-    }
+    }, {
+      actionType: "create",
+      loadingTitle: "Creating Support Ticket...",
+      loadingMsg: `Submitting "${ticketSubject}"...`,
+      successTitle: "Ticket Created!",
+      successMsg: `Support Ticket "${ticketSubject}" dispatched.`,
+      errorTitle: "Ticket Submission Failed",
+    })
+    setIsSubmittingTicket(false)
   }
 
   return (

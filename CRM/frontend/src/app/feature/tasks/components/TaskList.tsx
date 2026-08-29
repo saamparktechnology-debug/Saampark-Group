@@ -570,7 +570,7 @@ export function TaskList({
                         const chip = getTaskCountdownChip(t.deadline, t.dueTime, t.status)
                         return (
                           <div className="flex flex-col gap-1">
-                            <span className="font-medium text-rose-500 dark:text-rose-400">
+                            <span className="font-bold text-red-600 dark:text-red-400">
                               {t.deadline}{t.dueTime ? ` (${t.dueTime})` : ''}
                             </span>
                             {chip && (

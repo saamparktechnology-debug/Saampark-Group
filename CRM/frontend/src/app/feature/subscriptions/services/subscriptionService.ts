@@ -97,6 +97,7 @@ export const getSubscriptions = async (companyId?: string): Promise<Subscription
         numericAmount: numAmt,
         amount: s.amount.startsWith("₹") ? s.amount : `₹${numAmt.toLocaleString("en-IN")}`,
         autoRenew: s.autoRenew !== undefined ? s.autoRenew : true,
+        firstPaymentDate: s.firstPaymentDate || s.startDate,
       })
     }
   }
@@ -152,7 +153,8 @@ export const addSubscription = async (sub: Omit<Subscription, "id">, companyId?:
     amount: formattedAmt,
     numericAmount: numAmt,
     autoRenew: sub.autoRenew !== undefined ? sub.autoRenew : true,
-    startDate: sub.startDate || new Date().toISOString().split("T")[0],
+    startDate: sub.startDate || sub.firstPaymentDate || new Date().toISOString().split("T")[0],
+    firstPaymentDate: sub.firstPaymentDate || sub.startDate || new Date().toISOString().split("T")[0],
     companyId: effectiveComp,
   }
 

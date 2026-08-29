@@ -13,6 +13,7 @@ import {
   X,
   User,
   MapPin,
+  Info,
 } from "lucide-react"
 import { Project } from "../types"
 import { ProjectFiltersDropdown } from "./ProjectFiltersDropdown"
@@ -281,12 +282,33 @@ export function ProjectList({
                         </button>
                         
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          {/* Added by Creator Badge */}
+                          {/* Glass-effect Creator Info Circle Icon with Tooltip */}
                           {((p as any).createdByName || (p as any).createdBy || (p as any).billedBy) && (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/70 text-[9.5px] font-semibold">
-                              <User size={9} />
-                              <span>Added by: {(p as any).createdByName || (p as any).createdBy || (p as any).billedBy}</span>
-                            </span>
+                            <div className="relative group/projectcreator inline-flex items-center">
+                              <button
+                                type="button"
+                                className="w-5 h-5 rounded-full backdrop-blur-md bg-white/80 dark:bg-zinc-800/80 hover:bg-indigo-50/90 dark:hover:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 border border-indigo-200/80 dark:border-indigo-500/30 flex items-center justify-center cursor-pointer transition-all duration-200 shadow-xs hover:shadow-md hover:shadow-indigo-500/20 hover:scale-110 active:scale-95"
+                                title="Added by Details"
+                              >
+                                <Info size={11} className="stroke-[2.2]" />
+                              </button>
+                              <div className="absolute left-0 top-full mt-2 hidden group-hover/projectcreator:block z-50 w-56 p-3 bg-zinc-900/95 dark:bg-zinc-900/95 text-white rounded-2xl shadow-2xl border border-white/10 text-[11px] pointer-events-none space-y-1.5 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150">
+                                <div className="text-[9.5px] font-bold uppercase tracking-wider text-indigo-400 border-b border-white/10 pb-1 flex items-center justify-between">
+                                  <span>Project Creator</span>
+                                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
+                                </div>
+                                <div className="flex items-center gap-1.5 text-zinc-100 font-semibold">
+                                  <User size={12} className="text-indigo-400 shrink-0" />
+                                  <span>Added by: <strong className="text-indigo-300 font-bold">{(p as any).createdByName || (p as any).createdBy || (p as any).billedBy}</strong></span>
+                                </div>
+                                {(p as any).branchName && (
+                                  <div className="flex items-center gap-1.5 text-zinc-300">
+                                    <MapPin size={12} className="text-amber-400 shrink-0" />
+                                    <span>Branch: <strong className="text-white font-medium">{(p as any).branchName}</strong></span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                           )}
 
                           {/* Branch Badge (Only if non-empty) */}
@@ -334,13 +356,7 @@ export function ProjectList({
 
                     {/* Deadline */}
                     <td className="py-3.5 px-4">
-                      <span
-                        className={
-                          isOverdueOrNear
-                            ? "text-red-500 dark:text-red-400 font-medium"
-                            : "text-zinc-600 dark:text-zinc-400"
-                        }
-                      >
+                      <span className="text-red-600 dark:text-red-400 font-bold font-mono text-xs">
                         {p.deadline}
                       </span>
                     </td>

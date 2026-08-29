@@ -64,10 +64,18 @@ export default function SettingsMain() {
   const [industry, setIndustry] = React.useState("Software & IT Services")
 
   // SMTP Settings Form State (Super Admin)
+  const [smtpPreset, setSmtpPreset] = React.useState<"gmail" | "zoho" | "outlook" | "custom">("gmail")
   const [smtpUser, setSmtpUser] = React.useState("supriyogod@gmail.com")
   const [smtpPass, setSmtpPass] = React.useState("vctonocakbbgbvib")
   const [smtpHost, setSmtpHost] = React.useState("smtp.gmail.com")
   const [smtpPort, setSmtpPort] = React.useState("587")
+  const [smtpSecure, setSmtpSecure] = React.useState(false)
+  const [smtpFromName, setSmtpFromName] = React.useState("SAAMPARK Technology")
+  const [smtpFromEmail, setSmtpFromEmail] = React.useState("")
+  const [showSmtpPass, setShowSmtpPass] = React.useState(false)
+  const [isTestingSmtp, setIsTestingSmtp] = React.useState(false)
+  const [smtpTestResult, setSmtpTestResult] = React.useState<{ success?: boolean; message?: string } | null>(null)
+  const [smtpTestRecipient, setSmtpTestRecipient] = React.useState("")
 
   // ── KYC Form State ──
   const [kycFullName, setKycFullName] = React.useState(user?.name || "")
@@ -112,8 +120,17 @@ export default function SettingsMain() {
         if (saved.industry) setIndustry(saved.industry)
         if (saved.smtpUser) setSmtpUser(saved.smtpUser)
         if (saved.smtpPass) setSmtpPass(saved.smtpPass)
-        if (saved.smtpHost) setSmtpHost(saved.smtpHost)
+        if (saved.smtpHost) {
+          setSmtpHost(saved.smtpHost)
+          if (saved.smtpHost.includes("gmail")) setSmtpPreset("gmail")
+          else if (saved.smtpHost.includes("zoho")) setSmtpPreset("zoho")
+          else if (saved.smtpHost.includes("office365") || saved.smtpHost.includes("outlook")) setSmtpPreset("outlook")
+          else setSmtpPreset("custom")
+        }
         if (saved.smtpPort) setSmtpPort(saved.smtpPort)
+        if (saved.smtpSecure !== undefined) setSmtpSecure(saved.smtpSecure)
+        if (saved.smtpFromName) setSmtpFromName(saved.smtpFromName)
+        if (saved.smtpFromEmail) setSmtpFromEmail(saved.smtpFromEmail)
       }
     })
 
@@ -156,36 +173,54 @@ export default function SettingsMain() {
     }
   }, [user])
 
-  // Handle Photo Upload directly with permanent ImgBB Cloud Hosting
+  // Handle Photo Upload directly with permanent ImgBB Cloud Hosting & Automatic Compression
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
-    if (file.size > 10 * 1024 * 1024) {
-      alert("Image size should be under 10MB.")
+    if (file.size > 12 * 1024 * 1024) {
+      alert("Image size should be under 12MB.")
       return
     }
 
     setIsUploadingAvatar(true)
+    setErrorMsg("")
     try {
-      const uploadResult = await uploadToImgBB(file, `${user?.name || "avatar"}_${Date.now()}`)
+      const uploadResult = await uploadToImgBB(file, `${user?.name || "avatar"}_${Date.now()}`, 400)
       if (uploadResult.url) {
-        setAvatar(uploadResult.url)
+        const finalAvatarUrl = uploadResult.url
+        setAvatar(finalAvatarUrl)
         
         // Live sync avatar across session immediately
         if (user) {
           useAuthStore.setState({
-            user: { ...user, avatar: uploadResult.url, avatarUrl: uploadResult.url } as any
+            user: { ...user, avatar: finalAvatarUrl, avatarUrl: finalAvatarUrl } as any
           })
           recordUserAccount({
             ...user,
-            avatarUrl: uploadResult.url,
+            avatarUrl: finalAvatarUrl,
+            avatar: finalAvatarUrl,
             id: String(user.id),
           })
-          cascadeUserAvatarChange(user.name, user.email, uploadResult.url).catch(() => {})
+          cascadeUserAvatarChange(user.name, user.email, finalAvatarUrl).catch(() => {})
+
+          // Sync to backend MySQL table
+          try {
+            const { api } = await import("@/lib/api")
+            await api.put(`/users/${user.id || user.email}`, {
+              avatar_url: finalAvatarUrl,
+              avatar: finalAvatarUrl,
+              avatarUrl: finalAvatarUrl,
+            }).catch(() => {})
+          } catch {}
+
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new Event("storage"))
+            window.dispatchEvent(new CustomEvent("crm_avatar_changed", { detail: { avatar: finalAvatarUrl } }))
+          }
         }
 
-        setSuccessMsg("📸 Profile picture uploaded permanently to Cloud! Live synced across CRM.")
+        setSuccessMsg("📸 Profile picture updated & live synced across Topbar, Leads, Projects & Comments!")
         setTimeout(() => setSuccessMsg(""), 4000)
       }
     } catch (err: any) {
@@ -287,6 +322,9 @@ export default function SettingsMain() {
           email: updatedUserData.email,
           phone: updatedUserData.phone,
           department: updatedUserData.department,
+          avatar_url: avatar,
+          avatarUrl: avatar,
+          avatar: avatar,
           password: newPassword || undefined,
         }).catch((err) => console.warn("Backend profile update warning:", err))
       } catch {}
@@ -299,6 +337,7 @@ export default function SettingsMain() {
         phone: updatedUserData.phone,
         department: updatedUserData.department,
         avatarUrl: avatar,
+        avatar: avatar,
         password: newPassword || (user as any)?.password || "Password123",
         companyIds: user?.companyIds || (user?.companyId ? [user.companyId] : ["tech"]),
         companyId: user?.companyId || "tech",
@@ -412,11 +451,68 @@ export default function SettingsMain() {
     setLoading(true)
     await saveModuleDataToDB("settings", {
       companyName, currency, currencySymbol, address, industry,
-      smtpUser, smtpPass, smtpHost, smtpPort
+      smtpUser, smtpPass, smtpHost, smtpPort, smtpSecure, smtpFromName, smtpFromEmail
     })
     setLoading(false)
-    setSuccessMsg("SMTP configurations saved to MySQL database successfully!")
+    setSuccessMsg("SMTP configurations saved and synced across all email services successfully!")
     setTimeout(() => setSuccessMsg(""), 3000)
+  }
+
+  const applySmtpPreset = (preset: "gmail" | "zoho" | "outlook" | "custom") => {
+    setSmtpPreset(preset)
+    setSmtpTestResult(null)
+    if (preset === "gmail") {
+      setSmtpHost("smtp.gmail.com")
+      setSmtpPort("587")
+      setSmtpSecure(false)
+    } else if (preset === "zoho") {
+      setSmtpHost("smtp.zoho.in")
+      setSmtpPort("465")
+      setSmtpSecure(true)
+    } else if (preset === "outlook") {
+      setSmtpHost("smtp.office365.com")
+      setSmtpPort("587")
+      setSmtpSecure(false)
+    }
+  }
+
+  const handleTestSmtpConnection = async () => {
+    if (!smtpUser.trim() || !smtpPass.trim()) {
+      setSmtpTestResult({
+        success: false,
+        message: "Please enter SMTP Sender Email and App Password before testing.",
+      })
+      return
+    }
+
+    setIsTestingSmtp(true)
+    setSmtpTestResult(null)
+
+    try {
+      const { api } = await import("@/lib/api")
+      const res = await api.post("/email/test-connection", {
+        host: smtpHost.trim() || "smtp.gmail.com",
+        port: smtpPort.trim() || "587",
+        secure: smtpSecure,
+        user: smtpUser.trim(),
+        pass: smtpPass.trim(),
+        fromName: smtpFromName.trim() || companyName || "SAAMPARK CRM",
+        fromEmail: smtpFromEmail.trim() || smtpUser.trim(),
+        testEmail: smtpTestRecipient.trim() || smtpUser.trim(),
+      })
+
+      setSmtpTestResult({
+        success: true,
+        message: res.data?.message || `Verified! Test email successfully sent to ${smtpTestRecipient.trim() || smtpUser.trim()}`,
+      })
+    } catch (err: any) {
+      setSmtpTestResult({
+        success: false,
+        message: err.response?.data?.message || err.message || "Failed to authenticate SMTP connection. Please check your App Password or Host.",
+      })
+    } finally {
+      setIsTestingSmtp(false)
+    }
   }
 
   const handleQrUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -553,7 +649,7 @@ export default function SettingsMain() {
               <img
                 src={avatar}
                 alt={name}
-                className="w-24 h-24 rounded-2xl object-cover border-4 border-white dark:border-zinc-800 shadow-md bg-zinc-100"
+                className="w-24 h-24 rounded-2xl object-cover border-4 border-white dark:border-zinc-800 shadow-md bg-transparent"
               />
               <button
                 type="button"
@@ -1124,61 +1220,229 @@ export default function SettingsMain() {
 
       {/* ── TAB 3: SMTP SETUP (Super Admin Only) ────────────────────────────── */}
       {activeTab === "smtp" && isSuperAdmin && (
-        <form onSubmit={handleSaveSmtp} className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-3xl p-6 space-y-4 max-w-2xl text-xs shadow-2xs">
-          <h3 className="font-bold text-sm text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-            <Mail size={16} className="text-blue-600" />
-            <span>SMTP Email Dispatch Configurations</span>
-          </h3>
+        <form onSubmit={handleSaveSmtp} className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-3xl p-6 space-y-5 max-w-3xl text-xs shadow-2xs">
+          <div className="flex items-start justify-between border-b border-border/50 pb-3.5">
+            <div>
+              <h3 className="font-bold text-sm text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                <Mail size={16} className="text-blue-600" />
+                <span>Global SMTP Email Dispatch Configurations</span>
+              </h3>
+              <p className="text-muted-foreground text-[11px] mt-0.5">
+                Configure primary Google / Workspace or custom SMTP credentials used for system-wide invoices, password resets, and notifications.
+              </p>
+            </div>
+            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 shrink-0">
+              Live Dynamic Engine
+            </span>
+          </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          {/* Quick Presets */}
+          <div className="space-y-1.5">
+            <label className="block font-bold text-foreground text-[11px]">Choose Mail Provider Preset:</label>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => applySmtpPreset("gmail")}
+                className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                  smtpPreset === "gmail"
+                    ? "bg-red-600 text-white shadow-sm"
+                    : "bg-surface border border-border text-foreground hover:bg-surface-hover"
+                }`}
+              >
+                <span>Gmail / Google Workspace</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => applySmtpPreset("zoho")}
+                className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                  smtpPreset === "zoho"
+                    ? "bg-amber-600 text-white shadow-sm"
+                    : "bg-surface border border-border text-foreground hover:bg-surface-hover"
+                }`}
+              >
+                <span>Zoho Mail</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => applySmtpPreset("outlook")}
+                className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                  smtpPreset === "outlook"
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "bg-surface border border-border text-foreground hover:bg-surface-hover"
+                }`}
+              >
+                <span>Outlook / Microsoft 365</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => applySmtpPreset("custom")}
+                className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                  smtpPreset === "custom"
+                    ? "bg-zinc-800 text-white dark:bg-zinc-200 dark:text-zinc-900 shadow-sm"
+                    : "bg-surface border border-border text-foreground hover:bg-surface-hover"
+                }`}
+              >
+                <span>Custom SMTP Server</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">SMTP Host</label>
               <input
                 type="text"
                 value={smtpHost}
                 onChange={(e) => setSmtpHost(e.target.value)}
+                placeholder="smtp.gmail.com"
                 className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono focus:outline-hidden"
               />
             </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Port</label>
+                <input
+                  type="text"
+                  value={smtpPort}
+                  onChange={(e) => {
+                    const p = e.target.value
+                    setSmtpPort(p)
+                    if (p === "465") setSmtpSecure(true)
+                    if (p === "587") setSmtpSecure(false)
+                  }}
+                  placeholder="587 / 465"
+                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono focus:outline-hidden"
+                />
+              </div>
+              <div>
+                <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Encryption</label>
+                <select
+                  value={smtpSecure ? "ssl" : "tls"}
+                  onChange={(e) => setSmtpSecure(e.target.value === "ssl")}
+                  className="w-full px-2.5 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-semibold focus:outline-hidden cursor-pointer"
+                >
+                  <option value="tls">STARTTLS (587)</option>
+                  <option value="ssl">SSL / TLS (465)</option>
+                </select>
+              </div>
+            </div>
+
             <div>
-              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Port</label>
+              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Sender Email (Username) *</label>
+              <input
+                type="email"
+                value={smtpUser}
+                onChange={(e) => {
+                  setSmtpUser(e.target.value)
+                  if (!smtpFromEmail) setSmtpFromEmail(e.target.value)
+                  if (!smtpTestRecipient) setSmtpTestRecipient(e.target.value)
+                }}
+                placeholder="supriyogod@gmail.com"
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono focus:outline-hidden"
+              />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-zinc-600 dark:text-zinc-400 font-semibold">App Password / Auth Token *</label>
+                <button
+                  type="button"
+                  onClick={() => setShowSmtpPass(!showSmtpPass)}
+                  className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline font-semibold cursor-pointer"
+                >
+                  {showSmtpPass ? "Hide" : "Show"}
+                </button>
+              </div>
+              <input
+                type={showSmtpPass ? "text" : "password"}
+                value={smtpPass}
+                onChange={(e) => setSmtpPass(e.target.value)}
+                placeholder="16-digit Google App Password"
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono focus:outline-hidden"
+              />
+            </div>
+
+            <div>
+              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Sender From Name</label>
               <input
                 type="text"
-                value={smtpPort}
-                onChange={(e) => setSmtpPort(e.target.value)}
+                value={smtpFromName}
+                onChange={(e) => setSmtpFromName(e.target.value)}
+                placeholder="SAAMPARK Technology"
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden"
+              />
+            </div>
+
+            <div>
+              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Sender From Email (Header)</label>
+              <input
+                type="email"
+                value={smtpFromEmail}
+                onChange={(e) => setSmtpFromEmail(e.target.value)}
+                placeholder="info@saamparktechnology.com"
                 className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono focus:outline-hidden"
               />
             </div>
           </div>
 
-          <div>
-            <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Sender Email *</label>
-            <input
-              type="email"
-              value={smtpUser}
-              onChange={(e) => setSmtpUser(e.target.value)}
-              className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono focus:outline-hidden"
-            />
+          {/* Google App Password Help Banner */}
+          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-[11px] text-amber-900 dark:text-amber-200 space-y-1">
+            <p className="font-bold flex items-center gap-1.5">
+              <span>💡 Setting up Google / Gmail SMTP:</span>
+            </p>
+            <p className="text-muted-foreground leading-relaxed">
+              Google requires a 16-character <strong>App Password</strong>. Navigate to <strong>Google Account ➔ Security ➔ 2-Step Verification ➔ App passwords</strong>, create an app password (name it "CRM"), and paste it above.
+            </p>
           </div>
 
-          <div>
-            <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">App Password / Auth Token *</label>
-            <input
-              type="password"
-              value={smtpPass}
-              onChange={(e) => setSmtpPass(e.target.value)}
-              className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono focus:outline-hidden"
-            />
+          {/* Live Test Connection Tool */}
+          <div className="p-4 bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 rounded-2xl space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <span className="font-bold text-foreground text-xs block">Verify SMTP Connection & Send Test Email</span>
+                <span className="text-[10px] text-muted-foreground">Test credentials in real time against the backend mail server.</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="email"
+                  value={smtpTestRecipient}
+                  onChange={(e) => setSmtpTestRecipient(e.target.value)}
+                  placeholder="Test recipient email..."
+                  className="px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-xs font-mono w-48 focus:outline-hidden"
+                />
+                <button
+                  type="button"
+                  disabled={isTestingSmtp || !smtpUser || !smtpPass}
+                  onClick={handleTestSmtpConnection}
+                  className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition-all"
+                >
+                  <Sparkles size={13} className={isTestingSmtp ? "animate-spin" : ""} />
+                  <span>{isTestingSmtp ? "Verifying..." : "⚡ Test SMTP"}</span>
+                </button>
+              </div>
+            </div>
+
+            {smtpTestResult && (
+              <div className={`p-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 ${
+                smtpTestResult.success
+                  ? "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                  : "bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800"
+              }`}>
+                {smtpTestResult.success ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+                <span>{smtpTestResult.message}</span>
+              </div>
+            )}
           </div>
 
           <div className="pt-2 flex justify-end">
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-sm"
+              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
             >
               <Save size={14} />
-              <span>Save SMTP Settings</span>
+              <span>Save & Apply SMTP Settings</span>
             </button>
           </div>
         </form>

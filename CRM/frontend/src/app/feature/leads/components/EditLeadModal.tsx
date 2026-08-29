@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { X, Plus, Check, Calendar, Clock, Wrench, FileText, User as UserIcon, Trash2, MapPin, Building } from "lucide-react"
+import { X, Plus, Check, Calendar, Clock, Wrench, FileText, User as UserIcon, Trash2, MapPin, Building, Info } from "lucide-react"
 import { Lead, LeadStatus, LeadType } from "../types"
 import { updateLead, unlockLead, parseLeadDate, formatLeadReminderDate, MONTH_NAMES_SHORT } from "../services/leadService"
 import { useAuthStore } from "@/store/useAuthStore"
@@ -153,6 +153,11 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
 
   React.useEffect(() => {
     if (isOpen) {
+      if (user?.role === "Clients") {
+        setTeamMembers([])
+        return
+      }
+
       getUsers("all").then((list) => {
         const isSuperAdmin = user?.role === "Super Admin"
         const userCompIds = user?.companyIds || (user?.companyId ? [user?.companyId] : ["tech"])
@@ -391,18 +396,21 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
           
           {/* Creator & Branch Context Info */}
           {(lead?.createdByName || lead?.createdBy || lead?.branchName || lead?.branchId) && (
-            <div className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 text-[11px] font-medium text-zinc-600 dark:text-zinc-400 flex-wrap">
+            <div className="flex items-center justify-between gap-2 p-2.5 rounded-2xl backdrop-blur-md bg-white/70 dark:bg-zinc-800/60 border border-indigo-100/80 dark:border-indigo-900/40 text-[11px] font-medium text-zinc-600 dark:text-zinc-400 flex-wrap shadow-2xs">
               {(lead?.createdByName || lead?.createdBy) && (
-                <span className="flex items-center gap-1">
-                  <span>👤 Added by:</span>
-                  <strong className="text-zinc-900 dark:text-zinc-100">{lead.createdByName || lead.createdBy} {lead.createdByRole ? `(${lead.createdByRole})` : ""}</strong>
+                <span className="flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full backdrop-blur-md bg-white/80 dark:bg-zinc-800/80 text-indigo-600 dark:text-indigo-400 border border-indigo-200/80 dark:border-indigo-500/30 flex items-center justify-center shadow-xs">
+                    <Info size={11} className="stroke-[2.2]" />
+                  </span>
+                  <span className="text-zinc-500 font-medium">Added by:</span>
+                  <strong className="text-indigo-950 dark:text-indigo-200 font-bold">{lead.createdByName || lead.createdBy} {lead.createdByRole ? `(${lead.createdByRole})` : ""}</strong>
                 </span>
               )}
               {(lead?.branchName || lead?.branchId) && (
                 <span className="flex items-center gap-1.5">
-                  <MapPin size={11} className="text-amber-500 shrink-0" />
-                  <span>Branch:</span>
-                  <strong className="text-blue-600 dark:text-blue-400">{lead.branchName || lead.branchId}</strong>
+                  <MapPin size={12} className="text-amber-500 shrink-0" />
+                  <span className="text-zinc-500">Branch:</span>
+                  <strong className="text-blue-600 dark:text-blue-400 font-semibold">{lead.branchName || lead.branchId}</strong>
                 </span>
               )}
             </div>
@@ -525,34 +533,42 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
             </select>
           </div>
 
-          {/* Services Multi-Select Tick Boxes */}
-          <div className="grid grid-cols-4 items-start gap-4">
+          {/* Services Multi-Select Compact Chips */}
+          <div className="grid grid-cols-4 items-start gap-3">
             <label className="text-zinc-500 font-medium flex items-center gap-1 pt-1">
               <Wrench size={13} className="text-zinc-400" />
               <span>Services</span>
             </label>
-            <div className="col-span-3 space-y-2 bg-zinc-50 dark:bg-zinc-800/60 p-3 rounded-lg border border-zinc-200 dark:border-zinc-700">
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                {STANDARD_SERVICES.map((s) => (
-                  <label key={s} className="flex items-center gap-2 cursor-pointer text-zinc-700 dark:text-zinc-300 hover:text-blue-600">
-                    <input
-                      type="checkbox"
-                      checked={selectedServices.includes(s)}
-                      onChange={() => toggleService(s)}
-                      className="rounded text-blue-600 focus:ring-blue-500"
-                    />
-                    <span>{s}</span>
-                  </label>
-                ))}
-                <label className="flex items-center gap-2 cursor-pointer text-zinc-700 dark:text-zinc-300 hover:text-blue-600">
-                  <input
-                    type="checkbox"
-                    checked={selectedServices.includes("Others")}
-                    onChange={() => toggleService("Others")}
-                    className="rounded text-blue-600 focus:ring-blue-500"
-                  />
-                  <span>Others</span>
-                </label>
+            <div className="col-span-3 space-y-1.5 bg-zinc-50 dark:bg-zinc-800/60 p-2 rounded-lg border border-zinc-200 dark:border-zinc-700">
+              <div className="flex flex-wrap gap-1.5 text-xs">
+                {STANDARD_SERVICES.map((s) => {
+                  const isSelected = selectedServices.includes(s)
+                  return (
+                    <button
+                      type="button"
+                      key={s}
+                      onClick={() => toggleService(s)}
+                      className={`px-2 py-0.5 rounded-md text-[11px] font-medium border transition-all cursor-pointer ${
+                        isSelected
+                          ? "bg-blue-600 text-white border-blue-600 shadow-2xs font-semibold"
+                          : "bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-zinc-400"
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  )
+                })}
+                <button
+                  type="button"
+                  onClick={() => toggleService("Others")}
+                  className={`px-2 py-0.5 rounded-md text-[11px] font-medium border transition-all cursor-pointer ${
+                    selectedServices.includes("Others")
+                      ? "bg-blue-600 text-white border-blue-600 shadow-2xs font-semibold"
+                      : "bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-zinc-400"
+                  }`}
+                >
+                  Others
+                </button>
               </div>
               {selectedServices.includes("Others") && (
                 <input
@@ -560,19 +576,19 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
                   placeholder="Type custom service name..."
                   value={customService}
                   onChange={(e) => setCustomService(e.target.value)}
-                  className="w-full mt-2 px-3 py-1.5 bg-white dark:bg-zinc-900 border border-blue-200 dark:border-blue-800 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 text-xs"
+                  className="w-full mt-1 px-2.5 py-1 bg-white dark:bg-zinc-900 border border-blue-200 dark:border-blue-800 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 text-xs"
                 />
               )}
             </div>
           </div>
 
-          {/* Reminder Date & Time with None / 00,00,0000 and AM/PM format */}
-          <div className="grid grid-cols-4 items-start gap-4">
+          {/* Reminder Date & Time */}
+          <div className="grid grid-cols-4 items-start gap-3">
             <label className="text-zinc-500 font-medium flex items-center gap-1 pt-1">
               <Calendar size={13} className="text-amber-500" />
               <span>Reminder Date & Time</span>
             </label>
-            <div className="col-span-3 space-y-2">
+            <div className="col-span-3 space-y-1.5">
               <div className="flex items-center gap-2">
                 <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-zinc-700 dark:text-zinc-300">
                   <input
@@ -596,7 +612,7 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
                           setReminderDate(formatDateForDisplay(e.target.value))
                         }
                       }}
-                      className="w-full pl-8 pr-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-amber-600 dark:text-amber-400 font-semibold cursor-pointer text-xs"
+                      className="w-full pl-8 pr-3 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-amber-600 dark:text-amber-400 font-semibold cursor-pointer text-xs"
                     />
                     <Calendar size={14} className="absolute left-2.5 text-amber-500 pointer-events-none" />
                   </div>
@@ -619,13 +635,13 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
                     }
 
                     return (
-                      <div className="flex items-center bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md overflow-hidden p-1 gap-1 text-xs">
-                        <Clock size={14} className="text-amber-500 shrink-0 ml-1" />
+                      <div className="flex items-center bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md overflow-hidden p-0.5 gap-1 text-xs">
+                        <Clock size={13} className="text-amber-500 shrink-0 ml-1" />
                         {/* Hour Selector */}
                         <select
                           value={hStr}
                           onChange={(e) => updateTime(e.target.value, mStr, ampmStr)}
-                          className="bg-transparent text-amber-600 dark:text-amber-400 font-bold focus:outline-none cursor-pointer py-1 text-xs"
+                          className="bg-transparent text-amber-600 dark:text-amber-400 font-bold focus:outline-none cursor-pointer py-0.5 text-xs"
                         >
                           {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0")).map((h) => (
                             <option key={h} value={h} className="bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200">
@@ -638,7 +654,7 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
                         <select
                           value={mStr}
                           onChange={(e) => updateTime(hStr, e.target.value, ampmStr)}
-                          className="bg-transparent text-amber-600 dark:text-amber-400 font-bold focus:outline-none cursor-pointer py-1 text-xs"
+                          className="bg-transparent text-amber-600 dark:text-amber-400 font-bold focus:outline-none cursor-pointer py-0.5 text-xs"
                         >
                           {["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"].map((m) => (
                             <option key={m} value={m} className="bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200">
@@ -651,12 +667,13 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
                             </option>
                           )}
                         </select>
-                        {/* AM / PM Segmented Button */}
-                        <div className="flex items-center border-l border-zinc-200 dark:border-zinc-700 ml-1 pl-1 bg-zinc-100/80 dark:bg-zinc-700/50 p-0.5 rounded text-[10px] font-bold">
+
+                        {/* AM/PM Switcher Buttons */}
+                        <div className="flex items-center bg-zinc-200/70 dark:bg-zinc-700/60 rounded p-0.5 text-[10px]">
                           <button
                             type="button"
                             onClick={() => updateTime(hStr, mStr, "AM")}
-                            className={`px-2 py-0.5 rounded transition-all cursor-pointer ${
+                            className={`px-1.5 py-0.5 rounded font-bold transition-all cursor-pointer ${
                               ampmStr === "AM"
                                 ? "bg-amber-500 text-white font-extrabold shadow-2xs"
                                 : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
@@ -667,7 +684,7 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
                           <button
                             type="button"
                             onClick={() => updateTime(hStr, mStr, "PM")}
-                            className={`px-2 py-0.5 rounded transition-all cursor-pointer ${
+                            className={`px-1.5 py-0.5 rounded font-bold transition-all cursor-pointer ${
                               ampmStr === "PM"
                                 ? "bg-amber-500 text-white font-extrabold shadow-2xs"
                                 : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
@@ -685,38 +702,55 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
           </div>
 
           {/* Remainder Notes */}
-          <div className="grid grid-cols-4 items-start gap-4">
-            <label className="text-zinc-500 font-medium pt-2 flex items-center gap-1">
+          <div className="grid grid-cols-4 items-start gap-3">
+            <label className="text-zinc-500 font-medium pt-1.5 flex items-center gap-1">
               <FileText size={13} className="text-zinc-400" />
               <span>Remainder Notes</span>
             </label>
             <textarea
-              rows={3}
+              rows={1}
               placeholder="Add reminder notes regarding follow up call..."
               value={reminderNotes}
               onChange={(e) => setReminderNotes(e.target.value)}
-              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 resize-none"
+              className="col-span-3 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 resize-none text-xs"
             />
           </div>
 
           {/* Assigned to / Caller Member */}
-          <div className="grid grid-cols-4 items-center gap-4">
+          <div className="grid grid-cols-4 items-center gap-3">
             <label className="text-zinc-500 font-medium flex items-center gap-1">
               <UserIcon size={13} className="text-zinc-400" />
               <span>Assigned to</span>
             </label>
-            <select
-              value={caller || "None"}
-              onChange={(e) => setCaller(e.target.value)}
-              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-semibold"
-            >
-              <option value="None">None (Unassigned)</option>
-              {teamMembers.map((m) => (
-                <option key={m.id || m.name} value={m.name}>
-                  {m.name} {m.role ? `(${m.role})` : ""}
-                </option>
-              ))}
-            </select>
+            {user?.role === "Clients" ? (
+              <input
+                type="text"
+                placeholder="Type assigned member name (Optional)..."
+                value={caller === "None" ? "" : (caller || "")}
+                onChange={(e) => {
+                  const val = e.target.value
+                  setCaller(val.trim() ? val : "None")
+                  setOwner(val.trim() ? val : "None")
+                }}
+                className="col-span-3 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 text-xs placeholder:text-zinc-400"
+              />
+            ) : (
+              <select
+                value={caller || "None"}
+                onChange={(e) => {
+                  setCaller(e.target.value)
+                  setOwner(e.target.value)
+                }}
+                className="col-span-3 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-medium text-xs"
+              >
+                <option value="None">None (Unassigned)</option>
+                {teamMembers.map((m) => (
+                  <option key={m.id || m.name} value={m.name}>
+                    {m.name} {m.role ? `(${m.role})` : ""}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           {/* Primary contact */}

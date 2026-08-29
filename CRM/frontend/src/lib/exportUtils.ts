@@ -1,11 +1,36 @@
 "use client"
 
+import { useAuthStore, Company } from "@/store/useAuthStore"
+
+export interface ExportCompanyInfo {
+  name: string
+  brandName?: string
+  divisionName?: string
+  subtitle?: string
+  logoUrl?: string
+  logo?: string
+  address?: string
+  city?: string
+  state?: string
+  zip?: string
+  country?: string
+  phone?: string
+  email?: string
+  website?: string
+  gstin?: string
+  cin?: string
+  pan?: string
+  currency?: string
+  currencySymbol?: string
+}
+
 export interface ExcelExportOptions {
   filename: string
   title: string
   subtitle?: string
   headers: string[]
   rows: Array<(string | number | null | undefined)[]>
+  company?: Partial<Company> | string
 }
 
 export interface PDFPrintOptions {
@@ -15,10 +40,90 @@ export interface PDFPrintOptions {
   headers: string[]
   rows: Array<(string | number | null | undefined)[]>
   landscape?: boolean
+  company?: Partial<Company> | string
 }
 
 /**
- * Exports data to a premium styled Excel (.xls) file with colors, banners, and borders.
+ * Dynamically resolves active company info from useAuthStore or optional override.
+ */
+export function resolveExportCompany(custom?: Partial<Company> | string): ExportCompanyInfo {
+  try {
+    const store = useAuthStore.getState()
+    const activeCompanyId = store.activeCompanyId
+    const companies = store.companies || []
+
+    let matched: Company | undefined
+
+    if (custom && typeof custom === "object") {
+      matched = custom as Company
+    } else if (typeof custom === "string" && custom.trim()) {
+      const q = custom.toLowerCase().trim()
+      matched = companies.find(c => 
+        String(c.id).toLowerCase() === q || 
+        String(c.slug || "").toLowerCase() === q || 
+        String(c.name).toLowerCase() === q
+      )
+    }
+
+    if (!matched && activeCompanyId) {
+      const q = String(activeCompanyId).toLowerCase().trim()
+      matched = companies.find(c => 
+        String(c.id).toLowerCase() === q || 
+        String(c.slug || "").toLowerCase() === q
+      )
+    }
+
+    if (!matched && companies.length > 0) {
+      matched = companies[0]
+    }
+
+    if (matched) {
+      const brand = matched.brand_name || (matched.name ? matched.name.split(" ")[0] : "SAAMPARK")
+      const division = matched.division_name || (matched.name ? matched.name.split(" ").slice(1).join(" ") : "")
+      
+      const fullAddress = [
+        matched.address,
+        matched.city,
+        matched.state ? `${matched.state}${matched.zip ? ` - ${matched.zip}` : ""}` : matched.zip,
+        matched.country
+      ].filter(Boolean).join(", ")
+
+      return {
+        name: matched.name || [brand, division].filter(Boolean).join(" ") || "SAAMPARK GROUP",
+        brandName: brand,
+        divisionName: division,
+        subtitle: matched.subtitle,
+        logoUrl: matched.logo_url,
+        logo: matched.logo || "🏢",
+        address: fullAddress || matched.address,
+        city: matched.city,
+        state: matched.state,
+        zip: matched.zip,
+        country: matched.country,
+        phone: matched.phone,
+        email: matched.email,
+        website: matched.website,
+        gstin: matched.gstin,
+        cin: matched.cin,
+        pan: matched.pan,
+        currency: matched.currency || "INR",
+        currencySymbol: matched.currency_symbol || "₹",
+      }
+    }
+  } catch {}
+
+  return {
+    name: "SAAMPARK GROUP",
+    brandName: "SAAMPARK",
+    divisionName: "GROUP",
+    subtitle: "Enterprise Business Management",
+    currency: "INR",
+    currencySymbol: "₹",
+  }
+}
+
+/**
+ * Exports data to a premium styled Excel (.xls) file with company headers, branding, and borders.
  */
 export function exportToExcel({
   filename,
@@ -26,7 +131,9 @@ export function exportToExcel({
   subtitle,
   headers,
   rows,
+  company,
 }: ExcelExportOptions) {
+  const comp = resolveExportCompany(company)
   const dateStr = new Date().toLocaleDateString("en-GB", {
     day: "2-digit",
     month: "short",
@@ -101,12 +208,20 @@ export function exportToExcel({
       <table>
         <tr>
           <td colspan="${colSpan}" style="background-color: #1E3A8A; color: #FFFFFF; font-size: 16px; font-weight: bold; padding: 14px; text-align: center;">
-            SAAMPARK GROUP • ${title.toUpperCase()}
+            ${comp.name.toUpperCase()} • ${title.toUpperCase()}
+          </td>
+        </tr>
+        <tr>
+          <td colspan="${colSpan}" style="background-color: #F8FAFC; color: #334155; font-size: 11px; padding: 6px 12px; border-bottom: 1px solid #E2E8F0;">
+            <strong>Company:</strong> ${comp.name} 
+            ${comp.gstin ? `&nbsp;|&nbsp; <strong>GSTIN:</strong> ${comp.gstin}` : ""} 
+            ${comp.cin ? `&nbsp;|&nbsp; <strong>CIN:</strong> ${comp.cin}` : ""}
+            ${comp.address ? `&nbsp;|&nbsp; <strong>Address:</strong> ${comp.address}` : ""}
           </td>
         </tr>
         <tr>
           <td colspan="${colSpan}" style="background-color: #F1F5F9; color: #475569; font-size: 11px; padding: 8px 12px; border-bottom: 2px solid #CBD5E1;">
-            <strong>Subtitle:</strong> ${subtitle || "All Records"} &nbsp;|&nbsp; <strong>Total Records:</strong> ${rows.length} &nbsp;|&nbsp; <strong>Exported:</strong> ${dateStr}
+            <strong>Scope:</strong> ${subtitle || "All Records"} &nbsp;|&nbsp; <strong>Total Records:</strong> ${rows.length} &nbsp;|&nbsp; <strong>Exported:</strong> ${dateStr}
           </td>
         </tr>
         <tr>
@@ -121,8 +236,9 @@ export function exportToExcel({
   const blob = new Blob([excelTemplate], { type: "application/vnd.ms-excel;charset=utf-8" })
   const link = document.createElement("a")
   const url = URL.createObjectURL(blob)
+  const cleanCompName = comp.name.replace(/[^a-zA-Z0-9_-]/g, "_")
   link.href = url
-  link.download = `${filename.replace(/\s+/g, "_")}_${Date.now()}.xls`
+  link.download = `${cleanCompName}_${filename.replace(/\s+/g, "_")}_${Date.now()}.xls`
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)
@@ -130,7 +246,7 @@ export function exportToExcel({
 }
 
 /**
- * Generates an executive A4 PDF Print report with official SAAMPARK branding.
+ * Generates an executive A4 PDF Print report with dynamic company branding and headers.
  */
 export function printPDFReport({
   title,
@@ -139,7 +255,9 @@ export function printPDFReport({
   headers,
   rows,
   landscape = true,
+  company,
 }: PDFPrintOptions) {
+  const comp = resolveExportCompany(company)
   const dateStr = new Date().toLocaleDateString("en-GB", {
     day: "2-digit",
     month: "short",
@@ -178,6 +296,9 @@ export function printPDFReport({
     .join("")
 
   const metaHtml = [
+    `<div><strong>Company:</strong> ${comp.name}</div>`,
+    comp.gstin ? `<div><strong>GSTIN:</strong> ${comp.gstin}</div>` : "",
+    comp.cin ? `<div><strong>CIN:</strong> ${comp.cin}</div>` : "",
     subtitle ? `<div><strong>Scope:</strong> ${subtitle}</div>` : "",
     `<div><strong>Total Records:</strong> ${rows.length}</div>`,
     `<div><strong>Date:</strong> ${dateStr}</div>`,
@@ -186,11 +307,17 @@ export function printPDFReport({
     .filter(Boolean)
     .join("")
 
+  const logoHtml = comp.logoUrl
+    ? `<img src="${comp.logoUrl}" alt="${comp.name}" style="height: 38px; max-width: 140px; object-fit: contain; margin-right: 12px;" />`
+    : ""
+
+  const addressContact = [comp.address, comp.phone, comp.email].filter(Boolean).join(" • ")
+
   const htmlContent = `
     <!DOCTYPE html>
     <html>
     <head>
-      <title>SAAMPARK - ${title}</title>
+      <title>${comp.name} - ${title}</title>
       <style>
         @page { size: ${landscape ? "A4 landscape" : "A4 portrait"}; margin: 12mm; }
         body {
@@ -209,8 +336,13 @@ export function printPDFReport({
           padding-bottom: 12px;
           margin-bottom: 14px;
         }
-        .title { font-size: 20px; font-weight: 800; color: #0F172A; letter-spacing: -0.5px; }
-        .subtitle { font-size: 11px; color: #64748B; margin-top: 2px; }
+        .header-brand {
+          display: flex;
+          align-items: center;
+        }
+        .title { font-size: 18px; font-weight: 800; color: #0F172A; letter-spacing: -0.5px; }
+        .subtitle { font-size: 13px; font-weight: 700; color: #1E3A8A; margin-top: 2px; }
+        .comp-contact { font-size: 10px; color: #64748B; margin-top: 3px; max-width: 550px; }
         .meta { font-size: 11px; color: #334155; text-align: right; line-height: 1.5; }
         table { width: 100%; border-collapse: collapse; margin-top: 8px; }
         th {
@@ -241,9 +373,16 @@ export function printPDFReport({
     </head>
     <body>
       <div class="header">
-        <div>
-          <div class="title">SAAMPARK GROUP</div>
-          <div class="subtitle">${title}</div>
+        <div class="header-brand">
+          ${logoHtml}
+          <div>
+            <div class="title">
+              <span style="color: #2563EB;">${comp.brandName || "SAAMPARK"}</span> ${comp.divisionName || ""}
+            </div>
+            <div class="subtitle">${title}</div>
+            ${comp.subtitle ? `<div style="font-size: 10px; font-weight: 600; color: #475569;">${comp.subtitle}</div>` : ""}
+            ${addressContact ? `<div class="comp-contact">${addressContact}</div>` : ""}
+          </div>
         </div>
         <div class="meta">
           ${metaHtml}
@@ -262,8 +401,8 @@ export function printPDFReport({
       </table>
 
       <div class="footer">
-        <span>Generated by SAAMPARK CRM Platform</span>
-        <span>Confidential • Internal Use Only</span>
+        <span>${comp.name} • Official Enterprise CRM System</span>
+        <span>Confidential • Internal & Client Records</span>
       </div>
 
       <script>

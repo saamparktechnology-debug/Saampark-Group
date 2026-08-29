@@ -24,6 +24,7 @@ import {
   Check,
   Layers,
   Trash2,
+  Info,
 } from "lucide-react"
 import { Lead, LeadStatus } from "../types"
 import { LeadFiltersDropdown } from "./LeadFiltersDropdown"
@@ -1243,7 +1244,7 @@ export function LeadKanban({
               >
                 {columnLeads.map((l) => {
                   const isWonOrLost = (l.status || "").toLowerCase().trim() === "won" || (l.status || "").toLowerCase().trim() === "lost"
-                  const isLocked = !isWonOrLost && !!l.isLocked
+                  const isLocked = !!l.isLocked
 
                   return (
                     <div
@@ -1296,7 +1297,7 @@ export function LeadKanban({
                           </div>
 
                           <div className="flex items-center gap-1.5 shrink-0">
-                            {/* Tiny Creator Info Icon with Hover/Click Tooltip */}
+                            {/* Glass-effect Creator Info Circle Icon with Tooltip */}
                             {(l.createdByName || l.createdBy || l.branchName || l.transferredBy) && (
                               <div className="relative group/creator">
                                 <button
@@ -1305,19 +1306,23 @@ export function LeadKanban({
                                     e.stopPropagation()
                                     onSelectLeadDetail(l)
                                   }}
-                                  className="w-4 h-4 rounded-full bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/80 dark:hover:bg-indigo-900 text-indigo-600 dark:text-indigo-400 border border-indigo-200/80 dark:border-indigo-800 flex items-center justify-center text-[10px] cursor-pointer transition-colors shadow-2xs"
+                                  className="w-5 h-5 rounded-full backdrop-blur-md bg-white/80 dark:bg-zinc-800/80 hover:bg-indigo-50/90 dark:hover:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 border border-indigo-200/80 dark:border-indigo-500/30 flex items-center justify-center cursor-pointer transition-all duration-200 shadow-xs hover:shadow-md hover:shadow-indigo-500/20 hover:scale-110 active:scale-95"
                                   title="Creator & Branch Details"
                                 >
-                                  ℹ️
+                                  <Info size={11} className="stroke-[2.2]" />
                                 </button>
                                 
-                                {/* Hover Tooltip Card */}
-                                <div className="absolute right-0 top-full mt-1.5 hidden group-hover/creator:block z-50 w-52 p-2.5 bg-zinc-900/95 dark:bg-zinc-800 text-white rounded-xl shadow-xl border border-zinc-700 text-[10.5px] pointer-events-none space-y-1 backdrop-blur-sm">
+                                {/* Glass Tooltip Card */}
+                                <div className="absolute right-0 top-full mt-2 hidden group-hover/creator:block z-50 w-56 p-3 bg-zinc-900/95 dark:bg-zinc-900/95 text-white rounded-2xl shadow-2xl border border-white/10 text-[11px] pointer-events-none space-y-1.5 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150">
+                                  <div className="text-[9.5px] font-bold uppercase tracking-wider text-indigo-400 border-b border-white/10 pb-1 flex items-center justify-between">
+                                    <span>Lead Details</span>
+                                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
+                                  </div>
                                   {(l.createdByName || l.createdBy) && (
-                                    <div className="flex items-center gap-1 text-indigo-300 font-bold">
-                                      <UserIcon size={11} className="shrink-0" />
+                                    <div className="flex items-center gap-1.5 text-zinc-100 font-semibold">
+                                      <UserIcon size={12} className="text-indigo-400 shrink-0" />
                                       <span>
-                                        Added by: {l.createdByName || l.createdBy}
+                                        Added by: <strong className="text-indigo-300 font-bold">{l.createdByName || l.createdBy}</strong>
                                         {l.createdByRole && !String(l.createdByName || l.createdBy).includes(l.createdByRole)
                                           ? ` (${l.createdByRole})`
                                           : ""}
@@ -1325,13 +1330,13 @@ export function LeadKanban({
                                     </div>
                                   )}
                                   {(l.branchName || l.assignedBranchName || l.branchId) && (
-                                    <div className="flex items-center gap-1 text-zinc-300">
-                                      <MapPin size={11} className="text-amber-400 shrink-0" />
-                                      <span>Branch: {l.branchName || l.assignedBranchName || `Branch (${l.branchId})`}</span>
+                                    <div className="flex items-center gap-1.5 text-zinc-300">
+                                      <MapPin size={12} className="text-amber-400 shrink-0" />
+                                      <span>Branch: <strong className="text-white font-medium">{l.branchName || l.assignedBranchName || `Branch (${l.branchId})`}</strong></span>
                                     </div>
                                   )}
                                   {l.transferredBy && (
-                                    <div className="flex items-center gap-1 text-emerald-300 font-semibold pt-0.5 border-t border-zinc-700/60">
+                                    <div className="flex items-center gap-1.5 text-emerald-300 font-semibold pt-1 border-t border-white/10">
                                       <span>🚀 Sent by: {l.transferredBy}</span>
                                     </div>
                                   )}

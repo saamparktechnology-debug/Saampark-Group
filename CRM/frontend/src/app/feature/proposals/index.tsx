@@ -422,7 +422,7 @@ export default function ProposalsMain() {
                       <div className="text-[10px] text-zinc-400">{p.clientEmail}</div>
                     </td>
                     <td className="py-3 px-4 text-zinc-500 font-mono text-[11px]">{p.proposalDate}</td>
-                    <td className="py-3 px-4 text-zinc-500 font-mono text-[11px]">{p.validUntil}</td>
+                    <td className="py-3 px-4 text-red-600 dark:text-red-400 font-bold font-mono text-[11px]">{p.validUntil}</td>
                     <td className="py-3 px-4 font-bold text-zinc-900 dark:text-zinc-100">{p.amount}</td>
                     <td className="py-3 px-4">
                       <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${statusBadge}`}>

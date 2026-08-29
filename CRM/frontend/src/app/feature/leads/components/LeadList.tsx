@@ -24,6 +24,7 @@ import {
   Check,
   Clock,
   Layers,
+  Info,
 } from "lucide-react"
 import { Lead } from "../types"
 import { LeadFiltersDropdown } from "./LeadFiltersDropdown"
@@ -35,6 +36,7 @@ import { CallOutcomeModal } from "./CallOutcomeModal"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { getUsers } from "@/app/feature/users/services/userService"
+import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 
 interface LeadListProps {
   leads: Lead[]
@@ -493,7 +495,7 @@ export function LeadList({
     }
   }
 
-  // Premium Styled Excel Export
+  // Export Leads to Excel
   const handleExportExcel = () => {
     let filterTitle = activeFilter || "All Leads"
     if (selectedMember === "unassigned") {
@@ -504,115 +506,56 @@ export function LeadList({
         filterTitle += ` (${selectedMemberStage})`
       }
     }
-    const timestamp = new Date().toLocaleDateString("en-GB", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
+
+    const rows = filteredLeads.map((l, index) => {
+      const assignedPerson = (l.assignedTo && l.assignedTo !== "None" && l.assignedTo !== "Unassigned")
+        ? l.assignedTo
+        : ((l.caller && l.caller !== "None" && l.caller !== "Unassigned")
+          ? l.caller
+          : ((l.owner && l.owner !== "None" && l.owner !== "Unassigned")
+            ? l.owner
+            : "Unassigned"))
+
+      const phoneVal = l.secondaryPhone ? `${l.phone} (Mgr: ${l.secondaryPhone})` : l.phone
+      const contactVal = l.secondaryContact ? `${l.primaryContact} (Mgr: ${l.secondaryContact})` : l.primaryContact
+      const reminderVal = l.reminderDate && l.reminderDate !== "None" && formatLeadReminderDate(l.reminderDate) !== "No Reminder"
+        ? `${formatLeadReminderDate(l.reminderDate)}${l.reminderTime && l.reminderTime !== "None" ? ` (${l.reminderTime})` : ""}`
+        : "No Reminder"
+
+      return [
+        index + 1,
+        l.name,
+        contactVal || "-",
+        phoneVal || "-",
+        l.service || "-",
+        l.source || "-",
+        l.city?.trim() || l.address?.trim() || l.state?.trim() || "-",
+        assignedPerson,
+        reminderVal,
+        l.status,
+        l.createdAt || "-"
+      ]
     })
 
-    const rowsHtml = filteredLeads
-      .map((l, index) => {
-        const isEven = index % 2 === 0
-        const rowBg = isEven ? "#FFFFFF" : "#F8FAFC"
-        const statusColors: Record<string, { bg: string; color: string }> = {
-          Won: { bg: "#DCFCE7", color: "#166534" },
-          Lost: { bg: "#FEE2E2", color: "#991B1B" },
-          Contacted: { bg: "#DBEAFE", color: "#1E40AF" },
-          New: { bg: "#F1F5F9", color: "#334155" },
-          Negotiation: { bg: "#F3E8FF", color: "#6B21A8" },
-          "Store Visit": { bg: "#E0E7FF", color: "#3730A3" },
-          "Our Office Visit": { bg: "#FFEDD5", color: "#9A3412" },
-          "They come to our office": { bg: "#FFEDD5", color: "#9A3412" },
-        }
-        const sColor = statusColors[l.status] || { bg: "#F1F5F9", color: "#334155" }
-
-        const assignedPerson = (l.assignedTo && l.assignedTo !== "None" && l.assignedTo !== "Unassigned")
-          ? l.assignedTo
-          : ((l.caller && l.caller !== "None" && l.caller !== "Unassigned")
-            ? l.caller
-            : ((l.owner && l.owner !== "None" && l.owner !== "Unassigned")
-              ? l.owner
-              : "Unassigned"))
-
-        const phoneVal = l.secondaryPhone ? `${l.phone} (Mgr: ${l.secondaryPhone})` : l.phone
-        const contactVal = l.secondaryContact ? `${l.primaryContact} (Mgr: ${l.secondaryContact})` : l.primaryContact
-        const reminderVal = l.reminderDate && l.reminderDate !== "None" && formatLeadReminderDate(l.reminderDate) !== "No Reminder"
-          ? `${formatLeadReminderDate(l.reminderDate)}${l.reminderTime && l.reminderTime !== "None" ? ` (${l.reminderTime})` : ""}`
-          : "No Reminder"
-
-        return `
-          <tr style="background-color: ${rowBg};">
-            <td style="padding: 8px 12px; border: 1px solid #E2E8F0; text-align: center;">${index + 1}</td>
-            <td style="padding: 8px 12px; border: 1px solid #E2E8F0; font-weight: bold; color: #0F172A;">${l.name}</td>
-            <td style="padding: 8px 12px; border: 1px solid #E2E8F0; color: #334155;">${contactVal}</td>
-            <td style="padding: 8px 12px; border: 1px solid #E2E8F0; mso-number-format:'\\@'; color: #0284C7;">${phoneVal}</td>
-            <td style="padding: 8px 12px; border: 1px solid #E2E8F0; color: #475569;">${l.service || "-"}</td>
-            <td style="padding: 8px 12px; border: 1px solid #E2E8F0; color: #475569;">${l.source || "-"}</td>
-            <td style="padding: 8px 12px; border: 1px solid #E2E8F0; color: #475569;">${l.city?.trim() || l.address?.trim() || l.state?.trim() || "-"}</td>
-            <td style="padding: 8px 12px; border: 1px solid #E2E8F0; color: #334155;">${assignedPerson}</td>
-            <td style="padding: 8px 12px; border: 1px solid #E2E8F0; color: #D97706;">${reminderVal}</td>
-            <td style="padding: 8px 12px; border: 1px solid #E2E8F0; text-align: center;">
-              <span style="background-color: ${sColor.bg}; color: ${sColor.color}; padding: 4px 10px; border-radius: 4px; font-weight: bold; font-size: 11px;">
-                ${l.status}
-              </span>
-            </td>
-            <td style="padding: 8px 12px; border: 1px solid #E2E8F0; text-align: center; color: #64748B;">${l.createdAt || "-"}</td>
-          </tr>
-        `
-      })
-      .join("")
-
-    const excelTemplate = `
-      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-      <head>
-        <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Leads</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
-        <meta http-equiv="content-type" content="text/plain; charset=UTF-8"/>
-        <style>
-          body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; }
-          table { border-collapse: collapse; width: 100%; }
-          th { background-color: #1E3A8A; color: #FFFFFF; font-weight: bold; padding: 10px 12px; border: 1px solid #1E40AF; text-align: left; }
-        </style>
-      </head>
-      <body>
-        <table>
-          <tr>
-            <td colspan="11" style="background-color: #1E3A8A; color: #FFFFFF; font-size: 16px; font-weight: bold; padding: 14px; text-align: center;">
-              SAAMPARK GROUP • LEADS REPORT
-            </td>
-          </tr>
-          <tr>
-            <td colspan="11" style="background-color: #F1F5F9; color: #475569; font-size: 11px; padding: 8px 12px; border-bottom: 2px solid #CBD5E1;">
-              <strong>Filter:</strong> ${filterTitle} &nbsp;|&nbsp; <strong>Total Leads:</strong> ${filteredLeads.length} &nbsp;|&nbsp; <strong>Generated Date:</strong> ${timestamp}
-            </td>
-          </tr>
-          <tr>
-            <th style="text-align: center; width: 50px;">#</th>
-            <th>Business / Lead Name</th>
-            <th>Primary Contact</th>
-            <th>Phone</th>
-            <th>Service</th>
-            <th>Source</th>
-            <th>City</th>
-            <th>Assigned To</th>
-            <th>Reminder</th>
-            <th style="text-align: center;">Status</th>
-            <th style="text-align: center;">Created Date</th>
-          </tr>
-          ${rowsHtml}
-        </table>
-      </body>
-      </html>
-    `
-
-    const blob = new Blob([excelTemplate], { type: "application/vnd.ms-excel;charset=utf-8" })
-    const link = document.createElement("a")
-    const url = URL.createObjectURL(blob)
-    link.href = url
-    link.download = `SAAMPARK_Leads_${filterTitle.replace(/\s+/g, "_")}_${Date.now()}.xls`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
+    exportToExcel({
+      filename: `Leads_${filterTitle}`,
+      title: "Leads & Prospects Registry",
+      subtitle: `Filter: ${filterTitle}`,
+      headers: [
+        "#",
+        "Business / Lead Name",
+        "Primary Contact",
+        "Phone",
+        "Service",
+        "Source",
+        "City",
+        "Assigned To",
+        "Reminder",
+        "Status",
+        "Created Date"
+      ],
+      rows
+    })
   }
 
   // PDF Print Generator
@@ -626,127 +569,56 @@ export function LeadList({
         filterTitle += ` (${selectedMemberStage})`
       }
     }
-    const timestamp = new Date().toLocaleDateString("en-GB", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
+
+    const rows = filteredLeads.map((l, index) => {
+      const assignedPerson = (l.assignedTo && l.assignedTo !== "None" && l.assignedTo !== "Unassigned")
+        ? l.assignedTo
+        : ((l.caller && l.caller !== "None" && l.caller !== "Unassigned")
+          ? l.caller
+          : ((l.owner && l.owner !== "None" && l.owner !== "Unassigned")
+            ? l.owner
+            : "Unassigned"))
+
+      const phoneVal = l.secondaryPhone ? `${l.phone} (Mgr: ${l.secondaryPhone})` : l.phone
+      const contactVal = l.secondaryContact ? `${l.primaryContact} (Mgr: ${l.secondaryContact})` : l.primaryContact
+      const reminderVal = l.reminderDate && l.reminderDate !== "None" && formatLeadReminderDate(l.reminderDate) !== "No Reminder"
+        ? `${formatLeadReminderDate(l.reminderDate)}${l.reminderTime && l.reminderTime !== "None" ? ` (${l.reminderTime})` : ""}`
+        : "-"
+
+      return [
+        index + 1,
+        l.name,
+        contactVal || "-",
+        phoneVal || "-",
+        l.service || "-",
+        l.source || "-",
+        l.city?.trim() || l.address?.trim() || l.state?.trim() || "-",
+        assignedPerson,
+        reminderVal,
+        l.status,
+        l.createdAt || "-"
+      ]
     })
 
-    const printWindow = window.open("", "_blank", "width=1100,height=850")
-    if (!printWindow) {
-      window.print()
-      return
-    }
-
-    const rowsHtml = filteredLeads
-      .map((l, index) => {
-        const assignedPerson = (l.assignedTo && l.assignedTo !== "None" && l.assignedTo !== "Unassigned")
-          ? l.assignedTo
-          : ((l.caller && l.caller !== "None" && l.caller !== "Unassigned")
-            ? l.caller
-            : ((l.owner && l.owner !== "None" && l.owner !== "Unassigned")
-              ? l.owner
-              : "Unassigned"))
-
-        const phoneVal = l.secondaryPhone ? `${l.phone}<br/><span style="color:#7C3AED;font-size:10px;">Mgr: ${l.secondaryPhone}</span>` : l.phone
-        const formattedRem = formatLeadReminderDate(l.reminderDate)
-        const reminderVal = formattedRem !== "No Reminder" ? `${formattedRem}<br/><span style="color:#D97706;font-size:10px;">${l.reminderTime || ""}</span>` : "-"
-
-        return `
-          <tr>
-            <td style="text-align: center; color: #64748B;">${index + 1}</td>
-            <td style="font-weight: 600; color: #0F172A;">${l.name}</td>
-            <td>${l.primaryContact || "-"}</td>
-            <td>${phoneVal}</td>
-            <td>${l.service || "-"}</td>
-            <td><span class="badge badge-source">${l.source || "-"}</span></td>
-            <td>${l.city?.trim() || l.address?.trim() || l.state?.trim() || "-"}</td>
-            <td>${assignedPerson}</td>
-            <td>${reminderVal}</td>
-            <td style="text-align: center;">
-              <span class="badge badge-status">${l.status}</span>
-            </td>
-            <td style="text-align: center; color: #64748B;">${l.createdAt || "-"}</td>
-          </tr>
-        `
-      })
-      .join("")
-
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>SAAMPARK Leads Report - ${filterTitle}</title>
-        <style>
-          @page { size: A4 landscape; margin: 12mm 10mm; }
-          body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; color: #1E293B; margin: 0; padding: 0; }
-          .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1E3A8A; padding-bottom: 12px; margin-bottom: 14px; }
-          .logo-area h1 { margin: 0; font-size: 18px; color: #1E3A8A; font-weight: 800; }
-          .logo-area p { margin: 2px 0 0 0; font-size: 10px; color: #64748B; font-weight: 500; }
-          .meta-info { text-align: right; font-size: 10px; color: #475569; }
-          .meta-info strong { color: #0F172A; }
-          table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-          th { background-color: #F8FAFC; color: #334155; font-weight: 700; text-transform: uppercase; font-size: 9.5px; letter-spacing: 0.5px; border: 1px solid #E2E8F0; padding: 7px 8px; text-align: left; }
-          td { border: 1px solid #E2E8F0; padding: 6px 8px; font-size: 10px; }
-          tr:nth-child(even) { background-color: #F8FAFC; }
-          .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 700; text-align: center; }
-          .badge-status { background-color: #E0E7FF; color: #3730A3; }
-          .badge-source { background-color: #F1F5F9; color: #475569; }
-          .footer { display: flex; justify-content: space-between; font-size: 9px; color: #94A3B8; border-top: 1px solid #E2E8F0; padding-top: 8px; }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <div class="logo-area">
-            <h1>SAAMPARK GROUP</h1>
-            <p>Leads & Opportunities Comprehensive Registry</p>
-          </div>
-          <div class="meta-info">
-            <div><strong>Active Filter:</strong> ${filterTitle}</div>
-            <div><strong>Total Leads:</strong> ${filteredLeads.length} &nbsp;|&nbsp; <strong>Printed:</strong> ${timestamp}</div>
-          </div>
-        </div>
-
-        <table>
-          <thead>
-            <tr>
-              <th style="text-align: center; width: 35px;">#</th>
-              <th>Business / Lead Name</th>
-              <th>Contact Person</th>
-              <th>Phone</th>
-              <th>Service</th>
-              <th>Source</th>
-              <th>City</th>
-              <th>Assigned To</th>
-              <th>Reminder</th>
-              <th style="text-align: center;">Status</th>
-              <th style="text-align: center;">Created Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rowsHtml}
-          </tbody>
-        </table>
-
-        <div class="footer">
-          <span>Saampark CRM System • Confidential & Proprietary</span>
-          <span>Page 1 of 1</span>
-        </div>
-
-        <script>
-          window.onload = function() {
-            setTimeout(function() {
-              window.print();
-            }, 300);
-          }
-        </script>
-      </body>
-      </html>
-    `
-
-    printWindow.document.open()
-    printWindow.document.write(htmlContent)
-    printWindow.document.close()
+    printPDFReport({
+      title: "Leads & Opportunities Registry",
+      subtitle: `Filter: ${filterTitle}`,
+      headers: [
+        "#",
+        "Lead Name",
+        "Contact",
+        "Phone",
+        "Service",
+        "Source",
+        "City",
+        "Assigned To",
+        "Reminder",
+        "Status",
+        "Date"
+      ],
+      rows,
+      landscape: true
+    })
   }
 
   return (
@@ -1346,7 +1218,7 @@ export function LeadList({
             <tbody className="divide-y divide-zinc-200/80 dark:divide-zinc-800">
               {paginatedLeads.map((l) => {
                 const isWonOrLost = (l.status || "").toLowerCase().trim() === "won" || (l.status || "").toLowerCase().trim() === "lost"
-                const isLocked = !isWonOrLost && l.isLocked === true
+                const isLocked = l.isLocked === true
 
                 return (
                   <tr
@@ -1356,38 +1228,69 @@ export function LeadList({
                     {/* Name (Business with Building Icon) */}
                     <td className="py-3.5 px-4 font-medium text-zinc-900 dark:text-zinc-100">
                       <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-md bg-blue-50 dark:bg-blue-950/70 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900 flex items-center justify-center shrink-0">
-                            <Building2 size={13} />
-                          </div>
-                          <span
-                            className={`font-semibold ${
-                              isLocked
-                                ? "text-rose-600 dark:text-rose-400 line-through"
-                                : "text-zinc-900 dark:text-zinc-100"
-                            }`}
-                          >
-                            {l.name}
-                          </span>
-                        </div>
-                        {(l.createdByName || l.createdBy) && (
-                          <div className="inline-flex items-center gap-1 px-1.5 py-0.5 w-fit rounded bg-indigo-500/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 text-[9.5px] font-semibold ml-8 mt-0.5">
-                            <UserIcon size={9} />
-                            <span className="inline-flex items-center gap-1">
-                              Added by: {l.createdByName || l.createdBy}
-                              {l.createdByRole && !String(l.createdByName || l.createdBy).includes(l.createdByRole)
-                                ? ` (${l.createdByRole})`
-                                : ""}
-                              {(l.branchName || l.branchId) && (
-                                <>
-                                  <span className="opacity-50">•</span>
-                                  <MapPin size={10} className="text-amber-500 inline" />
-                                  <span>{l.branchName || `Branch (${l.branchId})`}</span>
-                                </>
-                              )}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-md bg-blue-50 dark:bg-blue-950/70 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900 flex items-center justify-center shrink-0">
+                              <Building2 size={13} />
+                            </div>
+                            <span
+                              className={`font-semibold ${
+                                isLocked
+                                  ? "text-rose-600 dark:text-rose-400 line-through"
+                                  : "text-zinc-900 dark:text-zinc-100"
+                              }`}
+                            >
+                              {l.name}
                             </span>
                           </div>
-                        )}
+
+                          {/* Glass-effect Creator Info Circle Icon with Tooltip */}
+                          {(l.createdByName || l.createdBy || l.branchName || l.branchId || (l as any).transferredBy) && (
+                            <div className="relative group/leadcreator inline-flex items-center">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onSelectLeadDetail(l)
+                                }}
+                                className="w-5 h-5 rounded-full backdrop-blur-md bg-white/80 dark:bg-zinc-800/80 hover:bg-indigo-50/90 dark:hover:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 border border-indigo-200/80 dark:border-indigo-500/30 flex items-center justify-center cursor-pointer transition-all duration-200 shadow-xs hover:shadow-md hover:shadow-indigo-500/20 hover:scale-110 active:scale-95"
+                                title="Added By & Branch Details"
+                              >
+                                <Info size={11} className="stroke-[2.2]" />
+                              </button>
+
+                              {/* Glass Tooltip Card */}
+                              <div className="absolute left-0 top-full mt-2 hidden group-hover/leadcreator:block z-50 w-56 p-3 bg-zinc-900/95 dark:bg-zinc-900/95 text-white rounded-2xl shadow-2xl border border-white/10 text-[11px] pointer-events-none space-y-1.5 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150">
+                                <div className="text-[9.5px] font-bold uppercase tracking-wider text-indigo-400 border-b border-white/10 pb-1 flex items-center justify-between">
+                                  <span>Lead Details</span>
+                                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
+                                </div>
+                                {(l.createdByName || l.createdBy) && (
+                                  <div className="flex items-center gap-1.5 text-zinc-100 font-semibold">
+                                    <UserIcon size={12} className="text-indigo-400 shrink-0" />
+                                    <span>
+                                      Added by: <strong className="text-indigo-300 font-bold">{l.createdByName || l.createdBy}</strong>
+                                      {l.createdByRole && !String(l.createdByName || l.createdBy).includes(l.createdByRole)
+                                        ? ` (${l.createdByRole})`
+                                        : ""}
+                                    </span>
+                                  </div>
+                                )}
+                                {(l.branchName || l.branchId) && (
+                                  <div className="flex items-center gap-1.5 text-zinc-300">
+                                    <MapPin size={12} className="text-amber-400 shrink-0" />
+                                    <span>Branch: <strong className="text-white font-medium">{l.branchName || `Branch (${l.branchId})`}</strong></span>
+                                  </div>
+                                )}
+                                {(l as any).transferredBy && (
+                                  <div className="flex items-center gap-1.5 text-emerald-300 font-semibold pt-1 border-t border-white/10">
+                                    <span>🚀 Sent by: {(l as any).transferredBy}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
 

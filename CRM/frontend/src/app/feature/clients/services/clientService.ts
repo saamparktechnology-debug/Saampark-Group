@@ -191,7 +191,7 @@ export async function deleteStoredClientLabel(id: string, companyId?: string): P
   return updated
 }
 
-/** Format display email to hide background dummy identifiers (e.g. lead_123@...) */
+/** Format display email to hide background dummy/placeholder identifiers (e.g. lead_123@..., client@saampark-client.com) */
 export function formatDisplayEmail(email?: string): string {
   if (!email) return ""
   const clean = email.trim()
@@ -200,8 +200,13 @@ export function formatDisplayEmail(email?: string): string {
     lower.startsWith("lead_") ||
     lower.includes("@crm.saampark") ||
     lower.includes("@saampark-client.com") ||
-    (lower.startsWith("lead_") && lower.endsWith("@saampark.in")) ||
-    lower.includes("lead_lead_")
+    (lower.startsWith("lead_") && (lower.endsWith("@saampark.in") || lower.endsWith("@saampark.com"))) ||
+    lower.includes("lead_lead_") ||
+    lower.includes("@crm.local") ||
+    lower.includes("@saampark.internal") ||
+    lower.includes("dummy") ||
+    lower.includes("placeholder") ||
+    lower.endsWith("@example.com")
   ) {
     return ""
   }

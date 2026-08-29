@@ -14,6 +14,7 @@ import { useUIStore } from "@/store/useUIStore"
 import { UserService } from "@/services/apiServices"
 import { taskService } from "@/app/feature/tasks/services/taskService"
 import { Task } from "@/app/feature/tasks/types"
+import { getUserAvatar } from "@/app/feature/users/services/userService"
 
 export type TeamMember = {
   id: string
@@ -58,7 +59,7 @@ export default function TeamMembersPage() {
           return {
             id: String(u.id || u._id || idx),
             name: mName,
-            avatarUrl: (u as any).avatarUrl || u.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${mName}`,
+            avatarUrl: (u as any).avatar_url || (u as any).avatarUrl || u.avatar || getUserAvatar(mName, undefined, mName),
             jobTitle: u.role_name || u.role || "Technical Lead",
             email: u.email || "-",
             phone: u.phone || "+91 98765 43210",
@@ -288,7 +289,7 @@ export default function TeamMembersPage() {
                           <div>
                             <div className="font-bold text-zinc-900 dark:text-zinc-100">{t.title}</div>
                             <div className="text-[11px] text-zinc-400 mt-0.5">
-                              Project: <span className="font-medium text-zinc-600 dark:text-zinc-300">{t.relatedTo}</span> • Deadline: <span className="font-mono">{t.deadline}</span>
+                              Project: <span className="font-medium text-zinc-600 dark:text-zinc-300">{t.relatedTo}</span> • Deadline: <span className="font-mono font-bold text-red-600 dark:text-red-400">{t.deadline}</span>
                             </div>
                           </div>
                           <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">

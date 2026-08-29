@@ -127,17 +127,20 @@ export function UserOverviewModal({
           <div className="flex items-center gap-4">
             {/* Avatar */}
             <div className="relative">
-              {user.avatarUrl ? (
-                <img
-                  src={user.avatarUrl}
-                  alt={user.name}
-                  className="w-14 h-14 rounded-2xl object-cover border-2 border-primary/20 shadow-xs"
-                />
-              ) : (
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-bold flex items-center justify-center text-lg shadow-xs">
-                  {user.name.substring(0, 2).toUpperCase()}
-                </div>
-              )}
+              {(() => {
+                const avatarSrc = user.avatarUrl || (user as any).avatar
+                return avatarSrc && !avatarSrc.includes("dicebear") ? (
+                  <img
+                    src={avatarSrc}
+                    alt={user.name}
+                    className="w-14 h-14 rounded-2xl object-cover border-2 border-primary/20 shadow-xs"
+                  />
+                ) : (
+                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-bold flex items-center justify-center text-lg shadow-xs">
+                    {user.name.substring(0, 2).toUpperCase()}
+                  </div>
+                )
+              })()}
               <span className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-surface ${
                 user.status === "Active" ? "bg-emerald-500" : "bg-zinc-400"
               }`} />

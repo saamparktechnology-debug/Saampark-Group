@@ -15,6 +15,7 @@ import { addProject } from "@/app/feature/projects/services/projectService"
 import { addInvoice } from "@/app/feature/sales/invoices/services/invoiceService"
 import { addOrder } from "@/app/feature/sales/orders/services/orderService"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
+import { executeWithFeedback, useActionFeedbackStore } from "@/store/useActionFeedbackStore"
 
 export default function EstimatesPage() {
   const { user } = useAuthStore()
@@ -142,43 +143,67 @@ export default function EstimatesPage() {
       return
     }
 
-    const created = await addEstimate({
-      client,
-      clientEmail: clientEmail || `${client.toLowerCase().replace(/\s+/g, "")}@example.com`,
-      title,
-      date: new Date().toLocaleDateString("en-GB"),
-      validUntil: validUntil || new Date(Date.now() + 30 * 86400000).toLocaleDateString("en-GB"),
-      services,
-      subtotal,
-      gstRate: 18,
-      gstAmount,
-      totalAmount: grandTotal,
-      formattedTotal: formattedGrandTotal,
-      status: "Sent",
-      notes: notes || "Terms: 50% advance on approval, balance on final delivery.",
-      createdAdmin: user?.name || "Admin",
-    })
+    await executeWithFeedback(async () => {
+      const created = await addEstimate({
+        client,
+        clientEmail: clientEmail || `${client.toLowerCase().replace(/\s+/g, "")}@example.com`,
+        title,
+        date: new Date().toLocaleDateString("en-GB"),
+        validUntil: validUntil || new Date(Date.now() + 30 * 86400000).toLocaleDateString("en-GB"),
+        services,
+        subtotal,
+        gstRate: 18,
+        gstAmount,
+        totalAmount: grandTotal,
+        formattedTotal: formattedGrandTotal,
+        status: "Sent",
+        notes: notes || "Terms: 50% advance on approval, balance on final delivery.",
+        createdAdmin: user?.name || "Admin",
+      })
 
-    showToast(`✅ Estimate ${created.estimateNumber} sent to ${client}!`)
-    setIsCreateModalOpen(false)
-    setTitle("")
-    setNotes("")
-    loadData()
+      setIsCreateModalOpen(false)
+      setTitle("")
+      setNotes("")
+      loadData()
+    }, {
+      actionType: "create",
+      loadingTitle: "Generating Quotation...",
+      loadingMsg: `Calculating items and dispatching quotation to ${client}...`,
+      successTitle: "Estimate Dispatched!",
+      successMsg: `Quotation sent successfully to ${client}.`,
+      errorTitle: "Estimate Creation Failed",
+    })
   }
 
   // Client actions
   const handleClientAccept = async (est: EstimateItem) => {
-    await updateEstimateStatus(est.id, "Accepted", { acceptedAt: new Date().toLocaleDateString("en-GB") })
-    showToast(`🎉 You have Accepted Estimate ${est.estimateNumber}!`)
-    setIsDetailModalOpen(false)
-    loadData()
+    await executeWithFeedback(async () => {
+      await updateEstimateStatus(est.id, "Accepted", { acceptedAt: new Date().toLocaleDateString("en-GB") })
+      setIsDetailModalOpen(false)
+      loadData()
+    }, {
+      actionType: "process",
+      loadingTitle: "Accepting Estimate...",
+      loadingMsg: `Approving quotation ${est.estimateNumber}...`,
+      successTitle: "Quotation Accepted!",
+      successMsg: `You have successfully accepted estimate ${est.estimateNumber}.`,
+      errorTitle: "Approval Failed",
+    })
   }
 
   const handleClientDecline = async (est: EstimateItem) => {
-    await updateEstimateStatus(est.id, "Declined")
-    showToast(`Estimate ${est.estimateNumber} was declined.`)
-    setIsDetailModalOpen(false)
-    loadData()
+    await executeWithFeedback(async () => {
+      await updateEstimateStatus(est.id, "Declined")
+      setIsDetailModalOpen(false)
+      loadData()
+    }, {
+      actionType: "update",
+      loadingTitle: "Updating Status...",
+      loadingMsg: "Marking quotation as declined...",
+      successTitle: "Quotation Declined",
+      successMsg: `Estimate ${est.estimateNumber} was declined.`,
+      errorTitle: "Update Failed",
+    })
   }
 
   const handleClientRequestRevision = async () => {
@@ -193,8 +218,10 @@ export default function EstimatesPage() {
 
   // Convert to Project & Invoice
   const handleConvertToProject = async (est: EstimateItem) => {
-    try {
-      const pTitle = est.title || `Project from ${est.estimateNumber}`
+    const pTitle = est.title || `Project from ${est.estimateNumber}`
+    const invoiceId = `INV #${Math.floor(100 + Math.random() * 900)}`
+
+    await executeWithFeedback(async () => {
       const p = await addProject({
         title: pTitle,
         client: est.client,
@@ -213,7 +240,6 @@ export default function EstimatesPage() {
         totalAmount: est.totalAmount,
       })
 
-      const invoiceId = `INV #${Math.floor(100 + Math.random() * 900)}`
       await addInvoice({
         id: invoiceId,
         client: est.client,
@@ -245,19 +271,41 @@ export default function EstimatesPage() {
         invoiceId,
       })
 
-      showToast(`🚀 Converted into active Project, Tax Invoice (${invoiceId}), and Order!`)
       loadData()
-    } catch (err: any) {
-      alert(`Error converting: ${err.message}`)
-    }
+    }, {
+      actionType: "process",
+      loadingTitle: "Converting Quotation...",
+      loadingMsg: `Initializing active Project, Sales Order, and Tax Invoice ${invoiceId}...`,
+      successTitle: "Converted Successfully!",
+      successMsg: `Estimate ${est.estimateNumber} converted into Project, Invoice ${invoiceId}, and Sales Order.`,
+      errorTitle: "Conversion Failed",
+    })
   }
 
   const handleDelete = async (id: string) => {
-    if (confirm("Delete this estimate?")) {
+    if (!canDeleteEstimate) {
+      useActionFeedbackStore.getState().showError({
+        title: "Permission Denied",
+        message: "You do not have permission to delete estimates.",
+        actionType: "delete",
+      })
+      return
+    }
+
+    const est = estimates.find(e => e.id === id)
+    const estNum = est?.estimateNumber || "Estimate"
+
+    await executeWithFeedback(async () => {
       await deleteEstimate(id)
       setEstimates(prev => prev.filter(e => e.id !== id))
-      showToast("Estimate deleted.")
-    }
+    }, {
+      actionType: "delete",
+      loadingTitle: "Deleting Estimate...",
+      loadingMsg: `Removing ${estNum}...`,
+      successTitle: "Estimate Deleted",
+      successMsg: `${estNum} was deleted successfully.`,
+      errorTitle: "Delete Failed",
+    })
   }
 
   // Summary Metrics
@@ -497,7 +545,7 @@ export default function EstimatesPage() {
                       <td className="py-3 px-4 text-zinc-500 font-mono text-[11px]">
                         {est.date}
                       </td>
-                      <td className="py-3 px-4 text-zinc-500 font-mono text-[11px]">
+                      <td className="py-3 px-4 text-red-600 dark:text-red-400 font-bold font-mono text-[11px]">
                         {est.validUntil}
                       </td>
                       <td className="py-3 px-4 font-bold text-zinc-900 dark:text-zinc-100">

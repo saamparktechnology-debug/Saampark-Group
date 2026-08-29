@@ -7,6 +7,7 @@ import { ClientItem } from "../types"
 import { getUsers } from "@/app/feature/users/services/userService"
 import { useAuthStore } from "@/store/useAuthStore"
 import { sendClientWelcomeEmailNotification } from "@/services/emailNotificationService"
+import { formatDisplayEmail } from "../services/clientService"
 
 
 interface AddClientModalProps {
@@ -65,7 +66,7 @@ export function AddClientModal({
       if (initialData) {
         setCompanyName(initialData.name || "")
         setPhone(initialData.phone || "")
-        setEmail(initialData.email || "")
+        setEmail(formatDisplayEmail(initialData.email) || "")
         setClientGroup(initialData.group || "VIP")
         setLabel(initialData.label || "Corporate")
         setOwner(initialData.owner || user?.name || "")

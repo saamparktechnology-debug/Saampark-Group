@@ -29,6 +29,30 @@ export interface Branch {
   createdAt?: string
 }
 
+export interface SubBranch {
+  id: string
+  parentBranchId: string
+  companyId: string
+  name: string
+  code?: string
+  partnerName?: string
+  partnerPhone?: string
+  partnerEmail?: string
+  city?: string
+  address?: string
+  revenueSharePct: number // e.g. 30 -> 30% Partner share, 70% Company share
+  partnerType?: "Franchise Partner" | "Agency Partner" | "Satellite Office" | "Regional Associate"
+  bankDetails?: {
+    accountHolder?: string
+    bankName?: string
+    accountNumber?: string
+    ifscCode?: string
+    upiId?: string
+  }
+  status: 'Active' | 'Inactive'
+  createdAt?: string
+}
+
 export interface Company {
   id: string
   name: string
@@ -68,6 +92,14 @@ export interface Company {
   signatory_name?: string
   signatory_designation?: string
   signature_image_url?: string
+  // SMTP / Email Dispatch Credentials (Per Company)
+  smtp_host?: string
+  smtp_port?: string | number
+  smtp_user?: string
+  smtp_pass?: string
+  smtp_from_name?: string
+  smtp_from_email?: string
+  smtp_secure?: boolean
 }
 
 export interface User {
@@ -81,6 +113,7 @@ export interface User {
   branchIds?: string[]    // Assigned multiple branches
   branchName?: string   // Human-readable branch name
   avatar: string
+  avatarUrl?: string
   phone?: string
   department?: string
   allowedModules?: string[]
@@ -88,6 +121,30 @@ export interface User {
   kycStatus?: "Pending" | "Processing" | "Verified" | "Rejected"
   kycData?: any
   status?: "Active" | "Inactive" | "Pending"
+}
+
+export function getCompanyLogoUrl(company?: Partial<Company> | null): string | null {
+  if (!company) return null
+  const candidates = [company.logo_url, (company as any)?.logoUrl, company.logo]
+  for (const c of candidates) {
+    if (typeof c === "string") {
+      const trimmed = c.trim()
+      if (
+        trimmed.startsWith("http://") || 
+        trimmed.startsWith("https://") || 
+        trimmed.startsWith("data:image/") || 
+        trimmed.startsWith("/") ||
+        trimmed.includes(".png") ||
+        trimmed.includes(".jpg") ||
+        trimmed.includes(".jpeg") ||
+        trimmed.includes(".svg") ||
+        trimmed.includes(".webp")
+      ) {
+        return trimmed
+      }
+    }
+  }
+  return null
 }
 
 export const DEFAULT_COMPANIES: Company[] = [
@@ -166,8 +223,10 @@ interface AuthState {
   user: User | null
   activeCompanyId: string | null
   activeBranchId: string | null
+  activeSubBranchId: string | null
   companies: Company[]
   branches: Branch[]
+  subBranches: SubBranch[]
   
   // Actions
   loginAs: (role: Role | string, customUser?: Partial<User>) => void
@@ -175,14 +234,19 @@ interface AuthState {
   logout: () => void
   switchCompany: (companyId: string) => void
   switchBranch: (branchId: string | null) => void
+  switchSubBranch: (subBranchId: string | null) => void
   fetchCompanies: () => Promise<Company[]>
   fetchBranches: () => Promise<Branch[]>
+  fetchSubBranches: () => Promise<SubBranch[]>
   addCompany: (company: Partial<Company>) => Promise<Company | null>
   updateCompany: (companyId: string, updates: Partial<Company>) => Promise<Company | null>
   deleteCompany: (companyId: string) => Promise<boolean>
   addBranch: (branch: Partial<Branch>) => Promise<Branch | null>
   updateBranch: (branchId: string, updates: Partial<Branch>) => Promise<void>
   deleteBranch: (branchId: string) => Promise<boolean>
+  addSubBranch: (subBranch: Partial<SubBranch>) => Promise<SubBranch | null>
+  updateSubBranch: (subBranchId: string, updates: Partial<SubBranch>) => Promise<void>
+  deleteSubBranch: (subBranchId: string) => Promise<boolean>
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -193,8 +257,10 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       activeCompanyId: null,
       activeBranchId: null,
+      activeSubBranchId: null,
       companies: DEFAULT_COMPANIES,
       branches: DEFAULT_BRANCHES,
+      subBranches: [],
 
       fetchCompanies: async () => {
         try {
@@ -211,9 +277,12 @@ export const useAuthStore = create<AuthState>()(
             apiList = list.map((c: any) => ({
               id: c.slug || String(c.id),
               name: c.name,
+              brand_name: c.brand_name || c.name,
+              division_name: c.division_name || '',
+              subtitle: c.subtitle || '',
               slug: c.slug || String(c.id),
-              logo: c.slug === 'digital' ? '📈' : '💻',
-              logo_url: c.logo_url,
+              logo: c.logo || (c.slug === 'digital' ? '📈' : '💻'),
+              logo_url: c.logo_url || '/saampark-logo.png',
               currency: c.currency || 'INR',
               currency_symbol: c.currency_symbol || '₹',
             }))
@@ -289,6 +358,33 @@ export const useAuthStore = create<AuthState>()(
         return currentFiltered
       },
 
+      fetchSubBranches: async () => {
+        try {
+          const deletedIds = await syncGlobalDeletedIds().catch(() => getLocalDeletedIds())
+          const dbSubBranches = await fetchModuleDataFromDB<SubBranch[]>('sub_branches', [], 'all').catch(() => null)
+          
+          let list: SubBranch[] = []
+          if (Array.isArray(dbSubBranches) && dbSubBranches.length > 0) {
+            list = dbSubBranches
+          } else {
+            const res: any = await api.get('/sub-branches').catch(() => null)
+            if (res && (Array.isArray(res.data) || Array.isArray(res))) {
+              list = Array.isArray(res.data) ? res.data : res
+            }
+          }
+
+          const filtered = list.filter(sb => !isGlobalItemDeleted(sb.id, deletedIds))
+          set({ subBranches: filtered })
+          return filtered
+        } catch (err) {
+          console.warn("fetchSubBranches warning:", err)
+        }
+        const localDeleted = getLocalDeletedIds()
+        const currentFiltered = (get().subBranches || []).filter(sb => !isGlobalItemDeleted(sb.id, localDeleted))
+        set({ subBranches: currentFiltered })
+        return currentFiltered
+      },
+
       addCompany: async (newComp: Partial<Company>) => {
         const { user, companies } = get()
         if (user?.role !== 'Super Admin') {
@@ -346,10 +442,34 @@ export const useAuthStore = create<AuthState>()(
 
           const current = get().companies
           const updated = [...current.filter(c => c.id !== created.id && c.slug !== created.slug), created]
-          set({ companies: updated })
+          
+          // Ensure Super Admin and creator has the newly created company in their companyIds
+          const currentUser = get().user
+          let updatedUser = currentUser
+          if (currentUser) {
+            const currentCompIds = currentUser.companyIds || (currentUser.companyId ? [currentUser.companyId] : ['tech'])
+            const newCompIds = Array.from(new Set([...currentCompIds, created.id, created.slug].filter(Boolean))) as string[]
+            updatedUser = {
+              ...currentUser,
+              companyIds: newCompIds,
+            }
+          }
+
+          set({ 
+            companies: updated,
+            user: updatedUser,
+          })
 
           // Persist to MySQL database single source of truth
           await saveModuleDataToDB('companies', updated, 'all').catch(() => {})
+          if (updatedUser) {
+            import('@/app/feature/users/services/userService').then(({ recordUserAccount }) => {
+              recordUserAccount({
+                ...updatedUser,
+                id: String(updatedUser.id),
+              })
+            }).catch(() => {})
+          }
 
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new Event('storage'))
@@ -554,6 +674,84 @@ export const useAuthStore = create<AuthState>()(
         return true
       },
 
+      addSubBranch: async (subBranchData: Partial<SubBranch>) => {
+        const { subBranches, branches } = get()
+        const parentBranch = branches.find(b => b.id === subBranchData.parentBranchId)
+        const targetCompId = subBranchData.companyId || parentBranch?.companyId || 'tech'
+
+        const newSubBranch: SubBranch = {
+          id: subBranchData.id || `subbranch_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          parentBranchId: subBranchData.parentBranchId || '',
+          companyId: targetCompId,
+          name: subBranchData.name || 'New Sub-Branch',
+          code: subBranchData.code || `SB-${Math.floor(100 + Math.random() * 900)}`,
+          partnerName: subBranchData.partnerName || '',
+          partnerPhone: subBranchData.partnerPhone || '',
+          partnerEmail: subBranchData.partnerEmail || '',
+          city: subBranchData.city || '',
+          address: subBranchData.address || '',
+          revenueSharePct: subBranchData.revenueSharePct !== undefined ? Number(subBranchData.revenueSharePct) : 30,
+          partnerType: subBranchData.partnerType || 'Franchise Partner',
+          bankDetails: subBranchData.bankDetails || {},
+          status: subBranchData.status || 'Active',
+          createdAt: new Date().toISOString().split('T')[0],
+        }
+
+        try {
+          await api.post('/sub-branches', newSubBranch).catch(() => {})
+        } catch {}
+
+        const updated = [...(subBranches || []).filter(sb => sb.id !== newSubBranch.id), newSubBranch]
+        set({ subBranches: updated })
+        await saveModuleDataToDB('sub_branches', updated, 'all').catch(() => {})
+
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('storage'))
+          window.dispatchEvent(new CustomEvent('saampark_data_synced'))
+          window.dispatchEvent(new CustomEvent('saampark_subbranches_updated', { detail: newSubBranch }))
+        }
+        return newSubBranch
+      },
+
+      updateSubBranch: async (subBranchId: string, updates: Partial<SubBranch>) => {
+        const { subBranches } = get()
+        const updated = (subBranches || []).map(sb => sb.id === subBranchId ? { ...sb, ...updates } : sb)
+        set({ subBranches: updated })
+        await saveModuleDataToDB('sub_branches', updated, 'all').catch(() => {})
+
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('storage'))
+          window.dispatchEvent(new CustomEvent('saampark_data_synced'))
+          window.dispatchEvent(new CustomEvent('saampark_subbranches_updated'))
+        }
+      },
+
+      deleteSubBranch: async (subBranchId: string) => {
+        const { subBranches } = get()
+        try {
+          await api.delete(`/sub-branches/${subBranchId}`).catch(() => {})
+        } catch {}
+
+        markGlobalItemDeleted(subBranchId, 'sub_branches')
+        const updated = (subBranches || []).filter(sb => sb.id !== subBranchId)
+        set({ subBranches: updated })
+        await saveModuleDataToDB('sub_branches', updated, 'all').catch(() => {})
+
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('storage'))
+          window.dispatchEvent(new CustomEvent('saampark_data_synced'))
+          window.dispatchEvent(new CustomEvent('saampark_subbranches_updated'))
+        }
+        return true
+      },
+
+      switchSubBranch: (subBranchId: string | null) => {
+        set({ activeSubBranchId: subBranchId })
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('saampark_subbranch_switched', { detail: { subBranchId } }))
+        }
+      },
+
       switchBranch: (branchId: string | null) => {
         const { user } = get()
         if (!user) return
@@ -728,11 +926,35 @@ export const useAuthStore = create<AuthState>()(
 
         if (canSwitch) {
           invalidateModuleCache()
+
+          // If Super Admin, ensure companyIds includes this company so session sync doesn't reset it
+          let updatedCompanyIds = user.companyIds || [effectiveId]
+          if (isSuperAdmin && !updatedCompanyIds.includes(effectiveId)) {
+            updatedCompanyIds = [...updatedCompanyIds, effectiveId]
+          }
+
+          const updatedUser = {
+            ...user,
+            companyId: effectiveId as any,
+            companyIds: updatedCompanyIds,
+          }
+
           set({
             activeCompanyId: effectiveId,
             activeBranchId: null,
-            user: user ? { ...user, companyId: effectiveId as any } : null,
+            user: updatedUser,
           })
+
+          // Save updated user companyIds to persistence
+          if (isSuperAdmin) {
+            import('@/app/feature/users/services/userService').then(({ recordUserAccount }) => {
+              recordUserAccount({
+                ...updatedUser,
+                id: String(updatedUser.id),
+              })
+            }).catch(() => {})
+          }
+
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('saampark_company_switched', { detail: effectiveId }))
             window.dispatchEvent(new CustomEvent('saampark_branch_switched', { detail: null }))

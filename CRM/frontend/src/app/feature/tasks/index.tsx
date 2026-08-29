@@ -11,6 +11,7 @@ import { EditTaskModal } from "./components/EditTaskModal"
 import { ManageTaskLabelsModal } from "./components/ManageTaskLabelsModal"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
+import { executeWithFeedback, useActionFeedbackStore } from "@/store/useActionFeedbackStore"
 import { ThreeDotLoader } from "@/components/ui/ThreeDotLoader"
 
 export default function TasksMain() {
@@ -85,37 +86,56 @@ export default function TasksMain() {
   }
 
   const handleUpdateTaskStatus = async (id: string, newStatus: TaskStatus) => {
-    setTasks((prev) =>
-      prev.map((t) =>
-        String(t.id).toLowerCase().trim() === String(id).toLowerCase().trim()
-          ? { ...t, status: newStatus }
-          : t
+    const task = tasks.find(t => String(t.id).toLowerCase().trim() === String(id).toLowerCase().trim())
+    const taskTitle = task?.title || "Task"
+    await executeWithFeedback(async () => {
+      setTasks((prev) =>
+        prev.map((t) =>
+          String(t.id).toLowerCase().trim() === String(id).toLowerCase().trim()
+            ? { ...t, status: newStatus }
+            : t
+        )
       )
-    )
-    try {
       await taskService.updateTask(id, { status: newStatus })
-    } catch (err) {
-      console.error("Failed to update status:", err)
-    }
+    }, {
+      actionType: "update",
+      loadingTitle: "Updating Status...",
+      loadingMsg: `Moving "${taskTitle}" to ${newStatus}...`,
+      successTitle: "Status Updated!",
+      successMsg: `"${taskTitle}" status changed to ${newStatus}.`,
+      errorTitle: "Status Update Failed",
+      minLoadingMs: 300,
+      autoCloseMs: 1800,
+    })
   }
 
   const handleDeleteTask = async (id: string) => {
     const { user } = useAuthStore.getState()
     const { canPerformAction } = usePermissionStore.getState()
     if (!canPerformAction(user, "Tasks", "delete")) {
-      alert("Action forbidden: You do not have permission to delete tasks.")
+      useActionFeedbackStore.getState().showError({
+        title: "Permission Denied",
+        message: "You do not have permission to delete tasks.",
+        actionType: "delete",
+      })
       return
     }
 
-    if (confirm("Are you sure you want to delete this task?")) {
-      const strId = String(id).toLowerCase().trim()
+    const task = tasks.find(t => String(t.id).toLowerCase().trim() === String(id).toLowerCase().trim())
+    const taskTitle = task?.title || "Task"
+    const strId = String(id).toLowerCase().trim()
+
+    await executeWithFeedback(async () => {
       setTasks((prev) => prev.filter((t) => String(t.id).toLowerCase().trim() !== strId))
-      try {
-        await taskService.deleteTask(id)
-      } catch (err) {
-        console.error("Failed to delete task:", err)
-      }
-    }
+      await taskService.deleteTask(id)
+    }, {
+      actionType: "delete",
+      loadingTitle: "Deleting Task...",
+      loadingMsg: `Removing "${taskTitle}"...`,
+      successTitle: "Task Deleted",
+      successMsg: `"${taskTitle}" has been deleted.`,
+      errorTitle: "Delete Failed",
+    })
   }
 
   const handleSelectTask = (task: Task) => {

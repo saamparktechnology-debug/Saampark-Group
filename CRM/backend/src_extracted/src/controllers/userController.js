@@ -1,12 +1,15 @@
 const pool = require('../config/db');
 const { successResponse, errorResponse } = require('../utils/apiResponse');
 
+// Ensure avatar_url column exists in users table
+pool.execute('ALTER TABLE users ADD COLUMN avatar_url TEXT NULL').catch(() => {});
+
 // ─── GET ALL USERS ────────────────────────────────────────────────────────────
 const getAllUsers = async (req, res, next) => {
   try {
     const [users] = await pool.execute(
       `SELECT u.id, u.full_name, u.email, u.phone, u.department, u.status, u.permissions, u.last_login, u.created_at,
-              u.company_id, u.company_ids,
+              u.company_id, u.company_ids, u.avatar_url,
               r.name as role_name, r.id as role_id
        FROM users u
        LEFT JOIN roles r ON u.role_id = r.id
@@ -24,7 +27,7 @@ const getUserById = async (req, res, next) => {
   try {
     const { id } = req.params;
     const [users] = await pool.execute(
-      `SELECT u.id, u.full_name, u.email, u.phone, u.department, u.status, u.permissions, u.company_id, u.company_ids,
+      `SELECT u.id, u.full_name, u.email, u.phone, u.department, u.status, u.permissions, u.company_id, u.company_ids, u.avatar_url,
               r.name as role_name, r.id as role_id
        FROM users u
        LEFT JOIN roles r ON u.role_id = r.id
@@ -46,11 +49,12 @@ const getUserById = async (req, res, next) => {
 const updateUser = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { full_name, name, email, phone, role_id, status, permissions, department, company_id, company_ids, companyIds } = req.body;
+    const { full_name, name, email, phone, role_id, status, permissions, department, company_id, company_ids, companyIds, avatar_url, avatar, avatarUrl } = req.body;
 
     const displayName = full_name || name || null;
     const phoneVal = phone !== undefined ? (phone || null) : null;
     const statusVal = status || null;
+    const avatarVal = avatar_url || avatar || avatarUrl || null;
     let roleIdVal = role_id ? parseInt(role_id, 10) : null;
     if (!roleIdVal && req.body.role) {
       const rLower = String(req.body.role).toLowerCase();
@@ -85,6 +89,7 @@ const updateUser = async (req, res, next) => {
     if (company_id) { setClauses.push('company_id = ?'); params.push(company_id); }
     if (compIdsStr) { setClauses.push('company_ids = ?'); params.push(compIdsStr); }
     if (department !== undefined) { setClauses.push('department = ?'); params.push(department || null); }
+    if (avatarVal !== null) { setClauses.push('avatar_url = ?'); params.push(avatarVal); }
     if (permissions !== undefined && permissions !== null) {
       const permStr = typeof permissions === 'string' ? permissions : JSON.stringify(permissions);
       setClauses.push('permissions = ?');
@@ -143,6 +148,8 @@ const updateUser = async (req, res, next) => {
           parsedCompanyIds = [u.company_id || 'tech'];
         }
 
+        const effectiveAvatar = avatarVal || u.avatar_url || undefined;
+
         const updatedItem = {
           id: String(u.id),
           name: u.full_name || u.email,
@@ -153,6 +160,8 @@ const updateUser = async (req, res, next) => {
           companyName: u.company_name || 'SAAMPARK Technology',
           branchId: req.body.branch_id || req.body.branchId || undefined,
           branchName: req.body.branch_name || req.body.branchName || undefined,
+          avatarUrl: effectiveAvatar,
+          avatar: effectiveAvatar,
           status: u.status === 'inactive' ? 'Inactive' : 'Active',
           department: u.department || 'General',
           phone: u.phone || '',

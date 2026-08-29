@@ -66,6 +66,8 @@ export interface Subscription {
   billingCycle: BillingCycle
   customDaysCount?: number
   startDate?: string
+  firstPaymentDate?: string
+  firstPaymentAmount?: number | string
   nextBillingDate: string
   lastRenewedDate?: string
   autoRenew?: boolean

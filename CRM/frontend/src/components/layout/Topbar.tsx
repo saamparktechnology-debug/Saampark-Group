@@ -12,7 +12,7 @@ import Link from "next/link"
 
 import { Button } from "../ui/Button"
 import { useUIStore } from "@/store/useUIStore"
-import { useAuthStore, COMPANIES } from "@/store/useAuthStore"
+import { useAuthStore, COMPANIES, getCompanyLogoUrl } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 
 // Quick-Add Dropdown options with module keys
@@ -32,13 +32,17 @@ export function Topbar() {
     user, 
     activeCompanyId, 
     activeBranchId, 
+    activeSubBranchId,
     switchCompany, 
     switchBranch, 
+    switchSubBranch,
     logout, 
     companies, 
     branches, 
+    subBranches,
     fetchCompanies, 
-    fetchBranches 
+    fetchBranches,
+    fetchSubBranches 
   } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
 
@@ -58,6 +62,7 @@ export function Topbar() {
     const handleSync = () => {
       fetchCompanies()
       fetchBranches()
+      fetchSubBranches().catch(() => {})
     }
 
     handleSync()
@@ -93,11 +98,16 @@ export function Topbar() {
             ? dbRecord.companyIds
             : [dbRecord.companyId || "tech"]
 
-          // If current active company is not in the assigned companies list, auto-switch to primary company
+          // If current user is Super Admin, they have access to all companies - do NOT reset active company
+          const isSuper = (dbRecord.role === "Super Admin") || (user.role === "Super Admin")
           const currentActive = useAuthStore.getState().activeCompanyId
-          const nextActive = freshCompanyIds.includes(currentActive || "")
-            ? currentActive
-            : freshCompanyIds[0]
+          const nextActive = isSuper
+            ? (currentActive || freshCompanyIds[0] || "tech")
+            : (freshCompanyIds.includes(currentActive || "") ? currentActive : freshCompanyIds[0])
+
+          const finalCompanyIds = isSuper
+            ? Array.from(new Set([...freshCompanyIds, currentActive || "tech", ...companies.map(c => c.id), ...companies.map(c => c.slug || "")].filter(Boolean)))
+            : freshCompanyIds
 
           let freshPerms = dbRecord.permissions
           if (typeof freshPerms === "string") {
@@ -116,13 +126,17 @@ export function Topbar() {
             usePermissionStore.getState().setUserAllModuleActions(myEmailNorm, freshPerms.actionMatrix)
           }
 
+          const freshAvatar = dbRecord.avatarUrl || (dbRecord as any).avatar || (user as any).avatarUrl || user.avatar
+
           useAuthStore.setState({
             user: {
               ...user,
               name: dbRecord.name,
               role: dbRecord.role,
+              avatar: freshAvatar,
+              avatarUrl: freshAvatar,
               companyId: nextActive || "tech",
-              companyIds: freshCompanyIds,
+              companyIds: finalCompanyIds,
               branchId: dbRecord.branchId,
               branchIds: dbRecord.branchIds,
               branchName: dbRecord.branchName,
@@ -143,10 +157,12 @@ export function Topbar() {
     window.addEventListener("focus", syncUserSession)
     window.addEventListener("storage", syncUserSession)
     window.addEventListener("saampark_data_synced", syncUserSession)
+    window.addEventListener("crm_avatar_changed", syncUserSession)
     return () => {
       window.removeEventListener("focus", syncUserSession)
       window.removeEventListener("storage", syncUserSession)
       window.removeEventListener("saampark_data_synced", syncUserSession)
+      window.removeEventListener("crm_avatar_changed", syncUserSession)
     }
   }, [user?.email])
 
@@ -270,13 +286,21 @@ export function Topbar() {
                   className="flex items-center gap-2 px-3 py-1.5 bg-surface-pressed border border-primary/30 hover:border-primary/60 rounded-full text-xs font-semibold text-foreground transition-all cursor-pointer shadow-2xs"
                   title="Click to switch active company or branch"
                 >
-                  <span className="text-sm">{activeCompany.logo || "🏢"}</span>
+                  {getCompanyLogoUrl(activeCompany) ? (
+                    <img src={getCompanyLogoUrl(activeCompany)!} alt={activeCompany.name} className="w-5 h-5 rounded-full object-contain shrink-0 bg-white/10" />
+                  ) : (
+                    <span className="text-sm">{activeCompany.logo || "🏢"}</span>
+                  )}
                   <span className="truncate max-w-[140px] sm:max-w-[180px]">{activeCompany.name}</span>
                   <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-bold">Switch ▾</span>
                 </button>
               ) : (
                 <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-surface-pressed border border-border rounded-full text-xs font-medium text-muted-foreground">
-                  <span className="text-sm">{activeCompany.logo || "🏢"}</span>
+                  {getCompanyLogoUrl(activeCompany) ? (
+                    <img src={getCompanyLogoUrl(activeCompany)!} alt={activeCompany.name} className="w-4 h-4 rounded-full object-contain shrink-0 bg-white/10" />
+                  ) : (
+                    <span className="text-sm">{activeCompany.logo || "🏢"}</span>
+                  )}
                   <span className="truncate max-w-[160px]">{activeCompany.name}</span>
                 </div>
               )}
@@ -317,6 +341,7 @@ export function Topbar() {
                     {allowedCompanies.map((comp) => {
                       const isActive = activeCompanyId === comp.id || activeCompanyId === comp.slug
                       const compBranches = branches.filter(b => b.companyId === comp.id || b.companyId === comp.slug)
+                      const compLogoUrl = getCompanyLogoUrl(comp)
 
                       return (
                         <div key={comp.id} className="space-y-1">
@@ -330,7 +355,11 @@ export function Topbar() {
                             }`}
                           >
                             <div className="flex items-center gap-2.5 truncate">
-                              <span className="text-base">{comp.logo || "🏢"}</span>
+                              {compLogoUrl ? (
+                                <img src={compLogoUrl} alt={comp.name} className="w-5 h-5 rounded-full object-contain shrink-0 bg-white/20" />
+                              ) : (
+                                <span className="text-base">{comp.logo || "🏢"}</span>
+                              )}
                               <span className="truncate">{comp.name}</span>
                             </div>
                             {isActive && <Check size={14} className="shrink-0" />}
@@ -353,24 +382,59 @@ export function Topbar() {
                               >
                                 🏢 All Branches / HQ
                               </button>
-                              {compBranches.map(b => (
-                                <button
-                                  key={b.id}
-                                  type="button"
-                                  onClick={() => { switchBranch(b.id); setShowCompanyMenu(false) }}
-                                  className={`w-full flex items-center justify-between px-2 py-1 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
-                                    activeBranchId === b.id
-                                      ? "bg-primary/10 text-primary font-bold"
-                                      : "text-muted-foreground hover:text-foreground hover:bg-surface-hover"
-                                  }`}
-                                >
-                                  <span className="flex items-center gap-1.5 truncate">
-                                    <MapPin size={12} className="text-primary shrink-0" />
-                                    {b.name}
-                                  </span>
-                                  {activeBranchId === b.id && <Check size={12} className="shrink-0" />}
-                                </button>
-                              ))}
+                              {compBranches.map(b => {
+                                const bSubBranches = (subBranches || []).filter(sb => sb.parentBranchId === b.id)
+                                return (
+                                  <div key={b.id} className="space-y-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => { switchBranch(b.id); switchSubBranch(null); setShowCompanyMenu(false) }}
+                                      className={`w-full flex items-center justify-between px-2 py-1 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
+                                        activeBranchId === b.id && !activeSubBranchId
+                                          ? "bg-primary/10 text-primary font-bold"
+                                          : "text-muted-foreground hover:text-foreground hover:bg-surface-hover"
+                                      }`}
+                                    >
+                                      <span className="flex items-center gap-1.5 truncate">
+                                        <MapPin size={12} className="text-primary shrink-0" />
+                                        {b.name}
+                                      </span>
+                                      {activeBranchId === b.id && !activeSubBranchId && <Check size={12} className="shrink-0" />}
+                                    </button>
+
+                                    {/* Nested Sub-Branches with % Share Badge */}
+                                    {bSubBranches.length > 0 && (
+                                      <div className="pl-4 space-y-0.5 border-l border-emerald-500/30 ml-2">
+                                        {bSubBranches.map(sb => (
+                                          <button
+                                            key={sb.id}
+                                            type="button"
+                                            onClick={() => { 
+                                              switchBranch(b.id)
+                                              switchSubBranch(sb.id)
+                                              setShowCompanyMenu(false) 
+                                            }}
+                                            className={`w-full flex items-center justify-between px-2 py-0.5 rounded text-[10.5px] transition-colors cursor-pointer ${
+                                              activeSubBranchId === sb.id
+                                                ? "bg-emerald-500/15 text-emerald-600 font-bold"
+                                                : "text-muted-foreground hover:text-foreground hover:bg-surface-hover"
+                                            }`}
+                                          >
+                                            <span className="flex items-center gap-1 truncate">
+                                              <span>🌿</span>
+                                              <span className="truncate">{sb.name}</span>
+                                              <span className="text-[9px] font-mono text-emerald-600 dark:text-emerald-400">
+                                                ({sb.revenueSharePct}%)
+                                              </span>
+                                            </span>
+                                            {activeSubBranchId === sb.id && <Check size={10} className="text-emerald-600 shrink-0" />}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              })}
                             </div>
                           )}
                         </div>

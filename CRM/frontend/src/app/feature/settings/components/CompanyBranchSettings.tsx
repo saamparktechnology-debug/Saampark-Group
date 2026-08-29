@@ -4,26 +4,34 @@ import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
   Building2, Plus, Pencil, Trash2, Shield, MapPin, Phone, Mail, 
-  User, Check, X, AlertTriangle, Layers, ChevronDown, ChevronRight,
+  User, Check, X, AlertTriangle, Layers, ChevronDown, ChevronRight, ChevronLeft,
   Globe, CreditCard, FileText, QrCode, Sparkles, Lock, UploadCloud,
   Image as ImageIcon, CheckCircle2
 } from "lucide-react"
-import { useAuthStore, Company, Branch } from "@/store/useAuthStore"
+import { useAuthStore, Company, Branch, SubBranch } from "@/store/useAuthStore"
 import { getUsers } from "@/app/feature/users/services/userService"
+import { executeWithFeedback, useActionFeedbackStore } from "@/store/useActionFeedbackStore"
 
 export function CompanyBranchSettings() {
   const { 
     user, 
     companies, 
     branches, 
+    subBranches,
     fetchCompanies, 
     fetchBranches, 
+    fetchSubBranches,
     addCompany, 
     updateCompany,
     deleteCompany, 
     addBranch, 
     updateBranch, 
-    deleteBranch 
+    deleteBranch,
+    addSubBranch,
+    updateSubBranch,
+    deleteSubBranch,
+    activeCompanyId,
+    switchCompany
   } = useAuthStore()
 
   const isSuperAdmin = user?.role === "Super Admin"
@@ -40,8 +48,16 @@ export function CompanyBranchSettings() {
   const [allUsers, setAllUsers] = React.useState<any[]>([])
 
   // Modal States
+  const COMPANY_TABS_LIST: Array<"basic" | "invoice" | "tax" | "contact" | "bank" | "smtp"> = React.useMemo(() => [
+    "basic",
+    "invoice",
+    "tax",
+    "contact",
+    "bank",
+    "smtp"
+  ], [])
   const [isCompanyModalOpen, setIsCompanyModalOpen] = React.useState(false)
-  const [companyModalTab, setCompanyModalTab] = React.useState<"basic" | "tax" | "contact" | "bank" | "invoice">("basic")
+  const [companyModalTab, setCompanyModalTab] = React.useState<"basic" | "invoice" | "tax" | "contact" | "bank" | "smtp">("basic")
   const [editingCompany, setEditingCompany] = React.useState<Company | null>(null)
 
   // Company Form States (All invoice & enterprise configuration fields)
@@ -81,6 +97,20 @@ export function CompanyBranchSettings() {
   const [companySignatoryDesignation, setCompanySignatoryDesignation] = React.useState("")
   const [companySignatureImageUrl, setCompanySignatureImageUrl] = React.useState("")
 
+  // SMTP & Email Dispatch Configurations (Per Company)
+  const [companySmtpPreset, setCompanySmtpPreset] = React.useState<"gmail" | "zoho" | "outlook" | "custom">("gmail")
+  const [companySmtpHost, setCompanySmtpHost] = React.useState("smtp.gmail.com")
+  const [companySmtpPort, setCompanySmtpPort] = React.useState("587")
+  const [companySmtpSecure, setCompanySmtpSecure] = React.useState(false)
+  const [companySmtpUser, setCompanySmtpUser] = React.useState("")
+  const [companySmtpPass, setCompanySmtpPass] = React.useState("")
+  const [companySmtpFromName, setCompanySmtpFromName] = React.useState("")
+  const [companySmtpFromEmail, setCompanySmtpFromEmail] = React.useState("")
+  const [showCompanySmtpPass, setShowCompanySmtpPass] = React.useState(false)
+  const [isTestingCompanySmtp, setIsTestingCompanySmtp] = React.useState(false)
+  const [companySmtpTestResult, setCompanySmtpTestResult] = React.useState<{ success?: boolean; message?: string } | null>(null)
+  const [companyTestEmail, setCompanyTestEmail] = React.useState("")
+
   // Branch Modal States
   const [isBranchModalOpen, setIsBranchModalOpen] = React.useState(false)
   const [targetCompanyIdForBranch, setTargetCompanyIdForBranch] = React.useState<string>("tech")
@@ -94,15 +124,38 @@ export function CompanyBranchSettings() {
   const [branchManager, setBranchManager] = React.useState("")
   const [branchStatus, setBranchStatus] = React.useState<"Active" | "Inactive">("Active")
 
+  // Sub-Branch Modal & Form States
+  const [isSubBranchModalOpen, setIsSubBranchModalOpen] = React.useState(false)
+  const [editingSubBranch, setEditingSubBranch] = React.useState<SubBranch | null>(null)
+  const [subBranchParentBranchId, setSubBranchParentBranchId] = React.useState<string>("")
+  const [subBranchCompanyId, setSubBranchCompanyId] = React.useState<string>("tech")
+  const [subBranchName, setSubBranchName] = React.useState("")
+  const [subBranchCode, setSubBranchCode] = React.useState("")
+  const [subBranchPartnerName, setSubBranchPartnerName] = React.useState("")
+  const [subBranchPartnerPhone, setSubBranchPartnerPhone] = React.useState("")
+  const [subBranchPartnerEmail, setSubBranchPartnerEmail] = React.useState("")
+  const [subBranchCity, setSubBranchCity] = React.useState("")
+  const [subBranchAddress, setSubBranchAddress] = React.useState("")
+  const [subBranchRevenueSharePct, setSubBranchRevenueSharePct] = React.useState<number>(30)
+  const [subBranchPartnerType, setSubBranchPartnerType] = React.useState<"Franchise Partner" | "Agency Partner" | "Satellite Office" | "Regional Associate">("Franchise Partner")
+  const [subBranchAccountHolder, setSubBranchAccountHolder] = React.useState("")
+  const [subBranchBankName, setSubBranchBankName] = React.useState("")
+  const [subBranchAccountNumber, setSubBranchAccountNumber] = React.useState("")
+  const [subBranchIfscCode, setSubBranchIfscCode] = React.useState("")
+  const [subBranchUpiId, setSubBranchUpiId] = React.useState("")
+  const [subBranchStatus, setSubBranchStatus] = React.useState<"Active" | "Inactive">("Active")
+
   // Refs for file uploads
   const logoFileInputRef = React.useRef<HTMLInputElement>(null)
   const signatureFileInputRef = React.useRef<HTMLInputElement>(null)
+  const qrFileInputRef = React.useRef<HTMLInputElement>(null)
 
   React.useEffect(() => {
     fetchCompanies()
     fetchBranches()
+    fetchSubBranches()
     getUsers("all").then((list) => setAllUsers(list || []))
-  }, [fetchCompanies, fetchBranches])
+  }, [fetchCompanies, fetchBranches, fetchSubBranches])
 
   // Automatically expand first company
   React.useEffect(() => {
@@ -146,6 +199,23 @@ export function CompanyBranchSettings() {
     reader.onload = () => {
       if (typeof reader.result === "string") {
         setCompanySignatureImageUrl(reader.result)
+      }
+    }
+    reader.readAsDataURL(file)
+  }
+
+  // Handle QR Image Upload
+  const handleQrUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 5 * 1024 * 1024) {
+      alert("QR Code image size should not exceed 5MB.")
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setCompanyPaymentQrUrl(reader.result)
       }
     }
     reader.readAsDataURL(file)
@@ -198,6 +268,16 @@ export function CompanyBranchSettings() {
     setCompanySignatoryName("Authorized Signatory")
     setCompanySignatoryDesignation("Managing Director")
     setCompanySignatureImageUrl("")
+    setCompanySmtpPreset("gmail")
+    setCompanySmtpHost("smtp.gmail.com")
+    setCompanySmtpPort("587")
+    setCompanySmtpSecure(false)
+    setCompanySmtpUser("")
+    setCompanySmtpPass("")
+    setCompanySmtpFromName("SAAMPARK")
+    setCompanySmtpFromEmail("")
+    setCompanySmtpTestResult(null)
+    setCompanyTestEmail("")
     setIsCompanyModalOpen(true)
   }
 
@@ -236,6 +316,24 @@ export function CompanyBranchSettings() {
     setCompanySignatoryName(company.signatory_name || "Authorized Signatory")
     setCompanySignatoryDesignation(company.signatory_designation || "")
     setCompanySignatureImageUrl(company.signature_image_url || "")
+
+    // Load Company SMTP
+    const host = company.smtp_host || "smtp.gmail.com"
+    const port = String(company.smtp_port || "587")
+    setCompanySmtpHost(host)
+    setCompanySmtpPort(port)
+    setCompanySmtpSecure(!!company.smtp_secure || port === "465")
+    setCompanySmtpUser(company.smtp_user || "")
+    setCompanySmtpPass(company.smtp_pass || "")
+    setCompanySmtpFromName(company.smtp_from_name || company.name || "")
+    setCompanySmtpFromEmail(company.smtp_from_email || company.email || "")
+    if (host.includes("gmail")) setCompanySmtpPreset("gmail")
+    else if (host.includes("zoho")) setCompanySmtpPreset("zoho")
+    else if (host.includes("office365") || host.includes("outlook")) setCompanySmtpPreset("outlook")
+    else setCompanySmtpPreset("custom")
+    setCompanySmtpTestResult(null)
+    setCompanyTestEmail(company.smtp_user || "")
+
     setIsCompanyModalOpen(true)
   }
 
@@ -278,32 +376,113 @@ export function CompanyBranchSettings() {
       signatory_name: companySignatoryName.trim(),
       signatory_designation: companySignatoryDesignation.trim(),
       signature_image_url: companySignatureImageUrl.trim(),
+      smtp_host: companySmtpHost.trim() || "smtp.gmail.com",
+      smtp_port: companySmtpPort.trim() || "587",
+      smtp_secure: companySmtpSecure,
+      smtp_user: companySmtpUser.trim(),
+      smtp_pass: companySmtpPass.trim(),
+      smtp_from_name: companySmtpFromName.trim() || finalName,
+      smtp_from_email: companySmtpFromEmail.trim() || companySmtpUser.trim(),
     }
 
-    if (editingCompany) {
-      await updateCompany(editingCompany.id, payload)
-    } else {
-      await addCompany(payload)
+    const isEdit = !!editingCompany
+    await executeWithFeedback(async () => {
+      if (editingCompany) {
+        await updateCompany(editingCompany.id, payload)
+      } else {
+        await addCompany(payload)
+      }
+
+      await fetchCompanies().catch(() => {})
+      setIsCompanyModalOpen(false)
+    }, {
+      actionType: isEdit ? "update" : "create",
+      loadingTitle: isEdit ? "Saving Company Profile..." : "Creating Entity...",
+      loadingMsg: `Applying corporate branding, signature, and tax details for ${finalName}...`,
+      successTitle: isEdit ? "Company Profile Saved!" : "Company Created Successfully!",
+      successMsg: `Company profile for ${finalName} has been saved and synced.`,
+      errorTitle: "Company Save Failed",
+    })
+  }
+
+  const handleApplyCompanyPreset = (preset: "gmail" | "zoho" | "outlook" | "custom") => {
+    setCompanySmtpPreset(preset)
+    setCompanySmtpTestResult(null)
+    if (preset === "gmail") {
+      setCompanySmtpHost("smtp.gmail.com")
+      setCompanySmtpPort("587")
+      setCompanySmtpSecure(false)
+    } else if (preset === "zoho") {
+      setCompanySmtpHost("smtp.zoho.in")
+      setCompanySmtpPort("465")
+      setCompanySmtpSecure(true)
+    } else if (preset === "outlook") {
+      setCompanySmtpHost("smtp.office365.com")
+      setCompanySmtpPort("587")
+      setCompanySmtpSecure(false)
+    }
+  }
+
+  const handleTestCompanySmtp = async () => {
+    if (!companySmtpUser.trim() || !companySmtpPass.trim()) {
+      setCompanySmtpTestResult({
+        success: false,
+        message: "Please enter SMTP User/Email and App Password before testing.",
+      })
+      return
     }
 
-    await fetchCompanies().catch(() => {})
-    setIsCompanyModalOpen(false)
+    setIsTestingCompanySmtp(true)
+    setCompanySmtpTestResult(null)
+
+    try {
+      const { api } = await import("@/lib/api")
+      const res = await api.post("/email/test-connection", {
+        host: companySmtpHost.trim() || "smtp.gmail.com",
+        port: companySmtpPort.trim() || "587",
+        secure: companySmtpSecure,
+        user: companySmtpUser.trim(),
+        pass: companySmtpPass.trim(),
+        fromName: companySmtpFromName.trim() || companyName || "SAAMPARK",
+        fromEmail: companySmtpFromEmail.trim() || companySmtpUser.trim(),
+        testEmail: companyTestEmail.trim() || companySmtpUser.trim(),
+        companyId: editingCompany?.id || undefined,
+      })
+
+      setCompanySmtpTestResult({
+        success: true,
+        message: res.data?.message || `Verified! Test email successfully delivered to ${companyTestEmail.trim() || companySmtpUser.trim()}`,
+      })
+    } catch (err: any) {
+      setCompanySmtpTestResult({
+        success: false,
+        message: err.response?.data?.message || err.message || "Failed to verify SMTP credentials. Please check your App Password or Host.",
+      })
+    } finally {
+      setIsTestingCompanySmtp(false)
+    }
   }
 
   const handleDeleteCompany = async (compId: string, compName: string) => {
     if (!isSuperAdmin) {
-      alert("Only Super Admin can delete companies.")
+      useActionFeedbackStore.getState().showError({
+        title: "Permission Denied",
+        message: "Only Super Admin can delete companies.",
+        actionType: "delete",
+      })
       return
     }
-    if (!confirm(`Are you sure you want to permanently delete company "${compName}" and all its branches?`)) {
-      return
-    }
-    try {
+    await executeWithFeedback(async () => {
       await deleteCompany(compId)
       await fetchCompanies().catch(() => {})
-    } catch (err: any) {
-      alert(err?.message || "Failed to delete company.")
-    }
+    }, {
+      actionType: "delete",
+      loadingTitle: "Deleting Company...",
+      loadingMsg: `Permanently removing ${compName} and associated branches...`,
+      successTitle: "Company Deleted",
+      successMsg: `Company ${compName} has been removed.`,
+      errorTitle: "Delete Failed",
+    })
   }
 
   // ── BRANCH HANDLERS (Admin & Super Admin) ────────────────────────────────────
@@ -347,42 +526,165 @@ export function CompanyBranchSettings() {
       }
     }
 
-    if (editingBranch) {
-      await updateBranch(editingBranch.id, {
-        companyId: finalCompanyId,
-        name: branchName.trim(),
-        code: branchCode.trim(),
-        city: branchCity.trim(),
-        address: branchAddress.trim(),
-        phone: branchPhone.trim(),
-        email: branchEmail.trim(),
-        managerName: branchManager.trim(),
-        status: branchStatus,
-      })
-    } else {
-      await addBranch({
-        companyId: finalCompanyId,
-        name: branchName.trim(),
-        code: branchCode.trim(),
-        city: branchCity.trim(),
-        address: branchAddress.trim(),
-        phone: branchPhone.trim(),
-        email: branchEmail.trim(),
-        managerName: branchManager.trim(),
-        status: branchStatus,
-      })
-    }
+    const isEdit = !!editingBranch
+    await executeWithFeedback(async () => {
+      if (editingBranch) {
+        await updateBranch(editingBranch.id, {
+          companyId: finalCompanyId,
+          name: branchName.trim(),
+          code: branchCode.trim(),
+          city: branchCity.trim(),
+          address: branchAddress.trim(),
+          phone: branchPhone.trim(),
+          email: branchEmail.trim(),
+          managerName: branchManager.trim(),
+          status: branchStatus,
+        })
+      } else {
+        await addBranch({
+          companyId: finalCompanyId,
+          name: branchName.trim(),
+          code: branchCode.trim(),
+          city: branchCity.trim(),
+          address: branchAddress.trim(),
+          phone: branchPhone.trim(),
+          email: branchEmail.trim(),
+          managerName: branchManager.trim(),
+          status: branchStatus,
+        })
+      }
 
-    await fetchBranches().catch(() => {})
-    setIsBranchModalOpen(false)
+      await fetchBranches().catch(() => {})
+      setIsBranchModalOpen(false)
+    }, {
+      actionType: isEdit ? "update" : "create",
+      loadingTitle: isEdit ? "Updating Branch..." : "Creating Branch...",
+      loadingMsg: `Saving branch ${branchName.trim()}...`,
+      successTitle: isEdit ? "Branch Updated!" : "Branch Created Successfully!",
+      successMsg: `Branch ${branchName.trim()} has been saved.`,
+      errorTitle: "Branch Save Failed",
+    })
   }
 
   const handleDeleteBranch = async (branchId: string, bName: string) => {
-    if (!confirm(`Are you sure you want to delete branch "${bName}"?`)) {
+    await executeWithFeedback(async () => {
+      await deleteBranch(branchId)
+      await fetchBranches().catch(() => {})
+    }, {
+      actionType: "delete",
+      loadingTitle: "Deleting Branch...",
+      loadingMsg: `Removing branch "${bName}"...`,
+      successTitle: "Branch Deleted",
+      successMsg: `Branch "${bName}" removed.`,
+      errorTitle: "Delete Failed",
+    })
+  }
+
+  // ── SUB-BRANCH HANDLERS (Percentage Wise Revenue Share) ─────────────────────
+  const handleOpenCreateSubBranch = (parentBranch: Branch) => {
+    setSubBranchParentBranchId(parentBranch.id)
+    setSubBranchCompanyId(parentBranch.companyId)
+    setEditingSubBranch(null)
+    setSubBranchName("")
+    setSubBranchCode(`SB-${Math.floor(100 + Math.random() * 900)}`)
+    setSubBranchPartnerName("")
+    setSubBranchPartnerPhone("")
+    setSubBranchPartnerEmail("")
+    setSubBranchCity(parentBranch.city || "")
+    setSubBranchAddress("")
+    setSubBranchRevenueSharePct(30)
+    setSubBranchPartnerType("Franchise Partner")
+    setSubBranchAccountHolder("")
+    setSubBranchBankName("")
+    setSubBranchAccountNumber("")
+    setSubBranchIfscCode("")
+    setSubBranchUpiId("")
+    setSubBranchStatus("Active")
+    setIsSubBranchModalOpen(true)
+  }
+
+  const handleOpenEditSubBranch = (sb: SubBranch) => {
+    setSubBranchParentBranchId(sb.parentBranchId)
+    setSubBranchCompanyId(sb.companyId)
+    setEditingSubBranch(sb)
+    setSubBranchName(sb.name)
+    setSubBranchCode(sb.code || "")
+    setSubBranchPartnerName(sb.partnerName || "")
+    setSubBranchPartnerPhone(sb.partnerPhone || "")
+    setSubBranchPartnerEmail(sb.partnerEmail || "")
+    setSubBranchCity(sb.city || "")
+    setSubBranchAddress(sb.address || "")
+    setSubBranchRevenueSharePct(sb.revenueSharePct ?? 30)
+    setSubBranchPartnerType(sb.partnerType || "Franchise Partner")
+    setSubBranchAccountHolder(sb.bankDetails?.accountHolder || "")
+    setSubBranchBankName(sb.bankDetails?.bankName || "")
+    setSubBranchAccountNumber(sb.bankDetails?.accountNumber || "")
+    setSubBranchIfscCode(sb.bankDetails?.ifscCode || "")
+    setSubBranchUpiId(sb.bankDetails?.upiId || "")
+    setSubBranchStatus(sb.status)
+    setIsSubBranchModalOpen(true)
+  }
+
+  const handleSaveSubBranch = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!subBranchName.trim() || !subBranchParentBranchId) {
+      alert("Sub-Branch Name and Parent Branch are required.")
       return
     }
-    await deleteBranch(branchId)
-    await fetchBranches().catch(() => {})
+
+    const payload = {
+      parentBranchId: subBranchParentBranchId,
+      companyId: subBranchCompanyId,
+      name: subBranchName.trim(),
+      code: subBranchCode.trim(),
+      partnerName: subBranchPartnerName.trim(),
+      partnerPhone: subBranchPartnerPhone.trim(),
+      partnerEmail: subBranchPartnerEmail.trim(),
+      city: subBranchCity.trim(),
+      address: subBranchAddress.trim(),
+      revenueSharePct: Number(subBranchRevenueSharePct),
+      partnerType: subBranchPartnerType,
+      bankDetails: {
+        accountHolder: subBranchAccountHolder.trim(),
+        bankName: subBranchBankName.trim(),
+        accountNumber: subBranchAccountNumber.trim(),
+        ifscCode: subBranchIfscCode.trim(),
+        upiId: subBranchUpiId.trim(),
+      },
+      status: subBranchStatus,
+    }
+
+    const isEdit = !!editingSubBranch
+    await executeWithFeedback(async () => {
+      if (editingSubBranch) {
+        await updateSubBranch(editingSubBranch.id, payload)
+      } else {
+        await addSubBranch(payload)
+      }
+      await fetchSubBranches().catch(() => {})
+      setIsSubBranchModalOpen(false)
+    }, {
+      actionType: isEdit ? "update" : "create",
+      loadingTitle: isEdit ? "Updating Sub-Branch..." : "Creating Sub-Branch...",
+      loadingMsg: `Saving revenue share agreement (${subBranchRevenueSharePct}% Partner / ${100 - subBranchRevenueSharePct}% Company) for ${subBranchName}...`,
+      successTitle: isEdit ? "Sub-Branch Updated!" : "Sub-Branch Created!",
+      successMsg: `Sub-Branch "${subBranchName}" saved with ${subBranchRevenueSharePct}% partner revenue share.`,
+      errorTitle: "Sub-Branch Save Failed",
+    })
+  }
+
+  const handleDeleteSubBranch = async (subBranchId: string, sbName: string) => {
+    await executeWithFeedback(async () => {
+      await deleteSubBranch(subBranchId)
+      await fetchSubBranches().catch(() => {})
+    }, {
+      actionType: "delete",
+      loadingTitle: "Deleting Sub-Branch...",
+      loadingMsg: `Removing sub-branch "${sbName}"...`,
+      successTitle: "Sub-Branch Removed",
+      successMsg: `Sub-Branch "${sbName}" deleted successfully.`,
+      errorTitle: "Delete Failed",
+    })
   }
 
   return (
@@ -487,6 +789,27 @@ export function CompanyBranchSettings() {
 
                 {/* Company Action Buttons */}
                 <div className="flex items-center gap-2 ml-auto flex-wrap">
+                  {/* Direct Switch Company Button / Active Badge */}
+                  {(() => {
+                    const isActive = activeCompanyId === company.id || activeCompanyId === company.slug
+                    return isActive ? (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-bold shadow-2xs">
+                        <CheckCircle2 size={13} />
+                        <span>Active Workspace</span>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => switchCompany(company.id)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-bold transition-all shadow-xs cursor-pointer"
+                        title={`Switch active CRM workspace to ${company.name}`}
+                      >
+                        <Building2 size={13} />
+                        <span>Switch to this Company</span>
+                      </button>
+                    )
+                  })()}
+
                   {/* Super Admin Edit Company & Invoice Details Button */}
                   {isSuperAdmin ? (
                     <button
@@ -614,6 +937,83 @@ export function CompanyBranchSettings() {
                               </div>
                             )}
                           </div>
+
+                          {/* 🌿 Sub-Branches Section (% Share / Franchise Network) */}
+                          <div className="mt-3 pt-3 border-t border-dashed border-border space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                                <span>🌿 Sub-Branches</span>
+                                <span className="px-1.5 py-0.2 rounded-full bg-emerald-500/10 text-emerald-600 font-mono text-[9px]">
+                                  {(subBranches || []).filter(sb => sb.parentBranchId === branch.id).length}
+                                </span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenCreateSubBranch(branch)}
+                                className="inline-flex items-center gap-1 text-[10.5px] font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors cursor-pointer"
+                              >
+                                <Plus size={11} />
+                                <span>Add Sub-Branch (% Share)</span>
+                              </button>
+                            </div>
+
+                            {/* Sub-Branch list for this parent branch */}
+                            <div className="space-y-1.5">
+                              {(subBranches || []).filter(sb => sb.parentBranchId === branch.id).length === 0 ? (
+                                <p className="text-[10px] text-muted-foreground italic py-1">
+                                  No sub-branches attached yet. Click above to add a percentage-share partner.
+                                </p>
+                              ) : (
+                                (subBranches || []).filter(sb => sb.parentBranchId === branch.id).map(sb => (
+                                  <div
+                                    key={sb.id}
+                                    className="p-2.5 rounded-xl bg-surface-pressed/30 border border-border/70 hover:border-emerald-500/40 transition-colors space-y-1.5"
+                                  >
+                                    <div className="flex items-center justify-between gap-1">
+                                      <div className="flex items-center gap-1.5 min-w-0">
+                                        <span className="font-bold text-[11px] text-foreground truncate">{sb.name}</span>
+                                        <span className="px-1.5 py-0.2 rounded-md bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-mono font-bold text-[9.5px]">
+                                          🪙 {sb.revenueSharePct}% Partner / {100 - (sb.revenueSharePct ?? 30)}% Company
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-0.5 shrink-0">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleOpenEditSubBranch(sb)}
+                                          className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-surface transition-colors"
+                                          title="Edit Sub-Branch"
+                                        >
+                                          <Pencil size={11} />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeleteSubBranch(sb.id, sb.name)}
+                                          className="p-1 rounded-md text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+                                          title="Delete Sub-Branch"
+                                        >
+                                          <Trash2 size={11} />
+                                        </button>
+                                      </div>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+                                      {sb.partnerName && (
+                                        <span>Partner: <strong className="text-foreground">{sb.partnerName}</strong></span>
+                                      )}
+                                      {sb.partnerPhone && (
+                                        <span className="font-mono">{sb.partnerPhone}</span>
+                                      )}
+                                      {sb.city && (
+                                        <span>📍 {sb.city}</span>
+                                      )}
+                                      <span className={`px-1 py-0.2 rounded text-[8.5px] font-bold uppercase ${sb.status === "Active" ? "text-emerald-600 bg-emerald-500/10" : "text-zinc-500 bg-zinc-500/10"}`}>
+                                        {sb.status}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -638,7 +1038,7 @@ export function CompanyBranchSettings() {
               {/* Modal Header */}
               <div className="flex items-center justify-between border-b border-border/50 pb-3 shrink-0">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center text-xl shrink-0 overflow-hidden">
+                  <div className="w-9 h-9 rounded-xl bg-white dark:bg-zinc-800 border border-border flex items-center justify-center text-xl shrink-0 overflow-hidden">
                     {companyLogoUrl ? (
                       <img src={companyLogoUrl} alt="Logo" className="w-7 h-7 object-contain" />
                     ) : (
@@ -729,6 +1129,19 @@ export function CompanyBranchSettings() {
                   <CreditCard size={13} />
                   <span>5. Bank & UPI Pay</span>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCompanyModalTab("smtp")}
+                  className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                    companyModalTab === "smtp"
+                      ? "bg-surface text-primary shadow-xs border border-primary/20"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Mail size={13} />
+                  <span>6. SMTP Email Dispatch</span>
+                </button>
               </div>
 
               {/* Form Content */}
@@ -742,7 +1155,7 @@ export function CompanyBranchSettings() {
                         Live Invoice Header Preview:
                       </span>
                       <div className="flex items-center gap-3">
-                        <div className="w-11 h-11 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-xl overflow-hidden shrink-0">
+                        <div className="w-11 h-11 rounded-xl bg-white dark:bg-zinc-800 border border-border flex items-center justify-center text-xl overflow-hidden shrink-0">
                           {companyLogoUrl ? (
                             <img src={companyLogoUrl} alt="Logo" className="w-9 h-9 object-contain" />
                           ) : (
@@ -751,13 +1164,13 @@ export function CompanyBranchSettings() {
                         </div>
                         <div>
                           <div className="text-base font-black tracking-tight leading-none text-foreground flex items-center gap-1.5 flex-wrap">
-                            <span className="text-primary uppercase">{companyBrandName || "SAAMPARK"}</span>
+                            <span className="text-primary">{companyBrandName || "SAAMPARK"}</span>
                             {companyDivisionName?.trim() && (
-                              <span className="text-foreground uppercase">{companyDivisionName.trim()}</span>
+                              <span className="text-foreground">{companyDivisionName.trim()}</span>
                             )}
                           </div>
                           {companySubtitle?.trim() && (
-                            <div className="text-[11px] font-bold text-muted-foreground tracking-wider uppercase mt-1">
+                            <div className="text-[11px] font-bold text-muted-foreground tracking-wider mt-1">
                               {companySubtitle.trim()}
                             </div>
                           )}
@@ -775,10 +1188,10 @@ export function CompanyBranchSettings() {
                           required
                           value={companyBrandName}
                           onChange={(e) => updateBrandOrDivision(e.target.value, companyDivisionName)}
-                          placeholder="e.g. SAAMPARK"
-                          className="w-full px-3.5 py-2.5 rounded-xl bg-surface border border-border text-xs focus:outline-hidden focus:border-primary font-bold text-foreground uppercase"
+                          placeholder="e.g. SAAMPARK or Saampark"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-surface border border-border text-xs focus:outline-hidden focus:border-primary font-bold text-foreground"
                         />
-                        <p className="text-[10px] text-muted-foreground mt-0.5">Primary brand prefix (e.g. SAAMPARK)</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">Brand prefix (e.g. SAAMPARK, Saampark, etc.)</p>
                       </div>
 
                       <div>
@@ -803,8 +1216,8 @@ export function CompanyBranchSettings() {
                           type="text"
                           value={companySubtitle}
                           onChange={(e) => setCompanySubtitle(e.target.value)}
-                          placeholder="e.g. AND RESEARCH PRIVATE LIMITED or CONSULTING SERVICES (Leave blank if none)"
-                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden focus:border-primary uppercase"
+                          placeholder="e.g. AND RESEARCH PRIVATE LIMITED or Consultancy Services (Leave blank if none)"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden focus:border-primary"
                         />
                       </div>
 
@@ -900,11 +1313,11 @@ export function CompanyBranchSettings() {
                 {companyModalTab === "invoice" && (
                   <div className="space-y-4">
                     {/* Live Signature Preview Card */}
-                    <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/20 space-y-2">
-                      <span className="text-[10.5px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider block">
+                    <div className="p-4 rounded-2xl bg-surface border border-border space-y-2">
+                      <span className="text-[10.5px] font-bold text-primary uppercase tracking-wider block">
                         Official Authorized Signature Preview:
                       </span>
-                      <div className="flex items-center justify-between border-t border-amber-500/20 pt-3">
+                      <div className="flex items-center justify-between border-t border-border/60 pt-3">
                         <div className="text-center space-y-1">
                           <div className="h-12 flex items-end justify-center">
                             {companySignatureImageUrl ? (
@@ -1189,43 +1602,328 @@ export function CompanyBranchSettings() {
                         />
                       </div>
 
-                      <div className="sm:col-span-2">
-                        <label className="block font-bold text-foreground mb-1">Custom Payment QR Image Link</label>
-                        <input
-                          type="text"
-                          value={companyPaymentQrUrl}
-                          onChange={(e) => setCompanyPaymentQrUrl(e.target.value)}
-                          placeholder="https://... (Direct image URL of UPI QR Code to show on invoice)"
-                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden"
-                        />
+                      {/* Custom Payment QR Code Upload & Link */}
+                      <div className="sm:col-span-2 p-3 rounded-2xl bg-surface-hover/50 border border-border space-y-2">
+                        <label className="block font-bold text-foreground">
+                          Custom Payment QR Code Image
+                        </label>
+                        <div className="flex items-center gap-3">
+                          <div className="w-16 h-16 rounded-2xl bg-surface border border-border flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                            {companyPaymentQrUrl ? (
+                              <img src={companyPaymentQrUrl} alt="Payment QR" className="w-14 h-14 object-contain" />
+                            ) : (
+                              <QrCode size={28} className="text-muted-foreground" />
+                            )}
+                          </div>
+                          <div className="space-y-1.5 flex-1 min-w-0">
+                            <input 
+                              type="file" 
+                              ref={qrFileInputRef}
+                              accept="image/*"
+                              onChange={handleQrUpload}
+                              className="hidden" 
+                            />
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => qrFileInputRef.current?.click()}
+                                className="px-3 py-1.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs flex items-center gap-1.5 hover:bg-primary/90 transition-all cursor-pointer shadow-xs"
+                              >
+                                <UploadCloud size={13} />
+                                <span>Upload QR Image</span>
+                              </button>
+                              {companyPaymentQrUrl && (
+                                <button
+                                  type="button"
+                                  onClick={() => setCompanyPaymentQrUrl("")}
+                                  className="px-2.5 py-1.5 rounded-xl border border-border text-rose-600 hover:bg-rose-50 font-semibold text-xs cursor-pointer"
+                                >
+                                  Clear Image
+                                </button>
+                              )}
+                            </div>
+                            <input
+                              type="text"
+                              value={companyPaymentQrUrl}
+                              onChange={(e) => setCompanyPaymentQrUrl(e.target.value)}
+                              placeholder="Or paste direct image URL (e.g. /qr-code.png or https://...)"
+                              className="w-full px-3 py-1.5 rounded-lg bg-surface border border-border text-[11px] font-mono focus:outline-hidden"
+                            />
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* Modal Action Buttons */}
-                <div className="flex items-center justify-between pt-4 border-t border-border/60 shrink-0">
-                  <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                    <Sparkles size={13} className="text-teal-500" />
-                    <span>Branding and signature changes reflect dynamically on all invoices.</span>
-                  </div>
+                {/* TAB 6: DEDICATED COMPANY SMTP EMAIL DISPATCH */}
+                {companyModalTab === "smtp" && (
+                  <div className="space-y-4">
+                    <div className="p-3.5 rounded-2xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 flex items-start gap-2.5">
+                      <Mail size={16} className="text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                      <div className="space-y-1">
+                        <h4 className="font-bold text-blue-950 dark:text-blue-100 text-xs">
+                          Company-Dedicated Email Dispatch (Google / Custom SMTP)
+                        </h4>
+                        <p className="text-[11px] text-blue-800/80 dark:text-blue-200/80 leading-relaxed">
+                          Invoices, project completions, payment receipts, and reminders for <strong>{companyName || "this company"}</strong> will be dispatched directly through this company's authenticated email account.
+                        </p>
+                      </div>
+                    </div>
 
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsCompanyModalOpen(false)}
-                      className="px-4 py-2 rounded-xl border border-border text-muted-foreground hover:text-foreground font-semibold cursor-pointer"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-5 py-2 rounded-xl bg-primary text-primary-foreground font-bold shadow-md hover:bg-primary/90 cursor-pointer"
-                    >
-                      {editingCompany ? "Save Entity & Signature" : "Create Company Entity"}
-                    </button>
+                    {/* Quick Presets */}
+                    <div className="space-y-1.5">
+                      <label className="block font-bold text-foreground text-[11px]">Choose Mail Provider Preset:</label>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => handleApplyCompanyPreset("gmail")}
+                          className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                            companySmtpPreset === "gmail"
+                              ? "bg-red-600 text-white shadow-sm"
+                              : "bg-surface border border-border text-foreground hover:bg-surface-hover"
+                          }`}
+                        >
+                          <span>Gmail / Google Workspace</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleApplyCompanyPreset("zoho")}
+                          className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                            companySmtpPreset === "zoho"
+                              ? "bg-amber-600 text-white shadow-sm"
+                              : "bg-surface border border-border text-foreground hover:bg-surface-hover"
+                          }`}
+                        >
+                          <span>Zoho Mail</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleApplyCompanyPreset("outlook")}
+                          className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                            companySmtpPreset === "outlook"
+                              ? "bg-blue-600 text-white shadow-sm"
+                              : "bg-surface border border-border text-foreground hover:bg-surface-hover"
+                          }`}
+                        >
+                          <span>Outlook / Microsoft 365</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleApplyCompanyPreset("custom")}
+                          className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                            companySmtpPreset === "custom"
+                              ? "bg-zinc-800 text-white dark:bg-zinc-200 dark:text-zinc-900 shadow-sm"
+                              : "bg-surface border border-border text-foreground hover:bg-surface-hover"
+                          }`}
+                        >
+                          <span>Custom SMTP Server</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div>
+                        <label className="block font-bold text-foreground mb-1">SMTP Host</label>
+                        <input
+                          type="text"
+                          value={companySmtpHost}
+                          onChange={(e) => setCompanySmtpHost(e.target.value)}
+                          placeholder="e.g. smtp.gmail.com"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block font-bold text-foreground mb-1">Port</label>
+                          <input
+                            type="text"
+                            value={companySmtpPort}
+                            onChange={(e) => {
+                              const p = e.target.value
+                              setCompanySmtpPort(p)
+                              if (p === "465") setCompanySmtpSecure(true)
+                              if (p === "587") setCompanySmtpSecure(false)
+                            }}
+                            placeholder="587 / 465"
+                            className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-foreground mb-1">Encryption</label>
+                          <select
+                            value={companySmtpSecure ? "ssl" : "tls"}
+                            onChange={(e) => setCompanySmtpSecure(e.target.value === "ssl")}
+                            className="w-full px-2.5 py-2 rounded-xl bg-surface border border-border text-xs font-semibold focus:outline-hidden cursor-pointer"
+                          >
+                            <option value="tls">STARTTLS (587)</option>
+                            <option value="ssl">SSL / TLS (465)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-foreground mb-1">SMTP Username / Email *</label>
+                        <input
+                          type="email"
+                          value={companySmtpUser}
+                          onChange={(e) => {
+                            setCompanySmtpUser(e.target.value)
+                            if (!companySmtpFromEmail) setCompanySmtpFromEmail(e.target.value)
+                            if (!companyTestEmail) setCompanyTestEmail(e.target.value)
+                          }}
+                          placeholder="e.g. accounts@saamparktechnology.com"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden"
+                        />
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="font-bold text-foreground">App Password / Auth Key *</label>
+                          <button
+                            type="button"
+                            onClick={() => setShowCompanySmtpPass(!showCompanySmtpPass)}
+                            className="text-[10px] text-primary hover:underline font-semibold cursor-pointer"
+                          >
+                            {showCompanySmtpPass ? "Hide" : "Show"}
+                          </button>
+                        </div>
+                        <input
+                          type={showCompanySmtpPass ? "text" : "password"}
+                          value={companySmtpPass}
+                          onChange={(e) => setCompanySmtpPass(e.target.value)}
+                          placeholder="16-character Google App Password"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-foreground mb-1">Sender Display Name</label>
+                        <input
+                          type="text"
+                          value={companySmtpFromName}
+                          onChange={(e) => setCompanySmtpFromName(e.target.value)}
+                          placeholder="e.g. SAAMPARK TECHNOLOGY Invoicing"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-foreground mb-1">Sender From Email (Header)</label>
+                        <input
+                          type="email"
+                          value={companySmtpFromEmail}
+                          onChange={(e) => setCompanySmtpFromEmail(e.target.value)}
+                          placeholder="e.g. billing@saamparktechnology.com"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Google App Password Help Banner */}
+                    <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-[11px] text-amber-900 dark:text-amber-200 space-y-1">
+                      <p className="font-bold flex items-center gap-1.5">
+                        <span>💡 How to generate a Google App Password:</span>
+                      </p>
+                      <p className="text-muted-foreground leading-relaxed">
+                        Go to your <strong>Google Account ➔ Security ➔ 2-Step Verification ➔ App passwords</strong>. Create a new App Password (name it "CRM") and paste the 16-character key above. Regular account passwords with 2FA will be rejected by Google SMTP.
+                      </p>
+                    </div>
+
+                    {/* Live Test Connection Tool */}
+                    <div className="p-3.5 bg-surface-hover/60 border border-border rounded-2xl space-y-2.5">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <span className="font-bold text-foreground text-xs block">Verify SMTP Connection & Send Test Email</span>
+                          <span className="text-[10px] text-muted-foreground">Test your credentials in real-time before saving.</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="email"
+                            value={companyTestEmail}
+                            onChange={(e) => setCompanyTestEmail(e.target.value)}
+                            placeholder="Recipient email..."
+                            className="px-3 py-1.5 rounded-xl bg-surface border border-border text-xs font-mono w-44 focus:outline-hidden"
+                          />
+                          <button
+                            type="button"
+                            disabled={isTestingCompanySmtp || !companySmtpUser || !companySmtpPass}
+                            onClick={handleTestCompanySmtp}
+                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition-all"
+                          >
+                            <Sparkles size={13} className={isTestingCompanySmtp ? "animate-spin" : ""} />
+                            <span>{isTestingCompanySmtp ? "Testing..." : "⚡ Test SMTP"}</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {companySmtpTestResult && (
+                        <div className={`p-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 ${
+                          companySmtpTestResult.success
+                            ? "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                            : "bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800"
+                        }`}>
+                          {companySmtpTestResult.success ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+                          <span>{companySmtpTestResult.message}</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {/* Modal Action Buttons */}
+                {(() => {
+                  const currentCompanyTabIndex = COMPANY_TABS_LIST.indexOf(companyModalTab)
+                  return (
+                    <div className="flex flex-col sm:flex-row items-center justify-between pt-4 border-t border-border/60 gap-3 shrink-0">
+                      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground w-full sm:w-auto">
+                        <Sparkles size={13} className="text-teal-500 shrink-0" />
+                        <span>Step {currentCompanyTabIndex + 1} of 6 • Dynamic Multi-Company Sync</span>
+                      </div>
+
+                      <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => setIsCompanyModalOpen(false)}
+                          className="px-3.5 py-2 rounded-xl border border-border text-muted-foreground hover:text-foreground font-semibold cursor-pointer text-xs transition-colors"
+                        >
+                          Cancel
+                        </button>
+
+                        {currentCompanyTabIndex > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setCompanyModalTab(COMPANY_TABS_LIST[currentCompanyTabIndex - 1])}
+                            className="px-3.5 py-2 rounded-xl bg-surface border border-border text-foreground hover:bg-surface-hover font-semibold text-xs flex items-center gap-1 cursor-pointer transition-colors"
+                          >
+                            <ChevronLeft size={14} />
+                            <span>Back</span>
+                          </button>
+                        )}
+
+                        {currentCompanyTabIndex < COMPANY_TABS_LIST.length - 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setCompanyModalTab(COMPANY_TABS_LIST[currentCompanyTabIndex + 1])}
+                            className="px-4 py-2 rounded-xl bg-primary text-primary-foreground font-bold text-xs flex items-center gap-1 shadow-xs hover:bg-primary/90 cursor-pointer transition-all"
+                          >
+                            <span>Next</span>
+                            <ChevronRight size={14} />
+                          </button>
+                        )}
+
+                        <button
+                          type="submit"
+                          className="px-4.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md cursor-pointer transition-all flex items-center gap-1.5"
+                        >
+                          <Check size={14} />
+                          <span>{editingCompany ? "Save Entity & Signature" : "Create Company Entity"}</span>
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })()}
               </form>
             </motion.div>
           </div>
@@ -1404,6 +2102,293 @@ export function CompanyBranchSettings() {
                   >
                     {editingBranch ? "Update Branch" : "Create Branch"}
                   </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── CREATE / EDIT SUB-BRANCH & REVENUE SHARE MODAL ── */}
+      <AnimatePresence>
+        {isSubBranchModalOpen && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="w-full max-w-xl bg-surface border border-border rounded-3xl p-6 shadow-2xl space-y-4 my-8"
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold">
+                    🌿
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-foreground">
+                      {editingSubBranch ? "Edit Sub-Branch & Share Agreement" : "Add Sub-Branch (Percentage Wise Partner)"}
+                    </h3>
+                    <p className="text-[10px] text-muted-foreground">
+                      Attach a commission-based franchise / partner sub-branch with automated percentage revenue split
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsSubBranchModalOpen(false)}
+                  className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveSubBranch} className="space-y-4 text-xs">
+                {/* Parent Branch Selection */}
+                <div>
+                  <label className="block font-semibold text-foreground mb-1">Parent Operating Branch *</label>
+                  <select
+                    value={subBranchParentBranchId}
+                    onChange={(e) => {
+                      setSubBranchParentBranchId(e.target.value)
+                      const pb = branches.find(b => b.id === e.target.value)
+                      if (pb) setSubBranchCompanyId(pb.companyId)
+                    }}
+                    required
+                    className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-semibold text-foreground focus:outline-hidden focus:border-primary"
+                  >
+                    <option value="" disabled>Select Parent Branch</option>
+                    {branches.map(b => (
+                      <option key={b.id} value={b.id}>
+                        🏢 {b.name} {b.city ? `(${b.city})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold text-foreground mb-1">Sub-Branch Name *</label>
+                    <input
+                      type="text"
+                      required
+                      value={subBranchName}
+                      onChange={(e) => setSubBranchName(e.target.value)}
+                      placeholder="e.g. Durgapur City Center Sub-Branch"
+                      className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden focus:border-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-foreground mb-1">Sub-Branch Code</label>
+                    <input
+                      type="text"
+                      value={subBranchCode}
+                      onChange={(e) => setSubBranchCode(e.target.value)}
+                      placeholder="e.g. SB-DGP-01"
+                      className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+
+                {/* ── INTERACTIVE PERCENTAGE REVENUE SPLIT SLIDER ── */}
+                <div className="p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-800/40 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-bold text-xs text-foreground flex items-center gap-1.5">
+                        <span>🪙 Revenue Share Split (% Wise)</span>
+                      </span>
+                      <p className="text-[10px] text-muted-foreground">
+                        Sub-Branch operates as a percentage partner; earnings auto-calculated on each invoice & order
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm">
+                        {subBranchRevenueSharePct}% Partner
+                      </span>
+                      <span className="text-[10px] text-muted-foreground block">
+                        / {100 - subBranchRevenueSharePct}% Company
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Slider Control */}
+                  <div className="space-y-1">
+                    <input
+                      type="range"
+                      min={1}
+                      max={95}
+                      step={1}
+                      value={subBranchRevenueSharePct}
+                      onChange={(e) => setSubBranchRevenueSharePct(Number(e.target.value))}
+                      className="w-full accent-emerald-600 h-2 bg-emerald-200 dark:bg-emerald-900 rounded-lg cursor-pointer"
+                    />
+                    <div className="flex justify-between text-[9.5px] font-mono text-muted-foreground">
+                      <span>1% (Low Commission)</span>
+                      <span>30% (Standard Franchise)</span>
+                      <span>50% (50-50 JV)</span>
+                      <span>90% (Principal Partner)</span>
+                    </div>
+                  </div>
+
+                  {/* Visual Split Bar */}
+                  <div className="h-3 rounded-full overflow-hidden flex shadow-inner bg-zinc-200 dark:bg-zinc-800">
+                    <div
+                      style={{ width: `${subBranchRevenueSharePct}%` }}
+                      className="bg-emerald-500 text-[9px] font-bold text-white flex items-center justify-center overflow-hidden transition-all"
+                    >
+                      {subBranchRevenueSharePct >= 15 ? `${subBranchRevenueSharePct}% Partner` : ""}
+                    </div>
+                    <div
+                      style={{ width: `${100 - subBranchRevenueSharePct}%` }}
+                      className="bg-blue-600 text-[9px] font-bold text-white flex items-center justify-center overflow-hidden transition-all"
+                    >
+                      {100 - subBranchRevenueSharePct >= 15 ? `${100 - subBranchRevenueSharePct}% Company Retained` : ""}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Partner Details */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block font-semibold text-foreground mb-1">Partner / Owner Name</label>
+                    <input
+                      type="text"
+                      value={subBranchPartnerName}
+                      onChange={(e) => setSubBranchPartnerName(e.target.value)}
+                      placeholder="e.g. Subrata Mukherjee"
+                      className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-foreground mb-1">Partner Phone</label>
+                    <input
+                      type="text"
+                      value={subBranchPartnerPhone}
+                      onChange={(e) => setSubBranchPartnerPhone(e.target.value)}
+                      placeholder="+91 98765 00000"
+                      className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-foreground mb-1">Partner Email</label>
+                    <input
+                      type="email"
+                      value={subBranchPartnerEmail}
+                      onChange={(e) => setSubBranchPartnerEmail(e.target.value)}
+                      placeholder="partner@saampark.in"
+                      className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold text-foreground mb-1">City / Region</label>
+                    <input
+                      type="text"
+                      value={subBranchCity}
+                      onChange={(e) => setSubBranchCity(e.target.value)}
+                      placeholder="e.g. Durgapur"
+                      className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-foreground mb-1">Partner Entity Type</label>
+                    <select
+                      value={subBranchPartnerType}
+                      onChange={(e) => setSubBranchPartnerType(e.target.value as any)}
+                      className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                    >
+                      <option value="Franchise Partner">Franchise Partner</option>
+                      <option value="Agency Partner">Agency Partner</option>
+                      <option value="Satellite Office">Satellite Office</option>
+                      <option value="Regional Associate">Regional Associate</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Partner Payout & Bank Settlement Details */}
+                <div className="p-3.5 rounded-2xl bg-surface-pressed/30 border border-border/70 space-y-2.5">
+                  <span className="font-bold text-[11px] text-foreground flex items-center gap-1.5">
+                    <CreditCard size={13} className="text-primary" />
+                    <span>Partner Commission Payout Account Details</span>
+                  </span>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <input
+                        type="text"
+                        value={subBranchAccountHolder}
+                        onChange={(e) => setSubBranchAccountHolder(e.target.value)}
+                        placeholder="Account Holder Name"
+                        className="w-full px-3 py-1.5 rounded-lg bg-surface border border-border text-xs focus:outline-hidden"
+                      />
+                    </div>
+                    <div>
+                      <input
+                        type="text"
+                        value={subBranchBankName}
+                        onChange={(e) => setSubBranchBankName(e.target.value)}
+                        placeholder="Bank Name"
+                        className="w-full px-3 py-1.5 rounded-lg bg-surface border border-border text-xs focus:outline-hidden"
+                      />
+                    </div>
+                    <div>
+                      <input
+                        type="text"
+                        value={subBranchAccountNumber}
+                        onChange={(e) => setSubBranchAccountNumber(e.target.value)}
+                        placeholder="Bank Account Number"
+                        className="w-full px-3 py-1.5 rounded-lg bg-surface border border-border text-xs font-mono focus:outline-hidden"
+                      />
+                    </div>
+                    <div>
+                      <input
+                        type="text"
+                        value={subBranchIfscCode}
+                        onChange={(e) => setSubBranchIfscCode(e.target.value)}
+                        placeholder="IFSC Code (e.g. SBIN0001234)"
+                        className="w-full px-3 py-1.5 rounded-lg bg-surface border border-border text-xs font-mono uppercase focus:outline-hidden"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <input
+                      type="text"
+                      value={subBranchUpiId}
+                      onChange={(e) => setSubBranchUpiId(e.target.value)}
+                      placeholder="Partner UPI ID for Instant Payouts (e.g. partner@okhdfcbank)"
+                      className="w-full px-3 py-1.5 rounded-lg bg-surface border border-border text-xs font-mono focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-2">
+                  <div className="flex items-center gap-2">
+                    <label className="font-semibold text-foreground text-[11px]">Operational Status:</label>
+                    <select
+                      value={subBranchStatus}
+                      onChange={(e) => setSubBranchStatus(e.target.value as any)}
+                      className="px-2.5 py-1 rounded-lg bg-surface border border-border text-xs focus:outline-hidden"
+                    >
+                      <option value="Active">Active</option>
+                      <option value="Inactive">Inactive</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsSubBranchModalOpen(false)}
+                      className="px-4 py-2 rounded-xl border border-border text-muted-foreground hover:text-foreground font-semibold cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md cursor-pointer transition-colors"
+                    >
+                      {editingSubBranch ? "Update Sub-Branch" : "Register Sub-Branch"}
+                    </button>
+                  </div>
                 </div>
               </form>
             </motion.div>

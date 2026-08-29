@@ -7,6 +7,7 @@ import { addProject } from "../services/projectService"
 import { getUsers } from "@/app/feature/users/services/userService"
 import { getClients } from "@/app/feature/clients/services/clientService"
 import { useAuthStore } from "@/store/useAuthStore"
+import { executeWithFeedback } from "@/store/useActionFeedbackStore"
 
 interface AddProjectModalProps {
   isOpen: boolean
@@ -114,7 +115,7 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
     const finalBranchName = currentBranchObj?.name || user?.branchName || undefined
 
     setIsSubmitting(true)
-    try {
+    await executeWithFeedback(async () => {
       const created = await addProject({
         title,
         projectType,
@@ -156,11 +157,15 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
       } else {
         onClose()
       }
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setIsSubmitting(false)
-    }
+    }, {
+      actionType: "create",
+      loadingTitle: "Creating Project...",
+      loadingMsg: `Initializing workspace for "${title}"...`,
+      successTitle: "Project Created Successfully!",
+      successMsg: `Project "${title}" has been created and assigned.`,
+      errorTitle: "Project Creation Failed",
+    })
+    setIsSubmitting(false)
   }
 
   return (

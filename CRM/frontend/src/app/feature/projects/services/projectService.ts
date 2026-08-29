@@ -127,6 +127,49 @@ export const addProject = async (project: Omit<Project, "id">, companyId?: strin
 }
 
 
+export const syncLinkedOrdersWithProject = async (
+  projectTitle: string,
+  projectId: string,
+  projectStatus: string,
+  companyId?: string
+) => {
+  try {
+    const { getOrders, updateOrder } = await import("@/app/feature/sales/orders/services/orderService")
+    const orders = await getOrders(companyId || "all").catch(() => [])
+    const pTitleNorm = (projectTitle || "").toLowerCase().trim()
+    const pIdNorm = String(projectId || "").toLowerCase().trim()
+
+    let targetOrderStatus: "Pending" | "Processing" | "Completed" | "Cancelled" = "Processing"
+    const normStatus = (projectStatus || "").toLowerCase().trim()
+
+    if (normStatus === "completed" || normStatus === "finished") {
+      targetOrderStatus = "Completed"
+    } else if (normStatus === "canceled" || normStatus === "cancelled") {
+      targetOrderStatus = "Cancelled"
+    } else if (normStatus === "on hold" || normStatus === "pending" || normStatus === "not started") {
+      targetOrderStatus = "Pending"
+    } else {
+      targetOrderStatus = "Processing"
+    }
+
+    for (const ord of orders) {
+      const ordProj = (ord.project || "").toLowerCase().trim()
+      const ordId = String(ord.id || "").toLowerCase().trim()
+      const isMatch =
+        ordProj === pTitleNorm ||
+        ordId === pIdNorm ||
+        (pTitleNorm && ordProj.includes(pTitleNorm)) ||
+        (ordProj && pTitleNorm.includes(ordProj))
+
+      if (isMatch && ord.status !== targetOrderStatus) {
+        await updateOrder(ord.id, { status: targetOrderStatus }, companyId)
+      }
+    }
+  } catch (err) {
+    console.warn("Failed to sync orders with project status:", err)
+  }
+}
+
 export const updateProject = async (id: string, updates: Partial<Project>, companyId?: string): Promise<Project> => {
   const strId = String(id).toLowerCase().trim()
   const current = await fetchModuleDataFromDB<Project[]>("projects", [], companyId)
@@ -138,11 +181,18 @@ export const updateProject = async (id: string, updates: Partial<Project>, compa
     if (updates.status === "Completed") {
       sendProjectCompletionEmailNotification(updatedProj).catch(() => null)
     }
+    if (updates.status) {
+      syncLinkedOrdersWithProject(updatedProj.title, updatedProj.id, updates.status, companyId).catch(() => null)
+    }
     return updatedProj
   }
   const prevStatus = current[idx].status
   current[idx] = { ...current[idx], ...updates }
   await saveModuleDataToDB("projects", current, companyId)
+
+  if (updates.status && updates.status !== prevStatus) {
+    syncLinkedOrdersWithProject(current[idx].title, current[idx].id, updates.status, companyId).catch(() => null)
+  }
 
   if (updates.status === "Completed" && prevStatus !== "Completed") {
     sendProjectCompletionEmailNotification(current[idx]).catch(() => null)
@@ -196,6 +246,10 @@ export const addOrUpdateProjectMilestone = async (
 
   current[idx] = updatedProj
   await saveModuleDataToDB("projects", current, companyId)
+
+  if (newStatus !== target.status) {
+    syncLinkedOrdersWithProject(updatedProj.title, updatedProj.id, newStatus, companyId).catch(() => null)
+  }
 
   if (newStatus === "Completed" && target.status !== "Completed") {
     sendProjectCompletionEmailNotification(updatedProj).catch(() => null)

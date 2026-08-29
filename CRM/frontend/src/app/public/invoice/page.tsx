@@ -16,7 +16,8 @@ import { Company, DEFAULT_COMPANIES } from "@/store/useAuthStore"
 
 function PublicInvoiceContent() {
   const searchParams = useSearchParams()
-  const invoiceId = searchParams.get("id") || searchParams.get("view") || ""
+  const rawParam = searchParams.get("id") || searchParams.get("num") || searchParams.get("number") || searchParams.get("invoiceNumber") || searchParams.get("view") || ""
+  const invoiceQuery = rawParam.replace(/^#/, "").trim()
 
   const [invoice, setInvoice] = React.useState<InvoiceItem | null>(null)
   const [paySettings, setPaySettings] = React.useState<CompanyPaymentSettings>({
@@ -54,10 +55,14 @@ function PublicInvoiceContent() {
 
         setPaySettings(settings)
 
-        if (invoiceId) {
-          const target = allInvoices.find(
-            (i) => i.id.toLowerCase().trim() === invoiceId.toLowerCase().trim()
-          )
+        if (invoiceQuery) {
+          const queryNorm = invoiceQuery.toLowerCase()
+          const target = allInvoices.find((i) => {
+            const idNorm = (i.id || "").toLowerCase()
+            const numNorm = ((i as any).invoiceNumber || (i as any).invoice_number || "").toLowerCase()
+            return idNorm === queryNorm || numNorm === queryNorm || idNorm.endsWith(queryNorm) || numNorm.endsWith(queryNorm)
+          })
+
           if (target) {
             setInvoice(target)
             const matchedCli = allClients.find(
@@ -83,7 +88,7 @@ function PublicInvoiceContent() {
     }
 
     loadData()
-  }, [invoiceId])
+  }, [invoiceQuery])
 
   const handlePrint = () => {
     window.print()
@@ -114,7 +119,7 @@ function PublicInvoiceContent() {
         </div>
         <h2 className="text-lg font-black text-zinc-900 dark:text-zinc-100">Invoice Not Found</h2>
         <p className="text-xs text-zinc-500 max-w-sm mt-1">
-          The requested invoice identifier <code className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded font-bold">{invoiceId || "EMPTY"}</code> could not be found or has expired.
+          The requested invoice identifier <code className="font-mono bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded font-bold">{invoiceQuery || "EMPTY"}</code> could not be found or has expired.
         </p>
       </div>
     )

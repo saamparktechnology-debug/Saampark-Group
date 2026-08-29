@@ -29,6 +29,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
 import { Project, ProjectMilestone } from "../types"
 import { addOrUpdateProjectMilestone } from "../services/projectService"
 import { useAuthStore } from "@/store/useAuthStore"
+import { getUserAvatar } from "@/app/feature/users/services/userService"
 
 interface ProjectDetailViewProps {
   projects: Project[]
@@ -375,7 +376,7 @@ export function ProjectDetailView({
                   </div>
                   <div className="text-[11px] text-zinc-400 truncate">{p.client}</div>
                   <div className="flex items-center gap-2 pt-1 text-[10px] text-zinc-400">
-                    <span>{p.deadline}</span>
+                    <span className="text-red-600 dark:text-red-400 font-bold font-mono">{p.deadline}</span>
                     <span>•</span>
                     <span className="font-medium text-emerald-600 dark:text-emerald-400">{p.price}</span>
                   </div>
@@ -518,7 +519,7 @@ export function ProjectDetailView({
 
                     <div className="w-full space-y-1.5 pt-4 text-xs text-zinc-500 border-t border-zinc-100 dark:border-zinc-800">
                       <div><strong className="text-zinc-700 dark:text-zinc-300">Start date:</strong> {selectedProject.startDate}</div>
-                      <div><strong className="text-zinc-700 dark:text-zinc-300">Deadline:</strong> {selectedProject.deadline}</div>
+                      <div><strong className="text-zinc-700 dark:text-zinc-300">Deadline:</strong> <span className="text-red-600 dark:text-red-400 font-bold font-mono">{selectedProject.deadline}</span></div>
                       <div><strong className="text-zinc-700 dark:text-zinc-300">Status:</strong> {selectedProject.status}</div>
                     </div>
                   </div>
@@ -599,9 +600,9 @@ export function ProjectDetailView({
                         <div key={m.id} className="flex items-center justify-between text-xs">
                           <div className="flex items-center gap-3">
                             <img
-                              src={m.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${m.name}`}
+                              src={(m as any).avatarUrl || m.avatar || getUserAvatar(m.name, undefined, m.name)}
                               alt={m.name}
-                              className="w-8 h-8 rounded-full object-cover bg-amber-500 shrink-0"
+                              className="w-8 h-8 rounded-full object-cover bg-surface border border-border shrink-0"
                             />
                             <div>
                               <div className="font-bold text-zinc-800 dark:text-zinc-200">{m.name}</div>

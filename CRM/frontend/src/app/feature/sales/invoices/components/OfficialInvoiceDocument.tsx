@@ -14,6 +14,32 @@ interface OfficialInvoiceDocumentProps {
   paySettings?: CompanyPaymentSettings
 }
 
+export function formatInvoiceDate(rawDate?: string | number | Date | null): string {
+  if (!rawDate) return "-"
+  const str = String(rawDate).trim()
+  if (str === "-" || str === "") return "-"
+
+  // Check if already in DD-MM-YYYY or DD/MM/YYYY
+  const dmyMatch = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/)
+  if (dmyMatch) {
+    return `${dmyMatch[1].padStart(2, "0")}-${dmyMatch[2].padStart(2, "0")}-${dmyMatch[3]}`
+  }
+
+  // Check if in YYYY-MM-DD or YYYY/MM/DD
+  const ymdMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/)
+  if (ymdMatch) {
+    return `${ymdMatch[3].padStart(2, "0")}-${ymdMatch[2].padStart(2, "0")}-${ymdMatch[1]}`
+  }
+
+  const d = new Date(str)
+  if (isNaN(d.getTime())) return str
+
+  const day = String(d.getDate()).padStart(2, "0")
+  const month = String(d.getMonth() + 1).padStart(2, "0")
+  const year = d.getFullYear()
+  return `${day}-${month}-${year}`
+}
+
 export function numberToIndianWords(num: number): string {
   if (num === 0) return "Zero Rupees Only"
   
@@ -57,7 +83,7 @@ export function OfficialInvoiceDocument({
 }: OfficialInvoiceDocumentProps) {
   const { companies, activeCompanyId } = useAuthStore()
 
-  // 1. Resolve Company Details dynamically
+  // 1. Resolve Company Details dynamically based on specific invoice company
   const activeCompany = React.useMemo(() => {
     if (companyDetails) return companyDetails
 
@@ -74,17 +100,19 @@ export function OfficialInvoiceDocument({
   }, [companyDetails, invoice.companyId, (invoice as any).company, activeCompanyId, companies])
 
   // 2. Determine if GST (>0%) or Non-GST / 0% GST Bill
+  const isExplicitNonGst = invoice.id?.toUpperCase().startsWith("NGINV") || (invoice.gstRate === 0 && (!invoice.items || invoice.items.every(it => !it.gstRate || it.gstRate === 0)))
+  
   const hasItemGst = Array.isArray(invoice.items) && invoice.items.length > 0
     ? invoice.items.some(it => (Number(it.gstRate) || 0) > 0 || (Number(it.gstAmount) || 0) > 0)
     : false
 
-  const isGstInvoice = Boolean(
+  const isGstInvoice = !isExplicitNonGst && Boolean(
     hasItemGst ||
     (typeof invoice.gstRate === "number" && invoice.gstRate > 0) ||
     (typeof invoice.gstAmount === "number" && invoice.gstAmount > 0)
   )
 
-  // Theme configuration based on GST vs Non-GST
+  // Theme configuration based on GST (Teal theme) vs Non-GST (Blue theme)
   const theme = isGstInvoice
     ? {
         name: "gst-teal",
@@ -92,30 +120,30 @@ export function OfficialInvoiceDocument({
         cardHeaderGradient: "bg-gradient-to-br from-[#005f69] via-[#007380] to-[#008a99]",
         primaryBg: "bg-[#005f69]",
         primaryText: "text-[#005f69]",
-        lightBg: "bg-cyan-50/60 dark:bg-cyan-950/30",
-        lightBorder: "border-cyan-200/80 dark:border-cyan-800/60",
+        lightBg: "bg-teal-50/70 dark:bg-teal-950/30",
+        lightBorder: "border-teal-200/80 dark:border-teal-800/60",
         tableHeaderBg: "bg-[#005f69] text-white",
-        tableSubtotalBg: "bg-[#e0f7fa] text-[#005f69] dark:bg-[#005f69]/40 dark:text-cyan-300",
+        tableSubtotalBg: "bg-[#e0f7fa] text-[#005f69] dark:bg-[#005f69]/40 dark:text-teal-300",
         grandTotalBg: "bg-[#005f69] text-white",
-        badgeBg: "bg-cyan-50 text-cyan-800 border-cyan-300",
+        badgeBg: "bg-teal-50 text-teal-800 border-teal-300",
         accentRing: "ring-[#005f69]",
         sealColor: "text-[#005f69] border-[#005f69]",
         invoiceTypeLabel: "TAX INVOICE",
       }
     : {
-        name: "non-gst-light-blue",
-        headerGradient: "bg-gradient-to-r from-[#0284c7] via-[#0ea5e9] to-[#38bdf8]",
-        cardHeaderGradient: "bg-gradient-to-br from-[#0284c7] via-[#0ea5e9] to-[#38bdf8]",
-        primaryBg: "bg-[#0284c7]",
-        primaryText: "text-[#0284c7]",
-        lightBg: "bg-sky-50/70 dark:bg-sky-950/30",
-        lightBorder: "border-sky-200/80 dark:border-sky-800/60",
-        tableHeaderBg: "bg-[#0284c7] text-white",
-        tableSubtotalBg: "bg-[#e0f2fe] text-[#0284c7] dark:bg-[#0284c7]/40 dark:text-sky-300",
-        grandTotalBg: "bg-[#0284c7] text-white",
-        badgeBg: "bg-sky-50 text-sky-800 border-sky-300",
-        accentRing: "ring-[#0284c7]",
-        sealColor: "text-[#0284c7] border-[#0284c7]",
+        name: "non-gst-blue",
+        headerGradient: "bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-600",
+        cardHeaderGradient: "bg-gradient-to-br from-blue-700 via-blue-600 to-indigo-600",
+        primaryBg: "bg-blue-600",
+        primaryText: "text-blue-600",
+        lightBg: "bg-blue-50/70 dark:bg-blue-950/30",
+        lightBorder: "border-blue-200/80 dark:border-blue-800/60",
+        tableHeaderBg: "bg-blue-600 text-white",
+        tableSubtotalBg: "bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300",
+        grandTotalBg: "bg-blue-600 text-white",
+        badgeBg: "bg-blue-50 text-blue-800 border-blue-300",
+        accentRing: "ring-blue-600",
+        sealColor: "text-blue-600 border-blue-600",
         invoiceTypeLabel: "INVOICE",
       }
 
@@ -157,11 +185,28 @@ export function OfficialInvoiceDocument({
     ? "PART PAID" 
     : "NOT PAID"
 
-  // URLs and QR Codes
-  const originUrl = typeof window !== "undefined" ? window.location.origin : "https://saamparktechnology.com"
-  const verifyInvoiceUrl = `${originUrl}/public/invoice?id=${encodeURIComponent(invoice.id)}`
-  
-  const customPaymentQrUrl = activeCompany?.payment_qr_url || paySettings?.qrCodeUrl || null
+  // Bank & UPI details resolved from active company or payment settings
+  const resolvedUpiId = activeCompany?.upi_id || paySettings?.upiId || ""
+  const resolvedAccountHolder = activeCompany?.account_holder || paySettings?.accountHolderName || activeCompany?.name || ""
+  const resolvedBankName = activeCompany?.bank_name || paySettings?.bankName || ""
+  const resolvedAccountNumber = activeCompany?.account_number || paySettings?.accountNumber || ""
+  const resolvedIfscCode = activeCompany?.ifsc_code || paySettings?.ifscCode || ""
+  const resolvedBankBranch = activeCompany?.bank_branch || paySettings?.branch || ""
+
+  // Resolve QR Code URL: If uploaded QR code exists, use it. Otherwise generate dynamic UPI payment QR!
+  const customPaymentQrUrl = activeCompany?.payment_qr_url || paySettings?.qrCodeUrl || (
+    resolvedUpiId
+      ? `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`upi://pay?pa=${resolvedUpiId}&pn=${encodeURIComponent(resolvedAccountHolder || activeCompany?.name || "Saampark")}&am=${totalVal}&cu=INR`)}`
+      : null
+  )
+
+  // Generate Official Public Verification / View Online PDF QR Code against Invoice Number
+  const invoiceNumOrId = (invoice as any).invoiceNumber || (invoice as any).invoice_number || invoice.id
+  const originUrl = typeof window !== "undefined" && window.location.origin
+    ? window.location.origin
+    : "https://saampark.com"
+  const publicInvoiceViewUrl = `${originUrl}/public/invoice?id=${encodeURIComponent(invoice.id)}`
+  const invoiceVerificationQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(publicInvoiceViewUrl)}`
 
   // Line items
   const finalRenderedRows = (invoice.items && invoice.items.length > 0)
@@ -171,7 +216,7 @@ export function OfficialInvoiceDocument({
         const itemCharges = it.charges ? it.charges.reduce((sum, c) => sum + (c.amount || 0), 0) : 0
         const rowBase = (itemRate * itemQty) + itemCharges
         const rowTax = isGstInvoice ? Math.round(rowBase * ((it.gstRate || gstRate) / 100)) : 0
-        const rowTotal = it.totalAmount || (rowBase + rowTax)
+        const rowTotal = isGstInvoice ? (it.totalAmount || (rowBase + rowTax)) : rowBase
         return {
           ...it,
           id: it.id || `row_${idx}`,
@@ -202,44 +247,36 @@ export function OfficialInvoiceDocument({
 
   const totalTableQty = finalRenderedRows.reduce((sum, it) => sum + it.itemQty, 0)
   const totalTableBase = finalRenderedRows.reduce((sum, it) => sum + (it.itemRate * it.itemQty) + it.itemCharges, 0)
-  const totalTableGst = finalRenderedRows.reduce((sum, it) => sum + it.rowTax, 0)
-  const totalTableGross = finalRenderedRows.reduce((sum, it) => sum + it.rowTotal, 0)
+  const totalTableGst = isGstInvoice ? finalRenderedRows.reduce((sum, it) => sum + it.rowTax, 0) : 0
+  const totalTableGross = isGstInvoice ? finalRenderedRows.reduce((sum, it) => sum + it.rowTotal, 0) : totalTableBase
 
   const isMultiPage = finalRenderedRows.length > 5
   const page1Items = isMultiPage ? finalRenderedRows.slice(0, 5) : finalRenderedRows
   const page2Items = isMultiPage ? finalRenderedRows.slice(5) : []
 
   const hasDue = parsedDue > 0
-
-  // Bank & UPI details resolved from active company
-  const resolvedUpiId = activeCompany?.upi_id || paySettings?.upiId || ""
-  const resolvedAccountHolder = activeCompany?.account_holder || paySettings?.accountHolderName || activeCompany?.name || ""
-  const resolvedBankName = activeCompany?.bank_name || paySettings?.bankName || ""
-  const resolvedAccountNumber = activeCompany?.account_number || paySettings?.accountNumber || ""
-  const resolvedIfscCode = activeCompany?.ifsc_code || paySettings?.ifscCode || ""
-  const resolvedBankBranch = activeCompany?.bank_branch || paySettings?.branch || ""
-
   const hasBankDetails = Boolean(resolvedBankName || resolvedAccountNumber)
   const hasUpiDetails = Boolean(resolvedUpiId || customPaymentQrUrl)
   const hasContactInfo = Boolean(activeCompany?.phone || activeCompany?.website || activeCompany?.email)
-  const hasTerms = Boolean(activeCompany?.terms_conditions && activeCompany.terms_conditions.trim().length > 0)
   const hasLegalIds = Boolean(activeCompany?.cin || (isGstInvoice && activeCompany?.gstin) || activeCompany?.pan)
 
   const renderTopHeader = (pageNumber?: number) => (
     <div className="flex flex-col sm:flex-row justify-between items-stretch gap-4 border-b border-zinc-200 pb-3">
-      {/* Left: Company Brand & Entity Info with Logo Badge */}
+      {/* Left: Company Brand & Entity Info with Logo */}
       <div className="flex items-start gap-3.5 flex-1 min-w-0">
-        <div className={`w-28 h-24 p-2 rounded-tl-2xl rounded-tr-xs rounded-br-[32px] rounded-bl-xs ${theme.cardHeaderGradient} text-white flex items-center justify-center text-center shadow-md shrink-0 border border-white/20 overflow-hidden`}>
-          {activeCompany?.logo_url ? (
+        {activeCompany?.logo_url ? (
+          <div className="w-28 h-24 flex items-center justify-center shrink-0 overflow-hidden bg-transparent">
             <img 
               src={activeCompany.logo_url} 
               alt={activeCompany.name} 
-              className="w-20 h-20 object-contain drop-shadow-md brightness-110" 
+              className="max-w-full max-h-full object-contain" 
             />
-          ) : (
+          </div>
+        ) : (
+          <div className={`w-28 h-24 p-2 rounded-tl-2xl rounded-tr-xs rounded-br-[32px] rounded-bl-xs ${theme.cardHeaderGradient} text-white flex items-center justify-center text-center shadow-md shrink-0 border border-white/20 overflow-hidden`}>
             <span className="text-4xl">{activeCompany?.logo || "🏢"}</span>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Title, Subtitle, Legal IDs & Registered Office Coordinates */}
         <div className="space-y-1 flex-1 min-w-0 pt-0.5">
@@ -251,19 +288,19 @@ export function OfficialInvoiceDocument({
                 : ""
               return (
                 <h1 className="text-xl sm:text-2xl font-black tracking-tight leading-none">
-                  <span className="text-zinc-950 uppercase">{brandPart}</span>{" "}
-                  {divisionPart && <span className={`${theme.primaryText} uppercase font-extrabold`}>{divisionPart}</span>}
+                  <span className="text-zinc-950">{brandPart}</span>{" "}
+                  {divisionPart && <span className={`${theme.primaryText} font-extrabold`}>{divisionPart}</span>}
                 </h1>
               )
             })()}
             {activeCompany?.subtitle && (
-              <h2 className="text-xs sm:text-sm font-bold text-zinc-700 tracking-wider uppercase mt-1">
+              <h2 className="text-xs sm:text-sm font-bold text-zinc-700 tracking-wider mt-1">
                 {activeCompany.subtitle}
               </h2>
             )}
           </div>
 
-          {/* Legal IDs: CIN, GSTIN, PAN (Only rendered if provided, blank if empty) */}
+          {/* Legal IDs: CIN, GSTIN (GST Only), PAN */}
           {hasLegalIds && (
             <p className="text-[10px] font-semibold text-zinc-600 font-mono pt-0.5 flex items-center gap-2 flex-wrap">
               {activeCompany?.cin && (
@@ -273,7 +310,7 @@ export function OfficialInvoiceDocument({
                 <span>{activeCompany?.cin ? "| " : ""}GSTIN: <strong className="text-zinc-900 font-black">{activeCompany.gstin}</strong></span>
               )}
               {activeCompany?.pan && (
-                <span>{(activeCompany?.cin || activeCompany?.gstin) ? "| " : ""}PAN: <strong className="text-zinc-900 font-black">{activeCompany.pan}</strong></span>
+                <span>{(activeCompany?.cin || (isGstInvoice && activeCompany?.gstin)) ? "| " : ""}PAN: <strong className="text-zinc-900 font-black">{activeCompany.pan}</strong></span>
               )}
             </p>
           )}
@@ -318,8 +355,8 @@ export function OfficialInvoiceDocument({
         </div>
       </div>
 
-      {/* Right: Curved Header Card with Status Badge & Details */}
-      <div className={`w-full sm:w-56 rounded-2xl ${theme.cardHeaderGradient} text-white p-3 shadow-md shrink-0 flex flex-col justify-between`}>
+      {/* Right: Header Card with Status Badge & Dates */}
+      <div className={`w-full sm:w-60 rounded-2xl ${theme.cardHeaderGradient} text-white p-3 shadow-md shrink-0 flex flex-col justify-between`}>
         <div className="flex items-center justify-between border-b border-white/20 pb-1.5">
           <span className="font-black text-xs tracking-wider uppercase">
             {theme.invoiceTypeLabel} {pageNumber ? `(P.${pageNumber}/2)` : ''}
@@ -335,26 +372,37 @@ export function OfficialInvoiceDocument({
           </span>
         </div>
 
-        <div className="space-y-1.5 pt-2 text-[10px]">
-          <div className="flex justify-between items-center">
-            <span className="text-white/80 flex items-center gap-1">
-              <span>📄</span> INVOICE NO.
-            </span>
-            <strong className="font-mono text-white text-[11px]">{invoice.id}</strong>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-white/80 flex items-center gap-1">
-              <span>📅</span> INVOICE DATE & TIME
-            </span>
-            <strong className="text-white font-mono text-[9.5px]">
-              {invoice.billDate} {invoice.billTime ? `• ${invoice.billTime}` : (invoice.createdAt ? `• ${new Date(invoice.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}` : "")}
-            </strong>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-white/80 flex items-center gap-1">
-              <span>📅</span> NEXT DUE DATE
-            </span>
-            <strong className="text-white font-mono">{hasDue ? (invoice.dueDate || "-") : "-"}</strong>
+        <div className="flex items-center gap-2 pt-2">
+          <a 
+            href={publicInvoiceViewUrl} 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="shrink-0 group block"
+            title="Scan or click to view public invoice PDF online"
+          >
+            <img 
+              src={invoiceVerificationQrUrl} 
+              alt={`QR ${invoiceNumOrId}`} 
+              className="w-14 h-14 bg-white p-0.5 rounded-lg border border-white/40 shadow-xs object-contain group-hover:scale-105 transition-transform" 
+            />
+          </a>
+          <div className="space-y-1 text-[10px] flex-1 min-w-0">
+            <div className="flex justify-between items-center">
+              <span className="text-white/80">INVOICE NO:</span>
+              <strong className="font-mono text-white text-[11px] truncate max-w-[95px]">{invoice.id}</strong>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-white/80">DATE:</span>
+              <strong className="text-white font-mono text-[9.5px]">
+                {formatInvoiceDate(invoice.billDate)}
+              </strong>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-white/80">DUE:</span>
+              <strong className="text-white font-mono text-[9.5px]">
+                {hasDue ? formatInvoiceDate(invoice.dueDate) : "-"}
+              </strong>
+            </div>
           </div>
         </div>
       </div>
@@ -363,8 +411,8 @@ export function OfficialInvoiceDocument({
 
   const renderInfoCards = () => (
     <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-1">
-      {/* Box 1: BILL TO (5 cols) */}
-      <div className={`sm:col-span-5 p-3 rounded-2xl ${theme.lightBg} border ${theme.lightBorder} space-y-1 shadow-2xs`}>
+      {/* Box 1: BILL TO (7 cols) */}
+      <div className={`sm:col-span-7 p-3 rounded-2xl ${theme.lightBg} border ${theme.lightBorder} space-y-1 shadow-2xs`}>
         <div className="flex items-center gap-1.5 text-[10.5px] font-black uppercase tracking-wider text-zinc-700">
           <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center text-[8px]`}>👤</span>
           <span>BILL TO</span>
@@ -374,42 +422,27 @@ export function OfficialInvoiceDocument({
           <strong>Address:</strong> {clientDetails?.address || (invoice.clientEmail ? `${clientDetails?.address || 'Corporate Center'}` : 'Head Office')}
         </p>
         <p className="text-[10px] text-zinc-600">
-          <strong>State:</strong> {clientDetails?.state || 'West Bengal'}
+          <strong>State / Location:</strong> {clientDetails?.state || clientDetails?.city || (activeCompany?.state || 'West Bengal')}
         </p>
         {isGstInvoice && clientDetails?.gstNumber && (
           <p className="text-[9.5px] font-mono font-bold text-zinc-800">
-            <strong>GSTIN:</strong> {clientDetails.gstNumber}
+            <strong>Client GSTIN:</strong> {clientDetails.gstNumber}
           </p>
         )}
       </div>
 
-      {/* Box 2: SHIP TO / DELIVERY LOCATION (4 cols) */}
-      <div className={`sm:col-span-4 p-3 rounded-2xl ${theme.lightBg} border ${theme.lightBorder} space-y-1 shadow-2xs`}>
-        <div className="flex items-center gap-1.5 text-[10.5px] font-black uppercase tracking-wider text-zinc-700">
-          <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center text-[8px]`}>📦</span>
-          <span>SHIP TO / WORK SITE</span>
-        </div>
-        <p className="font-black text-xs text-zinc-900 leading-tight">{invoice.client}</p>
-        <p className="text-[10px] text-zinc-600 leading-tight">
-          {clientDetails?.address || 'Same as Billing Address'}
-        </p>
-        <p className="text-[10px] text-zinc-600">
-          <strong>Place of Supply:</strong> {clientDetails?.state || (activeCompany?.state || 'West Bengal')}
-        </p>
-      </div>
-
-      {/* Box 3: SERVICE / ENGAGEMENT DETAILS (3 cols) */}
-      <div className={`sm:col-span-3 p-3 rounded-2xl ${theme.lightBg} border ${theme.lightBorder} space-y-1 shadow-2xs`}>
+      {/* Box 2: SERVICE / ENGAGEMENT DETAILS (5 cols) */}
+      <div className={`sm:col-span-5 p-3 rounded-2xl ${theme.lightBg} border ${theme.lightBorder} space-y-1 shadow-2xs`}>
         <div className="flex items-center gap-1.5 text-[10.5px] font-black uppercase tracking-wider text-zinc-700">
           <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center text-[8px]`}>💼</span>
-          <span>PROJECT / SERVICE</span>
+          <span>PROJECT / SERVICE SCOPE</span>
         </div>
         <p className="font-bold text-xs text-zinc-900 truncate">{invoice.project || "Enterprise Solutions"}</p>
         <p className="text-[10px] text-zinc-600 font-mono">
-          <strong>Category:</strong> {isGstInvoice ? 'GST Service' : 'Direct Retainer'}
+          <strong>Billing Scheme:</strong> {isGstInvoice ? 'GST Tax Invoice' : 'Non-GST / Direct Retainer'}
         </p>
         <p className="text-[10px] text-zinc-600">
-          <strong>Branch:</strong> {invoice.branchName || (activeCompany?.name || 'Main Office')}
+          <strong>Issuing Entity:</strong> {activeCompany?.name || invoice.branchName || 'Main Office'}
         </p>
       </div>
     </div>
@@ -457,7 +490,7 @@ export function OfficialInvoiceDocument({
                     </span>
                   </div>
                 ) : (
-                  <span>₹0.00</span>
+                  <span className="font-mono text-zinc-400">₹0.00</span>
                 )}
               </td>
               <td className="py-2.5 px-3 text-right font-mono font-black text-zinc-900">
@@ -505,22 +538,23 @@ export function OfficialInvoiceDocument({
             </p>
           </div>
 
-          {/* Terms & Conditions (Only rendered if configured, blank otherwise) */}
-          {hasTerms && (
-            <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200 space-y-1 shadow-2xs">
-              <span className="font-black text-[10px] uppercase tracking-wider text-zinc-700 block border-b border-zinc-200 pb-1">
-                TERMS & CONDITIONS
-              </span>
-              <ul className="space-y-1 text-[9px] text-zinc-700 font-medium leading-tight whitespace-pre-line">
-                {activeCompany?.terms_conditions?.split("\n").filter(Boolean).map((line, idx) => (
+          {/* Terms & Conditions */}
+          <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200 space-y-1 shadow-2xs">
+            <span className="font-black text-[10px] uppercase tracking-wider text-zinc-700 block border-b border-zinc-200 pb-1">
+              TERMS & CONDITIONS
+            </span>
+            <ul className="space-y-1 text-[9px] text-zinc-700 font-medium leading-tight whitespace-pre-line">
+              {(activeCompany?.terms_conditions || "1. All payments must be made in favor of the company indicated above.\n2. Please quote Invoice Number in all remittance references.\n3. Goods / Services once rendered are subject to standard enterprise terms.\n4. Interest @ 18% p.a. applies on unpaid balances beyond the due date.")
+                .split("\n")
+                .filter(Boolean)
+                .map((line, idx) => (
                   <li key={idx} className="flex items-start gap-1.5">
                     <span className={`${theme.primaryText} font-bold`}>✔</span>
                     <span>{line}</span>
                   </li>
                 ))}
-              </ul>
-            </div>
-          )}
+            </ul>
+          </div>
         </div>
 
         {/* Right 6 Columns: Financial Computation Matrix */}
@@ -586,13 +620,13 @@ export function OfficialInvoiceDocument({
 
             <div className="flex justify-between pt-0.5 text-[9.5px] text-zinc-500">
               <span>Next Due Date</span>
-              <span className="font-mono font-bold text-zinc-800">{hasDue ? (invoice.dueDate || "-") : "-"}</span>
+              <span className="font-mono font-bold text-zinc-800">{hasDue ? formatInvoiceDate(invoice.dueDate) : "-"}</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* PAYMENT & BANK TRANSFER DETAILS (Only rendered if configured, blank otherwise) */}
+      {/* PAYMENT & BANK TRANSFER DETAILS */}
       {(hasUpiDetails || hasBankDetails) && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
           {hasUpiDetails ? (
@@ -609,25 +643,25 @@ export function OfficialInvoiceDocument({
                   <img 
                     src={customPaymentQrUrl} 
                     alt="Payment QR Code" 
-                    className="w-14 h-14 bg-white p-1 border border-zinc-300 shrink-0 object-contain shadow-xs rounded-lg" 
+                    className="w-16 h-16 bg-white p-1 border border-zinc-300 shrink-0 object-contain shadow-xs rounded-lg" 
                   />
                 ) : (
-                  <div className="w-11 h-11 rounded-lg bg-white border border-zinc-200 flex flex-col items-center justify-center text-center p-0.5 shrink-0 text-zinc-500">
+                  <div className="w-14 h-14 rounded-lg bg-white border border-zinc-200 flex flex-col items-center justify-center text-center p-0.5 shrink-0 text-zinc-500">
                     <span className="text-sm">⚡</span>
                     <span className="text-[7.5px] font-bold">UPI PAY</span>
                   </div>
                 )}
                 
-                <div className="space-y-0.5 text-[9px] flex-1">
+                <div className="space-y-0.5 text-[9px] flex-1 min-w-0">
                   {resolvedUpiId && (
                     <div className="flex justify-between">
                       <span className="text-zinc-600">UPI ID:</span>
-                      <strong className="font-mono text-zinc-900 font-bold">{resolvedUpiId}</strong>
+                      <strong className="font-mono text-zinc-900 font-bold truncate">{resolvedUpiId}</strong>
                     </div>
                   )}
                   {resolvedAccountHolder && (
                     <div className="flex justify-between">
-                      <span className="text-zinc-600">Account Holder:</span>
+                      <span className="text-zinc-600">A/C Name:</span>
                       <strong className="text-zinc-900 font-bold truncate max-w-[130px]">{resolvedAccountHolder}</strong>
                     </div>
                   )}
@@ -681,7 +715,7 @@ export function OfficialInvoiceDocument({
       {/* SIGNATURES & OFFICIAL SEAL ROW */}
       <div className="flex flex-row justify-between items-center gap-3 pt-2 border-t border-zinc-200">
         <div className="text-center space-y-0.5">
-          <div className="h-6 flex items-end justify-center">
+          <div className="h-10 flex items-end justify-center">
             <span className="font-serif italic text-zinc-500 text-xs">Customer Signature</span>
           </div>
           <div className="w-32 border-t border-zinc-400 pt-0.5">
@@ -689,23 +723,43 @@ export function OfficialInvoiceDocument({
           </div>
         </div>
 
-        <div className={`px-3 py-1 rounded-xl ${theme.lightBg} border ${theme.lightBorder} text-center space-y-0.5`}>
-          <p className="font-extrabold text-[10.5px] text-zinc-900">
-            💬 Thank you for your business!
-          </p>
-          <p className="text-[9px] text-zinc-500">
-            We look forward to serving you again.
-          </p>
+        {/* Official Scan to View / Verify Online PDF QR Box */}
+        <div className={`px-2.5 py-1 rounded-xl ${theme.lightBg} border ${theme.lightBorder} flex items-center gap-2 shadow-2xs`}>
+          <a 
+            href={publicInvoiceViewUrl} 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="block shrink-0 cursor-pointer group"
+            title="Click or scan to view digital PDF copy online"
+          >
+            <img 
+              src={invoiceVerificationQrUrl} 
+              alt={`QR Code for Invoice #${invoiceNumOrId}`} 
+              className="w-12 h-12 bg-white p-0.5 border border-zinc-300 rounded-lg object-contain shadow-xs group-hover:scale-105 transition-transform" 
+            />
+          </a>
+          <div className="text-left space-y-0.5">
+            <div className="flex items-center gap-1">
+              <span className="text-[10px]">🔍</span>
+              <span className="font-extrabold text-[8.5px] text-zinc-900 uppercase tracking-tight">Scan for Online PDF</span>
+            </div>
+            <p className="text-[8px] font-mono text-zinc-600 font-bold leading-tight">
+              INV #{invoiceNumOrId}
+            </p>
+            <p className="text-[7.5px] text-emerald-700 font-bold leading-tight flex items-center gap-0.5">
+              <span>✓</span> Public PDF (No Login)
+            </p>
+          </div>
         </div>
 
         <div className="flex items-center gap-2.5">
           <div className="text-center space-y-0.5">
-            <div className="h-12 flex items-end justify-center">
+            <div className="h-14 flex items-end justify-center">
               {activeCompany?.signature_image_url ? (
                 <img 
                   src={activeCompany.signature_image_url} 
                   alt="Company Signature / Stamp" 
-                  className="max-h-12 max-w-[140px] object-contain drop-shadow-xs" 
+                  className="max-h-14 max-w-[150px] object-contain drop-shadow-xs" 
                 />
               ) : (
                 <span className="font-serif italic text-zinc-700 text-xs font-bold">

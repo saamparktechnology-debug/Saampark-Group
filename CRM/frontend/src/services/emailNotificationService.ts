@@ -67,6 +67,7 @@ export async function sendInvoiceDetailsEmailNotification(
       dueAmount: invoice.due || invoice.totalInvoiced,
       items: invoice.items || [],
       viewUrl: invoiceUrl,
+      companyId: (invoice as any).companyId || (invoice as any).company_id || undefined,
     })
     return { success: true, message: `Invoice email successfully delivered to ${recipient}` }
   } catch (err: any) {
@@ -100,6 +101,7 @@ export async function sendProjectCompletionEmailNotification(
         clientName: name,
         projectTitle: project.title,
         invoiceId: (project as any).invoiceId || "",
+        companyId: (project as any).companyId || (project as any).company_id || undefined,
       })
 
     } catch (err) {
@@ -133,6 +135,7 @@ export async function sendClientWelcomeEmailNotification(
       to: recipient,
       clientName: client.primaryContact || client.name,
       companyName: client.name,
+      companyId: (client as any).companyId || (client as any).company_id || undefined,
     })
   } catch (err) {
     console.warn("Welcome email dispatch error:", err)
@@ -184,6 +187,7 @@ export async function sendPaymentReceiptEmailNotification({
       nextDueDate: isZero ? "-" : (nextDueDate || invoice.dueDate || "-"),
       paymentMethod,
       txnRef,
+      companyId: (invoice as any).companyId || (invoice as any).company_id || undefined,
     })
   } catch (err) {
     console.warn("Payment receipt email dispatch error:", err)
@@ -221,6 +225,7 @@ export async function sendPaymentDueReminderEmailNotification(
       project: invoice.project,
       dueAmount: dueVal,
       dueDate: invoice.dueDate || "Immediate",
+      companyId: (invoice as any).companyId || (invoice as any).company_id || undefined,
     })
     return { success: true, message: `Payment reminder email sent to ${recipient} for ${dueVal}` }
   } catch (err: any) {
@@ -236,7 +241,8 @@ export async function sendGenericReminderEmail(
   to: string,
   subject: string,
   html: string,
-  clientName?: string
+  clientName?: string,
+  companyId?: string
 ): Promise<boolean> {
   const recipient = (to || "").trim()
   if (!recipient) return false
@@ -249,6 +255,7 @@ export async function sendGenericReminderEmail(
       subject,
       html,
       clientName: clientName || "Valued Client",
+      companyId: companyId || undefined,
     })
     return true
   } catch (err) {

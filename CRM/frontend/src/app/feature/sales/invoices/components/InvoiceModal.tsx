@@ -56,7 +56,7 @@ export function InvoiceModal({
     c.id.toLowerCase() === (invoice.companyId || "").toLowerCase() ||
     (c.slug && c.slug.toLowerCase() === (invoice.companyId || "").toLowerCase()) ||
     c.name.toLowerCase() === (invoice.companyId || "").toLowerCase()
-  ) || null
+  ) || companies.find(c => c.id.toLowerCase() === (useAuthStore.getState().activeCompanyId || "").toLowerCase()) || companies[0] || null
 
   const originUrl = typeof window !== "undefined" ? window.location.origin : "https://saamparktechnology.com"
   const publicShareUrl = `${originUrl}/public/invoice?id=${encodeURIComponent(invoice.id)}`

@@ -10,6 +10,7 @@ import { EditProjectModal } from "./components/EditProjectModal"
 import { ProjectDetailView } from "./components/ProjectDetailView"
 import { useAuthStore } from "@/store/useAuthStore"
 import { ThreeDotLoader } from "@/components/ui/ThreeDotLoader"
+import { executeWithFeedback } from "@/store/useActionFeedbackStore"
 
 export default function ProjectsMain() {
   const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
@@ -173,11 +174,22 @@ export default function ProjectsMain() {
   }
 
   const handleDeleteProject = async (id: string) => {
-    await deleteProject(id)
-    setProjects((prev) => prev.filter((p) => p.id !== id))
-    if (selectedProject?.id === id) {
-      setSelectedProject(projects.find((p) => p.id !== id) || null)
-    }
+    const proj = projects.find(p => p.id === id)
+    const projTitle = proj?.title || "Project"
+    await executeWithFeedback(async () => {
+      await deleteProject(id)
+      setProjects((prev) => prev.filter((p) => p.id !== id))
+      if (selectedProject?.id === id) {
+        setSelectedProject(projects.find((p) => p.id !== id) || null)
+      }
+    }, {
+      actionType: "delete",
+      loadingTitle: "Deleting Project...",
+      loadingMsg: `Removing "${projTitle}" and milestones...`,
+      successTitle: "Project Deleted",
+      successMsg: `"${projTitle}" was deleted successfully.`,
+      errorTitle: "Delete Failed",
+    })
   }
 
   const handleOpenEditModal = (p: Project) => {

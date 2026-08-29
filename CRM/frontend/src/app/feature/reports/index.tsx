@@ -9,7 +9,7 @@ import {
 } from "lucide-react"
 
 import { Button } from "@/components/ui/Button"
-import { useAuthStore } from "@/store/useAuthStore"
+import { useAuthStore, SubBranch } from "@/store/useAuthStore"
 import { getUsers } from "../users/services/userService"
 import { getInvoices, InvoiceItem } from "../sales/invoices/services/invoiceService"
 import { getPayments, PaymentItem } from "../sales/payments/services/paymentService"
@@ -21,11 +21,11 @@ import { Task } from "../tasks/types"
 import { getLeads } from "../leads/services/leadService"
 import { Lead } from "../leads/types"
 
-type ReportTab = "revenue" | "gst_analytics" | "leads" | "productivity" | "attendance" | "expenses"
+type ReportTab = "revenue" | "gst_analytics" | "sub_branches" | "leads" | "productivity" | "attendance" | "expenses"
 type InvoiceFilterType = "all" | "gst" | "non_gst" | "due" | "paid" | "partially_paid"
 
 export default function ReportsMain() {
-  const { user, branches, activeCompanyId, activeBranchId } = useAuthStore()
+  const { user, branches, subBranches, fetchSubBranches, activeCompanyId, activeBranchId } = useAuthStore()
   
   const isSuperAdmin = user?.role === "Super Admin"
   const isAdmin = user?.role === "Admin"
@@ -110,13 +110,16 @@ export default function ReportsMain() {
 
   React.useEffect(() => {
     loadData()
+    fetchSubBranches().catch(() => {})
     window.addEventListener("storage", loadData)
     window.addEventListener("saampark_data_synced", loadData)
+    window.addEventListener("saampark_subbranches_updated", loadData)
     return () => {
       window.removeEventListener("storage", loadData)
       window.removeEventListener("saampark_data_synced", loadData)
+      window.removeEventListener("saampark_subbranches_updated", loadData)
     }
-  }, [loadData])
+  }, [loadData, fetchSubBranches])
 
   // Helper map for client GSTIN and Branch details
   const clientMap = React.useMemo(() => {
@@ -369,12 +372,123 @@ export default function ReportsMain() {
       })
   }, [users, tasks, branchMap])
 
+  // ── Sub-Branch Performance & Percentage Revenue Share Calculations ─────────
+  const subBranchReportData = React.useMemo(() => {
+    const list = subBranches || []
+    return list.map((sb) => {
+      const parentBranch = (branches || []).find((b) => b.id === sb.parentBranchId)
+      const parentBranchName = parentBranch?.name || sb.parentBranchId || "Main Operating Branch"
+
+      // Match invoices attributed to this sub-branch
+      const matchedInvoices = scopedInvoices.filter((inv) => {
+        const strSubBranchId = String(inv.subBranchId || "").toLowerCase().trim()
+        const strSubBranchName = String(inv.subBranchName || "").toLowerCase().trim()
+        const sbId = String(sb.id).toLowerCase().trim()
+        const sbName = String(sb.name).toLowerCase().trim()
+
+        return (
+          (strSubBranchId && strSubBranchId === sbId) ||
+          (strSubBranchName && strSubBranchName === sbName) ||
+          ((inv as any).subBranch && String((inv as any).subBranch).toLowerCase().trim() === sbName)
+        )
+      })
+
+      const totalInvoicedGross = matchedInvoices.reduce((sum, inv) => {
+        const num = parseInt((inv.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
+        return sum + num
+      }, 0)
+
+      const totalPaid = matchedInvoices.reduce((sum, inv) => {
+        const num = parseInt((inv.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
+        return sum + num
+      }, 0)
+
+      const totalDue = matchedInvoices.reduce((sum, inv) => {
+        const num = parseInt((inv.due || "0").replace(/[^0-9]/g, "")) || 0
+        return sum + num
+      }, 0)
+
+      const sharePct = sb.revenueSharePct ?? 30
+      const companySharePct = 100 - sharePct
+      const partnerEarnedGross = Math.round(totalInvoicedGross * (sharePct / 100))
+      const companyRetainedGross = totalInvoicedGross - partnerEarnedGross
+
+      const partnerEarnedRealized = Math.round(totalPaid * (sharePct / 100))
+      const partnerPendingPayout = Math.round(totalDue * (sharePct / 100))
+
+      return {
+        ...sb,
+        parentBranchName,
+        invoicesCount: matchedInvoices.length,
+        totalInvoicedGross,
+        totalPaid,
+        totalDue,
+        sharePct,
+        companySharePct,
+        partnerEarnedGross,
+        companyRetainedGross,
+        partnerEarnedRealized,
+        partnerPendingPayout,
+        matchedInvoices,
+      }
+    })
+  }, [subBranches, branches, scopedInvoices])
+
+  const totalSubBranchGrossVolume = subBranchReportData.reduce((sum, sb) => sum + sb.totalInvoicedGross, 0)
+  const totalCompanyRetainedFromSubBranches = subBranchReportData.reduce((sum, sb) => sum + sb.companyRetainedGross, 0)
+  const totalPartnerPayoutAccrued = subBranchReportData.reduce((sum, sb) => sum + sb.partnerEarnedGross, 0)
+  const totalPartnerPayoutRealized = subBranchReportData.reduce((sum, sb) => sum + sb.partnerEarnedRealized, 0)
+
   // ── CSV / Excel Export ────────────────────────────────────────────────────
   const handleExportCSV = () => {
     let rows: string[][] = []
     let filename = `saampark_billing_report_${new Date().toISOString().split("T")[0]}.csv`
 
-    if (activeTab === "revenue" || activeTab === "gst_analytics") {
+    if (activeTab === "sub_branches") {
+      filename = `saampark_subbranch_revenue_share_report_${new Date().toISOString().split("T")[0]}.csv`
+      rows = [
+        [
+          "Sub-Branch Name",
+          "Code",
+          "Parent Branch",
+          "Partner Name",
+          "Partner Phone",
+          "Partner Type",
+          "Partner Share (%)",
+          "Company Share (%)",
+          "Invoices Count",
+          "Total Invoiced Gross (INR)",
+          "Company Retained (INR)",
+          "Partner Total Accrued (INR)",
+          "Partner Realized Payout (INR)",
+          "Partner Pending Due (INR)",
+          "Bank Account",
+          "IFSC",
+          "UPI ID",
+          "Status"
+        ],
+        ...subBranchReportData.map((sb) => [
+          sb.name,
+          sb.code || "-",
+          sb.parentBranchName,
+          sb.partnerName || "-",
+          sb.partnerPhone || "-",
+          sb.partnerType || "Franchise Partner",
+          `${sb.sharePct}%`,
+          `${sb.companySharePct}%`,
+          String(sb.invoicesCount),
+          String(sb.totalInvoicedGross),
+          String(sb.companyRetainedGross),
+          String(sb.partnerEarnedGross),
+          String(sb.partnerEarnedRealized),
+          String(sb.partnerPendingPayout),
+          sb.bankDetails?.accountNumber || "-",
+          sb.bankDetails?.ifscCode || "-",
+          sb.bankDetails?.upiId || "-",
+          sb.status
+        ])
+      ]
+    } else if (activeTab === "revenue" || activeTab === "gst_analytics") {
       rows = [
         [
           "Invoice Number",
@@ -559,6 +673,7 @@ export default function ReportsMain() {
         {[
           { id: "revenue", label: "Financial & Tax Overview", icon: DollarSign },
           { id: "gst_analytics", label: "GST & Tax Slab Audit", icon: Landmark },
+          { id: "sub_branches", label: "🌿 Sub-Branch Revenue Share (% Wise)", icon: Percent },
           { id: "leads", label: "Leads & Conversion", icon: Target },
           { id: "productivity", label: "Team Productivity", icon: CheckSquare },
           { id: "attendance", label: "Staff & Branch Directory", icon: Users },
@@ -985,6 +1100,228 @@ export default function ReportsMain() {
         </div>
       )}
 
+      {/* ── TAB: SUB-BRANCH REVENUE SHARE (% WISE) ────────────────────────── */}
+      {activeTab === "sub_branches" && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Summary Hero Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Total Sub-Branch Gross */}
+            <div className="p-5 rounded-2xl bg-surface border border-border space-y-2 shadow-2xs">
+              <div className="flex items-center justify-between text-muted-foreground text-xs font-semibold">
+                <span>Sub-Branch Invoiced (Gross)</span>
+                <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-600">
+                  <Receipt size={14} />
+                </div>
+              </div>
+              <p className="text-2xl font-black text-foreground">
+                ₹{totalSubBranchGrossVolume.toLocaleString("en-IN")}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                Across {subBranchReportData.length} registered percentage partner hubs
+              </p>
+            </div>
+
+            {/* Company Retained Net Share */}
+            <div className="p-5 rounded-2xl bg-surface border border-border space-y-2 shadow-2xs">
+              <div className="flex items-center justify-between text-muted-foreground text-xs font-semibold">
+                <span>Company Retained Share</span>
+                <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-600">
+                  <Building2 size={14} />
+                </div>
+              </div>
+              <p className="text-2xl font-black text-blue-600 dark:text-blue-400">
+                ₹{totalCompanyRetainedFromSubBranches.toLocaleString("en-IN")}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                Company retainage (Operating Branch share)
+              </p>
+            </div>
+
+            {/* Partner Payouts Accrued */}
+            <div className="p-5 rounded-2xl bg-surface border border-border space-y-2 shadow-2xs">
+              <div className="flex items-center justify-between text-muted-foreground text-xs font-semibold">
+                <span>Partner Payouts (Accrued)</span>
+                <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-600">
+                  <Percent size={14} />
+                </div>
+              </div>
+              <p className="text-2xl font-black text-amber-600 dark:text-amber-400">
+                ₹{totalPartnerPayoutAccrued.toLocaleString("en-IN")}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                Total commission/share earned by sub-branches
+              </p>
+            </div>
+
+            {/* Realized Cash Payouts */}
+            <div className="p-5 rounded-2xl bg-surface border border-border space-y-2 shadow-2xs">
+              <div className="flex items-center justify-between text-muted-foreground text-xs font-semibold">
+                <span>Partner Share Realized</span>
+                <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-600">
+                  <CheckCircle2 size={14} />
+                </div>
+              </div>
+              <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                ₹{totalPartnerPayoutRealized.toLocaleString("en-IN")}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                Commission realized from collected customer payments
+              </p>
+            </div>
+          </div>
+
+          {/* Sub-Branch Breakdown Cards & Interactive Table */}
+          <div className="bg-surface border border-border rounded-2xl p-5 space-y-4 shadow-2xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
+                  <span className="text-base">🌿</span>
+                  <span>Sub-Branch Performance & Percentage Settlement Breakdown</span>
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Real-time ledger tracking gross billings, percentage agreements, company retention, and partner commissions.
+                </p>
+              </div>
+            </div>
+
+            {subBranchReportData.length === 0 ? (
+              <div className="py-12 text-center bg-surface-hover/30 rounded-2xl border border-dashed border-border p-6 space-y-2">
+                <p className="font-bold text-xs text-foreground">No Sub-Branches configured yet.</p>
+                <p className="text-[11px] text-muted-foreground max-w-md mx-auto">
+                  Go to <strong>Settings &gt; Company Entities &amp; Branch Hubs</strong> to add your first percentage-based franchise or partner sub-branch.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-border/80">
+                <table className="w-full text-xs text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-border text-muted-foreground font-semibold bg-surface-hover/40">
+                      <th className="py-3 px-3.5">Sub-Branch & Hub</th>
+                      <th className="py-3 px-3.5">Parent Operating Branch</th>
+                      <th className="py-3 px-3.5">Partner / Franchisee</th>
+                      <th className="py-3 px-3.5 text-center">Revenue Split Agreement</th>
+                      <th className="py-3 px-3.5 text-center">Bills</th>
+                      <th className="py-3 px-3.5 text-right">Gross Invoiced</th>
+                      <th className="py-3 px-3.5 text-right">Company Retained</th>
+                      <th className="py-3 px-3.5 text-right">Partner Share</th>
+                      <th className="py-3 px-3.5 text-right">Realized Cash Payout</th>
+                      <th className="py-3 px-3.5 text-center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/50 font-medium">
+                    {subBranchReportData.map((sb) => (
+                      <tr key={sb.id} className="hover:bg-surface-hover/60 transition-colors">
+                        {/* Sub-Branch */}
+                        <td className="py-3.5 px-3.5">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="font-bold text-foreground flex items-center gap-1.5">
+                              <span className="text-emerald-500">🌿</span>
+                              <span>{sb.name}</span>
+                            </span>
+                            {sb.code && (
+                              <span className="font-mono text-[10px] text-muted-foreground">
+                                Code: {sb.code}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Parent Branch */}
+                        <td className="py-3.5 px-3.5">
+                          <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground font-semibold">
+                            <Building2 size={11} className="text-blue-500 shrink-0" />
+                            <span>{sb.parentBranchName}</span>
+                          </span>
+                        </td>
+
+                        {/* Partner Contact */}
+                        <td className="py-3.5 px-3.5">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="font-bold text-foreground">{sb.partnerName || "Primary Partner"}</span>
+                            {sb.partnerPhone && (
+                              <span className="font-mono text-[10px] text-muted-foreground">
+                                {sb.partnerPhone}
+                              </span>
+                            )}
+                            {sb.bankDetails?.upiId && (
+                              <span className="font-mono text-[9.5px] text-emerald-600 dark:text-emerald-400">
+                                UPI: {sb.bankDetails.upiId}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Split Bar & Percentage */}
+                        <td className="py-3.5 px-3.5">
+                          <div className="space-y-1 w-44 mx-auto">
+                            <div className="flex justify-between text-[10px] font-bold">
+                              <span className="text-emerald-600 dark:text-emerald-400">
+                                🪙 {sb.sharePct}% Partner
+                              </span>
+                              <span className="text-blue-600 dark:text-blue-400">
+                                {sb.companySharePct}% Co.
+                              </span>
+                            </div>
+                            <div className="h-2 rounded-full overflow-hidden flex bg-zinc-200 dark:bg-zinc-800">
+                              <div
+                                style={{ width: `${sb.sharePct}%` }}
+                                className="bg-emerald-500 h-full"
+                              />
+                              <div
+                                style={{ width: `${sb.companySharePct}%` }}
+                                className="bg-blue-600 h-full"
+                              />
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Bills Count */}
+                        <td className="py-3.5 px-3.5 text-center font-mono font-bold text-foreground">
+                          {sb.invoicesCount}
+                        </td>
+
+                        {/* Gross Invoiced */}
+                        <td className="py-3.5 px-3.5 text-right font-mono font-black text-foreground">
+                          ₹{sb.totalInvoicedGross.toLocaleString("en-IN")}
+                        </td>
+
+                        {/* Company Retained */}
+                        <td className="py-3.5 px-3.5 text-right font-mono font-bold text-blue-600 dark:text-blue-400">
+                          ₹{sb.companyRetainedGross.toLocaleString("en-IN")}
+                        </td>
+
+                        {/* Partner Total Accrued */}
+                        <td className="py-3.5 px-3.5 text-right font-mono font-bold text-amber-600 dark:text-amber-400">
+                          ₹{sb.partnerEarnedGross.toLocaleString("en-IN")}
+                        </td>
+
+                        {/* Partner Realized Payout */}
+                        <td className="py-3.5 px-3.5 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                          ₹{sb.partnerEarnedRealized.toLocaleString("en-IN")}
+                        </td>
+
+                        {/* Status */}
+                        <td className="py-3.5 px-3.5 text-center">
+                          <span
+                            className={`inline-block px-2 py-0.5 rounded-full text-[9.5px] font-bold ${
+                              sb.status === "Active"
+                                ? "bg-emerald-500/10 text-emerald-600 border border-emerald-200 dark:border-emerald-800"
+                                : "bg-zinc-500/10 text-zinc-500"
+                            }`}
+                          >
+                            {sb.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── TAB 3: LEADS & CONVERSION ────────────────────────────────────── */}
       {activeTab === "leads" && (
         <div className="space-y-6 animate-in fade-in duration-200">
@@ -1172,6 +1509,64 @@ export default function ReportsMain() {
                 {expenses.filter((e) => e.status === "Approved").length} Settled
               </p>
               <p className="text-[11px] text-muted-foreground pt-1">Verified business costs</p>
+            </div>
+          </div>
+
+          {/* Expenses Register Table */}
+          <div className="bg-surface border border-border rounded-2xl p-5 space-y-4 shadow-2xs">
+            <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
+              <PieChart size={16} className="text-primary" />
+              <span>Operational &amp; Project Expenses Register</span>
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-border text-muted-foreground font-semibold bg-surface-hover/40">
+                    <th className="py-3 px-4">Ref #</th>
+                    <th className="py-3 px-4">Expense Title</th>
+                    <th className="py-3 px-4">Associated Project</th>
+                    <th className="py-3 px-4">Category</th>
+                    <th className="py-3 px-4">Paid By</th>
+                    <th className="py-3 px-4 text-right">Amount (INR)</th>
+                    <th className="py-3 px-4 text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/40 font-medium">
+                  {expenses.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-muted-foreground">
+                        No expense logs recorded.
+                      </td>
+                    </tr>
+                  ) : (
+                    expenses.map((exp) => (
+                      <tr key={exp.id || Math.random()} className="hover:bg-surface-hover/50 transition-colors">
+                        <td className="py-3 px-4 font-mono font-bold text-primary">{exp.expenseNumber || "EXP"}</td>
+                        <td className="py-3 px-4 font-bold text-foreground">{exp.title}</td>
+                        <td className="py-3 px-4 text-muted-foreground">
+                          {exp.projectName ? (
+                            <span className="font-semibold text-blue-600 dark:text-blue-400">💼 {exp.projectName}</span>
+                          ) : (
+                            <span className="text-zinc-400 italic">General Overhead</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-muted-foreground">{exp.category}</td>
+                        <td className="py-3 px-4 text-foreground">{exp.member || "Admin"}</td>
+                        <td className="py-3 px-4 text-right font-mono font-bold text-rose-500">
+                          {exp.amount || `₹${(exp.amountNum || 0).toLocaleString("en-IN")}`}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            exp.status === "Approved" ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"
+                          }`}>
+                            {exp.status || "Pending"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>

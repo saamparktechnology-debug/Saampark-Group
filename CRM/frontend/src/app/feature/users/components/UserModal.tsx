@@ -68,6 +68,9 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
   const [phone, setPhone] = React.useState("")
   const [password, setPassword] = React.useState("")
   const [status, setStatus] = React.useState<UserStatus>("Active")
+  const [avatarUrl, setAvatarUrl] = React.useState("")
+  const [isUploadingAvatar, setIsUploadingAvatar] = React.useState(false)
+  const avatarInputRef = React.useRef<HTMLInputElement>(null)
 
   // Available branches for selected companies (with robust slug/id normalization)
   const availableBranches = React.useMemo(() => {
@@ -139,6 +142,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
       setPhone(editingUser.phone || "")
       setStatus(editingUser.status || "Active")
       setPassword(editingUser.password || "Password123")
+      setAvatarUrl(editingUser.avatarUrl || (editingUser as any)?.avatar || "")
 
       const userIdStr = String(editingUser.id)
       const emailNorm = (editingUser.email || "").toLowerCase().trim()
@@ -183,8 +187,9 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
       setSelectedBranchId("")
       setDepartment("")
       setPhone("")
+      setPassword("Password123")
       setStatus("Active")
-      setPassword("")
+      setAvatarUrl("")
       setAllowedModules([...CONFIGURABLE_MODULES])
       
       const init: Record<string, ModuleActionFlags> = {}
@@ -339,7 +344,8 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
       phone,
       password,
       status,
-      avatarUrl: editingUser?.avatarUrl || (editingUser as any)?.avatar || undefined,
+      avatarUrl: avatarUrl.trim() || editingUser?.avatarUrl || (editingUser as any)?.avatar || undefined,
+      avatar: avatarUrl.trim() || editingUser?.avatarUrl || (editingUser as any)?.avatar || undefined,
     }
 
     if (editingUser) {
@@ -413,6 +419,64 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4 text-xs flex-1">
+            {/* Avatar Upload Banner */}
+            <div className="p-3.5 bg-zinc-50 dark:bg-zinc-800/40 rounded-2xl border border-zinc-200 dark:border-zinc-700/60 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 overflow-hidden shrink-0 flex items-center justify-center shadow-xs">
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt={name || "Avatar"} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-bold flex items-center justify-center text-sm">
+                      {(name ? name.substring(0, 2) : "US").toUpperCase()}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <h4 className="font-bold text-zinc-900 dark:text-zinc-100 text-xs">Profile Picture</h4>
+                  <p className="text-[11px] text-zinc-500">
+                    Upload an avatar for this user. Synced across team tasks, leads, and orders.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <input
+                  type="file"
+                  ref={avatarInputRef}
+                  accept="image/*"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    setIsUploadingAvatar(true)
+                    try {
+                      const { uploadToImgBB } = await import("@/lib/imgbbUpload")
+                      const res = await uploadToImgBB(file, `${name || "user"}_${Date.now()}`, 400)
+                      if (res.url) setAvatarUrl(res.url)
+                    } catch {}
+                    finally { setIsUploadingAvatar(false) }
+                  }}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  disabled={isUploadingAvatar}
+                  className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs cursor-pointer shadow-xs transition-all"
+                >
+                  <span>{isUploadingAvatar ? "Uploading..." : avatarUrl ? "Change Photo" : "Upload Photo"}</span>
+                </button>
+                {avatarUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setAvatarUrl("")}
+                    className="px-2.5 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-xs font-semibold cursor-pointer"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5 flex items-center gap-1.5">
@@ -468,7 +532,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
                 <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5 flex items-center gap-1.5">
                   <Building size={14} /> Assign to Companies * ({selectedCompanyIds.length} Selected)
                 </label>
-                <div className="p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex flex-wrap gap-2">
+                <div className="p-2 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
                   {availableCompanies.map((c) => {
                     const cIdNorm = String(c.id).toLowerCase().trim()
                     const cSlugNorm = String(c.slug || "").toLowerCase().trim()
@@ -481,7 +545,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
                         type="button"
                         key={c.id}
                         onClick={() => handleToggleCompany(c.id)}
-                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
+                        className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border transition-all cursor-pointer ${
                           isChecked
                             ? "bg-blue-600 text-white border-blue-600 shadow-2xs font-bold"
                             : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:border-zinc-400"
@@ -489,7 +553,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
                       >
                         <span>{c.logo || "🏢"}</span>
                         <span>{c.name}</span>
-                        {isChecked && <Check size={12} />}
+                        {isChecked && <Check size={11} />}
                       </button>
                     )
                   })}
@@ -498,60 +562,43 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
             </div>
 
             {/* Branch Selector */}
-            <div>
-              <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5 flex items-center justify-between">
-                <span className="flex items-center gap-1.5">
-                  <MapPin size={13} className="text-amber-500 shrink-0" /> Assigned Branch / Location
-                </span>
-                <span className="text-[10px] text-zinc-400 font-normal">
-                  {availableBranches.length} branches available
-                </span>
-              </label>
-              
-              {availableBranches.length === 0 ? (
-                <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-dashed border-zinc-200 dark:border-zinc-700 text-center">
-                  <p className="text-xs text-zinc-400">No branches created for this company yet.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedBranchId("")}
-                    className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
-                      !selectedBranchId
-                        ? "bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border-blue-400 dark:border-blue-700 shadow-2xs font-bold"
-                        : "bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:border-zinc-400"
-                    }`}
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <span>🏢</span> All Branches / Main Headquarters
-                    </span>
-                    {!selectedBranchId && <Check size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />}
-                  </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <MapPin size={13} className="text-amber-500 shrink-0" /> Assigned Branch / Location
+                  </span>
+                  <span className="text-[10px] text-zinc-400 font-normal">
+                    {availableBranches.length} available
+                  </span>
+                </label>
+                
+                <select
+                  value={selectedBranchId}
+                  onChange={(e) => setSelectedBranchId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs focus:outline-hidden font-medium"
+                >
+                  <option value="">🏢 All Branches / Main Headquarters</option>
+                  {availableBranches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      📍 {b.name} {b.city ? `(${b.city})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-                  {availableBranches.map((b) => {
-                    const isSelected = String(selectedBranchId || "").toLowerCase() === String(b.id || "").toLowerCase()
-                    return (
-                      <button
-                        key={b.id}
-                        type="button"
-                        onClick={() => setSelectedBranchId(b.id)}
-                        className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium border transition-all cursor-pointer ${
-                          isSelected
-                            ? "bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border-blue-400 dark:border-blue-700 shadow-2xs font-bold"
-                            : "bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:border-zinc-400"
-                        }`}
-                      >
-                        <div className="text-left truncate mr-1">
-                          <span className="font-semibold text-zinc-800 dark:text-zinc-200">{b.name}</span>
-                          {b.city && <span className="text-[10px] text-zinc-400 ml-1.5 font-normal">({b.city})</span>}
-                        </div>
-                        {isSelected && <Check size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
+              <div>
+                <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                  Department / Unit
+                </label>
+                <input
+                  type="text"
+                  value={department}
+                  onChange={(e) => setDepartment(e.target.value)}
+                  placeholder="e.g. Engineering & Delivery"
+                  className="w-full px-3 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs focus:outline-hidden"
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

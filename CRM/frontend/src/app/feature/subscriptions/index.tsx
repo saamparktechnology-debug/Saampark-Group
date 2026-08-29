@@ -45,8 +45,8 @@ export default function SubscriptionsMain() {
   const canAddSubscription = canPerformAction(user, "Subscriptions", "add")
   const canDeleteSubscription = canPerformAction(user, "Subscriptions", "delete")
 
-  // Active Tab: "installments" | "subscriptions"
-  const [activeTab, setActiveTab] = React.useState<"installments" | "subscriptions">("installments")
+  // Active Tab: "subscriptions" | "installments"
+  const [activeTab, setActiveTab] = React.useState<"subscriptions" | "installments">("subscriptions")
 
   // Data States
   const [subscriptions, setSubscriptions] = React.useState<Subscription[]>([])
@@ -325,6 +325,8 @@ export default function SubscriptionsMain() {
       billingCycle: newCycle,
       customDaysCount: newCycle === "Custom Days" ? customDaysCount : undefined,
       startDate: newStartDate,
+      firstPaymentDate: newStartDate,
+      firstPaymentAmount: numAmount,
       nextBillingDate: finalNextDate,
       autoRenew: true,
     }, activeCompanyId || "tech")
@@ -508,25 +510,7 @@ export default function SubscriptionsMain() {
 
       {/* Main Tab Navigation Slider */}
       <div className="flex items-center gap-2 p-1.5 bg-zinc-100 dark:bg-zinc-800/80 rounded-2xl w-full sm:w-fit border border-zinc-200/80 dark:border-zinc-700/60 shadow-2xs">
-        <button
-          type="button"
-          onClick={() => setActiveTab("installments")}
-          className={`flex-1 sm:flex-initial px-5 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
-            activeTab === "installments"
-              ? "bg-white dark:bg-zinc-900 text-teal-800 dark:text-teal-300 shadow-sm border border-teal-500/20"
-              : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
-          }`}
-        >
-          <span>💳 Installments & Part-Payments</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-            activeTab === "installments"
-              ? "bg-teal-100 dark:bg-teal-950 text-teal-800 dark:text-teal-300"
-              : "bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400"
-          }`}>
-            {visibleInstallments.length}
-          </span>
-        </button>
-
+        {/* 1. Recurring and Subscription */}
         <button
           type="button"
           onClick={() => setActiveTab("subscriptions")}
@@ -536,7 +520,7 @@ export default function SubscriptionsMain() {
               : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
           }`}
         >
-          <span>🔄 Recurring Subscriptions & Retainers</span>
+          <span>🔁 Recurring and Subscription</span>
           <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
             activeTab === "subscriptions"
               ? "bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300"
@@ -545,12 +529,40 @@ export default function SubscriptionsMain() {
             {visibleSubscriptions.length}
           </span>
         </button>
+
+        {/* 2. EMI & Installments */}
+        <button
+          type="button"
+          onClick={() => setActiveTab("installments")}
+          className={`flex-1 sm:flex-initial px-5 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            activeTab === "installments"
+              ? "bg-white dark:bg-zinc-900 text-teal-800 dark:text-teal-300 shadow-sm border border-teal-500/20"
+              : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+          }`}
+        >
+          <span>💳 EMI</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+            activeTab === "installments"
+              ? "bg-teal-100 dark:bg-teal-950 text-teal-800 dark:text-teal-300"
+              : "bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400"
+          }`}>
+            {visibleInstallments.length}
+          </span>
+        </button>
       </div>
 
       {/* Main Tab Content */}
       {isLoading ? (
         <ThreeDotLoader text="Loading subscriptions & installments..." fullScreen={false} />
-      ) : activeTab === "installments" ? (
+      ) : activeTab === "subscriptions" ? (
+        <SubscriptionList
+          subscriptions={visibleSubscriptions}
+          onDelete={handleDeleteSubscription}
+          onOpenRenewModal={(sub) => setRenewingSubscription(sub)}
+          onSendReminder={handleSendSubscriptionReminder}
+          onToggleAutoRenew={handleToggleAutoRenew}
+        />
+      ) : (
         <InstallmentsView
           installments={visibleInstallments}
           onSelectInstallment={(item) => setSelectedInstallmentForDetail(item)}
@@ -558,14 +570,6 @@ export default function SubscriptionsMain() {
           onOpenRecordPayment={(installment, scheduleItem) => {
             setRecordingInstallment({ installment, scheduleItem })
           }}
-        />
-      ) : (
-        <SubscriptionList
-          subscriptions={visibleSubscriptions}
-          onDelete={handleDeleteSubscription}
-          onOpenRenewModal={(sub) => setRenewingSubscription(sub)}
-          onSendReminder={handleSendSubscriptionReminder}
-          onToggleAutoRenew={handleToggleAutoRenew}
         />
       )}
 
@@ -718,10 +722,11 @@ export default function SubscriptionsMain() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">
-                      Start Date
+                      1st Payment Date *
                     </label>
                     <input
                       type="date"
+                      required
                       value={newStartDate}
                       onChange={(e) => setNewStartDate(e.target.value)}
                       className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden font-medium"
@@ -730,14 +735,28 @@ export default function SubscriptionsMain() {
 
                   <div>
                     <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">
-                      Next Billing / Renewal Date
+                      Next Payment Date *
                     </label>
                     <input
                       type="date"
+                      required
                       value={newNextDate}
                       onChange={(e) => setNewNextDate(e.target.value)}
                       className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden font-medium"
                     />
+                  </div>
+                </div>
+
+                {/* Visual Payment Timeline Preview */}
+                <div className="p-3 rounded-2xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-800/40 flex items-center justify-between text-[11px]">
+                  <div className="flex items-center gap-1.5 font-medium text-zinc-700 dark:text-zinc-300">
+                    <Calendar size={13} className="text-blue-500 shrink-0" />
+                    <span>1st Payment: <strong className="text-blue-950 dark:text-blue-200">{newStartDate || "Today"}</strong></span>
+                  </div>
+                  <div className="text-blue-500 font-black px-1">──►</div>
+                  <div className="flex items-center gap-1.5 font-medium text-emerald-700 dark:text-emerald-300">
+                    <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
+                    <span>Next Due: <strong className="text-emerald-950 dark:text-emerald-200">{newNextDate || "Calculated"}</strong></span>
                   </div>
                 </div>
 

@@ -1,18 +1,145 @@
 const nodemailer = require('nodemailer');
+const pool = require('../config/db');
 
-// ─── SMTP Transporter ─────────────────────────────────────────────────────────
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: 'supriyogod@gmail.com',
-    pass: 'vctonocakbbgbvib', // Gmail App Password
-  },
-});
+/**
+ * Resolve SMTP Transporter and From identity dynamically for a given company or global fallback
+ */
+async function getEmailConfig(companyId = null, overrideConfig = null) {
+  // 1. If explicit config is provided (e.g. for connection testing or manual payload)
+  if (overrideConfig && overrideConfig.user && overrideConfig.pass) {
+    const host = (overrideConfig.host || 'smtp.gmail.com').trim();
+    const port = parseInt(overrideConfig.port || '587', 10);
+    const secure = overrideConfig.secure === true || overrideConfig.secure === 'true' || port === 465;
+    const fromName = overrideConfig.fromName || 'SAAMPARK CRM';
+    const fromEmail = overrideConfig.fromEmail || overrideConfig.user;
+
+    const transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure,
+      auth: {
+        user: overrideConfig.user.trim(),
+        pass: overrideConfig.pass.trim(),
+      },
+      tls: {
+        rejectUnauthorized: false,
+      },
+    });
+
+    return {
+      transporter,
+      from: `"${fromName}" <${fromEmail}>`,
+      fromEmail,
+      fromName,
+    };
+  }
+
+  // 2. If companyId provided, try to find Company's specific SMTP settings
+  if (companyId && companyId !== 'all') {
+    try {
+      const [compRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "companies"');
+      if (compRows.length > 0) {
+        const companies = JSON.parse(compRows[0].data_json);
+        const comp = Array.isArray(companies) ? companies.find(c => c.id === companyId || c.slug === companyId) : null;
+        if (comp && comp.smtp_user && comp.smtp_pass) {
+          const host = (comp.smtp_host || 'smtp.gmail.com').trim();
+          const port = parseInt(comp.smtp_port || '587', 10);
+          const secure = comp.smtp_secure === true || comp.smtp_secure === 'true' || port === 465;
+          const fromName = comp.smtp_from_name || comp.brand_name || comp.name || 'SAAMPARK CRM';
+          const fromEmail = comp.smtp_from_email || comp.smtp_user;
+
+          const transporter = nodemailer.createTransport({
+            host,
+            port,
+            secure,
+            auth: {
+              user: comp.smtp_user.trim(),
+              pass: comp.smtp_pass.trim(),
+            },
+            tls: {
+              rejectUnauthorized: false,
+            },
+          });
+
+          return {
+            transporter,
+            from: `"${fromName}" <${fromEmail}>`,
+            fromEmail,
+            fromName,
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('Company SMTP lookup error:', err.message);
+    }
+  }
+
+  // 3. Try to read Global Settings from DB
+  try {
+    const [settingsRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "settings"');
+    if (settingsRows.length > 0) {
+      const settings = JSON.parse(settingsRows[0].data_json);
+      if (settings && settings.smtpUser && settings.smtpPass) {
+        const host = (settings.smtpHost || 'smtp.gmail.com').trim();
+        const port = parseInt(settings.smtpPort || '587', 10);
+        const secure = settings.smtpSecure === true || settings.smtpSecure === 'true' || port === 465;
+        const fromName = settings.smtpFromName || settings.companyName || 'SAAMPARK CRM';
+        const fromEmail = settings.smtpFromEmail || settings.smtpUser;
+
+        const transporter = nodemailer.createTransport({
+          host,
+          port,
+          secure,
+          auth: {
+            user: settings.smtpUser.trim(),
+            pass: settings.smtpPass.trim(),
+          },
+          tls: {
+            rejectUnauthorized: false,
+          },
+        });
+
+        return {
+          transporter,
+          from: `"${fromName}" <${fromEmail}>`,
+          fromEmail,
+          fromName,
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('Global Settings SMTP lookup error:', err.message);
+  }
+
+  // 4. Default Fallback
+  const defaultUser = process.env.SMTP_USER || 'supriyogod@gmail.com';
+  const defaultPass = process.env.SMTP_PASS || 'vctonocakbbgbvib';
+  const defaultHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+  const defaultPort = parseInt(process.env.SMTP_PORT || '587', 10);
+
+  const transporter = nodemailer.createTransport({
+    host: defaultHost,
+    port: defaultPort,
+    secure: defaultPort === 465,
+    auth: {
+      user: defaultUser,
+      pass: defaultPass,
+    },
+    tls: {
+      rejectUnauthorized: false,
+    },
+  });
+
+  return {
+    transporter,
+    from: `"SAAMPARK CRM" <${defaultUser}>`,
+    fromEmail: defaultUser,
+    fromName: 'SAAMPARK CRM',
+  };
+}
 
 // ─── OTP In-Memory Store ──────────────────────────────────────────────────────
-// { email: { otp: '123456', expiresAt: Date, type: 'verify'|'reset', attempts: 0 } }
 const otpStore = new Map();
-
 const OTP_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
 const MAX_OTP_ATTEMPTS = 5;
 
@@ -60,11 +187,63 @@ function verifyOTP(email, inputOtp, type = 'reset') {
 }
 
 /**
+ * Test SMTP connection and send a test email
+ */
+async function testSmtpConnection(config) {
+  const { host, port, secure, user, pass, fromName, fromEmail, testEmail, companyId } = config;
+  const emailConfig = await getEmailConfig(companyId, { host, port, secure, user, pass, fromName, fromEmail });
+
+  // 1. Verify credentials with SMTP server
+  await emailConfig.transporter.verify();
+
+  // 2. Send test email to target recipient
+  const recipient = (testEmail || user || emailConfig.fromEmail).trim();
+  if (recipient) {
+    const testHtml = `
+      <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 520px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden; border: 1px solid #1e1e2e;">
+        <div style="background: linear-gradient(135deg, #10b981, #059669); padding: 32px 40px; text-align: center;">
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 700;">SMTP Test Successful! ✅</h1>
+          <p style="color: rgba(255,255,255,0.85); margin: 8px 0 0; font-size: 13px;">Google / Custom SMTP Credentials Verified</p>
+        </div>
+        <div style="padding: 32px 40px; background: #16161e;">
+          <p style="color: #e2e8f0; font-size: 15px; margin: 0 0 12px;">Hello Administrator,</p>
+          <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0 0 20px;">
+            This email confirms that your SMTP configurations in <strong>SAAMPARK CRM</strong> are working and actively sending emails!
+          </p>
+          <div style="background: #1e1e2e; border: 1px solid #2d2d3d; border-radius: 12px; padding: 20px; margin-bottom: 24px; font-size: 13px;">
+            <div style="color: #94a3b8; margin-bottom: 6px;"><strong>SMTP Host:</strong> <span style="color: #38bdf8; font-family: monospace;">${config.host || 'smtp.gmail.com'}</span></div>
+            <div style="color: #94a3b8; margin-bottom: 6px;"><strong>Sender User:</strong> <span style="color: #e2e8f0; font-family: monospace;">${config.user || emailConfig.fromEmail}</span></div>
+            <div style="color: #94a3b8;"><strong>Timestamp:</strong> <span style="color: #10b981;">${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</span></div>
+          </div>
+          <p style="color: #64748b; font-size: 12px; line-height: 1.5; margin: 0;">
+            All automated invoice dispatches, OTP resets, project milestone notices, and payment receipts will now be delivered through this authenticated SMTP account.
+          </p>
+        </div>
+        <div style="padding: 20px 40px; background: #0f0f13; text-align: center; border-top: 1px solid #1e1e2e;">
+          <p style="color: #475569; font-size: 12px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
+        </div>
+      </div>
+    `;
+
+    await emailConfig.transporter.sendMail({
+      from: emailConfig.from,
+      to: recipient,
+      subject: `✅ SAAMPARK CRM: SMTP Test Connection Successful (${config.host || 'Gmail'})`,
+      html: testHtml,
+    });
+  }
+
+  return { success: true, message: `SMTP connection verified and test email successfully delivered to ${recipient}` };
+}
+
+/**
  * Send OTP email for password reset
  */
-async function sendPasswordResetOTP(email, name = 'User') {
+async function sendPasswordResetOTP(email, name = 'User', companyId = null) {
   const otp = generateOTP();
   storeOTP(email, otp, 'reset');
+
+  const { transporter, from } = await getEmailConfig(companyId);
 
   const html = `
     <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 520px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden;">
@@ -93,7 +272,7 @@ async function sendPasswordResetOTP(email, name = 'User') {
   `;
 
   await transporter.sendMail({
-    from: '"SAAMPARK CRM" <supriyogod@gmail.com>',
+    from,
     to: email,
     subject: '🔐 Your SAAMPARK CRM Password Reset OTP',
     html,
@@ -105,9 +284,11 @@ async function sendPasswordResetOTP(email, name = 'User') {
 /**
  * Send OTP email for email verification after registration
  */
-async function sendEmailVerificationOTP(email, name = 'User') {
+async function sendEmailVerificationOTP(email, name = 'User', companyId = null) {
   const otp = generateOTP();
   storeOTP(email, otp, 'verify');
+
+  const { transporter, from } = await getEmailConfig(companyId);
 
   const html = `
     <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 520px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden;">
@@ -136,7 +317,7 @@ async function sendEmailVerificationOTP(email, name = 'User') {
   `;
 
   await transporter.sendMail({
-    from: '"SAAMPARK CRM" <supriyogod@gmail.com>',
+    from,
     to: email,
     subject: '✅ Verify Your SAAMPARK CRM Email',
     html,
@@ -148,7 +329,9 @@ async function sendEmailVerificationOTP(email, name = 'User') {
 /**
  * Send welcome email with credentials for admin-created accounts (bypasses OTP verification)
  */
-async function sendAdminCreatedAccountEmail(email, name = 'Team Member', role = 'Teams', companyName = 'SAAMPARK Technology', tempPassword = '') {
+async function sendAdminCreatedAccountEmail(email, name = 'Team Member', role = 'Teams', companyName = 'SAAMPARK Technology', tempPassword = '', companyId = null) {
+  const { transporter, from } = await getEmailConfig(companyId);
+
   const html = `
     <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden; border: 1px solid #1e1e2e;">
       <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); padding: 32px 40px; text-align: center;">
@@ -192,7 +375,7 @@ async function sendAdminCreatedAccountEmail(email, name = 'Team Member', role = 
   `;
 
   await transporter.sendMail({
-    from: '"SAAMPARK CRM" <supriyogod@gmail.com>',
+    from,
     to: email,
     subject: `🎉 Congratulations! You have been added as ${role} at ${companyName}`,
     html,
@@ -200,11 +383,11 @@ async function sendAdminCreatedAccountEmail(email, name = 'Team Member', role = 
 }
 
 /**
- * Send a welcome email to a newly registered user (stub — alias to sendAdminCreatedAccountEmail)
+ * Send a welcome email to a newly registered user
  */
-async function sendWelcomeEmail(email, name = 'Team Member', role = 'Teams', companyName = 'SAAMPARK Technology') {
+async function sendWelcomeEmail(email, name = 'Team Member', role = 'Teams', companyName = 'SAAMPARK Technology', companyId = null) {
   try {
-    await sendAdminCreatedAccountEmail(email, name, role, companyName, '');
+    await sendAdminCreatedAccountEmail(email, name, role, companyName, '', companyId);
   } catch (err) {
     console.warn('sendWelcomeEmail warning:', err.message);
   }
@@ -224,8 +407,11 @@ async function sendInvoiceDetailsEmail({
   receivedAmount = '₹0',
   dueAmount = '₹0',
   items = [],
-  viewUrl = `https://crm.saampark.com/sales/invoices?view=${invoiceId}`
+  viewUrl = `https://crm.saampark.com/sales/invoices?view=${invoiceId}`,
+  companyId = null,
 }) {
+  const { transporter, from } = await getEmailConfig(companyId);
+
   const itemsHtml = (items && items.length > 0)
     ? items.map(it => `
         <tr style="border-bottom: 1px solid #2d2d3d;">
@@ -318,7 +504,7 @@ async function sendInvoiceDetailsEmail({
   `;
 
   await transporter.sendMail({
-    from: '"SAAMPARK Invoicing" <supriyogod@gmail.com>',
+    from,
     to,
     subject: `📄 Invoice ${invoiceId} for ${project} - Saampark Technology`,
     html,
@@ -332,8 +518,11 @@ async function sendProjectCompletionEmail({
   to,
   clientName = 'Valued Client',
   projectTitle,
-  invoiceId = ''
+  invoiceId = '',
+  companyId = null,
 }) {
+  const { transporter, from } = await getEmailConfig(companyId);
+
   const html = `
     <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden; border: 1px solid #1e1e2e;">
       <div style="background: linear-gradient(135deg, #3b82f6, #1d4ed8); padding: 32px 40px; text-align: center;">
@@ -362,7 +551,7 @@ async function sendProjectCompletionEmail({
   `;
 
   await transporter.sendMail({
-    from: '"SAAMPARK Project Team" <supriyogod@gmail.com>',
+    from,
     to,
     subject: `🚀 Project Completed: ${projectTitle} - Saampark Technology`,
     html,
@@ -375,8 +564,11 @@ async function sendProjectCompletionEmail({
 async function sendClientWelcomeEmail({
   to,
   clientName = 'Valued Client',
-  companyName = 'Client Company'
+  companyName = 'Client Company',
+  companyId = null,
 }) {
+  const { transporter, from } = await getEmailConfig(companyId);
+
   const html = `
     <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden; border: 1px solid #1e1e2e;">
       <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); padding: 32px 40px; text-align: center;">
@@ -409,7 +601,7 @@ async function sendClientWelcomeEmail({
   `;
 
   await transporter.sendMail({
-    from: '"SAAMPARK Client Relations" <supriyogod@gmail.com>',
+    from,
     to,
     subject: `👋 Welcome to Saampark Group - ${companyName}`,
     html,
@@ -428,8 +620,10 @@ async function sendPaymentReceiptEmail({
   remainingDue = '₹0',
   nextDueDate = '-',
   paymentMethod = 'UPI',
-  txnRef = ''
+  txnRef = '',
+  companyId = null,
 }) {
+  const { transporter, from } = await getEmailConfig(companyId);
   const isZeroDue = remainingDue === '₹0' || remainingDue === '0' || remainingDue === '₹0.00';
 
   const html = `
@@ -478,7 +672,7 @@ async function sendPaymentReceiptEmail({
   `;
 
   await transporter.sendMail({
-    from: '"SAAMPARK Accounts" <supriyogod@gmail.com>',
+    from,
     to,
     subject: `💳 Payment Receipt: ${paidAmount} Received for ${invoiceId}`,
     html,
@@ -494,8 +688,11 @@ async function sendPaymentDueReminderEmail({
   invoiceId,
   project = 'Service',
   dueAmount,
-  dueDate = 'Immediate'
+  dueDate = 'Immediate',
+  companyId = null,
 }) {
+  const { transporter, from } = await getEmailConfig(companyId);
+
   const html = `
     <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden; border: 1px solid #1e1e2e;">
       <div style="background: linear-gradient(135deg, #f59e0b, #d97706); padding: 32px 40px; text-align: center;">
@@ -536,14 +733,36 @@ async function sendPaymentDueReminderEmail({
   `;
 
   await transporter.sendMail({
-    from: '"SAAMPARK Accounts" <supriyogod@gmail.com>',
+    from,
     to,
     subject: `⏰ Payment Due Reminder: ${dueAmount} for ${invoiceId} - Saampark Technology`,
     html,
   });
 }
 
+/**
+ * Send generic notification email
+ */
+async function sendGenericEmail({
+  to,
+  subject,
+  html,
+  clientName = 'Valued Client',
+  companyId = null,
+}) {
+  const { transporter, from } = await getEmailConfig(companyId);
+
+  await transporter.sendMail({
+    from,
+    to,
+    subject: subject || 'Notification from SAAMPARK CRM',
+    html: html || `<p>Hello ${clientName},</p><p>You have a new update in SAAMPARK CRM.</p>`,
+  });
+}
+
 module.exports = {
+  getEmailConfig,
+  testSmtpConnection,
   sendPasswordResetOTP,
   sendEmailVerificationOTP,
   sendWelcomeEmail,
@@ -553,6 +772,7 @@ module.exports = {
   sendClientWelcomeEmail,
   sendPaymentReceiptEmail,
   sendPaymentDueReminderEmail,
+  sendGenericEmail,
   verifyOTP,
   generateOTP,
   storeOTP,

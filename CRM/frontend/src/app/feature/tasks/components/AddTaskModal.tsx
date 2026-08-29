@@ -9,6 +9,7 @@ import { getUsers, getUserAvatar } from "@/app/feature/users/services/userServic
 import { UserItem } from "@/app/feature/users/types"
 
 import { useAuthStore } from "@/store/useAuthStore"
+import { executeWithFeedback } from "@/store/useActionFeedbackStore"
 
 interface AddTaskModalProps {
   isOpen: boolean
@@ -132,7 +133,7 @@ export function AddTaskModal({ isOpen, onClose, onTaskAdded, onSelectTask }: Add
     }
 
     setIsSubmitting(true)
-    try {
+    await executeWithFeedback(async () => {
       const parsedLabels = labels
         .split(",")
         .map((l) => l.trim())
@@ -189,11 +190,15 @@ export function AddTaskModal({ isOpen, onClose, onTaskAdded, onSelectTask }: Add
         onSelectTask(created)
       }
       onClose()
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setIsSubmitting(false)
-    }
+    }, {
+      actionType: "create",
+      loadingTitle: "Creating Task...",
+      loadingMsg: `Assigning and creating "${title}"...`,
+      successTitle: "Task Created Successfully!",
+      successMsg: `Task "${title}" created and scheduled.`,
+      errorTitle: "Task Creation Failed",
+    })
+    setIsSubmitting(false)
   }
 
   return (
