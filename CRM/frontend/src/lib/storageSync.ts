@@ -44,6 +44,11 @@ export function unmarkGlobalItemDeleted(id: string | number): void {
   }
   deletedCache = deletedCache.filter(d => d !== strId)
   lastDeletedSyncTime = 0
+
+  // Asynchronously purge from MySQL deleted table so it doesn't resurrect on next fetch
+  api.delete(`/deleted/${encodeURIComponent(strId)}`).catch(() => {
+    api.post("/deleted/restore", { id: strId }).catch(() => {})
+  })
 }
 
 // In-memory deleted cache & deduplication

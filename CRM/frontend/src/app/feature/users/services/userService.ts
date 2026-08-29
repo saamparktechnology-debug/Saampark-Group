@@ -74,8 +74,10 @@ export async function getStoredUserAccountsAsync(): Promise<UserItem[]> {
     getDeletedUserEmailsAsync()
   ]);
 
-  let data = Array.isArray(dbData) && dbData.length > 0 ? dbData : [...DEFAULT_SYSTEM_ACCOUNTS];
-  return data.filter((a) => !deletedEmails.includes(a.email.toLowerCase().trim()));
+  if (Array.isArray(dbData) && dbData.length > 0) {
+    return dbData;
+  }
+  return DEFAULT_SYSTEM_ACCOUNTS.filter((a) => !deletedEmails.includes(a.email.toLowerCase().trim()));
 }
 
 /** @deprecated Use getStoredUserAccountsAsync() */
@@ -722,11 +724,11 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
 
   saveModuleDataToDB("users", dbUsers, "all").catch(() => {});
 
-  // 3. Filter out deleted user emails and hidden master admin account, and strictly enforce 1:1 email uniqueness
+  // 3. Filter out hidden master admin account, and strictly enforce 1:1 email uniqueness
   const uniqueUsersMap = new Map<string, UserItem>();
   dbUsers.forEach((u) => {
     const emailNorm = (u.email || "").toLowerCase().trim();
-    if (!emailNorm || HIDDEN_MASTER_EMAILS.includes(emailNorm) || deletedEmails.includes(emailNorm)) return;
+    if (!emailNorm || HIDDEN_MASTER_EMAILS.includes(emailNorm)) return;
 
     if (!uniqueUsersMap.has(emailNorm)) {
       uniqueUsersMap.set(emailNorm, u);

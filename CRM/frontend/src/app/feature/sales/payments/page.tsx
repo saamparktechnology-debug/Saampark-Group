@@ -424,7 +424,8 @@ export default function PaymentsPage() {
             <DataTable 
               columns={columns} 
               data={displayedPayments} 
-              searchKey="client"
+              searchKey="invoiceId"
+              searchPlaceholder="Search by invoice number, client, project, txn ref..."
             />
             {/* Summary Footer */}
             <div className="border-t border-zinc-100 dark:border-zinc-800 mt-4 pt-4 flex justify-end gap-12 pr-8 text-xs">

@@ -29,4 +29,18 @@ const markItemDeleted = async (req, res, next) => {
   }
 };
 
-module.exports = { getDeletedItems, markItemDeleted };
+// Unmark / restore an item from deleted_items table
+const unmarkItemDeleted = async (req, res, next) => {
+  try {
+    const rawId = req.params.id || req.body.id;
+    if (!rawId) return errorResponse(res, 400, 'Item ID is required');
+
+    const strId = String(rawId).toLowerCase().trim();
+    await pool.execute('DELETE FROM deleted_items WHERE LOWER(TRIM(item_id)) = ?', [strId]);
+    return successResponse(res, 200, 'Item restored / unmarked from deleted items successfully');
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { getDeletedItems, markItemDeleted, unmarkItemDeleted };
