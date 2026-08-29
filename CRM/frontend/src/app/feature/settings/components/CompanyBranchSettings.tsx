@@ -121,44 +121,134 @@ export function CompanyBranchSettings() {
   const [companySmtpTestResult, setCompanySmtpTestResult] = React.useState<{ success?: boolean; message?: string } | null>(null)
   const [companyTestEmail, setCompanyTestEmail] = React.useState("")
 
-  // Branch Modal States
+  // Branch Modal States (5 Full Tabs)
+  const BRANCH_TABS_LIST: Array<"basic" | "tax" | "contact" | "bank" | "signature"> = React.useMemo(() => [
+    "basic",
+    "tax",
+    "contact",
+    "bank",
+    "signature"
+  ], [])
   const [isBranchModalOpen, setIsBranchModalOpen] = React.useState(false)
+  const [branchModalTab, setBranchModalTab] = React.useState<"basic" | "tax" | "contact" | "bank" | "signature">("basic")
   const [targetCompanyIdForBranch, setTargetCompanyIdForBranch] = React.useState<string>("tech")
   const [editingBranch, setEditingBranch] = React.useState<Branch | null>(null)
+  
+  // 1. Identity & Branding
   const [branchName, setBranchName] = React.useState("")
   const [branchCode, setBranchCode] = React.useState("")
-  const [branchCity, setBranchCity] = React.useState("")
-  const [branchAddress, setBranchAddress] = React.useState("")
-  const [branchPhone, setBranchPhone] = React.useState("")
-  const [branchEmail, setBranchEmail] = React.useState("")
+  const [branchBrandName, setBranchBrandName] = React.useState("")
+  const [branchDivisionName, setBranchDivisionName] = React.useState("")
+  const [branchSubtitle, setBranchSubtitle] = React.useState("")
+  const [branchLogoUrl, setBranchLogoUrl] = React.useState("")
   const [branchManager, setBranchManager] = React.useState("")
+  const [branchManagerPhone, setBranchManagerPhone] = React.useState("")
+  const [branchManagerEmail, setBranchManagerEmail] = React.useState("")
   const [branchStatus, setBranchStatus] = React.useState<"Active" | "Inactive">("Active")
 
-  // Sub-Branch Modal & Form States
+  // 2. Legal & Tax
+  const [branchGstin, setBranchGstin] = React.useState("")
+  const [branchPan, setBranchPan] = React.useState("")
+  const [branchCin, setBranchCin] = React.useState("")
+  const [branchMsmeReg, setBranchMsmeReg] = React.useState("")
+
+  // 3. Address & Contact
+  const [branchAddress, setBranchAddress] = React.useState("")
+  const [branchCity, setBranchCity] = React.useState("")
+  const [branchState, setBranchState] = React.useState("")
+  const [branchZip, setBranchZip] = React.useState("")
+  const [branchCountry, setBranchCountry] = React.useState("India")
+  const [branchPhone, setBranchPhone] = React.useState("")
+  const [branchEmail, setBranchEmail] = React.useState("")
+  const [branchWebsite, setBranchWebsite] = React.useState("")
+
+  // 4. Bank & UPI Pay
+  const [branchBankName, setBranchBankName] = React.useState("")
+  const [branchAccountHolder, setBranchAccountHolder] = React.useState("")
+  const [branchAccountNumber, setBranchAccountNumber] = React.useState("")
+  const [branchIfscCode, setBranchIfscCode] = React.useState("")
+  const [branchBankBranch, setBranchBankBranch] = React.useState("")
+  const [branchUpiId, setBranchUpiId] = React.useState("")
+  const [branchPaymentQrUrl, setBranchPaymentQrUrl] = React.useState("")
+  const [branchTermsConditions, setBranchTermsConditions] = React.useState("")
+
+  // 5. Signature & Stamp
+  const [branchSignatoryName, setBranchSignatoryName] = React.useState("")
+  const [branchSignatoryDesignation, setBranchSignatoryDesignation] = React.useState("")
+  const [branchSignatureImageUrl, setBranchSignatureImageUrl] = React.useState("")
+  const [branchStampImageUrl, setBranchStampImageUrl] = React.useState("")
+
+  // Sub-Branch Modal & Form States (5 Full Tabs)
+  const SUB_BRANCH_TABS_LIST: Array<"basic" | "tax" | "contact" | "bank" | "signature"> = React.useMemo(() => [
+    "basic",
+    "tax",
+    "contact",
+    "bank",
+    "signature"
+  ], [])
   const [isSubBranchModalOpen, setIsSubBranchModalOpen] = React.useState(false)
+  const [subBranchModalTab, setSubBranchModalTab] = React.useState<"basic" | "tax" | "contact" | "bank" | "signature">("basic")
   const [editingSubBranch, setEditingSubBranch] = React.useState<SubBranch | null>(null)
   const [subBranchParentBranchId, setSubBranchParentBranchId] = React.useState<string>("")
   const [subBranchCompanyId, setSubBranchCompanyId] = React.useState<string>("tech")
+
+  // 1. Identity & Branding
   const [subBranchName, setSubBranchName] = React.useState("")
   const [subBranchCode, setSubBranchCode] = React.useState("")
+  const [subBranchBrandName, setSubBranchBrandName] = React.useState("")
+  const [subBranchDivisionName, setSubBranchDivisionName] = React.useState("")
+  const [subBranchSubtitle, setSubBranchSubtitle] = React.useState("")
   const [subBranchPartnerName, setSubBranchPartnerName] = React.useState("")
   const [subBranchPartnerPhone, setSubBranchPartnerPhone] = React.useState("")
   const [subBranchPartnerEmail, setSubBranchPartnerEmail] = React.useState("")
-  const [subBranchCity, setSubBranchCity] = React.useState("")
-  const [subBranchAddress, setSubBranchAddress] = React.useState("")
   const [subBranchRevenueSharePct, setSubBranchRevenueSharePct] = React.useState<number>(30)
   const [subBranchPartnerType, setSubBranchPartnerType] = React.useState<"Franchise Partner" | "Agency Partner" | "Satellite Office" | "Regional Associate">("Franchise Partner")
+  const [subBranchStatus, setSubBranchStatus] = React.useState<"Active" | "Inactive">("Active")
+
+  // 2. Legal & Tax
+  const [subBranchGstin, setSubBranchGstin] = React.useState("")
+  const [subBranchPan, setSubBranchPan] = React.useState("")
+  const [subBranchCin, setSubBranchCin] = React.useState("")
+  const [subBranchMsmeReg, setSubBranchMsmeReg] = React.useState("")
+
+  // 3. Address & Contact
+  const [subBranchAddress, setSubBranchAddress] = React.useState("")
+  const [subBranchCity, setSubBranchCity] = React.useState("")
+  const [subBranchState, setSubBranchState] = React.useState("")
+  const [subBranchZip, setSubBranchZip] = React.useState("")
+  const [subBranchCountry, setSubBranchCountry] = React.useState("India")
+  const [subBranchPhone, setSubBranchPhone] = React.useState("")
+  const [subBranchEmail, setSubBranchEmail] = React.useState("")
+  const [subBranchWebsite, setSubBranchWebsite] = React.useState("")
+
+  // 4. Bank & UPI Pay
   const [subBranchAccountHolder, setSubBranchAccountHolder] = React.useState("")
   const [subBranchBankName, setSubBranchBankName] = React.useState("")
   const [subBranchAccountNumber, setSubBranchAccountNumber] = React.useState("")
   const [subBranchIfscCode, setSubBranchIfscCode] = React.useState("")
+  const [subBranchBankBranch, setSubBranchBankBranch] = React.useState("")
   const [subBranchUpiId, setSubBranchUpiId] = React.useState("")
-  const [subBranchStatus, setSubBranchStatus] = React.useState<"Active" | "Inactive">("Active")
+  const [subBranchPaymentQrUrl, setSubBranchPaymentQrUrl] = React.useState("")
+  const [subBranchTermsConditions, setSubBranchTermsConditions] = React.useState("")
+
+  // 5. Signature & Stamp
+  const [subBranchSignatoryName, setSubBranchSignatoryName] = React.useState("")
+  const [subBranchSignatoryDesignation, setSubBranchSignatoryDesignation] = React.useState("")
+  const [subBranchSignatureImageUrl, setSubBranchSignatureImageUrl] = React.useState("")
+  const [subBranchStampImageUrl, setSubBranchStampImageUrl] = React.useState("")
 
   // Refs for file uploads
   const logoFileInputRef = React.useRef<HTMLInputElement>(null)
   const signatureFileInputRef = React.useRef<HTMLInputElement>(null)
   const qrFileInputRef = React.useRef<HTMLInputElement>(null)
+
+  const branchSignatureInputRef = React.useRef<HTMLInputElement>(null)
+  const branchStampInputRef = React.useRef<HTMLInputElement>(null)
+  const branchQrInputRef = React.useRef<HTMLInputElement>(null)
+
+  const subBranchSignatureInputRef = React.useRef<HTMLInputElement>(null)
+  const subBranchStampInputRef = React.useRef<HTMLInputElement>(null)
+  const subBranchQrInputRef = React.useRef<HTMLInputElement>(null)
 
   React.useEffect(() => {
     fetchCompanies()
@@ -505,17 +595,100 @@ export function CompanyBranchSettings() {
     })
   }
 
+  // Branch Upload Handlers
+  const handleBranchSignatureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 5 * 1024 * 1024) { alert("Signature image size should not exceed 5MB."); return; }
+    const reader = new FileReader()
+    reader.onload = () => { if (typeof reader.result === "string") setBranchSignatureImageUrl(reader.result) }
+    reader.readAsDataURL(file)
+  }
+
+  const handleBranchStampUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 5 * 1024 * 1024) { alert("Stamp image size should not exceed 5MB."); return; }
+    const reader = new FileReader()
+    reader.onload = () => { if (typeof reader.result === "string") setBranchStampImageUrl(reader.result) }
+    reader.readAsDataURL(file)
+  }
+
+  const handleBranchQrUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 5 * 1024 * 1024) { alert("QR Code image size should not exceed 5MB."); return; }
+    const reader = new FileReader()
+    reader.onload = () => { if (typeof reader.result === "string") setBranchPaymentQrUrl(reader.result) }
+    reader.readAsDataURL(file)
+  }
+
+  // Sub-Branch Upload Handlers
+  const handleSubBranchSignatureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 5 * 1024 * 1024) { alert("Signature image size should not exceed 5MB."); return; }
+    const reader = new FileReader()
+    reader.onload = () => { if (typeof reader.result === "string") setSubBranchSignatureImageUrl(reader.result) }
+    reader.readAsDataURL(file)
+  }
+
+  const handleSubBranchStampUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 5 * 1024 * 1024) { alert("Stamp image size should not exceed 5MB."); return; }
+    const reader = new FileReader()
+    reader.onload = () => { if (typeof reader.result === "string") setSubBranchStampImageUrl(reader.result) }
+    reader.readAsDataURL(file)
+  }
+
+  const handleSubBranchQrUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 5 * 1024 * 1024) { alert("QR Code image size should not exceed 5MB."); return; }
+    const reader = new FileReader()
+    reader.onload = () => { if (typeof reader.result === "string") setSubBranchPaymentQrUrl(reader.result) }
+    reader.readAsDataURL(file)
+  }
+
   // ── BRANCH HANDLERS (Admin & Super Admin) ────────────────────────────────────
   const handleOpenCreateBranch = (compId: string) => {
     setTargetCompanyIdForBranch(compId)
     setEditingBranch(null)
+    setBranchModalTab("basic")
     setBranchName("")
-    setBranchCode("")
-    setBranchCity("")
+    setBranchCode(`BR-${Math.floor(100 + Math.random() * 900)}`)
+    setBranchBrandName("")
+    setBranchDivisionName("")
+    setBranchSubtitle("")
+    setBranchLogoUrl("")
+    setBranchManager("")
+    setBranchManagerPhone("")
+    setBranchManagerEmail("")
+    setBranchGstin("")
+    setBranchPan("")
+    setBranchCin("")
+    setBranchMsmeReg("")
     setBranchAddress("")
+    setBranchCity("")
+    setBranchState("")
+    setBranchZip("")
+    setBranchCountry("India")
     setBranchPhone("")
     setBranchEmail("")
-    setBranchManager("")
+    setBranchWebsite("")
+    setBranchBankName("")
+    setBranchAccountHolder("")
+    setBranchAccountNumber("")
+    setBranchIfscCode("")
+    setBranchBankBranch("")
+    setBranchUpiId("")
+    setBranchPaymentQrUrl("")
+    setBranchTermsConditions("")
+    setBranchSignatoryName("")
+    setBranchSignatoryDesignation("")
+    setBranchSignatureImageUrl("")
+    setBranchStampImageUrl("")
     setBranchStatus("Active")
     setIsBranchModalOpen(true)
   }
@@ -523,13 +696,40 @@ export function CompanyBranchSettings() {
   const handleOpenEditBranch = (branch: Branch) => {
     setTargetCompanyIdForBranch(branch.companyId)
     setEditingBranch(branch)
-    setBranchName(branch.name)
+    setBranchModalTab("basic")
+    setBranchName(branch.name || "")
     setBranchCode(branch.code || "")
-    setBranchCity(branch.city || "")
+    setBranchBrandName(branch.brand_name || "")
+    setBranchDivisionName(branch.division_name || "")
+    setBranchSubtitle(branch.subtitle || "")
+    setBranchLogoUrl(branch.logo_url || "")
+    setBranchManager(branch.managerName || "")
+    setBranchManagerPhone(branch.managerPhone || "")
+    setBranchManagerEmail(branch.managerEmail || "")
+    setBranchGstin(branch.gstin || "")
+    setBranchPan(branch.pan || "")
+    setBranchCin(branch.cin || "")
+    setBranchMsmeReg(branch.msme_reg || "")
     setBranchAddress(branch.address || "")
+    setBranchCity(branch.city || "")
+    setBranchState(branch.state || "")
+    setBranchZip(branch.zip || "")
+    setBranchCountry(branch.country || "India")
     setBranchPhone(branch.phone || "")
     setBranchEmail(branch.email || "")
-    setBranchManager(branch.managerName || "")
+    setBranchWebsite(branch.website || "")
+    setBranchBankName(branch.bank_name || "")
+    setBranchAccountHolder(branch.account_holder || "")
+    setBranchAccountNumber(branch.account_number || "")
+    setBranchIfscCode(branch.ifsc_code || "")
+    setBranchBankBranch(branch.bank_branch || "")
+    setBranchUpiId(branch.upi_id || "")
+    setBranchPaymentQrUrl(branch.payment_qr_url || "")
+    setBranchTermsConditions(branch.terms_conditions || "")
+    setBranchSignatoryName(branch.signatory_name || "")
+    setBranchSignatoryDesignation(branch.signatory_designation || "")
+    setBranchSignatureImageUrl(branch.signature_image_url || "")
+    setBranchStampImageUrl(branch.stamp_image_url || "")
     setBranchStatus(branch.status)
     setIsBranchModalOpen(true)
   }
@@ -546,32 +746,50 @@ export function CompanyBranchSettings() {
       }
     }
 
+    const payload: Partial<Branch> = {
+      companyId: finalCompanyId,
+      name: branchName.trim(),
+      code: branchCode.trim(),
+      brand_name: branchBrandName.trim(),
+      division_name: branchDivisionName.trim(),
+      subtitle: branchSubtitle.trim(),
+      logo_url: branchLogoUrl,
+      managerName: branchManager.trim(),
+      managerPhone: branchManagerPhone.trim(),
+      managerEmail: branchManagerEmail.trim(),
+      gstin: branchGstin.trim(),
+      pan: branchPan.trim(),
+      cin: branchCin.trim(),
+      msme_reg: branchMsmeReg.trim(),
+      address: branchAddress.trim(),
+      city: branchCity.trim(),
+      state: branchState.trim(),
+      zip: branchZip.trim(),
+      country: branchCountry.trim(),
+      phone: branchPhone.trim(),
+      email: branchEmail.trim(),
+      website: branchWebsite.trim(),
+      bank_name: branchBankName.trim(),
+      account_holder: branchAccountHolder.trim(),
+      account_number: branchAccountNumber.trim(),
+      ifsc_code: branchIfscCode.trim(),
+      bank_branch: branchBankBranch.trim(),
+      upi_id: branchUpiId.trim(),
+      payment_qr_url: branchPaymentQrUrl,
+      terms_conditions: branchTermsConditions.trim(),
+      signatory_name: branchSignatoryName.trim(),
+      signatory_designation: branchSignatoryDesignation.trim(),
+      signature_image_url: branchSignatureImageUrl,
+      stamp_image_url: branchStampImageUrl,
+      status: branchStatus,
+    }
+
     const isEdit = !!editingBranch
     await executeWithFeedback(async () => {
       if (editingBranch) {
-        await updateBranch(editingBranch.id, {
-          companyId: finalCompanyId,
-          name: branchName.trim(),
-          code: branchCode.trim(),
-          city: branchCity.trim(),
-          address: branchAddress.trim(),
-          phone: branchPhone.trim(),
-          email: branchEmail.trim(),
-          managerName: branchManager.trim(),
-          status: branchStatus,
-        })
+        await updateBranch(editingBranch.id, payload)
       } else {
-        await addBranch({
-          companyId: finalCompanyId,
-          name: branchName.trim(),
-          code: branchCode.trim(),
-          city: branchCity.trim(),
-          address: branchAddress.trim(),
-          phone: branchPhone.trim(),
-          email: branchEmail.trim(),
-          managerName: branchManager.trim(),
-          status: branchStatus,
-        })
+        await addBranch(payload)
       }
 
       await fetchBranches().catch(() => {})
@@ -581,7 +799,7 @@ export function CompanyBranchSettings() {
       loadingTitle: isEdit ? "Updating Branch..." : "Creating Branch...",
       loadingMsg: `Saving branch ${branchName.trim()}...`,
       successTitle: isEdit ? "Branch Updated!" : "Branch Created Successfully!",
-      successMsg: `Branch ${branchName.trim()} has been saved.`,
+      successMsg: `Branch ${branchName.trim()} has been saved with full tax, contact, and banking records.`,
       errorTitle: "Branch Save Failed",
     })
   }
@@ -600,25 +818,46 @@ export function CompanyBranchSettings() {
     })
   }
 
-  // ── SUB-BRANCH HANDLERS (Percentage Wise Revenue Share) ─────────────────────
+  // ── SUB-BRANCH HANDLERS (Percentage Wise Revenue Share & Full Details) ─────
   const handleOpenCreateSubBranch = (parentBranch: Branch) => {
     setSubBranchParentBranchId(parentBranch.id)
     setSubBranchCompanyId(parentBranch.companyId)
     setEditingSubBranch(null)
+    setSubBranchModalTab("basic")
     setSubBranchName("")
     setSubBranchCode(`SB-${Math.floor(100 + Math.random() * 900)}`)
+    setSubBranchBrandName("")
+    setSubBranchDivisionName("")
+    setSubBranchSubtitle("")
     setSubBranchPartnerName("")
     setSubBranchPartnerPhone("")
     setSubBranchPartnerEmail("")
     setSubBranchCity(parentBranch.city || "")
+    setSubBranchState(parentBranch.state || "")
     setSubBranchAddress("")
+    setSubBranchZip("")
+    setSubBranchCountry("India")
+    setSubBranchPhone("")
+    setSubBranchEmail("")
+    setSubBranchWebsite("")
     setSubBranchRevenueSharePct(30)
     setSubBranchPartnerType("Franchise Partner")
+    setSubBranchGstin("")
+    setSubBranchPan("")
+    setSubBranchCin("")
+    setSubBranchMsmeReg("")
     setSubBranchAccountHolder("")
     setSubBranchBankName("")
     setSubBranchAccountNumber("")
     setSubBranchIfscCode("")
+    setSubBranchBankBranch("")
     setSubBranchUpiId("")
+    setSubBranchPaymentQrUrl("")
+    setSubBranchTermsConditions("")
+    setSubBranchSignatoryName("")
+    setSubBranchSignatoryDesignation("")
+    setSubBranchSignatureImageUrl("")
+    setSubBranchStampImageUrl("")
     setSubBranchStatus("Active")
     setIsSubBranchModalOpen(true)
   }
@@ -627,20 +866,41 @@ export function CompanyBranchSettings() {
     setSubBranchParentBranchId(sb.parentBranchId)
     setSubBranchCompanyId(sb.companyId)
     setEditingSubBranch(sb)
-    setSubBranchName(sb.name)
+    setSubBranchModalTab("basic")
+    setSubBranchName(sb.name || "")
     setSubBranchCode(sb.code || "")
+    setSubBranchBrandName(sb.brand_name || "")
+    setSubBranchDivisionName(sb.division_name || "")
+    setSubBranchSubtitle(sb.subtitle || "")
     setSubBranchPartnerName(sb.partnerName || "")
     setSubBranchPartnerPhone(sb.partnerPhone || "")
     setSubBranchPartnerEmail(sb.partnerEmail || "")
     setSubBranchCity(sb.city || "")
+    setSubBranchState(sb.state || "")
     setSubBranchAddress(sb.address || "")
+    setSubBranchZip(sb.zip || "")
+    setSubBranchCountry(sb.country || "India")
+    setSubBranchPhone(sb.phone || "")
+    setSubBranchEmail(sb.email || "")
+    setSubBranchWebsite(sb.website || "")
     setSubBranchRevenueSharePct(sb.revenueSharePct ?? 30)
     setSubBranchPartnerType(sb.partnerType || "Franchise Partner")
-    setSubBranchAccountHolder(sb.bankDetails?.accountHolder || "")
-    setSubBranchBankName(sb.bankDetails?.bankName || "")
-    setSubBranchAccountNumber(sb.bankDetails?.accountNumber || "")
-    setSubBranchIfscCode(sb.bankDetails?.ifscCode || "")
-    setSubBranchUpiId(sb.bankDetails?.upiId || "")
+    setSubBranchGstin(sb.gstin || "")
+    setSubBranchPan(sb.pan || "")
+    setSubBranchCin(sb.cin || "")
+    setSubBranchMsmeReg(sb.msme_reg || "")
+    setSubBranchAccountHolder(sb.account_holder || sb.bankDetails?.accountHolder || "")
+    setSubBranchBankName(sb.bank_name || sb.bankDetails?.bankName || "")
+    setSubBranchAccountNumber(sb.account_number || sb.bankDetails?.accountNumber || "")
+    setSubBranchIfscCode(sb.ifsc_code || sb.bankDetails?.ifscCode || "")
+    setSubBranchBankBranch(sb.bank_branch || "")
+    setSubBranchUpiId(sb.upi_id || sb.bankDetails?.upiId || "")
+    setSubBranchPaymentQrUrl(sb.payment_qr_url || "")
+    setSubBranchTermsConditions(sb.terms_conditions || "")
+    setSubBranchSignatoryName(sb.signatory_name || "")
+    setSubBranchSignatoryDesignation(sb.signatory_designation || "")
+    setSubBranchSignatureImageUrl(sb.signature_image_url || "")
+    setSubBranchStampImageUrl(sb.stamp_image_url || "")
     setSubBranchStatus(sb.status)
     setIsSubBranchModalOpen(true)
   }
@@ -652,18 +912,43 @@ export function CompanyBranchSettings() {
       return
     }
 
-    const payload = {
+    const payload: Partial<SubBranch> = {
       parentBranchId: subBranchParentBranchId,
       companyId: subBranchCompanyId,
       name: subBranchName.trim(),
       code: subBranchCode.trim(),
+      brand_name: subBranchBrandName.trim(),
+      division_name: subBranchDivisionName.trim(),
+      subtitle: subBranchSubtitle.trim(),
       partnerName: subBranchPartnerName.trim(),
       partnerPhone: subBranchPartnerPhone.trim(),
       partnerEmail: subBranchPartnerEmail.trim(),
       city: subBranchCity.trim(),
+      state: subBranchState.trim(),
       address: subBranchAddress.trim(),
+      zip: subBranchZip.trim(),
+      country: subBranchCountry.trim(),
+      phone: subBranchPhone.trim(),
+      email: subBranchEmail.trim(),
+      website: subBranchWebsite.trim(),
       revenueSharePct: Number(subBranchRevenueSharePct),
       partnerType: subBranchPartnerType,
+      gstin: subBranchGstin.trim(),
+      pan: subBranchPan.trim(),
+      cin: subBranchCin.trim(),
+      msme_reg: subBranchMsmeReg.trim(),
+      account_holder: subBranchAccountHolder.trim(),
+      bank_name: subBranchBankName.trim(),
+      account_number: subBranchAccountNumber.trim(),
+      ifsc_code: subBranchIfscCode.trim(),
+      bank_branch: subBranchBankBranch.trim(),
+      upi_id: subBranchUpiId.trim(),
+      payment_qr_url: subBranchPaymentQrUrl,
+      terms_conditions: subBranchTermsConditions.trim(),
+      signatory_name: subBranchSignatoryName.trim(),
+      signatory_designation: subBranchSignatoryDesignation.trim(),
+      signature_image_url: subBranchSignatureImageUrl,
+      stamp_image_url: subBranchStampImageUrl,
       bankDetails: {
         accountHolder: subBranchAccountHolder.trim(),
         bankName: subBranchBankName.trim(),
@@ -1947,477 +2232,1237 @@ export function CompanyBranchSettings() {
         )}
       </AnimatePresence>
 
-      {/* ── CREATE / EDIT BRANCH MODAL (Admin & Super Admin) ───────────────── */}
+      {/* ── CREATE / EDIT BRANCH MODAL (5 Full Tabs) ───────────────────────── */}
       <AnimatePresence>
         {isBranchModalOpen && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm overflow-y-auto">
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-lg bg-surface p-6 rounded-3xl border border-border shadow-2xl space-y-4"
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="w-full max-w-2xl bg-surface border border-border rounded-3xl p-6 shadow-2xl space-y-4 my-8 max-h-[90vh] flex flex-col"
             >
-              <div className="flex items-center justify-between border-b border-border/50 pb-3">
+              {/* Header */}
+              <div className="flex items-center justify-between pb-3 border-b border-border shrink-0">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 shrink-0 shadow-2xs">
-                    <MapPin size={16} />
+                  <div className="w-9 h-9 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 shadow-2xs font-bold">
+                    <MapPin size={18} />
                   </div>
-                  <h3 className="font-bold text-base text-foreground">
-                    {editingBranch ? "Edit Branch" : "Create New Branch"}
-                  </h3>
+                  <div>
+                    <h3 className="font-bold text-base text-foreground">
+                      {editingBranch ? `Edit Branch: ${editingBranch.name}` : "Create New Branch Hub"}
+                    </h3>
+                    <p className="text-[11px] text-muted-foreground">
+                      Configure branch branding, legal tax IDs, addresses, custom banking, and digital signature/stamp
+                    </p>
+                  </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setIsBranchModalOpen(false)}
-                  className="p-1 rounded-lg text-muted-foreground hover:text-foreground"
+                  className="p-1.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-surface-hover cursor-pointer"
                 >
                   <X size={18} />
                 </button>
               </div>
 
-              <form onSubmit={handleSaveBranch} className="space-y-3.5 text-xs">
-                {/* Company Selection Field */}
-                <div>
-                  <label className="block font-semibold text-foreground mb-1">
-                    {isSuperAdmin ? "Target Company *" : "Assigned Company"}
-                  </label>
-                  {isSuperAdmin ? (
-                    <select
-                      value={targetCompanyIdForBranch}
-                      onChange={(e) => setTargetCompanyIdForBranch(e.target.value)}
-                      className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden focus:border-primary font-semibold text-foreground"
-                    >
-                      {companies.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.logo || "🏢"} {c.name} ({c.slug || c.id})
-                        </option>
-                      ))}
-                    </select>
-                  ) : visibleCompanies.length > 1 ? (
-                    <select
-                      value={targetCompanyIdForBranch}
-                      onChange={(e) => setTargetCompanyIdForBranch(e.target.value)}
-                      className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden focus:border-primary font-semibold text-foreground"
-                    >
-                      {visibleCompanies.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.logo || "🏢"} {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <div className="flex items-center justify-between px-3.5 py-2 rounded-xl bg-surface-pressed/30 border border-border text-xs font-semibold text-foreground">
-                      <div className="flex items-center gap-2">
-                        <span>{visibleCompanies[0]?.logo || "🏢"}</span>
-                        <span>{visibleCompanies[0]?.name || "Assigned Company"}</span>
-                      </div>
-                      <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded font-bold">
-                        Assigned
-                      </span>
+              {/* 5 Tab Navigation Bar */}
+              <div className="flex items-center gap-1.5 p-1 bg-surface-pressed/30 rounded-2xl border border-border/80 overflow-x-auto shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setBranchModalTab("basic")}
+                  className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                    branchModalTab === "basic"
+                      ? "bg-surface text-foreground shadow-xs border border-border"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Building2 size={13} />
+                  <span>1. Identity</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setBranchModalTab("tax")}
+                  className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                    branchModalTab === "tax"
+                      ? "bg-surface text-foreground shadow-xs border border-border"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <FileText size={13} />
+                  <span>2. Tax & Legal</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setBranchModalTab("contact")}
+                  className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                    branchModalTab === "contact"
+                      ? "bg-surface text-foreground shadow-xs border border-border"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <MapPin size={13} />
+                  <span>3. Address</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setBranchModalTab("bank")}
+                  className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                    branchModalTab === "bank"
+                      ? "bg-surface text-foreground shadow-xs border border-border"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <CreditCard size={13} />
+                  <span>4. Bank & UPI</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setBranchModalTab("signature")}
+                  className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                    branchModalTab === "signature"
+                      ? "bg-surface text-foreground shadow-xs border border-border"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Shield size={13} />
+                  <span>5. Signature & Stamp</span>
+                </button>
+              </div>
+
+              {/* Form Content */}
+              <form onSubmit={handleSaveBranch} className="space-y-4 text-xs overflow-y-auto flex-1 pr-1">
+                
+                {/* ── TAB 1: IDENTITY & BRANDING ── */}
+                {branchModalTab === "basic" && (
+                  <div className="space-y-3.5">
+                    {/* Target Company */}
+                    <div>
+                      <label className="block font-semibold text-foreground mb-1">Target Parent Company *</label>
+                      {isSuperAdmin ? (
+                        <select
+                          value={targetCompanyIdForBranch}
+                          onChange={(e) => setTargetCompanyIdForBranch(e.target.value)}
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden font-semibold text-foreground"
+                        >
+                          {companies.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.logo || "🏢"} {c.name} ({c.slug || c.id})
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div className="flex items-center justify-between px-3.5 py-2 rounded-xl bg-surface-pressed/30 border border-border text-xs font-semibold text-foreground">
+                          <div className="flex items-center gap-2">
+                            <span>{visibleCompanies[0]?.logo || "🏢"}</span>
+                            <span>{visibleCompanies[0]?.name || "Assigned Company"}</span>
+                          </div>
+                          <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded font-bold">Assigned</span>
+                        </div>
+                      )}
                     </div>
-                  )}
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    {isSuperAdmin
-                      ? "Super Admin can create a branch under any registered company."
-                      : "Branches created by this Admin are automatically scoped under your assigned company."}
-                  </p>
-                </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="col-span-2 sm:col-span-1">
-                    <label className="block font-semibold text-foreground mb-1">Branch Name *</label>
-                    <input
-                      type="text"
-                      required
-                      value={branchName}
-                      onChange={(e) => setBranchName(e.target.value)}
-                      placeholder="e.g. Kolkata South Branch"
-                      className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden focus:border-primary"
-                    />
-                  </div>
-                  <div className="col-span-2 sm:col-span-1">
-                    <label className="block font-semibold text-foreground mb-1">Branch Code</label>
-                    <input
-                      type="text"
-                      value={branchCode}
-                      onChange={(e) => setBranchCode(e.target.value)}
-                      placeholder="e.g. BR-101"
-                      className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden"
-                    />
-                  </div>
-                </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">Branch Operating Name *</label>
+                        <input
+                          type="text"
+                          required
+                          value={branchName}
+                          onChange={(e) => setBranchName(e.target.value)}
+                          placeholder="e.g. Kolkata Salt Lake City Center"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">Branch Code (Invoice ID Prefix) *</label>
+                        <input
+                          type="text"
+                          required
+                          value={branchCode}
+                          onChange={(e) => setBranchCode(e.target.value)}
+                          placeholder="e.g. KOL-01, BLR-HQ"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold uppercase focus:outline-hidden"
+                        />
+                      </div>
+                    </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-semibold text-foreground mb-1">City / Region</label>
-                    <input
-                      type="text"
-                      value={branchCity}
-                      onChange={(e) => setBranchCity(e.target.value)}
-                      placeholder="e.g. Kolkata"
-                      className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-foreground mb-1">Branch Manager</label>
-                    <input
-                      type="text"
-                      value={branchManager}
-                      onChange={(e) => setBranchManager(e.target.value)}
-                      placeholder="e.g. Rahul Sharma"
-                      className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
-                    />
-                  </div>
-                </div>
+                    {/* Brand & Division Custom Overrides */}
+                    <div className="p-3 rounded-2xl bg-surface-pressed/30 border border-border/70 space-y-2.5">
+                      <span className="font-bold text-[11px] text-foreground flex items-center gap-1.5">
+                        <Sparkles size={13} className="text-primary" />
+                        <span>Branch Custom Brand & Division Header (Optional Overrides)</span>
+                      </span>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div>
+                          <label className="block text-[10.5px] text-muted-foreground mb-1">Brand Name Override</label>
+                          <input
+                            type="text"
+                            value={branchBrandName}
+                            onChange={(e) => setBranchBrandName(e.target.value)}
+                            placeholder="Defaults to Company Brand (e.g. SAAMPARK)"
+                            className="w-full px-3 py-1.5 rounded-lg bg-surface border border-border text-xs focus:outline-hidden"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10.5px] text-muted-foreground mb-1">Division Name Override</label>
+                          <input
+                            type="text"
+                            value={branchDivisionName}
+                            onChange={(e) => setBranchDivisionName(e.target.value)}
+                            placeholder="e.g. TECHNOLOGY - EAST INDIA"
+                            className="w-full px-3 py-1.5 rounded-lg bg-surface border border-border text-xs focus:outline-hidden"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10.5px] text-muted-foreground mb-1">Branch Subtitle / Tagline</label>
+                        <input
+                          type="text"
+                          value={branchSubtitle}
+                          onChange={(e) => setBranchSubtitle(e.target.value)}
+                          placeholder="e.g. Regional Development & Enterprise Support Center"
+                          className="w-full px-3 py-1.5 rounded-lg bg-surface border border-border text-xs focus:outline-hidden"
+                        />
+                      </div>
+                    </div>
 
-                <div>
-                  <label className="block font-semibold text-foreground mb-1">Physical Address</label>
-                  <input
-                    type="text"
-                    value={branchAddress}
-                    onChange={(e) => setBranchAddress(e.target.value)}
-                    placeholder="e.g. Plot 12, Salt Lake Sector V, Kolkata"
-                    className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-semibold text-foreground mb-1">Contact Phone</label>
-                    <input
-                      type="text"
-                      value={branchPhone}
-                      onChange={(e) => setBranchPhone(e.target.value)}
-                      placeholder="+91 98765 43210"
-                      className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
-                    />
+                    {/* Manager & Operational Status */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">Branch Manager</label>
+                        <input
+                          type="text"
+                          value={branchManager}
+                          onChange={(e) => setBranchManager(e.target.value)}
+                          placeholder="e.g. Rahul Sharma"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">Manager Phone</label>
+                        <input
+                          type="text"
+                          value={branchManagerPhone}
+                          onChange={(e) => setBranchManagerPhone(e.target.value)}
+                          placeholder="+91 98765 43210"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">Status</label>
+                        <select
+                          value={branchStatus}
+                          onChange={(e) => setBranchStatus(e.target.value as any)}
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden font-bold"
+                        >
+                          <option value="Active">Active</option>
+                          <option value="Inactive">Inactive</option>
+                        </select>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block font-semibold text-foreground mb-1">Contact Email</label>
-                    <input
-                      type="email"
-                      value={branchEmail}
-                      onChange={(e) => setBranchEmail(e.target.value)}
-                      placeholder="branch@saampark.in"
-                      className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
-                    />
+                )}
+
+                {/* ── TAB 2: LEGAL & TAX IDS ── */}
+                {branchModalTab === "tax" && (
+                  <div className="space-y-3.5">
+                    <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-2xl text-[11px] text-blue-900 dark:text-blue-200">
+                      💡 <strong>State-Specific GSTIN:</strong> In India, businesses with multi-state operations have distinct state GSTINs per branch. Enter the branch-specific GSTIN below to appear on invoices issued from this branch.
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">Branch State GSTIN</label>
+                        <input
+                          type="text"
+                          value={branchGstin}
+                          onChange={(e) => setBranchGstin(e.target.value.toUpperCase())}
+                          placeholder="e.g. 19ABCDE1234F1Z5"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold uppercase focus:outline-hidden"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">Branch PAN</label>
+                        <input
+                          type="text"
+                          value={branchPan}
+                          onChange={(e) => setBranchPan(e.target.value.toUpperCase())}
+                          placeholder="e.g. ABCDE1234F"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold uppercase focus:outline-hidden"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">Branch CIN / Registration No.</label>
+                        <input
+                          type="text"
+                          value={branchCin}
+                          onChange={(e) => setBranchCin(e.target.value)}
+                          placeholder="e.g. U72200WB2023PTC123456"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">MSME / Udyam Reg No.</label>
+                        <input
+                          type="text"
+                          value={branchMsmeReg}
+                          onChange={(e) => setBranchMsmeReg(e.target.value)}
+                          placeholder="e.g. UDYAM-WB-10-0012345"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden"
+                        />
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
 
-                <div>
-                  <label className="block font-semibold text-foreground mb-1">Status</label>
-                  <select
-                    value={branchStatus}
-                    onChange={(e) => setBranchStatus(e.target.value as any)}
-                    className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
-                  >
-                    <option value="Active">Active</option>
-                    <option value="Inactive">Inactive</option>
-                  </select>
-                </div>
+                {/* ── TAB 3: ADDRESS & CONTACTS ── */}
+                {branchModalTab === "contact" && (
+                  <div className="space-y-3.5">
+                    <div>
+                      <label className="block font-semibold text-foreground mb-1">Physical Street Address *</label>
+                      <input
+                        type="text"
+                        value={branchAddress}
+                        onChange={(e) => setBranchAddress(e.target.value)}
+                        placeholder="e.g. Plot 12, Block EP & GP, Sector V, Salt Lake"
+                        className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden font-medium"
+                      />
+                    </div>
 
-                <div className="flex items-center justify-end gap-2 pt-3 border-t border-border/50">
-                  <button
-                    type="button"
-                    onClick={() => setIsBranchModalOpen(false)}
-                    className="px-4 py-2 rounded-xl border border-border text-muted-foreground hover:text-foreground font-semibold cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-5 py-2 rounded-xl bg-primary text-primary-foreground font-bold shadow-md hover:bg-primary/90 cursor-pointer"
-                  >
-                    {editingBranch ? "Update Branch" : "Create Branch"}
-                  </button>
-                </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">City / Hub</label>
+                        <input
+                          type="text"
+                          value={branchCity}
+                          onChange={(e) => setBranchCity(e.target.value)}
+                          placeholder="e.g. Kolkata"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden font-medium"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">State / Province</label>
+                        <input
+                          type="text"
+                          value={branchState}
+                          onChange={(e) => setBranchState(e.target.value)}
+                          placeholder="e.g. West Bengal"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">PIN / Zip Code</label>
+                        <input
+                          type="text"
+                          value={branchZip}
+                          onChange={(e) => setBranchZip(e.target.value)}
+                          placeholder="700091"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">Branch Direct Phone</label>
+                        <input
+                          type="text"
+                          value={branchPhone}
+                          onChange={(e) => setBranchPhone(e.target.value)}
+                          placeholder="+91 33 2345 6789"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">Branch Invoicing Email</label>
+                        <input
+                          type="email"
+                          value={branchEmail}
+                          onChange={(e) => setBranchEmail(e.target.value)}
+                          placeholder="kolkata.billing@saampark.in"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">Branch Website / Portal</label>
+                        <input
+                          type="text"
+                          value={branchWebsite}
+                          onChange={(e) => setBranchWebsite(e.target.value)}
+                          placeholder="https://saampark.com/kolkata"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── TAB 4: BANK & UPI PAY ── */}
+                {branchModalTab === "bank" && (
+                  <div className="space-y-3.5">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">Bank Name</label>
+                        <input
+                          type="text"
+                          value={branchBankName}
+                          onChange={(e) => setBranchBankName(e.target.value)}
+                          placeholder="e.g. ICICI Bank Ltd."
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">Account Holder Name</label>
+                        <input
+                          type="text"
+                          value={branchAccountHolder}
+                          onChange={(e) => setBranchAccountHolder(e.target.value)}
+                          placeholder="e.g. SAAMPARK TECHNOLOGY PVT LTD (KOLKATA)"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="col-span-2">
+                        <label className="block font-semibold text-foreground mb-1">Bank Account Number</label>
+                        <input
+                          type="text"
+                          value={branchAccountNumber}
+                          onChange={(e) => setBranchAccountNumber(e.target.value)}
+                          placeholder="002105023910"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold focus:outline-hidden"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">IFSC Code</label>
+                        <input
+                          type="text"
+                          value={branchIfscCode}
+                          onChange={(e) => setBranchIfscCode(e.target.value.toUpperCase())}
+                          placeholder="ICIC0000021"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold uppercase focus:outline-hidden"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">Bank Branch Location</label>
+                        <input
+                          type="text"
+                          value={branchBankBranch}
+                          onChange={(e) => setBranchBankBranch(e.target.value)}
+                          placeholder="Salt Lake Sector V Branch"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">Branch UPI VPA ID</label>
+                        <input
+                          type="text"
+                          value={branchUpiId}
+                          onChange={(e) => setBranchUpiId(e.target.value)}
+                          placeholder="saampark.kolkata@icici"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden"
+                        />
+                      </div>
+                    </div>
+
+                    {/* QR Code Upload */}
+                    <div className="p-3.5 rounded-2xl bg-surface-pressed/30 border border-border/70 flex items-center justify-between gap-4">
+                      <div>
+                        <span className="font-bold text-foreground text-xs block">Branch Payment QR Code</span>
+                        <span className="text-[10px] text-muted-foreground block">
+                          Upload a standalone payment QR code for this branch. If omitted, live UPI QR is auto-generated.
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {branchPaymentQrUrl && (
+                          <div className="relative w-12 h-12 rounded-xl bg-white p-1 border border-border overflow-hidden shrink-0">
+                            <img src={branchPaymentQrUrl} alt="QR Preview" className="w-full h-full object-contain" />
+                            <button
+                              type="button"
+                              onClick={() => setBranchPaymentQrUrl("")}
+                              className="absolute top-0.5 right-0.5 p-0.5 bg-rose-600 text-white rounded-full text-[8px]"
+                            >
+                              <X size={10} />
+                            </button>
+                          </div>
+                        )}
+                        <input
+                          type="file"
+                          ref={branchQrInputRef}
+                          onChange={handleBranchQrUpload}
+                          accept="image/*"
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => branchQrInputRef.current?.click()}
+                          className="px-3 py-1.5 rounded-xl bg-surface border border-border text-xs font-bold hover:bg-surface-hover cursor-pointer"
+                        >
+                          Upload QR
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── TAB 5: SIGNATURE & STAMP UPLOAD ── */}
+                {branchModalTab === "signature" && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">Branch Signatory Name</label>
+                        <input
+                          type="text"
+                          value={branchSignatoryName}
+                          onChange={(e) => setBranchSignatoryName(e.target.value)}
+                          placeholder="e.g. Subir Karmakar"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-bold focus:outline-hidden"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">Signatory Designation</label>
+                        <input
+                          type="text"
+                          value={branchSignatoryDesignation}
+                          onChange={(e) => setBranchSignatoryDesignation(e.target.value)}
+                          placeholder="e.g. Branch Head & Authorized Signatory"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 pt-2">
+                      {/* Signature Upload Card */}
+                      <div className="p-4 rounded-2xl bg-surface-pressed/30 border border-border/80 flex flex-col items-center justify-center text-center space-y-2">
+                        <span className="font-bold text-xs text-foreground">Digital Signature</span>
+                        <div className="w-full h-24 rounded-xl bg-surface border border-dashed border-border flex items-center justify-center p-2 relative overflow-hidden">
+                          {branchSignatureImageUrl ? (
+                            <>
+                              <img src={branchSignatureImageUrl} alt="Signature" className="max-h-full max-w-full object-contain" />
+                              <button
+                                type="button"
+                                onClick={() => setBranchSignatureImageUrl("")}
+                                className="absolute top-1 right-1 p-1 bg-rose-600 text-white rounded-full cursor-pointer shadow-xs"
+                              >
+                                <X size={12} />
+                              </button>
+                            </>
+                          ) : (
+                            <span className="text-[11px] text-muted-foreground">No signature uploaded</span>
+                          )}
+                        </div>
+                        <input
+                          type="file"
+                          ref={branchSignatureInputRef}
+                          onChange={handleBranchSignatureUpload}
+                          accept="image/*"
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => branchSignatureInputRef.current?.click()}
+                          className="px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 cursor-pointer shadow-xs"
+                        >
+                          Upload Signature Image
+                        </button>
+                      </div>
+
+                      {/* Stamp Upload Card */}
+                      <div className="p-4 rounded-2xl bg-surface-pressed/30 border border-border/80 flex flex-col items-center justify-center text-center space-y-2">
+                        <span className="font-bold text-xs text-foreground">Branch Official Stamp / Seal</span>
+                        <div className="w-full h-24 rounded-xl bg-surface border border-dashed border-border flex items-center justify-center p-2 relative overflow-hidden">
+                          {branchStampImageUrl ? (
+                            <>
+                              <img src={branchStampImageUrl} alt="Stamp" className="max-h-full max-w-full object-contain" />
+                              <button
+                                type="button"
+                                onClick={() => setBranchStampImageUrl("")}
+                                className="absolute top-1 right-1 p-1 bg-rose-600 text-white rounded-full cursor-pointer shadow-xs"
+                              >
+                                <X size={12} />
+                              </button>
+                            </>
+                          ) : (
+                            <span className="text-[11px] text-muted-foreground">No seal uploaded</span>
+                          )}
+                        </div>
+                        <input
+                          type="file"
+                          ref={branchStampInputRef}
+                          onChange={handleBranchStampUpload}
+                          accept="image/*"
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => branchStampInputRef.current?.click()}
+                          className="px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 cursor-pointer shadow-xs"
+                        >
+                          Upload Official Seal
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Modal Actions */}
+                {(() => {
+                  const currentBranchTabIndex = BRANCH_TABS_LIST.indexOf(branchModalTab)
+                  return (
+                    <div className="flex flex-col sm:flex-row items-center justify-between pt-4 border-t border-border/60 gap-3 shrink-0">
+                      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                        <Sparkles size={13} className="text-amber-500 shrink-0" />
+                        <span>Step {currentBranchTabIndex + 1} of 5 • Branch Profile Configuration</span>
+                      </div>
+
+                      <div className="flex items-center gap-2 justify-end flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => setIsBranchModalOpen(false)}
+                          className="px-3.5 py-2 rounded-xl border border-border text-muted-foreground hover:text-foreground font-semibold cursor-pointer text-xs"
+                        >
+                          Cancel
+                        </button>
+
+                        {currentBranchTabIndex > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setBranchModalTab(BRANCH_TABS_LIST[currentBranchTabIndex - 1])}
+                            className="px-3.5 py-2 rounded-xl bg-surface border border-border text-foreground hover:bg-surface-hover font-semibold text-xs flex items-center gap-1 cursor-pointer"
+                          >
+                            <ChevronLeft size={14} />
+                            <span>Back</span>
+                          </button>
+                        )}
+
+                        {currentBranchTabIndex < BRANCH_TABS_LIST.length - 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setBranchModalTab(BRANCH_TABS_LIST[currentBranchTabIndex + 1])}
+                            className="px-4 py-2 rounded-xl bg-primary text-primary-foreground font-bold text-xs flex items-center gap-1 shadow-xs hover:bg-primary/90 cursor-pointer"
+                          >
+                            <span>Next</span>
+                            <ChevronRight size={14} />
+                          </button>
+                        )}
+
+                        <button
+                          type="submit"
+                          className="px-4.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md cursor-pointer flex items-center gap-1.5"
+                        >
+                          <Check size={14} />
+                          <span>{editingBranch ? "Save Branch Hub" : "Create Branch Hub"}</span>
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })()}
               </form>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
-      {/* ── CREATE / EDIT SUB-BRANCH & REVENUE SHARE MODAL ── */}
+      {/* ── CREATE / EDIT SUB-BRANCH & REVENUE SHARE MODAL (5 Full Tabs) ──── */}
       <AnimatePresence>
         {isSubBranchModalOpen && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm overflow-y-auto">
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm overflow-y-auto">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="w-full max-w-xl bg-surface border border-border rounded-3xl p-6 shadow-2xl space-y-4 my-8"
+              className="w-full max-w-2xl bg-surface border border-border rounded-3xl p-6 shadow-2xl space-y-4 my-8 max-h-[90vh] flex flex-col"
             >
-              <div className="flex items-center justify-between pb-3 border-b border-border">
+              {/* Header */}
+              <div className="flex items-center justify-between pb-3 border-b border-border shrink-0">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold">
+                  <div className="w-9 h-9 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold">
                     🌿
                   </div>
                   <div>
-                    <h3 className="font-bold text-sm text-foreground">
-                      {editingSubBranch ? "Edit Sub-Branch & Share Agreement" : "Add Sub-Branch (Percentage Wise Partner)"}
+                    <h3 className="font-bold text-base text-foreground">
+                      {editingSubBranch ? `Edit Sub-Branch: ${editingSubBranch.name}` : "Add Sub-Branch (Partner / Franchise Hub)"}
                     </h3>
-                    <p className="text-[10px] text-muted-foreground">
-                      Attach a commission-based franchise / partner sub-branch with automated percentage revenue split
+                    <p className="text-[11px] text-muted-foreground">
+                      Manage percentage revenue split, legal IDs, contacts, settlement bank details, and digital signatures
                     </p>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setIsSubBranchModalOpen(false)}
-                  className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors"
+                  className="p-1.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-surface-hover cursor-pointer"
                 >
-                  <X size={16} />
+                  <X size={18} />
                 </button>
               </div>
 
-              <form onSubmit={handleSaveSubBranch} className="space-y-4 text-xs">
-                {/* Parent Branch Selection */}
-                <div>
-                  <label className="block font-semibold text-foreground mb-1">Parent Operating Branch *</label>
-                  <select
-                    value={subBranchParentBranchId}
-                    onChange={(e) => {
-                      setSubBranchParentBranchId(e.target.value)
-                      const pb = branches.find(b => b.id === e.target.value)
-                      if (pb) setSubBranchCompanyId(pb.companyId)
-                    }}
-                    required
-                    className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-semibold text-foreground focus:outline-hidden focus:border-primary"
-                  >
-                    <option value="" disabled>Select Parent Branch</option>
-                    {branches.map(b => (
-                      <option key={b.id} value={b.id}>
-                        🏢 {b.name} {b.city ? `(${b.city})` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              {/* 5 Tab Navigation Bar */}
+              <div className="flex items-center gap-1.5 p-1 bg-surface-pressed/30 rounded-2xl border border-border/80 overflow-x-auto shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSubBranchModalTab("basic")}
+                  className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                    subBranchModalTab === "basic"
+                      ? "bg-surface text-foreground shadow-xs border border-border"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Building2 size={13} />
+                  <span>1. Identity & Split</span>
+                </button>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-semibold text-foreground mb-1">Sub-Branch Name *</label>
-                    <input
-                      type="text"
-                      required
-                      value={subBranchName}
-                      onChange={(e) => setSubBranchName(e.target.value)}
-                      placeholder="e.g. Durgapur City Center Sub-Branch"
-                      className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden focus:border-primary"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-foreground mb-1">Sub-Branch Code</label>
-                    <input
-                      type="text"
-                      value={subBranchCode}
-                      onChange={(e) => setSubBranchCode(e.target.value)}
-                      placeholder="e.g. SB-DGP-01"
-                      className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden"
-                    />
-                  </div>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setSubBranchModalTab("tax")}
+                  className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                    subBranchModalTab === "tax"
+                      ? "bg-surface text-foreground shadow-xs border border-border"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <FileText size={13} />
+                  <span>2. Tax & Legal</span>
+                </button>
 
-                {/* ── INTERACTIVE PERCENTAGE REVENUE SPLIT SLIDER ── */}
-                <div className="p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-800/40 space-y-3">
-                  <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setSubBranchModalTab("contact")}
+                  className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                    subBranchModalTab === "contact"
+                      ? "bg-surface text-foreground shadow-xs border border-border"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <MapPin size={13} />
+                  <span>3. Address</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSubBranchModalTab("bank")}
+                  className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                    subBranchModalTab === "bank"
+                      ? "bg-surface text-foreground shadow-xs border border-border"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <CreditCard size={13} />
+                  <span>4. Payout & Bank</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSubBranchModalTab("signature")}
+                  className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                    subBranchModalTab === "signature"
+                      ? "bg-surface text-foreground shadow-xs border border-border"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Shield size={13} />
+                  <span>5. Signature & Stamp</span>
+                </button>
+              </div>
+
+              {/* Form Content */}
+              <form onSubmit={handleSaveSubBranch} className="space-y-4 text-xs overflow-y-auto flex-1 pr-1">
+                
+                {/* ── TAB 1: IDENTITY & REVENUE SPLIT ── */}
+                {subBranchModalTab === "basic" && (
+                  <div className="space-y-3.5">
+                    {/* Parent Branch Selection */}
                     <div>
-                      <span className="font-bold text-xs text-foreground flex items-center gap-1.5">
-                        <span>🪙 Revenue Share Split (% Wise)</span>
-                      </span>
-                      <p className="text-[10px] text-muted-foreground">
-                        Sub-Branch operates as a percentage partner; earnings auto-calculated on each invoice & order
-                      </p>
+                      <label className="block font-semibold text-foreground mb-1">Parent Operating Branch *</label>
+                      <select
+                        value={subBranchParentBranchId}
+                        onChange={(e) => {
+                          setSubBranchParentBranchId(e.target.value)
+                          const pb = branches.find(b => b.id === e.target.value)
+                          if (pb) setSubBranchCompanyId(pb.companyId)
+                        }}
+                        required
+                        className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-semibold text-foreground focus:outline-hidden focus:border-primary"
+                      >
+                        <option value="" disabled>Select Parent Branch</option>
+                        {branches.map(b => (
+                          <option key={b.id} value={b.id}>
+                            🏢 {b.name} {b.city ? `(${b.city})` : ""}
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                    <div className="text-right">
-                      <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm">
-                        {subBranchRevenueSharePct}% Partner
-                      </span>
-                      <span className="text-[10px] text-muted-foreground block">
-                        / {100 - subBranchRevenueSharePct}% Company
-                      </span>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">Sub-Branch Name *</label>
+                        <input
+                          type="text"
+                          required
+                          value={subBranchName}
+                          onChange={(e) => setSubBranchName(e.target.value)}
+                          placeholder="e.g. Durgapur City Center Sub-Branch"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">Sub-Branch Code *</label>
+                        <input
+                          type="text"
+                          value={subBranchCode}
+                          onChange={(e) => setSubBranchCode(e.target.value)}
+                          placeholder="e.g. SB-DGP-01"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold uppercase focus:outline-hidden"
+                        />
+                      </div>
+                    </div>
+
+                    {/* ── PERCENTAGE REVENUE SPLIT SLIDER ── */}
+                    <div className="p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-800/40 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="font-bold text-xs text-foreground flex items-center gap-1.5">
+                            <span>🪙 Revenue Share Split (% Wise)</span>
+                          </span>
+                          <p className="text-[10px] text-muted-foreground">
+                            Sub-Branch operates as a percentage partner; earnings auto-calculated on each invoice
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm">
+                            {subBranchRevenueSharePct}% Partner
+                          </span>
+                          <span className="text-[10px] text-muted-foreground block">
+                            / {100 - subBranchRevenueSharePct}% Company
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Slider Control */}
+                      <div className="space-y-1">
+                        <input
+                          type="range"
+                          min={1}
+                          max={95}
+                          step={1}
+                          value={subBranchRevenueSharePct}
+                          onChange={(e) => setSubBranchRevenueSharePct(Number(e.target.value))}
+                          className="w-full accent-emerald-600 h-2 bg-emerald-200 dark:bg-emerald-900 rounded-lg cursor-pointer"
+                        />
+                        <div className="flex justify-between text-[9.5px] font-mono text-muted-foreground">
+                          <span>1% (Referral)</span>
+                          <span>30% (Franchise)</span>
+                          <span>50% (50-50 JV)</span>
+                          <span>90% (Principal)</span>
+                        </div>
+                      </div>
+
+                      {/* Visual Split Bar */}
+                      <div className="h-3 rounded-full overflow-hidden flex shadow-inner bg-zinc-200 dark:bg-zinc-800">
+                        <div
+                          style={{ width: `${subBranchRevenueSharePct}%` }}
+                          className="bg-emerald-500 text-[9px] font-bold text-white flex items-center justify-center overflow-hidden transition-all"
+                        >
+                          {subBranchRevenueSharePct >= 15 ? `${subBranchRevenueSharePct}% Partner` : ""}
+                        </div>
+                        <div
+                          style={{ width: `${100 - subBranchRevenueSharePct}%` }}
+                          className="bg-blue-600 text-[9px] font-bold text-white flex items-center justify-center overflow-hidden transition-all"
+                        >
+                          {100 - subBranchRevenueSharePct >= 15 ? `${100 - subBranchRevenueSharePct}% Company Retained` : ""}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Partner Details */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">Partner / Owner Name</label>
+                        <input
+                          type="text"
+                          value={subBranchPartnerName}
+                          onChange={(e) => setSubBranchPartnerName(e.target.value)}
+                          placeholder="e.g. Subrata Mukherjee"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">Partner Phone</label>
+                        <input
+                          type="text"
+                          value={subBranchPartnerPhone}
+                          onChange={(e) => setSubBranchPartnerPhone(e.target.value)}
+                          placeholder="+91 98765 00000"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">Partner Entity Type</label>
+                        <select
+                          value={subBranchPartnerType}
+                          onChange={(e) => setSubBranchPartnerType(e.target.value as any)}
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                        >
+                          <option value="Franchise Partner">Franchise Partner</option>
+                          <option value="Agency Partner">Agency Partner</option>
+                          <option value="Satellite Office">Satellite Office</option>
+                          <option value="Regional Associate">Regional Associate</option>
+                        </select>
+                      </div>
                     </div>
                   </div>
+                )}
 
-                  {/* Slider Control */}
-                  <div className="space-y-1">
-                    <input
-                      type="range"
-                      min={1}
-                      max={95}
-                      step={1}
-                      value={subBranchRevenueSharePct}
-                      onChange={(e) => setSubBranchRevenueSharePct(Number(e.target.value))}
-                      className="w-full accent-emerald-600 h-2 bg-emerald-200 dark:bg-emerald-900 rounded-lg cursor-pointer"
-                    />
-                    <div className="flex justify-between text-[9.5px] font-mono text-muted-foreground">
-                      <span>1% (Low Commission)</span>
-                      <span>30% (Standard Franchise)</span>
-                      <span>50% (50-50 JV)</span>
-                      <span>90% (Principal Partner)</span>
+                {/* ── TAB 2: TAX & LEGAL IDS ── */}
+                {subBranchModalTab === "tax" && (
+                  <div className="space-y-3.5">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">Sub-Branch GSTIN</label>
+                        <input
+                          type="text"
+                          value={subBranchGstin}
+                          onChange={(e) => setSubBranchGstin(e.target.value.toUpperCase())}
+                          placeholder="e.g. 19ABCDE1234F1Z5"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold uppercase focus:outline-hidden"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">Partner PAN</label>
+                        <input
+                          type="text"
+                          value={subBranchPan}
+                          onChange={(e) => setSubBranchPan(e.target.value.toUpperCase())}
+                          placeholder="e.g. ABCDE1234F"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold uppercase focus:outline-hidden"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">CIN / Registration No.</label>
+                        <input
+                          type="text"
+                          value={subBranchCin}
+                          onChange={(e) => setSubBranchCin(e.target.value)}
+                          placeholder="e.g. U72200WB2023PTC123456"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">MSME Udyam No.</label>
+                        <input
+                          type="text"
+                          value={subBranchMsmeReg}
+                          onChange={(e) => setSubBranchMsmeReg(e.target.value)}
+                          placeholder="e.g. UDYAM-WB-10-0012345"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden"
+                        />
+                      </div>
                     </div>
                   </div>
+                )}
 
-                  {/* Visual Split Bar */}
-                  <div className="h-3 rounded-full overflow-hidden flex shadow-inner bg-zinc-200 dark:bg-zinc-800">
-                    <div
-                      style={{ width: `${subBranchRevenueSharePct}%` }}
-                      className="bg-emerald-500 text-[9px] font-bold text-white flex items-center justify-center overflow-hidden transition-all"
-                    >
-                      {subBranchRevenueSharePct >= 15 ? `${subBranchRevenueSharePct}% Partner` : ""}
-                    </div>
-                    <div
-                      style={{ width: `${100 - subBranchRevenueSharePct}%` }}
-                      className="bg-blue-600 text-[9px] font-bold text-white flex items-center justify-center overflow-hidden transition-all"
-                    >
-                      {100 - subBranchRevenueSharePct >= 15 ? `${100 - subBranchRevenueSharePct}% Company Retained` : ""}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Partner Details */}
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="block font-semibold text-foreground mb-1">Partner / Owner Name</label>
-                    <input
-                      type="text"
-                      value={subBranchPartnerName}
-                      onChange={(e) => setSubBranchPartnerName(e.target.value)}
-                      placeholder="e.g. Subrata Mukherjee"
-                      className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-foreground mb-1">Partner Phone</label>
-                    <input
-                      type="text"
-                      value={subBranchPartnerPhone}
-                      onChange={(e) => setSubBranchPartnerPhone(e.target.value)}
-                      placeholder="+91 98765 00000"
-                      className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-foreground mb-1">Partner Email</label>
-                    <input
-                      type="email"
-                      value={subBranchPartnerEmail}
-                      onChange={(e) => setSubBranchPartnerEmail(e.target.value)}
-                      placeholder="partner@saampark.in"
-                      className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-semibold text-foreground mb-1">City / Region</label>
-                    <input
-                      type="text"
-                      value={subBranchCity}
-                      onChange={(e) => setSubBranchCity(e.target.value)}
-                      placeholder="e.g. Durgapur"
-                      className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-foreground mb-1">Partner Entity Type</label>
-                    <select
-                      value={subBranchPartnerType}
-                      onChange={(e) => setSubBranchPartnerType(e.target.value as any)}
-                      className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
-                    >
-                      <option value="Franchise Partner">Franchise Partner</option>
-                      <option value="Agency Partner">Agency Partner</option>
-                      <option value="Satellite Office">Satellite Office</option>
-                      <option value="Regional Associate">Regional Associate</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Partner Payout & Bank Settlement Details */}
-                <div className="p-3.5 rounded-2xl bg-surface-pressed/30 border border-border/70 space-y-2.5">
-                  <span className="font-bold text-[11px] text-foreground flex items-center gap-1.5">
-                    <CreditCard size={13} className="text-primary" />
-                    <span>Partner Commission Payout Account Details</span>
-                  </span>
-                  <div className="grid grid-cols-2 gap-2.5">
+                {/* ── TAB 3: ADDRESS & CONTACTS ── */}
+                {subBranchModalTab === "contact" && (
+                  <div className="space-y-3.5">
                     <div>
+                      <label className="block font-semibold text-foreground mb-1">Physical Address</label>
                       <input
                         type="text"
-                        value={subBranchAccountHolder}
-                        onChange={(e) => setSubBranchAccountHolder(e.target.value)}
-                        placeholder="Account Holder Name"
-                        className="w-full px-3 py-1.5 rounded-lg bg-surface border border-border text-xs focus:outline-hidden"
+                        value={subBranchAddress}
+                        onChange={(e) => setSubBranchAddress(e.target.value)}
+                        placeholder="e.g. City Center Mall, Ground Floor, Durgapur"
+                        className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
                       />
                     </div>
-                    <div>
-                      <input
-                        type="text"
-                        value={subBranchBankName}
-                        onChange={(e) => setSubBranchBankName(e.target.value)}
-                        placeholder="Bank Name"
-                        className="w-full px-3 py-1.5 rounded-lg bg-surface border border-border text-xs focus:outline-hidden"
-                      />
-                    </div>
-                    <div>
-                      <input
-                        type="text"
-                        value={subBranchAccountNumber}
-                        onChange={(e) => setSubBranchAccountNumber(e.target.value)}
-                        placeholder="Bank Account Number"
-                        className="w-full px-3 py-1.5 rounded-lg bg-surface border border-border text-xs font-mono focus:outline-hidden"
-                      />
-                    </div>
-                    <div>
-                      <input
-                        type="text"
-                        value={subBranchIfscCode}
-                        onChange={(e) => setSubBranchIfscCode(e.target.value)}
-                        placeholder="IFSC Code (e.g. SBIN0001234)"
-                        className="w-full px-3 py-1.5 rounded-lg bg-surface border border-border text-xs font-mono uppercase focus:outline-hidden"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <input
-                      type="text"
-                      value={subBranchUpiId}
-                      onChange={(e) => setSubBranchUpiId(e.target.value)}
-                      placeholder="Partner UPI ID for Instant Payouts (e.g. partner@okhdfcbank)"
-                      className="w-full px-3 py-1.5 rounded-lg bg-surface border border-border text-xs font-mono focus:outline-hidden"
-                    />
-                  </div>
-                </div>
 
-                <div className="flex items-center justify-between pt-2">
-                  <div className="flex items-center gap-2">
-                    <label className="font-semibold text-foreground text-[11px]">Operational Status:</label>
-                    <select
-                      value={subBranchStatus}
-                      onChange={(e) => setSubBranchStatus(e.target.value as any)}
-                      className="px-2.5 py-1 rounded-lg bg-surface border border-border text-xs focus:outline-hidden"
-                    >
-                      <option value="Active">Active</option>
-                      <option value="Inactive">Inactive</option>
-                    </select>
-                  </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">City / Region</label>
+                        <input
+                          type="text"
+                          value={subBranchCity}
+                          onChange={(e) => setSubBranchCity(e.target.value)}
+                          placeholder="e.g. Durgapur"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">State</label>
+                        <input
+                          type="text"
+                          value={subBranchState}
+                          onChange={(e) => setSubBranchState(e.target.value)}
+                          placeholder="e.g. West Bengal"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">PIN Code</label>
+                        <input
+                          type="text"
+                          value={subBranchZip}
+                          onChange={(e) => setSubBranchZip(e.target.value)}
+                          placeholder="713216"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden"
+                        />
+                      </div>
+                    </div>
 
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsSubBranchModalOpen(false)}
-                      className="px-4 py-2 rounded-xl border border-border text-muted-foreground hover:text-foreground font-semibold cursor-pointer"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md cursor-pointer transition-colors"
-                    >
-                      {editingSubBranch ? "Update Sub-Branch" : "Register Sub-Branch"}
-                    </button>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">Partner Email</label>
+                        <input
+                          type="email"
+                          value={subBranchEmail}
+                          onChange={(e) => setSubBranchEmail(e.target.value)}
+                          placeholder="partner@saampark.in"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">Partner Phone / Hotline</label>
+                        <input
+                          type="text"
+                          value={subBranchPhone}
+                          onChange={(e) => setSubBranchPhone(e.target.value)}
+                          placeholder="+91 98765 00000"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                        />
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {/* ── TAB 4: BANK & UPI PAY ── */}
+                {subBranchModalTab === "bank" && (
+                  <div className="space-y-3.5">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">Account Holder Name</label>
+                        <input
+                          type="text"
+                          value={subBranchAccountHolder}
+                          onChange={(e) => setSubBranchAccountHolder(e.target.value)}
+                          placeholder="Partner Account Name"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">Bank Name</label>
+                        <input
+                          type="text"
+                          value={subBranchBankName}
+                          onChange={(e) => setSubBranchBankName(e.target.value)}
+                          placeholder="Bank Name (e.g. HDFC Bank)"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">Account Number</label>
+                        <input
+                          type="text"
+                          value={subBranchAccountNumber}
+                          onChange={(e) => setSubBranchAccountNumber(e.target.value)}
+                          placeholder="Account Number"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold focus:outline-hidden"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">IFSC Code</label>
+                        <input
+                          type="text"
+                          value={subBranchIfscCode}
+                          onChange={(e) => setSubBranchIfscCode(e.target.value.toUpperCase())}
+                          placeholder="HDFC0001234"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold uppercase focus:outline-hidden"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-foreground mb-1">Partner UPI ID</label>
+                      <input
+                        type="text"
+                        value={subBranchUpiId}
+                        onChange={(e) => setSubBranchUpiId(e.target.value)}
+                        placeholder="partner@okhdfcbank"
+                        className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* ── TAB 5: SIGNATURE & STAMP ── */}
+                {subBranchModalTab === "signature" && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">Partner Signatory Name</label>
+                        <input
+                          type="text"
+                          value={subBranchSignatoryName}
+                          onChange={(e) => setSubBranchSignatoryName(e.target.value)}
+                          placeholder="e.g. Subrata Mukherjee"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-bold focus:outline-hidden"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-foreground mb-1">Designation</label>
+                        <input
+                          type="text"
+                          value={subBranchSignatoryDesignation}
+                          onChange={(e) => setSubBranchSignatoryDesignation(e.target.value)}
+                          placeholder="e.g. Managing Partner / Franchise Head"
+                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 pt-2">
+                      {/* Signature Upload */}
+                      <div className="p-4 rounded-2xl bg-surface-pressed/30 border border-border/80 flex flex-col items-center justify-center text-center space-y-2">
+                        <span className="font-bold text-xs text-foreground">Partner Signature</span>
+                        <div className="w-full h-24 rounded-xl bg-surface border border-dashed border-border flex items-center justify-center p-2 relative overflow-hidden">
+                          {subBranchSignatureImageUrl ? (
+                            <>
+                              <img src={subBranchSignatureImageUrl} alt="Signature" className="max-h-full max-w-full object-contain" />
+                              <button
+                                type="button"
+                                onClick={() => setSubBranchSignatureImageUrl("")}
+                                className="absolute top-1 right-1 p-1 bg-rose-600 text-white rounded-full cursor-pointer shadow-xs"
+                              >
+                                <X size={12} />
+                              </button>
+                            </>
+                          ) : (
+                            <span className="text-[11px] text-muted-foreground">No signature uploaded</span>
+                          )}
+                        </div>
+                        <input
+                          type="file"
+                          ref={subBranchSignatureInputRef}
+                          onChange={handleSubBranchSignatureUpload}
+                          accept="image/*"
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => subBranchSignatureInputRef.current?.click()}
+                          className="px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 cursor-pointer shadow-xs"
+                        >
+                          Upload Signature
+                        </button>
+                      </div>
+
+                      {/* Stamp Upload */}
+                      <div className="p-4 rounded-2xl bg-surface-pressed/30 border border-border/80 flex flex-col items-center justify-center text-center space-y-2">
+                        <span className="font-bold text-xs text-foreground">Partner Seal / Stamp</span>
+                        <div className="w-full h-24 rounded-xl bg-surface border border-dashed border-border flex items-center justify-center p-2 relative overflow-hidden">
+                          {subBranchStampImageUrl ? (
+                            <>
+                              <img src={subBranchStampImageUrl} alt="Stamp" className="max-h-full max-w-full object-contain" />
+                              <button
+                                type="button"
+                                onClick={() => setSubBranchStampImageUrl("")}
+                                className="absolute top-1 right-1 p-1 bg-rose-600 text-white rounded-full cursor-pointer shadow-xs"
+                              >
+                                <X size={12} />
+                              </button>
+                            </>
+                          ) : (
+                            <span className="text-[11px] text-muted-foreground">No seal uploaded</span>
+                          )}
+                        </div>
+                        <input
+                          type="file"
+                          ref={subBranchStampInputRef}
+                          onChange={handleSubBranchStampUpload}
+                          accept="image/*"
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => subBranchStampInputRef.current?.click()}
+                          className="px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 cursor-pointer shadow-xs"
+                        >
+                          Upload Seal
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Modal Actions */}
+                {(() => {
+                  const currentSbTabIndex = SUB_BRANCH_TABS_LIST.indexOf(subBranchModalTab)
+                  return (
+                    <div className="flex flex-col sm:flex-row items-center justify-between pt-4 border-t border-border/60 gap-3 shrink-0">
+                      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                        <Sparkles size={13} className="text-emerald-500 shrink-0" />
+                        <span>Step {currentSbTabIndex + 1} of 5 • Partner Agreement Configuration</span>
+                      </div>
+
+                      <div className="flex items-center gap-2 justify-end flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => setIsSubBranchModalOpen(false)}
+                          className="px-3.5 py-2 rounded-xl border border-border text-muted-foreground hover:text-foreground font-semibold cursor-pointer text-xs"
+                        >
+                          Cancel
+                        </button>
+
+                        {currentSbTabIndex > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setSubBranchModalTab(SUB_BRANCH_TABS_LIST[currentSbTabIndex - 1])}
+                            className="px-3.5 py-2 rounded-xl bg-surface border border-border text-foreground hover:bg-surface-hover font-semibold text-xs flex items-center gap-1 cursor-pointer"
+                          >
+                            <ChevronLeft size={14} />
+                            <span>Back</span>
+                          </button>
+                        )}
+
+                        {currentSbTabIndex < SUB_BRANCH_TABS_LIST.length - 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setSubBranchModalTab(SUB_BRANCH_TABS_LIST[currentSbTabIndex + 1])}
+                            className="px-4 py-2 rounded-xl bg-primary text-primary-foreground font-bold text-xs flex items-center gap-1 shadow-xs hover:bg-primary/90 cursor-pointer"
+                          >
+                            <span>Next</span>
+                            <ChevronRight size={14} />
+                          </button>
+                        )}
+
+                        <button
+                          type="submit"
+                          className="px-4.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md cursor-pointer flex items-center gap-1.5"
+                        >
+                          <Check size={14} />
+                          <span>{editingSubBranch ? "Save Sub-Branch" : "Register Sub-Branch"}</span>
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })()}
               </form>
             </motion.div>
           </div>

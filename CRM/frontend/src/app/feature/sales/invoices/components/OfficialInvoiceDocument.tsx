@@ -5,7 +5,7 @@ import { MapPin } from "lucide-react"
 import { InvoiceItem, InvoiceLineItem } from "../services/invoiceService"
 import { CompanyPaymentSettings } from "@/app/feature/settings/services/companyPaymentService"
 import { ClientItem } from "@/app/feature/clients/types"
-import { useAuthStore, Company, DEFAULT_COMPANIES, getCompanyLogoUrl } from "@/store/useAuthStore"
+import { useAuthStore, Company, Branch, DEFAULT_COMPANIES, getCompanyLogoUrl } from "@/store/useAuthStore"
 
 interface OfficialInvoiceDocumentProps {
   invoice: InvoiceItem
@@ -126,7 +126,7 @@ export function OfficialInvoiceDocument({
   }, [companyDetails, invoice.companyId, (invoice as any).company, (invoice as any).companyName, activeCompanyId, companies])
 
   // Resolve Issuing Branch / Sub-Branch Details
-  const activeBranch = React.useMemo(() => {
+  const activeBranch: Branch | null = React.useMemo(() => {
     const targetBranchId = String(invoice.branchId || (invoice as any).branch_id || activeBranchId || "").toLowerCase().trim()
     const targetBranchName = String(invoice.branchName || (invoice as any).branch_name || "").toLowerCase().trim()
 
@@ -148,12 +148,12 @@ export function OfficialInvoiceDocument({
         name: targetBranchName,
         code: (invoice as any).branchCode || "",
         companyId: invoice.companyId || "tech",
-        status: "Active" as const,
+        status: "Active",
         city: "",
         address: "",
         phone: "",
         email: "",
-      }
+      } as Branch
     }
     return null
   }, [invoice.branchId, invoice.branchName, (invoice as any).branch_id, (invoice as any).branch_name, (invoice as any).branchCode, activeBranchId, branches])
@@ -173,24 +173,56 @@ export function OfficialInvoiceDocument({
     }) || null
   }, [invoice.subBranchId, invoice.subBranchName, (invoice as any).sub_branch_id, (invoice as any).sub_branch_name, subBranches])
 
-  // Resolve Signature URL with all possible backend/local property aliases
+  // ── Unified Entity Resolution (SubBranch -> Branch -> Company Fallback) ──
+  const resolvedBrandName = activeSubBranch?.brand_name || activeBranch?.brand_name || activeCompany?.brand_name || activeCompany?.name || "SAAMPARK"
+  const resolvedDivisionName = (activeSubBranch?.division_name && activeSubBranch.division_name.trim()) 
+    ? activeSubBranch.division_name.trim() 
+    : ((activeBranch?.division_name && activeBranch.division_name.trim()) 
+      ? activeBranch.division_name.trim() 
+      : (activeCompany?.division_name?.trim() || ""))
+  const resolvedSubtitle = activeSubBranch?.subtitle || activeBranch?.subtitle || activeCompany?.subtitle || ""
+  const resolvedLogoUrl = activeSubBranch?.logo_url || activeBranch?.logo_url || getCompanyLogoUrl(activeCompany) || activeCompany?.logo_url || ""
+
+  const resolvedCin = activeSubBranch?.cin || activeBranch?.cin || activeCompany?.cin || ""
+  const resolvedGstin = activeSubBranch?.gstin || activeBranch?.gstin || activeCompany?.gstin || ""
+  const resolvedPan = activeSubBranch?.pan || activeBranch?.pan || activeCompany?.pan || ""
+
+  const resolvedAddress = activeSubBranch?.address || activeBranch?.address || activeCompany?.address || ""
+  const resolvedPhone = activeSubBranch?.phone || (activeSubBranch as any)?.partnerPhone || activeBranch?.phone || activeCompany?.phone || ""
+  const resolvedEmail = activeSubBranch?.email || (activeSubBranch as any)?.partnerEmail || activeBranch?.email || activeCompany?.email || ""
+  const resolvedWebsite = activeSubBranch?.website || activeBranch?.website || activeCompany?.website || ""
+
+  // Bank & UPI details resolved with Branch / SubBranch prioritization
+  const resolvedUpiId = activeSubBranch?.upi_id || (activeSubBranch as any)?.bankDetails?.upiId || activeBranch?.upi_id || activeCompany?.upi_id || paySettings?.upiId || ""
+  const resolvedAccountHolder = activeSubBranch?.account_holder || (activeSubBranch as any)?.bankDetails?.accountHolder || activeBranch?.account_holder || activeCompany?.account_holder || paySettings?.accountHolderName || activeCompany?.name || ""
+  const resolvedBankName = activeSubBranch?.bank_name || (activeSubBranch as any)?.bankDetails?.bankName || activeBranch?.bank_name || activeCompany?.bank_name || paySettings?.bankName || ""
+  const resolvedAccountNumber = activeSubBranch?.account_number || (activeSubBranch as any)?.bankDetails?.accountNumber || activeBranch?.account_number || activeCompany?.account_number || paySettings?.accountNumber || ""
+  const resolvedIfscCode = activeSubBranch?.ifsc_code || (activeSubBranch as any)?.bankDetails?.ifscCode || activeBranch?.ifsc_code || activeCompany?.ifsc_code || paySettings?.ifscCode || ""
+  const resolvedBankBranch = activeSubBranch?.bank_branch || activeBranch?.bank_branch || activeCompany?.bank_branch || paySettings?.branch || ""
+
+  // Signatory & Stamp Image URLs
   const resolvedSignatureUrl = 
+    activeSubBranch?.signature_image_url ||
+    activeBranch?.signature_image_url ||
     activeCompany?.signature_image_url ||
     (activeCompany as any)?.signatureImageUrl ||
     (activeCompany as any)?.signature_url ||
-    (activeCompany as any)?.signatureUrl ||
-    (activeCompany as any)?.signature ||
-    (activeCompany as any)?.stamp_url ||
-    (activeCompany as any)?.stampUrl ||
     ""
-
-  // Resolve Company Logo across all possible property aliases and formats
-  const resolvedLogoUrl = 
-    getCompanyLogoUrl(activeCompany) || 
-    activeCompany?.logo_url || 
-    (activeCompany as any)?.logoUrl || 
-    (activeCompany?.logo && (activeCompany.logo.startsWith("http") || activeCompany.logo.startsWith("data:") || activeCompany.logo.startsWith("/")) ? activeCompany.logo : null) || 
+  const resolvedStampUrl = 
+    activeSubBranch?.stamp_image_url ||
+    activeBranch?.stamp_image_url ||
+    activeCompany?.stamp_image_url ||
     ""
+  const resolvedSignatoryName = 
+    activeSubBranch?.signatory_name || 
+    activeBranch?.signatory_name || 
+    activeCompany?.signatory_name || 
+    "AUTHORISED SIGNATORY"
+  const resolvedSignatoryDesignation = 
+    activeSubBranch?.signatory_designation || 
+    activeBranch?.signatory_designation || 
+    activeCompany?.signatory_designation || 
+    (activeBranch ? "Branch Authorized Signatory" : "")
 
   // 2. Determine if GST (>0%) or Non-GST / 0% GST Bill
   const isExplicitNonGst = 
@@ -283,18 +315,10 @@ export function OfficialInvoiceDocument({
     ? "PART PAID" 
     : "NOT PAID"
 
-  // Bank & UPI details resolved from active company or payment settings
-  const resolvedUpiId = activeCompany?.upi_id || paySettings?.upiId || ""
-  const resolvedAccountHolder = activeCompany?.account_holder || paySettings?.accountHolderName || activeCompany?.name || ""
-  const resolvedBankName = activeCompany?.bank_name || paySettings?.bankName || ""
-  const resolvedAccountNumber = activeCompany?.account_number || paySettings?.accountNumber || ""
-  const resolvedIfscCode = activeCompany?.ifsc_code || paySettings?.ifscCode || ""
-  const resolvedBankBranch = activeCompany?.bank_branch || paySettings?.branch || ""
-
   // Resolve QR Code URL: 100% scanable high-res square modules with margin
-  const customPaymentQrUrl = activeCompany?.payment_qr_url || paySettings?.qrCodeUrl || (
+  const customPaymentQrUrl = activeSubBranch?.payment_qr_url || activeBranch?.payment_qr_url || activeCompany?.payment_qr_url || paySettings?.qrCodeUrl || (
     resolvedUpiId
-      ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=1&ecc=M&data=${encodeURIComponent(`upi://pay?pa=${resolvedUpiId}&pn=${encodeURIComponent(resolvedAccountHolder || activeCompany?.name || "Saampark")}&am=${totalVal}&cu=INR`)}`
+      ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=1&ecc=M&data=${encodeURIComponent(`upi://pay?pa=${resolvedUpiId}&pn=${encodeURIComponent(resolvedAccountHolder || resolvedBrandName)}&am=${totalVal}&cu=INR`)}`
       : null
   )
 
@@ -355,8 +379,8 @@ export function OfficialInvoiceDocument({
   const hasDue = parsedDue > 0
   const hasBankDetails = Boolean(resolvedBankName || resolvedAccountNumber)
   const hasUpiDetails = Boolean(resolvedUpiId || customPaymentQrUrl)
-  const hasContactInfo = Boolean(activeCompany?.phone || activeCompany?.website || activeCompany?.email)
-  const hasLegalIds = Boolean(activeCompany?.cin || (isGstInvoice && activeCompany?.gstin) || activeCompany?.pan)
+  const hasContactInfo = Boolean(resolvedPhone || resolvedWebsite || resolvedEmail)
+  const hasLegalIds = Boolean(resolvedCin || (isGstInvoice && resolvedGstin) || resolvedPan)
 
   const renderTopHeader = (pageNumber?: number) => (
     <div className="flex flex-col sm:flex-row justify-between items-stretch gap-4 border-b border-zinc-200 pb-3">
@@ -377,7 +401,7 @@ export function OfficialInvoiceDocument({
             <div className="relative z-10 w-full h-full flex flex-col items-center justify-center">
               <img 
                 src={resolvedLogoUrl} 
-                alt={activeCompany?.name || "Company Logo"} 
+                alt={resolvedBrandName || "Entity Logo"} 
                 className="max-w-full max-h-20 object-contain drop-shadow-md brightness-110" 
               />
             </div>
@@ -385,10 +409,10 @@ export function OfficialInvoiceDocument({
             <div className="relative z-10 w-full h-full flex flex-col items-center justify-center text-center text-white pb-2">
               <div className="text-3xl mb-1 drop-shadow-sm">🚀</div>
               <div className="font-black text-xs tracking-wider uppercase leading-tight font-sans">
-                {activeCompany?.brand_name || activeCompany?.name || "SAAMPARK"}
+                {resolvedBrandName}
               </div>
               <div className="text-[7.5px] font-bold text-teal-200 tracking-widest uppercase mt-0.5">
-                {activeCompany?.division_name || "TECHNOLOGY"}
+                {resolvedDivisionName || "TECHNOLOGY"}
               </div>
             </div>
           )}
@@ -397,21 +421,13 @@ export function OfficialInvoiceDocument({
         {/* Title, Subtitle, Legal IDs & Registered Office Coordinates */}
         <div className="space-y-1 flex-1 min-w-0 pt-0.5">
           <div>
-            {(() => {
-              const brandPart = activeCompany?.brand_name || activeCompany?.name || "SAAMPARK"
-              const divisionPart = (activeCompany?.division_name !== undefined && activeCompany?.division_name !== null)
-                ? activeCompany.division_name.trim()
-                : ""
-              return (
-                <h1 className="text-xl sm:text-2xl font-black tracking-tight leading-none">
-                  <span className="text-zinc-950">{brandPart}</span>{" "}
-                  {divisionPart && <span className={`${theme.primaryText} font-extrabold`}>{divisionPart}</span>}
-                </h1>
-              )
-            })()}
-            {activeCompany?.subtitle && (
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight leading-none">
+              <span className="text-zinc-950">{resolvedBrandName}</span>{" "}
+              {resolvedDivisionName && <span className={`${theme.primaryText} font-extrabold`}>{resolvedDivisionName}</span>}
+            </h1>
+            {resolvedSubtitle && (
               <h2 className="text-xs sm:text-sm font-bold text-zinc-700 tracking-wider mt-1">
-                {activeCompany.subtitle}
+                {resolvedSubtitle}
               </h2>
             )}
           </div>
@@ -419,49 +435,49 @@ export function OfficialInvoiceDocument({
           {/* Legal IDs: CIN, GSTIN (GST Only), PAN */}
           {hasLegalIds && (
             <p className="text-[10px] font-semibold text-zinc-600 font-mono pt-0.5 flex items-center gap-2 flex-wrap">
-              {activeCompany?.cin && (
-                <span>CIN: <strong className="text-zinc-800 font-bold">{activeCompany.cin}</strong></span>
+              {resolvedCin && (
+                <span>CIN: <strong className="text-zinc-800 font-bold">{resolvedCin}</strong></span>
               )}
-              {isGstInvoice && activeCompany?.gstin && (
-                <span>{activeCompany?.cin ? "| " : ""}GSTIN: <strong className="text-zinc-900 font-black">{activeCompany.gstin}</strong></span>
+              {isGstInvoice && resolvedGstin && (
+                <span>{resolvedCin ? "| " : ""}GSTIN: <strong className="text-zinc-900 font-black">{resolvedGstin}</strong></span>
               )}
-              {activeCompany?.pan && (
-                <span>{(activeCompany?.cin || (isGstInvoice && activeCompany?.gstin)) ? "| " : ""}PAN: <strong className="text-zinc-900 font-black">{activeCompany.pan}</strong></span>
+              {resolvedPan && (
+                <span>{(resolvedCin || (isGstInvoice && resolvedGstin)) ? "| " : ""}PAN: <strong className="text-zinc-900 font-black">{resolvedPan}</strong></span>
               )}
             </p>
           )}
 
           {/* Address & Contact Row */}
-          {(activeCompany?.address || hasContactInfo) && (
+          {(resolvedAddress || hasContactInfo) && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[9.5px] text-zinc-700 pt-1">
-              {activeCompany?.address ? (
+              {resolvedAddress ? (
                 <div className="flex items-start gap-1.5">
                   <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center text-[8px] shrink-0 mt-0.5`}>📍</span>
                   <div className="leading-snug">
                     <strong className="text-zinc-900 block text-[9.5px]">Registered Office:</strong>
-                    <span className="text-zinc-600 text-[9px]">{activeCompany.address}</span>
+                    <span className="text-zinc-600 text-[9px]">{resolvedAddress}</span>
                   </div>
                 </div>
               ) : <div />}
 
               {hasContactInfo && (
                 <div className="space-y-0.5">
-                  {activeCompany?.phone && (
+                  {resolvedPhone && (
                     <p className="flex items-center gap-1.5">
                       <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center text-[7px] shrink-0`}>📞</span>
-                      <span className="font-mono text-zinc-800 font-semibold text-[9px]">{activeCompany.phone}</span>
+                      <span className="font-mono text-zinc-800 font-semibold text-[9px]">{resolvedPhone}</span>
                     </p>
                   )}
-                  {activeCompany?.website && (
+                  {resolvedWebsite && (
                     <p className="flex items-center gap-1.5">
                       <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center text-[7px] shrink-0`}>🌐</span>
-                      <span className="text-zinc-700 text-[9px]">{activeCompany.website}</span>
+                      <span className="text-zinc-700 text-[9px]">{resolvedWebsite}</span>
                     </p>
                   )}
-                  {activeCompany?.email && (
+                  {resolvedEmail && (
                     <p className="flex items-center gap-1.5">
                       <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center text-[7px] shrink-0`}>✉️</span>
-                      <span className="text-zinc-700 text-[9px]">{activeCompany.email}</span>
+                      <span className="text-zinc-700 text-[9px]">{resolvedEmail}</span>
                     </p>
                   )}
                 </div>
@@ -903,36 +919,42 @@ export function OfficialInvoiceDocument({
               {resolvedSignatureUrl ? (
                 <img 
                   src={resolvedSignatureUrl} 
-                  alt="Company Signature / Stamp" 
+                  alt="Authorized Signature / Stamp" 
                   className="max-h-14 max-w-[150px] object-contain drop-shadow-xs" 
                 />
               ) : (
                 <span className="font-serif italic text-zinc-700 text-xs font-bold">
-                  {activeCompany?.name ? `${activeCompany.brand_name || activeCompany.name.split(" ")[0]} Authorized` : "Authorized"}
+                  {`${resolvedBrandName.split(" ")[0]} Authorized`}
                 </span>
               )}
             </div>
             <div className="w-36 border-t border-zinc-400 pt-0.5">
               <p className="text-[8px] font-black uppercase text-zinc-700 font-bold">
-                {activeCompany?.signatory_name || "AUTHORISED SIGNATORY"}
+                {resolvedSignatoryName}
               </p>
-              {activeCompany?.signatory_designation && (
+              {resolvedSignatoryDesignation && (
                 <p className="text-[7.5px] text-zinc-500 font-medium">
-                  {activeCompany.signatory_designation}
+                  {resolvedSignatoryDesignation}
                 </p>
               )}
             </div>
           </div>
 
-          <div className={`w-12 h-12 rounded-full border-2 border-dashed ${theme.sealColor} flex flex-col items-center justify-center text-center p-0.5 shadow-2xs shrink-0 select-none`}>
-            <span className="text-[4.5px] font-black tracking-tighter uppercase leading-none truncate max-w-[40px]">
-              {activeCompany?.brand_name || (activeCompany?.name ? activeCompany.name.substring(0, 10) : "SAAMPARK")}
-            </span>
-            <span className="text-[5.5px] font-black my-0.2">★ SEAL ★</span>
-            <span className="text-[4.5px] font-bold tracking-tighter uppercase leading-none truncate max-w-[40px]">
-              {activeCompany?.division_name ? activeCompany.division_name.substring(0, 10) : "AUTHORISED"}
-            </span>
-          </div>
+          {resolvedStampUrl ? (
+            <div className="w-14 h-14 flex items-center justify-center p-0.5 shadow-2xs shrink-0 select-none">
+              <img src={resolvedStampUrl} alt="Official Seal" className="max-h-14 max-w-14 object-contain" />
+            </div>
+          ) : (
+            <div className={`w-12 h-12 rounded-full border-2 border-dashed ${theme.sealColor} flex flex-col items-center justify-center text-center p-0.5 shadow-2xs shrink-0 select-none`}>
+              <span className="text-[4.5px] font-black tracking-tighter uppercase leading-none truncate max-w-[40px]">
+                {resolvedBrandName.substring(0, 10)}
+              </span>
+              <span className="text-[5.5px] font-black my-0.2">★ SEAL ★</span>
+              <span className="text-[4.5px] font-bold tracking-tighter uppercase leading-none truncate max-w-[40px]">
+                {resolvedDivisionName ? resolvedDivisionName.substring(0, 10) : "AUTHORISED"}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -940,10 +962,10 @@ export function OfficialInvoiceDocument({
       <div className={`rounded-xl ${theme.headerGradient} text-white p-1.5 text-[8.5px] font-medium flex flex-wrap items-center justify-between gap-1 shadow-xs`}>
         <p className="flex items-center gap-1">
           <MapPin size={10} />
-          <span>{activeCompany?.address || `${activeCompany?.name || 'Saampark Group'}`}</span>
+          <span>{resolvedAddress || `${resolvedBrandName} ${resolvedDivisionName}`.trim()}</span>
         </p>
         <p>
-          {activeCompany?.email ? `Support: ${activeCompany.email}` : ""} {activeCompany?.phone ? `| ${activeCompany.phone}` : ""}
+          {resolvedEmail ? `Support: ${resolvedEmail}` : ""} {resolvedPhone ? `| Tel: ${resolvedPhone}` : ""}
         </p>
       </div>
     </>

@@ -21,11 +21,43 @@ export interface Branch {
   companyId: string
   name: string
   code?: string
-  city?: string
+  // 1. Brand & Division Names
+  brand_name?: string
+  division_name?: string
+  subtitle?: string
+  logo_url?: string
+  // 2. Signature & Stamp Upload
+  signatory_name?: string
+  signatory_designation?: string
+  signature_image_url?: string
+  stamp_image_url?: string
+  // 3. Legal & Tax IDs
+  gstin?: string
+  pan?: string
+  cin?: string
+  msme_reg?: string
+  // 4. Address & Contacts
   address?: string
+  city?: string
+  state?: string
+  zip?: string
+  country?: string
   phone?: string
   email?: string
+  website?: string
   managerName?: string
+  managerPhone?: string
+  managerEmail?: string
+  // 5. Bank & UPI Pay
+  upi_id?: string
+  account_holder?: string
+  bank_name?: string
+  account_number?: string
+  ifsc_code?: string
+  bank_branch?: string
+  payment_qr_url?: string
+  terms_conditions?: string
+  invoice_notes?: string
   status: 'Active' | 'Inactive'
   createdAt?: string
 }
@@ -39,10 +71,40 @@ export interface SubBranch {
   partnerName?: string
   partnerPhone?: string
   partnerEmail?: string
-  city?: string
-  address?: string
   revenueSharePct: number // e.g. 30 -> 30% Partner share, 70% Company share
   partnerType?: "Franchise Partner" | "Agency Partner" | "Satellite Office" | "Regional Associate"
+  // 1. Brand & Division Names
+  brand_name?: string
+  division_name?: string
+  subtitle?: string
+  logo_url?: string
+  // 2. Signature & Stamp Upload
+  signatory_name?: string
+  signatory_designation?: string
+  signature_image_url?: string
+  stamp_image_url?: string
+  // 3. Legal & Tax IDs
+  gstin?: string
+  pan?: string
+  cin?: string
+  msme_reg?: string
+  // 4. Address & Contacts
+  address?: string
+  city?: string
+  state?: string
+  zip?: string
+  country?: string
+  phone?: string
+  email?: string
+  website?: string
+  // 5. Bank & UPI Pay
+  upi_id?: string
+  account_holder?: string
+  bank_name?: string
+  account_number?: string
+  ifsc_code?: string
+  bank_branch?: string
+  payment_qr_url?: string
   bankDetails?: {
     accountHolder?: string
     bankName?: string
@@ -50,6 +112,8 @@ export interface SubBranch {
     ifscCode?: string
     upiId?: string
   }
+  terms_conditions?: string
+  invoice_notes?: string
   status: 'Active' | 'Inactive'
   createdAt?: string
 }
@@ -93,6 +157,7 @@ export interface Company {
   signatory_name?: string
   signatory_designation?: string
   signature_image_url?: string
+  stamp_image_url?: string
   // SMTP / Email Dispatch Credentials (Per Company)
   smtp_host?: string
   smtp_port?: string | number
@@ -743,6 +808,7 @@ export const useAuthStore = create<AuthState>()(
         }
 
         const newBranch: Branch = {
+          ...branchData,
           id: branchData.id || `branch_${Date.now()}`,
           companyId: targetCompanyId,
           name: branchData.name || 'New Branch',
@@ -807,6 +873,7 @@ export const useAuthStore = create<AuthState>()(
         const targetCompId = subBranchData.companyId || parentBranch?.companyId || 'tech'
 
         const newSubBranch: SubBranch = {
+          ...subBranchData,
           id: subBranchData.id || `subbranch_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
           parentBranchId: subBranchData.parentBranchId || '',
           companyId: targetCompId,
@@ -819,7 +886,6 @@ export const useAuthStore = create<AuthState>()(
           address: subBranchData.address || '',
           revenueSharePct: subBranchData.revenueSharePct !== undefined ? Number(subBranchData.revenueSharePct) : 30,
           partnerType: subBranchData.partnerType || 'Franchise Partner',
-          bankDetails: subBranchData.bankDetails || {},
           status: subBranchData.status || 'Active',
           createdAt: new Date().toISOString().split('T')[0],
         }
