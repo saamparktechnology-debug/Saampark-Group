@@ -108,9 +108,13 @@ export function getStoredUserAccounts(): UserItem[] {
   return DEFAULT_SYSTEM_ACCOUNTS;
 }
 
-// Helper: save user accounts to MySQL only (master 'all' company scope)
+// Helper: save user accounts to MySQL only (master 'all' company scope + sync legacy scopes)
 export async function saveUserAccounts(accounts: UserItem[]): Promise<void> {
-  await saveModuleDataToDB("users", accounts, "all");
+  await Promise.all([
+    saveModuleDataToDB("users", accounts, "all"),
+    saveModuleDataToDB("users", accounts, "tech"),
+    saveModuleDataToDB("users", accounts, "digital")
+  ]);
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("storage"));
     window.dispatchEvent(new CustomEvent("saampark_data_synced"));
@@ -615,11 +619,8 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
     return "Teams";
   };
 
-  // 1. Fetch all primary user records from MySQL app_data DB across all keys ('users', 'users_tech')
-  const [dbUsersBase, dbUsersTech] = await Promise.all([
-    fetchModuleDataFromDB<UserItem[]>("users", [], "all").catch(() => []),
-    fetchModuleDataFromDB<UserItem[]>("users", [], "tech").catch(() => [])
-  ]);
+  // 1. Fetch master user records from MySQL app_data DB ('users', 'all')
+  const dbUsersBase = await fetchModuleDataFromDB<UserItem[]>("users", [], "all").catch(() => []);
   
   const isSuperAdminEmail = (email: string) => {
     const e = email.toLowerCase().trim();
@@ -630,10 +631,18 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
 
   const userMap = new Map<string, UserItem>();
   
-  // 1. Seed base default accounts
+  // Collect existing IDs and emails in dbUsersBase to prevent default accounts from overwriting user changes
+  const existingDbIds = (Array.isArray(dbUsersBase) ? dbUsersBase : []).map(u => String(u.id || '').toLowerCase().trim());
+  const existingDbEmails = (Array.isArray(dbUsersBase) ? dbUsersBase : []).map(u => (u.email || '').toLowerCase().trim());
+  const existingDbPrevEmails = (Array.isArray(dbUsersBase) ? dbUsersBase : []).flatMap(u => Array.isArray(u.previousEmails) ? u.previousEmails.map(pe => (pe || '').toLowerCase().trim()) : []);
+
+  // 1. Seed base default accounts ONLY IF they haven't been modified/registered in the database
   for (const sysAcc of DEFAULT_SYSTEM_ACCOUNTS) {
+    const sysId = String(sysAcc.id || '').toLowerCase().trim();
     const sysEmail = sysAcc.email.toLowerCase().trim();
-    userMap.set(sysEmail, sysAcc);
+    if (!existingDbIds.includes(sysId) && !existingDbEmails.includes(sysEmail) && !existingDbPrevEmails.includes(sysEmail)) {
+      userMap.set(sysEmail, sysAcc);
+    }
   }
 
   // 2. Merge master database accounts
@@ -676,10 +685,6 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
   };
 
   for (const u of (Array.isArray(dbUsersBase) ? dbUsersBase : [])) {
-    mergeUserIntoMap(u);
-  }
-
-  for (const u of (Array.isArray(dbUsersTech) ? dbUsersTech : [])) {
     mergeUserIntoMap(u);
   }
 
