@@ -12,6 +12,7 @@ import { EventDetailsModal } from "./components/EventDetailsModal"
 import { useAuthStore } from "@/store/useAuthStore"
 import {
   getEvents,
+  getMergedCalendarEvents,
   saveStoredEvent,
   deleteStoredEvent,
   getStoredEventLabels,
@@ -40,11 +41,11 @@ export default function EventsMain() {
   const [selectedEventDetails, setSelectedEventDetails] = React.useState<CalendarEvent | null>(null)
 
   const loadData = React.useCallback(async () => {
-    const evts = await getEvents(targetComp)
+    const evts = await getMergedCalendarEvents(targetComp, user ? { email: user.email, name: user.name, role: user.role } : undefined)
     setEvents(evts)
     const lbls = await getStoredEventLabels(targetComp)
     setLabels(lbls)
-  }, [targetComp])
+  }, [targetComp, user])
 
   React.useEffect(() => {
     loadData()
