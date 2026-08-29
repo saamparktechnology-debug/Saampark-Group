@@ -616,51 +616,58 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
   const deletedEmails = (await getDeletedUserEmailsAsync()).map((e) => e.toLowerCase().trim());
 
   const userMap = new Map<string, UserItem>();
-  const hasBaseData = Array.isArray(dbUsersBase) && dbUsersBase.length > 0;
-  if (!hasBaseData) {
-    for (const sysAcc of DEFAULT_SYSTEM_ACCOUNTS) {
-      const sysEmail = sysAcc.email.toLowerCase().trim();
-      if (!deletedEmails.includes(sysEmail)) {
-        userMap.set(sysEmail, sysAcc);
-      }
-    }
+  
+  // 1. Seed base default accounts
+  for (const sysAcc of DEFAULT_SYSTEM_ACCOUNTS) {
+    const sysEmail = sysAcc.email.toLowerCase().trim();
+    userMap.set(sysEmail, sysAcc);
   }
 
-  for (const u of (Array.isArray(dbUsersBase) ? dbUsersBase : [])) {
-    if (u && u.email) {
-      const eNorm = u.email.toLowerCase().trim();
-      if (!deletedEmails.includes(eNorm)) {
-        if (isSuperAdminEmail(eNorm)) {
-          u.role = "Super Admin";
+  // 2. Merge master database accounts
+  const mergeUserIntoMap = (u: UserItem) => {
+    if (!u || !u.email) return;
+    const eNorm = u.email.toLowerCase().trim();
+    if (isSuperAdminEmail(eNorm)) {
+      u.role = "Super Admin";
+    }
+
+    // Check if this account has previous emails that were in userMap (e.g. transferred from a default account)
+    const prevList: string[] = [];
+    if (Array.isArray(u.previousEmails)) {
+      u.previousEmails.forEach((pe) => {
+        if (pe) {
+          const peNorm = pe.toLowerCase().trim();
+          prevList.push(peNorm);
+          userMap.delete(peNorm);
         }
-        // Remove any previous emails of this user from userMap so old transferred emails never show up
-        if (Array.isArray(u.previousEmails)) {
-          u.previousEmails.forEach((pe) => userMap.delete((pe || "").toLowerCase().trim()));
-        }
-        if (u.previousEmail) {
-          userMap.delete(u.previousEmail.toLowerCase().trim());
-        }
-        userMap.set(eNorm, u);
+      });
+    }
+    if (u.previousEmail) {
+      const peNorm = u.previousEmail.toLowerCase().trim();
+      prevList.push(peNorm);
+      userMap.delete(peNorm);
+    }
+
+    // If this user was transferred from an old default email (like hiisupriya@gmail.com -> new email)
+    // find if userMap has an entry with matching ID or matching previous email and update it
+    for (const [key, existing] of Array.from(userMap.entries())) {
+      if (
+        (u.id && String(existing.id).toLowerCase().trim() === String(u.id).toLowerCase().trim()) ||
+        prevList.includes(existing.email.toLowerCase().trim())
+      ) {
+        userMap.delete(key);
       }
     }
+
+    userMap.set(eNorm, u);
+  };
+
+  for (const u of (Array.isArray(dbUsersBase) ? dbUsersBase : [])) {
+    mergeUserIntoMap(u);
   }
 
   for (const u of (Array.isArray(dbUsersTech) ? dbUsersTech : [])) {
-    if (u && u.email) {
-      const eNorm = u.email.toLowerCase().trim();
-      if (!deletedEmails.includes(eNorm)) {
-        if (isSuperAdminEmail(eNorm)) {
-          u.role = "Super Admin";
-        }
-        if (Array.isArray(u.previousEmails)) {
-          u.previousEmails.forEach((pe) => userMap.delete((pe || "").toLowerCase().trim()));
-        }
-        if (u.previousEmail) {
-          userMap.delete(u.previousEmail.toLowerCase().trim());
-        }
-        userMap.set(eNorm, u);
-      }
-    }
+    mergeUserIntoMap(u);
   }
 
   let dbUsers = Array.from(userMap.values());

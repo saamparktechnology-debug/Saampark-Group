@@ -224,8 +224,8 @@ export default function UsersMain() {
         prevEmailsList.push(oldEmail)
       }
       try {
-        const { markGlobalItemDeleted, unmarkGlobalItemDeleted } = await import("@/lib/storageSync")
-        await markGlobalItemDeleted(oldEmail, "users")
+        const { unmarkGlobalItemDeleted } = await import("@/lib/storageSync")
+        unmarkGlobalItemDeleted(oldEmail)
         if (newEmail) unmarkGlobalItemDeleted(newEmail)
       } catch {}
     } else if (newEmail) {
