@@ -64,7 +64,9 @@ export default function InvoicesPage() {
   const { user, activeCompanyId, activeBranchId, branches, subBranches, companies } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
 
+  const canViewInvoice = canPerformAction(user, "Sales", "view")
   const canAddInvoice = canPerformAction(user, "Sales", "add")
+  const canEditInvoice = canPerformAction(user, "Sales", "edit")
   const canDeleteInvoice = canPerformAction(user, "Sales", "delete")
   const isClientRole = user?.role === "Clients"
   const clientEmailNorm = (user?.email || "").toLowerCase().trim()
@@ -1095,7 +1097,7 @@ export default function InvoicesPage() {
               </button>
             )}
 
-            {!isClientRole && (
+            {canEditInvoice && (
               <button
                 type="button"
                 onClick={() => handleOpenEditInvoice(inv)}
@@ -1118,7 +1120,7 @@ export default function InvoicesPage() {
               <Eye size={14} />
             </button>
 
-            {!isClientRole && (
+            {canDeleteInvoice && (
               <button
                 type="button"
                 onClick={() => handleDeleteInvoice(inv.id)}
@@ -1219,7 +1221,7 @@ export default function InvoicesPage() {
             <span>Print</span>
           </button>
 
-          {!isClientRole && (
+          {canAddInvoice && (
             <button
               type="button"
               onClick={() => setIsAddModalOpen(true)}
@@ -1296,7 +1298,7 @@ export default function InvoicesPage() {
           setIsInvoiceModalOpen(false)
           setSelectedInvoice(null)
         }}
-        onEditInvoice={!isClientRole ? (inv) => handleOpenEditInvoice(inv) : undefined}
+        onEditInvoice={canEditInvoice ? (inv) => handleOpenEditInvoice(inv) : undefined}
       />
 
       {/* ---------------- RECORD PAYMENT / MARK PAID MODAL ---------------- */}

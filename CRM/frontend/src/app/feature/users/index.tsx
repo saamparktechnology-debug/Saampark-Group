@@ -224,12 +224,19 @@ export default function UsersMain() {
         prevEmailsList.push(oldEmail)
       }
       try {
-        const { markGlobalItemDeleted } = await import("@/lib/storageSync")
+        const { markGlobalItemDeleted, unmarkGlobalItemDeleted } = await import("@/lib/storageSync")
         await markGlobalItemDeleted(oldEmail, "users")
+        if (newEmail) unmarkGlobalItemDeleted(newEmail)
+      } catch {}
+    } else if (newEmail) {
+      try {
+        const { unmarkGlobalItemDeleted } = await import("@/lib/storageSync")
+        unmarkGlobalItemDeleted(newEmail)
       } catch {}
     }
 
-    const saved = recordUserAccount(
+    const { recordUserAccountAsync } = await import("./services/userService")
+    const saved = await recordUserAccountAsync(
       {
         ...userData,
         id: realId || userData.id,

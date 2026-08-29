@@ -47,6 +47,8 @@ import { getUserAvatar } from "@/app/feature/users/services/userService"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
 import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
 
+import { usePermissionStore } from "@/store/usePermissionStore"
+
 type OrderStatus = "Pending" | "Processing" | "Completed" | "Cancelled"
 type PaymentStatus = "Paid" | "Partially paid" | "Unpaid"
 
@@ -73,6 +75,13 @@ const INITIAL_ORDERS: OrderItem[] = []
 
 export default function OrderListPage() {
   const { user, activeCompanyId } = useAuthStore()
+  const { canPerformAction } = usePermissionStore()
+
+  const canViewOrder = canPerformAction(user, "Sales", "view")
+  const canAddOrder = canPerformAction(user, "Sales", "add")
+  const canEditOrder = canPerformAction(user, "Sales", "edit")
+  const canDeleteOrder = canPerformAction(user, "Sales", "delete")
+
   const targetComp = activeCompanyId || user?.companyId || "tech"
 
   const isClientRole = user?.role === "Clients"
@@ -488,11 +497,11 @@ export default function OrderListPage() {
             <span>Print</span>
           </button>
 
-          {!isClientRole && (
+          {canAddOrder && (
             <button
               type="button"
               onClick={() => setIsAddModalOpen(true)}
-              className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm"
+              className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm cursor-pointer"
             >
               <Plus size={14} />
               <span>Add Order</span>
@@ -652,7 +661,7 @@ export default function OrderListPage() {
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center justify-center gap-1.5">
-                        {!isClientRole && isUnpaid && (
+                        {canEditOrder && isUnpaid && (
                           <button
                             type="button"
                             onClick={() => handleSendReminder(ord)}
@@ -664,7 +673,7 @@ export default function OrderListPage() {
                           </button>
                         )}
 
-                        {!isClientRole && isUnpaid && (
+                        {canEditOrder && isUnpaid && (
                           <button
                             type="button"
                             onClick={() => handleMarkPaymentCompleted(ord)}
@@ -679,7 +688,7 @@ export default function OrderListPage() {
                         <button
                           type="button"
                           onClick={() => handleGenerateInvoice(ord)}
-                          className="p-1 hover:text-blue-600 transition-colors"
+                          className="p-1 hover:text-blue-600 transition-colors cursor-pointer"
                           title="Generate / View Tax Invoice"
                         >
                           <FileText size={14} />
@@ -691,17 +700,17 @@ export default function OrderListPage() {
                             setSelectedOrder(ord)
                             setIsDetailModalOpen(true)
                           }}
-                          className="p-1 hover:text-blue-600 transition-colors"
+                          className="p-1 hover:text-blue-600 transition-colors cursor-pointer"
                           title="View Details"
                         >
                           <Eye size={14} />
                         </button>
 
-                        {!isClientRole && (
+                        {canDeleteOrder && (
                           <button
                             type="button"
                             onClick={() => handleDeleteOrder(ord.id)}
-                            className="p-1 hover:text-rose-600 transition-colors"
+                            className="p-1 hover:text-rose-600 transition-colors cursor-pointer"
                             title="Delete Order"
                           >
                             <Trash2 size={14} />

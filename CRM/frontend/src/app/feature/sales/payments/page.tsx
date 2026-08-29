@@ -30,9 +30,17 @@ import { getInvoices, InvoiceItem } from "../invoices/services/invoiceService"
 
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
+import { usePermissionStore } from "@/store/usePermissionStore"
 
 export default function PaymentsPage() {
   const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
+  const { canPerformAction } = usePermissionStore()
+
+  const canViewPayment = canPerformAction(user, "Sales", "view")
+  const canAddPayment = canPerformAction(user, "Sales", "add")
+  const canEditPayment = canPerformAction(user, "Sales", "edit")
+  const canDeletePayment = canPerformAction(user, "Sales", "delete")
+
   const isClientRole = user?.role === "Clients"
   const clientEmailNorm = (user?.email || "").toLowerCase().trim()
   const clientNameNorm = (user?.name || "").toLowerCase().trim()
@@ -253,11 +261,11 @@ export default function PaymentsPage() {
           >
             <Receipt size={14} />
           </button>
-          {!isClientRole && (
+          {canDeletePayment && (
             <button
               type="button"
               onClick={() => handleDeletePayment(row.original.id)}
-              className="p-1 text-zinc-400 hover:text-rose-600 transition-colors"
+              className="p-1 text-zinc-400 hover:text-rose-600 transition-colors cursor-pointer"
               title="Delete Payment"
             >
               <Trash2 size={14} />
@@ -357,11 +365,11 @@ export default function PaymentsPage() {
             <span>Print</span>
           </button>
 
-          {!isClientRole && (
+          {canAddPayment && (
             <button
               type="button"
               onClick={() => setIsAddPaymentModalOpen(true)}
-              className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm"
+              className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm cursor-pointer"
             >
               <Plus size={14} />
               <span>Record Payment</span>

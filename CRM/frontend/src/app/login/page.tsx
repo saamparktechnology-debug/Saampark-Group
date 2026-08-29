@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { useAuthStore, DEMO_USERS, Role } from "@/store/useAuthStore"
 import { recordUserAccount, getStoredUserAccountsAsync, isUserDeleted, unmarkUserAsDeleted } from "@/app/feature/users/services/userService"
+import { UserItem } from "@/app/feature/users/types"
+import { fetchModuleDataFromDB } from "@/lib/storageSync"
 import { normalizeRole } from "@/store/usePermissionStore"
 import { AuthService } from "@/services/apiServices"
 
@@ -139,8 +141,9 @@ export default function LoginPage() {
 
     try {
       // 1. Fetch active registered user accounts from MySQL database
+      unmarkUserAsDeleted(normalizedEmail)
       const registeredAccounts = await getStoredUserAccountsAsync()
-      const dbAccount = registeredAccounts.find((acc) => {
+      let dbAccount = registeredAccounts.find((acc) => {
         const mainEmail = (acc.email || "").toLowerCase().trim()
         const prevEmails = Array.isArray(acc.previousEmails)
           ? acc.previousEmails.map((pe) => (pe || "").toLowerCase().trim())
@@ -148,6 +151,18 @@ export default function LoginPage() {
         const altEmail = ((acc as any).previousEmail || "").toLowerCase().trim()
         return mainEmail === normalizedEmail || prevEmails.includes(normalizedEmail) || altEmail === normalizedEmail
       })
+
+      if (!dbAccount) {
+        const allDbUsers = await fetchModuleDataFromDB<UserItem[]>("users", [], "all").catch(() => [])
+        dbAccount = allDbUsers.find((acc) => {
+          const mainEmail = (acc.email || "").toLowerCase().trim()
+          const prevEmails = Array.isArray(acc.previousEmails)
+            ? acc.previousEmails.map((pe) => (pe || "").toLowerCase().trim())
+            : []
+          const altEmail = ((acc as any).previousEmail || "").toLowerCase().trim()
+          return mainEmail === normalizedEmail || prevEmails.includes(normalizedEmail) || altEmail === normalizedEmail
+        })
+      }
 
       // If user is actively registered in MySQL accounts, unmark from deleted cache immediately
       if (dbAccount) {

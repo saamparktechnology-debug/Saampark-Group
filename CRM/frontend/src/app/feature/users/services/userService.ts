@@ -5,6 +5,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { 
   filterGlobalDeletedItems, 
   markGlobalItemDeleted, 
+  unmarkGlobalItemDeleted,
   fetchModuleDataFromDB, 
   saveModuleDataToDB,
   syncGlobalDeletedIds,
@@ -61,7 +62,9 @@ export function markUserAsDeleted(email: string): void {
 
 // Helper: unmark a user email as deleted
 export function unmarkUserAsDeleted(email: string): void {
-  // No-op for DB, active record in users table takes precedence
+  if (!email) return;
+  const normEmail = email.toLowerCase().trim();
+  unmarkGlobalItemDeleted(normEmail);
 }
 
 // Helper: get user accounts — reads strictly from MySQL database
@@ -84,6 +87,10 @@ export function getStoredUserAccounts(): UserItem[] {
 // Helper: save user accounts to MySQL only (master 'all' company scope)
 export async function saveUserAccounts(accounts: UserItem[]): Promise<void> {
   await saveModuleDataToDB("users", accounts, "all");
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("storage"));
+    window.dispatchEvent(new CustomEvent("saampark_data_synced"));
+  }
 }
 
 // Helper: check if an email is already registered
@@ -94,13 +101,16 @@ export async function isEmailRegistered(email: string): Promise<boolean> {
   return accounts.some((acc) => acc.email.toLowerCase().trim() === normEmail);
 }
 
-// Helper: record a logged-in or newly created account into MySQL
-export function recordUserAccount(user: Partial<UserItem>, isNewRegistration = false): UserItem | null {
+// Helper: record a logged-in or newly created account into MySQL (Async version)
+export async function recordUserAccountAsync(user: Partial<UserItem>, isNewRegistration = false): Promise<UserItem | null> {
   const normalizedEmail = (user.email || "").toLowerCase().trim();
   if (!normalizedEmail) return null;
 
   // Unmark email as deleted when recording/saving an active account
   unmarkUserAsDeleted(normalizedEmail);
+  if (user.id) {
+    unmarkGlobalItemDeleted(String(user.id).toLowerCase().trim());
+  }
 
   // Build the account object
   const updatedAccount: UserItem = {
@@ -125,12 +135,12 @@ export function recordUserAccount(user: Partial<UserItem>, isNewRegistration = f
     allowedModules: (user as any).allowedModules,
     kycStatus: user.kycStatus || (user as any).kyc_status || "Pending",
     kycData: user.kycData || (user as any).kyc_data || undefined,
-    previousEmails: (user as any).previousEmails || (user as any).previousEmail ? [(user as any).previousEmail] : undefined,
+    previousEmails: (user as any).previousEmails || ((user as any).previousEmail ? [(user as any).previousEmail] : undefined),
     previousEmail: (user as any).previousEmail || undefined,
   };
 
-  // Save to MySQL asynchronously (fire and forget since this can be called from sync contexts)
-  getStoredUserAccountsAsync().then((currentAccounts) => {
+  try {
+    const currentAccounts = await fetchModuleDataFromDB<UserItem[]>("users", DEFAULT_SYSTEM_ACCOUNTS, "all");
     const existing = currentAccounts.find(
       (acc) =>
         (user.id && String(acc.id) === String(user.id)) ||
@@ -172,13 +182,47 @@ export function recordUserAccount(user: Partial<UserItem>, isNewRegistration = f
       cascadeUserNameChange(prevName, normalizedEmail, updatedAccount.name).catch(() => {});
     }
 
-    saveUserAccounts(updatedList).catch(() => {});
-  }).catch(() => {});
+    await saveUserAccounts(updatedList);
+  } catch (err) {
+    console.warn("recordUserAccountAsync error:", err);
+  }
 
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("storage"));
+    window.dispatchEvent(new CustomEvent("saampark_data_synced"));
   }
   return updatedAccount;
+}
+
+// Helper: record user account (sync wrapper)
+export function recordUserAccount(user: Partial<UserItem>, isNewRegistration = false): UserItem | null {
+  const normalizedEmail = (user.email || "").toLowerCase().trim();
+  if (!normalizedEmail) return null;
+
+  unmarkUserAsDeleted(normalizedEmail);
+  if (user.id) {
+    unmarkGlobalItemDeleted(String(user.id).toLowerCase().trim());
+  }
+
+  recordUserAccountAsync(user, isNewRegistration).catch(() => {});
+
+  return {
+    id: user.id || `usr_${Date.now()}`,
+    name: user.name || "User Account",
+    email: normalizedEmail,
+    role: user.role !== undefined ? user.role : "Teams",
+    companyId: user.companyId || "tech",
+    companyIds: user.companyIds || (user.companyId ? [user.companyId] : ["tech"]),
+    companyName: user.companyName || "SAAMPARK Technology",
+    status: user.status || "Active",
+    department: user.department || "General",
+    phone: user.phone || "",
+    password: user.password !== undefined ? user.password : "Password123",
+    lastLogin: user.lastLogin || "Just now",
+    joinedDate: user.joinedDate || new Date().toISOString().split("T")[0],
+    permissions: (user as any).permissions,
+    allowedModules: (user as any).allowedModules,
+  };
 }
 
 // Cascade user name change across assigned Tasks, Leads, and Clients

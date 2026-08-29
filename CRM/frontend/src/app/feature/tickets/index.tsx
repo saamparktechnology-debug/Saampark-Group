@@ -50,6 +50,7 @@ export default function TicketsMain() {
   const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
 
+  const canViewTicket = canPerformAction(user, "Tickets", "view")
   const canAddTicket = canPerformAction(user, "Tickets", "add")
   const canEditTicket = canPerformAction(user, "Tickets", "edit")
   const canDeleteTicket = canPerformAction(user, "Tickets", "delete")
@@ -57,6 +58,7 @@ export default function TicketsMain() {
   const isSuperAdmin = user?.role === "Super Admin"
   const isCompanyAdmin = user?.role === "Admin"
   const isAdmin = isSuperAdmin || isCompanyAdmin
+  const canResolveTicket = canEditTicket || isAdmin
   const currentUserEmail = (user?.email || "").toLowerCase().trim()
   const currentUserName = user?.name || "User"
   const targetComp = activeCompanyId || user?.companyId || "tech"
@@ -492,10 +494,10 @@ export default function TicketsMain() {
                             setNewStatus(t.status)
                             setResolutionInput(t.resolutionNote || "")
                           }}
-                          className="px-2.5 py-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-semibold flex items-center gap-1"
+                          className="px-2.5 py-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-semibold flex items-center gap-1 cursor-pointer"
                         >
                           <Eye size={12} />
-                          <span>{isAdmin ? "Analyze & Resolve" : "View Status"}</span>
+                          <span>{canResolveTicket ? "Analyze & Resolve" : "View Status"}</span>
                         </button>
 
                         {canDeleteTicket && (
@@ -647,12 +649,12 @@ export default function TicketsMain() {
                   </div>
                 )}
 
-                {/* Admin Resolution Input Box */}
-                {isAdmin && (
+                {/* Resolution Input Box */}
+                {canResolveTicket && (
                   <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800 space-y-3">
                     <h4 className="font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
                       <ShieldAlert size={14} className="text-blue-600" />
-                      <span>Admin Investigation & Status Resolution</span>
+                      <span>Resolution & Status Investigation</span>
                     </h4>
 
                     <div className="grid grid-cols-2 gap-3">
@@ -729,12 +731,12 @@ export default function TicketsMain() {
                 <button
                   type="button"
                   onClick={() => setSelectedTicket(null)}
-                  className="px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-100 rounded-lg font-semibold"
+                  className="px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-100 rounded-lg font-semibold cursor-pointer"
                 >
                   Close
                 </button>
 
-                {isAdmin && (
+                {canResolveTicket && (
                   <button
                     type="button"
                     onClick={handleSaveResolution}

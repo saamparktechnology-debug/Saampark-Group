@@ -43,7 +43,9 @@ export default function SubscriptionsMain() {
   const isClient = roleLower.includes("client")
   const isTeam = !isSuperAdmin && !isAdmin && !isClient
 
+  const canViewSubscription = canPerformAction(user, "Subscriptions", "view")
   const canAddSubscription = canPerformAction(user, "Subscriptions", "add")
+  const canEditSubscription = canPerformAction(user, "Subscriptions", "edit")
   const canDeleteSubscription = canPerformAction(user, "Subscriptions", "delete")
 
   // Active Tab: "subscriptions" | "installments"
