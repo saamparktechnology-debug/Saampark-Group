@@ -174,19 +174,32 @@ export async function recordUserAccountAsync(user: Partial<UserItem>, isNewRegis
     const prevEmail = (existing?.email || (user as any).previousEmail || "").toLowerCase().trim();
     const prevName = existing?.name;
 
-    const prevEmailsList = Array.isArray(existing?.previousEmails)
-      ? [...(existing?.previousEmails || [])]
-      : (existing?.previousEmail ? [existing.previousEmail] : []);
+    const currentPrev = Array.isArray(existing?.previousEmails)
+      ? existing.previousEmails.map((pe) => (pe || "").toLowerCase().trim())
+      : (existing?.previousEmail ? [(existing.previousEmail || "").toLowerCase().trim()] : []);
 
-    if (prevEmail && prevEmail !== normalizedEmail && !prevEmailsList.includes(prevEmail)) {
-      prevEmailsList.push(prevEmail);
+    const prevSet = new Set<string>(currentPrev);
+    if (prevEmail && prevEmail !== normalizedEmail) {
+      prevSet.add(prevEmail);
     }
+    if ((user as any)?.previousEmails && Array.isArray((user as any).previousEmails)) {
+      (user as any).previousEmails.forEach((pe: string) => {
+        if (pe) {
+          const peNorm = pe.toLowerCase().trim();
+          if (peNorm !== normalizedEmail) prevSet.add(peNorm);
+        }
+      });
+    }
+    // Strict requirement: the active primary email MUST NEVER exist in its own previousEmails history!
+    prevSet.delete(normalizedEmail);
+    const prevEmailsList = Array.from(prevSet).filter(Boolean);
 
     const mergedAccount: UserItem = {
       ...(existing || {}),
       ...updatedAccount,
-      previousEmails: prevEmailsList.length > 0 ? prevEmailsList : existing?.previousEmails,
-      previousEmail: prevEmailsList.length > 0 ? prevEmailsList[prevEmailsList.length - 1] : existing?.previousEmail,
+      email: normalizedEmail,
+      previousEmails: prevEmailsList.length > 0 ? prevEmailsList : undefined,
+      previousEmail: prevEmailsList.length > 0 ? prevEmailsList[prevEmailsList.length - 1] : undefined,
     };
 
     // Strict 1:1 Email Uniqueness: Remove all other rows matching this ID or this email or previous email
@@ -196,7 +209,7 @@ export async function recordUserAccountAsync(user: Partial<UserItem>, isNewRegis
       const accEmail = (acc.email || "").toLowerCase().trim();
       if (targetId && accId === targetId) return false;
       if (accEmail === normalizedEmail) return false;
-      if (prevEmail && accEmail === prevEmail) return false;
+      if (prevEmailsList.includes(accEmail)) return false;
       return true;
     });
 
@@ -631,29 +644,29 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
       u.role = "Super Admin";
     }
 
-    // Check if this account has previous emails that were in userMap (e.g. transferred from a default account)
-    const prevList: string[] = [];
-    if (Array.isArray(u.previousEmails)) {
-      u.previousEmails.forEach((pe) => {
-        if (pe) {
-          const peNorm = pe.toLowerCase().trim();
-          prevList.push(peNorm);
-          userMap.delete(peNorm);
-        }
-      });
-    }
-    if (u.previousEmail) {
-      const peNorm = u.previousEmail.toLowerCase().trim();
-      prevList.push(peNorm);
-      userMap.delete(peNorm);
-    }
+    // Clean previousEmails on u so the active email is NEVER in its own history
+    let currentPrev = Array.isArray(u.previousEmails)
+      ? u.previousEmails.map((pe) => (pe || "").toLowerCase().trim())
+      : (u.previousEmail ? [(u.previousEmail || "").toLowerCase().trim()] : []);
 
-    // If this user was transferred from an old default email (like hiisupriya@gmail.com -> new email)
-    // find if userMap has an entry with matching ID or matching previous email and update it
+    currentPrev = currentPrev.filter((pe) => pe && pe !== eNorm);
+    u.previousEmails = currentPrev.length > 0 ? currentPrev : undefined;
+    u.previousEmail = currentPrev.length > 0 ? currentPrev[currentPrev.length - 1] : undefined;
+
+    // Remove obsolete previous emails from userMap
+    currentPrev.forEach((pe) => {
+      userMap.delete(pe);
+    });
+
+    // If this user was transferred from an old email (like hiisupriya@gmail.com -> new email)
+    // find if userMap has an entry with matching ID or matching previous email and remove it
     for (const [key, existing] of Array.from(userMap.entries())) {
+      const existingId = String(existing.id || "").toLowerCase().trim();
+      const targetId = String(u.id || "").toLowerCase().trim();
+      const existingEmail = (existing.email || "").toLowerCase().trim();
       if (
-        (u.id && String(existing.id).toLowerCase().trim() === String(u.id).toLowerCase().trim()) ||
-        prevList.includes(existing.email.toLowerCase().trim())
+        (targetId && existingId === targetId) ||
+        (existingEmail && currentPrev.includes(existingEmail))
       ) {
         userMap.delete(key);
       }

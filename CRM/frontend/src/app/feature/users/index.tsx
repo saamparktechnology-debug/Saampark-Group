@@ -214,15 +214,20 @@ export default function UsersMain() {
       console.warn("API sync silent fail:", e)
     }
 
-    // Preserve previous emails history for dual login capability
-    const prevEmailsList: string[] = Array.isArray(editingUser?.previousEmails)
-      ? [...editingUser.previousEmails]
-      : (editingUser?.previousEmail ? [editingUser.previousEmail] : [])
+    // Preserve previous emails history for transferred account tracking
+    const currentPrev = Array.isArray(editingUser?.previousEmails)
+      ? editingUser.previousEmails.map((pe) => (pe || "").toLowerCase().trim())
+      : (editingUser?.previousEmail ? [(editingUser.previousEmail || "").toLowerCase().trim()] : [])
+
+    const prevSet = new Set<string>(currentPrev)
+    if (isEmailTransfer && oldEmail) {
+      prevSet.add(oldEmail)
+    }
+    // Strict requirement: the active new email MUST NEVER exist in its own previousEmails history!
+    prevSet.delete(newEmail)
+    const prevEmailsList: string[] = Array.from(prevSet).filter(Boolean)
 
     if (isEmailTransfer && oldEmail) {
-      if (!prevEmailsList.includes(oldEmail)) {
-        prevEmailsList.push(oldEmail)
-      }
       try {
         const { unmarkGlobalItemDeleted } = await import("@/lib/storageSync")
         unmarkGlobalItemDeleted(oldEmail)
@@ -239,6 +244,7 @@ export default function UsersMain() {
     const saved = await recordUserAccountAsync(
       {
         ...userData,
+        email: newEmail,
         id: realId || userData.id || editingUser?.id,
         companyIds: userData.companyIds || (userData.companyId ? [userData.companyId] : ["tech"]),
         permissions: (userData as any).permissions,
@@ -344,10 +350,11 @@ export default function UsersMain() {
         const updatedItem: UserItem = {
           ...editingUser,
           ...saved,
+          email: newEmail,
           role: userData.role || saved.role,
           permissions: (userData as any).permissions,
-          previousEmails: prevEmailsList.length > 0 ? prevEmailsList : editingUser.previousEmails,
-          previousEmail: prevEmailsList.length > 0 ? prevEmailsList[prevEmailsList.length - 1] : editingUser.previousEmail,
+          previousEmails: prevEmailsList.length > 0 ? prevEmailsList : undefined,
+          previousEmail: prevEmailsList.length > 0 ? prevEmailsList[prevEmailsList.length - 1] : undefined,
         }
         nextList = [updatedItem, ...filtered]
       } else {
