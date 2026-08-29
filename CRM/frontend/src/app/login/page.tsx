@@ -164,14 +164,10 @@ export default function LoginPage() {
         })
       }
 
-      // If user is actively registered in MySQL accounts, unmark from deleted cache immediately
+      // Ensure active account is un-suppressed
       if (dbAccount) {
         unmarkUserAsDeleted(normalizedEmail)
         if (dbAccount.email) unmarkUserAsDeleted(dbAccount.email.toLowerCase().trim())
-      } else if (isUserDeleted(normalizedEmail)) {
-        setIsLoading(false)
-        setError("Account does not exist. Please contact your System Administrator.")
-        return
       }
 
       let backendUser: any = null

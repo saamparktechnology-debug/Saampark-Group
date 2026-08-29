@@ -2093,16 +2093,27 @@ export function CompanyBranchSettings() {
                     />
                   </div>
                   <div>
-                    <label className="block font-semibold text-foreground mb-1">Status</label>
-                    <select
-                      value={branchStatus}
-                      onChange={(e) => setBranchStatus(e.target.value as any)}
+                    <label className="block font-semibold text-foreground mb-1">Contact Email</label>
+                    <input
+                      type="email"
+                      value={branchEmail}
+                      onChange={(e) => setBranchEmail(e.target.value)}
+                      placeholder="branch@saampark.in"
                       className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
-                    >
-                      <option value="Active">Active</option>
-                      <option value="Inactive">Inactive</option>
-                    </select>
+                    />
                   </div>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-foreground mb-1">Status</label>
+                  <select
+                    value={branchStatus}
+                    onChange={(e) => setBranchStatus(e.target.value as any)}
+                    className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
                 </div>
 
                 <div className="flex items-center justify-end gap-2 pt-3 border-t border-border/50">

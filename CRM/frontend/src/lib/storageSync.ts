@@ -2,11 +2,14 @@ import { api } from "@/lib/api"
 
 const UNIVERSAL_DELETED_KEY = "saampark_universal_deleted_ids"
 
+const PROTECTED_ACCOUNTS = ["hiisupriya@gmail.com", "1", "2", "3", "4", "tech", "digital"]
+
 export function getLocalDeletedIds(): string[] {
   if (typeof window === "undefined") return []
   try {
     const raw = localStorage.getItem(UNIVERSAL_DELETED_KEY)
-    return raw ? JSON.parse(raw) : []
+    const list: string[] = raw ? JSON.parse(raw) : []
+    return list.filter(id => !PROTECTED_ACCOUNTS.includes(String(id).toLowerCase().trim()))
   } catch {
     return []
   }
@@ -153,9 +156,6 @@ export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: 
     const cached = cacheStore.get(cacheKey)
 
     if (cached && now - cached.timestamp < CACHE_TTL_MS) {
-      if (Array.isArray(cached.data)) {
-        return filterGlobalDeletedItems(cached.data as any) as any
-      }
       return cached.data as any
     }
 
@@ -163,9 +163,6 @@ export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: 
     if (inFlightRequests.has(cacheKey)) {
       const pendingRes = await inFlightRequests.get(cacheKey)
       if (pendingRes !== undefined && pendingRes !== null) {
-        if (Array.isArray(pendingRes)) {
-          return filterGlobalDeletedItems(pendingRes as any) as any
-        }
         return pendingRes as any
       }
     }
@@ -197,9 +194,6 @@ export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: 
     const serverData = await requestPromise
 
     if (serverData !== null && serverData !== undefined) {
-      if (Array.isArray(serverData)) {
-        return filterGlobalDeletedItems(serverData as any) as any
-      }
       return serverData as any
     }
 

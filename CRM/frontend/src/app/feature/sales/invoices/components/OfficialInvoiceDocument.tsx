@@ -81,14 +81,23 @@ export function OfficialInvoiceDocument({
   companyDetails,
   paySettings,
 }: OfficialInvoiceDocumentProps) {
-  const { companies, activeCompanyId, fetchCompanies } = useAuthStore()
+  const { 
+    companies, 
+    branches, 
+    subBranches, 
+    activeCompanyId, 
+    activeBranchId,
+    fetchCompanies, 
+    fetchBranches, 
+    fetchSubBranches 
+  } = useAuthStore()
 
-  // Ensure companies list is fetched if not yet loaded
+  // Ensure entities are fetched if not yet loaded
   React.useEffect(() => {
-    if (!companies || companies.length === 0) {
-      fetchCompanies().catch(() => {})
-    }
-  }, [companies, fetchCompanies])
+    if (!companies || companies.length === 0) fetchCompanies().catch(() => {})
+    if (!branches || branches.length === 0) fetchBranches().catch(() => {})
+    if (!subBranches || subBranches.length === 0) fetchSubBranches().catch(() => {})
+  }, [companies, branches, subBranches, fetchCompanies, fetchBranches, fetchSubBranches])
 
   // 1. Resolve Company Details dynamically based on specific invoice company
   const activeCompany = React.useMemo(() => {
@@ -115,6 +124,54 @@ export function OfficialInvoiceDocument({
     const defMatch = DEFAULT_COMPANIES.find(c => c.id.toLowerCase() === targetCompId || c.slug?.toLowerCase() === targetCompId)
     return defMatch || companies[0] || DEFAULT_COMPANIES[0]
   }, [companyDetails, invoice.companyId, (invoice as any).company, (invoice as any).companyName, activeCompanyId, companies])
+
+  // Resolve Issuing Branch / Sub-Branch Details
+  const activeBranch = React.useMemo(() => {
+    const targetBranchId = String(invoice.branchId || (invoice as any).branch_id || activeBranchId || "").toLowerCase().trim()
+    const targetBranchName = String(invoice.branchName || (invoice as any).branch_name || "").toLowerCase().trim()
+
+    if (!targetBranchId && !targetBranchName) return null
+
+    const matched = (branches || []).find(b => {
+      const bId = String(b.id || "").toLowerCase().trim()
+      const bName = String(b.name || "").toLowerCase().trim()
+      const bCode = String(b.code || "").toLowerCase().trim()
+      return (targetBranchId && (bId === targetBranchId || bCode === targetBranchId)) ||
+             (targetBranchName && (bName === targetBranchName || bCode === targetBranchName))
+    })
+
+    if (matched) return matched
+
+    if (targetBranchName) {
+      return {
+        id: targetBranchId || "branch",
+        name: targetBranchName,
+        code: (invoice as any).branchCode || "",
+        companyId: invoice.companyId || "tech",
+        status: "Active" as const,
+        city: "",
+        address: "",
+        phone: "",
+        email: "",
+      }
+    }
+    return null
+  }, [invoice.branchId, invoice.branchName, (invoice as any).branch_id, (invoice as any).branch_name, (invoice as any).branchCode, activeBranchId, branches])
+
+  const activeSubBranch = React.useMemo(() => {
+    const targetSbId = String(invoice.subBranchId || (invoice as any).sub_branch_id || "").toLowerCase().trim()
+    const targetSbName = String(invoice.subBranchName || (invoice as any).sub_branch_name || "").toLowerCase().trim()
+
+    if (!targetSbId && !targetSbName) return null
+
+    return (subBranches || []).find(sb => {
+      const sbId = String(sb.id || "").toLowerCase().trim()
+      const sbName = String(sb.name || "").toLowerCase().trim()
+      const sbCode = String(sb.code || "").toLowerCase().trim()
+      return (targetSbId && (sbId === targetSbId || sbCode === targetSbId)) ||
+             (targetSbName && (sbName === targetSbName || sbCode === targetSbName))
+    }) || null
+  }, [invoice.subBranchId, invoice.subBranchName, (invoice as any).sub_branch_id, (invoice as any).sub_branch_name, subBranches])
 
   // Resolve Signature URL with all possible backend/local property aliases
   const resolvedSignatureUrl = 
@@ -393,6 +450,45 @@ export function OfficialInvoiceDocument({
               )}
             </div>
           )}
+
+          {/* Issuing Branch / Operating Unit Section (Only when invoice is generated from a branch / sub-branch) */}
+          {(activeBranch || activeSubBranch) && (
+            <div className="mt-1.5 p-2 rounded-xl bg-gradient-to-r from-zinc-50 to-zinc-100/70 dark:from-zinc-900/60 dark:to-zinc-800/40 border border-zinc-200/90 dark:border-zinc-700/60 text-[9px] text-zinc-700 dark:text-zinc-300">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-extrabold text-zinc-900 dark:text-zinc-100 flex items-center gap-1">
+                  <span className="text-[10px]">🏢</span>
+                  <span>Issuing Branch:</span>
+                  <span className="text-blue-700 dark:text-blue-400 font-black">{activeBranch?.name || activeSubBranch?.name}</span>
+                </span>
+                {(activeBranch?.code || activeSubBranch?.code) && (
+                  <span className="font-mono text-[8.5px] px-1.5 py-0.2 rounded-md bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300 font-bold border border-blue-200/60 dark:border-blue-800/60">
+                    Branch Code: {activeBranch?.code || activeSubBranch?.code}
+                  </span>
+                )}
+                {activeSubBranch && (
+                  <span className="font-mono text-[8.5px] px-1.5 py-0.2 rounded-md bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 font-bold border border-emerald-200/60">
+                    🌿 Partner Sub-Branch ({activeSubBranch.revenueSharePct}% Share)
+                  </span>
+                )}
+              </div>
+              {((activeBranch?.address || activeSubBranch?.address) || (activeBranch?.city || activeSubBranch?.city) || (activeBranch?.phone || activeSubBranch?.partnerPhone) || (activeBranch?.email || activeSubBranch?.partnerEmail)) && (
+                <div className="flex items-center gap-3 flex-wrap text-[8.5px] text-zinc-600 dark:text-zinc-400 mt-1 font-medium">
+                  {(activeBranch?.address || activeSubBranch?.address) && (
+                    <span>📍 {activeBranch?.address || activeSubBranch?.address}</span>
+                  )}
+                  {(activeBranch?.city || activeSubBranch?.city) && (
+                    <span>({activeBranch?.city || activeSubBranch?.city})</span>
+                  )}
+                  {(activeBranch?.phone || activeSubBranch?.partnerPhone) && (
+                    <span>📞 {activeBranch?.phone || activeSubBranch?.partnerPhone}</span>
+                  )}
+                  {(activeBranch?.email || activeSubBranch?.partnerEmail) && (
+                    <span>✉️ {activeBranch?.email || activeSubBranch?.partnerEmail}</span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -471,8 +567,13 @@ export function OfficialInvoiceDocument({
             <strong>Billing Scheme:</strong> {isGstInvoice ? 'GST Tax Invoice' : 'Non-GST Direct Invoice'}
           </p>
           <p className="text-[10px] text-zinc-600">
-            <strong>Issuing Entity:</strong> {activeCompany?.name || invoice.branchName || 'Main Office'}
+            <strong>Issuing Entity:</strong> {activeCompany?.name || 'SAAMPARK Group'}
           </p>
+          {(activeBranch || activeSubBranch) && (
+            <p className="text-[10px] text-zinc-700 font-semibold">
+              <strong>Branch:</strong> {activeBranch?.name || activeSubBranch?.name} {((activeBranch?.code || activeSubBranch?.code)) ? `(Code: ${activeBranch?.code || activeSubBranch?.code})` : ''}
+            </p>
+          )}
         </div>
 
         {/* Official Scan & Verify QR Code beside Project Scope */}

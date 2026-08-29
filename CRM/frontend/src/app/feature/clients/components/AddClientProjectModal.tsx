@@ -63,7 +63,7 @@ export function AddClientProjectModal({
   onProjectCreated,
   onInvoiceCreated,
 }: AddClientProjectModalProps) {
-  const { user, activeCompanyId } = useAuthStore()
+  const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
   const targetCompany = activeCompanyId || user?.companyId || "tech"
 
   const [creationMode, setCreationMode] = React.useState<"project_and_invoice" | "invoice_only">("project_and_invoice")
@@ -581,6 +581,10 @@ export function AddClientProjectModal({
         due: formattedDue,
         status: invoiceStatus,
         billedBy: billedByAdmin,
+        companyId: targetCompany,
+        branchId: activeBranchId || user?.branchId || undefined,
+        branchName: branches.find(b => b.id === (activeBranchId || user?.branchId) || b.name.toLowerCase() === (activeBranchId || "").toLowerCase())?.name || undefined,
+        branchCode: branches.find(b => b.id === (activeBranchId || user?.branchId) || b.name.toLowerCase() === (activeBranchId || "").toLowerCase())?.code || undefined,
         items: finalInvoiceItems,
         discountsList: finalDiscounts,
       } as any, targetCompany)

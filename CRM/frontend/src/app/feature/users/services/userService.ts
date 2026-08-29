@@ -592,7 +592,7 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
       rawData.forEach((u: any) => {
         const emailNorm = (u.email || "").toLowerCase().trim();
         const rawIdStr = String(u.id || "").toLowerCase().trim();
-        if (emailNorm && !HIDDEN_MASTER_EMAILS.includes(emailNorm) && !deletedEmails.includes(emailNorm)) {
+        if (emailNorm && !HIDDEN_MASTER_EMAILS.includes(emailNorm)) {
           const existingIdx = dbUsers.findIndex((du) => 
             (rawIdStr && String(du.id).toLowerCase().trim() === rawIdStr) ||
             du.email.toLowerCase().trim() === emailNorm ||
