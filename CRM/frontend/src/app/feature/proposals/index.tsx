@@ -31,12 +31,14 @@ export interface ProposalItem {
 }
 
 export default function ProposalsMain() {
-  const { user } = useAuthStore()
+  const { user, activeCompanyId } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
 
   const canAddProposal = canPerformAction(user, "Proposals", "add")
   const canEditProposal = canPerformAction(user, "Proposals", "edit")
   const canDeleteProposal = canPerformAction(user, "Proposals", "delete")
+
+  const targetComp = activeCompanyId || user?.companyId || "tech"
 
   const isClientRole = user?.role === "Clients"
   const clientEmailNorm = (user?.email || "").toLowerCase().trim()
@@ -65,14 +67,20 @@ export default function ProposalsMain() {
   }
 
   const loadProposals = React.useCallback(async () => {
-    const data = await fetchModuleDataFromDB<ProposalItem[]>("proposals", [])
+    const data = await fetchModuleDataFromDB<ProposalItem[]>("proposals", [], targetComp)
     setProposals(Array.isArray(data) ? filterGlobalDeletedItems(data) : [])
-  }, [])
+  }, [targetComp])
 
   React.useEffect(() => {
     loadProposals()
-    const interval = setInterval(loadProposals, 4000)
-    return () => clearInterval(interval)
+    window.addEventListener("storage", loadProposals)
+    window.addEventListener("saampark_data_synced", loadProposals)
+    window.addEventListener("saampark_company_switched", loadProposals)
+    return () => {
+      window.removeEventListener("storage", loadProposals)
+      window.removeEventListener("saampark_data_synced", loadProposals)
+      window.removeEventListener("saampark_company_switched", loadProposals)
+    }
   }, [loadProposals])
 
   React.useEffect(() => {
@@ -145,7 +153,7 @@ export default function ProposalsMain() {
 
     const updated = [newProp, ...proposals]
     setProposals(updated)
-    await saveModuleDataToDB("proposals", updated)
+    await saveModuleDataToDB("proposals", updated, targetComp)
     showToast(`✅ Proposal ${newProp.proposalNumber} dispatched to ${client}!`)
     setIsCreateModalOpen(false)
     setTitle("")
@@ -156,7 +164,7 @@ export default function ProposalsMain() {
   const handleClientAccept = async (prop: ProposalItem) => {
     const updated = proposals.map(p => p.id === prop.id ? { ...p, status: "Accepted" as const } : p)
     setProposals(updated)
-    await saveModuleDataToDB("proposals", updated)
+    await saveModuleDataToDB("proposals", updated, targetComp)
     showToast(`🎉 Accepted Proposal ${prop.proposalNumber}!`)
     setSelectedProposal(null)
   }
@@ -164,7 +172,7 @@ export default function ProposalsMain() {
   const handleClientDecline = async (prop: ProposalItem) => {
     const updated = proposals.map(p => p.id === prop.id ? { ...p, status: "Declined" as const } : p)
     setProposals(updated)
-    await saveModuleDataToDB("proposals", updated)
+    await saveModuleDataToDB("proposals", updated, targetComp)
     showToast(`Proposal ${prop.proposalNumber} marked as declined.`)
     setSelectedProposal(null)
   }

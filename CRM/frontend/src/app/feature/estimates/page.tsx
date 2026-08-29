@@ -18,7 +18,7 @@ import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 import { executeWithFeedback, useActionFeedbackStore } from "@/store/useActionFeedbackStore"
 
 export default function EstimatesPage() {
-  const { user } = useAuthStore()
+  const { user, activeCompanyId } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
   
   const canAddEstimate = canPerformAction(user, "Estimates", "add")
@@ -56,15 +56,23 @@ export default function EstimatesPage() {
     setTimeout(() => setToastMessage(null), 4000)
   }
 
+  const targetComp = activeCompanyId || user?.companyId || "tech"
+
   const loadData = React.useCallback(async () => {
-    const data = await getEstimates()
+    const data = await getEstimates(targetComp)
     setEstimates(data)
-  }, [])
+  }, [targetComp])
 
   React.useEffect(() => {
     loadData()
-    const interval = setInterval(loadData, 4000)
-    return () => clearInterval(interval)
+    window.addEventListener("storage", loadData)
+    window.addEventListener("saampark_data_synced", loadData)
+    window.addEventListener("saampark_company_switched", loadData)
+    return () => {
+      window.removeEventListener("storage", loadData)
+      window.removeEventListener("saampark_data_synced", loadData)
+      window.removeEventListener("saampark_company_switched", loadData)
+    }
   }, [loadData])
 
   React.useEffect(() => {

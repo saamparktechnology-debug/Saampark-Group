@@ -64,16 +64,18 @@ export default function MessagesMain() {
   const prevCountRef = React.useRef<number>(0)
   const activeContactRef = React.useRef<string>("")
 
-  // 1. Load users & clients into contacts list with strict role scoping
+  // 1. Load users & clients into contacts list with strict company and role scoping
   React.useEffect(() => {
     if (!user) return
 
     const loadDirectory = async () => {
       try {
         const targetComp = activeCompanyId || user.companyId || "tech"
+        const targetNorm = targetComp.toLowerCase().trim()
+
         const [userList, clientList, leadList, projectList] = await Promise.all([
-          getUsers(currentUserRole === "Super Admin" ? "all" : targetComp).catch(() => []),
-          getClients(currentUserRole === "Super Admin" ? undefined : targetComp).catch(() => []),
+          getUsers(targetComp).catch(() => []),
+          getClients(targetComp).catch(() => []),
           getLeads(targetComp).catch(() => []),
           getProjects(targetComp).catch(() => []),
         ])
@@ -84,6 +86,25 @@ export default function MessagesMain() {
         const isCompanyAdmin = currentUserRole === "Admin"
         const isTeamMember = currentUserRole === "Teams"
         const isClient = currentUserRole === "Clients"
+
+        // Helper to verify user belongs to the active company workspace
+        const userBelongsToCompany = (u: any) => {
+          if (!targetComp || targetComp === "all") return true
+          if (u.role === "Super Admin") return true
+          if (u.companyIds && Array.isArray(u.companyIds) && u.companyIds.length > 0) {
+            const normIds = u.companyIds.map((id: any) => String(id).toLowerCase().trim())
+            if (normIds.includes(targetNorm)) return true
+          }
+          const uComp = String(u.companyId || "tech").toLowerCase().trim()
+          return uComp === targetNorm || (targetNorm === "tech" && !u.companyId)
+        }
+
+        // Helper to verify client belongs to the active company workspace
+        const clientBelongsToCompany = (c: any) => {
+          if (!targetComp || targetComp === "all") return true
+          const cComp = String(c.companyId || (c as any).company || "tech").toLowerCase().trim()
+          return cComp === targetNorm || (targetNorm === "tech" && !c.companyId)
+        }
 
         // ── Team Member: Find assigned clients from leads & projects ───────
         const assignedClientEmails = new Set<string>()
@@ -139,15 +160,15 @@ export default function MessagesMain() {
           })
         }
 
-        // ── Process System Users ──────────────────────────────────────────
-        userList.forEach((u: any) => {
+        // ── Process System Users Filtered by Active Company ───────────────
+        userList.filter(userBelongsToCompany).forEach((u: any) => {
           const uEmail = (u.email || "").toLowerCase().trim()
           const uName = (u.name || "").toLowerCase().trim()
           if (!uEmail || uEmail === currentUserEmail) return
 
           const uRole = u.role || "Teams"
 
-          // Super Admin can message everyone
+          // Super Admin can message everyone in the active company
           if (isSuperAdmin) {
             contactMap.set(uEmail, {
               id: String(u.id || uEmail),
@@ -232,13 +253,13 @@ export default function MessagesMain() {
           }
         })
 
-        // ── Process External Clients ──────────────────────────────────────
-        clientList.forEach((c: any) => {
+        // ── Process External Clients Filtered by Active Company ───────────
+        clientList.filter(clientBelongsToCompany).forEach((c: any) => {
           const cEmail = (c.email || "").toLowerCase().trim()
           const cName = (c.name || "").toLowerCase().trim()
           if (!cEmail || cEmail === currentUserEmail) return
 
-          // Super Admin and Company Admin can message all clients
+          // Super Admin and Company Admin can message all clients of this company
           if (isSuperAdmin || isCompanyAdmin) {
             if (!contactMap.has(cEmail)) {
               contactMap.set(cEmail, {
@@ -277,6 +298,8 @@ export default function MessagesMain() {
             const stillExists = arr.find((c) => c.email.toLowerCase() === prev.email.toLowerCase())
             return stillExists || arr[0]
           })
+        } else {
+          setSelectedContact(null)
         }
       } catch (err) {
         console.warn("Messages directory load error:", err)
@@ -284,27 +307,33 @@ export default function MessagesMain() {
     }
 
     loadDirectory()
-    const interval = setInterval(loadDirectory, 5000)
     window.addEventListener("storage", loadDirectory)
+    window.addEventListener("saampark_data_synced", loadDirectory)
+    window.addEventListener("saampark_company_switched", loadDirectory)
     return () => {
-      clearInterval(interval)
       window.removeEventListener("storage", loadDirectory)
+      window.removeEventListener("saampark_data_synced", loadDirectory)
+      window.removeEventListener("saampark_company_switched", loadDirectory)
     }
   }, [currentUserEmail, currentUserRole, currentUserName, activeCompanyId, user])
 
-  // 2. Load and poll chat messages
+  // 2. Load and poll chat messages scoped by active company
+  const targetComp = activeCompanyId || user?.companyId || "tech"
+
   const loadChat = React.useCallback(async () => {
-    const data = await fetchModuleDataFromDB<ChatMessage[]>("chat_messages", [])
+    const data = await fetchModuleDataFromDB<ChatMessage[]>("chat_messages", [], targetComp)
     setMessages(Array.isArray(data) ? filterGlobalDeletedItems(data) : [])
-  }, [])
+  }, [targetComp])
 
   React.useEffect(() => {
     loadChat()
-    const interval = setInterval(loadChat, 2000)
     window.addEventListener("storage", loadChat)
+    window.addEventListener("saampark_data_synced", loadChat)
+    window.addEventListener("saampark_company_switched", loadChat)
     return () => {
-      clearInterval(interval)
       window.removeEventListener("storage", loadChat)
+      window.removeEventListener("saampark_data_synced", loadChat)
+      window.removeEventListener("saampark_company_switched", loadChat)
     }
   }, [loadChat])
 
@@ -375,7 +404,7 @@ export default function MessagesMain() {
     const updated = [...messages, newMsg]
     setMessages(updated)
     setInputText("")
-    await saveModuleDataToDB("chat_messages", updated)
+    await saveModuleDataToDB("chat_messages", updated, targetComp)
   }
 
   const handleDeleteMessage = async (msgId: string) => {
@@ -383,7 +412,7 @@ export default function MessagesMain() {
     const filtered = messages.filter((m) => m.id !== msgId)
     setMessages(filtered)
     await markGlobalItemDeleted(msgId, "chat_messages")
-    await saveModuleDataToDB("chat_messages", filtered)
+    await saveModuleDataToDB("chat_messages", filtered, targetComp)
   }
 
   const filteredContacts = contacts.filter((c) =>

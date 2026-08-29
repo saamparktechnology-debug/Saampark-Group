@@ -18,6 +18,8 @@ export interface OrderItem {
   notes?: string
   invoiceId?: string
   lastReminderSent?: string
+  companyId?: string
+  branchId?: string
 }
 
 export const getOrders = async (companyId?: string): Promise<OrderItem[]> => {
@@ -45,11 +47,23 @@ export const getOrders = async (companyId?: string): Promise<OrderItem[]> => {
   const allMaster = await fetchModuleDataFromDB<OrderItem[]>("orders", [], "all").catch(() => [])
 
   const map = new Map<string, OrderItem>()
+  const targetNorm = targetComp.toLowerCase().trim()
+
   for (const o of (Array.isArray(allMaster) ? allMaster : [])) {
-    if (o && o.id) map.set(String(o.id).toLowerCase().trim(), o)
+    if (o && o.id) {
+      const oComp = (o.companyId || (o as any).company || "tech").toLowerCase().trim()
+      if (oComp === targetNorm || (targetNorm === "tech" && !o.companyId)) {
+        map.set(String(o.id).toLowerCase().trim(), o)
+      }
+    }
   }
   for (const o of (Array.isArray(scopedData) ? scopedData : [])) {
-    if (o && o.id) map.set(String(o.id).toLowerCase().trim(), o)
+    if (o && o.id) {
+      const oComp = (o.companyId || (o as any).company || targetComp).toLowerCase().trim()
+      if (oComp === targetNorm || (targetNorm === "tech" && !o.companyId) || !o.companyId) {
+        map.set(String(o.id).toLowerCase().trim(), o)
+      }
+    }
   }
 
   return filterGlobalDeletedItems(Array.from(map.values()))
@@ -81,6 +95,7 @@ export const addOrder = async (orderData: Omit<OrderItem, "id" | "orderNumber"> 
   const newOrder: OrderItem = {
     ...orderData,
     id: nextId,
+    companyId: effectiveComp,
     orderNumber,
     itemsCount: orderData.itemsCount || 1,
     paymentStatus: orderData.paymentStatus || "Unpaid",
@@ -89,12 +104,6 @@ export const addOrder = async (orderData: Omit<OrderItem, "id" | "orderNumber"> 
 
   const updatedScoped = [newOrder, ...currentScoped.filter(o => String(o.id).toLowerCase().trim() !== nextId.toLowerCase().trim())]
   await saveModuleDataToDB("orders", updatedScoped, effectiveComp)
-
-  if (effectiveComp !== "tech") {
-    const currentTech = await fetchModuleDataFromDB<OrderItem[]>("orders", [], "tech").catch(() => [])
-    const updatedTech = [newOrder, ...currentTech.filter(o => String(o.id).toLowerCase().trim() !== nextId.toLowerCase().trim())]
-    await saveModuleDataToDB("orders", updatedTech, "tech")
-  }
 
   const updatedAll = [newOrder, ...currentAll.filter(o => String(o.id).toLowerCase().trim() !== nextId.toLowerCase().trim())]
   await saveModuleDataToDB("orders", updatedAll, "all")

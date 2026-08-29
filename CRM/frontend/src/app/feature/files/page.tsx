@@ -25,12 +25,13 @@ export interface CloudFileItem {
 }
 
 export default function FilesPage() {
-  const { user } = useAuthStore()
+  const { user, activeCompanyId } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
 
   const canAddFile = canPerformAction(user, "Files", "add")
   const canDeleteFile = canPerformAction(user, "Files", "delete")
 
+  const targetComp = activeCompanyId || user?.companyId || "tech"
   const isAdmin = user?.role === "Super Admin" || user?.role === "Admin"
 
   const [files, setFiles] = React.useState<CloudFileItem[]>([])
@@ -54,14 +55,20 @@ export default function FilesPage() {
   }
 
   const loadFiles = React.useCallback(async () => {
-    const data = await fetchModuleDataFromDB<CloudFileItem[]>("cloud_files", [])
+    const data = await fetchModuleDataFromDB<CloudFileItem[]>("cloud_files", [], targetComp)
     setFiles(Array.isArray(data) ? filterGlobalDeletedItems(data) : [])
-  }, [])
+  }, [targetComp])
 
   React.useEffect(() => {
     loadFiles()
-    const interval = setInterval(loadFiles, 4000)
-    return () => clearInterval(interval)
+    window.addEventListener("storage", loadFiles)
+    window.addEventListener("saampark_data_synced", loadFiles)
+    window.addEventListener("saampark_company_switched", loadFiles)
+    return () => {
+      window.removeEventListener("storage", loadFiles)
+      window.removeEventListener("saampark_data_synced", loadFiles)
+      window.removeEventListener("saampark_company_switched", loadFiles)
+    }
   }, [loadFiles])
 
   const filteredFiles = React.useMemo(() => {
@@ -100,7 +107,7 @@ export default function FilesPage() {
 
     const updated = [newFile, ...files]
     setFiles(updated)
-    await saveModuleDataToDB("cloud_files", updated)
+    await saveModuleDataToDB("cloud_files", updated, targetComp)
     showToast(`✅ File "${name}" registered with ${linkType} link!`)
     setIsAddModalOpen(false)
     setName("")
@@ -113,7 +120,7 @@ export default function FilesPage() {
       await markGlobalItemDeleted(id, "cloud_files")
       const updated = files.filter(f => f.id !== id)
       setFiles(updated)
-      await saveModuleDataToDB("cloud_files", updated)
+      await saveModuleDataToDB("cloud_files", updated, targetComp)
       showToast("File link removed.")
     }
   }

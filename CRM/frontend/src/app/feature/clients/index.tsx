@@ -104,8 +104,8 @@ export default function ClientsMain() {
 
       const [storedClientsRaw, storedContacts, storedLabels, allProjects, allInvoices, allPayments] = await Promise.all([
         getClients(targetComp && targetComp !== "all" ? targetComp : undefined),
-        getStoredContacts(),
-        getStoredClientLabels(),
+        getStoredContacts(targetComp && targetComp !== "all" ? targetComp : undefined),
+        getStoredClientLabels(targetComp && targetComp !== "all" ? targetComp : undefined),
         getProjects(targetComp && targetComp !== "all" ? targetComp : "all").catch(() => []),
         getInvoices(targetComp && targetComp !== "all" ? targetComp : "all").catch(() => []),
         getPayments(targetComp && targetComp !== "all" ? targetComp : "all").catch(() => []),

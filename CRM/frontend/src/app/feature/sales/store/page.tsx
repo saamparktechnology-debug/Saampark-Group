@@ -72,7 +72,9 @@ const DEFAULT_STORE_PRODUCTS: StoreServiceProduct[] = [
 ]
 
 export default function StorePage() {
-  const { user } = useAuthStore()
+  const { user, activeCompanyId } = useAuthStore()
+  const targetComp = activeCompanyId || user?.companyId || "tech"
+
   const [products, setProducts] = React.useState<StoreServiceProduct[]>(DEFAULT_STORE_PRODUCTS)
   const [selectedProduct, setSelectedProduct] = React.useState<StoreServiceProduct | null>(null)
   const [selectedCategory, setSelectedCategory] = React.useState("all")
@@ -84,13 +86,25 @@ export default function StorePage() {
     setTimeout(() => setToastMessage(null), 4000)
   }
 
-  React.useEffect(() => {
-    fetchModuleDataFromDB<StoreServiceProduct[]>("store_products", DEFAULT_STORE_PRODUCTS).then((data) => {
+  const loadProducts = React.useCallback(() => {
+    fetchModuleDataFromDB<StoreServiceProduct[]>("store_products", DEFAULT_STORE_PRODUCTS, targetComp).then((data) => {
       if (Array.isArray(data) && data.length > 0) {
         setProducts(data)
       }
     })
-  }, [])
+  }, [targetComp])
+
+  React.useEffect(() => {
+    loadProducts()
+    window.addEventListener("storage", loadProducts)
+    window.addEventListener("saampark_data_synced", loadProducts)
+    window.addEventListener("saampark_company_switched", loadProducts)
+    return () => {
+      window.removeEventListener("storage", loadProducts)
+      window.removeEventListener("saampark_data_synced", loadProducts)
+      window.removeEventListener("saampark_company_switched", loadProducts)
+    }
+  }, [loadProducts])
 
   const filteredProducts = React.useMemo(() => {
     if (selectedCategory === "all") return products
@@ -118,7 +132,8 @@ export default function StorePage() {
         status: "Processing",
         notes: `Direct Store purchase: ${prod.title}`,
         invoiceId,
-      })
+        companyId: targetComp,
+      }, targetComp)
 
       await addInvoice({
         id: invoiceId,
@@ -135,7 +150,8 @@ export default function StorePage() {
         due: prod.price,
         status: "Not paid",
         billedBy: "Automated Store Portal",
-      })
+        companyId: targetComp,
+      }, targetComp)
 
       showToast(`🎉 Order placed for "${prod.title}"! Registered in Orders & Invoices (${invoiceId}).`)
       setSelectedProduct(null)

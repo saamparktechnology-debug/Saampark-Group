@@ -85,16 +85,18 @@ export default function ReportsMain() {
   const [tasks, setTasks] = React.useState<Task[]>([])
   const [leads, setLeads] = React.useState<Lead[]>([])
 
+  const targetComp = selectedCompanyId || activeCompanyId || user?.companyId || "tech"
+
   const loadData = React.useCallback(async () => {
     try {
       const [uList, invList, payList, cliList, expList, tList, lList] = await Promise.all([
         getUsers("all").catch(() => []),
-        getInvoices().catch(() => []),
-        getPayments().catch(() => []),
-        getClients().catch(() => []),
-        fetchModuleDataFromDB<any[]>("expenses", []).catch(() => []),
-        taskService.getTasks().catch(() => []),
-        getLeads().catch(() => []),
+        getInvoices(targetComp).catch(() => []),
+        getPayments(targetComp).catch(() => []),
+        getClients(targetComp).catch(() => []),
+        fetchModuleDataFromDB<any[]>("expenses", [], targetComp).catch(() => []),
+        taskService.getTasks(targetComp).catch(() => []),
+        getLeads(targetComp).catch(() => []),
       ])
       setUsers(uList || [])
       setInvoices(invList || [])
@@ -106,17 +108,19 @@ export default function ReportsMain() {
     } catch (err) {
       console.error("Error loading reports data:", err)
     }
-  }, [])
+  }, [targetComp])
 
   React.useEffect(() => {
     loadData()
     fetchSubBranches().catch(() => {})
     window.addEventListener("storage", loadData)
     window.addEventListener("saampark_data_synced", loadData)
+    window.addEventListener("saampark_company_switched", loadData)
     window.addEventListener("saampark_subbranches_updated", loadData)
     return () => {
       window.removeEventListener("storage", loadData)
       window.removeEventListener("saampark_data_synced", loadData)
+      window.removeEventListener("saampark_company_switched", loadData)
       window.removeEventListener("saampark_subbranches_updated", loadData)
     }
   }, [loadData, fetchSubBranches])

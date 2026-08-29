@@ -89,16 +89,37 @@ export const getSubscriptions = async (companyId?: string): Promise<Subscription
     fetchModuleDataFromDB<Subscription[]>("subscriptions", [], "all").catch(() => []),
   ])
 
-  for (const s of [...(Array.isArray(allSubs) ? allSubs : []), ...(Array.isArray(scopedSubs) ? scopedSubs : [])]) {
+  const targetNorm = effectiveComp.toLowerCase().trim()
+
+  for (const s of (Array.isArray(allSubs) ? allSubs : [])) {
     if (s && s.id) {
-      const numAmt = s.numericAmount || parseInt(String(s.amount).replace(/[^0-9]/g, "")) || 0
-      map.set(String(s.id).toLowerCase().trim(), {
-        ...s,
-        numericAmount: numAmt,
-        amount: s.amount.startsWith("₹") ? s.amount : `₹${numAmt.toLocaleString("en-IN")}`,
-        autoRenew: s.autoRenew !== undefined ? s.autoRenew : true,
-        firstPaymentDate: s.firstPaymentDate || s.startDate,
-      })
+      const sComp = (s.companyId || (s as any).company || "tech").toLowerCase().trim()
+      if (sComp === targetNorm || (targetNorm === "tech" && !s.companyId)) {
+        const numAmt = s.numericAmount || parseInt(String(s.amount).replace(/[^0-9]/g, "")) || 0
+        map.set(String(s.id).toLowerCase().trim(), {
+          ...s,
+          numericAmount: numAmt,
+          amount: s.amount.startsWith("₹") ? s.amount : `₹${numAmt.toLocaleString("en-IN")}`,
+          autoRenew: s.autoRenew !== undefined ? s.autoRenew : true,
+          firstPaymentDate: s.firstPaymentDate || s.startDate,
+        })
+      }
+    }
+  }
+
+  for (const s of (Array.isArray(scopedSubs) ? scopedSubs : [])) {
+    if (s && s.id) {
+      const sComp = (s.companyId || (s as any).company || effectiveComp).toLowerCase().trim()
+      if (sComp === targetNorm || (targetNorm === "tech" && !s.companyId) || !s.companyId) {
+        const numAmt = s.numericAmount || parseInt(String(s.amount).replace(/[^0-9]/g, "")) || 0
+        map.set(String(s.id).toLowerCase().trim(), {
+          ...s,
+          numericAmount: numAmt,
+          amount: s.amount.startsWith("₹") ? s.amount : `₹${numAmt.toLocaleString("en-IN")}`,
+          autoRenew: s.autoRenew !== undefined ? s.autoRenew : true,
+          firstPaymentDate: s.firstPaymentDate || s.startDate,
+        })
+      }
     }
   }
 
@@ -325,6 +346,7 @@ export const getInstallments = async (companyId?: string): Promise<InstallmentIt
     } catch {}
   }
   const effectiveComp = (!targetComp || targetComp === "all") ? "tech" : targetComp
+  const targetNorm = effectiveComp.toLowerCase().trim()
 
   const map = new Map<string, InstallmentItem>()
 
@@ -334,9 +356,20 @@ export const getInstallments = async (companyId?: string): Promise<InstallmentIt
     fetchModuleDataFromDB<InstallmentItem[]>("installments", [], "all").catch(() => []),
   ])
 
-  for (const item of [...(Array.isArray(allInsts) ? allInsts : []), ...(Array.isArray(scopedInsts) ? scopedInsts : [])]) {
+  for (const item of (Array.isArray(allInsts) ? allInsts : [])) {
     if (item && item.id) {
-      map.set(String(item.id).toLowerCase().trim(), item)
+      const iComp = (item.companyId || (item as any).company || "tech").toLowerCase().trim()
+      if (iComp === targetNorm || (targetNorm === "tech" && !item.companyId)) {
+        map.set(String(item.id).toLowerCase().trim(), item)
+      }
+    }
+  }
+  for (const item of (Array.isArray(scopedInsts) ? scopedInsts : [])) {
+    if (item && item.id) {
+      const iComp = (item.companyId || (item as any).company || effectiveComp).toLowerCase().trim()
+      if (iComp === targetNorm || (targetNorm === "tech" && !item.companyId) || !item.companyId) {
+        map.set(String(item.id).toLowerCase().trim(), item)
+      }
     }
   }
 
@@ -347,7 +380,16 @@ export const getInstallments = async (companyId?: string): Promise<InstallmentIt
       fetchModuleDataFromDB<Project[]>("projects", [], "all").catch(() => []),
     ])
 
-    const combinedProjects = [...(Array.isArray(allProjects) ? allProjects : []), ...(Array.isArray(scopedProjects) ? scopedProjects : [])]
+    const combinedProjects = [
+      ...(Array.isArray(allProjects) ? allProjects : []).filter(p => {
+        const pComp = (p.companyId || (p as any).company || "tech").toLowerCase().trim()
+        return pComp === targetNorm || (targetNorm === "tech" && !p.companyId)
+      }),
+      ...(Array.isArray(scopedProjects) ? scopedProjects : []).filter(p => {
+        const pComp = (p.companyId || (p as any).company || effectiveComp).toLowerCase().trim()
+        return pComp === targetNorm || (targetNorm === "tech" && !p.companyId) || !p.companyId
+      })
+    ]
 
     for (const p of combinedProjects) {
       if (!p || !p.id) continue

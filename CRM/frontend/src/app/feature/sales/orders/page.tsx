@@ -64,12 +64,16 @@ interface OrderItem {
   notes?: string
   lastReminderSent?: string
   invoiceId?: string
+  companyId?: string
+  branchId?: string
 }
 
 const INITIAL_ORDERS: OrderItem[] = []
 
 export default function OrderListPage() {
-  const { user } = useAuthStore()
+  const { user, activeCompanyId } = useAuthStore()
+  const targetComp = activeCompanyId || user?.companyId || "tech"
+
   const isClientRole = user?.role === "Clients"
   const clientEmailNorm = (user?.email || "").toLowerCase().trim()
   const clientNameNorm = (user?.name || "").toLowerCase().trim()
@@ -108,9 +112,9 @@ export default function OrderListPage() {
 
   const loadOrders = React.useCallback(async () => {
     const [data, projs, invs] = await Promise.all([
-      getOrders().catch(() => []),
-      getProjects().catch(() => []),
-      getInvoices().catch(() => []),
+      getOrders(targetComp).catch(() => []),
+      getProjects(targetComp).catch(() => []),
+      getInvoices(targetComp).catch(() => []),
     ])
 
     const safeProjs = Array.isArray(projs) ? projs : []
@@ -143,20 +147,20 @@ export default function OrderListPage() {
     })
 
     setOrders(synced)
-  }, [])
+  }, [targetComp])
 
   React.useEffect(() => {
     loadOrders()
-    const interval = setInterval(loadOrders, 4000)
     window.addEventListener("saampark_data_synced", loadOrders)
     window.addEventListener("saampark_orders_updated", loadOrders)
     window.addEventListener("saampark_projects_updated", loadOrders)
+    window.addEventListener("saampark_company_switched", loadOrders)
     window.addEventListener("storage", loadOrders)
     return () => {
-      clearInterval(interval)
       window.removeEventListener("saampark_data_synced", loadOrders)
       window.removeEventListener("saampark_orders_updated", loadOrders)
       window.removeEventListener("saampark_projects_updated", loadOrders)
+      window.removeEventListener("saampark_company_switched", loadOrders)
       window.removeEventListener("storage", loadOrders)
     }
   }, [loadOrders])

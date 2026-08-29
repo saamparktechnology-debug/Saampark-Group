@@ -36,12 +36,14 @@ const colorMap: Record<NoteColor, string> = {
 }
 
 export default function NotesMain() {
-  const { user } = useAuthStore()
+  const { user, activeCompanyId } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
 
   const canAddNote = canPerformAction(user, "Notes", "add")
   const canEditNote = canPerformAction(user, "Notes", "edit")
   const canDeleteNote = canPerformAction(user, "Notes", "delete")
+
+  const targetComp = activeCompanyId || user?.companyId || "tech"
 
   const [notes, setNotes] = React.useState<NoteItem[]>([])
   const [searchQuery, setSearchQuery] = React.useState("")
@@ -64,14 +66,20 @@ export default function NotesMain() {
   }
 
   const loadNotes = React.useCallback(async () => {
-    const data = await fetchModuleDataFromDB<NoteItem[]>("notes", [])
+    const data = await fetchModuleDataFromDB<NoteItem[]>("notes", [], targetComp)
     setNotes(Array.isArray(data) ? filterGlobalDeletedItems(data) : [])
-  }, [])
+  }, [targetComp])
 
   React.useEffect(() => {
     loadNotes()
-    const interval = setInterval(loadNotes, 4000)
-    return () => clearInterval(interval)
+    window.addEventListener("storage", loadNotes)
+    window.addEventListener("saampark_data_synced", loadNotes)
+    window.addEventListener("saampark_company_switched", loadNotes)
+    return () => {
+      window.removeEventListener("storage", loadNotes)
+      window.removeEventListener("saampark_data_synced", loadNotes)
+      window.removeEventListener("saampark_company_switched", loadNotes)
+    }
   }, [loadNotes])
 
   // Filter notes: Public notes are shown to EVERYONE (Clients, Teams, Admins). Private notes only to creator/admin.
@@ -125,7 +133,7 @@ export default function NotesMain() {
 
     const updated = [newNote, ...notes]
     setNotes(updated)
-    await saveModuleDataToDB("notes", updated)
+    await saveModuleDataToDB("notes", updated, targetComp)
     showToast(`✅ Note created as ${visibility.toUpperCase()}!`)
     setIsAddModalOpen(false)
     setTitle("")
@@ -137,7 +145,7 @@ export default function NotesMain() {
       await markGlobalItemDeleted(id, "notes")
       const updated = notes.filter((n) => n.id !== id)
       setNotes(updated)
-      await saveModuleDataToDB("notes", updated)
+      await saveModuleDataToDB("notes", updated, targetComp)
       showToast("Note removed.")
       if (selectedNote?.id === id) setSelectedNote(null)
     }
@@ -146,7 +154,8 @@ export default function NotesMain() {
   const handleToggleImportant = async (note: NoteItem) => {
     const updated = notes.map((n) => n.id === note.id ? { ...n, isImportant: !n.isImportant } : n)
     setNotes(updated)
-    await saveModuleDataToDB("notes", updated)
+    await saveModuleDataToDB("notes", updated, targetComp)
+    showToast(note.isImportant ? "Note unmarked from important." : "⭐ Note marked as Important!")
   }
 
   return (
