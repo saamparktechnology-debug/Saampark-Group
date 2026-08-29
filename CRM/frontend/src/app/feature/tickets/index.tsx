@@ -231,7 +231,7 @@ export default function TicketsMain() {
       creatorRole: user?.role || "User",
       companyId: targetComp,
       branchId: user?.branchId || undefined,
-      createdAt: new Date().toLocaleDateString("en-IN", { dateStyle: "medium", timeStyle: "short" }),
+      createdAt: new Date().toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }),
       assignedTo: "Company Admin & Super Admin",
       raisedTo: "Company Admin & Super Admin",
     }
