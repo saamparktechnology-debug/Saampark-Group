@@ -619,3 +619,65 @@ export const sendInstallmentReminder = async (
 
   return ok
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 3. GENERATE INVOICE AGAINST SUBSCRIPTION
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const generateSubscriptionInvoice = async (
+  sub: Subscription,
+  companyId?: string
+): Promise<any> => {
+  const { addInvoice, getInvoices, generateInvoiceNumber } = await import("@/app/feature/sales/invoices/services/invoiceService")
+  const effectiveComp = companyId || sub.companyId || "tech"
+  const allInvoices = await getInvoices("all")
+  const invoiceId = generateInvoiceNumber(allInvoices, new Date(), false)
+  const numAmount = sub.numericAmount || parseInt(String(sub.amount).replace(/[^0-9]/g, "")) || 0
+  const gstAmount = Math.round(numAmount * 0.18)
+  const totalAmount = numAmount + gstAmount
+  const formattedTotal = `₹${totalAmount.toLocaleString("en-IN")}`
+
+  const newInv = await addInvoice({
+    id: invoiceId,
+    client: sub.clientName,
+    clientEmail: sub.clientEmail || `${sub.clientName.toLowerCase().replace(/\s+/g, '')}@client.com`,
+    project: `${sub.planName} — Subscription (${sub.billingCycle})`,
+    billDate: new Date().toLocaleDateString("en-GB"),
+    dueDate: sub.nextBillingDate || new Date(Date.now() + 14 * 86400000).toLocaleDateString("en-GB"),
+    baseAmount: numAmount,
+    setupCharge: 0,
+    discount: 0,
+    gstRate: 18,
+    gstAmount: gstAmount,
+    totalInvoiced: formattedTotal,
+    paymentReceived: "₹0",
+    due: formattedTotal,
+    status: "Not paid",
+    billedBy: sub.billedBy || "Admin",
+    companyId: effectiveComp,
+    branchId: sub.branchId || undefined,
+    branchName: sub.branchName || undefined,
+    items: [
+      {
+        id: `svc_${Date.now()}`,
+        serviceName: `${sub.planName} (${sub.billingCycle} Retainer Cycle)`,
+        sacCode: "998313",
+        qty: 1,
+        unit: sub.billingCycle || "Cycle",
+        rate: numAmount,
+        charges: [],
+        gstRate: 18,
+        gstAmount: gstAmount,
+        totalAmount: totalAmount,
+      }
+    ],
+  }, effectiveComp)
+
+  // Update subscription metadata
+  await updateSubscription(sub.id, {
+    invoicesCount: (sub.invoicesCount || 0) + 1,
+  }, effectiveComp)
+
+  return newInv
+}
+

@@ -27,10 +27,14 @@ import {
   renewSubscription, 
   sendSubscriptionReminder, 
   updateSubscription,
-  calculateNextCycleDate 
+  calculateNextCycleDate,
+  generateSubscriptionInvoice 
 } from "./services/subscriptionService"
 import { SubscriptionList } from "./components/SubscriptionList"
 import { RenewSubscriptionModal } from "./components/RenewSubscriptionModal"
+import { ClientSubscriptionLedgerModal } from "./components/ClientSubscriptionLedgerModal"
+import { InvoiceModal } from "@/app/feature/sales/invoices/components/InvoiceModal"
+import { InvoiceItem } from "@/app/feature/sales/invoices/services/invoiceService"
 import { getClients } from "@/app/feature/clients/services/clientService"
 import { ThreeDotLoader } from "@/components/ui/ThreeDotLoader"
 import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
@@ -66,6 +70,9 @@ export default function SubscriptionsMain() {
   const [isAddSubModalOpen, setIsAddSubModalOpen] = React.useState(false)
   const [selectedSubModelTab, setSelectedSubModelTab] = React.useState<SubscriptionType>("package")
   const [renewingSubscription, setRenewingSubscription] = React.useState<Subscription | null>(null)
+  const [selectedLedgerClient, setSelectedLedgerClient] = React.useState<string | null>(null)
+  const [selectedLedgerEmail, setSelectedLedgerEmail] = React.useState<string | undefined>(undefined)
+  const [selectedViewInvoice, setSelectedViewInvoice] = React.useState<InvoiceItem | null>(null)
 
   // Client Pay / Renew Modal
   const [clientPayingSub, setClientPayingSub] = React.useState<Subscription | null>(null)
@@ -473,6 +480,17 @@ export default function SubscriptionsMain() {
     }
   }
 
+  const handleGenerateSubscriptionInvoice = async (sub: Subscription) => {
+    try {
+      const inv = await generateSubscriptionInvoice(sub, activeCompanyId || "tech")
+      showToast(`✅ Invoice #${inv?.id || ''} generated for ${sub.clientName}!`)
+      loadData(false)
+    } catch (err) {
+      console.error("Error generating subscription invoice:", err)
+      alert("Could not generate invoice. Please try again.")
+    }
+  }
+
   // Client Pay Now Simulation & Record
   const handleClientPaySubscription = async () => {
     if (!clientPayingSub) return
@@ -825,6 +843,11 @@ export default function SubscriptionsMain() {
           onSendReminder={handleSendReminder}
           onToggleAutoRenew={handleToggleAutoRenew}
           onClientPayNow={(sub) => setClientPayingSub(sub)}
+          onGenerateInvoice={handleGenerateSubscriptionInvoice}
+          onSelectClient={(cName, sub) => {
+            setSelectedLedgerClient(cName)
+            setSelectedLedgerEmail(sub.clientEmail)
+          }}
         />
       )}
 
@@ -1483,6 +1506,33 @@ export default function SubscriptionsMain() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* ── MODAL 4: CLIENT SUBSCRIPTION & BILLING LEDGER MODAL ── */}
+      <ClientSubscriptionLedgerModal
+        isOpen={Boolean(selectedLedgerClient)}
+        clientName={selectedLedgerClient}
+        clientEmail={selectedLedgerEmail}
+        subscriptions={subscriptions}
+        onClose={() => {
+          setSelectedLedgerClient(null)
+          setSelectedLedgerEmail(undefined)
+        }}
+        onGenerateInvoice={handleGenerateSubscriptionInvoice}
+        onRenewSubscription={(sub) => setRenewingSubscription(sub)}
+        onViewInvoice={(inv) => setSelectedViewInvoice(inv)}
+        onOpenCreateSub={(cName) => {
+          setNewClientName(cName)
+          setIsCustomClient(false)
+          setIsAddSubModalOpen(true)
+        }}
+      />
+
+      {/* ── MODAL 5: OFFICIAL TAX INVOICE PREVIEW / PRINT MODAL ── */}
+      <InvoiceModal
+        isOpen={Boolean(selectedViewInvoice)}
+        invoice={selectedViewInvoice}
+        onClose={() => setSelectedViewInvoice(null)}
+      />
 
     </motion.div>
   )

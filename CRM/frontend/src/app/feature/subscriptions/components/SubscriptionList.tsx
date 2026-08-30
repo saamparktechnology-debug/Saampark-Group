@@ -4,7 +4,8 @@ import * as React from "react"
 import { 
   Search, RefreshCw, Send, Trash2, Calendar, 
   CheckCircle2, Clock, AlertCircle, Sparkles, Building2, User,
-  CreditCard, Package, Layers, ChevronDown, ChevronUp, Check, ShieldCheck
+  CreditCard, Package, Layers, ChevronDown, ChevronUp, Check, ShieldCheck,
+  FileText, Receipt
 } from "lucide-react"
 import { Subscription, SubscriptionStatus, SubscriptionType } from "../types"
 import { useAuthStore } from "@/store/useAuthStore"
@@ -16,6 +17,8 @@ interface SubscriptionListProps {
   onSendReminder: (id: string) => Promise<void>
   onToggleAutoRenew: (sub: Subscription) => void
   onClientPayNow?: (sub: Subscription) => void
+  onGenerateInvoice?: (sub: Subscription) => Promise<void>
+  onSelectClient?: (clientName: string, sub: Subscription) => void
 }
 
 export function SubscriptionList({
@@ -25,6 +28,8 @@ export function SubscriptionList({
   onSendReminder,
   onToggleAutoRenew,
   onClientPayNow,
+  onGenerateInvoice,
+  onSelectClient,
 }: SubscriptionListProps) {
   const { user } = useAuthStore()
   const isClient = (user?.role || "").toLowerCase().includes("client")
@@ -227,12 +232,19 @@ export function SubscriptionList({
                             </div>
                             <div className="min-w-0">
                               <div className="font-bold text-zinc-900 dark:text-zinc-100 truncate flex items-center gap-1.5">
-                                <span>{sub.clientName}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => onSelectClient ? onSelectClient(sub.clientName, sub) : undefined}
+                                  className="text-left font-bold text-zinc-900 dark:text-zinc-100 hover:text-blue-600 dark:hover:text-blue-400 hover:underline cursor-pointer truncate transition-colors"
+                                  title="Click to view full client subscription history & billing ledger"
+                                >
+                                  {sub.clientName}
+                                </button>
                                 {hasDeliverables && (
                                   <button
                                     type="button"
                                     onClick={() => setExpandedSubId(isExpanded ? null : sub.id)}
-                                    className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold hover:underline flex items-center"
+                                    className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold hover:underline flex items-center shrink-0"
                                   >
                                     <span>Features</span>
                                     {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
@@ -347,6 +359,18 @@ export function SubscriptionList({
                                   >
                                     <Send size={11} />
                                     <span>{sendingReminderId === sub.id ? "Sending..." : "Reminder"}</span>
+                                  </button>
+                                )}
+
+                                 {onGenerateInvoice && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onGenerateInvoice(sub)}
+                                    className="px-2 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800 font-bold text-[11px] flex items-center gap-1 transition-colors cursor-pointer"
+                                    title="Generate official tax invoice against this subscription"
+                                  >
+                                    <Receipt size={11} />
+                                    <span>Invoice</span>
                                   </button>
                                 )}
 
