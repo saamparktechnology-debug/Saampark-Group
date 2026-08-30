@@ -83,12 +83,20 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
     return companies.filter((c) => c.id === user?.companyId || c.slug === user?.companyId)
   }, [companies, user])
 
+  const isBranchLocked = Boolean(user?.branchId && user?.role !== "Super Admin")
+
   const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>(
     activeCompanyId || user?.companyId || "tech"
   )
   const [selectedBranchId, setSelectedBranchId] = React.useState<string>(
-    activeBranchId || user?.branchId || ""
+    user?.branchId || activeBranchId || ""
   )
+
+  React.useEffect(() => {
+    if (user?.branchId && user?.role !== "Super Admin") {
+      setSelectedBranchId(user.branchId)
+    }
+  }, [user?.branchId, user?.role, isOpen])
 
   const availableBranches = React.useMemo(() => {
     if (!branches || !Array.isArray(branches)) return []
@@ -101,7 +109,9 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
 
   const handleCompanyChange = (newCompId: string) => {
     setSelectedCompanyId(newCompId)
-    setSelectedBranchId("")
+    if (!isBranchLocked) {
+      setSelectedBranchId("")
+    }
   }
 
   const [teamMembers, setTeamMembers] = React.useState<{ id: string; name: string; role?: string }[]>([])
@@ -369,22 +379,36 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
 
               {/* Branch */}
               <div className="space-y-1">
-                <label className="text-zinc-600 dark:text-zinc-300 font-semibold flex items-center gap-1.5 text-[11px]">
-                  <MapPin size={13} className="text-amber-500" />
-                  <span>Branch (Optional)</span>
+                <label className="text-zinc-600 dark:text-zinc-300 font-semibold flex items-center justify-between text-[11px]">
+                  <span className="flex items-center gap-1.5">
+                    <MapPin size={13} className="text-amber-500" />
+                    <span>Assigned Branch</span>
+                  </span>
+                  {isBranchLocked && (
+                    <span className="text-[10px] text-amber-600 font-bold bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800">
+                      🔒 Locked
+                    </span>
+                  )}
                 </label>
-                <select
-                  value={selectedBranchId}
-                  onChange={(e) => setSelectedBranchId(e.target.value)}
-                  className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-semibold cursor-pointer shadow-2xs"
-                >
-                  <option value="">-- No Branch (Company Wide) --</option>
-                  {availableBranches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
+                {isBranchLocked ? (
+                  <div className="w-full px-3 py-2 bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg text-zinc-800 dark:text-zinc-200 text-xs font-bold flex items-center justify-between">
+                    <span>📍 {branches.find(b => b.id === user?.branchId)?.name || user?.branchId || "Assigned Branch"}</span>
+                    <span className="text-[10px] text-amber-600 font-normal">Fixed to your branch</span>
+                  </div>
+                ) : (
+                  <select
+                    value={selectedBranchId}
+                    onChange={(e) => setSelectedBranchId(e.target.value)}
+                    className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-semibold cursor-pointer shadow-2xs"
+                  >
+                    <option value="">-- No Branch (Company Wide) --</option>
+                    {availableBranches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
             </div>
           )}

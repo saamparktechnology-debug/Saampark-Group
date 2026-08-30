@@ -59,11 +59,14 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
     return companies.filter((c) => adminCompanyIds.includes(c.id) || adminCompanyIds.includes(c.slug || ""))
   }, [isCurrentSuperAdmin, companies, currentUser])
 
+  const isCurrentBranchAdmin = Boolean(currentUser?.branchId && currentUser?.role === "Admin")
+
   const [name, setName] = React.useState("")
   const [email, setEmail] = React.useState("")
   const [emailError, setEmailError] = React.useState<string | null>(null)
   const [isCheckingEmail, setIsCheckingEmail] = React.useState(false)
   const [role, setRole] = React.useState<UserRole>("Teams")
+  const [adminScope, setAdminScope] = React.useState<"company" | "branch">("company")
   const [selectedCompanyIds, setSelectedCompanyIds] = React.useState<string[]>(["tech"])
   const [selectedBranchId, setSelectedBranchId] = React.useState<string>("")
   const [department, setDepartment] = React.useState("")
@@ -138,7 +141,9 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
         ? editingUser.companyIds 
         : [editingUser.companyId || "tech"]
       setSelectedCompanyIds(compIds)
-      setSelectedBranchId(editingUser.branchId || (editingUser as any).branch_id || "")
+      const bId = editingUser.branchId || (editingUser as any).branch_id || ""
+      setSelectedBranchId(bId)
+      setAdminScope(bId ? "branch" : "company")
 
       setDepartment(editingUser.department || "")
       setPhone(editingUser.phone || "")
@@ -183,11 +188,18 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
       setEmail("")
       setEmailError(null)
       setRole("Teams")
-      const defaultComp = (activeCompanyId && availableCompanies.some(c => c.id === activeCompanyId || c.slug === activeCompanyId))
-        ? activeCompanyId
-        : (availableCompanies[0]?.id || "tech")
-      setSelectedCompanyIds([defaultComp])
-      setSelectedBranchId("")
+      if (isCurrentBranchAdmin && currentUser?.branchId) {
+        setAdminScope("branch")
+        setSelectedBranchId(currentUser.branchId)
+        setSelectedCompanyIds(currentUser.companyIds || (currentUser.companyId ? [currentUser.companyId] : ["tech"]))
+      } else {
+        setAdminScope("company")
+        const defaultComp = (activeCompanyId && availableCompanies.some(c => c.id === activeCompanyId || c.slug === activeCompanyId))
+          ? activeCompanyId
+          : (availableCompanies[0]?.id || "tech")
+        setSelectedCompanyIds([defaultComp])
+        setSelectedBranchId("")
+      }
       setDepartment("")
       setPhone("")
       setPassword("Password123")
@@ -201,7 +213,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
       })
       setActionMatrix(init)
     }
-  }, [editingUser?.id, isOpen, availableCompanies])
+  }, [editingUser, isOpen, availableCompanies, isCurrentBranchAdmin, currentUser, activeCompanyId])
 
   const handleRoleChange = (newRole: UserRole) => {
     setRole(newRole)
@@ -633,91 +645,146 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
                 )}
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5 flex items-center gap-1.5">
-                  <Building size={14} /> Assign to Companies * ({selectedCompanyIds.length} Selected)
-                </label>
-                <div className="p-2 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
-                  {availableCompanies.map((c) => {
-                    const cIdNorm = String(c.id).toLowerCase().trim()
-                    const cSlugNorm = String(c.slug || "").toLowerCase().trim()
-                    const isChecked = selectedCompanyIds.some(id => {
-                      const norm = String(id).toLowerCase().trim()
-                      return norm === cIdNorm || norm === cSlugNorm
-                    })
-                    return (
-                      <button
-                        type="button"
-                        key={c.id}
-                        onClick={() => handleToggleCompany(c.id)}
-                        className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border transition-all cursor-pointer ${
-                          isChecked
-                            ? "bg-blue-600 text-white border-blue-600 shadow-2xs font-bold"
-                            : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:border-zinc-400"
-                        }`}
-                      >
-                        <span>{c.logo || "🏢"}</span>
-                        <span>{c.name}</span>
-                        {isChecked && <Check size={11} />}
-                      </button>
-                    )
-                  })}
+              {/* Scope Switcher for Admin Role */}
+              {role === "Admin" && !isCurrentBranchAdmin && (
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5 flex items-center gap-1.5">
+                    <Building size={14} /> Admin Assignment Scope *
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAdminScope("company")}
+                      className={`px-3 py-2 rounded-xl text-xs font-semibold border flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
+                        adminScope === "company"
+                          ? "bg-blue-600 text-white border-blue-600 shadow-xs font-bold"
+                          : "bg-zinc-50 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100"
+                      }`}
+                    >
+                      <Building size={13} />
+                      <span>Company Admin</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAdminScope("branch")}
+                      className={`px-3 py-2 rounded-xl text-xs font-semibold border flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
+                        adminScope === "branch"
+                          ? "bg-amber-600 text-white border-amber-600 shadow-xs font-bold"
+                          : "bg-zinc-50 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100"
+                      }`}
+                    >
+                      <MapPin size={13} />
+                      <span>Single Branch Admin</span>
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-zinc-400 mt-1">
+                    {adminScope === "branch" 
+                      ? "📍 Single-Branch Admin will be locked exclusively to 1 branch across all billing, leads, clients & team." 
+                      : "🏢 Company Admin can manage all branches under selected companies."}
+                  </p>
                 </div>
-              </div>
+              )}
+
+              {/* Multi-Company Selector for Company Admin or Non-Branch-Admin Roles */}
+              {(role !== "Admin" || adminScope === "company") && !isCurrentBranchAdmin && (
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5 flex items-center gap-1.5">
+                    <Building size={14} /> Assign to Companies * ({selectedCompanyIds.length} Selected)
+                  </label>
+                  <div className="p-2 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                    {availableCompanies.map((c) => {
+                      const cIdNorm = String(c.id).toLowerCase().trim()
+                      const cSlugNorm = String(c.slug || "").toLowerCase().trim()
+                      const isChecked = selectedCompanyIds.some(id => {
+                        const norm = String(id).toLowerCase().trim()
+                        return norm === cIdNorm || norm === cSlugNorm
+                      })
+                      return (
+                        <button
+                          type="button"
+                          key={c.id}
+                          onClick={() => handleToggleCompany(c.id)}
+                          className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border transition-all cursor-pointer ${
+                            isChecked
+                              ? "bg-blue-600 text-white border-blue-600 shadow-2xs font-bold"
+                              : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:border-zinc-400"
+                          }`}
+                        >
+                          <span>{c.logo || "🏢"}</span>
+                          <span>{c.name}</span>
+                          {isChecked && <Check size={11} />}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Branch Selector */}
+            {/* Branch Assignment Section */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5 flex items-center justify-between">
                   <span className="flex items-center gap-1.5">
-                    <MapPin size={13} className="text-amber-500 shrink-0" /> Assigned Branch / Location
+                    <MapPin size={13} className="text-amber-500 shrink-0" /> Assigned Branch / Location {adminScope === "branch" || isCurrentBranchAdmin ? "*" : ""}
                   </span>
-                  <span className="text-[10px] text-zinc-400 font-normal">
-                    {availableBranches.length} available
-                  </span>
+                  {isCurrentBranchAdmin ? (
+                    <span className="text-[10px] text-amber-600 font-bold bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800">
+                      🔒 Locked to your branch
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-zinc-400 font-normal">
+                      {branches.length} branches available
+                    </span>
+                  )}
                 </label>
                 
-                <select
-                  value={selectedBranchId}
-                  onChange={(e) => setSelectedBranchId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs focus:outline-hidden font-medium"
-                >
-                  <option value="">🏢 All Branches / Main Headquarters</option>
-                  {availableBranches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      📍 {b.name} {b.city ? `(${b.city})` : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
-                  Department / Unit
-                </label>
-                <input
-                  type="text"
-                  value={department}
-                  onChange={(e) => setDepartment(e.target.value)}
-                  placeholder="e.g. Engineering & Delivery"
-                  className="w-full px-3 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs focus:outline-hidden"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
-                  Department / Unit
-                </label>
-                <input
-                  type="text"
-                  value={department}
-                  onChange={(e) => setDepartment(e.target.value)}
-                  placeholder="e.g. Software Engineering & Delivery"
-                  className="w-full px-3.5 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs focus:outline-hidden"
-                />
+                {isCurrentBranchAdmin ? (
+                  <div className="w-full px-3 py-2 rounded-xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 text-xs font-bold text-amber-900 dark:text-amber-300 flex items-center justify-between">
+                    <span>📍 {branches.find(b => String(b.id) === String(currentUser?.branchId))?.name || currentUser?.branchId || "Your Assigned Branch"}</span>
+                    <span className="text-[10px] text-amber-600">Fixed</span>
+                  </div>
+                ) : (
+                  <select
+                    value={selectedBranchId}
+                    onChange={(e) => {
+                      const bId = e.target.value
+                      setSelectedBranchId(bId)
+                      if (bId) {
+                        const matched = branches.find((b) => String(b.id).toLowerCase() === String(bId).toLowerCase())
+                        if (matched && matched.companyId) {
+                          setSelectedCompanyIds([matched.companyId])
+                        }
+                      }
+                    }}
+                    required={adminScope === "branch"}
+                    className={`w-full px-3 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800 border text-xs focus:outline-hidden font-medium ${
+                      adminScope === "branch" && !selectedBranchId
+                        ? "border-amber-400 focus:ring-amber-500"
+                        : "border-zinc-200 dark:border-zinc-700 focus:ring-blue-500"
+                    }`}
+                  >
+                    <option value="">{adminScope === "branch" ? "⚠️ Select Branch for Single-Branch Admin *" : "🏢 All Branches / Main Headquarters"}</option>
+                    {(adminScope === "branch" ? branches : availableBranches).map((b) => {
+                      const comp = companies.find(c => String(c.id) === String(b.companyId))
+                      return (
+                        <option key={b.id} value={b.id}>
+                          📍 {b.name} {b.city ? `(${b.city})` : ""} {comp ? `— ${comp.name}` : ""}
+                        </option>
+                      )
+                    })}
+                  </select>
+                )}
+                {adminScope === "branch" && selectedBranchId && (
+                  <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-1 flex items-center gap-1">
+                    <Check size={11} /> Auto-linked to parent company: {
+                      companies.find(c => {
+                        const matchedB = branches.find(b => String(b.id) === String(selectedBranchId))
+                        return String(c.id) === String(matchedB?.companyId)
+                      })?.name || "SAAMPARK Technology"
+                    }
+                  </p>
+                )}
               </div>
 
               <div>
@@ -736,6 +803,19 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
+                <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                  Department / Unit
+                </label>
+                <input
+                  type="text"
+                  value={department}
+                  onChange={(e) => setDepartment(e.target.value)}
+                  placeholder="e.g. Sales, Billing & Operations"
+                  className="w-full px-3.5 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs focus:outline-hidden"
+                />
+              </div>
+
+              <div>
                 <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5 flex items-center gap-1.5">
                   <Lock size={14} /> Initial Login Password *
                 </label>
@@ -748,7 +828,9 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
                   className="w-full px-3.5 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs font-mono focus:outline-hidden"
                 />
               </div>
+            </div>
 
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5 flex items-center gap-1.5">
                   <UserCheck size={14} /> Account Status

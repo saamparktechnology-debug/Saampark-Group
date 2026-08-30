@@ -92,43 +92,55 @@ export default function UsersMain() {
     }
 
     const targetComp = (activeCompanyId || user?.companyId || "").toLowerCase().trim()
-    const targetBranch = activeBranchId
+    const targetBranch = user?.branchId || activeBranchId
 
     let filtered = users
     if (!isSuperAdminLoggedIn) {
       filtered = filtered.filter((u) => u.role !== "Super Admin")
 
-      if (targetComp && targetComp !== "all") {
-        filtered = filtered.filter((u) => {
-          const uCompIds = (u.companyIds && u.companyIds.length > 0)
-            ? u.companyIds.map(id => String(id).toLowerCase().trim())
-            : [String(u.companyId || "tech").toLowerCase().trim()]
-          return uCompIds.includes(targetComp)
-        })
-      }
-
-      if (targetBranch) {
-        const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === targetBranch.toLowerCase())
-        const targetBranchId = String(targetBranchObj?.id || targetBranch).toLowerCase().trim()
-        const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
+      if (user?.branchId) {
+        const uBranchNorm = String(user.branchId).toLowerCase().trim()
+        const targetBranchObj = branches.find(b => b.id === user.branchId || b.name.toLowerCase() === uBranchNorm)
+        const branchNameNorm = targetBranchObj?.name?.toLowerCase().trim() || ""
 
         filtered = filtered.filter((u) => {
-          const uBranchIds = (u.branchIds && u.branchIds.length > 0)
-            ? u.branchIds.map(id => String(id).toLowerCase().trim())
-            : (u.branchId ? [String(u.branchId).toLowerCase().trim()] : [])
-          const uBranchName = String(u.branchName || "").toLowerCase().trim()
-
-          return (
-            uBranchIds.includes(targetBranchId) ||
-            (targetBranchName && uBranchIds.includes(targetBranchName)) ||
-            String(u.branchId || "").toLowerCase().trim() === targetBranchId ||
-            (targetBranchName && (uBranchName === targetBranchName || String(u.branchId || "").toLowerCase().trim() === targetBranchName))
-          )
+          const ub = String(u.branchId || "").toLowerCase().trim()
+          const ubn = String(u.branchName || "").toLowerCase().trim()
+          return ub === uBranchNorm || (branchNameNorm && (ub === branchNameNorm || ubn === branchNameNorm))
         })
+      } else {
+        if (targetComp && targetComp !== "all") {
+          filtered = filtered.filter((u) => {
+            const uCompIds = (u.companyIds && u.companyIds.length > 0)
+              ? u.companyIds.map(id => String(id).toLowerCase().trim())
+              : [String(u.companyId || "tech").toLowerCase().trim()]
+            return uCompIds.includes(targetComp)
+          })
+        }
+
+        if (targetBranch) {
+          const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === targetBranch.toLowerCase())
+          const targetBranchId = String(targetBranchObj?.id || targetBranch).toLowerCase().trim()
+          const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
+
+          filtered = filtered.filter((u) => {
+            const uBranchIds = (u.branchIds && u.branchIds.length > 0)
+              ? u.branchIds.map(id => String(id).toLowerCase().trim())
+              : (u.branchId ? [String(u.branchId).toLowerCase().trim()] : [])
+            const uBranchName = String(u.branchName || "").toLowerCase().trim()
+
+            return (
+              uBranchIds.includes(targetBranchId) ||
+              (targetBranchName && uBranchIds.includes(targetBranchName)) ||
+              String(u.branchId || "").toLowerCase().trim() === targetBranchId ||
+              (targetBranchName && (uBranchName === targetBranchName || String(u.branchId || "").toLowerCase().trim() === targetBranchName))
+            )
+          })
+        }
       }
     }
 
-    return filtered.length > 0 ? filtered : users
+    return filtered.length > 0 ? filtered : (user?.branchId ? [] : users)
   }, [users, isSuperAdminLoggedIn, isClientRole, user, activeCompanyId, activeBranchId, branches])
 
   // Metric counts based on visible users

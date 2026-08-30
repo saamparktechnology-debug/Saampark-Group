@@ -19,7 +19,7 @@ import { executeWithFeedback, useActionFeedbackStore } from "@/store/useActionFe
 import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
 
 export default function EstimatesPage() {
-  const { user, activeCompanyId } = useAuthStore()
+  const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
   
   const canAddEstimate = canPerformAction(user, "Estimates", "add")
@@ -90,9 +90,23 @@ export default function EstimatesPage() {
 
   // Client vs Admin filtering
   const displayedEstimates = React.useMemo(() => {
-    if (!isClientRole) return estimates
-    return estimates.filter((e) => isRecordAssignedToClient(e, user))
-  }, [estimates, isClientRole, user])
+    let filtered = estimates
+    if (isClientRole) {
+      filtered = filtered.filter((e) => isRecordAssignedToClient(e, user))
+    }
+    const targetBranch = user?.branchId || activeBranchId
+    if (targetBranch) {
+      const bObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === targetBranch.toLowerCase())
+      const bId = String(bObj?.id || targetBranch).toLowerCase().trim()
+      const bName = bObj?.name?.toLowerCase().trim() || ""
+      filtered = filtered.filter((e) => {
+        const eb = String(e.branchId || (e as any).branch_id || "").toLowerCase().trim()
+        const ebn = String(e.branchName || (e as any).branch_name || "").toLowerCase().trim()
+        return !eb || eb === bId || (bName && (eb === bName || ebn === bName))
+      })
+    }
+    return filtered
+  }, [estimates, isClientRole, user, activeBranchId, branches])
 
   const filteredEstimates = React.useMemo(() => {
     return displayedEstimates.filter((e) => {
@@ -118,8 +132,8 @@ export default function EstimatesPage() {
       if (s.id !== id) return s
       const updated = { ...s, [field]: value }
       if (field === "quantity" || field === "unitPrice") {
-        const q = field === "quantity" ? Number(value) : s.quantity
-        const p = field === "unitPrice" ? Number(value) : s.unitPrice
+        const q = Number(updated.quantity) || 1
+        const p = Number(updated.unitPrice) || 0
         updated.total = q * p
       }
       return updated
@@ -127,12 +141,15 @@ export default function EstimatesPage() {
   }
 
   const handleRemoveServiceRow = (id: string) => {
-    if (services.length <= 1) return
+    if (services.length <= 1) {
+      alert("At least one service line item is required.")
+      return
+    }
     setServices(services.filter(s => s.id !== id))
   }
 
   // Calculate totals
-  const subtotal = services.reduce((sum, s) => sum + (s.total || 0), 0)
+  const subtotal = services.reduce((sum, s) => sum + (Number(s.total) || 0), 0)
   const gstAmount = Math.round(subtotal * 0.18)
   const grandTotal = subtotal + gstAmount
   const formattedGrandTotal = `₹${grandTotal.toLocaleString("en-IN")}`
@@ -143,6 +160,9 @@ export default function EstimatesPage() {
       alert("Please provide Estimate Title and Client.")
       return
     }
+
+    const assignedBranchId = user?.branchId || activeBranchId || undefined
+    const assignedBranchName = branches.find(b => b.id === assignedBranchId)?.name || undefined
 
     await executeWithFeedback(async () => {
       const created = await addEstimate({
@@ -160,6 +180,9 @@ export default function EstimatesPage() {
         status: "Sent",
         notes: notes || "Terms: 50% advance on approval, balance on final delivery.",
         createdAdmin: user?.name || "Admin",
+        companyId: targetComp,
+        branchId: assignedBranchId,
+        branchName: assignedBranchName,
       })
 
       setIsCreateModalOpen(false)

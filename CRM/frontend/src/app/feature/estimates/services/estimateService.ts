@@ -29,6 +29,8 @@ export interface EstimateItem {
   notes?: string
   companyId?: string
   branchId?: string
+  branchName?: string
+  branchCode?: string
   createdAdmin?: string
   acceptedAt?: string
   revisionNote?: string

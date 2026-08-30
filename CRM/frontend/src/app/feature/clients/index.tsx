@@ -71,7 +71,7 @@ export default function ClientsMain() {
       // Always read fresh from store — avoids stale closure after company/branch switch
       const { activeCompanyId: freshCompanyId, activeBranchId: freshBranchId, branches: freshBranches, user: freshUser } = useAuthStore.getState()
       const targetComp = (freshCompanyId || freshUser?.companyId || "").toLowerCase().trim()
-      const targetBranch = freshBranchId
+      const targetBranch = freshUser?.branchId || freshBranchId
 
       const targetBranchObj = freshBranches.find(b => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
       const targetBranchId = String(targetBranchObj?.id || targetBranch || "").toLowerCase().trim()

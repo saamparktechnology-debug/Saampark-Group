@@ -163,9 +163,10 @@ export default function ExpensesMain() {
         (e.projectName && e.projectName.toLowerCase().includes(searchQuery.toLowerCase()))
 
       if (!matchSearch) return false
-      if (activeBranchId) {
-        const targetBranchObj = branches.find(b => b.id === activeBranchId || b.name.toLowerCase() === activeBranchId.toLowerCase())
-        const targetBranchId = String(targetBranchObj?.id || activeBranchId).toLowerCase().trim()
+      const targetBranch = user?.branchId || activeBranchId
+      if (targetBranch) {
+        const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === targetBranch.toLowerCase())
+        const targetBranchId = String(targetBranchObj?.id || targetBranch).toLowerCase().trim()
         const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
 
         const eBranch = String((e as any).branchId || (e as any).branch_id || "").toLowerCase().trim()
@@ -180,7 +181,7 @@ export default function ExpensesMain() {
       if (selectedCategory === "all") return true
       return e.category === selectedCategory
     })
-  }, [expenses, searchQuery, selectedCategory, activeBranchId, branches])
+  }, [expenses, searchQuery, selectedCategory, activeBranchId, branches, user?.branchId])
 
   // Project-specific expenses
   const projectExpenses = React.useMemo(() => {

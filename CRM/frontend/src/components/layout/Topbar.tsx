@@ -317,21 +317,26 @@ export function Topbar() {
                   <span className="truncate max-w-[120px]">
                     {branches.find(b => b.id === activeBranchId)?.name || 'Branch'}
                   </span>
-                  <button
-                    type="button"
-                    onClick={(e) => { stop(e); switchBranch(null) }}
-                    className="hover:text-rose-500 ml-0.5 cursor-pointer text-xs leading-none"
-                    title="Clear branch filter (view all branches)"
-                  >
-                    ×
-                  </button>
+                  {!user?.branchId && user?.role === "Super Admin" && (
+                    <button
+                      type="button"
+                      onClick={(e) => { stop(e); switchBranch(null) }}
+                      className="hover:text-rose-500 ml-0.5 cursor-pointer text-xs leading-none"
+                      title="Clear branch filter (view all branches)"
+                    >
+                      ×
+                    </button>
+                  )}
+                  {user?.branchId && (
+                    <span className="text-[9px] text-amber-500 font-mono ml-0.5">🔒</span>
+                  )}
                 </div>
               )}
             </div>
 
             {/* Company & Branch Dropdown Menu */}
             <AnimatePresence>
-              {showCompanyMenu && (allowedCompanies.length > 1 || branches.some(b => b.companyId === activeCompany.id || b.companyId === activeCompany.slug)) && (
+              {showCompanyMenu && !user?.branchId && (allowedCompanies.length > 1 || branches.some(b => b.companyId === activeCompany.id || b.companyId === activeCompany.slug)) && (
                 <motion.div
                   initial={{ opacity: 0, y: 8, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}

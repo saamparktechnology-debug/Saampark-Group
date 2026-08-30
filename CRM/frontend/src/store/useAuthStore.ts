@@ -949,18 +949,24 @@ export const useAuthStore = create<AuthState>()(
         const { user } = get()
         if (!user) return
 
+        // If the user is assigned strictly to a single branch (e.g. Branch Admin / Branch Staff), lock them to their branch
+        const isSingleBranchUser = Boolean(user.branchId && user.role !== 'Super Admin')
+        if (isSingleBranchUser && branchId && String(branchId).toLowerCase().trim() !== String(user.branchId).toLowerCase().trim()) {
+          return // Block switching to other branches
+        }
+
         const canSwitch =
           user.role === 'Super Admin' ||
-          user.role === 'Admin' ||
+          (!user.branchId && user.role === 'Admin') ||
           !branchId ||
           user.branchId === branchId ||
           (user.branchIds && user.branchIds.includes(branchId))
 
         if (canSwitch) {
           invalidateModuleCache()
-          set({ activeBranchId: branchId })
+          set({ activeBranchId: isSingleBranchUser ? (user.branchId || null) : branchId })
           if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('saampark_branch_switched', { detail: branchId }))
+            window.dispatchEvent(new CustomEvent('saampark_branch_switched', { detail: isSingleBranchUser ? user.branchId : branchId }))
             window.dispatchEvent(new CustomEvent('saampark_data_synced'))
             window.dispatchEvent(new Event('storage'))
           }
@@ -1055,6 +1061,8 @@ export const useAuthStore = create<AuthState>()(
               res.user?.allowedModules ||
               (resPerms && Array.isArray(resPerms.allowedModules) ? resPerms.allowedModules : undefined)
 
+            const userBranch = res.user?.branch_id || res.user?.branchId || res.user?.branch || undefined
+
             const userObj: User = {
               id: res.user?.id || 'u_live',
               name: res.user?.full_name || res.user?.name || res.user?.email || 'User',
@@ -1062,17 +1070,22 @@ export const useAuthStore = create<AuthState>()(
               role: role,
               companyId: res.user?.company_id || parsedCompanyIds[0] || 'tech',
               companyIds: parsedCompanyIds,
+              branchId: userBranch,
+              branchName: res.user?.branch_name || res.user?.branchName || undefined,
               avatar: res.user?.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${res.user?.email || 'user'}`,
               phone: res.user?.phone,
               allowedModules: userAllowedMods,
               permissions: resPerms || res.user?.permissions,
             }
 
+            const initialBranchId = (role !== 'Super Admin' && userBranch) ? userBranch : null
+
             set({
               isAuthenticated: true,
               token: res.token,
               user: userObj,
               activeCompanyId: userObj.companyId || 'tech',
+              activeBranchId: initialBranchId,
             })
 
             // Fetch dynamic company list on login

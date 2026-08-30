@@ -169,16 +169,15 @@ export default function LeadsMain() {
     // Read fresh from store to avoid stale closure after company/branch switch
     const { activeCompanyId: freshCompanyId, activeBranchId: freshBranchId, branches: freshBranches, user: freshUser } = useAuthStore.getState()
     const userComp = (freshCompanyId || freshUser?.companyId || "").toLowerCase().trim()
-    const targetBranch = freshBranchId
+    const targetBranch = freshUser?.branchId || freshBranchId
 
-
-    // Admins see all leads across companies and branches
+    // Admins see all leads across companies and branches (or scoped to their assigned branch)
     if (isSuperOrAdmin) {
       const res = leads.filter((l) => {
         const isClientPrivate = (l as any).isClientPrivate === true || l.createdByRole === "Clients"
         if (isClientPrivate) return false
 
-        if (userComp && userComp !== "all" && freshUser?.role !== "Super Admin") {
+        if (userComp && userComp !== "all" && freshUser?.role !== "Super Admin" && !freshUser?.branchId) {
           const lComp = (l.companyId || (l as any).company || "tech").toLowerCase().trim()
           if (lComp !== userComp && !(userComp === "tech" && !l.companyId)) return false
         }
@@ -199,7 +198,7 @@ export default function LeadsMain() {
 
         return true
       })
-      return res.length > 0 ? res : leads
+      return res.length > 0 ? res : (freshUser?.branchId ? [] : leads)
     }
 
     const uName = (user.name || (user as any).full_name || "").toLowerCase().trim()

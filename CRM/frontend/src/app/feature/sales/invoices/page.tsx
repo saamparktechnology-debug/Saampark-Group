@@ -828,9 +828,9 @@ export default function InvoicesPage() {
         status: finalStatus,
         billedBy: user?.name || "Admin",
         companyId: targetComp,
-        branchId: activeBranchId || selectedSb?.parentBranchId || undefined,
-        branchName: branches.find(b => b.id === (activeBranchId || selectedSb?.parentBranchId) || b.name.toLowerCase() === (activeBranchId || "").toLowerCase())?.name || undefined,
-        branchCode: branches.find(b => b.id === (activeBranchId || selectedSb?.parentBranchId) || b.name.toLowerCase() === (activeBranchId || "").toLowerCase())?.code || undefined,
+        branchId: user?.branchId || activeBranchId || selectedSb?.parentBranchId || undefined,
+        branchName: branches.find(b => b.id === (user?.branchId || activeBranchId || selectedSb?.parentBranchId) || b.name.toLowerCase() === (user?.branchId || activeBranchId || "").toLowerCase())?.name || undefined,
+        branchCode: branches.find(b => b.id === (user?.branchId || activeBranchId || selectedSb?.parentBranchId) || b.name.toLowerCase() === (user?.branchId || activeBranchId || "").toLowerCase())?.code || undefined,
         subBranchId: selectedSb?.id,
         subBranchName: selectedSb?.name,
         subBranchCode: selectedSb?.code,
@@ -928,7 +928,7 @@ export default function InvoicesPage() {
   // Client-specific vs Admin filtered invoices
   const displayedInvoices = React.useMemo(() => {
     const userComp = (activeCompanyId || user?.companyId || "").toLowerCase().trim()
-    const targetBranch = activeBranchId
+    const targetBranch = user?.branchId || activeBranchId
 
     const targetBranchObj = (branches as any[]).find((b: any) => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
     const targetBranchId = String(targetBranchObj?.id || targetBranch || "").toLowerCase().trim()
@@ -938,8 +938,10 @@ export default function InvoicesPage() {
       if (!targetBranch) return true
       const iBranch = String(i.branchId || i.branch_id || "").toLowerCase().trim()
       const iBranchName = String(i.branchName || i.branch_name || "").toLowerCase().trim()
+      const iBranchCode = String(i.branchCode || i.branch_code || "").toLowerCase().trim()
       return (iBranch && (iBranch === targetBranchId || (targetBranchName && iBranch === targetBranchName))) ||
-             (iBranchName && (iBranchName === targetBranchName || iBranchName === targetBranchId))
+             (iBranchName && (iBranchName === targetBranchName || iBranchName === targetBranchId)) ||
+             (iBranchCode && targetBranchObj?.code && iBranchCode === targetBranchObj.code.toLowerCase().trim())
     }
 
     let filtered = invoices
@@ -949,7 +951,7 @@ export default function InvoicesPage() {
         return isRecordAssignedToClient(i, user)
       })
     } else {
-      if (userComp && userComp !== "all") {
+      if (userComp && userComp !== "all" && !user?.branchId) {
         filtered = filtered.filter((i) => {
           const iComp = (i.companyId || (i as any).company || "tech").toLowerCase().trim()
           return iComp === userComp || (userComp === "tech" && !i.companyId)
@@ -960,7 +962,7 @@ export default function InvoicesPage() {
       }
     }
     return filtered
-  }, [invoices, isClientRole, clientEmailNorm, clientNameNorm, activeCompanyId, activeBranchId, branches, user?.companyId])
+  }, [invoices, isClientRole, clientEmailNorm, clientNameNorm, activeCompanyId, activeBranchId, branches, user?.companyId, user?.branchId])
 
   // Summary Metrics based on displayed invoices
   const totalInvoicedNum = displayedInvoices.reduce((sum, i) => sum + (parseInt((i.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0), 0)
