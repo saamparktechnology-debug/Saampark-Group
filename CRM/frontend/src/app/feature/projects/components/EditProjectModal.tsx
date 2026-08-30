@@ -4,7 +4,7 @@ import * as React from "react"
 import { X, Check, Bold, Italic, Underline, List, ListOrdered, Table, Link2, Code, Sparkles, Minus, Maximize2, Users, UserCheck } from "lucide-react"
 import { Project, ProjectMember, ProjectStatus, ProjectType } from "../types"
 import { updateProject } from "../services/projectService"
-import { getUsers } from "@/app/feature/users/services/userService"
+import { UserService } from "@/services/apiServices"
 
 interface EditProjectModalProps {
   isOpen: boolean
@@ -30,17 +30,26 @@ export function EditProjectModal({
   const [newLabelInput, setNewLabelInput] = React.useState("")
   const [status, setStatus] = React.useState<ProjectStatus>("Open")
   const [selectedMemberIds, setSelectedMemberIds] = React.useState<string[]>([])
+  const [memberSearchQuery, setMemberSearchQuery] = React.useState("")
   const [teamMembers, setTeamMembers] = React.useState<any[]>([])
   const [isSubmitting, setIsSubmitting] = React.useState(false)
 
   React.useEffect(() => {
     if (isOpen) {
-      getUsers("all").then((allUsers) => {
-        const onlyTeam = (allUsers || []).filter((u) => {
-          const role = (u.role || "").toLowerCase().trim()
-          return !role.includes("client") && u.status !== "Inactive"
-        })
-        setTeamMembers(onlyTeam)
+      UserService.getTeamMembers().then((allUsers) => {
+        if (Array.isArray(allUsers)) {
+          const onlyTeam = allUsers.filter((u) => {
+            const role = (u.role || u.role_name || "").toLowerCase().trim()
+            return !role.includes("client") && u.status !== "Inactive"
+          }).map(u => ({
+            id: String(u.id || u._id),
+            name: u.full_name || u.name || "Team Member",
+            role: u.role_name || u.role || u.department || "Developer",
+            email: u.email || "",
+            avatar: u.avatar_url || u.avatarUrl || u.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${u.full_name || u.name}`,
+          }))
+          setTeamMembers(onlyTeam)
+        }
       }).catch(() => {})
     }
   }, [isOpen])
@@ -63,8 +72,9 @@ export function EditProjectModal({
   if (!isOpen || !project) return null
 
   const handleToggleMember = (mem: any) => {
+    const memId = String(mem.id)
     setSelectedMemberIds((prev) =>
-      prev.includes(mem.id) ? prev.filter((id) => id !== mem.id) : [...prev, mem.id]
+      prev.includes(memId) ? prev.filter((id) => id !== memId) : [...prev, memId]
     )
   }
 
@@ -88,12 +98,12 @@ export function EditProjectModal({
     setIsSubmitting(true)
     try {
       const assignedMembers: ProjectMember[] = teamMembers
-        .filter((m) => selectedMemberIds.includes(m.id))
+        .filter((m) => selectedMemberIds.some(id => String(id).toLowerCase() === String(m.id).toLowerCase()))
         .map((m) => ({
           id: String(m.id),
           name: m.name,
-          role: m.department || "Developer",
-          avatar: m.avatarUrl || m.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${m.name}`,
+          role: m.role || "Developer",
+          avatar: m.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${m.name}`,
           email: m.email,
         }))
 
@@ -348,6 +358,90 @@ export function EditProjectModal({
                   onChange={(e) => setPrice(e.target.value)}
                   className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 font-mono"
                 />
+              </div>
+            </div>
+          </div>
+
+          {/* Assigned Team Members Section */}
+          <div className="grid grid-cols-4 items-start gap-4">
+            <label className="text-zinc-500 font-medium pt-2 flex items-center gap-1.5">
+              <Users size={14} className="text-blue-500" />
+              <span>Assigned Team</span>
+            </label>
+            <div className="col-span-3 space-y-2 p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
+              {/* Selected Members Chips */}
+              <div className="flex flex-wrap gap-1.5 min-h-[28px] items-center">
+                {selectedMemberIds.length === 0 ? (
+                  <span className="text-[11px] text-zinc-400 italic">No team members assigned yet.</span>
+                ) : (
+                  teamMembers
+                    .filter(m => selectedMemberIds.includes(String(m.id)))
+                    .map(m => (
+                      <span
+                        key={m.id}
+                        className="inline-flex items-center gap-1.5 pl-1.5 pr-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/80 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-[11px] font-medium"
+                      >
+                        <img src={m.avatar} alt={m.name} className="w-4 h-4 rounded-full object-cover" />
+                        <span>{m.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleMember(m)}
+                          className="hover:text-blue-900 dark:hover:text-white cursor-pointer ml-0.5"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))
+                )}
+              </div>
+
+              {/* Member Search Bar */}
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Filter team members..."
+                  value={memberSearchQuery}
+                  onChange={(e) => setMemberSearchQuery(e.target.value)}
+                  className="w-full px-2.5 py-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Team Members Checkbox List */}
+              <div className="max-h-36 overflow-y-auto space-y-1 divide-y divide-zinc-100 dark:divide-zinc-800">
+                {teamMembers
+                  .filter(m => {
+                    if (!memberSearchQuery.trim()) return true
+                    const q = memberSearchQuery.toLowerCase().trim()
+                    return m.name.toLowerCase().includes(q) || m.role.toLowerCase().includes(q) || m.email.toLowerCase().includes(q)
+                  })
+                  .map(m => {
+                    const isSelected = selectedMemberIds.includes(String(m.id))
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => handleToggleMember(m)}
+                        className={`w-full flex items-center justify-between p-1.5 rounded-lg text-left transition-colors cursor-pointer text-xs ${
+                          isSelected 
+                            ? "bg-blue-50 dark:bg-blue-950/50 text-blue-900 dark:text-blue-200 font-semibold" 
+                            : "hover:bg-zinc-100 dark:hover:bg-zinc-750 text-zinc-700 dark:text-zinc-300"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <img src={m.avatar} alt={m.name} className="w-5 h-5 rounded-full object-cover" />
+                          <div>
+                            <div className="font-medium leading-none">{m.name}</div>
+                            <div className="text-[10px] text-zinc-400 mt-0.5">{m.role} {m.email ? `• ${m.email}` : ''}</div>
+                          </div>
+                        </div>
+                        <div className={`w-4 h-4 rounded flex items-center justify-center border text-[10px] ${
+                          isSelected ? "bg-blue-600 border-blue-600 text-white" : "border-zinc-300 dark:border-zinc-600"
+                        }`}>
+                          {isSelected && "✓"}
+                        </div>
+                      </button>
+                    )
+                  })}
               </div>
             </div>
           </div>
