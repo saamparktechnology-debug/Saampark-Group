@@ -24,7 +24,8 @@ import {
   FolderPlus,
   Calculator,
   Tag,
-  Pencil
+  Pencil,
+  MapPin
 } from "lucide-react"
 import { ColumnDef } from "@tanstack/react-table"
 
@@ -124,14 +125,41 @@ export default function InvoicesPage() {
   const [autoCreateSubscription, setAutoCreateSubscription] = React.useState<boolean>(true)
 
   // Invoice Type (GST vs Non-GST) and Issuing Company
+  const isBranchLocked = Boolean(user?.branchId && user?.role !== "Super Admin")
   const [invoiceType, setInvoiceType] = React.useState<"gst" | "nongst">("gst")
   const [isNonGstMode, setIsNonGstMode] = React.useState(false)
   const [invoiceCompanyId, setInvoiceCompanyId] = React.useState<string>("tech")
+  const [invoiceBranchId, setInvoiceBranchId] = React.useState<string>(user?.branchId || activeBranchId || "")
   const [invoiceSubBranchId, setInvoiceSubBranchId] = React.useState<string>("")
   const [editInvoiceType, setEditInvoiceType] = React.useState<"gst" | "nongst">("gst")
   const [editCompanyId, setEditCompanyId] = React.useState<string>("tech")
+  const [editBranchId, setEditBranchId] = React.useState<string>("")
   const [editSubBranchId, setEditSubBranchId] = React.useState<string>("")
   const [editIsNonGst, setEditIsNonGst] = React.useState(false)
+
+  React.useEffect(() => {
+    if (user?.branchId && user?.role !== "Super Admin") {
+      setInvoiceBranchId(user.branchId)
+    }
+  }, [user?.branchId, user?.role])
+
+  const availableBillingBranches = React.useMemo(() => {
+    if (!branches || branches.length === 0) return []
+    const targetComp = (invoiceCompanyId || activeCompanyId || user?.companyId || "tech").toLowerCase().trim()
+    return branches.filter((b) => {
+      const bComp = String(b.companyId || "").toLowerCase().trim()
+      return bComp === targetComp || (targetComp === "tech" && !b.companyId)
+    })
+  }, [branches, invoiceCompanyId, activeCompanyId, user?.companyId])
+
+  const availableEditBranches = React.useMemo(() => {
+    if (!branches || branches.length === 0) return []
+    const targetComp = (editCompanyId || activeCompanyId || user?.companyId || "tech").toLowerCase().trim()
+    return branches.filter((b) => {
+      const bComp = String(b.companyId || "").toLowerCase().trim()
+      return bComp === targetComp || (targetComp === "tech" && !b.companyId)
+    })
+  }, [branches, editCompanyId, activeCompanyId, user?.companyId])
 
   // Dynamic Multi-Services State for Invoices
   const [invoiceServiceItems, setInvoiceServiceItems] = React.useState<any[]>([
@@ -246,6 +274,7 @@ export default function InvoicesPage() {
     const isNonGst = inv.id?.toUpperCase().startsWith("NGINV") || (inv.gstRate === 0 && (!inv.items || inv.items.every(it => !it.gstRate || it.gstRate === 0)))
     setEditInvoiceType(isNonGst ? "nongst" : "gst")
     setEditCompanyId(inv.companyId || activeCompanyId || "tech")
+    setEditBranchId(inv.branchId || (inv as any).branch_id || (isBranchLocked ? (user?.branchId || "") : ""))
     setEditingInvoice(inv)
     setEditClientName(inv.client || "")
     setEditClientEmail(inv.clientEmail || "")
@@ -457,6 +486,9 @@ export default function InvoicesPage() {
       due: `₹${dueNum.toLocaleString("en-IN")}`,
       status: calculatedStatus,
       companyId: editCompanyId || editingInvoice.companyId || activeCompanyId || "tech",
+      branchId: editBranchId || (isBranchLocked ? user?.branchId : editingInvoice.branchId) || undefined,
+      branchName: branches.find(b => b.id === (editBranchId || (isBranchLocked ? user?.branchId : editingInvoice.branchId)))?.name || editingInvoice.branchName || undefined,
+      branchCode: branches.find(b => b.id === (editBranchId || (isBranchLocked ? user?.branchId : editingInvoice.branchId)))?.code || editingInvoice.branchCode || undefined,
     }
 
     await executeWithFeedback(async () => {
@@ -828,9 +860,9 @@ export default function InvoicesPage() {
         status: finalStatus,
         billedBy: user?.name || "Admin",
         companyId: targetComp,
-        branchId: user?.branchId || activeBranchId || selectedSb?.parentBranchId || undefined,
-        branchName: branches.find(b => b.id === (user?.branchId || activeBranchId || selectedSb?.parentBranchId) || b.name.toLowerCase() === (user?.branchId || activeBranchId || "").toLowerCase())?.name || undefined,
-        branchCode: branches.find(b => b.id === (user?.branchId || activeBranchId || selectedSb?.parentBranchId) || b.name.toLowerCase() === (user?.branchId || activeBranchId || "").toLowerCase())?.code || undefined,
+        branchId: (invoiceBranchId || (isBranchLocked ? user?.branchId : (activeBranchId || selectedSb?.parentBranchId))) || undefined,
+        branchName: branches.find(b => b.id === (invoiceBranchId || (isBranchLocked ? user?.branchId : (activeBranchId || selectedSb?.parentBranchId))) || b.name.toLowerCase() === ((invoiceBranchId || user?.branchId || activeBranchId) || "").toLowerCase())?.name || undefined,
+        branchCode: branches.find(b => b.id === (invoiceBranchId || (isBranchLocked ? user?.branchId : (activeBranchId || selectedSb?.parentBranchId))) || b.name.toLowerCase() === ((invoiceBranchId || user?.branchId || activeBranchId) || "").toLowerCase())?.code || undefined,
         subBranchId: selectedSb?.id,
         subBranchName: selectedSb?.name,
         subBranchCode: selectedSb?.code,
@@ -1524,24 +1556,61 @@ export default function InvoicesPage() {
                     </button>
                   </div>
 
-                  <div>
-                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
-                      Issuing Company Entity:
-                    </label>
-                    <select
-                      value={invoiceCompanyId || activeCompanyId || "tech"}
-                      onChange={(e) => {
-                        setInvoiceCompanyId(e.target.value)
-                        setInvoiceSubBranchId("")
-                      }}
-                      className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-800 dark:text-zinc-200 font-bold"
-                    >
-                      {(companies as any[]).map((c: any) => (
-                        <option key={c.id} value={c.id}>
-                          {c.logo || "🏢"} {c.brand_name || c.name} {c.division_name ? `(${c.division_name})` : ""}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
+                        Issuing Company Entity:
+                      </label>
+                      <select
+                        value={invoiceCompanyId || activeCompanyId || "tech"}
+                        onChange={(e) => {
+                          setInvoiceCompanyId(e.target.value)
+                          setInvoiceSubBranchId("")
+                          if (!isBranchLocked) setInvoiceBranchId("")
+                        }}
+                        className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-800 dark:text-zinc-200 font-bold"
+                      >
+                        {(companies as any[]).map((c: any) => (
+                          <option key={c.id} value={c.id}>
+                            {c.logo || "🏢"} {c.brand_name || c.name} {c.division_name ? `(${c.division_name})` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Billing Branch / Location */}
+                    <div>
+                      <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-1 flex items-center justify-between">
+                        <span className="flex items-center gap-1">
+                          <MapPin size={11} className="text-amber-500" />
+                          <span>Billing Branch / Location:</span>
+                        </span>
+                        {isBranchLocked && (
+                          <span className="text-[9px] text-amber-600 font-bold bg-amber-50 dark:bg-amber-950/40 px-1 py-0.2 rounded border border-amber-200 dark:border-amber-800">
+                            🔒 Locked
+                          </span>
+                        )}
+                      </label>
+                      {isBranchLocked ? (
+                        <div className="w-full px-3 py-2 bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-xl text-zinc-800 dark:text-zinc-200 text-xs font-bold flex items-center justify-between">
+                          <span>📍 {branches.find(b => b.id === user?.branchId)?.name || user?.branchId || "Your Assigned Branch"}</span>
+                          <span className="text-[10px] text-amber-600 font-normal">Fixed</span>
+                        </div>
+                      ) : (
+                        <select
+                          value={invoiceBranchId}
+                          onChange={(e) => setInvoiceBranchId(e.target.value)}
+                          className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-800 dark:text-zinc-200 font-bold"
+                        >
+                          <option value="">🏢 Company HQ / Central Office</option>
+                          {availableBillingBranches.map((b) => (
+                            <option key={b.id} value={b.id}>
+                              📍 {b.name} {b.city ? `(${b.city})` : ""} {b.code ? `• [${b.code}]` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -2433,21 +2502,60 @@ export default function InvoicesPage() {
                     </button>
                   </div>
 
-                  <div>
-                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
-                      Issuing Company Entity:
-                    </label>
-                    <select
-                      value={editCompanyId || activeCompanyId || "tech"}
-                      onChange={(e) => setEditCompanyId(e.target.value)}
-                      className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-800 dark:text-zinc-200 font-bold"
-                    >
-                      {(companies as any[]).map((c: any) => (
-                        <option key={c.id} value={c.id}>
-                          {c.logo || "🏢"} {c.brand_name || c.name} {c.division_name ? `(${c.division_name})` : ""}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
+                        Issuing Company Entity:
+                      </label>
+                      <select
+                        value={editCompanyId || activeCompanyId || "tech"}
+                        onChange={(e) => {
+                          setEditCompanyId(e.target.value)
+                          if (!isBranchLocked) setEditBranchId("")
+                        }}
+                        className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-800 dark:text-zinc-200 font-bold"
+                      >
+                        {(companies as any[]).map((c: any) => (
+                          <option key={c.id} value={c.id}>
+                            {c.logo || "🏢"} {c.brand_name || c.name} {c.division_name ? `(${c.division_name})` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Billing Branch / Location */}
+                    <div>
+                      <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-1 flex items-center justify-between">
+                        <span className="flex items-center gap-1">
+                          <MapPin size={11} className="text-amber-500" />
+                          <span>Billing Branch / Location:</span>
+                        </span>
+                        {isBranchLocked && (
+                          <span className="text-[9px] text-amber-600 font-bold bg-amber-50 dark:bg-amber-950/40 px-1 py-0.2 rounded border border-amber-200 dark:border-amber-800">
+                            🔒 Locked
+                          </span>
+                        )}
+                      </label>
+                      {isBranchLocked ? (
+                        <div className="w-full px-3 py-2 bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-xl text-zinc-800 dark:text-zinc-200 text-xs font-bold flex items-center justify-between">
+                          <span>📍 {branches.find(b => b.id === user?.branchId)?.name || user?.branchId || "Your Assigned Branch"}</span>
+                          <span className="text-[10px] text-amber-600 font-normal">Fixed</span>
+                        </div>
+                      ) : (
+                        <select
+                          value={editBranchId}
+                          onChange={(e) => setEditBranchId(e.target.value)}
+                          className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-800 dark:text-zinc-200 font-bold"
+                        >
+                          <option value="">🏢 Company HQ / Central Office</option>
+                          {availableEditBranches.map((b) => (
+                            <option key={b.id} value={b.id}>
+                              📍 {b.name} {b.city ? `(${b.city})` : ""} {b.code ? `• [${b.code}]` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
                   </div>
                 </div>
 
