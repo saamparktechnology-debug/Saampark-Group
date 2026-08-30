@@ -709,4 +709,69 @@ export const generateSubscriptionInvoice = async (
   return newInv
 }
 
+export const deleteInstallmentRecord = async (id: string, companyId?: string): Promise<boolean> => {
+  const strId = String(id).trim()
+  const lowerId = strId.toLowerCase()
+  const upperId = strId.toUpperCase()
+
+  // 1. Mark as globally deleted across variations
+  await markGlobalItemDeleted(strId, "installments")
+  await markGlobalItemDeleted(lowerId, "installments")
+  await markGlobalItemDeleted(upperId, "installments")
+  await markGlobalItemDeleted(`inst_proj_${strId}`, "installments")
+
+  // 2. Cascade delete from storage
+  const comp = companyId || "all"
+  const current = await fetchModuleDataFromDB<InstallmentItem[]>("installments", [], comp)
+  const filtered = (Array.isArray(current) ? current : []).filter(item => String(item.id).toLowerCase().trim() !== lowerId)
+  await saveModuleDataToDB("installments", filtered, comp)
+
+  if (comp !== "all") {
+    const all = await fetchModuleDataFromDB<InstallmentItem[]>("installments", [], "all")
+    const allFiltered = (Array.isArray(all) ? all : []).filter(item => String(item.id).toLowerCase().trim() !== lowerId)
+    await saveModuleDataToDB("installments", allFiltered, "all")
+  }
+
+  // 3. Cascade delete any linked invoices
+  try {
+    const invoices = await fetchModuleDataFromDB<any[]>("invoices", [], "all")
+    const updatedInvoices = (Array.isArray(invoices) ? invoices : []).filter(inv => {
+      const invEmiId = String(inv.emiContractId || inv.orderId || inv.subscriptionId || "").toLowerCase().trim()
+      return invEmiId !== lowerId
+    })
+    if (updatedInvoices.length !== invoices.length) {
+      await saveModuleDataToDB("invoices", updatedInvoices, "all")
+      await saveModuleDataToDB("invoices", updatedInvoices, comp)
+    }
+  } catch (err) {
+    console.warn("Cascade invoice delete from installment warning:", err)
+  }
+
+  // 4. Cascade delete linked payments
+  try {
+    const payments = await fetchModuleDataFromDB<any[]>("payments", [], "all")
+    const updatedPayments = (Array.isArray(payments) ? payments : []).filter(pay => {
+      const payEmiId = String(pay.contractId || pay.emiId || pay.referenceId || pay.invoiceId || "").toLowerCase().trim()
+      return payEmiId !== lowerId
+    })
+    if (updatedPayments.length !== payments.length) {
+      await saveModuleDataToDB("payments", updatedPayments, "all")
+      await saveModuleDataToDB("payments", updatedPayments, comp)
+    }
+  } catch (err) {
+    console.warn("Cascade payment delete from installment warning:", err)
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("saampark_data_synced"))
+    window.dispatchEvent(new Event("saampark_installments_updated"))
+    window.dispatchEvent(new Event("saampark_invoices_updated"))
+    window.dispatchEvent(new Event("saampark_payments_updated"))
+    window.dispatchEvent(new Event("storage"))
+  }
+
+  return true
+}
+
+
 

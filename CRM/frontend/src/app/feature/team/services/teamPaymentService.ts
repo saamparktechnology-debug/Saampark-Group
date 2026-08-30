@@ -208,22 +208,19 @@ export const getProjectWiseUserEarnings = async (
 
     const projectTotal = parseInt(String(p.price || p.totalAmount || "0").replace(/[^0-9]/g, "")) || 0
     let clientPaid = 0
-    if (p.paymentStatus === "Paid") clientPaid = projectTotal
-    else if (p.paymentStatus === "Advance Received" || p.paymentStatus === "Partially Paid") {
-      clientPaid = p.advanceAmount ? Number(p.advanceAmount) : Math.round(projectTotal * 0.4)
+    if (p.paymentStatus === "Paid") {
+      clientPaid = projectTotal
+    } else if (p.paymentStatus === "Advance Received" || p.paymentStatus === "Partially Paid") {
+      clientPaid = p.advanceAmount ? Number(p.advanceAmount) : 0
     } else {
-      clientPaid = Math.round(projectTotal * 0.5) // demo baseline
+      clientPaid = p.advanceAmount ? Number(p.advanceAmount) : 0
     }
 
     const assignedMembers: ProjectMember[] = Array.isArray(p.members) && p.members.length > 0
       ? p.members
-      : nonClientUsers.slice(0, 2).map((u: any) => ({
-          id: String(u.id || u._id),
-          name: u.name || "Lead Developer",
-          role: u.role || "Developer",
-          email: u.email || "",
-          sharePercentage: 15,
-        }))
+      : []
+
+    if (assignedMembers.length === 0) continue
 
     const defaultSharePct = Math.round(30 / Math.max(1, assignedMembers.length))
 
@@ -446,15 +443,15 @@ export const getTeamPayoutProfiles = async (
 
     const bankInfo = bankingMap[memberId.toLowerCase()] || bankingMap[mEmail] || {
       memberId,
-      baseSalary: u.salary ? Number(u.salary) : 25000 + (idx * 5000),
-      bankName: "ICICI Bank Ltd.",
-      accountNumber: `0021015${String(idx).padStart(4, "0")}`,
-      ifscCode: "ICIC0000021",
-      accountHolderName: mName,
-      upiId: `${mName.toLowerCase().replace(/[^a-z0-9]/g, '')}@icici`,
+      baseSalary: u.salary ? Number(u.salary) : (u.baseSalary ? Number(u.baseSalary) : 0),
+      bankName: u.bankName || u.bankingInfo?.bankName || "",
+      accountNumber: u.accountNumber || u.bankingInfo?.accountNumber || "",
+      ifscCode: u.ifscCode || u.bankingInfo?.ifscCode || "",
+      accountHolderName: u.accountHolderName || u.bankingInfo?.accountHolderName || mName,
+      upiId: u.upiId || u.bankingInfo?.upiId || "",
     }
 
-    const baseSalary = bankInfo.baseSalary || 25000
+    const baseSalary = typeof bankInfo.baseSalary === "number" ? bankInfo.baseSalary : (u.salary ? Number(u.salary) : (u.baseSalary ? Number(u.baseSalary) : 0))
 
     // Compute active subscription commissions
     const memberSubs = (Array.isArray(allSubs) ? allSubs : []).filter((s: Subscription) => {
@@ -492,7 +489,7 @@ export const getTeamPayoutProfiles = async (
     const remainingNeedToPay = Math.max(0, totalGrossDue - thisMonthPaid)
 
     let payoutStatus: PayoutStatus = "Need to Pay"
-    if (remainingNeedToPay === 0 && totalGrossDue > 0) {
+    if (totalGrossDue === 0 || remainingNeedToPay === 0) {
       payoutStatus = "Paid"
     } else if (thisMonthPaid > 0 && remainingNeedToPay > 0) {
       payoutStatus = "Partial"

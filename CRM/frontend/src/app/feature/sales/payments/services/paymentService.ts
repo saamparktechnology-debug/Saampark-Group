@@ -340,12 +340,28 @@ export const settleOrUpdatePaymentToCompleted = async (params: {
   return settledPayment
 }
 
-export const deletePayment = async (id: string): Promise<boolean> => {
+export const deletePayment = async (id: string, companyId?: string): Promise<boolean> => {
   const strId = String(id).toLowerCase().trim()
   await markGlobalItemDeleted(strId, "payments")
-  const current = await getPayments()
+  await markGlobalItemDeleted(String(id).toUpperCase().trim(), "payments")
+
+  const comp = companyId || "all"
+  const current = await getPayments(comp)
   const filtered = current.filter(p => String(p.id).toLowerCase().trim() !== strId)
-  await saveModuleDataToDB("payments", filtered)
+  await saveModuleDataToDB("payments", filtered, comp)
+
+  if (comp !== "all") {
+    const all = await getPayments("all")
+    const allFiltered = all.filter(p => String(p.id).toLowerCase().trim() !== strId)
+    await saveModuleDataToDB("payments", allFiltered, "all")
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("saampark_data_synced"))
+    window.dispatchEvent(new Event("saampark_payments_updated"))
+    window.dispatchEvent(new Event("storage"))
+  }
+
   return true
 }
 

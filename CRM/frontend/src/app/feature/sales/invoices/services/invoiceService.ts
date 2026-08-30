@@ -577,11 +577,14 @@ export const deleteInvoice = async (id: string, companyId?: string): Promise<boo
       console.warn("Cascade delete payments failed:", err)
     }
 
-    // 4. Cascade delete from Subscriptions (if any part-payment subscription was created for this project/client)
+    // 4. Cascade delete from Subscriptions & Installments
     try {
       const subs = await fetchModuleDataFromDB<any[]>("subscriptions", [], companyId)
+      const targetSubId = (target as any)?.subscriptionId
+      const targetInvId = target?.id
       const matchingSubs = subs.filter(s =>
-        (targetProjectNorm && s.planName && s.planName.toLowerCase().includes(targetProjectNorm) && targetClientNorm && s.clientName && s.clientName.toLowerCase().trim() === targetClientNorm)
+        (targetProjectNorm && s.planName && s.planName.toLowerCase().includes(targetProjectNorm) && targetClientNorm && s.clientName && s.clientName.toLowerCase().trim() === targetClientNorm) ||
+        (s.id && ((targetSubId && s.id === targetSubId) || (targetInvId && s.id === targetInvId)))
       )
       for (const ms of matchingSubs) {
         if (ms.id) await markGlobalItemDeleted(ms.id, "subscriptions")
@@ -592,7 +595,29 @@ export const deleteInvoice = async (id: string, companyId?: string): Promise<boo
       console.warn("Cascade delete subscriptions failed:", err)
     }
 
-    // 5. Deduct from Client Total Invoiced, Paid & Due Everywhere
+    // 5. Cascade delete from Installments / EMI Contracts
+    try {
+      const insts = await fetchModuleDataFromDB<any[]>("installments", [], companyId)
+      const targetEmiId = (target as any)?.emiContractId
+      const targetOrderId = (target as any)?.orderId
+      const targetInvId = target?.id
+      const matchingInsts = insts.filter(i =>
+        (targetProjectNorm && i.projectTitle && i.projectTitle.toLowerCase().includes(targetProjectNorm) && targetClientNorm && i.clientName && i.clientName.toLowerCase().trim() === targetClientNorm) ||
+        (i.id && ((targetEmiId && i.id === targetEmiId) || (targetOrderId && i.id === targetOrderId) || (targetInvId && i.id === targetInvId)))
+      )
+      for (const mi of matchingInsts) {
+        if (mi.id) await markGlobalItemDeleted(mi.id, "installments")
+      }
+      const remainingInsts = insts.filter(i => !matchingInsts.some(mi => mi.id === i.id))
+      await saveModuleDataToDB("installments", remainingInsts, companyId)
+      if (companyId !== "all") {
+        await saveModuleDataToDB("installments", remainingInsts, "all")
+      }
+    } catch (err) {
+      console.warn("Cascade delete installments failed:", err)
+    }
+
+    // 6. Deduct from Client Total Invoiced, Paid & Due Everywhere
     try {
       const clients = await getClients(companyId)
       const clientIdx = clients.findIndex(c => 
@@ -620,12 +645,16 @@ export const deleteInvoice = async (id: string, companyId?: string): Promise<boo
       console.warn("Cascade deduct client balance failed:", err)
     }
 
-    // 6. Broadcast sync events so all active views update simultaneously
+    // 7. Broadcast sync events so all active views update simultaneously
     if (typeof window !== "undefined") {
       window.dispatchEvent(new Event("saampark_data_synced"))
+      window.dispatchEvent(new Event("saampark_invoices_updated"))
       window.dispatchEvent(new Event("saampark_orders_updated"))
       window.dispatchEvent(new Event("saampark_payments_updated"))
       window.dispatchEvent(new Event("saampark_clients_updated"))
+      window.dispatchEvent(new Event("saampark_subscriptions_updated"))
+      window.dispatchEvent(new Event("saampark_installments_updated"))
+      window.dispatchEvent(new Event("storage"))
     }
   }
 

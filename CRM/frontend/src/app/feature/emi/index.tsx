@@ -6,7 +6,7 @@ import {
   Receipt, Plus, Download, Clock, AlertCircle, CheckCircle2, 
   Search, Calendar, User, Building2, ChevronRight, Send, 
   DollarSign, Sparkles, Filter, CreditCard, ArrowUpRight,
-  ShieldCheck, Smartphone, QrCode, FileText, Check, X
+  ShieldCheck, Smartphone, QrCode, FileText, Check, X, Trash2
 } from "lucide-react"
 
 import { Button } from "@/components/ui/Button"
@@ -17,7 +17,8 @@ import {
   getInstallments, 
   saveInstallmentRecord, 
   recordInstallmentPayment, 
-  sendInstallmentReminder 
+  sendInstallmentReminder,
+  deleteInstallmentRecord
 } from "../subscriptions/services/subscriptionService"
 import { ClientInstallmentDetailModal } from "../subscriptions/components/ClientInstallmentDetailModal"
 import { RecordInstallmentPaymentModal } from "../subscriptions/components/RecordInstallmentPaymentModal"
@@ -111,14 +112,28 @@ export default function EMIMain() {
     window.addEventListener("saampark_company_switched", handleReload)
     window.addEventListener("saampark_branch_switched", handleReload)
     window.addEventListener("saampark_data_synced", handleReload)
+    window.addEventListener("saampark_installments_updated", handleReload)
 
     return () => {
       window.removeEventListener("storage", handleReload)
       window.removeEventListener("saampark_company_switched", handleReload)
       window.removeEventListener("saampark_branch_switched", handleReload)
       window.removeEventListener("saampark_data_synced", handleReload)
+      window.removeEventListener("saampark_installments_updated", handleReload)
     }
   }, [loadData])
+
+  const handleDeleteContract = async (id: string, title?: string) => {
+    if (!canDeleteEMI) {
+      alert("You do not have permission to delete EMI contracts.")
+      return
+    }
+    if (confirm(`Are you sure you want to delete EMI contract "${title || id}"? All associated installments, payments, and generated invoices will be deleted across the entire system.`)) {
+      await deleteInstallmentRecord(id, activeCompanyId || "tech")
+      showToast(`🗑️ EMI contract "${title || id}" deleted successfully.`)
+      loadData(false)
+    }
+  }
 
   // Populate available clients on modal open
   React.useEffect(() => {
@@ -646,6 +661,17 @@ export default function EMIMain() {
                     >
                       View Schedule ({item.schedule.length})
                     </Button>
+
+                    {canDeleteEMI && !isClient && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteContract(item.id, item.projectTitle)}
+                        className="p-2 rounded-xl text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer transition-colors border border-transparent hover:border-rose-200 dark:hover:border-rose-800"
+                        title="Delete EMI Contract"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    )}
                   </div>
                 </div>
 
