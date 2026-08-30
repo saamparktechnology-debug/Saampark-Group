@@ -79,6 +79,13 @@ export function ModulePermissionsModal({ isOpen, onClose }: ModulePermissionsMod
     roleActionPermissions,
   ])
 
+  // Fetch latest role permissions from DB whenever modal opens
+  React.useEffect(() => {
+    if (isOpen) {
+      usePermissionStore.getState().fetchRolePermissions?.()
+    }
+  }, [isOpen])
+
   // Initialize Action Matrix whenever active tab changes or modal opens
   React.useEffect(() => {
     if (!activeRoleTab) return
@@ -88,12 +95,18 @@ export function ModulePermissionsModal({ isOpen, onClose }: ModulePermissionsMod
 
     const init: Record<string, ModuleActionFlags> = {}
     ALL_MODULE_NAMES.forEach((m) => {
+      const config = MODULE_ACTION_CONFIG[m] || { hasAdd: true, hasEdit: true, hasDelete: true }
       if (existingRoleMatrix && existingRoleMatrix[m]) {
         init[m] = { ...existingRoleMatrix[m] }
       } else {
         const isModAllowed = existingRoleMods.includes(m)
         init[m] = isModAllowed
-          ? { view: true, add: activeRoleTab !== "Clients", edit: activeRoleTab !== "Clients", delete: activeRoleTab === "Admin" }
+          ? {
+              view: true,
+              add: Boolean(config.hasAdd !== false && activeRoleTab !== "Clients"),
+              edit: Boolean(config.hasEdit !== false && activeRoleTab !== "Clients"),
+              delete: Boolean(config.hasDelete !== false && activeRoleTab === "Admin"),
+            }
           : { view: false, add: false, edit: false, delete: false }
       }
     })
@@ -102,7 +115,7 @@ export function ModulePermissionsModal({ isOpen, onClose }: ModulePermissionsMod
   }, [activeRoleTab, rolePermissions, roleActionPermissions, isOpen])
 
   const handleCheckboxChange = (mod: ModuleName, actionKey: keyof ModuleActionFlags, checked: boolean) => {
-    const currentFlags = actionMatrix[mod] || { ...DEFAULT_FULL_ACTIONS }
+    const currentFlags = actionMatrix[mod] || { view: false, add: false, edit: false, delete: false }
     const updatedFlags = { ...currentFlags, [actionKey]: checked }
 
     // If unchecking View, uncheck Add, Edit, Delete as well
@@ -121,7 +134,7 @@ export function ModulePermissionsModal({ isOpen, onClose }: ModulePermissionsMod
   }
 
   const handleToggleModuleAll = (mod: ModuleName) => {
-    const current = actionMatrix[mod] || { ...DEFAULT_FULL_ACTIONS }
+    const current = actionMatrix[mod] || { view: false, add: false, edit: false, delete: false }
     const config = MODULE_ACTION_CONFIG[mod] || { hasAdd: true, hasEdit: true, hasDelete: true }
     const allOn = current.view && (!config.hasAdd || current.add) && (!config.hasEdit || current.edit) && (!config.hasDelete || current.delete)
 
@@ -181,6 +194,10 @@ export function ModulePermissionsModal({ isOpen, onClose }: ModulePermissionsMod
         rolePermissions: usePermissionStore.getState().rolePermissions,
         roleActionPermissions: usePermissionStore.getState().roleActionPermissions,
       }, "all").catch(() => {})
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("saampark_data_synced"))
+      }
 
       alert(`Granular module action permissions updated successfully for role "${activeRoleTab}"!`)
       onClose()

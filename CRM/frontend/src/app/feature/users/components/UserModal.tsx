@@ -15,7 +15,8 @@ import {
   DEFAULT_VIEW_ONLY_ACTIONS, 
   MODULE_ACTION_CONFIG,
   normalizeRole, 
-  DEFAULT_ROLE_PERMISSIONS 
+  DEFAULT_ROLE_PERMISSIONS,
+  DEFAULT_ROLE_ACTION_PERMISSIONS
 } from "@/store/usePermissionStore"
 
 interface UserModalProps {
@@ -23,10 +24,13 @@ interface UserModalProps {
   onClose: () => void
   onSave: (user: Partial<UserType>) => void
   editingUser?: UserType | null
+  initialRole?: UserRole
 }
 
-export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalProps) {
+export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }: UserModalProps) {
   const { 
+    rolePermissions,
+    roleActionPermissions,
     userActionPermissions, 
     userPermissions, 
     setUserPermissions, 
@@ -125,9 +129,45 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
   const [actionMatrix, setActionMatrix] = React.useState<Record<string, ModuleActionFlags>>({})
   const [allowedModules, setAllowedModules] = React.useState<ModuleName[]>([])
 
+  // Helper to compute standard action matrix for a role according to system and admin configurations
+  const getMatrixForRole = React.useCallback((targetRole: UserRole) => {
+    const norm = normalizeRole(targetRole)
+    const configuredRoleMatrix = (roleActionPermissions && roleActionPermissions[norm]) || DEFAULT_ROLE_ACTION_PERMISSIONS[norm] || {}
+    const configuredRoleMods = (rolePermissions && rolePermissions[norm]) || DEFAULT_ROLE_PERMISSIONS[norm] || []
+
+    const matrix: Record<string, ModuleActionFlags> = {}
+    CONFIGURABLE_MODULES.forEach((m) => {
+      const adminFlags = isCurrentSuperAdmin ? DEFAULT_FULL_ACTIONS : getUserModuleActions(currentUser, m)
+
+      if (configuredRoleMatrix[m]) {
+        const flag = configuredRoleMatrix[m]
+        matrix[m] = {
+          view: Boolean(adminFlags.view && flag.view),
+          add: Boolean(adminFlags.add && flag.add),
+          edit: Boolean(adminFlags.edit && flag.edit),
+          delete: Boolean(adminFlags.delete && flag.delete),
+        }
+      } else {
+        const isModInRole = configuredRoleMods.includes(m as ModuleName)
+        matrix[m] = isModInRole
+          ? {
+              view: Boolean(adminFlags.view),
+              add: Boolean(adminFlags.add && norm !== 'Clients'),
+              edit: Boolean(adminFlags.edit && norm !== 'Clients'),
+              delete: Boolean(adminFlags.delete && norm === 'Admin'),
+            }
+          : { view: false, add: false, edit: false, delete: false }
+      }
+    })
+    return matrix
+  }, [roleActionPermissions, rolePermissions, isCurrentSuperAdmin, currentUser, getUserModuleActions])
+
   React.useEffect(() => {
     fetchCompanies()
     fetchBranches()
+    if (isOpen) {
+      usePermissionStore.getState().fetchRolePermissions?.()
+    }
   }, [fetchCompanies, fetchBranches, isOpen])
 
   React.useEffect(() => {
@@ -163,18 +203,33 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
         (emailNorm ? userPermissions[emailNorm] : undefined) ||
         (editingUser.permissions?.allowedModules)
 
-      const norm = normalizeRole(editingUser.role || "Teams")
-      const fallbackMods = DEFAULT_ROLE_PERMISSIONS[norm] || [...CONFIGURABLE_MODULES]
-      const activeAllowed = existingMods && existingMods.length > 0 ? existingMods : fallbackMods
+      const fallbackMatrix = getMatrixForRole(editingUser.role || "Teams")
 
       const fullMatrix: Record<string, ModuleActionFlags> = {}
       CONFIGURABLE_MODULES.forEach((m) => {
+        const adminFlags = isCurrentSuperAdmin ? DEFAULT_FULL_ACTIONS : getUserModuleActions(currentUser, m)
+
         if (existingMatrix && existingMatrix[m]) {
-          fullMatrix[m] = { ...existingMatrix[m] }
-        } else if (activeAllowed.includes(m as ModuleName)) {
-          fullMatrix[m] = { ...DEFAULT_FULL_ACTIONS }
+          const ef = existingMatrix[m]
+          fullMatrix[m] = {
+            view: Boolean(adminFlags.view && ef.view),
+            add: Boolean(adminFlags.add && ef.add),
+            edit: Boolean(adminFlags.edit && ef.edit),
+            delete: Boolean(adminFlags.delete && ef.delete),
+          }
+        } else if (existingMods && existingMods.length > 0) {
+          const isAllowed = existingMods.includes(m as ModuleName)
+          const base = fallbackMatrix[m] || { view: true, add: false, edit: false, delete: false }
+          fullMatrix[m] = isAllowed
+            ? {
+                view: Boolean(adminFlags.view && base.view),
+                add: Boolean(adminFlags.add && base.add),
+                edit: Boolean(adminFlags.edit && base.edit),
+                delete: Boolean(adminFlags.delete && base.delete),
+              }
+            : { view: false, add: false, edit: false, delete: false }
         } else {
-          fullMatrix[m] = { view: false, add: false, edit: false, delete: false }
+          fullMatrix[m] = fallbackMatrix[m] || { view: false, add: false, edit: false, delete: false }
         }
       })
 
@@ -187,7 +242,8 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
       setName("")
       setEmail("")
       setEmailError(null)
-      setRole("Teams")
+      const defaultRole: UserRole = initialRole || "Teams"
+      setRole(defaultRole)
       if (isCurrentBranchAdmin && currentUser?.branchId) {
         setAdminScope("branch")
         setSelectedBranchId(currentUser.branchId)
@@ -205,43 +261,24 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
       setPassword("Password123")
       setStatus("Active")
       setAvatarUrl("")
-      setAllowedModules([...CONFIGURABLE_MODULES])
       
-      const init: Record<string, ModuleActionFlags> = {}
-      CONFIGURABLE_MODULES.forEach((m) => {
-        init[m] = { ...DEFAULT_FULL_ACTIONS }
-      })
-      setActionMatrix(init)
+      const initMatrix = getMatrixForRole(defaultRole)
+      setActionMatrix(initMatrix)
+      setAllowedModules(CONFIGURABLE_MODULES.filter(m => {
+        const flags = initMatrix[m]
+        return flags ? (flags.view || flags.add || flags.edit || flags.delete) : false
+      }))
     }
-  }, [editingUser, isOpen, availableCompanies, isCurrentBranchAdmin, currentUser, activeCompanyId])
+  }, [editingUser, isOpen, availableCompanies, isCurrentBranchAdmin, currentUser, activeCompanyId, getMatrixForRole, userActionPermissions, userPermissions, isCurrentSuperAdmin, getUserModuleActions])
 
   const handleRoleChange = (newRole: UserRole) => {
     setRole(newRole)
-    const norm = normalizeRole(newRole)
-    const roleMods = DEFAULT_ROLE_PERMISSIONS[norm] || [...CONFIGURABLE_MODULES]
-
-    // Admin can ONLY grant modules that the Admin himself is allowed to access
-    const safeRoleMods = isCurrentSuperAdmin
-      ? roleMods
-      : roleMods.filter((m) => displayableModules.includes(m as any))
-
-    setAllowedModules(safeRoleMods)
-
-    const init: Record<string, ModuleActionFlags> = {}
-    CONFIGURABLE_MODULES.forEach((m) => {
-      const isAllowed = safeRoleMods.includes(m as ModuleName)
-      const adminFlags = isCurrentSuperAdmin ? DEFAULT_FULL_ACTIONS : getUserModuleActions(currentUser, m)
-
-      init[m] = isAllowed
-        ? {
-            view: adminFlags.view,
-            add: adminFlags.add,
-            edit: adminFlags.edit,
-            delete: adminFlags.delete,
-          }
-        : { view: false, add: false, edit: false, delete: false }
-    })
-    setActionMatrix(init)
+    const nextMatrix = getMatrixForRole(newRole)
+    setActionMatrix(nextMatrix)
+    setAllowedModules(CONFIGURABLE_MODULES.filter(m => {
+      const flags = nextMatrix[m]
+      return flags ? (flags.view || flags.add || flags.edit || flags.delete) : false
+    }))
   }
 
   const handleToggleCompany = (compId: string) => {
@@ -261,8 +298,21 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
   }
 
   const handleCheckboxChange = (mod: ModuleName, actionKey: keyof ModuleActionFlags, checked: boolean) => {
-    const currentFlags = actionMatrix[mod] || { ...DEFAULT_FULL_ACTIONS }
+    const currentFlags = actionMatrix[mod] || { view: false, add: false, edit: false, delete: false }
     const updatedFlags = { ...currentFlags, [actionKey]: checked }
+
+    // If unchecking View, uncheck Add, Edit, Delete as well
+    if (actionKey === "view" && !checked) {
+      updatedFlags.add = false
+      updatedFlags.edit = false
+      updatedFlags.delete = false
+    }
+
+    // If checking Add, Edit, or Delete, automatically ensure View is checked
+    if ((actionKey === "add" || actionKey === "edit" || actionKey === "delete") && checked) {
+      updatedFlags.view = true
+    }
+
     const nextMatrix = { ...actionMatrix, [mod]: updatedFlags }
     setActionMatrix(nextMatrix)
 
@@ -275,7 +325,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
   }
 
   const handleToggleModuleAll = (mod: ModuleName) => {
-    const current = actionMatrix[mod] || { ...DEFAULT_FULL_ACTIONS }
+    const current = actionMatrix[mod] || { view: false, add: false, edit: false, delete: false }
     const config = MODULE_ACTION_CONFIG[mod] || { hasAdd: true, hasEdit: true, hasDelete: true }
     const allOn = current.view && (!config.hasAdd || current.add) && (!config.hasEdit || current.edit) && (!config.hasDelete || current.delete)
     
@@ -908,7 +958,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser }: UserModalPro
                 {/* Module Action Cards Grid with Checkboxes */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-80 overflow-y-auto p-3 bg-zinc-50/50 dark:bg-zinc-800/40 rounded-2xl border border-zinc-200/80 dark:border-zinc-700/60">
                   {displayableModules.map((mod) => {
-                    const flags = actionMatrix[mod] || { ...DEFAULT_FULL_ACTIONS }
+                    const flags = actionMatrix[mod] || { view: false, add: false, edit: false, delete: false }
                     const config = MODULE_ACTION_CONFIG[mod] || { hasAdd: true, hasEdit: true, hasDelete: true, description: "" }
                     const adminFlags = isCurrentSuperAdmin ? DEFAULT_FULL_ACTIONS : getUserModuleActions(currentUser, mod)
 

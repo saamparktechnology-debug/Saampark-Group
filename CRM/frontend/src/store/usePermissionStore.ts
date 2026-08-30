@@ -95,6 +95,13 @@ export const DEFAULT_VIEW_ONLY_ACTIONS: ModuleActionFlags = {
   delete: false,
 }
 
+export const DEFAULT_NO_ACTIONS: ModuleActionFlags = {
+  view: false,
+  add: false,
+  edit: false,
+  delete: false,
+}
+
 // Role normalization helper
 export function normalizeRole(role: string): Role {
   if (!role) return 'Teams'
@@ -128,22 +135,47 @@ export const DEFAULT_ROLE_ACTION_PERMISSIONS: Record<Role, Record<string, Module
   })(),
   'Admin': (() => {
     const init: Record<string, ModuleActionFlags> = {}
-    CONFIGURABLE_MODULES.forEach((m) => { init[m] = { ...DEFAULT_FULL_ACTIONS } })
+    const adminMods = DEFAULT_ROLE_PERMISSIONS['Admin']
+    CONFIGURABLE_MODULES.forEach((m) => {
+      const isAllowed = adminMods.includes(m as ModuleName)
+      const config = MODULE_ACTION_CONFIG[m] || { hasAdd: true, hasEdit: true, hasDelete: true }
+      init[m] = isAllowed
+        ? {
+            view: true,
+            add: config.hasAdd !== false,
+            edit: config.hasEdit !== false,
+            delete: config.hasDelete !== false,
+          }
+        : { view: false, add: false, edit: false, delete: false }
+    })
     return init
   })(),
   'Teams': (() => {
     const init: Record<string, ModuleActionFlags> = {}
+    const teamMods = DEFAULT_ROLE_PERMISSIONS['Teams']
     CONFIGURABLE_MODULES.forEach((m) => {
-      init[m] = { view: true, add: true, edit: true, delete: false }
+      const isAllowed = teamMods.includes(m as ModuleName)
+      const config = MODULE_ACTION_CONFIG[m] || { hasAdd: true, hasEdit: true, hasDelete: true }
+      init[m] = isAllowed
+        ? {
+            view: true,
+            add: config.hasAdd !== false,
+            edit: config.hasEdit !== false,
+            delete: false,
+          }
+        : { view: false, add: false, edit: false, delete: false }
     })
     return init
   })(),
   'Clients': (() => {
     const init: Record<string, ModuleActionFlags> = {}
+    const clientMods = DEFAULT_ROLE_PERMISSIONS['Clients']
     CONFIGURABLE_MODULES.forEach((m) => {
-      const isClientMod = ['Sales', 'Projects', 'Subscriptions', 'Estimates', 'Messages', 'Tickets', 'Files', 'Settings'].includes(m)
+      const isAllowed = clientMods.includes(m as ModuleName)
       const canAdd = ['Tickets', 'Messages'].includes(m)
-      init[m] = { view: isClientMod, add: canAdd, edit: false, delete: false }
+      init[m] = isAllowed
+        ? { view: true, add: canAdd, edit: false, delete: false }
+        : { view: false, add: false, edit: false, delete: false }
     })
     return init
   })(),
@@ -156,6 +188,7 @@ interface PermissionState {
   userActionPermissions: Record<string, Record<string, ModuleActionFlags>>
   
   // Actions
+  fetchRolePermissions: () => Promise<void>
   setRolePermissions: (role: Role, modules: ModuleName[]) => void
   setRoleAllModuleActions: (role: Role, matrix: Record<string, ModuleActionFlags>) => void
   setUserPermissions: (userId: string, modules: ModuleName[]) => void
@@ -177,6 +210,34 @@ export const usePermissionStore = create<PermissionState>()(
       roleActionPermissions: DEFAULT_ROLE_ACTION_PERMISSIONS,
       userPermissions: {},
       userActionPermissions: {},
+
+      fetchRolePermissions: async () => {
+        try {
+          const { fetchModuleDataFromDB } = await import('@/lib/storageSync')
+          const dbData = await fetchModuleDataFromDB<any>('role_permissions', null, 'all')
+          if (dbData && typeof dbData === 'object') {
+            const updates: Partial<PermissionState> = {}
+            if (dbData.rolePermissions && typeof dbData.rolePermissions === 'object') {
+              updates.rolePermissions = { ...get().rolePermissions, ...dbData.rolePermissions }
+            }
+            if (dbData.roleActionPermissions && typeof dbData.roleActionPermissions === 'object') {
+              const currentActionPerms = get().roleActionPermissions || {}
+              const mergedActionPerms: Record<string, Record<string, ModuleActionFlags>> = { ...currentActionPerms }
+              for (const [r, matrix] of Object.entries(dbData.roleActionPermissions)) {
+                if (matrix && typeof matrix === 'object') {
+                  mergedActionPerms[r] = { ...(matrix as any) }
+                }
+              }
+              updates.roleActionPermissions = mergedActionPerms as any
+            }
+            if (Object.keys(updates).length > 0) {
+              set(updates)
+            }
+          }
+        } catch (err) {
+          console.warn('fetchRolePermissions error:', err)
+        }
+      },
 
       setRolePermissions: (role: Role, modules: ModuleName[]) => {
         const norm = normalizeRole(role)
@@ -210,7 +271,7 @@ export const usePermissionStore = create<PermissionState>()(
       setUserModuleAction: (userId: string, moduleName: ModuleName, action: keyof ModuleActionFlags, value: boolean) => {
         set((state) => {
           const userMatrix = state.userActionPermissions[userId] || {}
-          const currentFlags = userMatrix[moduleName] || { ...DEFAULT_FULL_ACTIONS }
+          const currentFlags = userMatrix[moduleName] || { view: false, add: false, edit: false, delete: false }
           return {
             userActionPermissions: {
               ...state.userActionPermissions,
@@ -241,6 +302,7 @@ export const usePermissionStore = create<PermissionState>()(
       resetToDefaults: () => {
         set({
           rolePermissions: DEFAULT_ROLE_PERMISSIONS,
+          roleActionPermissions: DEFAULT_ROLE_ACTION_PERMISSIONS,
           userPermissions: {},
           userActionPermissions: {},
         })
@@ -402,13 +464,24 @@ export const usePermissionStore = create<PermissionState>()(
           return roleActionMatrix[moduleName]
         }
 
+        const roleMods = state.rolePermissions[normRole] || DEFAULT_ROLE_PERMISSIONS[normRole] || []
+        const isModInRole = roleMods.includes(moduleName as ModuleName)
+        if (!isModInRole) return { view: false, add: false, edit: false, delete: false }
+
+        const config = MODULE_ACTION_CONFIG[moduleName] || { hasAdd: true, hasEdit: true, hasDelete: true }
         if (normRole === 'Teams') {
-          return { view: true, add: true, edit: true, delete: false }
+          return { view: true, add: config.hasAdd !== false, edit: config.hasEdit !== false, delete: false }
         }
         if (normRole === 'Clients') {
-          return { view: true, add: false, edit: false, delete: false }
+          const canAdd = ['Tickets', 'Messages'].includes(moduleName)
+          return { view: true, add: canAdd, edit: false, delete: false }
         }
-        return { ...DEFAULT_FULL_ACTIONS }
+        return {
+          view: true,
+          add: config.hasAdd !== false,
+          edit: config.hasEdit !== false,
+          delete: config.hasDelete !== false,
+        }
       },
 
       canPerformAction: (user: User | null, moduleName: string, action: keyof ModuleActionFlags): boolean => {
@@ -430,3 +503,13 @@ export const usePermissionStore = create<PermissionState>()(
     }
   )
 )
+
+if (typeof window !== 'undefined') {
+  setTimeout(() => {
+    usePermissionStore.getState().fetchRolePermissions?.()
+  }, 100)
+  window.addEventListener('saampark_data_synced', () => {
+    usePermissionStore.getState().fetchRolePermissions?.()
+  })
+}
+
