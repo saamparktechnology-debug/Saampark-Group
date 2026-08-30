@@ -506,14 +506,37 @@ export const sendPaymentReminder = async (invoiceId: string): Promise<{ success:
 
 
 export const deleteInvoice = async (id: string, companyId?: string): Promise<boolean> => {
-  const strId = String(id).toLowerCase().trim()
-  const current = await getInvoices(companyId)
-  const target = current.find(i => String(i.id).toLowerCase().trim() === strId)
+  const strId = String(id).trim()
+  const lowerId = strId.toLowerCase()
+  const upperId = strId.toUpperCase()
 
-  // 1. Mark and remove from invoices
+  // 1. Mark as globally deleted across all case variations
   await markGlobalItemDeleted(strId, "invoices")
-  const filtered = current.filter(i => String(i.id).toLowerCase().trim() !== strId)
-  await saveModuleDataToDB("invoices", filtered, companyId)
+  await markGlobalItemDeleted(lowerId, "invoices")
+  await markGlobalItemDeleted(upperId, "invoices")
+
+  // 2. Remove from all company DB keys and "all" key
+  const knownCompanies = ["all", "tech", "infotech", "fashion", "digital", "consultancy", "jewellers"]
+  if (companyId && !knownCompanies.includes(companyId)) knownCompanies.push(companyId)
+
+  let target: InvoiceItem | undefined
+
+  await Promise.all(
+    knownCompanies.map(async (c) => {
+      try {
+        const list = await fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], c)
+        if (Array.isArray(list)) {
+          if (!target) {
+            target = list.find(i => String(i.id).toLowerCase().trim() === lowerId)
+          }
+          const filtered = list.filter(i => String(i.id).toLowerCase().trim() !== lowerId)
+          if (filtered.length !== list.length) {
+            await saveModuleDataToDB("invoices", filtered, c)
+          }
+        }
+      } catch {}
+    })
+  )
 
   if (target) {
     const targetTotal = parseInt((target.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
@@ -574,7 +597,7 @@ export const deleteInvoice = async (id: string, companyId?: string): Promise<boo
       const clients = await getClients(companyId)
       const clientIdx = clients.findIndex(c => 
         (c.name && c.name.toLowerCase().trim() === targetClientNorm) ||
-        (target.clientEmail && c.email && c.email.toLowerCase().trim() === target.clientEmail.toLowerCase().trim())
+        (target?.clientEmail && c.email && c.email.toLowerCase().trim() === target.clientEmail.toLowerCase().trim())
       )
       if (clientIdx !== -1) {
         const c = clients[clientIdx]

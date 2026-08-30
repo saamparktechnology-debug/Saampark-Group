@@ -678,8 +678,9 @@ export default function InvoicesPage() {
       return
     }
     await executeWithFeedback(async () => {
-      await deleteInvoice(id)
-      setInvoices(prev => prev.filter(i => i.id !== id))
+      await deleteInvoice(id, activeCompanyId || "all")
+      setInvoices(prev => prev.filter(i => String(i.id).toLowerCase().trim() !== String(id).toLowerCase().trim()))
+      await loadInvoices(false)
     }, {
       actionType: "delete",
       loadingTitle: `Deleting Invoice ${id}...`,

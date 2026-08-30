@@ -106,8 +106,10 @@ export function isGlobalItemDeleted(id: string | number, deletedIds?: string[]):
 
 export function filterGlobalDeletedItems<T extends { id: string | number }>(items: T[], deletedIds?: string[]): T[] {
   if (!Array.isArray(items)) return []
-  if (!deletedIds || !Array.isArray(deletedIds) || deletedIds.length === 0) return items
-  return items.filter((item) => item?.id && !deletedIds.includes(String(item.id).toLowerCase().trim()))
+  const ids = (deletedIds && Array.isArray(deletedIds) && deletedIds.length > 0) ? deletedIds : getLocalDeletedIds()
+  if (!ids || ids.length === 0) return items
+  const set = new Set(ids.map((s) => String(s).toLowerCase().trim()))
+  return items.filter((item) => item?.id && !set.has(String(item.id).toLowerCase().trim()))
 }
 
 // In-memory micro-cache & in-flight promise deduplication

@@ -5,7 +5,7 @@ import {
   Search, RefreshCw, Send, Trash2, Calendar, 
   CheckCircle2, Clock, AlertCircle, Sparkles, Building2, User,
   CreditCard, Package, Layers, ChevronDown, ChevronUp, Check, ShieldCheck,
-  FileText, Receipt, AlertTriangle
+  FileText, Receipt, AlertTriangle, Pencil
 } from "lucide-react"
 import { Subscription, SubscriptionStatus, SubscriptionType, calculateOverdueDetails } from "../types"
 import { useAuthStore } from "@/store/useAuthStore"
@@ -14,22 +14,28 @@ interface SubscriptionListProps {
   subscriptions: Subscription[]
   onDelete: (id: string) => void
   onOpenRenewModal: (sub: Subscription) => void
+  onOpenEditModal?: (sub: Subscription) => void
   onSendReminder: (id: string) => Promise<void>
   onToggleAutoRenew: (sub: Subscription) => void
   onClientPayNow?: (sub: Subscription) => void
   onGenerateInvoice?: (sub: Subscription) => Promise<void>
   onSelectClient?: (clientName: string, sub: Subscription) => void
+  canEdit?: boolean
+  canDelete?: boolean
 }
 
 export function SubscriptionList({
   subscriptions,
   onDelete,
   onOpenRenewModal,
+  onOpenEditModal,
   onSendReminder,
   onToggleAutoRenew,
   onClientPayNow,
   onGenerateInvoice,
   onSelectClient,
+  canEdit,
+  canDelete,
 }: SubscriptionListProps) {
   const { user } = useAuthStore()
   const isClient = (user?.role || "").toLowerCase().includes("client")
@@ -261,6 +267,17 @@ export function SubscriptionList({
                               <div className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
                                 {sub.planName}
                               </div>
+                              {(sub.assignedMemberName || sub.assignedMemberEmail) && (
+                                <div className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold flex items-center gap-1 mt-0.5">
+                                  <User size={10} />
+                                  <span>{sub.assignedMemberName || sub.assignedMemberEmail}</span>
+                                  {typeof sub.teamSharePercentage === "number" && sub.teamSharePercentage > 0 && (
+                                    <span className="px-1 py-0.2 rounded bg-indigo-100 dark:bg-indigo-900/60 text-indigo-800 dark:text-indigo-200 text-[9px] font-bold">
+                                      {sub.teamSharePercentage}% Share
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -403,6 +420,18 @@ export function SubscriptionList({
                                   >
                                     <Receipt size={11} />
                                     <span>Invoice</span>
+                                  </button>
+                                )}
+
+                                {onOpenEditModal && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onOpenEditModal(sub)}
+                                    className="px-2 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 border border-indigo-200 dark:border-indigo-800 font-bold text-[11px] flex items-center gap-1 transition-colors cursor-pointer"
+                                    title="Modify / Edit Subscription Contract"
+                                  >
+                                    <Pencil size={11} />
+                                    <span>Modify</span>
                                   </button>
                                 )}
 

@@ -169,6 +169,10 @@ export interface Subscription {
   branchName?: string
   assignedMembers?: string[]
   assignedMemberEmails?: string[]
+  assignedMemberId?: string
+  assignedMemberName?: string
+  assignedMemberEmail?: string
+  teamSharePercentage?: number // Revenue share % for assigned team member (e.g. 10%, 20%)
   billedBy?: string
   createdById?: string
   invoicesCount?: number
@@ -272,4 +276,41 @@ export function calculateOverdueDetails(sub: Subscription): {
     totalDueToday,
   }
 }
+
+export function calculateTeamRevenueShare(sub: Subscription): {
+  sharePercentage: number
+  cycleRevenue: number
+  monthlyRevenue: number
+  weeklyRevenue: number
+  dailyRevenue: number
+  annualRevenue: number
+} {
+  const baseAmt = sub.numericAmount || parseInt(String(sub.amount).replace(/[^0-9]/g, "")) || 0
+  const pct = typeof sub.teamSharePercentage === "number" ? sub.teamSharePercentage : 0
+  const cycleCut = Math.round((baseAmt * pct) / 100)
+  
+  let monthlyCut = cycleCut
+  const cycleStr = String(sub.billingCycle || "").toLowerCase()
+  if (cycleStr.includes("quarter")) monthlyCut = Math.round(cycleCut / 3)
+  else if (cycleStr.includes("half") || cycleStr.includes("semi")) monthlyCut = Math.round(cycleCut / 6)
+  else if (cycleStr.includes("annual") || cycleStr.includes("year")) monthlyCut = Math.round(cycleCut / 12)
+  else if (cycleStr.includes("week")) monthlyCut = Math.round(cycleCut * 4.33)
+  else if (sub.billingCycle === "Custom Days" && sub.customDaysCount) {
+    monthlyCut = Math.round((cycleCut / Math.max(1, sub.customDaysCount)) * 30)
+  }
+
+  const dailyCut = Math.round(monthlyCut / 30)
+  const weeklyCut = Math.round(monthlyCut / 4.33)
+  const annualCut = monthlyCut * 12
+
+  return {
+    sharePercentage: pct,
+    cycleRevenue: cycleCut,
+    monthlyRevenue: monthlyCut,
+    weeklyRevenue: weeklyCut,
+    dailyRevenue: dailyCut,
+    annualRevenue: annualCut,
+  }
+}
+
 

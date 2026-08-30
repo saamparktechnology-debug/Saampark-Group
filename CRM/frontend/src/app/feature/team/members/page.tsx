@@ -4,7 +4,8 @@ import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
   Plus, Download, Mail, X, ExternalLink, CheckCircle2, 
-  Briefcase, CheckSquare, Clock, Phone, User, Shield, Building2, Eye 
+  Briefcase, CheckSquare, Clock, Phone, User, Shield, Building2, Eye,
+  DollarSign, Percent, Sparkles, RefreshCw
 } from "lucide-react"
 import { ColumnDef } from "@tanstack/react-table"
 import { DataTable } from "@/components/ui/DataTable"
@@ -15,6 +16,8 @@ import { UserService } from "@/services/apiServices"
 import { taskService } from "@/app/feature/tasks/services/taskService"
 import { Task } from "@/app/feature/tasks/types"
 import { getUserAvatar } from "@/app/feature/users/services/userService"
+import { getSubscriptions } from "@/app/feature/subscriptions/services/subscriptionService"
+import { Subscription, calculateTeamRevenueShare } from "@/app/feature/subscriptions/types"
 
 export type TeamMember = {
   id: string
@@ -27,6 +30,8 @@ export type TeamMember = {
   status: "Online" | "Offline"
   assignedTasksCount: number
   activeTasks: Task[]
+  assignedSubscriptions: Subscription[]
+  totalMonthlyCommission: number
 }
 
 export default function TeamMembersPage() {
@@ -39,9 +44,10 @@ export default function TeamMembersPage() {
   const loadData = React.useCallback(async () => {
     setIsLoading(true)
     try {
-      const [userRes, allTasks] = await Promise.all([
+      const [userRes, allTasks, allSubs] = await Promise.all([
         UserService.getTeamMembers().catch(() => []),
         taskService.getTasks().catch(() => []),
+        getSubscriptions("all").catch(() => []),
       ])
 
       if (Array.isArray(userRes)) {
@@ -56,6 +62,20 @@ export default function TeamMembersPage() {
             return isAssigned && t.status !== "Done"
           })
 
+          // Filter assigned subscriptions
+          const memberSubs = (Array.isArray(allSubs) ? allSubs : []).filter((s: Subscription) => {
+            const byEmail = (s.assignedMemberEmail || "").toLowerCase().trim() === mEmail ||
+              (Array.isArray(s.assignedMembers) && s.assignedMembers.some(em => em.toLowerCase().trim() === mEmail))
+            const byName = (s.assignedMemberName || "").toLowerCase().trim() === mName.toLowerCase().trim()
+            const byId = s.assignedMemberId && String(s.assignedMemberId) === String(u.id || u._id)
+            return Boolean(byEmail || byName || byId)
+          })
+
+          const totalMonthlyCommission = memberSubs.reduce((acc, sub) => {
+            const calc = calculateTeamRevenueShare(sub)
+            return acc + calc.monthlyRevenue
+          }, 0)
+
           return {
             id: String(u.id || u._id || idx),
             name: mName,
@@ -67,6 +87,8 @@ export default function TeamMembersPage() {
             status: u.status === "active" || idx % 2 === 0 ? "Online" : "Offline",
             assignedTasksCount: memberTasks.length,
             activeTasks: memberTasks,
+            assignedSubscriptions: memberSubs,
+            totalMonthlyCommission,
           }
         })
         setMembers(live)
@@ -297,6 +319,66 @@ export default function TeamMembersPage() {
                           </span>
                         </div>
                       ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Managed Subscriptions & Revenue Share */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                      <RefreshCw size={14} className="text-indigo-600" />
+                      <span>Managed Subscriptions & Revenue Share ({selectedMember.assignedSubscriptions.length})</span>
+                    </h4>
+                    {selectedMember.totalMonthlyCommission > 0 && (
+                      <span className="text-[11px] font-black text-indigo-600 dark:text-indigo-400">
+                        Total: ₹{selectedMember.totalMonthlyCommission.toLocaleString("en-IN")}/mo
+                      </span>
+                    )}
+                  </div>
+
+                  {selectedMember.assignedSubscriptions.length === 0 ? (
+                    <div className="p-4 rounded-lg bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-700/60 text-zinc-500 text-xs">
+                      No recurring subscription contracts currently assigned to this team member.
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {selectedMember.assignedSubscriptions.map((sub) => {
+                        const calc = calculateTeamRevenueShare(sub)
+                        return (
+                          <div
+                            key={sub.id}
+                            className="p-3.5 bg-gradient-to-br from-indigo-50/40 to-blue-50/20 dark:from-indigo-950/30 dark:to-blue-950/10 rounded-xl border border-indigo-200/80 dark:border-indigo-800/60 space-y-2"
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                              <div>
+                                <div className="font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2 flex-wrap">
+                                  <span>{sub.planName}</span>
+                                  <span className="px-2 py-0.2 rounded-md bg-indigo-100 dark:bg-indigo-900/60 text-indigo-800 dark:text-indigo-200 text-[10px] font-bold">
+                                    {calc.sharePercentage}% Revenue Share
+                                  </span>
+                                </div>
+                                <div className="text-[11px] text-zinc-500 mt-0.5">
+                                  Client: <strong className="text-zinc-700 dark:text-zinc-300">{sub.clientName}</strong> • Contract Price: <strong className="text-zinc-800 dark:text-zinc-200">{sub.amount}</strong> ({sub.billingCycle})
+                                </div>
+                              </div>
+
+                              <div className="text-left sm:text-right">
+                                <div className="text-[10px] text-zinc-400 uppercase font-bold">Member Payout</div>
+                                <div className="text-sm font-black text-indigo-600 dark:text-indigo-400">
+                                  ₹{calc.monthlyRevenue.toLocaleString("en-IN")} / mo
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="pt-2 border-t border-indigo-100 dark:border-indigo-900/60 grid grid-cols-3 gap-2 text-[10px] text-zinc-500">
+                              <div>Daily: <strong className="text-zinc-800 dark:text-zinc-200">₹{calc.dailyRevenue.toLocaleString("en-IN")}/d</strong></div>
+                              <div>Weekly: <strong className="text-zinc-800 dark:text-zinc-200">₹{calc.weeklyRevenue.toLocaleString("en-IN")}/wk</strong></div>
+                              <div>Per Cycle: <strong className="text-zinc-800 dark:text-zinc-200">₹{calc.cycleRevenue.toLocaleString("en-IN")}</strong></div>
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
                   )}
                 </div>

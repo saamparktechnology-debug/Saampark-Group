@@ -6,7 +6,7 @@ import {
   Plus, Download, CreditCard, RefreshCw, X, Send, 
   CheckCircle2, DollarSign, Clock, AlertCircle, Sparkles, 
   Calendar, Layers, FileText, ChevronRight, Package, Check,
-  QrCode, Building2, ShieldCheck, ArrowUpRight
+  QrCode, Building2, ShieldCheck, ArrowUpRight, User, Percent, Pencil
 } from "lucide-react"
 
 import { Button } from "@/components/ui/Button"
@@ -32,10 +32,12 @@ import {
 } from "./services/subscriptionService"
 import { SubscriptionList } from "./components/SubscriptionList"
 import { RenewSubscriptionModal } from "./components/RenewSubscriptionModal"
+import { EditSubscriptionModal } from "./components/EditSubscriptionModal"
 import { ClientSubscriptionLedgerModal } from "./components/ClientSubscriptionLedgerModal"
 import { InvoiceModal } from "@/app/feature/sales/invoices/components/InvoiceModal"
 import { InvoiceItem } from "@/app/feature/sales/invoices/services/invoiceService"
 import { getClients } from "@/app/feature/clients/services/clientService"
+import { UserService } from "@/services/apiServices"
 import { ThreeDotLoader } from "@/components/ui/ThreeDotLoader"
 import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
@@ -63,6 +65,7 @@ export default function SubscriptionsMain() {
 
   // Data States
   const [subscriptions, setSubscriptions] = React.useState<Subscription[]>([])
+  const [teamMembers, setTeamMembers] = React.useState<{ id: string; name: string; email: string; role?: string }[]>([])
   const [isLoading, setIsLoading] = React.useState(true)
   const [toastMessage, setToastMessage] = React.useState<string | null>(null)
 
@@ -70,6 +73,7 @@ export default function SubscriptionsMain() {
   const [isAddSubModalOpen, setIsAddSubModalOpen] = React.useState(false)
   const [selectedSubModelTab, setSelectedSubModelTab] = React.useState<SubscriptionType>("package")
   const [renewingSubscription, setRenewingSubscription] = React.useState<Subscription | null>(null)
+  const [editingSubscription, setEditingSubscription] = React.useState<Subscription | null>(null)
   const [selectedLedgerClient, setSelectedLedgerClient] = React.useState<string | null>(null)
   const [selectedLedgerEmail, setSelectedLedgerEmail] = React.useState<string | undefined>(undefined)
   const [selectedViewInvoice, setSelectedViewInvoice] = React.useState<InvoiceItem | null>(null)
@@ -86,6 +90,10 @@ export default function SubscriptionsMain() {
   const [customClientEmail, setCustomClientEmail] = React.useState("")
   const [customClientPhone, setCustomClientPhone] = React.useState("")
   const [customClientCompany, setCustomClientCompany] = React.useState("")
+
+  // Form State: Assigned Team Member & Revenue Share %
+  const [assignedTeamMemberEmail, setAssignedTeamMemberEmail] = React.useState("")
+  const [teamSharePctInput, setTeamSharePctInput] = React.useState<number | "">(10)
 
   // Form State: Package Wise
   const [selectedPackageId, setSelectedPackageId] = React.useState<string>("pkg_growth_erp")
@@ -135,6 +143,25 @@ export default function SubscriptionsMain() {
 
   React.useEffect(() => {
     loadData(true)
+    
+    // Load team members strictly excluding clients
+    UserService.getTeamMembers().then((users: any[]) => {
+      if (Array.isArray(users)) {
+        const teamOnly = users
+          .filter(u => {
+            const r = (u.role || u.role_name || "").toLowerCase().trim()
+            return !r.includes("client")
+          })
+          .map((u, idx) => ({
+            id: String(u.id || u._id || idx),
+            name: u.full_name || u.name || u.email || "Team Member",
+            email: u.email || "",
+            role: u.role_name || u.role || "Team Member",
+          }))
+        setTeamMembers(teamOnly)
+      }
+    }).catch(() => {})
+
     const handleReload = () => loadData(false)
     window.addEventListener("storage", handleReload)
     window.addEventListener("saampark_company_switched", handleReload)
@@ -319,6 +346,11 @@ export default function SubscriptionsMain() {
       return
     }
 
+    const assignedMemberObj = teamMembers.find(m => m.email.toLowerCase() === assignedTeamMemberEmail.toLowerCase())
+    const assignedMemberName = assignedMemberObj?.name
+    const assignedMemberId = assignedMemberObj?.id
+    const teamSharePercentage = typeof teamSharePctInput === "number" ? teamSharePctInput : 0
+
     // 1. Package Wise Subscription
     if (selectedSubModelTab === "package") {
       let planTitle = ""
@@ -371,6 +403,11 @@ export default function SubscriptionsMain() {
         taxType: subTaxType,
         gstRate: isNonGst ? 0 : 18,
         dailyLateFee,
+        assignedMemberId,
+        assignedMemberName,
+        assignedMemberEmail: assignedTeamMemberEmail || undefined,
+        assignedMembers: assignedTeamMemberEmail ? [assignedTeamMemberEmail] : [],
+        teamSharePercentage,
       }, activeCompanyId || "tech")
 
       showToast(`✅ Package Subscription "${planTitle}" assigned to ${clientName}!`)
@@ -409,6 +446,11 @@ export default function SubscriptionsMain() {
         taxType: subTaxType,
         gstRate: isNonGst ? 0 : 18,
         dailyLateFee,
+        assignedMemberId,
+        assignedMemberName,
+        assignedMemberEmail: assignedTeamMemberEmail || undefined,
+        assignedMembers: assignedTeamMemberEmail ? [assignedTeamMemberEmail] : [],
+        teamSharePercentage,
       }, activeCompanyId || "tech")
 
       showToast(`✅ Regular Subscription "${regularPlanName}" created for ${clientName}!`)
@@ -456,6 +498,11 @@ export default function SubscriptionsMain() {
         taxType: subTaxType,
         gstRate: isNonGst ? 0 : 18,
         dailyLateFee,
+        assignedMemberId,
+        assignedMemberName,
+        assignedMemberEmail: assignedTeamMemberEmail || undefined,
+        assignedMembers: assignedTeamMemberEmail ? [assignedTeamMemberEmail] : [],
+        teamSharePercentage,
       }, activeCompanyId || "tech")
 
       showToast(`✅ EMI Subscription (${tenure} Months @ ₹${monthlyEmi.toLocaleString("en-IN")}/mo) created for ${clientName}!`)
@@ -463,6 +510,14 @@ export default function SubscriptionsMain() {
 
     setIsAddSubModalOpen(false)
     loadData(false)
+  }
+
+  const handleEditSubscriptionSave = async (id: string, updates: Partial<Subscription>) => {
+    const res = await updateSubscription(id, updates, activeCompanyId || "tech")
+    if (res) {
+      showToast("✅ Subscription successfully modified and updated!")
+      loadData(false)
+    }
   }
 
   const handleDeleteSubscription = async (id: string) => {
@@ -863,6 +918,7 @@ export default function SubscriptionsMain() {
           subscriptions={tabFilteredSubscriptions}
           onDelete={handleDeleteSubscription}
           onOpenRenewModal={(sub) => setRenewingSubscription(sub)}
+          onOpenEditModal={(sub) => setEditingSubscription(sub)}
           onSendReminder={handleSendReminder}
           onToggleAutoRenew={handleToggleAutoRenew}
           onClientPayNow={(sub) => setClientPayingSub(sub)}
@@ -871,6 +927,8 @@ export default function SubscriptionsMain() {
             setSelectedLedgerClient(cName)
             setSelectedLedgerEmail(sub.clientEmail)
           }}
+          canEdit={canEditSubscription}
+          canDelete={canDeleteSubscription}
         />
       )}
 
@@ -1194,6 +1252,53 @@ export default function SubscriptionsMain() {
                         onChange={(e) => setDailyLateFeeInput(e.target.value === "" ? "" : Number(e.target.value))}
                         className="w-full pl-7 pr-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-semibold focus:outline-hidden"
                       />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Assign Managing Team Member & Revenue Share Commission (%) */}
+                <div className="p-3 bg-gradient-to-br from-indigo-50/50 to-blue-50/30 dark:from-indigo-950/30 dark:to-blue-950/20 rounded-2xl border border-indigo-200 dark:border-indigo-800/60 space-y-2.5">
+                  <div className="flex items-center gap-1.5 text-indigo-700 dark:text-indigo-300 font-bold text-[11px]">
+                    <User size={13} />
+                    <span>Assign Managing Team Member & Revenue Share (%)</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] font-semibold text-zinc-600 dark:text-zinc-400 mb-1">
+                        Managing Team Member (Only Team)
+                      </label>
+                      <select
+                        value={assignedTeamMemberEmail}
+                        onChange={(e) => setAssignedTeamMemberEmail(e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden font-medium text-xs"
+                      >
+                        <option value="">-- No Member Assigned --</option>
+                        {teamMembers.map(m => (
+                          <option key={m.email} value={m.email}>
+                            {m.name} ({m.role || 'Team'})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-semibold text-zinc-600 dark:text-zinc-400 mb-1">
+                        Team Member Revenue Share (%)
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="1"
+                          placeholder="10"
+                          value={teamSharePctInput === "" ? "" : teamSharePctInput}
+                          onChange={(e) => setTeamSharePctInput(e.target.value === "" ? "" : Number(e.target.value))}
+                          className="w-full px-2.5 pr-7 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl font-bold text-xs focus:outline-hidden"
+                        />
+                        <span className="absolute right-2.5 top-1.5 text-zinc-400 font-bold text-xs">%</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1611,6 +1716,15 @@ export default function SubscriptionsMain() {
         isOpen={Boolean(selectedViewInvoice)}
         invoice={selectedViewInvoice}
         onClose={() => setSelectedViewInvoice(null)}
+      />
+
+      {/* ── MODAL 6: MODIFY / EDIT SUBSCRIPTION CONTRACT MODAL ── */}
+      <EditSubscriptionModal
+        isOpen={Boolean(editingSubscription)}
+        subscription={editingSubscription}
+        teamMembers={teamMembers}
+        onClose={() => setEditingSubscription(null)}
+        onSave={handleEditSubscriptionSave}
       />
 
     </motion.div>
