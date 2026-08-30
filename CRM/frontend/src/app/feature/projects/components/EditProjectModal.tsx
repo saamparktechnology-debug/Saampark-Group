@@ -1,9 +1,10 @@
 "use client"
 
 import * as React from "react"
-import { X, Check, Bold, Italic, Underline, List, ListOrdered, Table, Link2, Code, Sparkles, Minus, Maximize2, Users, UserCheck } from "lucide-react"
+import { X, Check, Bold, Italic, Underline, List, ListOrdered, Table, Link2, Code, Sparkles, Minus, Maximize2, Users, UserCheck, Search, Percent } from "lucide-react"
 import { Project, ProjectMember, ProjectStatus, ProjectType } from "../types"
 import { updateProject } from "../services/projectService"
+import { getUsers } from "@/app/feature/users/services/userService"
 import { UserService } from "@/services/apiServices"
 
 interface EditProjectModalProps {
@@ -30,30 +31,47 @@ export function EditProjectModal({
   const [newLabelInput, setNewLabelInput] = React.useState("")
   const [status, setStatus] = React.useState<ProjectStatus>("Open")
   const [selectedMemberIds, setSelectedMemberIds] = React.useState<string[]>([])
+  const [memberShares, setMemberShares] = React.useState<Record<string, number>>({})
   const [memberSearchQuery, setMemberSearchQuery] = React.useState("")
   const [teamMembers, setTeamMembers] = React.useState<any[]>([])
   const [isSubmitting, setIsSubmitting] = React.useState(false)
 
+  // Load team members reliably from both DB and API
   React.useEffect(() => {
     if (isOpen) {
-      UserService.getTeamMembers().then((allUsers) => {
-        if (Array.isArray(allUsers)) {
-          const onlyTeam = allUsers.filter((u) => {
-            const role = (u.role || u.role_name || "").toLowerCase().trim()
-            return !role.includes("client") && u.status !== "Inactive"
-          }).map(u => ({
-            id: String(u.id || u._id),
-            name: u.full_name || u.name || "Team Member",
-            role: u.role_name || u.role || u.department || "Developer",
-            email: u.email || "",
-            avatar: u.avatar_url || u.avatarUrl || u.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${u.full_name || u.name}`,
-          }))
-          setTeamMembers(onlyTeam)
+      Promise.all([
+        getUsers("all").catch(() => []),
+        UserService.getTeamMembers().catch(() => []),
+      ]).then(([dbUsers, apiUsers]) => {
+        const combined = [
+          ...(Array.isArray(dbUsers) ? dbUsers : []),
+          ...(Array.isArray(apiUsers) ? apiUsers : []),
+        ]
+        const unique = new Map<string, any>()
+        for (const u of combined) {
+          if (!u) continue
+          const role = (u.role || u.role_name || "").toLowerCase().trim()
+          const isClient = role.includes("client")
+          const isInactive = u.status === "Inactive"
+          const uId = String(u.id || u._id || u.email)
+          if (!isClient && !isInactive && !unique.has(uId.toLowerCase())) {
+            unique.set(uId.toLowerCase(), {
+              id: uId,
+              name: u.name || u.full_name || "Team Member",
+              role: u.role || u.role_name || u.department || "Developer",
+              email: u.email || "",
+              avatar: u.avatarUrl || u.avatar_url || u.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${u.name || u.full_name || uId}`,
+            })
+          }
         }
-      }).catch(() => {})
+        setTeamMembers(Array.from(unique.values()))
+      }).catch((err) => {
+        console.error("Error loading team members in EditProjectModal:", err)
+      })
     }
   }, [isOpen])
 
+  // Initialize form when project prop changes
   React.useEffect(() => {
     if (project) {
       setTitle(project.title || "")
@@ -65,17 +83,48 @@ export function EditProjectModal({
       setPrice(project.price || "")
       setLabelsList(project.labels || [])
       setStatus(project.status || "Open")
-      setSelectedMemberIds(project.members?.map(m => String(m.id)) || [])
+      
+      const initialShares: Record<string, number> = {}
+      const memberIds: string[] = []
+      if (Array.isArray(project.members)) {
+        project.members.forEach(m => {
+          const mId = String(m.id)
+          memberIds.push(mId)
+          initialShares[mId] = typeof m.sharePercentage === "number" ? m.sharePercentage : 15
+        })
+      }
+      setSelectedMemberIds(memberIds)
+      setMemberShares(initialShares)
     }
   }, [project])
 
   if (!isOpen || !project) return null
 
+  // Calculate numeric project total for live commission preview
+  const numericProjectTotal = parseFloat(
+    String(project.totalAmount ?? project.baseAmount ?? price ?? project.price ?? "0").replace(/[^0-9.]/g, "")
+  ) || 0
+
   const handleToggleMember = (mem: any) => {
     const memId = String(mem.id)
-    setSelectedMemberIds((prev) =>
-      prev.includes(memId) ? prev.filter((id) => id !== memId) : [...prev, memId]
-    )
+    setSelectedMemberIds((prev) => {
+      if (prev.includes(memId)) {
+        return prev.filter((id) => id !== memId)
+      } else {
+        if (memberShares[memId] === undefined) {
+          setMemberShares((s) => ({ ...s, [memId]: 15 }))
+        }
+        return [...prev, memId]
+      }
+    })
+  }
+
+  const handleShareChange = (memId: string, shareVal: number) => {
+    const clamped = isNaN(shareVal) ? 0 : Math.max(0, Math.min(100, shareVal))
+    setMemberShares((prev) => ({
+      ...prev,
+      [memId]: clamped,
+    }))
   }
 
   const handleRemoveLabel = (labelToRemove: string) => {
@@ -89,6 +138,11 @@ export function EditProjectModal({
     }
   }
 
+  const totalAssignedSharePct = selectedMemberIds.reduce(
+    (acc, mId) => acc + (memberShares[mId] !== undefined ? memberShares[mId] : 15),
+    0
+  )
+
   const handleSave = async () => {
     if (!title.trim()) {
       alert("Please enter a project title.")
@@ -97,15 +151,20 @@ export function EditProjectModal({
 
     setIsSubmitting(true)
     try {
-      const assignedMembers: ProjectMember[] = teamMembers
-        .filter((m) => selectedMemberIds.some(id => String(id).toLowerCase() === String(m.id).toLowerCase()))
-        .map((m) => ({
-          id: String(m.id),
-          name: m.name,
-          role: m.role || "Developer",
-          avatar: m.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${m.name}`,
-          email: m.email,
-        }))
+      const assignedMembers: ProjectMember[] = selectedMemberIds.map((mId) => {
+        const found = teamMembers.find(
+          (t) => String(t.id).toLowerCase() === mId.toLowerCase()
+        )
+        const sharePct = memberShares[mId] !== undefined ? Number(memberShares[mId]) : 15
+        return {
+          id: mId,
+          name: found?.name || "Team Member",
+          role: found?.role || "Developer",
+          avatar: found?.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${found?.name || mId}`,
+          email: found?.email || "",
+          sharePercentage: sharePct,
+        }
+      })
 
       const updated = await updateProject(project.id, {
         title,
@@ -124,7 +183,8 @@ export function EditProjectModal({
       onProjectUpdated(updated)
       onClose()
     } catch (err) {
-      console.error(err)
+      console.error("Error saving updated project:", err)
+      alert("Failed to save project updates.")
     } finally {
       setIsSubmitting(false)
     }
@@ -136,7 +196,9 @@ export function EditProjectModal({
         
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800">
-          <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">Edit project</h2>
+          <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
+            Edit project
+          </h2>
           <button
             type="button"
             onClick={onClose}
@@ -146,9 +208,8 @@ export function EditProjectModal({
           </button>
         </div>
 
-        {/* Form Body */}
-        <div className="p-6 overflow-y-auto space-y-4 text-xs flex-1">
-          
+        {/* Modal Body Form */}
+        <div className="p-6 overflow-y-auto space-y-4 text-xs">
           {/* Title */}
           <div className="grid grid-cols-4 items-center gap-4">
             <label className="text-zinc-500 font-medium">Title</label>
@@ -157,11 +218,11 @@ export function EditProjectModal({
               placeholder="Title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400"
+              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200"
             />
           </div>
 
-          {/* Project Type */}
+          {/* Project type */}
           <div className="grid grid-cols-4 items-center gap-4">
             <label className="text-zinc-500 font-medium">Project type</label>
             <select
@@ -174,88 +235,205 @@ export function EditProjectModal({
             </select>
           </div>
 
-          {/* Client (if Client Project) */}
+          {/* Client (only if Client Project) */}
           {projectType === "Client Project" && (
             <div className="grid grid-cols-4 items-center gap-4">
               <label className="text-zinc-500 font-medium">Client</label>
               <input
                 type="text"
-                placeholder="Client Name"
                 value={client}
                 onChange={(e) => setClient(e.target.value)}
-                className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200"
+                className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-semibold"
               />
             </div>
           )}
 
-          {/* Assign Team */}
-          <div className="grid grid-cols-4 items-start gap-4 pt-1">
-            <div className="text-zinc-500 font-medium pt-1 flex flex-col">
-              <span className="font-semibold text-zinc-700 dark:text-zinc-300">Assign Team</span>
-              <span className="text-[10px] text-blue-600 font-normal">
-                {selectedMemberIds.length} member{selectedMemberIds.length !== 1 ? "s" : ""} selected
+          {/* Assigned Team Members & Revenue Share % Section */}
+          <div className="grid grid-cols-4 items-start gap-4">
+            <div className="pt-2">
+              <label className="text-zinc-700 dark:text-zinc-300 font-bold block">Assign Team</label>
+              <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold">
+                {selectedMemberIds.length} member{selectedMemberIds.length !== 1 ? 's' : ''} selected
               </span>
             </div>
-            <div className="col-span-3 space-y-2">
-              {teamMembers.length === 0 ? (
-                <div className="p-3 rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 text-zinc-400 text-center text-[11px]">
-                  No team members found.
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-1.5 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700 scrollbar-thin">
-                  {teamMembers.map((tm) => {
-                    const isSelected = selectedMemberIds.includes(String(tm.id))
-                    return (
-                      <button
-                        key={tm.id}
-                        type="button"
-                        onClick={() => handleToggleMember(tm)}
-                        className={`flex items-center gap-2 p-2 rounded-lg text-left transition-all border cursor-pointer ${
-                          isSelected
-                            ? "bg-blue-50 dark:bg-blue-950/60 border-blue-400 dark:border-blue-600 shadow-2xs"
-                            : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:border-zinc-300"
-                        }`}
-                      >
-                        <img
-                          src={tm.avatar || tm.avatarUrl || `https://api.dicebear.com/7.x/notionists/svg?seed=${tm.name}`}
-                          alt={tm.name}
-                          className="w-7 h-7 rounded-full object-cover shrink-0 bg-zinc-200"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold text-[11px] text-zinc-800 dark:text-zinc-200 truncate">{tm.name}</p>
-                          <p className="text-[10px] text-zinc-400 truncate">{tm.department || tm.role || "Team Member"}</p>
+
+            <div className="col-span-3 space-y-3 p-3.5 bg-zinc-50/80 dark:bg-zinc-800/60 rounded-2xl border border-zinc-200 dark:border-zinc-700">
+              {/* Selected Members with Revenue Share % */}
+              {selectedMemberIds.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-[10.5px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider flex items-center justify-between">
+                    <span>Configured Project Shares</span>
+                    <span className="text-purple-600 dark:text-purple-400 font-extrabold text-[11px]">
+                      Total: {totalAssignedSharePct}% (₹{Math.round((numericProjectTotal * totalAssignedSharePct) / 100).toLocaleString("en-IN")})
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {selectedMemberIds.map((mId) => {
+                      const m = teamMembers.find(
+                        (t) => String(t.id).toLowerCase() === mId.toLowerCase()
+                      ) || {
+                        id: mId,
+                        name: "Team Member",
+                        role: "Developer",
+                        avatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${mId}`,
+                        email: "",
+                      }
+                      const shareVal = memberShares[mId] !== undefined ? memberShares[mId] : 15
+                      const memberCalculatedAmt = Math.round((numericProjectTotal * shareVal) / 100)
+
+                      return (
+                        <div
+                          key={mId}
+                          className="p-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200/80 dark:border-purple-800/60 shadow-2xs flex items-center justify-between gap-2.5"
+                        >
+                          {/* Member Info */}
+                          <div className="flex items-center gap-2 min-w-0">
+                            <img
+                              src={m.avatar}
+                              alt={m.name}
+                              className="w-7 h-7 rounded-full object-cover border border-purple-200 shrink-0"
+                            />
+                            <div className="min-w-0">
+                              <div className="font-bold text-zinc-900 dark:text-zinc-100 truncate text-xs">
+                                {m.name}
+                              </div>
+                              <div className="text-[10px] text-zinc-400 truncate">
+                                {m.role}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Share % Input & Computed Amount */}
+                          <div className="flex items-center gap-2 shrink-0">
+                            <div className="flex items-center gap-1 bg-zinc-50 dark:bg-zinc-800 px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700">
+                              <span className="text-[10px] text-zinc-500 font-semibold">Share:</span>
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={shareVal}
+                                onChange={(e) => handleShareChange(mId, Number(e.target.value))}
+                                className="w-10 bg-transparent text-purple-600 dark:text-purple-400 font-black text-center focus:outline-none text-xs"
+                              />
+                              <span className="text-zinc-400 font-bold text-[10px]">%</span>
+                            </div>
+
+                            {/* Payout Preview Badge */}
+                            <div className="px-2 py-1 rounded-lg bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-200 font-black text-[11px] border border-purple-200 dark:border-purple-800 whitespace-nowrap">
+                              ₹{memberCalculatedAmt.toLocaleString("en-IN")}
+                            </div>
+
+                            {/* Remove button */}
+                            <button
+                              type="button"
+                              onClick={() => handleToggleMember(m)}
+                              className="p-1 rounded-md text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
+                              title="Remove member"
+                            >
+                              <X size={13} />
+                            </button>
+                          </div>
                         </div>
-                        {isSelected && <UserCheck size={14} className="text-blue-600 shrink-0" />}
-                      </button>
-                    )
-                  })}
+                      )
+                    })}
+                  </div>
                 </div>
               )}
+
+              {/* Member Search Bar */}
+              <div className="relative">
+                <Search size={13} className="absolute left-2.5 top-2 text-zinc-400" />
+                <input
+                  type="text"
+                  placeholder="Search team members by name, role, email..."
+                  value={memberSearchQuery}
+                  onChange={(e) => setMemberSearchQuery(e.target.value)}
+                  className="w-full pl-8 pr-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Team Members Checkbox List */}
+              <div className="max-h-36 overflow-y-auto space-y-1 divide-y divide-zinc-100 dark:divide-zinc-800/60 bg-white dark:bg-zinc-900/60 rounded-xl p-1.5 border border-zinc-200/80 dark:border-zinc-700/60">
+                {teamMembers.length === 0 ? (
+                  <div className="py-4 text-center text-[11px] text-zinc-400">
+                    Loading team members...
+                  </div>
+                ) : (
+                  teamMembers
+                    .filter((m) => {
+                      if (!memberSearchQuery.trim()) return true
+                      const q = memberSearchQuery.toLowerCase().trim()
+                      return (
+                        m.name.toLowerCase().includes(q) ||
+                        m.role.toLowerCase().includes(q) ||
+                        m.email.toLowerCase().includes(q)
+                      )
+                    })
+                    .map((m) => {
+                      const isSelected = selectedMemberIds.includes(String(m.id))
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => handleToggleMember(m)}
+                          className={`w-full flex items-center justify-between p-1.5 rounded-lg text-left transition-colors cursor-pointer text-xs ${
+                            isSelected
+                              ? "bg-purple-50 dark:bg-purple-950/40 text-purple-900 dark:text-purple-200 font-semibold"
+                              : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <img
+                              src={m.avatar}
+                              alt={m.name}
+                              className="w-6 h-6 rounded-full object-cover border border-zinc-200 dark:border-zinc-700 shrink-0"
+                            />
+                            <div className="min-w-0">
+                              <div className="font-medium leading-none truncate">{m.name}</div>
+                              <div className="text-[10px] text-zinc-400 mt-0.5 truncate">
+                                {m.role} {m.email ? `• ${m.email}` : ''}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div
+                            className={`w-4 h-4 rounded flex items-center justify-center border text-[10px] shrink-0 ml-2 ${
+                              isSelected
+                                ? "bg-purple-600 border-purple-600 text-white"
+                                : "border-zinc-300 dark:border-zinc-600"
+                            }`}
+                          >
+                            {isSelected && "✓"}
+                          </div>
+                        </button>
+                      )
+                    })
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Description with Rich Formatting Toolbar matching Image 4 */}
+          {/* Description */}
           <div className="grid grid-cols-4 items-start gap-4">
             <label className="text-zinc-500 font-medium pt-2">Description</label>
-            <div className="col-span-3 border border-zinc-200 dark:border-zinc-700 rounded-md overflow-hidden bg-zinc-50 dark:bg-zinc-800/50">
-              {/* Rich Text Toolbar */}
-              <div className="flex items-center gap-1.5 p-2 bg-white dark:bg-zinc-800 border-b border-zinc-200 dark:border-zinc-700 text-zinc-500">
-                <button type="button" className="p-1 hover:text-blue-600 rounded"><Sparkles size={13} /></button>
-                <div className="h-3 w-px bg-zinc-200 dark:bg-zinc-700 mx-0.5" />
-                <button type="button" className="p-1 hover:text-zinc-800 dark:hover:text-zinc-200 rounded font-bold"><Bold size={13} /></button>
-                <button type="button" className="p-1 hover:text-zinc-800 dark:hover:text-zinc-200 rounded italic"><Italic size={13} /></button>
-                <button type="button" className="p-1 hover:text-zinc-800 dark:hover:text-zinc-200 rounded underline"><Underline size={13} /></button>
-                <div className="h-3 w-px bg-zinc-200 dark:bg-zinc-700 mx-0.5" />
-                <button type="button" className="p-1 hover:text-zinc-800 dark:hover:text-zinc-200 rounded"><List size={13} /></button>
-                <button type="button" className="p-1 hover:text-zinc-800 dark:hover:text-zinc-200 rounded"><ListOrdered size={13} /></button>
-                <button type="button" className="p-1 hover:text-zinc-800 dark:hover:text-zinc-200 rounded"><Table size={13} /></button>
-                <div className="h-3 w-px bg-zinc-200 dark:bg-zinc-700 mx-0.5" />
-                <button type="button" className="p-1 hover:text-zinc-800 dark:hover:text-zinc-200 rounded"><Link2 size={13} /></button>
-                <button type="button" className="p-1 hover:text-zinc-800 dark:hover:text-zinc-200 rounded"><Minus size={13} /></button>
-                <button type="button" className="p-1 hover:text-zinc-800 dark:hover:text-zinc-200 rounded"><Maximize2 size={13} /></button>
-                <button type="button" className="p-1 hover:text-zinc-800 dark:hover:text-zinc-200 rounded"><Code size={13} /></button>
+            <div className="col-span-3 border border-zinc-200 dark:border-zinc-700 rounded-md overflow-hidden bg-zinc-50 dark:bg-zinc-800">
+              <div className="flex items-center gap-1 p-1.5 border-b border-zinc-200 dark:border-zinc-700 text-zinc-500 overflow-x-auto">
+                <button type="button" className="p-1 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded"><Sparkles size={12} /></button>
+                <span className="w-px h-3 bg-zinc-300 dark:bg-zinc-600 mx-1" />
+                <button type="button" className="p-1 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded"><Bold size={12} /></button>
+                <button type="button" className="p-1 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded"><Italic size={12} /></button>
+                <button type="button" className="p-1 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded"><Underline size={12} /></button>
+                <span className="w-px h-3 bg-zinc-300 dark:bg-zinc-600 mx-1" />
+                <button type="button" className="p-1 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded"><List size={12} /></button>
+                <button type="button" className="p-1 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded"><ListOrdered size={12} /></button>
+                <button type="button" className="p-1 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded"><Table size={12} /></button>
+                <span className="w-px h-3 bg-zinc-300 dark:bg-zinc-600 mx-1" />
+                <button type="button" className="p-1 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded"><Link2 size={12} /></button>
+                <button type="button" className="p-1 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded"><Minus size={12} /></button>
+                <button type="button" className="p-1 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded"><Maximize2 size={12} /></button>
+                <button type="button" className="p-1 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded"><Code size={12} /></button>
               </div>
-
               <textarea
                 rows={5}
                 value={description}
@@ -291,7 +469,7 @@ export function EditProjectModal({
           <div className="grid grid-cols-4 items-start gap-4">
             <label className="text-zinc-500 font-medium pt-2">Price & Taxes</label>
             <div className="col-span-3 space-y-2.5">
-              {/* Detailed Breakdown for Projects Created from Client Section */}
+              {/* Detailed Breakdown */}
               {(project.baseAmount !== undefined || project.gstAmount !== undefined || project.clientId || (project.items && project.items.length > 0)) ? (
                 <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-zinc-800/60 border border-slate-200 dark:border-zinc-700 space-y-2 text-xs">
                   <div className="flex items-center justify-between border-b border-slate-200 dark:border-zinc-700 pb-1.5">
@@ -356,97 +534,13 @@ export function EditProjectModal({
                   placeholder="Price (e.g. ₹35,000)"
                   value={price}
                   onChange={(e) => setPrice(e.target.value)}
-                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 font-mono"
+                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 font-mono font-semibold"
                 />
               </div>
             </div>
           </div>
 
-          {/* Assigned Team Members Section */}
-          <div className="grid grid-cols-4 items-start gap-4">
-            <label className="text-zinc-500 font-medium pt-2 flex items-center gap-1.5">
-              <Users size={14} className="text-blue-500" />
-              <span>Assigned Team</span>
-            </label>
-            <div className="col-span-3 space-y-2 p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
-              {/* Selected Members Chips */}
-              <div className="flex flex-wrap gap-1.5 min-h-[28px] items-center">
-                {selectedMemberIds.length === 0 ? (
-                  <span className="text-[11px] text-zinc-400 italic">No team members assigned yet.</span>
-                ) : (
-                  teamMembers
-                    .filter(m => selectedMemberIds.includes(String(m.id)))
-                    .map(m => (
-                      <span
-                        key={m.id}
-                        className="inline-flex items-center gap-1.5 pl-1.5 pr-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/80 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-[11px] font-medium"
-                      >
-                        <img src={m.avatar} alt={m.name} className="w-4 h-4 rounded-full object-cover" />
-                        <span>{m.name}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleToggleMember(m)}
-                          className="hover:text-blue-900 dark:hover:text-white cursor-pointer ml-0.5"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))
-                )}
-              </div>
-
-              {/* Member Search Bar */}
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Filter team members..."
-                  value={memberSearchQuery}
-                  onChange={(e) => setMemberSearchQuery(e.target.value)}
-                  className="w-full px-2.5 py-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-
-              {/* Team Members Checkbox List */}
-              <div className="max-h-36 overflow-y-auto space-y-1 divide-y divide-zinc-100 dark:divide-zinc-800">
-                {teamMembers
-                  .filter(m => {
-                    if (!memberSearchQuery.trim()) return true
-                    const q = memberSearchQuery.toLowerCase().trim()
-                    return m.name.toLowerCase().includes(q) || m.role.toLowerCase().includes(q) || m.email.toLowerCase().includes(q)
-                  })
-                  .map(m => {
-                    const isSelected = selectedMemberIds.includes(String(m.id))
-                    return (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => handleToggleMember(m)}
-                        className={`w-full flex items-center justify-between p-1.5 rounded-lg text-left transition-colors cursor-pointer text-xs ${
-                          isSelected 
-                            ? "bg-blue-50 dark:bg-blue-950/50 text-blue-900 dark:text-blue-200 font-semibold" 
-                            : "hover:bg-zinc-100 dark:hover:bg-zinc-750 text-zinc-700 dark:text-zinc-300"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <img src={m.avatar} alt={m.name} className="w-5 h-5 rounded-full object-cover" />
-                          <div>
-                            <div className="font-medium leading-none">{m.name}</div>
-                            <div className="text-[10px] text-zinc-400 mt-0.5">{m.role} {m.email ? `• ${m.email}` : ''}</div>
-                          </div>
-                        </div>
-                        <div className={`w-4 h-4 rounded flex items-center justify-center border text-[10px] ${
-                          isSelected ? "bg-blue-600 border-blue-600 text-white" : "border-zinc-300 dark:border-zinc-600"
-                        }`}>
-                          {isSelected && "✓"}
-                        </div>
-                      </button>
-                    )
-                  })}
-              </div>
-            </div>
-          </div>
-
-          {/* Labels with removable pills matching Image 4 */}
+          {/* Labels with removable pills */}
           <div className="grid grid-cols-4 items-center gap-4">
             <label className="text-zinc-500 font-medium">Labels</label>
             <div className="col-span-3 flex flex-wrap items-center gap-2 px-3 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md min-h-[38px]">
@@ -458,7 +552,7 @@ export function EditProjectModal({
                   <button
                     type="button"
                     onClick={() => handleRemoveLabel(lbl)}
-                    className="hover:text-purple-900 dark:hover:text-purple-100"
+                    className="hover:text-purple-900 dark:hover:text-purple-100 cursor-pointer"
                   >
                     ×
                   </button>
@@ -487,22 +581,24 @@ export function EditProjectModal({
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value as ProjectStatus)}
-              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200"
+              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-semibold"
             >
               <option value="Open">Open</option>
-              <option value="Completed">Completed</option>
+              <option value="In Progress">In Progress</option>
               <option value="Hold">Hold</option>
+              <option value="Completed">Completed</option>
+              <option value="Finished">Finished</option>
             </select>
           </div>
 
         </div>
 
-        {/* Footer Buttons matching Image 4 */}
+        {/* Footer Buttons */}
         <div className="flex items-center justify-end gap-2 px-6 py-4 bg-zinc-50/50 dark:bg-zinc-800/40 border-t border-zinc-100 dark:border-zinc-800">
           <button
             type="button"
             onClick={onClose}
-            className="flex items-center gap-1 px-4 py-2 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700/50 transition-colors"
+            className="flex items-center gap-1 px-4 py-2 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700/50 transition-colors cursor-pointer"
           >
             <X size={14} />
             <span>Close</span>
@@ -512,7 +608,7 @@ export function EditProjectModal({
             type="button"
             disabled={isSubmitting}
             onClick={handleSave}
-            className="flex items-center gap-1 px-5 py-2 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+            className="flex items-center gap-1 px-5 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm cursor-pointer"
           >
             <Check size={14} />
             <span>Save</span>

@@ -7,6 +7,7 @@ export interface ProjectMember {
   role: string
   avatar?: string
   email?: string
+  sharePercentage?: number // Revenue share percentage against this project (e.g. 15 for 15%)
 }
 
 export interface ProjectMilestone {

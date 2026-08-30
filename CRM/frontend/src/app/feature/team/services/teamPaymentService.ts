@@ -12,7 +12,7 @@ import { getUsers, getUserAvatar } from "@/app/feature/users/services/userServic
 import { getSubscriptions } from "@/app/feature/subscriptions/services/subscriptionService"
 import { Subscription, calculateTeamRevenueShare } from "@/app/feature/subscriptions/types"
 import { getProjects } from "@/app/feature/projects/services/projectService"
-import { Project } from "@/app/feature/projects/types"
+import { Project, ProjectMember } from "@/app/feature/projects/types"
 
 const BANKING_STORAGE_KEY = "team_banking_details"
 const PAYOUTS_STORAGE_KEY = "team_payout_records"
@@ -215,19 +215,20 @@ export const getProjectWiseUserEarnings = async (
       clientPaid = Math.round(projectTotal * 0.5) // demo baseline
     }
 
-    const assignedMembers = Array.isArray(p.members) && p.members.length > 0
+    const assignedMembers: ProjectMember[] = Array.isArray(p.members) && p.members.length > 0
       ? p.members
       : nonClientUsers.slice(0, 2).map((u: any) => ({
           id: String(u.id || u._id),
           name: u.name || "Lead Developer",
           role: u.role || "Developer",
           email: u.email || "",
+          sharePercentage: 15,
         }))
 
     const defaultSharePct = Math.round(30 / Math.max(1, assignedMembers.length))
 
     for (const m of assignedMembers) {
-      const sharePct = defaultSharePct
+      const sharePct = typeof m.sharePercentage === "number" ? m.sharePercentage : defaultSharePct
       const totalEarned = Math.round((clientPaid * sharePct) / 100)
 
       // Check how much has already been disbursed to this member for this project

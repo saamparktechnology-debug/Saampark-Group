@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { X, Check, Users, Shield, UserCheck } from "lucide-react"
+import { X, Check, Users, Shield, UserCheck, Search, Percent, Sparkles, Building2 } from "lucide-react"
 import { Project, ProjectType, ProjectMember, ProjectMilestone } from "../types"
 import { addProject } from "../services/projectService"
 import { getUsers } from "@/app/feature/users/services/userService"
@@ -31,6 +31,7 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
   const [gstRate, setGstRate] = React.useState<number>(18)
   const [labels, setLabels] = React.useState("")
   const [selectedMemberIds, setSelectedMemberIds] = React.useState<string[]>([])
+  const [memberShares, setMemberShares] = React.useState<Record<string, number>>({})
   const [memberSearchQuery, setMemberSearchQuery] = React.useState("")
   const [isSubmitting, setIsSubmitting] = React.useState(false)
 
@@ -39,20 +40,33 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
 
   React.useEffect(() => {
     if (isOpen) {
-      UserService.getTeamMembers().then((allUsers) => {
-        if (Array.isArray(allUsers)) {
-          const onlyTeam = allUsers.filter((u) => {
-            const role = (u.role || u.role_name || "").toLowerCase().trim()
-            return !role.includes("client") && u.status !== "Inactive"
-          }).map(u => ({
-            id: String(u.id || u._id),
-            name: u.full_name || u.name || "Team Member",
-            role: u.role_name || u.role || u.department || "Developer",
-            email: u.email || "",
-            avatar: u.avatar_url || u.avatarUrl || u.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${u.full_name || u.name}`,
-          }))
-          setTeamMembers(onlyTeam)
+      // 1. Fetch team members reliably
+      Promise.all([
+        getUsers("all").catch(() => []),
+        UserService.getTeamMembers().catch(() => []),
+      ]).then(([dbUsers, apiUsers]) => {
+        const combined = [
+          ...(Array.isArray(dbUsers) ? dbUsers : []),
+          ...(Array.isArray(apiUsers) ? apiUsers : []),
+        ]
+        const unique = new Map<string, any>()
+        for (const u of combined) {
+          if (!u) continue
+          const role = (u.role || u.role_name || "").toLowerCase().trim()
+          const isClient = role.includes("client")
+          const isInactive = u.status === "Inactive"
+          const uId = String(u.id || u._id || u.email)
+          if (!isClient && !isInactive && !unique.has(uId.toLowerCase())) {
+            unique.set(uId.toLowerCase(), {
+              id: uId,
+              name: u.name || u.full_name || "Team Member",
+              role: u.role || u.role_name || u.department || "Developer",
+              email: u.email || "",
+              avatar: u.avatarUrl || u.avatar_url || u.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${u.name || u.full_name || uId}`,
+            })
+          }
         }
+        setTeamMembers(Array.from(unique.values()))
       }).catch(() => {})
 
       // 2. Fetch real clients
@@ -65,12 +79,38 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
 
   if (!isOpen) return null
 
+  // Computed numeric final price
+  const numericComputedPrice = (typeof baseAmount === "number" && baseAmount > 0)
+    ? (Math.max(0, baseAmount + (typeof setupCharge === "number" ? setupCharge : 0) - (typeof discount === "number" ? discount : 0)) +
+       Math.round(Math.max(0, baseAmount + (typeof setupCharge === "number" ? setupCharge : 0) - (typeof discount === "number" ? discount : 0)) * (gstRate / 100)))
+    : (parseFloat(String(price).replace(/[^0-9.]/g, "")) || 0)
+
   const handleToggleMember = (mem: any) => {
     const memId = String(mem.id)
-    setSelectedMemberIds((prev) =>
-      prev.includes(memId) ? prev.filter((id) => id !== memId) : [...prev, memId]
-    )
+    setSelectedMemberIds((prev) => {
+      if (prev.includes(memId)) {
+        return prev.filter((id) => id !== memId)
+      } else {
+        if (memberShares[memId] === undefined) {
+          setMemberShares((s) => ({ ...s, [memId]: 15 }))
+        }
+        return [...prev, memId]
+      }
+    })
   }
+
+  const handleShareChange = (memId: string, shareVal: number) => {
+    const clamped = isNaN(shareVal) ? 0 : Math.max(0, Math.min(100, shareVal))
+    setMemberShares((prev) => ({
+      ...prev,
+      [memId]: clamped,
+    }))
+  }
+
+  const totalAssignedSharePct = selectedMemberIds.reduce(
+    (acc, mId) => acc + (memberShares[mId] !== undefined ? memberShares[mId] : 15),
+    0
+  )
 
   const handleSave = async (continueAdding = false) => {
     if (!title.trim()) {
@@ -78,17 +118,22 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
       return
     }
 
-    const assignedMembers: ProjectMember[] = teamMembers
-      .filter((m) => selectedMemberIds.includes(m.id))
-      .map((m) => ({
-        id: String(m.id),
-        name: m.name,
-        role: m.department || "Developer",
-        avatar: m.avatarUrl || m.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${m.name}`,
-        email: m.email,
-      }))
+    const assignedMembers: ProjectMember[] = selectedMemberIds.map((mId) => {
+      const found = teamMembers.find(
+        (t) => String(t.id).toLowerCase() === mId.toLowerCase()
+      )
+      const sharePct = memberShares[mId] !== undefined ? Number(memberShares[mId]) : 15
+      return {
+        id: mId,
+        name: found?.name || "Team Member",
+        role: found?.role || "Developer",
+        avatar: found?.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${found?.name || mId}`,
+        email: found?.email || "",
+        sharePercentage: sharePct,
+      }
+    })
 
-    // Initial starter milestones for the assigned developer
+    // Starter milestones
     const defaultMilestones: ProjectMilestone[] = [
       {
         id: `ms_fe_${Date.now()}`,
@@ -104,79 +149,81 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
         title: "Backend API & Database Integration",
         stage: "Backend",
         status: "Pending",
-        notes: "Server endpoints, MySQL schema, and sync",
+        notes: "MySQL Schema & Storage Sync endpoints",
         updatedBy: assignedMembers[0]?.name || "Assigned Team",
         updatedAt: new Date().toISOString(),
-      },
+      }
     ]
 
+    const labelsArray = labels.split(",").map(l => l.trim()).filter(Boolean)
+
+    const finalPriceString = (typeof baseAmount === "number" && baseAmount > 0)
+      ? `₹${numericComputedPrice.toLocaleString("en-IN")}`
+      : (price || "₹0")
+
+    const currentBranch = branches.find(b => b.id === activeBranchId)
+
+    const newProjData: Omit<Project, "id"> = {
+      title,
+      projectType,
+      client: projectType === "Client Project" ? (client || "Client") : "-",
+      price: finalPriceString,
+      startDate: startDate || new Date().toISOString().split('T')[0],
+      deadline: deadline || new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0],
+      progress: 0,
+      status: "Open",
+      labels: labelsArray.length > 0 ? labelsArray : ["Active"],
+      description,
+      members: assignedMembers,
+      milestones: defaultMilestones,
+      companyId: activeCompanyId || user?.companyId || "tech",
+      branchId: activeBranchId || undefined,
+      branchName: currentBranch?.name || undefined,
+      baseAmount: typeof baseAmount === "number" ? baseAmount : undefined,
+      setupCharge: typeof setupCharge === "number" ? setupCharge : undefined,
+      discount: typeof discount === "number" ? discount : undefined,
+      gstRate: gstRate,
+      gstAmount: (typeof baseAmount === "number" && baseAmount > 0)
+        ? Math.round(Math.max(0, baseAmount + (typeof setupCharge === "number" ? setupCharge : 0) - (typeof discount === "number" ? discount : 0)) * (gstRate / 100))
+        : 0,
+      totalAmount: numericComputedPrice,
+      paymentStatus: "Payment Pending",
+      paymentStructure: "Full",
+      totalHours: 0,
+    }
+
     setIsSubmitting(true)
-    const numBase = typeof baseAmount === "number" ? baseAmount : 0
-    const numSetup = typeof setupCharge === "number" ? setupCharge : 0
-    const numDiscount = typeof discount === "number" ? discount : 0
-    const taxableBase = Math.max(0, numBase + numSetup - numDiscount)
-    const gstAmount = Math.round(taxableBase * (gstRate / 100))
-    const totalAmount = taxableBase + gstAmount
+    try {
+      const created = await executeWithFeedback(
+        () => addProject(newProjData),
+        {
+          loadingMsg: `Creating project "${title}"...`,
+          successMsg: `Project "${title}" created successfully!`,
+          errorMsg: "Failed to create project."
+        }
+      )
 
-    const formattedPrice = totalAmount > 0 
-      ? `₹${totalAmount.toLocaleString("en-IN")}`
-      : price ? (price.startsWith("$") || price.startsWith("₹") ? price : `₹${price}`) : "-"
-
-    const currentBranchObj = branches.find(b => b.id === (activeBranchId || user?.branchId))
-    const finalBranchName = currentBranchObj?.name || user?.branchName || undefined
-
-    setIsSubmitting(true)
-    await executeWithFeedback(async () => {
-      const created = await addProject({
-        title,
-        projectType,
-        client: projectType === "Client Project" ? (client || (availableClients[0]?.name ?? "Direct Client")) : "Internal Operations",
-        price: formattedPrice,
-        baseAmount: numBase > 0 ? numBase : undefined,
-        setupCharge: numSetup > 0 ? numSetup : undefined,
-        discount: numDiscount > 0 ? numDiscount : undefined,
-        gstRate,
-        gstAmount: gstAmount > 0 ? gstAmount : undefined,
-        totalAmount: totalAmount > 0 ? totalAmount : undefined,
-        startDate: startDate || new Date().toLocaleDateString("en-GB"),
-        deadline: deadline || new Date().toLocaleDateString("en-GB"),
-        progress: 0,
-        status: "Open",
-        labels: labels ? labels.split(",").map(l => l.trim()).filter(Boolean) : [],
-        description,
-        billedBy: user?.name || "Admin",
-        members: assignedMembers,
-        milestones: defaultMilestones,
-        branchId: activeBranchId || user?.branchId || undefined,
-        branchName: finalBranchName,
-        companyId: activeCompanyId || user?.companyId || "tech",
-      })
-
-      onProjectAdded(created)
-
-      if (continueAdding) {
-        setTitle("")
-        setDescription("")
-        setPrice("")
-        setBaseAmount("")
-        setSetupCharge("")
-        setDiscount("")
-        setLabels("")
-        setStartDate("")
-        setDeadline("")
-        setSelectedMemberIds([])
-      } else {
-        onClose()
+      if (created) {
+        onProjectAdded(created)
+        if (!continueAdding) {
+          onClose()
+        } else {
+          setTitle("")
+          setDescription("")
+          setPrice("")
+          setBaseAmount("")
+          setSetupCharge("")
+          setDiscount("")
+          setLabels("")
+          setSelectedMemberIds([])
+          setMemberShares({})
+        }
       }
-    }, {
-      actionType: "create",
-      loadingTitle: "Creating Project...",
-      loadingMsg: `Initializing workspace for "${title}"...`,
-      successTitle: "Project Created Successfully!",
-      successMsg: `Project "${title}" has been created and assigned.`,
-      errorTitle: "Project Creation Failed",
-    })
-    setIsSubmitting(false)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -185,7 +232,9 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
         
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800">
-          <h2 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">Add project</h2>
+          <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
+            Add project
+          </h2>
           <button
             type="button"
             onClick={onClose}
@@ -195,21 +244,21 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
           </button>
         </div>
 
-        {/* Form Body */}
-        <div className="p-6 overflow-y-auto space-y-4 text-xs flex-1">
+        {/* Modal Body Form */}
+        <div className="p-6 overflow-y-auto space-y-4 text-xs">
           {/* Title */}
           <div className="grid grid-cols-4 items-center gap-4">
-            <label className="text-zinc-500 font-medium">Title</label>
+            <label className="text-zinc-500 font-medium">Title *</label>
             <input
               type="text"
-              placeholder="Title"
+              placeholder="Project Title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400"
+              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200"
             />
           </div>
 
-          {/* Project Type */}
+          {/* Project type */}
           <div className="grid grid-cols-4 items-center gap-4">
             <label className="text-zinc-500 font-medium">Project type</label>
             <select
@@ -222,84 +271,197 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
             </select>
           </div>
 
-          {/* Client (if Client Project) */}
+          {/* Client Selection (only if Client Project) */}
           {projectType === "Client Project" && (
             <div className="grid grid-cols-4 items-center gap-4">
               <label className="text-zinc-500 font-medium">Client *</label>
-              {availableClients.length > 0 ? (
-                <select
-                  value={client}
-                  onChange={(e) => setClient(e.target.value)}
-                  className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200"
-                >
-                  {availableClients.map((c) => (
-                    <option key={c.name} value={c.name}>
-                      {c.name} {c.email ? `(${c.email})` : ""}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type="text"
-                  placeholder="Enter Client Name"
-                  value={client}
-                  onChange={(e) => setClient(e.target.value)}
-                  className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200"
-                />
-              )}
+              <div className="col-span-3">
+                {availableClients.length > 0 ? (
+                  <select
+                    value={client}
+                    onChange={(e) => setClient(e.target.value)}
+                    className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-semibold"
+                  >
+                    {availableClients.map(c => (
+                      <option key={c.name} value={c.name}>{c.name}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    placeholder="Client Name"
+                    value={client}
+                    onChange={(e) => setClient(e.target.value)}
+                    className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-semibold"
+                  />
+                )}
+              </div>
             </div>
           )}
 
-          {/* Assign Team (Team Members ONLY) */}
-          <div className="grid grid-cols-4 items-start gap-4 pt-1">
-            <div className="text-zinc-500 font-medium pt-1 flex flex-col">
-              <span>Assign Team</span>
-              <span className="text-[10px] text-blue-600 font-normal">Team Members Only</span>
+          {/* Assigned Team Members & Revenue Share % Section */}
+          <div className="grid grid-cols-4 items-start gap-4">
+            <div className="pt-2">
+              <label className="text-zinc-700 dark:text-zinc-300 font-bold block">Assign Team</label>
+              <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold">
+                {selectedMemberIds.length} member{selectedMemberIds.length !== 1 ? 's' : ''} selected
+              </span>
             </div>
-            <div className="col-span-3 space-y-2">
-              {teamMembers.length === 0 ? (
-                <div className="p-3 rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 text-zinc-400 text-center text-[11px]">
-                  No team members found. (Team members can be added under Users)
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto p-1 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
-                  {teamMembers.map((tm) => {
-                    const isSelected = selectedMemberIds.includes(tm.id)
-                    return (
-                      <button
-                        key={tm.id}
-                        type="button"
-                        onClick={() => handleToggleMember(tm)}
-                        className={`flex items-center gap-2 p-2 rounded-lg text-left transition-all border cursor-pointer ${
-                          isSelected
-                            ? "bg-blue-50 dark:bg-blue-950/60 border-blue-400 dark:border-blue-600 shadow-2xs"
-                            : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:border-zinc-300"
-                        }`}
-                      >
-                        <img
-                          src={tm.avatar || tm.avatarUrl || `https://api.dicebear.com/7.x/notionists/svg?seed=${tm.name}`}
-                          alt={tm.name}
-                          className="w-7 h-7 rounded-full object-cover shrink-0 bg-zinc-200"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold text-[11px] text-zinc-800 dark:text-zinc-200 truncate">{tm.name}</p>
-                          <p className="text-[10px] text-zinc-400 truncate">{tm.department || "Developer / Team"}</p>
+
+            <div className="col-span-3 space-y-3 p-3.5 bg-zinc-50/80 dark:bg-zinc-800/60 rounded-2xl border border-zinc-200 dark:border-zinc-700">
+              {/* Selected Members with Revenue Share % */}
+              {selectedMemberIds.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-[10.5px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider flex items-center justify-between">
+                    <span>Configured Project Shares</span>
+                    <span className="text-purple-600 dark:text-purple-400 font-extrabold text-[11px]">
+                      Total: {totalAssignedSharePct}% (₹{Math.round((numericComputedPrice * totalAssignedSharePct) / 100).toLocaleString("en-IN")})
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {selectedMemberIds.map((mId) => {
+                      const m = teamMembers.find(
+                        (t) => String(t.id).toLowerCase() === mId.toLowerCase()
+                      ) || {
+                        id: mId,
+                        name: "Team Member",
+                        role: "Developer",
+                        avatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${mId}`,
+                        email: "",
+                      }
+                      const shareVal = memberShares[mId] !== undefined ? memberShares[mId] : 15
+                      const memberCalculatedAmt = Math.round((numericComputedPrice * shareVal) / 100)
+
+                      return (
+                        <div
+                          key={mId}
+                          className="p-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-purple-200/80 dark:border-purple-800/60 shadow-2xs flex items-center justify-between gap-2.5"
+                        >
+                          {/* Member Info */}
+                          <div className="flex items-center gap-2 min-w-0">
+                            <img
+                              src={m.avatar}
+                              alt={m.name}
+                              className="w-7 h-7 rounded-full object-cover border border-purple-200 shrink-0"
+                            />
+                            <div className="min-w-0">
+                              <div className="font-bold text-zinc-900 dark:text-zinc-100 truncate text-xs">
+                                {m.name}
+                              </div>
+                              <div className="text-[10px] text-zinc-400 truncate">
+                                {m.role}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Share % Input & Computed Amount */}
+                          <div className="flex items-center gap-2 shrink-0">
+                            <div className="flex items-center gap-1 bg-zinc-50 dark:bg-zinc-800 px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700">
+                              <span className="text-[10px] text-zinc-500 font-semibold">Share:</span>
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={shareVal}
+                                onChange={(e) => handleShareChange(mId, Number(e.target.value))}
+                                className="w-10 bg-transparent text-purple-600 dark:text-purple-400 font-black text-center focus:outline-none text-xs"
+                              />
+                              <span className="text-zinc-400 font-bold text-[10px]">%</span>
+                            </div>
+
+                            {/* Payout Preview Badge */}
+                            <div className="px-2 py-1 rounded-lg bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-200 font-black text-[11px] border border-purple-200 dark:border-purple-800 whitespace-nowrap">
+                              ₹{memberCalculatedAmt.toLocaleString("en-IN")}
+                            </div>
+
+                            {/* Remove button */}
+                            <button
+                              type="button"
+                              onClick={() => handleToggleMember(m)}
+                              className="p-1 rounded-md text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
+                              title="Remove member"
+                            >
+                              <X size={13} />
+                            </button>
+                          </div>
                         </div>
-                        {isSelected && <UserCheck size={14} className="text-blue-600 shrink-0" />}
-                      </button>
-                    )
-                  })}
+                      )
+                    })}
+                  </div>
                 </div>
               )}
-            </div>
-          </div>
 
-          {/* Billed By (Admin in charge) */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <label className="text-zinc-500 font-medium">Billed By</label>
-            <div className="col-span-3 px-3 py-2 bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 rounded-md text-zinc-700 dark:text-zinc-300 font-semibold flex items-center justify-between">
-              <span>{user?.name || "Admin"}</span>
-              <span className="text-[10px] text-zinc-400 bg-white dark:bg-zinc-700 px-2 py-0.5 rounded">Admin In Charge</span>
+              {/* Member Search Bar */}
+              <div className="relative">
+                <Search size={13} className="absolute left-2.5 top-2 text-zinc-400" />
+                <input
+                  type="text"
+                  placeholder="Search team members by name, role, email..."
+                  value={memberSearchQuery}
+                  onChange={(e) => setMemberSearchQuery(e.target.value)}
+                  className="w-full pl-8 pr-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Team Members Checkbox List */}
+              <div className="max-h-36 overflow-y-auto space-y-1 divide-y divide-zinc-100 dark:divide-zinc-800/60 bg-white dark:bg-zinc-900/60 rounded-xl p-1.5 border border-zinc-200/80 dark:border-zinc-700/60">
+                {teamMembers.length === 0 ? (
+                  <div className="py-4 text-center text-[11px] text-zinc-400">
+                    Loading team members...
+                  </div>
+                ) : (
+                  teamMembers
+                    .filter((m) => {
+                      if (!memberSearchQuery.trim()) return true
+                      const q = memberSearchQuery.toLowerCase().trim()
+                      return (
+                        m.name.toLowerCase().includes(q) ||
+                        m.role.toLowerCase().includes(q) ||
+                        m.email.toLowerCase().includes(q)
+                      )
+                    })
+                    .map((m) => {
+                      const isSelected = selectedMemberIds.includes(String(m.id))
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => handleToggleMember(m)}
+                          className={`w-full flex items-center justify-between p-1.5 rounded-lg text-left transition-colors cursor-pointer text-xs ${
+                            isSelected
+                              ? "bg-purple-50 dark:bg-purple-950/40 text-purple-900 dark:text-purple-200 font-semibold"
+                              : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <img
+                              src={m.avatar}
+                              alt={m.name}
+                              className="w-6 h-6 rounded-full object-cover border border-zinc-200 dark:border-zinc-700 shrink-0"
+                            />
+                            <div className="min-w-0">
+                              <div className="font-medium leading-none truncate">{m.name}</div>
+                              <div className="text-[10px] text-zinc-400 mt-0.5 truncate">
+                                {m.role} {m.email ? `• ${m.email}` : ''}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div
+                            className={`w-4 h-4 rounded flex items-center justify-center border text-[10px] shrink-0 ml-2 ${
+                              isSelected
+                                ? "bg-purple-600 border-purple-600 text-white"
+                                : "border-zinc-300 dark:border-zinc-600"
+                            }`}
+                          >
+                            {isSelected && "✓"}
+                          </div>
+                        </button>
+                      )
+                    })
+                )}
+              </div>
             </div>
           </div>
 
@@ -308,22 +470,22 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
             <label className="text-zinc-500 font-medium pt-2">Description</label>
             <textarea
               rows={3}
-              placeholder="Description"
+              placeholder="Project description, scope, and objectives..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400"
+              className="col-span-3 p-3 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 text-xs resize-none"
             />
           </div>
 
-          {/* Start Date */}
+          {/* Start date */}
           <div className="grid grid-cols-4 items-center gap-4">
             <label className="text-zinc-500 font-medium">Start date</label>
             <input
               type="text"
-              placeholder="Start date (e.g. 20-06-2026)"
+              placeholder="YYYY-MM-DD or DD/MM/YYYY"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400"
+              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200"
             />
           </div>
 
@@ -332,179 +494,95 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
             <label className="text-zinc-500 font-medium">Deadline</label>
             <input
               type="text"
-              placeholder="Deadline (e.g. 08-08-2026)"
+              placeholder="YYYY-MM-DD or DD/MM/YYYY"
               value={deadline}
               onChange={(e) => setDeadline(e.target.value)}
-              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400"
+              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200"
             />
           </div>
 
-          {/* Financial Breakdown: Base, Setup Charge, Discount, GST */}
-          <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/80 space-y-3">
-            <span className="font-bold text-zinc-700 dark:text-zinc-300 block text-[11px]">
-              Financial Terms & Pricing
-            </span>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <div>
-                <label className="text-zinc-500 font-medium block text-[10.5px] mb-1">Base Deal Amount (₹)</label>
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="e.g. 50000"
-                  value={baseAmount}
-                  onChange={(e) => {
-                    const val = e.target.value
-                    setBaseAmount(val === "" ? "" : Math.max(0, Number(val)))
-                  }}
-                  className="w-full px-3 py-1.5 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md text-zinc-800 dark:text-zinc-200 font-semibold"
-                />
-              </div>
-
-              <div>
-                <label className="text-zinc-500 font-medium block text-[10.5px] mb-1">Platform / Setup Charge (₹)</label>
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="e.g. 2500"
-                  value={setupCharge}
-                  onChange={(e) => {
-                    const val = e.target.value
-                    setSetupCharge(val === "" ? "" : Math.max(0, Number(val)))
-                  }}
-                  className="w-full px-3 py-1.5 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md text-zinc-800 dark:text-zinc-200 font-semibold"
-                />
-              </div>
-
-              <div>
-                <label className="text-zinc-500 font-medium block text-[10.5px] mb-1">Less: Discount (₹)</label>
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="e.g. 1000"
-                  value={discount}
-                  onChange={(e) => {
-                    const val = e.target.value
-                    setDiscount(val === "" ? "" : Math.max(0, Number(val)))
-                  }}
-                  className="w-full px-3 py-1.5 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md text-zinc-800 dark:text-zinc-200 font-semibold"
-                />
-              </div>
-
-              <div>
-                <label className="text-zinc-500 font-medium block text-[10.5px] mb-1">GST Rate (%)</label>
-                <select
-                  value={gstRate}
-                  onChange={(e) => setGstRate(Number(e.target.value))}
-                  className="w-full px-3 py-1.5 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md text-zinc-800 dark:text-zinc-200 font-semibold"
-                >
-                  <option value={0}>0% (Non-GST / Exempt)</option>
-                  <option value={5}>5%</option>
-                  <option value={12}>12%</option>
-                  <option value={18}>18% (Standard GST)</option>
-                  <option value={28}>28%</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Price Preview / Override */}
-            <div className="grid grid-cols-4 items-center gap-2 pt-1 border-t border-zinc-200 dark:border-zinc-700">
-              <label className="text-zinc-500 font-medium text-[11px]">Final Price</label>
-              <div className="col-span-3 flex items-center gap-2">
-                <input
-                  type="text"
-                  placeholder="Auto-calculated or custom (e.g. ₹55,000)"
-                  value={
-                    typeof baseAmount === "number" && baseAmount > 0
-                      ? `₹${(Math.max(0, baseAmount + (typeof setupCharge === "number" ? setupCharge : 0) - (typeof discount === "number" ? discount : 0)) + Math.round(Math.max(0, baseAmount + (typeof setupCharge === "number" ? setupCharge : 0) - (typeof discount === "number" ? discount : 0)) * (gstRate / 100))).toLocaleString("en-IN")}`
-                      : price
-                  }
-                  onChange={(e) => setPrice(e.target.value)}
-                  className="flex-1 px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-md text-zinc-800 dark:text-zinc-200 font-bold"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Assigned Team Members Section */}
+          {/* Price & Billing Calculation */}
           <div className="grid grid-cols-4 items-start gap-4">
-            <label className="text-zinc-500 font-medium pt-2 flex items-center gap-1.5">
-              <Users size={14} className="text-blue-500" />
-              <span>Assigned Team</span>
-            </label>
-            <div className="col-span-3 space-y-2 p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
-              {/* Selected Members Chips */}
-              <div className="flex flex-wrap gap-1.5 min-h-[28px] items-center">
-                {selectedMemberIds.length === 0 ? (
-                  <span className="text-[11px] text-zinc-400 italic">No team members assigned yet.</span>
-                ) : (
-                  teamMembers
-                    .filter(m => selectedMemberIds.includes(String(m.id)))
-                    .map(m => (
-                      <span
-                        key={m.id}
-                        className="inline-flex items-center gap-1.5 pl-1.5 pr-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/80 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-[11px] font-medium"
-                      >
-                        <img src={m.avatar} alt={m.name} className="w-4 h-4 rounded-full object-cover" />
-                        <span>{m.name}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleToggleMember(m)}
-                          className="hover:text-blue-900 dark:hover:text-white cursor-pointer ml-0.5"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))
-                )}
+            <label className="text-zinc-500 font-medium pt-2">Price & Tax Breakdown</label>
+            <div className="col-span-3 space-y-2 p-3 bg-zinc-50 dark:bg-zinc-850/50 rounded-xl border border-zinc-200 dark:border-zinc-700">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-zinc-500 font-medium block text-[10.5px] mb-1">Base Price (₹) *</label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="e.g. 50000"
+                    value={baseAmount}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      setBaseAmount(val === "" ? "" : Math.max(0, Number(val)))
+                    }}
+                    className="w-full px-3 py-1.5 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md text-zinc-800 dark:text-zinc-200 font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-zinc-500 font-medium block text-[10.5px] mb-1">Platform / Setup Charge (₹)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="e.g. 2500"
+                    value={setupCharge}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      setSetupCharge(val === "" ? "" : Math.max(0, Number(val)))
+                    }}
+                    className="w-full px-3 py-1.5 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md text-zinc-800 dark:text-zinc-200 font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-zinc-500 font-medium block text-[10.5px] mb-1">Less: Discount (₹)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="e.g. 1000"
+                    value={discount}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      setDiscount(val === "" ? "" : Math.max(0, Number(val)))
+                    }}
+                    className="w-full px-3 py-1.5 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md text-zinc-800 dark:text-zinc-200 font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-zinc-500 font-medium block text-[10.5px] mb-1">GST Rate (%)</label>
+                  <select
+                    value={gstRate}
+                    onChange={(e) => setGstRate(Number(e.target.value))}
+                    className="w-full px-3 py-1.5 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md text-zinc-800 dark:text-zinc-200 font-semibold"
+                  >
+                    <option value={0}>0% (Non-GST / Exempt)</option>
+                    <option value={5}>5%</option>
+                    <option value={12}>12%</option>
+                    <option value={18}>18% (Standard GST)</option>
+                    <option value={28}>28%</option>
+                  </select>
+                </div>
               </div>
 
-              {/* Member Search Bar */}
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Filter team members..."
-                  value={memberSearchQuery}
-                  onChange={(e) => setMemberSearchQuery(e.target.value)}
-                  className="w-full px-2.5 py-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-
-              {/* Team Members Checkbox List */}
-              <div className="max-h-36 overflow-y-auto space-y-1 divide-y divide-zinc-100 dark:divide-zinc-800">
-                {teamMembers
-                  .filter(m => {
-                    if (!memberSearchQuery.trim()) return true
-                    const q = memberSearchQuery.toLowerCase().trim()
-                    return m.name.toLowerCase().includes(q) || m.role.toLowerCase().includes(q) || m.email.toLowerCase().includes(q)
-                  })
-                  .map(m => {
-                    const isSelected = selectedMemberIds.includes(String(m.id))
-                    return (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => handleToggleMember(m)}
-                        className={`w-full flex items-center justify-between p-1.5 rounded-lg text-left transition-colors cursor-pointer text-xs ${
-                          isSelected 
-                            ? "bg-blue-50 dark:bg-blue-950/50 text-blue-900 dark:text-blue-200 font-semibold" 
-                            : "hover:bg-zinc-100 dark:hover:bg-zinc-750 text-zinc-700 dark:text-zinc-300"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <img src={m.avatar} alt={m.name} className="w-5 h-5 rounded-full object-cover" />
-                          <div>
-                            <div className="font-medium leading-none">{m.name}</div>
-                            <div className="text-[10px] text-zinc-400 mt-0.5">{m.role} {m.email ? `• ${m.email}` : ''}</div>
-                          </div>
-                        </div>
-                        <div className={`w-4 h-4 rounded flex items-center justify-center border text-[10px] ${
-                          isSelected ? "bg-blue-600 border-blue-600 text-white" : "border-zinc-300 dark:border-zinc-600"
-                        }`}>
-                          {isSelected && "✓"}
-                        </div>
-                      </button>
-                    )
-                  })}
+              {/* Price Preview */}
+              <div className="grid grid-cols-4 items-center gap-2 pt-1 border-t border-zinc-200 dark:border-zinc-700">
+                <label className="text-zinc-500 font-medium text-[11px]">Final Price</label>
+                <div className="col-span-3 flex items-center gap-2">
+                  <input
+                    type="text"
+                    placeholder="Auto-calculated or custom"
+                    value={
+                      typeof baseAmount === "number" && baseAmount > 0
+                        ? `₹${numericComputedPrice.toLocaleString("en-IN")}`
+                        : price
+                    }
+                    onChange={(e) => setPrice(e.target.value)}
+                    className="flex-1 px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-md text-zinc-800 dark:text-zinc-200 font-bold font-mono"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -522,12 +600,12 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
           </div>
         </div>
 
-        {/* Footer Buttons matching Image 3 */}
+        {/* Footer Buttons */}
         <div className="flex items-center justify-end gap-2 px-6 py-4 bg-zinc-50/50 dark:bg-zinc-800/40 border-t border-zinc-100 dark:border-zinc-800">
           <button
             type="button"
             onClick={onClose}
-            className="flex items-center gap-1 px-4 py-2 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700/50 transition-colors"
+            className="flex items-center gap-1 px-4 py-2 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700/50 transition-colors cursor-pointer"
           >
             <X size={14} />
             <span>Close</span>
@@ -537,7 +615,7 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
             type="button"
             disabled={isSubmitting}
             onClick={() => handleSave(true)}
-            className="flex items-center gap-1 px-4 py-2 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors"
+            className="flex items-center gap-1 px-4 py-2 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors cursor-pointer"
           >
             <Check size={14} />
             <span>Save & continue</span>
@@ -547,7 +625,7 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
             type="button"
             disabled={isSubmitting}
             onClick={() => handleSave(false)}
-            className="flex items-center gap-1 px-5 py-2 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+            className="flex items-center gap-1 px-5 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm cursor-pointer"
           >
             <Check size={14} />
             <span>Save</span>
