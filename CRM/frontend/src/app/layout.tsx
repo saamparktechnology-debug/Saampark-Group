@@ -22,11 +22,12 @@ export const metadata: Metadata = {
   description: "Enterprise ERP, CRM, and Workspace",
   icons: {
     icon: [
-      { url: "/saampark-logo.png?v=2", type: "image/png" },
-      { url: "/favicon.ico?v=2" }
+      { url: "/saampark-logo.png?v=2026", type: "image/png" },
+      { url: "/logo.png?v=2026", type: "image/png" },
+      { url: "/favicon.ico?v=2026" }
     ],
-    shortcut: "/saampark-logo.png?v=2",
-    apple: "/saampark-logo.png?v=2",
+    shortcut: "/saampark-logo.png?v=2026",
+    apple: "/saampark-logo.png?v=2026",
   },
 };
 
@@ -42,9 +43,9 @@ export default function RootLayout({
       className={`${inter.variable} h-full antialiased`}
     >
       <head>
-        <link rel="icon" type="image/png" href="/saampark-logo.png?v=2" />
-        <link rel="shortcut icon" href="/saampark-logo.png?v=2" />
-        <link rel="apple-touch-icon" href="/saampark-logo.png?v=2" />
+        <link rel="icon" type="image/png" href="/saampark-logo.png?v=2026" />
+        <link rel="shortcut icon" href="/saampark-logo.png?v=2026" />
+        <link rel="apple-touch-icon" href="/saampark-logo.png?v=2026" />
       </head>
       <body suppressHydrationWarning className="min-h-full flex flex-col bg-background text-foreground transition-colors duration-300">
         <ThemeProvider

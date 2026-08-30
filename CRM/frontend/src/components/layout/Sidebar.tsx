@@ -302,7 +302,7 @@ export function Sidebar() {
             <img 
               src="/logo.png" 
               alt="SAAMPARK Logo" 
-              className="min-w-8 w-8 h-8 rounded-full object-cover shrink-0 shadow-sm border border-primary/20 group-hover:scale-105 transition-transform" 
+              className="min-w-8 w-8 h-8 rounded-xl object-contain shrink-0 group-hover:scale-105 transition-transform" 
             />
             <AnimatePresence>
               {(!isSidebarCollapsed || isMobile) && (

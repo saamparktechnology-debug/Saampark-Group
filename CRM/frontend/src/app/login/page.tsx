@@ -496,10 +496,10 @@ export default function LoginPage() {
             >
               <div>
                 <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-surface border border-border/80 text-primary mb-4 shadow-xl p-2">
-                  <img src="/logo.png" alt="SAAMPARK Logo" className="w-full h-full rounded-2xl object-cover" />
+                  <img src="/logo.png" alt="SAAMPARK Logo" className="w-full h-full rounded-2xl object-contain" />
                 </div>
                 <h1 className="text-4xl font-extrabold tracking-tight bg-gradient-to-br from-foreground via-foreground to-foreground/70 bg-clip-text text-transparent flex items-center justify-center gap-3">
-                  <img src="/logo.png" alt="SAAMPARK Logo" className="w-9 h-9 rounded-full inline-block object-cover border border-primary/20" />
+                  <img src="/logo.png" alt="SAAMPARK Logo" className="w-9 h-9 rounded-xl inline-block object-contain" />
                   <span>SAAMPARK Group CRM</span>
                 </h1>
                 <p className="text-muted-foreground text-base mt-2 max-w-md mx-auto">
