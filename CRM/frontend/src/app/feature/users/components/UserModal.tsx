@@ -132,8 +132,9 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
   // Helper to compute standard action matrix for a role according to system and admin configurations
   const getMatrixForRole = React.useCallback((targetRole: UserRole) => {
     const norm = normalizeRole(targetRole)
-    const configuredRoleMatrix = (roleActionPermissions && roleActionPermissions[norm]) || DEFAULT_ROLE_ACTION_PERMISSIONS[norm] || {}
-    const configuredRoleMods = (rolePermissions && rolePermissions[norm]) || DEFAULT_ROLE_PERMISSIONS[norm] || []
+    const storeState = usePermissionStore.getState()
+    const configuredRoleMatrix = (storeState.roleActionPermissions && storeState.roleActionPermissions[norm]) || DEFAULT_ROLE_ACTION_PERMISSIONS[norm] || {}
+    const configuredRoleMods = (storeState.rolePermissions && storeState.rolePermissions[norm]) || DEFAULT_ROLE_PERMISSIONS[norm] || []
 
     const matrix: Record<string, ModuleActionFlags> = {}
     CONFIGURABLE_MODULES.forEach((m) => {
@@ -160,7 +161,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
       }
     })
     return matrix
-  }, [roleActionPermissions, rolePermissions, isCurrentSuperAdmin, currentUser, getUserModuleActions])
+  }, [isCurrentSuperAdmin, currentUser, getUserModuleActions])
 
   React.useEffect(() => {
     fetchCompanies()
@@ -170,7 +171,18 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
     }
   }, [fetchCompanies, fetchBranches, isOpen])
 
+  const prevIsOpenRef = React.useRef(false)
+  const prevEditingIdRef = React.useRef<string | undefined>(undefined)
+
   React.useEffect(() => {
+    const wasClosed = !prevIsOpenRef.current && isOpen
+    const editingChanged = editingUser?.id !== prevEditingIdRef.current
+    prevIsOpenRef.current = isOpen
+    prevEditingIdRef.current = editingUser?.id
+
+    if (!isOpen) return
+    if (!wasClosed && !editingChanged) return
+
     if (editingUser) {
       setName(editingUser.name || "")
       setEmail(editingUser.email || "")
@@ -242,7 +254,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
       setName("")
       setEmail("")
       setEmailError(null)
-      const defaultRole: UserRole = initialRole || "Teams"
+      const defaultRole: UserRole = "Teams"
       setRole(defaultRole)
       if (isCurrentBranchAdmin && currentUser?.branchId) {
         setAdminScope("branch")

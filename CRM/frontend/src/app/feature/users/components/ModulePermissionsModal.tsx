@@ -46,7 +46,7 @@ export function ModulePermissionsModal({ isOpen, onClose }: ModulePermissionsMod
   }, [user])
 
   const [activeRoleTab, setActiveRoleTab] = React.useState<Role>(manageableRoles[0] || "Admin")
-  const [actionMatrix, setActionMatrix] = React.useState<Record<string, ModuleActionFlags>>({})
+  const [roleMatrices, setRoleMatrices] = React.useState<Record<Role, Record<string, ModuleActionFlags>>>({} as any)
   const [isSaving, setIsSaving] = React.useState(false)
 
   React.useEffect(() => {
@@ -79,43 +79,49 @@ export function ModulePermissionsModal({ isOpen, onClose }: ModulePermissionsMod
     roleActionPermissions,
   ])
 
-  // Fetch latest role permissions from DB whenever modal opens
+  // Initialize or re-populate all role matrices when modal opens or store permissions update
   React.useEffect(() => {
-    if (isOpen) {
-      usePermissionStore.getState().fetchRolePermissions?.()
-    }
-  }, [isOpen])
+    if (!isOpen) return
 
-  // Initialize Action Matrix whenever active tab changes or modal opens
-  React.useEffect(() => {
-    if (!activeRoleTab) return
+    usePermissionStore.getState().fetchRolePermissions?.()
 
-    const existingRoleMatrix = (roleActionPermissions && roleActionPermissions[activeRoleTab]) || DEFAULT_ROLE_ACTION_PERMISSIONS[activeRoleTab]
-    const existingRoleMods = rolePermissions[activeRoleTab] || DEFAULT_ROLE_PERMISSIONS[activeRoleTab] || []
+    const initialMatrices: Record<string, Record<string, ModuleActionFlags>> = {}
+    const storeState = usePermissionStore.getState()
+    const allRoles: Role[] = ["Super Admin", "Admin", "Teams", "Clients"]
 
-    const init: Record<string, ModuleActionFlags> = {}
-    ALL_MODULE_NAMES.forEach((m) => {
-      const config = MODULE_ACTION_CONFIG[m] || { hasAdd: true, hasEdit: true, hasDelete: true }
-      if (existingRoleMatrix && existingRoleMatrix[m]) {
-        init[m] = { ...existingRoleMatrix[m] }
-      } else {
-        const isModAllowed = existingRoleMods.includes(m)
-        init[m] = isModAllowed
-          ? {
-              view: true,
-              add: Boolean(config.hasAdd !== false && activeRoleTab !== "Clients"),
-              edit: Boolean(config.hasEdit !== false && activeRoleTab !== "Clients"),
-              delete: Boolean(config.hasDelete !== false && activeRoleTab === "Admin"),
-            }
-          : { view: false, add: false, edit: false, delete: false }
-      }
+    allRoles.forEach((r) => {
+      const existingRoleMatrix = (storeState.roleActionPermissions && storeState.roleActionPermissions[r]) || DEFAULT_ROLE_ACTION_PERMISSIONS[r] || {}
+      const existingRoleMods = (storeState.rolePermissions && storeState.rolePermissions[r]) || DEFAULT_ROLE_PERMISSIONS[r] || []
+
+      const init: Record<string, ModuleActionFlags> = {}
+      ALL_MODULE_NAMES.forEach((m) => {
+        const config = MODULE_ACTION_CONFIG[m] || { hasAdd: true, hasEdit: true, hasDelete: true }
+        if (existingRoleMatrix && existingRoleMatrix[m]) {
+          init[m] = { ...existingRoleMatrix[m] }
+        } else {
+          const isModAllowed = existingRoleMods.includes(m)
+          init[m] = isModAllowed
+            ? {
+                view: true,
+                add: Boolean(config.hasAdd !== false && r !== "Clients"),
+                edit: Boolean(config.hasEdit !== false && r !== "Clients"),
+                delete: Boolean(config.hasDelete !== false && r === "Admin"),
+              }
+            : { view: false, add: false, edit: false, delete: false }
+        }
+      })
+      initialMatrices[r] = init
     })
 
-    setActionMatrix(init)
-  }, [activeRoleTab, rolePermissions, roleActionPermissions, isOpen])
+    setRoleMatrices(initialMatrices as Record<Role, Record<string, ModuleActionFlags>>)
+  }, [isOpen])
+
+  const currentRoleMatrix: Record<string, ModuleActionFlags> = React.useMemo(() => {
+    return (roleMatrices && roleMatrices[activeRoleTab]) || {}
+  }, [roleMatrices, activeRoleTab])
 
   const handleCheckboxChange = (mod: ModuleName, actionKey: keyof ModuleActionFlags, checked: boolean) => {
-    const currentFlags = actionMatrix[mod] || { view: false, add: false, edit: false, delete: false }
+    const currentFlags = currentRoleMatrix[mod] || { view: false, add: false, edit: false, delete: false }
     const updatedFlags = { ...currentFlags, [actionKey]: checked }
 
     // If unchecking View, uncheck Add, Edit, Delete as well
@@ -130,11 +136,17 @@ export function ModulePermissionsModal({ isOpen, onClose }: ModulePermissionsMod
       updatedFlags.view = true
     }
 
-    setActionMatrix({ ...actionMatrix, [mod]: updatedFlags })
+    setRoleMatrices((prev) => ({
+      ...prev,
+      [activeRoleTab]: {
+        ...(prev[activeRoleTab] || {}),
+        [mod]: updatedFlags,
+      },
+    }))
   }
 
   const handleToggleModuleAll = (mod: ModuleName) => {
-    const current = actionMatrix[mod] || { view: false, add: false, edit: false, delete: false }
+    const current = currentRoleMatrix[mod] || { view: false, add: false, edit: false, delete: false }
     const config = MODULE_ACTION_CONFIG[mod] || { hasAdd: true, hasEdit: true, hasDelete: true }
     const allOn = current.view && (!config.hasAdd || current.add) && (!config.hasEdit || current.edit) && (!config.hasDelete || current.delete)
 
@@ -142,12 +154,18 @@ export function ModulePermissionsModal({ isOpen, onClose }: ModulePermissionsMod
       ? { view: false, add: false, edit: false, delete: false }
       : {
           view: true,
-          add: config.hasAdd !== false,
-          edit: config.hasEdit !== false,
-          delete: config.hasDelete !== false,
+          add: config.hasAdd !== false && activeRoleTab !== "Clients",
+          edit: config.hasEdit !== false && activeRoleTab !== "Clients",
+          delete: config.hasDelete !== false && (activeRoleTab === "Admin" || activeRoleTab === "Super Admin"),
         }
 
-    setActionMatrix({ ...actionMatrix, [mod]: nextFlags })
+    setRoleMatrices((prev) => ({
+      ...prev,
+      [activeRoleTab]: {
+        ...(prev[activeRoleTab] || {}),
+        [mod]: nextFlags,
+      },
+    }))
   }
 
   const handleSetGlobalTemplate = (template: "full" | "view" | "none") => {
@@ -158,9 +176,9 @@ export function ModulePermissionsModal({ isOpen, onClose }: ModulePermissionsMod
       if (template === "full") {
         nextMatrix[m] = {
           view: true,
-          add: config.hasAdd !== false,
-          edit: config.hasEdit !== false,
-          delete: config.hasDelete !== false,
+          add: config.hasAdd !== false && activeRoleTab !== "Clients",
+          edit: config.hasEdit !== false && activeRoleTab !== "Clients",
+          delete: config.hasDelete !== false && (activeRoleTab === "Admin" || activeRoleTab === "Super Admin"),
         }
       } else if (template === "view") {
         nextMatrix[m] = {
@@ -173,33 +191,45 @@ export function ModulePermissionsModal({ isOpen, onClose }: ModulePermissionsMod
         nextMatrix[m] = { view: false, add: false, edit: false, delete: false }
       }
     })
-    setActionMatrix(nextMatrix)
+
+    setRoleMatrices((prev) => ({
+      ...prev,
+      [activeRoleTab]: nextMatrix,
+    }))
   }
 
   const handleSave = async () => {
     setIsSaving(true)
     try {
-      // Calculate active module names having at least one action enabled
-      const activeModules = ALL_MODULE_NAMES.filter((m) => {
-        const flags = actionMatrix[m]
-        return flags && (flags.view || flags.add || flags.edit || flags.delete)
+      const updatedRolePermissions: Record<string, ModuleName[]> = { ...usePermissionStore.getState().rolePermissions }
+      const updatedRoleActionPermissions: Record<string, Record<string, ModuleActionFlags>> = { ...usePermissionStore.getState().roleActionPermissions }
+
+      // Save permissions for all roles configured in roleMatrices
+      Object.entries(roleMatrices).forEach(([r, matrix]) => {
+        const roleKey = r as Role
+        const activeModules = ALL_MODULE_NAMES.filter((m) => {
+          const flags = matrix[m]
+          return flags && (flags.view || flags.add || flags.edit || flags.delete)
+        })
+
+        setRolePermissions(roleKey, activeModules)
+        setRoleAllModuleActions(roleKey, matrix)
+
+        updatedRolePermissions[roleKey] = activeModules
+        updatedRoleActionPermissions[roleKey] = matrix
       })
 
-      // Update Zustand Store
-      setRolePermissions(activeRoleTab, activeModules)
-      setRoleAllModuleActions(activeRoleTab, actionMatrix)
-
-      // Persist to MySQL database table
+      // Persist all roles to MySQL database table
       await saveModuleDataToDB("role_permissions", {
-        rolePermissions: usePermissionStore.getState().rolePermissions,
-        roleActionPermissions: usePermissionStore.getState().roleActionPermissions,
+        rolePermissions: updatedRolePermissions,
+        roleActionPermissions: updatedRoleActionPermissions,
       }, "all").catch(() => {})
 
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("saampark_data_synced"))
       }
 
-      alert(`Granular module action permissions updated successfully for role "${activeRoleTab}"!`)
+      alert(`Granular module action permissions updated and saved successfully!`)
       onClose()
     } finally {
       setIsSaving(false)
@@ -210,7 +240,7 @@ export function ModulePermissionsModal({ isOpen, onClose }: ModulePermissionsMod
 
   // Count allowed modules
   const allowedCount = allowedConfigurableModules.filter((m) => {
-    const f = actionMatrix[m]
+    const f = currentRoleMatrix[m]
     return f && (f.view || f.add || f.edit || f.delete)
   }).length
 
@@ -312,7 +342,7 @@ export function ModulePermissionsModal({ isOpen, onClose }: ModulePermissionsMod
           <div className="overflow-y-auto flex-1 pr-1">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
               {allowedConfigurableModules.map((mod) => {
-                const flags = actionMatrix[mod] || { view: false, add: false, edit: false, delete: false }
+                const flags = currentRoleMatrix[mod] || { view: false, add: false, edit: false, delete: false }
                 const config = MODULE_ACTION_CONFIG[mod] || { hasAdd: true, hasEdit: true, hasDelete: true, description: "" }
                 const allOn = flags.view && (!config.hasAdd || flags.add) && (!config.hasEdit || flags.edit) && (!config.hasDelete || flags.delete)
                 const hasAny = flags.view || flags.add || flags.edit || flags.delete
