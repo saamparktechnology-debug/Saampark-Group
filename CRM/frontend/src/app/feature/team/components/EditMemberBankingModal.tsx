@@ -32,13 +32,13 @@ export function EditMemberBankingModal({
   React.useEffect(() => {
     if (profile) {
       const b = profile.bankingInfo || {}
-      setBankName(b.bankName || "ICICI Bank Ltd.")
+      setBankName(b.bankName || "")
       setAccountNumber(b.accountNumber || "")
-      setIfscCode(b.ifscCode || "ICIC0000021")
+      setIfscCode(b.ifscCode || "")
       setAccountHolderName(b.accountHolderName || profile.name)
-      setUpiId(b.upiId || `${profile.name.toLowerCase().replace(/[^a-z0-9]/g, '')}@icici`)
+      setUpiId(b.upiId || "")
       setPanNumber(b.panNumber || "")
-      setBaseSalary(profile.baseSalary || 25000)
+      setBaseSalary(profile.baseSalary || 0)
       setNotes(b.notes || "")
     }
   }, [profile])

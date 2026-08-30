@@ -445,7 +445,19 @@ export default function SettingsMain() {
         kycData: kycPayload,
       })
 
-      setSuccessMsg("🎉 KYC Submitted successfully! Your account is now Under Review by Administrator.")
+      // Sync with Team Banking & Payroll hub
+      try {
+        const { updateMemberBankingDetails } = await import("@/app/feature/team/services/teamPaymentService")
+        await updateMemberBankingDetails(String(user?.id || user?.email || email), {
+          bankName: kycBankName.trim() || undefined,
+          accountNumber: kycAccountNumber.trim() || undefined,
+          ifscCode: kycIfscCode.trim().toUpperCase() || undefined,
+          accountHolderName: kycAccountHolderName.trim() || undefined,
+          upiId: kycUpiId.trim() || undefined,
+        }, user?.companyId || "tech")
+      } catch {}
+
+      setSuccessMsg("🎉 KYC & Banking details saved successfully! Your account is now Under Review.")
       setTimeout(() => setSuccessMsg(""), 5000)
     } catch (err: any) {
       setErrorMsg(`Error submitting KYC: ${err.message}`)

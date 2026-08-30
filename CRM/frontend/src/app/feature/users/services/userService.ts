@@ -930,5 +930,86 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
   });
 }
 
+export async function updateUser(idOrEmail: string, updates: Partial<UserItem>, companyId?: string): Promise<UserItem | null> {
+  const norm = String(idOrEmail).toLowerCase().trim();
+  if (!norm) return null;
+
+  const allUsers = await getUsers("all");
+  const idx = allUsers.findIndex((u) => {
+    const uEmail = (u.email || "").toLowerCase().trim();
+    const uId = String(u.id || "").toLowerCase().trim();
+    return uEmail === norm || uId === norm;
+  });
+
+  if (idx === -1) return null;
+
+  const existing = allUsers[idx];
+  const updated: UserItem = {
+    ...existing,
+    ...updates,
+    id: existing.id,
+    email: updates.email || existing.email,
+  };
+
+  allUsers[idx] = updated;
+
+  await saveModuleDataToDB("users", allUsers, "all");
+  if (companyId && companyId !== "all") {
+    await saveModuleDataToDB("users", allUsers, companyId);
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("saampark_data_synced"));
+    window.dispatchEvent(new Event("saampark_users_updated"));
+    window.dispatchEvent(new Event("saampark_team_members_updated"));
+    window.dispatchEvent(new Event("storage"));
+  }
+
+  return updated;
+}
+
+export async function createTeamMember(memberData: Partial<UserItem>, companyId?: string): Promise<UserItem> {
+  const comp = companyId || memberData.companyId || "tech";
+  const newId = `usr_tm_${Date.now()}`;
+  const name = memberData.name || "Team Member";
+  const email = (memberData.email || `team_${Date.now()}@saampark.com`).toLowerCase().trim();
+
+  const newMember: UserItem = {
+    id: newId,
+    name,
+    email,
+    phone: memberData.phone || "+91 98765 43210",
+    role: (memberData.role || "Teams") as any,
+    department: memberData.department || "Operations & Delivery",
+    companyId: comp,
+    companyIds: [comp],
+    companyName: comp === "digital" ? "SAAMPARK Digital Marketing" : "SAAMPARK Technology",
+    branchId: memberData.branchId,
+    branchName: memberData.branchName,
+    status: memberData.status || "Active",
+    avatarUrl: memberData.avatarUrl || getUserAvatar(name, undefined, name),
+    joinedDate: new Date().toISOString().split("T")[0],
+    lastLogin: "Never",
+  };
+
+  const allUsers = await getUsers("all");
+  const nextList = [newMember, ...allUsers];
+
+  await saveModuleDataToDB("users", nextList, "all");
+  if (comp !== "all") {
+    await saveModuleDataToDB("users", nextList, comp);
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("saampark_data_synced"));
+    window.dispatchEvent(new Event("saampark_users_updated"));
+    window.dispatchEvent(new Event("saampark_team_members_updated"));
+    window.dispatchEvent(new Event("storage"));
+  }
+
+  return newMember;
+}
+
+
 
 
