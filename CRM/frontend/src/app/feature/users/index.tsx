@@ -18,7 +18,7 @@ import { usePermissionStore } from "@/store/usePermissionStore"
 import { ThreeDotLoader } from "@/components/ui/ThreeDotLoader"
 
 export default function UsersMain() {
-  const { activeCompanyId, activeBranchId, branches, user } = useAuthStore()
+  const { activeCompanyId, activeBranchId, branches, companies, user } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
 
   const canAddUser = user?.role === "Super Admin" || canPerformAction(user, "Users", "add")
@@ -97,51 +97,67 @@ export default function UsersMain() {
     let filtered = users
     if (!isSuperAdminLoggedIn) {
       filtered = filtered.filter((u) => u.role !== "Super Admin")
+    }
 
-      if (user?.branchId) {
-        const uBranchNorm = String(user.branchId).toLowerCase().trim()
-        const targetBranchObj = branches.find(b => b.id === user.branchId || b.name.toLowerCase() === uBranchNorm)
-        const branchNameNorm = targetBranchObj?.name?.toLowerCase().trim() || ""
+    if (user?.branchId && !isSuperAdminLoggedIn) {
+      const uBranchNorm = String(user.branchId).toLowerCase().trim()
+      const targetBranchObj = branches.find(b => b.id === user.branchId || b.name.toLowerCase() === uBranchNorm)
+      const branchNameNorm = targetBranchObj?.name?.toLowerCase().trim() || ""
+
+      filtered = filtered.filter((u) => {
+        const ub = String(u.branchId || "").toLowerCase().trim()
+        const ubn = String(u.branchName || "").toLowerCase().trim()
+        return ub === uBranchNorm || (branchNameNorm && (ub === branchNameNorm || ubn === branchNameNorm))
+      })
+    } else {
+      if (targetComp && targetComp !== "all") {
+        const matchedCompany = companies.find(
+          (c) =>
+            String(c.id).toLowerCase().trim() === targetComp ||
+            String(c.slug || "").toLowerCase().trim() === targetComp ||
+            String(c.name || "").toLowerCase().trim() === targetComp
+        )
+        const validTargetCompIds = new Set<string>([
+          targetComp,
+          ...(matchedCompany?.id ? [String(matchedCompany.id).toLowerCase().trim()] : []),
+          ...(matchedCompany?.slug ? [String(matchedCompany.slug).toLowerCase().trim()] : []),
+          ...(matchedCompany?.name ? [String(matchedCompany.name).toLowerCase().trim()] : []),
+        ])
 
         filtered = filtered.filter((u) => {
-          const ub = String(u.branchId || "").toLowerCase().trim()
-          const ubn = String(u.branchName || "").toLowerCase().trim()
-          return ub === uBranchNorm || (branchNameNorm && (ub === branchNameNorm || ubn === branchNameNorm))
+          const uCompIds = (u.companyIds && u.companyIds.length > 0)
+            ? u.companyIds.map(id => String(id).toLowerCase().trim())
+            : [String(u.companyId || "tech").toLowerCase().trim()]
+          if (u.companyName) {
+            uCompIds.push(String(u.companyName).toLowerCase().trim())
+          }
+          return uCompIds.some(id => validTargetCompIds.has(id))
         })
-      } else {
-        if (targetComp && targetComp !== "all") {
-          filtered = filtered.filter((u) => {
-            const uCompIds = (u.companyIds && u.companyIds.length > 0)
-              ? u.companyIds.map(id => String(id).toLowerCase().trim())
-              : [String(u.companyId || "tech").toLowerCase().trim()]
-            return uCompIds.includes(targetComp)
-          })
-        }
+      }
 
-        if (targetBranch) {
-          const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === targetBranch.toLowerCase())
-          const targetBranchId = String(targetBranchObj?.id || targetBranch).toLowerCase().trim()
-          const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
+      if (targetBranch) {
+        const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === targetBranch.toLowerCase())
+        const targetBranchId = String(targetBranchObj?.id || targetBranch).toLowerCase().trim()
+        const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
 
-          filtered = filtered.filter((u) => {
-            const uBranchIds = (u.branchIds && u.branchIds.length > 0)
-              ? u.branchIds.map(id => String(id).toLowerCase().trim())
-              : (u.branchId ? [String(u.branchId).toLowerCase().trim()] : [])
-            const uBranchName = String(u.branchName || "").toLowerCase().trim()
+        filtered = filtered.filter((u) => {
+          const uBranchIds = (u.branchIds && u.branchIds.length > 0)
+            ? u.branchIds.map(id => String(id).toLowerCase().trim())
+            : (u.branchId ? [String(u.branchId).toLowerCase().trim()] : [])
+          const uBranchName = String(u.branchName || "").toLowerCase().trim()
 
-            return (
-              uBranchIds.includes(targetBranchId) ||
-              (targetBranchName && uBranchIds.includes(targetBranchName)) ||
-              String(u.branchId || "").toLowerCase().trim() === targetBranchId ||
-              (targetBranchName && (uBranchName === targetBranchName || String(u.branchId || "").toLowerCase().trim() === targetBranchName))
-            )
-          })
-        }
+          return (
+            uBranchIds.includes(targetBranchId) ||
+            (targetBranchName && uBranchIds.includes(targetBranchName)) ||
+            String(u.branchId || "").toLowerCase().trim() === targetBranchId ||
+            (targetBranchName && (uBranchName === targetBranchName || String(u.branchId || "").toLowerCase().trim() === targetBranchName))
+          )
+        })
       }
     }
 
-    return filtered.length > 0 ? filtered : (user?.branchId ? [] : users)
-  }, [users, isSuperAdminLoggedIn, isClientRole, user, activeCompanyId, activeBranchId, branches])
+    return filtered
+  }, [users, isSuperAdminLoggedIn, isClientRole, user, activeCompanyId, activeBranchId, branches, companies])
 
   // Metric counts based on visible users
   const totalUsers = visibleUsers.length

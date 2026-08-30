@@ -914,19 +914,14 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
   const targetComp = String(companyId).toLowerCase().trim();
 
   return cleanUsers.filter((u) => {
-    if (u.role === "Super Admin") return true;
-
-    const uCompId = String(u.companyId || "").toLowerCase().trim();
-    if (!uCompId || uCompId === "1" || uCompId === "all" || uCompId === targetComp) return true;
-
-    if (u.companyIds && Array.isArray(u.companyIds)) {
-      return u.companyIds.some((c) => {
-        const cNorm = String(c).toLowerCase().trim();
-        return !cNorm || cNorm === "1" || cNorm === "all" || cNorm === targetComp;
-      });
+    const uCompIds = (u.companyIds && u.companyIds.length > 0)
+      ? u.companyIds.map(id => String(id).toLowerCase().trim())
+      : [String(u.companyId || "tech").toLowerCase().trim()];
+    if (u.companyName) {
+      uCompIds.push(String(u.companyName).toLowerCase().trim());
     }
 
-    return false;
+    return uCompIds.includes(targetComp);
   });
 }
 
