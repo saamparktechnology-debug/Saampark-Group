@@ -297,12 +297,12 @@ export function Sidebar() {
         )}
       >
         {/* Header */}
-        <div className="h-16 flex items-center justify-between px-4 border-b border-border/50 shrink-0">
-          <Link href="/feature/dashboard" onClick={handleLinkClick} className="flex items-center gap-3 group">
+        <div className="h-16 flex items-center justify-between px-3.5 border-b border-border/50 shrink-0">
+          <Link href="/feature/dashboard" onClick={handleLinkClick} className="flex items-center gap-2.5 group">
             <img 
-              src="/logo.png" 
+              src="/logo.png?v=2026_transparent" 
               alt="SAAMPARK Logo" 
-              className="min-w-8 w-8 h-8 rounded-xl object-contain shrink-0 group-hover:scale-105 transition-transform" 
+              className="w-10 h-10 min-w-[40px] object-contain shrink-0 group-hover:scale-105 transition-transform" 
             />
             <AnimatePresence>
               {(!isSidebarCollapsed || isMobile) && (
@@ -310,7 +310,7 @@ export function Sidebar() {
                   initial={{ opacity: 0, width: 0 }}
                   animate={{ opacity: 1, width: "auto" }}
                   exit={{ opacity: 0, width: 0 }}
-                  className="font-bold text-lg tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-primary to-info whitespace-nowrap overflow-hidden"
+                  className="font-extrabold text-xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-primary to-info whitespace-nowrap overflow-hidden"
                 >
                   SAAMPARK
                 </motion.span>
