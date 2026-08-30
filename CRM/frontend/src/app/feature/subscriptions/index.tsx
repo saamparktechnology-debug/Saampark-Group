@@ -112,6 +112,10 @@ export default function SubscriptionsMain() {
   const [emiTenureMonths, setEmiTenureMonths] = React.useState<number>(6)
   const [emiStartDate, setEmiStartDate] = React.useState(new Date().toISOString().split("T")[0])
 
+  // Tax & Overdue Late Fee Configuration
+  const [subTaxType, setSubTaxType] = React.useState<"gst" | "nongst">("gst")
+  const [dailyLateFeeInput, setDailyLateFeeInput] = React.useState<number | "">(0)
+
   const showToast = (msg: string) => {
     setToastMessage(msg)
     setTimeout(() => setToastMessage(null), 4000)
@@ -343,6 +347,9 @@ export default function SubscriptionsMain() {
       const startDate = new Date().toISOString().split("T")[0]
       const nextDate = calculateNextCycleDate(startDate, cycle)
 
+      const isNonGst = subTaxType === "nongst"
+      const dailyLateFee = typeof dailyLateFeeInput === "number" ? dailyLateFeeInput : 0
+
       await addSubscription({
         clientName,
         clientEmail,
@@ -360,6 +367,10 @@ export default function SubscriptionsMain() {
         autoRenew: true,
         subscriptionType: "package",
         deliverables: deliverablesList,
+        isNonGst,
+        taxType: subTaxType,
+        gstRate: isNonGst ? 0 : 18,
+        dailyLateFee,
       }, activeCompanyId || "tech")
 
       showToast(`✅ Package Subscription "${planTitle}" assigned to ${clientName}!`)
@@ -374,6 +385,8 @@ export default function SubscriptionsMain() {
       const numAmt = parseInt(regularAmount.replace(/[^0-9]/g, "")) || 0
       const formattedAmount = `₹${numAmt.toLocaleString("en-IN")}`
       const finalNextDate = regularNextDate || calculateNextCycleDate(regularStartDate, regularCycle, customDaysCount)
+      const isNonGst = subTaxType === "nongst"
+      const dailyLateFee = typeof dailyLateFeeInput === "number" ? dailyLateFeeInput : 0
 
       await addSubscription({
         clientName,
@@ -392,6 +405,10 @@ export default function SubscriptionsMain() {
         nextBillingDate: finalNextDate,
         autoRenew: true,
         subscriptionType: "regular",
+        isNonGst,
+        taxType: subTaxType,
+        gstRate: isNonGst ? 0 : 18,
+        dailyLateFee,
       }, activeCompanyId || "tech")
 
       showToast(`✅ Regular Subscription "${regularPlanName}" created for ${clientName}!`)
@@ -408,6 +425,8 @@ export default function SubscriptionsMain() {
       const tenure = Math.max(1, emiTenureMonths)
       const balance = Math.max(0, totalVal - downPay)
       const monthlyEmi = Math.round(balance / tenure)
+      const isNonGst = subTaxType === "nongst"
+      const dailyLateFee = typeof dailyLateFeeInput === "number" ? dailyLateFeeInput : 0
 
       const formattedAmount = `₹${totalVal.toLocaleString("en-IN")}`
       const nextDate = calculateNextCycleDate(emiStartDate, "Monthly")
@@ -433,6 +452,10 @@ export default function SubscriptionsMain() {
         downPayment: downPay,
         paidInstallmentsCount: downPay > 0 ? 1 : 0,
         totalInstallmentsCount: tenure,
+        isNonGst,
+        taxType: subTaxType,
+        gstRate: isNonGst ? 0 : 18,
+        dailyLateFee,
       }, activeCompanyId || "tech")
 
       showToast(`✅ EMI Subscription (${tenure} Months @ ₹${monthlyEmi.toLocaleString("en-IN")}/mo) created for ${clientName}!`)
@@ -1119,6 +1142,62 @@ export default function SubscriptionsMain() {
 
               {/* Form Content */}
               <form onSubmit={handleCreateSubscriptionSubmit} className="p-6 space-y-4 text-xs max-h-[70vh] overflow-y-auto">
+                {/* Tax Configuration (GST vs Non-GST) & Overdue Late Fee */}
+                <div className="p-3 bg-zinc-50 dark:bg-zinc-800/40 rounded-2xl border border-zinc-200 dark:border-zinc-700/80 space-y-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
+                      Subscription Tax Configuration:
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSubTaxType("gst")}
+                        className={`p-2 rounded-xl border flex flex-col items-center text-center gap-0.5 transition-all cursor-pointer ${
+                          subTaxType === "gst"
+                            ? "bg-teal-50 dark:bg-teal-950/40 border-teal-500 text-teal-800 dark:text-teal-200 ring-2 ring-teal-500/20 font-bold"
+                            : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100"
+                        }`}
+                      >
+                        <span className="text-xs">🏢 GST Tax Plan</span>
+                        <span className="text-[9.5px] opacity-75">18% GST Applicable</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setSubTaxType("nongst")}
+                        className={`p-2 rounded-xl border flex flex-col items-center text-center gap-0.5 transition-all cursor-pointer ${
+                          subTaxType === "nongst"
+                            ? "bg-blue-50 dark:bg-blue-950/40 border-blue-500 text-blue-800 dark:text-blue-200 ring-2 ring-blue-500/20 font-bold"
+                            : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100"
+                        }`}
+                      >
+                        <span className="text-xs">📄 Non-GST Plan</span>
+                        <span className="text-[9.5px] opacity-75">0% GST / Pure Service</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400">
+                        Overdue Daily Late Fee / Added Charge (₹/day)
+                      </label>
+                      <span className="text-[9px] text-zinc-400">Charged each day past due</span>
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2 text-zinc-400 font-bold">₹</span>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="0 (e.g. 50 / day)"
+                        value={dailyLateFeeInput === "" ? "" : dailyLateFeeInput}
+                        onChange={(e) => setDailyLateFeeInput(e.target.value === "" ? "" : Number(e.target.value))}
+                        className="w-full pl-7 pr-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-semibold focus:outline-hidden"
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 {/* Client Selection (Shared for all 3) */}
                 <div>
                   <div className="flex items-center justify-between mb-1">

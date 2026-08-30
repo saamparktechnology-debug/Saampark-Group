@@ -5,9 +5,9 @@ import {
   Search, RefreshCw, Send, Trash2, Calendar, 
   CheckCircle2, Clock, AlertCircle, Sparkles, Building2, User,
   CreditCard, Package, Layers, ChevronDown, ChevronUp, Check, ShieldCheck,
-  FileText, Receipt
+  FileText, Receipt, AlertTriangle
 } from "lucide-react"
-import { Subscription, SubscriptionStatus, SubscriptionType } from "../types"
+import { Subscription, SubscriptionStatus, SubscriptionType, calculateOverdueDetails } from "../types"
 import { useAuthStore } from "@/store/useAuthStore"
 
 interface SubscriptionListProps {
@@ -220,6 +220,8 @@ export function SubscriptionList({
                 {filteredSubs.map((sub) => {
                   const isExpanded = expandedSubId === sub.id
                   const hasDeliverables = Array.isArray(sub.deliverables) && sub.deliverables.length > 0
+                  const overdueInfo = calculateOverdueDetails(sub)
+                  const isNonGst = Boolean(sub.isNonGst || sub.taxType === "nongst" || sub.gstRate === 0)
 
                   return (
                     <React.Fragment key={sub.id}>
@@ -231,7 +233,7 @@ export function SubscriptionList({
                               {sub.clientName.charAt(0).toUpperCase()}
                             </div>
                             <div className="min-w-0">
-                              <div className="font-bold text-zinc-900 dark:text-zinc-100 truncate flex items-center gap-1.5">
+                              <div className="font-bold text-zinc-900 dark:text-zinc-100 truncate flex items-center gap-1.5 flex-wrap">
                                 <button
                                   type="button"
                                   onClick={() => onSelectClient ? onSelectClient(sub.clientName, sub) : undefined}
@@ -240,6 +242,11 @@ export function SubscriptionList({
                                 >
                                   {sub.clientName}
                                 </button>
+                                {isNonGst && (
+                                  <span className="px-1.5 py-0.2 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 text-[9px] font-bold border border-blue-200 dark:border-blue-800 shrink-0">
+                                    0% Non-GST
+                                  </span>
+                                )}
                                 {hasDeliverables && (
                                   <button
                                     type="button"
@@ -268,11 +275,17 @@ export function SubscriptionList({
                           <div className="font-bold text-zinc-900 dark:text-zinc-100 text-xs">
                             {sub.amount}
                           </div>
-                          <div className="text-[10px] text-zinc-400">
-                            {sub.subscriptionType === "emi"
-                              ? `₹${(sub.emiPerCycle || 0).toLocaleString("en-IN")}/mo`
-                              : `per ${sub.billingCycle.toLowerCase()}`}
-                          </div>
+                          {overdueInfo.isOverdue && overdueInfo.accumulatedLateFee > 0 ? (
+                            <div className="text-[10px] text-rose-600 font-bold">
+                              Total Due: ₹{overdueInfo.totalDueToday.toLocaleString("en-IN")}
+                            </div>
+                          ) : (
+                            <div className="text-[10px] text-zinc-400">
+                              {sub.subscriptionType === "emi"
+                                ? `₹${(sub.emiPerCycle || 0).toLocaleString("en-IN")}/mo`
+                                : `per ${sub.billingCycle.toLowerCase()}`}
+                            </div>
+                          )}
                         </td>
 
                         {/* Billing Cycle / Tenure */}
@@ -298,13 +311,32 @@ export function SubscriptionList({
 
                         {/* Next Payment Date */}
                         <td className="py-3.5 px-3 whitespace-nowrap">
-                          <div className="flex items-center gap-1.5 text-zinc-900 dark:text-zinc-100 font-bold">
-                            <Calendar size={12} className="text-emerald-500 shrink-0" />
-                            <span>{sub.nextBillingDate}</span>
-                          </div>
-                          <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
-                            {sub.lastRenewedDate ? `Renewed: ${sub.lastRenewedDate}` : "Next Due"}
-                          </div>
+                          {overdueInfo.isOverdue ? (
+                            <div>
+                              <div className="flex items-center gap-1 text-rose-600 dark:text-rose-400 font-bold">
+                                <AlertTriangle size={12} className="shrink-0 animate-pulse" />
+                                <span>{sub.nextBillingDate}</span>
+                              </div>
+                              <div className="text-[10px] text-rose-600 dark:text-rose-400 font-bold">
+                                ⚠️ Overdue {overdueInfo.daysOverdue} {overdueInfo.daysOverdue === 1 ? 'day' : 'days'}
+                              </div>
+                              {overdueInfo.dailyLateFee > 0 && overdueInfo.accumulatedLateFee > 0 && (
+                                <div className="text-[9.5px] text-rose-500 font-semibold">
+                                  +₹{overdueInfo.accumulatedLateFee} Late Fee (₹{overdueInfo.dailyLateFee}/d)
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div>
+                              <div className="flex items-center gap-1.5 text-zinc-900 dark:text-zinc-100 font-bold">
+                                <Calendar size={12} className="text-emerald-500 shrink-0" />
+                                <span>{sub.nextBillingDate}</span>
+                              </div>
+                              <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                                {sub.lastRenewedDate ? `Renewed: ${sub.lastRenewedDate}` : "Next Due"}
+                              </div>
+                            </div>
+                          )}
                         </td>
 
                         {/* Auto-Renew Toggle */}

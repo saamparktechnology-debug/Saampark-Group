@@ -629,55 +629,84 @@ export const generateSubscriptionInvoice = async (
   companyId?: string
 ): Promise<any> => {
   const { addInvoice, getInvoices, generateInvoiceNumber } = await import("@/app/feature/sales/invoices/services/invoiceService")
+  const { calculateOverdueDetails } = await import("../types")
+  
+  const isNonGst = Boolean(sub.isNonGst || sub.taxType === "nongst" || sub.gstRate === 0)
   const effectiveComp = companyId || sub.companyId || "tech"
   const allInvoices = await getInvoices("all")
-  const invoiceId = generateInvoiceNumber(allInvoices, new Date(), false)
-  const numAmount = sub.numericAmount || parseInt(String(sub.amount).replace(/[^0-9]/g, "")) || 0
-  const gstAmount = Math.round(numAmount * 0.18)
-  const totalAmount = numAmount + gstAmount
-  const formattedTotal = `₹${totalAmount.toLocaleString("en-IN")}`
+  const invoiceId = generateInvoiceNumber(allInvoices, new Date(), isNonGst)
+  
+  const overdueInfo = calculateOverdueDetails(sub)
+  const baseNum = overdueInfo.baseDue
+  const lateFeeNum = overdueInfo.accumulatedLateFee
+
+  const subtotal = baseNum + lateFeeNum
+  const gstRate = isNonGst ? 0 : 18
+  const gstAmount = isNonGst ? 0 : Math.round(subtotal * 0.18)
+  const grandTotal = subtotal + gstAmount
+  const formattedTotal = `₹${grandTotal.toLocaleString("en-IN")}`
+
+  const items: any[] = [
+    {
+      id: `svc_${Date.now()}`,
+      serviceName: `${sub.planName} (${sub.billingCycle} Retainer Cycle)`,
+      sacCode: "998313",
+      qty: 1,
+      unit: sub.billingCycle || "Cycle",
+      rate: baseNum,
+      charges: [],
+      gstRate: gstRate,
+      gstAmount: isNonGst ? 0 : Math.round(baseNum * 0.18),
+      totalAmount: isNonGst ? baseNum : (baseNum + Math.round(baseNum * 0.18)),
+    }
+  ]
+
+  if (lateFeeNum > 0 && overdueInfo.daysOverdue > 0) {
+    items.push({
+      id: `late_fee_${Date.now()}`,
+      serviceName: `Overdue Late Charge (${overdueInfo.daysOverdue} Days @ ₹${overdueInfo.dailyLateFee}/day)`,
+      sacCode: "998319",
+      qty: overdueInfo.daysOverdue,
+      unit: "Day",
+      rate: overdueInfo.dailyLateFee,
+      charges: [],
+      gstRate: gstRate,
+      gstAmount: isNonGst ? 0 : Math.round(lateFeeNum * 0.18),
+      totalAmount: isNonGst ? lateFeeNum : (lateFeeNum + Math.round(lateFeeNum * 0.18)),
+    })
+  }
 
   const newInv = await addInvoice({
     id: invoiceId,
     client: sub.clientName,
     clientEmail: sub.clientEmail || `${sub.clientName.toLowerCase().replace(/\s+/g, '')}@client.com`,
-    project: `${sub.planName} — Subscription (${sub.billingCycle})`,
+    project: `${sub.planName} — Subscription (${sub.billingCycle}${isNonGst ? ' • 0% Non-GST' : ''})`,
     billDate: new Date().toLocaleDateString("en-GB"),
     dueDate: sub.nextBillingDate || new Date(Date.now() + 14 * 86400000).toLocaleDateString("en-GB"),
-    baseAmount: numAmount,
+    baseAmount: subtotal,
     setupCharge: 0,
     discount: 0,
-    gstRate: 18,
+    gstRate: gstRate,
     gstAmount: gstAmount,
     totalInvoiced: formattedTotal,
     paymentReceived: "₹0",
     due: formattedTotal,
-    status: "Not paid",
+    status: overdueInfo.isOverdue ? "Not paid" : "Not paid",
     billedBy: sub.billedBy || "Admin",
     companyId: effectiveComp,
     branchId: sub.branchId || undefined,
     branchName: sub.branchName || undefined,
-    items: [
-      {
-        id: `svc_${Date.now()}`,
-        serviceName: `${sub.planName} (${sub.billingCycle} Retainer Cycle)`,
-        sacCode: "998313",
-        qty: 1,
-        unit: sub.billingCycle || "Cycle",
-        rate: numAmount,
-        charges: [],
-        gstRate: 18,
-        gstAmount: gstAmount,
-        totalAmount: totalAmount,
-      }
-    ],
+    items: items,
   }, effectiveComp)
 
   // Update subscription metadata
   await updateSubscription(sub.id, {
     invoicesCount: (sub.invoicesCount || 0) + 1,
+    accumulatedLateFee: lateFeeNum,
+    overdueDays: overdueInfo.daysOverdue,
   }, effectiveComp)
 
   return newInv
 }
+
 

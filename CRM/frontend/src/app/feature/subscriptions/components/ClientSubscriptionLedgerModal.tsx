@@ -15,7 +15,7 @@ import {
   CreditCard,
   AlertTriangle
 } from "lucide-react"
-import { Subscription, InstallmentItem, SubscriptionStatus } from "../types"
+import { Subscription, InstallmentItem, SubscriptionStatus, calculateOverdueDetails } from "../types"
 import { getInvoices, InvoiceItem } from "@/app/feature/sales/invoices/services/invoiceService"
 import { getInstallments } from "../services/subscriptionService"
 import { useAuthStore } from "@/store/useAuthStore"
@@ -418,10 +418,17 @@ export function ClientSubscriptionLedgerModal({
                     <div className="space-y-3">
                       {matchedSubs.map((sub) => {
                         const isGenerating = generatingSubId === sub.id
+                        const overdueInfo = calculateOverdueDetails(sub)
+                        const isNonGst = Boolean(sub.isNonGst || sub.taxType === "nongst" || sub.gstRate === 0)
+
                         return (
                           <div
                             key={sub.id}
-                            className="p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl border border-zinc-200 dark:border-zinc-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs hover:border-blue-500/50 transition-all"
+                            className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs transition-all ${
+                              overdueInfo.isOverdue
+                                ? "bg-rose-50/40 dark:bg-rose-950/20 border-rose-300 dark:border-rose-800"
+                                : "bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-700/80"
+                            }`}
                           >
                             <div className="space-y-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
@@ -432,11 +439,28 @@ export function ClientSubscriptionLedgerModal({
                                 <span className="px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-bold text-[10px] border border-blue-200 dark:border-blue-800">
                                   {sub.billingCycle} Retainer
                                 </span>
+                                {isNonGst && (
+                                  <span className="px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-bold text-[10px] border border-blue-200 dark:border-blue-800">
+                                    📄 0% Non-GST
+                                  </span>
+                                )}
                               </div>
                               <div className="flex items-center gap-3 text-[11px] text-zinc-500 flex-wrap">
                                 <span>Recurring Rate: <strong className="text-zinc-800 dark:text-zinc-200">{sub.amount}</strong></span>
                                 <span>•</span>
-                                <span>Next Billing: <strong className="text-emerald-600 dark:text-emerald-400">{sub.nextBillingDate}</strong></span>
+                                {overdueInfo.isOverdue ? (
+                                  <span className="text-rose-600 dark:text-rose-400 font-bold flex items-center gap-1">
+                                    <AlertTriangle size={11} className="animate-pulse" />
+                                    <span>Overdue by {overdueInfo.daysOverdue} {overdueInfo.daysOverdue === 1 ? 'day' : 'days'} (Due: {sub.nextBillingDate})</span>
+                                    {overdueInfo.dailyLateFee > 0 && (
+                                      <span className="text-[10px] font-semibold text-rose-500">
+                                        • +₹{overdueInfo.accumulatedLateFee} Late Fee (₹{overdueInfo.dailyLateFee}/d)
+                                      </span>
+                                    )}
+                                  </span>
+                                ) : (
+                                  <span>Next Billing: <strong className="text-emerald-600 dark:text-emerald-400">{sub.nextBillingDate}</strong></span>
+                                )}
                                 {sub.startDate && (
                                   <>
                                     <span>•</span>

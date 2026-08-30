@@ -184,6 +184,17 @@ export interface Subscription {
   downPayment?: number // Down payment if any
   paidInstallmentsCount?: number // Track progress of tenure
   totalInstallmentsCount?: number // Total installments in tenure
+
+  // Non-GST / Tax Configuration
+  isNonGst?: boolean
+  taxType?: "gst" | "nongst"
+  gstRate?: number
+
+  // Overdue & Daily Late Fee / Added Payment Tracking
+  dailyLateFee?: number // Daily added charge if overdue (e.g. ₹50/day)
+  overdueDays?: number
+  accumulatedLateFee?: number
+  overduePaymentAdded?: number
 }
 
 export interface SubscriptionKPIs {
@@ -196,6 +207,8 @@ export interface SubscriptionKPIs {
   renewalsDueThisMonthCount: number
   renewalsDueThisMonthAmount: number
   totalCollectedThisMonth: number
+  overdueCount?: number
+  overdueAmount?: number
 }
 
 export interface EMIKPIs {
@@ -209,3 +222,54 @@ export interface EMIKPIs {
   overdueInstallmentsAmount: number
   collectionRatePercent: number
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OVERDUE CALCULATION HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function calculateOverdueDays(dueDateStr?: string): number {
+  if (!dueDateStr) return 0
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  
+  // Parse date string (handles YYYY-MM-DD or DD/MM/YYYY)
+  let due: Date
+  if (dueDateStr.includes("/")) {
+    const [d, m, y] = dueDateStr.split("/").map(Number)
+    due = new Date(y, m - 1, d)
+  } else {
+    due = new Date(dueDateStr)
+  }
+
+  if (isNaN(due.getTime())) return 0
+  due.setHours(0, 0, 0, 0)
+  const diffTime = today.getTime() - due.getTime()
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+  return diffDays > 0 ? diffDays : 0
+}
+
+export function calculateOverdueDetails(sub: Subscription): {
+  isOverdue: boolean
+  daysOverdue: number
+  baseDue: number
+  dailyLateFee: number
+  accumulatedLateFee: number
+  totalDueToday: number
+} {
+  const daysOverdue = calculateOverdueDays(sub.nextBillingDate)
+  const isOverdue = daysOverdue > 0 && sub.status !== "Canceled"
+  const baseDue = sub.numericAmount || parseInt(String(sub.amount).replace(/[^0-9]/g, "")) || 0
+  const dailyLateFee = sub.dailyLateFee || 0
+  const accumulatedLateFee = isOverdue ? daysOverdue * dailyLateFee : 0
+  const totalDueToday = baseDue + accumulatedLateFee
+
+  return {
+    isOverdue,
+    daysOverdue,
+    baseDue,
+    dailyLateFee,
+    accumulatedLateFee,
+    totalDueToday,
+  }
+}
+
