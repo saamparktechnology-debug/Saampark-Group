@@ -86,6 +86,8 @@ export function RecordPayoutModal({
         companyId: profile.companyId || "tech",
         branchId: profile.branchId,
         branchName: profile.branchName,
+        subBranchId: profile.subBranchId,
+        subbranchName: profile.subbranchName,
         period: period.trim(),
         payoutType,
         baseAmount,

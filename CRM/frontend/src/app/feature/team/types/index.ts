@@ -26,6 +26,7 @@ export interface TeamMemberPayoutProfile {
   companyId?: string
   branchId?: string
   branchName?: string
+  subBranchId?: string
   subbranchName?: string
   
   // Banking & UPI
@@ -59,6 +60,8 @@ export interface TeamPayoutRecord {
   companyId?: string
   branchId?: string
   branchName?: string
+  subBranchId?: string
+  subbranchName?: string
   
   period: string // e.g. "August 2026", "Week 34, 2026"
   payoutType: PayoutType
@@ -113,6 +116,8 @@ export interface ProjectUserEarningsRecord {
   companyId?: string
   branchId?: string
   branchName?: string
+  subBranchId?: string
+  subbranchName?: string
   lastDisbursedDate?: string
 }
 
@@ -146,6 +151,8 @@ export interface CustomPaymentAdjustment {
   companyId?: string
   branchId?: string
   branchName?: string
+  subBranchId?: string
+  subbranchName?: string
   approvedBy?: string
 }
 

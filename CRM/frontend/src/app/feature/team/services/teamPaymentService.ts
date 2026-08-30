@@ -8,12 +8,11 @@ import {
   ProjectUserEarningsRecord,
   CustomPaymentAdjustment
 } from "../types"
-import { UserService } from "@/services/apiServices"
+import { getUsers, getUserAvatar } from "@/app/feature/users/services/userService"
 import { getSubscriptions } from "@/app/feature/subscriptions/services/subscriptionService"
 import { Subscription, calculateTeamRevenueShare } from "@/app/feature/subscriptions/types"
 import { getProjects } from "@/app/feature/projects/services/projectService"
 import { Project } from "@/app/feature/projects/types"
-import { getUserAvatar } from "@/app/feature/users/services/userService"
 
 const BANKING_STORAGE_KEY = "team_banking_details"
 const PAYOUTS_STORAGE_KEY = "team_payout_records"
@@ -78,7 +77,11 @@ export const updateMemberBankingDetails = async (
 // 2. PAYOUT RECORDS & DISBURSEMENT HISTORY
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const getPayoutRecords = async (companyId?: string, branchId?: string): Promise<TeamPayoutRecord[]> => {
+export const getPayoutRecords = async (
+  companyId?: string, 
+  branchId?: string,
+  subBranchId?: string
+): Promise<TeamPayoutRecord[]> => {
   const targetComp = companyId || "all"
   let records = await fetchModuleDataFromDB<TeamPayoutRecord[]>(PAYOUTS_STORAGE_KEY, [], targetComp)
   if (!Array.isArray(records)) records = []
@@ -88,6 +91,10 @@ export const getPayoutRecords = async (companyId?: string, branchId?: string): P
 
   if (branchId && branchId !== "all") {
     filtered = filtered.filter(r => !r.branchId || r.branchId === branchId)
+  }
+
+  if (subBranchId && subBranchId !== "all") {
+    filtered = filtered.filter(r => !r.subBranchId || r.subBranchId === subBranchId || r.subbranchName === subBranchId)
   }
 
   return filtered
@@ -181,18 +188,19 @@ export const deletePayoutRecord = async (id: string, companyId?: string): Promis
 
 export const getProjectWiseUserEarnings = async (
   companyId?: string,
-  branchId?: string
+  branchId?: string,
+  subBranchId?: string
 ): Promise<ProjectUserEarningsRecord[]> => {
   const [projects, users, payouts] = await Promise.all([
     getProjects(companyId).catch(() => []),
-    UserService.getTeamMembers().catch(() => []),
-    getPayoutRecords(companyId),
+    getUsers(companyId).catch(() => []),
+    getPayoutRecords(companyId, branchId, subBranchId),
   ])
 
   const records: ProjectUserEarningsRecord[] = []
 
   const nonClientUsers = Array.isArray(users)
-    ? users.filter(u => !((u.role || u.role_name || "").toLowerCase().includes("client")))
+    ? users.filter(u => !((u.role || "").toLowerCase().includes("client")))
     : []
 
   for (const p of projects) {
@@ -211,8 +219,8 @@ export const getProjectWiseUserEarnings = async (
       ? p.members
       : nonClientUsers.slice(0, 2).map((u: any) => ({
           id: String(u.id || u._id),
-          name: u.full_name || u.name || "Lead Developer",
-          role: u.role_name || u.role || "Developer",
+          name: u.name || "Lead Developer",
+          role: u.role || "Developer",
           email: u.email || "",
         }))
 
@@ -252,6 +260,8 @@ export const getProjectWiseUserEarnings = async (
         companyId: p.companyId || companyId || "tech",
         branchId: p.branchId,
         branchName: p.branchName,
+        subBranchId: (p as any).subBranchId,
+        subbranchName: (p as any).subbranchName,
         lastDisbursedDate,
       })
     }
@@ -260,6 +270,10 @@ export const getProjectWiseUserEarnings = async (
   let filtered = records
   if (branchId && branchId !== "all") {
     filtered = filtered.filter(r => !r.branchId || r.branchId === branchId)
+  }
+
+  if (subBranchId && subBranchId !== "all") {
+    filtered = filtered.filter(r => !r.subBranchId || r.subBranchId === subBranchId || r.subbranchName === subBranchId)
   }
 
   return filtered
@@ -271,7 +285,8 @@ export const getProjectWiseUserEarnings = async (
 
 export const getCustomAdjustments = async (
   companyId?: string,
-  branchId?: string
+  branchId?: string,
+  subBranchId?: string
 ): Promise<CustomPaymentAdjustment[]> => {
   const targetComp = companyId || "all"
   let list = await fetchModuleDataFromDB<CustomPaymentAdjustment[]>(CUSTOM_ADJ_STORAGE_KEY, [], targetComp)
@@ -282,6 +297,10 @@ export const getCustomAdjustments = async (
 
   if (branchId && branchId !== "all") {
     filtered = filtered.filter(r => !r.branchId || r.branchId === branchId)
+  }
+
+  if (subBranchId && subBranchId !== "all") {
+    filtered = filtered.filter(r => !r.subBranchId || r.subBranchId === subBranchId || r.subbranchName === subBranchId)
   }
 
   return filtered
@@ -386,39 +405,42 @@ export const deleteCustomAdjustment = async (id: string, companyId?: string): Pr
 
 export const getTeamPayoutProfiles = async (
   companyId?: string,
-  branchId?: string
+  branchId?: string,
+  subBranchId?: string
 ): Promise<{
   profiles: TeamMemberPayoutProfile[]
   kpis: TeamPayrollKPIs
 }> => {
+  const targetComp = companyId || "tech"
   const [users, allSubs, bankingMap, allPayouts, allProjectEarnings, allAdjustments] = await Promise.all([
-    UserService.getTeamMembers().catch(() => []),
-    getSubscriptions("all").catch(() => []),
-    getTeamBankingMap(companyId),
-    getPayoutRecords(companyId),
-    getProjectWiseUserEarnings(companyId, branchId),
-    getCustomAdjustments(companyId, branchId),
+    getUsers(targetComp).catch(() => []),
+    getSubscriptions(targetComp).catch(() => []),
+    getTeamBankingMap(targetComp),
+    getPayoutRecords(targetComp, branchId, subBranchId),
+    getProjectWiseUserEarnings(targetComp, branchId, subBranchId),
+    getCustomAdjustments(targetComp, branchId, subBranchId),
   ])
 
   // Filter strictly to non-clients
   const rawMembers = Array.isArray(users)
     ? users.filter(u => {
-        const r = (u.role || u.role_name || "").toLowerCase().trim()
-        return !r.includes("client")
+        const r = (u.role || "").toLowerCase().trim()
+        return !r.includes("client") && u.status !== "Inactive"
       })
     : []
 
   const currentMonthYear = new Date().toLocaleString("en-US", { month: "long", year: "numeric" })
 
   const profiles: TeamMemberPayoutProfile[] = rawMembers.map((u: any, idx: number) => {
-    const memberId = String(u.id || u._id || idx)
-    const mName = u.full_name || u.name || u.email || "Team Member"
+    const memberId = String(u.id || idx)
+    const mName = u.name || u.email || "Team Member"
     const mEmail = (u.email || "").toLowerCase().trim()
     const mPhone = u.phone || "+91 98765 43210"
-    const mRole = u.role_name || u.role || "Team Member"
+    const mRole = u.role || "Team Member"
     const mDept = u.department || "Operations & Delivery"
-    const mBranchId = u.branch_id || u.branchId
-    const mBranchName = u.branch_name || u.branchName
+    const mBranchId = u.branchId || u.branch_id
+    const mBranchName = u.branchName || u.branch_name
+    const mSubBranchId = u.subBranchId || u.subbranch_id
     const mSubbranch = u.subbranch || u.subbranch_name || u.subbranchName
 
     const bankInfo = bankingMap[memberId.toLowerCase()] || bankingMap[mEmail] || {
@@ -482,12 +504,13 @@ export const getTeamPayoutProfiles = async (
       name: mName,
       email: mEmail,
       phone: mPhone,
-      avatarUrl: u.avatar_url || u.avatarUrl || u.avatar || getUserAvatar(mName, undefined, mName),
+      avatarUrl: u.avatarUrl || u.avatar || getUserAvatar(mName, undefined, mName),
       role: mRole,
       department: mDept,
-      companyId: u.company_id || u.companyId || companyId || "tech",
+      companyId: u.companyId || targetComp,
       branchId: mBranchId,
       branchName: mBranchName,
+      subBranchId: mSubBranchId,
       subbranchName: mSubbranch,
       bankingInfo: bankInfo,
       baseSalary,
@@ -508,7 +531,14 @@ export const getTeamPayoutProfiles = async (
   // Filter by branch if specified
   let filteredProfiles = profiles
   if (branchId && branchId !== "all") {
-    filteredProfiles = profiles.filter(p => !p.branchId || p.branchId === branchId)
+    filteredProfiles = filteredProfiles.filter(p => !p.branchId || p.branchId === branchId)
+  }
+
+  // Filter by sub-branch if specified
+  if (subBranchId && subBranchId !== "all") {
+    filteredProfiles = filteredProfiles.filter(p => 
+      !p.subBranchId || p.subBranchId === subBranchId || p.subbranchName === subBranchId
+    )
   }
 
   // Calculate KPIs

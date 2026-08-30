@@ -64,7 +64,7 @@ import { ThreeDotLoader } from "@/components/ui/ThreeDotLoader"
 import { exportToExcel } from "@/lib/exportUtils"
 
 export default function TeamPaymentsPage() {
-  const { activeCompanyId, activeBranchId, branches, user } = useAuthStore()
+  const { activeCompanyId, activeBranchId, branches, subBranches, user } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
 
   const roleLower = (user?.role || "").toLowerCase().trim()
@@ -90,8 +90,10 @@ export default function TeamPaymentsPage() {
   // Active View Tab: "directory" | "projects" | "history" | "custom"
   const [activeTab, setActiveTab] = React.useState<"directory" | "projects" | "history" | "custom">("directory")
 
-  // Branch Selector Filter
+  // Branch & Sub-Branch Selector Filters
   const [selectedBranchId, setSelectedBranchId] = React.useState<string>("all")
+  const [selectedSubBranchId, setSelectedSubBranchId] = React.useState<string>("all")
+
   React.useEffect(() => {
     if (isSingleBranchAdmin && user?.branchId) {
       setSelectedBranchId(user.branchId)
@@ -101,6 +103,12 @@ export default function TeamPaymentsPage() {
       setSelectedBranchId("all")
     }
   }, [isSingleBranchAdmin, user?.branchId, activeBranchId])
+
+  // Filter available sub-branches based on selected branch
+  const availableSubBranches = React.useMemo(() => {
+    if (selectedBranchId === "all") return subBranches
+    return subBranches.filter(sb => sb.parentBranchId === selectedBranchId)
+  }, [subBranches, selectedBranchId])
 
   // Data States
   const [profiles, setProfiles] = React.useState<TeamMemberPayoutProfile[]>([])
@@ -145,11 +153,12 @@ export default function TeamPaymentsPage() {
     try {
       const comp = activeCompanyId || "tech"
       const branch = selectedBranchId
+      const subBranch = selectedSubBranchId
       const [pData, rData, projData, adjData] = await Promise.all([
-        getTeamPayoutProfiles(comp, branch),
-        getPayoutRecords(comp, branch),
-        getProjectWiseUserEarnings(comp, branch),
-        getCustomAdjustments(comp, branch),
+        getTeamPayoutProfiles(comp, branch, subBranch),
+        getPayoutRecords(comp, branch, subBranch),
+        getProjectWiseUserEarnings(comp, branch, subBranch),
+        getCustomAdjustments(comp, branch, subBranch),
       ])
       setProfiles(pData.profiles)
       setKpis(pData.kpis)
@@ -161,7 +170,7 @@ export default function TeamPaymentsPage() {
     } finally {
       if (showLoading) setIsLoading(false)
     }
-  }, [activeCompanyId, selectedBranchId])
+  }, [activeCompanyId, selectedBranchId, selectedSubBranchId])
 
   React.useEffect(() => {
     loadData(true)
@@ -169,6 +178,7 @@ export default function TeamPaymentsPage() {
     window.addEventListener("storage", handleReload)
     window.addEventListener("saampark_company_switched", handleReload)
     window.addEventListener("saampark_branch_switched", handleReload)
+    window.addEventListener("saampark_subbranches_updated", handleReload)
     window.addEventListener("saampark_team_payouts_updated", handleReload)
     window.addEventListener("saampark_team_banking_updated", handleReload)
     window.addEventListener("saampark_team_adjustments_updated", handleReload)
@@ -177,6 +187,7 @@ export default function TeamPaymentsPage() {
       window.removeEventListener("storage", handleReload)
       window.removeEventListener("saampark_company_switched", handleReload)
       window.removeEventListener("saampark_branch_switched", handleReload)
+      window.removeEventListener("saampark_subbranches_updated", handleReload)
       window.removeEventListener("saampark_team_payouts_updated", handleReload)
       window.removeEventListener("saampark_team_banking_updated", handleReload)
       window.removeEventListener("saampark_team_adjustments_updated", handleReload)
@@ -459,6 +470,25 @@ export default function TeamPaymentsPage() {
               </span>
             )}
           </div>
+
+          {/* Sub-Branch Filter Selector */}
+          {availableSubBranches.length > 0 && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50/60 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 text-xs">
+              <Layers size={13} className="text-purple-500 shrink-0" />
+              <select
+                value={selectedSubBranchId}
+                onChange={(e) => setSelectedSubBranchId(e.target.value)}
+                className="bg-transparent font-bold text-purple-900 dark:text-purple-200 focus:outline-hidden cursor-pointer text-xs"
+              >
+                <option value="all">🌐 All Sub-Branches</option>
+                {availableSubBranches.map(sb => (
+                  <option key={sb.id} value={sb.id}>
+                    🏢 {sb.name} ({sb.code || 'Sub-Branch'})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <Button size="sm" variant="secondary" onClick={handleExportExcel} leftIcon={<Download size={13} />}>
             Export Excel

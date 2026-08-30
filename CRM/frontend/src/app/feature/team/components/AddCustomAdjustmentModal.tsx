@@ -77,6 +77,8 @@ export function AddCustomAdjustmentModal({
         companyId: member.companyId || "tech",
         branchId: member.branchId,
         branchName: member.branchName,
+        subBranchId: member.subBranchId,
+        subbranchName: member.subbranchName,
       }, member.companyId)
 
       onSuccess(adj)

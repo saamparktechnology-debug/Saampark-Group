@@ -69,6 +69,8 @@ export function DisburseProjectShareModal({
         companyId: earningsRecord.companyId || "tech",
         branchId: earningsRecord.branchId,
         branchName: earningsRecord.branchName,
+        subBranchId: earningsRecord.subBranchId,
+        subbranchName: earningsRecord.subbranchName,
         period: `Project: ${earningsRecord.projectTitle}`,
         payoutType: "Project Share / Milestone Payout",
         baseAmount: 0,
