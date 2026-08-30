@@ -300,9 +300,9 @@ export function Sidebar() {
         <div className="h-16 flex items-center justify-between px-3.5 border-b border-border/50 shrink-0">
           <Link href="/feature/dashboard" onClick={handleLinkClick} className="flex items-center gap-2.5 group">
             <img 
-              src="/logo.png?v=2026_transparent" 
+              src="/logo.png?v=root_logo_v3" 
               alt="SAAMPARK Logo" 
-              className="w-10 h-10 min-w-[40px] object-contain shrink-0 group-hover:scale-105 transition-transform" 
+              className="w-11 h-11 min-w-[44px] object-contain shrink-0 group-hover:scale-105 transition-transform" 
             />
             <AnimatePresence>
               {(!isSidebarCollapsed || isMobile) && (
