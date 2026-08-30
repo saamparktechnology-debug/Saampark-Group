@@ -72,6 +72,15 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { name: "Estimates", href: "/feature/estimates", icon: Calculator },
   { name: "Notes", href: "/feature/notes", icon: Book },
   { name: "Messages", href: "/feature/messages", icon: MessageSquare },
+  { 
+    name: "Teams", 
+    href: "/feature/team/members", 
+    icon: UserCheck,
+    subItems: [
+      { name: "Team Members", href: "/feature/team/members", icon: UserCheck },
+      { name: "Payments & Payroll", href: "/feature/team/payments", icon: CreditCard },
+    ]
+  },
   { name: "Users", href: "/feature/users", icon: Users },
   { name: "Tickets", href: "/feature/tickets", icon: HeadphonesIcon },
   { name: "Knowledge base", href: "/feature/knowledge-base", icon: LifeBuoy },
