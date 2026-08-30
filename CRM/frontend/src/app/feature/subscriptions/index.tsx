@@ -6,7 +6,7 @@ import {
   Plus, Download, CreditCard, RefreshCw, X, Send, 
   CheckCircle2, DollarSign, Clock, AlertCircle, Sparkles, 
   Calendar, Layers, FileText, ChevronRight, Package, Check,
-  QrCode, Building2, ShieldCheck, ArrowUpRight, User, Percent, Pencil
+  QrCode, Building2, ShieldCheck, ArrowUpRight, User, Percent, Pencil, Search
 } from "lucide-react"
 
 import { Button } from "@/components/ui/Button"
@@ -85,6 +85,8 @@ export default function SubscriptionsMain() {
 
   // Form State: Client & Commons
   const [availableClients, setAvailableClients] = React.useState<{ name: string; email: string; phone?: string; company?: string }[]>([])
+  const [clientSearchQuery, setClientSearchQuery] = React.useState("")
+  const [isClientDropdownOpen, setIsClientDropdownOpen] = React.useState(false)
   const [newClientName, setNewClientName] = React.useState("")
   const [isCustomClient, setIsCustomClient] = React.useState(false)
   const [customClientEmail, setCustomClientEmail] = React.useState("")
@@ -1319,15 +1321,51 @@ export default function SubscriptionsMain() {
                   </div>
 
                   {!isCustomClient ? (
-                    <select
-                      value={newClientName}
-                      onChange={(e) => setNewClientName(e.target.value)}
-                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden font-medium"
-                    >
-                      {availableClients.map(c => (
-                        <option key={c.name} value={c.name}>{c.name} ({c.company || 'Client'})</option>
-                      ))}
-                    </select>
+                    <div className="space-y-1.5">
+                      {/* Search Filter Input */}
+                      <div className="relative">
+                        <Search size={13} className="absolute left-3 top-2.5 text-zinc-400" />
+                        <input
+                          type="text"
+                          placeholder="Search client by name, company, email..."
+                          value={clientSearchQuery}
+                          onChange={(e) => setClientSearchQuery(e.target.value)}
+                          className="w-full pl-8 pr-8 py-1.5 bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-medium focus:outline-hidden"
+                        />
+                        {clientSearchQuery && (
+                          <button
+                            type="button"
+                            onClick={() => setClientSearchQuery("")}
+                            className="absolute right-2.5 top-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 cursor-pointer"
+                          >
+                            <X size={13} />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Filtered Dropdown */}
+                      <select
+                        value={newClientName}
+                        onChange={(e) => {
+                          setNewClientName(e.target.value)
+                        }}
+                        className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden font-medium text-xs"
+                      >
+                        {availableClients
+                          .filter(c => {
+                            if (!clientSearchQuery.trim()) return true
+                            const q = clientSearchQuery.toLowerCase().trim()
+                            return c.name.toLowerCase().includes(q) ||
+                              (c.company && c.company.toLowerCase().includes(q)) ||
+                              (c.email && c.email.toLowerCase().includes(q))
+                          })
+                          .map(c => (
+                            <option key={c.name} value={c.name}>
+                              {c.name} {c.company ? `(${c.company})` : ''} {c.email ? `• ${c.email}` : ''}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
                   ) : (
                     <div className="space-y-2 p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700">
                       <input

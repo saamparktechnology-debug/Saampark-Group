@@ -24,7 +24,12 @@ import {
   Download,
   Printer,
   Sparkles,
-  Layers
+  Layers,
+  FolderGit2,
+  CheckSquare,
+  HelpCircle,
+  TrendingUp,
+  Receipt
 } from "lucide-react"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
@@ -32,22 +37,31 @@ import {
   TeamMemberPayoutProfile, 
   TeamPayoutRecord, 
   TeamPayrollKPIs,
-  TeamMemberBankingInfo 
+  TeamMemberBankingInfo,
+  ProjectUserEarningsRecord,
+  CustomPaymentAdjustment
 } from "../types"
 import { 
   getTeamPayoutProfiles, 
   getPayoutRecords, 
   updateMemberBankingDetails, 
   deletePayoutRecord, 
-  sendTeamPaymentReceiptEmail 
+  sendTeamPaymentReceiptEmail,
+  getProjectWiseUserEarnings,
+  getCustomAdjustments,
+  updateCustomAdjustmentStatus,
+  deleteCustomAdjustment,
+  recordTeamPayout
 } from "../services/teamPaymentService"
 import { RecordPayoutModal } from "../components/RecordPayoutModal"
 import { EditMemberBankingModal } from "../components/EditMemberBankingModal"
 import { TeamPaymentReceiptModal } from "../components/TeamPaymentReceiptModal"
 import { MemberPayoutLedgerModal } from "../components/MemberPayoutLedgerModal"
+import { DisburseProjectShareModal } from "../components/DisburseProjectShareModal"
+import { AddCustomAdjustmentModal } from "../components/AddCustomAdjustmentModal"
 import { Button } from "@/components/ui/Button"
 import { ThreeDotLoader } from "@/components/ui/ThreeDotLoader"
-import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
+import { exportToExcel } from "@/lib/exportUtils"
 
 export default function TeamPaymentsPage() {
   const { activeCompanyId, activeBranchId, branches, user } = useAuthStore()
@@ -73,8 +87,8 @@ export default function TeamPaymentsPage() {
   const canEditBanking = canPerformAction(user, "Teams", "edit") || isSuperAdmin || isCompanyAdmin
   const canDeletePayout = canPerformAction(user, "Teams", "delete") || isSuperAdmin || isCompanyAdmin
 
-  // Active View Tab: "directory" | "records"
-  const [activeTab, setActiveTab] = React.useState<"directory" | "records">("directory")
+  // Active View Tab: "directory" | "projects" | "history" | "custom"
+  const [activeTab, setActiveTab] = React.useState<"directory" | "projects" | "history" | "custom">("directory")
 
   // Branch Selector Filter
   const [selectedBranchId, setSelectedBranchId] = React.useState<string>("all")
@@ -91,6 +105,9 @@ export default function TeamPaymentsPage() {
   // Data States
   const [profiles, setProfiles] = React.useState<TeamMemberPayoutProfile[]>([])
   const [records, setRecords] = React.useState<TeamPayoutRecord[]>([])
+  const [projectEarnings, setProjectEarnings] = React.useState<ProjectUserEarningsRecord[]>([])
+  const [customAdjustments, setCustomAdjustments] = React.useState<CustomPaymentAdjustment[]>([])
+  
   const [kpis, setKpis] = React.useState<TeamPayrollKPIs>({
     totalMonthlyPayroll: 0,
     totalPaidThisMonth: 0,
@@ -98,6 +115,8 @@ export default function TeamPaymentsPage() {
     teamMembersOnPayroll: 0,
     paidMembersCount: 0,
     pendingMembersCount: 0,
+    totalProjectDisbursements: 0,
+    totalCustomAdjustments: 0,
   })
   const [isLoading, setIsLoading] = React.useState(true)
   const [toastMessage, setToastMessage] = React.useState<string | null>(null)
@@ -105,12 +124,15 @@ export default function TeamPaymentsPage() {
   // Filters & Search
   const [searchQuery, setSearchQuery] = React.useState("")
   const [statusFilter, setStatusFilter] = React.useState<string>("all")
+  const [categoryFilter, setCategoryFilter] = React.useState<string>("all")
 
   // Modals
   const [payingProfile, setPayingProfile] = React.useState<TeamMemberPayoutProfile | null>(null)
   const [editingBankingProfile, setEditingBankingProfile] = React.useState<TeamMemberPayoutProfile | null>(null)
   const [viewingReceipt, setViewingReceipt] = React.useState<TeamPayoutRecord | null>(null)
   const [viewingLedgerProfile, setViewingLedgerProfile] = React.useState<TeamMemberPayoutProfile | null>(null)
+  const [disbursingProject, setDisbursingProject] = React.useState<ProjectUserEarningsRecord | null>(null)
+  const [isAddAdjustmentOpen, setIsAddAdjustmentOpen] = React.useState(false)
 
   const showToast = (msg: string) => {
     setToastMessage(msg)
@@ -123,13 +145,17 @@ export default function TeamPaymentsPage() {
     try {
       const comp = activeCompanyId || "tech"
       const branch = selectedBranchId
-      const [pData, rData] = await Promise.all([
+      const [pData, rData, projData, adjData] = await Promise.all([
         getTeamPayoutProfiles(comp, branch),
         getPayoutRecords(comp, branch),
+        getProjectWiseUserEarnings(comp, branch),
+        getCustomAdjustments(comp, branch),
       ])
       setProfiles(pData.profiles)
       setKpis(pData.kpis)
       setRecords(rData)
+      setProjectEarnings(projData)
+      setCustomAdjustments(adjData)
     } catch (err) {
       console.error("Error loading team payments data:", err)
     } finally {
@@ -145,6 +171,7 @@ export default function TeamPaymentsPage() {
     window.addEventListener("saampark_branch_switched", handleReload)
     window.addEventListener("saampark_team_payouts_updated", handleReload)
     window.addEventListener("saampark_team_banking_updated", handleReload)
+    window.addEventListener("saampark_team_adjustments_updated", handleReload)
 
     return () => {
       window.removeEventListener("storage", handleReload)
@@ -152,6 +179,7 @@ export default function TeamPaymentsPage() {
       window.removeEventListener("saampark_branch_switched", handleReload)
       window.removeEventListener("saampark_team_payouts_updated", handleReload)
       window.removeEventListener("saampark_team_banking_updated", handleReload)
+      window.removeEventListener("saampark_team_adjustments_updated", handleReload)
     }
   }, [loadData])
 
@@ -182,6 +210,58 @@ export default function TeamPaymentsPage() {
     showToast(res.success ? `✅ Receipt sent to ${record.memberEmail}!` : "❌ Failed to send receipt.")
   }
 
+  // Disburse Custom Adjustment Directly
+  const handleDisburseCustomItem = async (adj: CustomPaymentAdjustment) => {
+    if (!canAddPayout) {
+      alert("Permission required to disburse payouts.")
+      return
+    }
+
+    try {
+      const payout = await recordTeamPayout({
+        memberId: adj.memberId,
+        memberName: adj.memberName,
+        memberEmail: adj.memberEmail,
+        role: adj.role,
+        department: adj.department,
+        companyId: adj.companyId || "tech",
+        branchId: adj.branchId,
+        branchName: adj.branchName,
+        period: `Custom: ${adj.category}`,
+        payoutType: "Custom Allowance",
+        baseAmount: 0,
+        commissionAmount: 0,
+        bonus: adj.type === "Credit" ? adj.amount : 0,
+        deductions: adj.type === "Debit" ? adj.amount : 0,
+        netAmount: adj.amount,
+        netAmountFormatted: `₹${adj.amount.toLocaleString("en-IN")}`,
+        paymentDate: new Date().toLocaleDateString("en-GB"),
+        paymentMethod: "Bank IMPS/NEFT",
+        transactionRef: `ADJTXN${Date.now().toString().slice(-6)}`,
+        status: "Completed",
+        notes: adj.description,
+        billedBy: "Admin",
+      }, adj.companyId)
+
+      await updateCustomAdjustmentStatus(adj.id, "Disbursed", adj.companyId, payout.id)
+      showToast(`🎉 Disbursed ₹${adj.amount.toLocaleString("en-IN")} for ${adj.category} to ${adj.memberName}!`)
+      loadData(false)
+      setViewingReceipt(payout)
+    } catch (err) {
+      console.error("Disbursement of adjustment failed:", err)
+      alert("Failed to disburse adjustment.")
+    }
+  }
+
+  // Delete Custom Adjustment
+  const handleDeleteCustomItem = async (id: string) => {
+    if (confirm("Delete this custom adjustment item?")) {
+      await deleteCustomAdjustment(id, activeCompanyId || "tech")
+      showToast("Custom adjustment deleted.")
+      loadData(false)
+    }
+  }
+
   // Filtered Profiles
   const filteredProfiles = React.useMemo(() => {
     return profiles.filter((p) => {
@@ -199,18 +279,45 @@ export default function TeamPaymentsPage() {
     })
   }, [profiles, searchQuery, statusFilter])
 
-  // Filtered Records
+  // Filtered Records (Universal History)
   const filteredRecords = React.useMemo(() => {
     return records.filter((r) => {
       const q = searchQuery.toLowerCase().trim()
-      return !q ||
+      const matchesSearch = !q ||
         r.id.toLowerCase().includes(q) ||
         r.memberName.toLowerCase().includes(q) ||
         r.memberEmail.toLowerCase().includes(q) ||
         r.period.toLowerCase().includes(q) ||
+        r.payoutType.toLowerCase().includes(q) ||
         (r.transactionRef && r.transactionRef.toLowerCase().includes(q))
+
+      const matchesCategory = categoryFilter === "all" || r.payoutType.toLowerCase().includes(categoryFilter.toLowerCase())
+      return matchesSearch && matchesCategory
     })
-  }, [records, searchQuery])
+  }, [records, searchQuery, categoryFilter])
+
+  // Filtered Projects
+  const filteredProjectEarnings = React.useMemo(() => {
+    return projectEarnings.filter((pe) => {
+      const q = searchQuery.toLowerCase().trim()
+      return !q ||
+        pe.projectTitle.toLowerCase().includes(q) ||
+        pe.clientName.toLowerCase().includes(q) ||
+        pe.memberName.toLowerCase().includes(q) ||
+        pe.memberEmail.toLowerCase().includes(q)
+    })
+  }, [projectEarnings, searchQuery])
+
+  // Filtered Custom Adjustments
+  const filteredCustomAdjustments = React.useMemo(() => {
+    return customAdjustments.filter((ca) => {
+      const q = searchQuery.toLowerCase().trim()
+      return !q ||
+        ca.memberName.toLowerCase().includes(q) ||
+        ca.category.toLowerCase().includes(q) ||
+        ca.description.toLowerCase().includes(q)
+    })
+  }, [customAdjustments, searchQuery])
 
   // Export Excel
   const handleExportExcel = () => {
@@ -219,23 +326,7 @@ export default function TeamPaymentsPage() {
         filename: `Team_Payroll_Directory_${new Date().toISOString().split("T")[0]}`,
         title: "Team Members Payroll & Banking Directory",
         subtitle: `All Team Members (${filteredProfiles.length} Records)`,
-        headers: [
-          "Member Name", 
-          "Email", 
-          "Role", 
-          "Department", 
-          "Branch", 
-          "Base Salary", 
-          "Commission", 
-          "Total Gross Due", 
-          "Paid This Month", 
-          "Need To Pay", 
-          "Status", 
-          "Bank Name", 
-          "Account No", 
-          "IFSC", 
-          "UPI ID"
-        ],
+        headers: ["Member Name", "Email", "Role", "Department", "Branch", "Base Salary", "Commission", "Project Earnings", "Total Gross Due", "Paid This Month", "Need To Pay", "Status", "Bank Name", "Account No", "IFSC", "UPI ID"],
         rows: filteredProfiles.map(p => [
           p.name,
           p.email,
@@ -244,6 +335,7 @@ export default function TeamPaymentsPage() {
           p.branchName || "HQ",
           p.baseSalary,
           p.subscriptionCommission,
+          p.projectEarnings,
           p.totalDueThisMonth,
           p.totalPaidThisMonth,
           p.remainingNeedToPay,
@@ -254,26 +346,48 @@ export default function TeamPaymentsPage() {
           p.bankingInfo?.upiId || "-",
         ])
       })
+    } else if (activeTab === "projects") {
+      exportToExcel({
+        filename: `Project_Wise_Earnings_${new Date().toISOString().split("T")[0]}`,
+        title: "Project-Wise User Earnings & Milestone Shares",
+        subtitle: `Project Shares (${filteredProjectEarnings.length} Records)`,
+        headers: ["Project Title", "Client Name", "Team Member", "Member Role", "Project Total Value", "Client Paid", "Share %", "Member Earned", "Member Disbursed", "Pending Share"],
+        rows: filteredProjectEarnings.map(pe => [
+          pe.projectTitle,
+          pe.clientName,
+          pe.memberName,
+          pe.memberRole,
+          pe.projectTotalValue,
+          pe.clientPaymentReceived,
+          `${pe.memberSharePercentage}%`,
+          pe.memberTotalEarned,
+          pe.memberPaidAmount,
+          pe.memberPendingAmount,
+        ])
+      })
+    } else if (activeTab === "custom") {
+      exportToExcel({
+        filename: `Custom_Adjustments_${new Date().toISOString().split("T")[0]}`,
+        title: "Custom Allowances & Reimbursements",
+        subtitle: `Custom Items (${filteredCustomAdjustments.length} Records)`,
+        headers: ["Voucher/ID", "Date", "Team Member", "Category", "Type", "Amount", "Description", "Status"],
+        rows: filteredCustomAdjustments.map(ca => [
+          ca.id,
+          ca.createdDate,
+          ca.memberName,
+          ca.category,
+          ca.type,
+          ca.amount,
+          ca.description,
+          ca.status,
+        ])
+      })
     } else {
       exportToExcel({
-        filename: `Team_Payout_Records_${new Date().toISOString().split("T")[0]}`,
-        title: "Team Payout Vouchers & Disbursement Records",
+        filename: `All_Payment_History_${new Date().toISOString().split("T")[0]}`,
+        title: "Universal Team Payment Disbursement History",
         subtitle: `Disbursement Ledger (${filteredRecords.length} Records)`,
-        headers: [
-          "Voucher ID", 
-          "Payment Date", 
-          "Member Name", 
-          "Member Email", 
-          "Period", 
-          "Payout Type", 
-          "Payment Method", 
-          "Transaction UTR", 
-          "Base Amount", 
-          "Commission", 
-          "Bonus", 
-          "Deductions", 
-          "Net Amount Paid"
-        ],
+        headers: ["Voucher ID", "Payment Date", "Member Name", "Member Email", "Period / Project", "Payout Category", "Payment Method", "Transaction UTR", "Amount Paid"],
         rows: filteredRecords.map(r => [
           r.id,
           r.paymentDate,
@@ -283,10 +397,6 @@ export default function TeamPaymentsPage() {
           r.payoutType,
           r.paymentMethod,
           r.transactionRef || "-",
-          r.baseAmount,
-          r.commissionAmount,
-          r.bonus || 0,
-          r.deductions || 0,
           r.netAmount,
         ])
       })
@@ -314,7 +424,7 @@ export default function TeamPaymentsPage() {
                 <span>Teams Payments & Payroll Hub</span>
               </h1>
               <p className="text-xs text-zinc-500">
-                Manage team banking profiles, monitor "Need to Pay" salaries & commissions, disburse vouchers, and dispatch email receipts.
+                Staff compensation, project milestone shares, banking/UPI details, universal payout history & custom allowances.
               </p>
             </div>
           </div>
@@ -354,6 +464,12 @@ export default function TeamPaymentsPage() {
             Export Excel
           </Button>
 
+          {canAddPayout && (
+            <Button size="sm" onClick={() => setIsAddAdjustmentOpen(true)} leftIcon={<Sparkles size={13} />} className="bg-amber-600 hover:bg-amber-700 text-white font-bold">
+              + Custom Allowance
+            </Button>
+          )}
+
           <Button size="sm" variant="secondary" onClick={() => loadData(true)} leftIcon={<RefreshCw size={13} />}>
             Refresh
           </Button>
@@ -370,7 +486,7 @@ export default function TeamPaymentsPage() {
               ₹{kpis.totalMonthlyPayroll.toLocaleString("en-IN")}
             </div>
             <div className="text-[11px] text-zinc-500 font-semibold mt-1">
-              {kpis.teamMembersOnPayroll} Team Members
+              {kpis.teamMembersOnPayroll} Active Staff
             </div>
           </div>
           <div className="p-3 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
@@ -410,30 +526,31 @@ export default function TeamPaymentsPage() {
           </div>
         </div>
 
-        {/* Team Size */}
+        {/* Project Shares Disbursed */}
         <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xs flex items-center justify-between">
           <div>
-            <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Payroll Headcount</div>
+            <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Project Shares Disbursed</div>
             <div className="text-2xl font-black text-purple-600 dark:text-purple-400 mt-1">
-              {profiles.length} Staff
+              ₹{kpis.totalProjectDisbursements.toLocaleString("en-IN")}
             </div>
             <div className="text-[11px] text-purple-600 dark:text-purple-400 font-semibold mt-1">
-              Active Compensation Ledger
+              {projectEarnings.length} Project Milestone Links
             </div>
           </div>
           <div className="p-3 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400">
-            <User size={22} />
+            <FolderGit2 size={22} />
           </div>
         </div>
       </div>
 
-      {/* Navigation Tabs */}
+      {/* 4-Tab Navigation Selector */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-2 p-1.5 bg-zinc-100 dark:bg-zinc-800/80 rounded-2xl w-fit border border-zinc-200/80 dark:border-zinc-700/60 shadow-2xs">
+        <div className="flex items-center gap-1.5 p-1.5 bg-zinc-100 dark:bg-zinc-800/80 rounded-2xl w-full sm:w-fit border border-zinc-200/80 dark:border-zinc-700/60 shadow-2xs overflow-x-auto">
+          {/* Tab 1 */}
           <button
             type="button"
             onClick={() => setActiveTab("directory")}
-            className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all cursor-pointer ${
+            className={`px-3.5 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === "directory"
                 ? "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-sm border border-zinc-200 dark:border-zinc-700"
                 : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
@@ -443,17 +560,46 @@ export default function TeamPaymentsPage() {
             <span>Team Members & Banking ({profiles.length})</span>
           </button>
 
+          {/* Tab 2 */}
           <button
             type="button"
-            onClick={() => setActiveTab("records")}
-            className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all cursor-pointer ${
-              activeTab === "records"
-                ? "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-sm border border-zinc-200 dark:border-zinc-700"
+            onClick={() => setActiveTab("projects")}
+            className={`px-3.5 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === "projects"
+                ? "bg-white dark:bg-zinc-900 text-purple-800 dark:text-purple-300 shadow-sm border border-purple-500/20"
                 : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
             }`}
           >
-            <CreditCard size={14} />
-            <span>Payout Vouchers & History ({records.length})</span>
+            <FolderGit2 size={14} />
+            <span>Project-Wise Payments ({projectEarnings.length})</span>
+          </button>
+
+          {/* Tab 3 */}
+          <button
+            type="button"
+            onClick={() => setActiveTab("history")}
+            className={`px-3.5 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === "history"
+                ? "bg-white dark:bg-zinc-900 text-blue-800 dark:text-blue-300 shadow-sm border border-blue-500/20"
+                : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+            }`}
+          >
+            <Receipt size={14} />
+            <span>All Payment History ({records.length})</span>
+          </button>
+
+          {/* Tab 4 */}
+          <button
+            type="button"
+            onClick={() => setActiveTab("custom")}
+            className={`px-3.5 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === "custom"
+                ? "bg-white dark:bg-zinc-900 text-amber-800 dark:text-amber-300 shadow-sm border border-amber-500/20"
+                : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+            }`}
+          >
+            <Sparkles size={14} />
+            <span>Custom Section ({customAdjustments.length})</span>
           </button>
         </div>
 
@@ -463,10 +609,14 @@ export default function TeamPaymentsPage() {
             <Search size={14} className="absolute left-3 top-2.5 text-zinc-400" />
             <input
               type="text"
-              placeholder="Search member, role, bank, UPI..."
+              placeholder={
+                activeTab === "projects" ? "Search project, client, member..." :
+                activeTab === "custom" ? "Search category, member..." :
+                "Search member, role, bank, UPI..."
+              }
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8 pr-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-medium focus:outline-hidden w-60"
+              className="pl-8 pr-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-medium focus:outline-hidden w-64"
             />
           </div>
 
@@ -482,12 +632,26 @@ export default function TeamPaymentsPage() {
               <option value="Partial">🟡 Partial</option>
             </select>
           )}
+
+          {activeTab === "history" && (
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-bold focus:outline-hidden"
+            >
+              <option value="all">All Payout Categories</option>
+              <option value="Salary">Monthly Salary</option>
+              <option value="Subscription">Subscription Commission</option>
+              <option value="Project">Project Share</option>
+              <option value="Allowance">Custom Allowance / Bonus</option>
+            </select>
+          )}
         </div>
       </div>
 
       {/* Main Content View */}
       {isLoading ? (
-        <ThreeDotLoader text="Loading team payroll profiles & records..." fullScreen={false} />
+        <ThreeDotLoader text="Loading team payroll, project shares & payout history..." fullScreen={false} />
       ) : activeTab === "directory" ? (
         /* ── TAB 1: TEAM MEMBERS PAYROLL & BANKING DIRECTORY ── */
         <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-3xl shadow-2xs overflow-hidden">
@@ -499,16 +663,17 @@ export default function TeamPaymentsPage() {
                   <th className="py-3.5 px-3">Role & Dept</th>
                   <th className="py-3.5 px-3">Bank & UPI Details</th>
                   <th className="py-3.5 px-3">Base Salary</th>
-                  <th className="py-3.5 px-3">Commission</th>
+                  <th className="py-3.5 px-3">Subscription Share</th>
+                  <th className="py-3.5 px-3">Project Share</th>
                   <th className="py-3.5 px-3">Total Need To Pay</th>
-                  <th className="py-3.5 px-3 text-center">Payout Status</th>
+                  <th className="py-3.5 px-3 text-center">Status</th>
                   <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800 font-medium">
                 {filteredProfiles.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-12 text-center text-zinc-400">
+                    <td colSpan={9} className="py-12 text-center text-zinc-400">
                       No team members match the search and filter criteria.
                     </td>
                   </tr>
@@ -553,7 +718,7 @@ export default function TeamPaymentsPage() {
                             {b.accountNumber ? (
                               <div className="flex items-center gap-1.5 text-[11px] text-zinc-700 dark:text-zinc-300 font-medium">
                                 <Building2 size={11} className="text-blue-500 shrink-0" />
-                                <span>{b.bankName || "Bank"} (A/C: ••••{b.accountNumber.slice(-4)})</span>
+                                <span>{b.bankName || "Bank"} (••••{b.accountNumber.slice(-4)})</span>
                               </div>
                             ) : (
                               <div className="text-[10.5px] text-zinc-400 italic">No bank a/c added</div>
@@ -583,6 +748,16 @@ export default function TeamPaymentsPage() {
                           </div>
                           <div className="text-[10px] text-indigo-500/80">
                             {p.activeSubscriptionsCount} Subscriptions
+                          </div>
+                        </td>
+
+                        {/* Project Share */}
+                        <td className="py-3.5 px-3 whitespace-nowrap">
+                          <div className="font-bold text-purple-600 dark:text-purple-400">
+                            +₹{p.projectEarnings.toLocaleString("en-IN")}
+                          </div>
+                          <div className="text-[10px] text-purple-500/80">
+                            {p.activeProjectsCount} Projects
                           </div>
                         </td>
 
@@ -627,7 +802,7 @@ export default function TeamPaymentsPage() {
                                 type="button"
                                 onClick={() => setPayingProfile(p)}
                                 className="px-2.5 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] inline-flex items-center gap-1 shadow-2xs cursor-pointer transition-colors"
-                                title="Disburse payment to this team member"
+                                title="Disburse salary and commission payout"
                               >
                                 <DollarSign size={12} />
                                 <span>Pay</span>
@@ -666,8 +841,92 @@ export default function TeamPaymentsPage() {
             </table>
           </div>
         </div>
-      ) : (
-        /* ── TAB 2: PAYOUT RECORDS & DISBURSEMENT HISTORY ── */
+      ) : activeTab === "projects" ? (
+        /* ── TAB 2: PROJECT-WISE USER EARNINGS & PAYOUTS ── */
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-3xl shadow-2xs overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-zinc-50 dark:bg-zinc-850/70 border-b border-zinc-200/80 dark:border-zinc-700/60 text-zinc-600 dark:text-zinc-300 font-bold uppercase tracking-wider text-[10px]">
+                <tr>
+                  <th className="py-3.5 px-4">Project & Client</th>
+                  <th className="py-3.5 px-3">Team Member</th>
+                  <th className="py-3.5 px-3">Project Value</th>
+                  <th className="py-3.5 px-3">Client Payment</th>
+                  <th className="py-3.5 px-3">Member Share %</th>
+                  <th className="py-3.5 px-3">Total Earned</th>
+                  <th className="py-3.5 px-3">Disbursed to Member</th>
+                  <th className="py-3.5 px-3">Pending Share</th>
+                  <th className="py-3.5 px-4 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800 font-medium">
+                {filteredProjectEarnings.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="py-12 text-center text-zinc-400">
+                      No project earnings records found matching the filter.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredProjectEarnings.map((pe) => (
+                    <tr key={pe.id} className="hover:bg-purple-50/20 dark:hover:bg-purple-950/10 transition-colors">
+                      <td className="py-3.5 px-4">
+                        <div className="font-bold text-zinc-900 dark:text-zinc-100">{pe.projectTitle}</div>
+                        <div className="text-[11px] text-zinc-400">Client: <strong className="text-zinc-600 dark:text-zinc-300">{pe.clientName}</strong></div>
+                      </td>
+                      <td className="py-3.5 px-3">
+                        <div className="font-bold text-zinc-800 dark:text-zinc-200">{pe.memberName}</div>
+                        <div className="text-[10px] text-zinc-400">{pe.memberRole}</div>
+                      </td>
+                      <td className="py-3.5 px-3 whitespace-nowrap font-semibold text-zinc-800 dark:text-zinc-200">
+                        ₹{pe.projectTotalValue.toLocaleString("en-IN")}
+                      </td>
+                      <td className="py-3.5 px-3 whitespace-nowrap">
+                        <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                          ₹{pe.clientPaymentReceived.toLocaleString("en-IN")}
+                        </span>
+                        <div className="text-[9.5px] text-zinc-400">{pe.clientPaymentStatus}</div>
+                      </td>
+                      <td className="py-3.5 px-3 whitespace-nowrap">
+                        <span className="px-2 py-0.5 rounded-md bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 font-bold text-[10.5px]">
+                          {pe.memberSharePercentage}% Share
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-3 whitespace-nowrap font-bold text-purple-700 dark:text-purple-300">
+                        ₹{pe.memberTotalEarned.toLocaleString("en-IN")}
+                      </td>
+                      <td className="py-3.5 px-3 whitespace-nowrap font-semibold text-emerald-600 dark:text-emerald-400">
+                        ₹{pe.memberPaidAmount.toLocaleString("en-IN")}
+                      </td>
+                      <td className="py-3.5 px-3 whitespace-nowrap">
+                        <span className={`text-sm font-black ${pe.memberPendingAmount > 0 ? "text-amber-600 dark:text-amber-400" : "text-zinc-400"}`}>
+                          ₹{pe.memberPendingAmount.toLocaleString("en-IN")}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                        {canAddPayout && pe.memberPendingAmount > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => setDisbursingProject(pe)}
+                            className="px-2.5 py-1 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-[11px] inline-flex items-center gap-1 shadow-2xs cursor-pointer transition-colors"
+                          >
+                            <DollarSign size={12} />
+                            <span>Pay Share</span>
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center justify-end gap-1">
+                            <CheckCircle2 size={12} /> Settled
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : activeTab === "history" ? (
+        /* ── TAB 3: UNIVERSAL PAYMENT HISTORY ── */
         <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-3xl shadow-2xs overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
@@ -675,10 +934,11 @@ export default function TeamPaymentsPage() {
                 <tr>
                   <th className="py-3.5 px-4">Voucher ID</th>
                   <th className="py-3.5 px-3">Date</th>
-                  <th className="py-3.5 px-3">Team Member</th>
-                  <th className="py-3.5 px-3">Period & Category</th>
+                  <th className="py-3.5 px-3">Beneficiary Member</th>
+                  <th className="py-3.5 px-3">Period / Project</th>
+                  <th className="py-3.5 px-3">Payout Category</th>
                   <th className="py-3.5 px-3">Payment Method</th>
-                  <th className="py-3.5 px-3">Transaction UTR / Ref</th>
+                  <th className="py-3.5 px-3">Transaction UTR</th>
                   <th className="py-3.5 px-3 text-right">Net Amount</th>
                   <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
@@ -686,8 +946,8 @@ export default function TeamPaymentsPage() {
               <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800 font-medium">
                 {filteredRecords.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-12 text-center text-zinc-400">
-                      No payout vouchers recorded yet.
+                    <td colSpan={9} className="py-12 text-center text-zinc-400">
+                      No payment vouchers found matching search criteria.
                     </td>
                   </tr>
                 ) : (
@@ -705,12 +965,14 @@ export default function TeamPaymentsPage() {
                       </td>
                       <td className="py-3.5 px-3">
                         <div className="font-semibold text-zinc-800 dark:text-zinc-200">{r.period}</div>
-                        <div className="text-[10px] text-zinc-400">{r.payoutType}</div>
                       </td>
                       <td className="py-3.5 px-3 whitespace-nowrap">
-                        <span className="px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-semibold text-[10px] border border-zinc-200 dark:border-zinc-700">
-                          {r.paymentMethod}
+                        <span className="px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-semibold text-[10px]">
+                          {r.payoutType}
                         </span>
+                      </td>
+                      <td className="py-3.5 px-3 whitespace-nowrap">
+                        <span className="font-medium text-zinc-600 dark:text-zinc-300">{r.paymentMethod}</span>
                       </td>
                       <td className="py-3.5 px-3 font-mono text-[11px] text-zinc-600 dark:text-zinc-300">
                         {r.transactionRef || "-"}
@@ -761,11 +1023,103 @@ export default function TeamPaymentsPage() {
             </table>
           </div>
         </div>
+      ) : (
+        /* ── TAB 4: CUSTOM SECTION (ADJUSTMENTS & ALLOWANCES) ── */
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-3xl shadow-2xs overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-zinc-50 dark:bg-zinc-850/70 border-b border-zinc-200/80 dark:border-zinc-700/60 text-zinc-600 dark:text-zinc-300 font-bold uppercase tracking-wider text-[10px]">
+                <tr>
+                  <th className="py-3.5 px-4">Adjustment ID</th>
+                  <th className="py-3.5 px-3">Date</th>
+                  <th className="py-3.5 px-3">Team Member</th>
+                  <th className="py-3.5 px-3">Compensation Category</th>
+                  <th className="py-3.5 px-3">Type</th>
+                  <th className="py-3.5 px-3">Amount</th>
+                  <th className="py-3.5 px-3">Description / Reason</th>
+                  <th className="py-3.5 px-3 text-center">Status</th>
+                  <th className="py-3.5 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800 font-medium">
+                {filteredCustomAdjustments.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="py-12 text-center text-zinc-400">
+                      No custom allowances, reimbursements, or bonuses recorded yet. Click "+ Custom Allowance" to add one!
+                    </td>
+                  </tr>
+                ) : (
+                  filteredCustomAdjustments.map((ca) => (
+                    <tr key={ca.id} className="hover:bg-amber-50/20 dark:hover:bg-amber-950/10 transition-colors">
+                      <td className="py-3.5 px-4 font-mono font-bold text-amber-600 dark:text-amber-400">
+                        {ca.id}
+                      </td>
+                      <td className="py-3.5 px-3 text-zinc-500 font-medium whitespace-nowrap">
+                        {ca.createdDate}
+                      </td>
+                      <td className="py-3.5 px-3">
+                        <div className="font-bold text-zinc-900 dark:text-zinc-100">{ca.memberName}</div>
+                        <div className="text-[10px] text-zinc-400">{ca.role}</div>
+                      </td>
+                      <td className="py-3.5 px-3">
+                        <span className="font-bold text-zinc-800 dark:text-zinc-200">{ca.category}</span>
+                      </td>
+                      <td className="py-3.5 px-3 whitespace-nowrap">
+                        <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] ${
+                          ca.type === "Credit" 
+                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                            : "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"
+                        }`}>
+                          {ca.type === "Credit" ? "+ Addition" : "- Deduction"}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-3 font-black text-sm text-zinc-900 dark:text-zinc-100">
+                        ₹{ca.amount.toLocaleString("en-IN")}
+                      </td>
+                      <td className="py-3.5 px-3 text-zinc-600 dark:text-zinc-400 max-w-[240px] truncate" title={ca.description}>
+                        {ca.description}
+                      </td>
+                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                          ca.status === "Disbursed" 
+                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                            : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                        }`}>
+                          {ca.status === "Disbursed" ? "✓ Disbursed" : "Approved / Pending"}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {canAddPayout && ca.status !== "Disbursed" && (
+                            <button
+                              type="button"
+                              onClick={() => handleDisburseCustomItem(ca)}
+                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-[11px] cursor-pointer"
+                            >
+                              Disburse
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCustomItem(ca.id)}
+                            className="p-1 rounded-lg text-zinc-400 hover:text-rose-600 cursor-pointer"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
       {/* ── MODALS ── */}
 
-      {/* 1. Record Payout Disbursement Modal */}
+      {/* 1. Record Salary & Commission Payout Modal */}
       <RecordPayoutModal
         isOpen={Boolean(payingProfile)}
         profile={payingProfile}
@@ -777,7 +1131,30 @@ export default function TeamPaymentsPage() {
         }}
       />
 
-      {/* 2. Edit Member Banking & UPI Modal */}
+      {/* 2. Disburse Project Share Modal */}
+      <DisburseProjectShareModal
+        isOpen={Boolean(disbursingProject)}
+        earningsRecord={disbursingProject}
+        onClose={() => setDisbursingProject(null)}
+        onSuccess={(payout) => {
+          showToast(`🎉 Project Share of ₹${payout.netAmount.toLocaleString("en-IN")} disbursed to ${payout.memberName}!`)
+          loadData(false)
+          setViewingReceipt(payout)
+        }}
+      />
+
+      {/* 3. Add Custom Adjustment Modal */}
+      <AddCustomAdjustmentModal
+        isOpen={isAddAdjustmentOpen}
+        profiles={profiles}
+        onClose={() => setIsAddAdjustmentOpen(false)}
+        onSuccess={(adj) => {
+          showToast(`✅ Custom ${adj.category} of ₹${adj.amount.toLocaleString("en-IN")} added for ${adj.memberName}!`)
+          loadData(false)
+        }}
+      />
+
+      {/* 4. Edit Member Banking & UPI Modal */}
       <EditMemberBankingModal
         isOpen={Boolean(editingBankingProfile)}
         profile={editingBankingProfile}
@@ -785,14 +1162,14 @@ export default function TeamPaymentsPage() {
         onSave={handleSaveBanking}
       />
 
-      {/* 3. Official Payment Receipt Voucher Modal */}
+      {/* 5. Official Payment Receipt Voucher Modal */}
       <TeamPaymentReceiptModal
         isOpen={Boolean(viewingReceipt)}
         payout={viewingReceipt}
         onClose={() => setViewingReceipt(null)}
       />
 
-      {/* 4. Single Member Historical Payout Ledger Modal */}
+      {/* 6. Single Member Historical Payout Ledger Modal */}
       <MemberPayoutLedgerModal
         isOpen={Boolean(viewingLedgerProfile)}
         profile={viewingLedgerProfile}

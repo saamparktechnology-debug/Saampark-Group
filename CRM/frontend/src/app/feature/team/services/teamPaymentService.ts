@@ -4,15 +4,20 @@ import {
   TeamMemberPayoutProfile, 
   TeamPayoutRecord, 
   TeamPayrollKPIs,
-  PayoutStatus 
+  PayoutStatus,
+  ProjectUserEarningsRecord,
+  CustomPaymentAdjustment
 } from "../types"
 import { UserService } from "@/services/apiServices"
 import { getSubscriptions } from "@/app/feature/subscriptions/services/subscriptionService"
 import { Subscription, calculateTeamRevenueShare } from "@/app/feature/subscriptions/types"
+import { getProjects } from "@/app/feature/projects/services/projectService"
+import { Project } from "@/app/feature/projects/types"
 import { getUserAvatar } from "@/app/feature/users/services/userService"
 
 const BANKING_STORAGE_KEY = "team_banking_details"
 const PAYOUTS_STORAGE_KEY = "team_payout_records"
+const CUSTOM_ADJ_STORAGE_KEY = "team_custom_adjustments"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. BANKING DETAILS REPOSITORY
@@ -171,7 +176,212 @@ export const deletePayoutRecord = async (id: string, companyId?: string): Promis
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 3. AGGREGATED TEAM PAYOUT PROFILES & FINANCIAL LEDGER
+// 3. PROJECT-WISE USER EARNINGS & PAYOUTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const getProjectWiseUserEarnings = async (
+  companyId?: string,
+  branchId?: string
+): Promise<ProjectUserEarningsRecord[]> => {
+  const [projects, users, payouts] = await Promise.all([
+    getProjects(companyId).catch(() => []),
+    UserService.getTeamMembers().catch(() => []),
+    getPayoutRecords(companyId),
+  ])
+
+  const records: ProjectUserEarningsRecord[] = []
+
+  const nonClientUsers = Array.isArray(users)
+    ? users.filter(u => !((u.role || u.role_name || "").toLowerCase().includes("client")))
+    : []
+
+  for (const p of projects) {
+    if (!p) continue
+
+    const projectTotal = parseInt(String(p.price || p.totalAmount || "0").replace(/[^0-9]/g, "")) || 0
+    let clientPaid = 0
+    if (p.paymentStatus === "Paid") clientPaid = projectTotal
+    else if (p.paymentStatus === "Advance Received" || p.paymentStatus === "Partially Paid") {
+      clientPaid = p.advanceAmount ? Number(p.advanceAmount) : Math.round(projectTotal * 0.4)
+    } else {
+      clientPaid = Math.round(projectTotal * 0.5) // demo baseline
+    }
+
+    const assignedMembers = Array.isArray(p.members) && p.members.length > 0
+      ? p.members
+      : nonClientUsers.slice(0, 2).map((u: any) => ({
+          id: String(u.id || u._id),
+          name: u.full_name || u.name || "Lead Developer",
+          role: u.role_name || u.role || "Developer",
+          email: u.email || "",
+        }))
+
+    const defaultSharePct = Math.round(30 / Math.max(1, assignedMembers.length))
+
+    for (const m of assignedMembers) {
+      const sharePct = defaultSharePct
+      const totalEarned = Math.round((clientPaid * sharePct) / 100)
+
+      // Check how much has already been disbursed to this member for this project
+      const memberProjectPayouts = payouts.filter((pay: TeamPayoutRecord) => 
+        (pay.projectId === p.id || pay.projectTitle === p.title) &&
+        (String(pay.memberId) === String(m.id) || (pay.memberEmail && m.email && pay.memberEmail.toLowerCase() === m.email.toLowerCase()))
+      )
+
+      const paidAmount = memberProjectPayouts.reduce((sum: number, pay: TeamPayoutRecord) => sum + (pay.netAmount || 0), 0)
+      const pendingAmount = Math.max(0, totalEarned - paidAmount)
+
+      const lastDisbursedDate = memberProjectPayouts.length > 0 ? memberProjectPayouts[0].paymentDate : undefined
+
+      records.push({
+        id: `PROJ-EARN-${p.id}-${m.id}`,
+        projectId: p.id,
+        projectTitle: p.title,
+        clientName: p.client || "Client Account",
+        projectTotalValue: projectTotal,
+        clientPaymentReceived: clientPaid,
+        clientPaymentStatus: p.paymentStatus || "In Progress",
+        memberId: String(m.id),
+        memberName: m.name,
+        memberEmail: m.email || "",
+        memberRole: m.role || "Developer",
+        memberSharePercentage: sharePct,
+        memberTotalEarned: totalEarned,
+        memberPaidAmount: paidAmount,
+        memberPendingAmount: pendingAmount,
+        companyId: p.companyId || companyId || "tech",
+        branchId: p.branchId,
+        branchName: p.branchName,
+        lastDisbursedDate,
+      })
+    }
+  }
+
+  let filtered = records
+  if (branchId && branchId !== "all") {
+    filtered = filtered.filter(r => !r.branchId || r.branchId === branchId)
+  }
+
+  return filtered
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 4. CUSTOM COMPENSATION ADJUSTMENTS & ALLOWANCES
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const getCustomAdjustments = async (
+  companyId?: string,
+  branchId?: string
+): Promise<CustomPaymentAdjustment[]> => {
+  const targetComp = companyId || "all"
+  let list = await fetchModuleDataFromDB<CustomPaymentAdjustment[]>(CUSTOM_ADJ_STORAGE_KEY, [], targetComp)
+  if (!Array.isArray(list)) list = []
+
+  const deletedIds = getLocalDeletedIds()
+  let filtered = filterGlobalDeletedItems(list, deletedIds)
+
+  if (branchId && branchId !== "all") {
+    filtered = filtered.filter(r => !r.branchId || r.branchId === branchId)
+  }
+
+  return filtered
+}
+
+export const addCustomAdjustment = async (
+  adjData: Omit<CustomPaymentAdjustment, "id" | "createdDate">,
+  companyId?: string
+): Promise<CustomPaymentAdjustment> => {
+  const comp = companyId || "all"
+  const currentList = await getCustomAdjustments(comp)
+  const year = new Date().getFullYear()
+  const seq = currentList.length + 1
+  const id = `ADJ-${year}-${String(seq).padStart(4, "0")}`
+
+  const newAdjustment: CustomPaymentAdjustment = {
+    ...adjData,
+    id,
+    createdDate: new Date().toLocaleDateString("en-GB"),
+    status: adjData.status || "Approved",
+  }
+
+  const nextList = [newAdjustment, ...currentList]
+  await saveModuleDataToDB(CUSTOM_ADJ_STORAGE_KEY, nextList, comp)
+  if (comp !== "all") {
+    await saveModuleDataToDB(CUSTOM_ADJ_STORAGE_KEY, nextList, "all")
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("saampark_data_synced"))
+    window.dispatchEvent(new Event("saampark_team_adjustments_updated"))
+    window.dispatchEvent(new Event("storage"))
+  }
+
+  return newAdjustment
+}
+
+export const updateCustomAdjustmentStatus = async (
+  id: string,
+  status: "Pending" | "Approved" | "Disbursed" | "Rejected",
+  companyId?: string,
+  voucherId?: string
+): Promise<boolean> => {
+  const comp = companyId || "all"
+  const currentList = await getCustomAdjustments(comp)
+  const normId = id.toLowerCase().trim()
+
+  const updatedList = currentList.map(a => {
+    if (a.id.toLowerCase().trim() === normId) {
+      return {
+        ...a,
+        status,
+        voucherId: voucherId || a.voucherId,
+        disbursedDate: status === "Disbursed" ? new Date().toLocaleDateString("en-GB") : a.disbursedDate,
+      }
+    }
+    return a
+  })
+
+  await saveModuleDataToDB(CUSTOM_ADJ_STORAGE_KEY, updatedList, comp)
+  if (comp !== "all") {
+    await saveModuleDataToDB(CUSTOM_ADJ_STORAGE_KEY, updatedList, "all")
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("saampark_data_synced"))
+    window.dispatchEvent(new Event("saampark_team_adjustments_updated"))
+    window.dispatchEvent(new Event("storage"))
+  }
+
+  return true
+}
+
+export const deleteCustomAdjustment = async (id: string, companyId?: string): Promise<boolean> => {
+  const strId = String(id).trim()
+  await markGlobalItemDeleted(strId, "team_adjustments")
+  await markGlobalItemDeleted(strId.toLowerCase(), "team_adjustments")
+
+  const comp = companyId || "all"
+  const currentList = await getCustomAdjustments(comp)
+  const filtered = currentList.filter(a => a.id.toLowerCase().trim() !== strId.toLowerCase())
+  await saveModuleDataToDB(CUSTOM_ADJ_STORAGE_KEY, filtered, comp)
+
+  if (comp !== "all") {
+    const allList = await getCustomAdjustments("all")
+    const allFiltered = allList.filter(a => a.id.toLowerCase().trim() !== strId.toLowerCase())
+    await saveModuleDataToDB(CUSTOM_ADJ_STORAGE_KEY, allFiltered, "all")
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("saampark_data_synced"))
+    window.dispatchEvent(new Event("saampark_team_adjustments_updated"))
+    window.dispatchEvent(new Event("storage"))
+  }
+
+  return true
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 5. AGGREGATED TEAM PAYOUT PROFILES & FINANCIAL LEDGER
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const getTeamPayoutProfiles = async (
@@ -181,11 +391,13 @@ export const getTeamPayoutProfiles = async (
   profiles: TeamMemberPayoutProfile[]
   kpis: TeamPayrollKPIs
 }> => {
-  const [users, allSubs, bankingMap, allPayouts] = await Promise.all([
+  const [users, allSubs, bankingMap, allPayouts, allProjectEarnings, allAdjustments] = await Promise.all([
     UserService.getTeamMembers().catch(() => []),
     getSubscriptions("all").catch(() => []),
     getTeamBankingMap(companyId),
     getPayoutRecords(companyId),
+    getProjectWiseUserEarnings(companyId, branchId),
+    getCustomAdjustments(companyId, branchId),
   ])
 
   // Filter strictly to non-clients
@@ -196,7 +408,7 @@ export const getTeamPayoutProfiles = async (
       })
     : []
 
-  const currentMonthYear = new Date().toLocaleString("en-US", { month: "long", year: "numeric" }) // e.g. "August 2026"
+  const currentMonthYear = new Date().toLocaleString("en-US", { month: "long", year: "numeric" })
 
   const profiles: TeamMemberPayoutProfile[] = rawMembers.map((u: any, idx: number) => {
     const memberId = String(u.id || u._id || idx)
@@ -235,7 +447,14 @@ export const getTeamPayoutProfiles = async (
       return acc + calc.monthlyRevenue
     }, 0)
 
-    const totalGrossDue = baseSalary + subscriptionCommission
+    // Compute active project earnings
+    const memberProjects = allProjectEarnings.filter(p => 
+      String(p.memberId).toLowerCase().trim() === memberId.toLowerCase().trim() ||
+      (p.memberEmail && mEmail && p.memberEmail.toLowerCase().trim() === mEmail)
+    )
+    const projectEarnings = memberProjects.reduce((acc, p) => acc + p.memberPendingAmount, 0)
+
+    const totalGrossDue = baseSalary + subscriptionCommission + projectEarnings
 
     // Check payouts this month
     const memberPayouts = allPayouts.filter(p => 
@@ -273,6 +492,7 @@ export const getTeamPayoutProfiles = async (
       bankingInfo: bankInfo,
       baseSalary,
       subscriptionCommission,
+      projectEarnings,
       totalDueThisMonth: totalGrossDue,
       totalPaidThisMonth: thisMonthPaid,
       remainingNeedToPay,
@@ -281,6 +501,7 @@ export const getTeamPayoutProfiles = async (
       lastPaidAmount: lastPaidRecord?.netAmount,
       nextPayoutDueDate: new Date(Date.now() + 5 * 86400000).toLocaleDateString("en-GB"),
       activeSubscriptionsCount: memberSubs.length,
+      activeProjectsCount: memberProjects.length,
     }
   })
 
@@ -296,6 +517,8 @@ export const getTeamPayoutProfiles = async (
   const totalNeedToPay = filteredProfiles.reduce((acc, p) => acc + p.remainingNeedToPay, 0)
   const paidMembersCount = filteredProfiles.filter(p => p.payoutStatus === "Paid").length
   const pendingMembersCount = filteredProfiles.filter(p => p.payoutStatus === "Need to Pay" || p.payoutStatus === "Partial").length
+  const totalProjectDisbursements = allPayouts.filter(p => p.payoutType.includes("Project")).reduce((s, p) => s + p.netAmount, 0)
+  const totalCustomAdjustments = allAdjustments.reduce((s, a) => s + (a.amount || 0), 0)
 
   const kpis: TeamPayrollKPIs = {
     totalMonthlyPayroll,
@@ -304,6 +527,8 @@ export const getTeamPayoutProfiles = async (
     teamMembersOnPayroll: filteredProfiles.length,
     paidMembersCount,
     pendingMembersCount,
+    totalProjectDisbursements,
+    totalCustomAdjustments,
   }
 
   return {
@@ -313,7 +538,7 @@ export const getTeamPayoutProfiles = async (
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4. DISPATCH PAYMENT RECEIPT EMAIL
+// 6. DISPATCH PAYMENT RECEIPT EMAIL
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const sendTeamPaymentReceiptEmail = async (payout: TeamPayoutRecord): Promise<{ success: boolean; message: string }> => {

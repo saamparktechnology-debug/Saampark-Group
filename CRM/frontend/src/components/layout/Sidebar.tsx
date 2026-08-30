@@ -99,12 +99,27 @@ export function Sidebar() {
   const [rawCounts, setRawCounts] = React.useState<Record<string, number>>({})
   const [visitedCounts, setVisitedCounts] = React.useState<Record<string, number>>({})
 
-  // Request browser notification permission gracefully on mount
+  // Request browser notification permission and run 3-tier automated reminders on mount
   React.useEffect(() => {
-    if (typeof window !== "undefined" && "Notification" in window) {
-      import("@/lib/notificationService").then(({ requestNotificationPermission }) => {
-        requestNotificationPermission().catch(() => {})
+    if (typeof window !== "undefined") {
+      if ("Notification" in window) {
+        import("@/lib/notificationService").then(({ requestNotificationPermission }) => {
+          requestNotificationPermission().catch(() => {})
+        })
+      }
+
+      // Run automated 3-tier reminder engine (-3 days, Day 0, +3 days overdue)
+      import("@/lib/automatedReminderEngine").then(({ runAutomated3TierReminders }) => {
+        runAutomated3TierReminders().catch(() => {})
       })
+
+      const interval = setInterval(() => {
+        import("@/lib/automatedReminderEngine").then(({ runAutomated3TierReminders }) => {
+          runAutomated3TierReminders().catch(() => {})
+        })
+      }, 30 * 60 * 1000) // every 30 minutes
+
+      return () => clearInterval(interval)
     }
   }, [])
 

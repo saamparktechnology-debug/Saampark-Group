@@ -1,6 +1,6 @@
 export type PayoutStatus = "Need to Pay" | "Paid" | "Partial" | "On Hold"
 export type PaymentMethod = "Bank IMPS/NEFT" | "UPI Transfer" | "Cash" | "Cheque"
-export type PayoutType = "Monthly Salary" | "Subscription Commission" | "Bonus / Incentive" | "Advance" | "Full Settlement"
+export type PayoutType = "Monthly Salary" | "Subscription Commission" | "Project Share / Milestone Payout" | "Bonus / Incentive" | "Advance" | "Custom Allowance" | "Expense Reimbursement" | "Full Settlement"
 
 export interface TeamMemberBankingInfo {
   memberId: string
@@ -34,6 +34,7 @@ export interface TeamMemberPayoutProfile {
   // Financial breakdown
   baseSalary: number
   subscriptionCommission: number
+  projectEarnings: number
   totalDueThisMonth: number
   totalPaidThisMonth: number
   remainingNeedToPay: number
@@ -44,6 +45,7 @@ export interface TeamMemberPayoutProfile {
   lastPaidAmount?: number
   nextPayoutDueDate?: string
   activeSubscriptionsCount: number
+  activeProjectsCount: number
 }
 
 export interface TeamPayoutRecord {
@@ -62,6 +64,7 @@ export interface TeamPayoutRecord {
   payoutType: PayoutType
   baseAmount: number
   commissionAmount: number
+  projectAmount?: number
   deductions?: number
   bonus?: number
   netAmount: number
@@ -70,6 +73,8 @@ export interface TeamPayoutRecord {
   paymentDate: string // DD/MM/YYYY
   paymentMethod: PaymentMethod
   transactionRef?: string // UTR / Txn Reference
+  projectId?: string
+  projectTitle?: string
   
   bankDetailsUsed?: {
     bankName?: string
@@ -87,6 +92,63 @@ export interface TeamPayoutRecord {
   createdAt?: string
 }
 
+export interface ProjectUserEarningsRecord {
+  id: string
+  projectId: string
+  projectTitle: string
+  clientName: string
+  projectTotalValue: number
+  clientPaymentReceived: number
+  clientPaymentStatus: string
+  
+  memberId: string
+  memberName: string
+  memberEmail: string
+  memberRole: string
+  memberSharePercentage: number // e.g. 15%
+  memberTotalEarned: number // (clientPaymentReceived * sharePct) / 100
+  memberPaidAmount: number
+  memberPendingAmount: number
+  
+  companyId?: string
+  branchId?: string
+  branchName?: string
+  lastDisbursedDate?: string
+}
+
+export type CustomAdjustmentCategory = 
+  | "Travel Reimbursement" 
+  | "Tech & Hardware Allowance" 
+  | "Performance Bonus" 
+  | "Salary Advance" 
+  | "Overtime & Weekend Delivery" 
+  | "Daily Calling Incentive"
+  | "Custom Credit" 
+  | "Custom Deduction"
+
+export interface CustomPaymentAdjustment {
+  id: string // e.g. ADJ-2026-0001
+  memberId: string
+  memberName: string
+  memberEmail: string
+  role?: string
+  department?: string
+  
+  category: CustomAdjustmentCategory
+  type: "Credit" | "Debit"
+  amount: number
+  description: string
+  status: "Pending" | "Approved" | "Disbursed" | "Rejected"
+  
+  createdDate: string
+  disbursedDate?: string
+  voucherId?: string
+  companyId?: string
+  branchId?: string
+  branchName?: string
+  approvedBy?: string
+}
+
 export interface TeamPayrollKPIs {
   totalMonthlyPayroll: number
   totalPaidThisMonth: number
@@ -94,4 +156,6 @@ export interface TeamPayrollKPIs {
   teamMembersOnPayroll: number
   paidMembersCount: number
   pendingMembersCount: number
+  totalProjectDisbursements: number
+  totalCustomAdjustments: number
 }
