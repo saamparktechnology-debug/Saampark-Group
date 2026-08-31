@@ -5,12 +5,13 @@ import { motion, AnimatePresence } from "framer-motion"
 import { useRouter } from "next/navigation"
 import { 
   Lock, Mail, ArrowRight, ShieldCheck, CheckCircle2, Eye, EyeOff, 
-  KeyRound, X, Users, Briefcase, Shield, ArrowLeft, RefreshCw, Loader2
+  KeyRound, X, Users, Briefcase, Shield, ArrowLeft, RefreshCw, Loader2,
+  Building2, ChevronRight, Check
 } from "lucide-react"
 
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
-import { useAuthStore, DEMO_USERS, Role } from "@/store/useAuthStore"
+import { useAuthStore, DEMO_USERS, Role, getCompanyLogoUrl } from "@/store/useAuthStore"
 import { recordUserAccount, getStoredUserAccountsAsync, isUserDeleted, unmarkUserAsDeleted } from "@/app/feature/users/services/userService"
 import { UserItem } from "@/app/feature/users/types"
 import { fetchModuleDataFromDB } from "@/lib/storageSync"
@@ -72,7 +73,7 @@ function OTPInput({ value, onChange }: { value: string; onChange: (v: string) =>
 // ─── Main Login Page ───────────────────────────────────────────────────────────
 export default function LoginPage() {
   const router = useRouter()
-  const { loginAs } = useAuthStore()
+  const { loginAs, companies, switchCompany } = useAuthStore()
 
   const [selectedRoleChoice, setSelectedRoleChoice] = React.useState<RoleChoice>(null)
   const [email, setEmail] = React.useState("")
@@ -82,6 +83,14 @@ export default function LoginPage() {
   const [error, setError] = React.useState("")
   const [success, setSuccess] = React.useState(false)
   const [successMessage, setSuccessMessage] = React.useState("")
+
+  // Multi-Company Workspace Selector State
+  const [multiCompanyModal, setMultiCompanyModal] = React.useState<{
+    isOpen: boolean
+    userData: any
+    role: Role
+    companyIds: string[]
+  } | null>(null)
 
   // Email Verification OTP State (after registration)
   const [verifyEmailModal, setVerifyEmailModal] = React.useState(false)
@@ -357,6 +366,29 @@ export default function LoginPage() {
       if (!Array.isArray(parsedCompanyIds) || parsedCompanyIds.length === 0) {
         const fallbackSingle = matchedAccount.companyId || matchedAccount.company_id || dbAccount?.companyId || backendUser?.company_id || "tech"
         parsedCompanyIds = matchedRole === "Super Admin" ? ["tech", "digital"] : [fallbackSingle]
+      }
+
+      // If user is assigned to multiple companies, prompt them with the Workspace Selection Screen
+      if (parsedCompanyIds.length > 1) {
+        setIsLoading(false)
+        setMultiCompanyModal({
+          isOpen: true,
+          userData: {
+            id: String(matchedAccount.id || matchedAccount.email),
+            name: displayName,
+            email: effectiveEmail,
+            username: matchedAccount.username || dbAccount?.username || (!normalizedInput.includes("@") ? normalizedInput : undefined),
+            role: matchedRole,
+            avatar: matchedAccount.avatarUrl || (matchedAccount as any).avatar || matchedAccount.avatar_url || dbAccount?.avatarUrl || (dbAccount as any)?.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${effectiveEmail}`,
+            avatarUrl: matchedAccount.avatarUrl || (matchedAccount as any).avatar || matchedAccount.avatar_url || dbAccount?.avatarUrl || (dbAccount as any)?.avatar || undefined,
+            phone: matchedAccount.phone || dbAccount?.phone,
+            allowedModules: matchedAccount.allowedModules || dbAccount?.allowedModules || (matchedAccount as any)?.permissions?.allowedModules,
+            permissions: matchedAccount.permissions || dbAccount?.permissions,
+          },
+          role: matchedRole,
+          companyIds: parsedCompanyIds,
+        })
+        return
       }
 
       loginAs(matchedRole, {
@@ -923,6 +955,141 @@ export default function LoginPage() {
                   <p className="text-xs text-muted-foreground">Closing in a moment...</p>
                 </div>
               )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── MULTI-COMPANY WORKSPACE SELECTION MODAL ───────────────────────── */}
+      <AnimatePresence>
+        {multiCompanyModal?.isOpen && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-card text-card-foreground border border-border rounded-3xl shadow-2xl max-w-xl w-full p-6 sm:p-8 overflow-hidden relative"
+            >
+              {/* Header */}
+              <div className="text-center mb-6">
+                <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shadow-inner">
+                  <Building2 size={28} />
+                </div>
+                <h2 className="text-2xl font-bold text-foreground tracking-tight">Select Your Workspace</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Welcome back, <span className="font-semibold text-foreground">{multiCompanyModal.userData.name}</span>! Choose which organization dashboard you want to access:
+                </p>
+              </div>
+
+              {/* Company Cards List */}
+              <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                {/* Global View for Super Admin */}
+                {multiCompanyModal.role === "Super Admin" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const { userData, role, companyIds } = multiCompanyModal
+                      loginAs(role, {
+                        ...userData,
+                        companyId: "all" as any,
+                        companyIds: companyIds,
+                      })
+                      switchCompany("all")
+                      setMultiCompanyModal(null)
+                      setSuccess(true)
+                      router.push("/feature/dashboard")
+                    }}
+                    className="w-full text-left p-4 rounded-2xl border-2 border-primary/30 bg-primary/5 hover:bg-primary/10 hover:border-primary transition-all flex items-center justify-between group shadow-sm"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-11 h-11 rounded-xl bg-primary text-primary-foreground flex items-center justify-center font-black text-sm shadow-md">
+                        ALL
+                      </div>
+                      <div>
+                        <div className="font-bold text-foreground flex items-center gap-2">
+                          <span>🌐 Consolidated Group View</span>
+                          <span className="text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full bg-primary/20 text-primary">
+                            Super Admin
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          View aggregate metrics, invoices, and operations across all companies
+                        </p>
+                      </div>
+                    </div>
+                    <ChevronRight size={18} className="text-primary group-hover:translate-x-1 transition-transform" />
+                  </button>
+                )}
+
+                {multiCompanyModal.companyIds.map((compId) => {
+                  const compObj = companies.find(
+                    (c) =>
+                      String(c.id).toLowerCase().trim() === String(compId).toLowerCase().trim() ||
+                      String(c.slug || "").toLowerCase().trim() === String(compId).toLowerCase().trim()
+                  )
+                  const compName = compObj?.brand_name || compObj?.name || (compId === "print" ? "Print Space India" : compId === "digital" ? "SAAMPARK Digital Marketing" : "SAAMPARK Technology")
+                  const compSubtitle = compObj?.subtitle || compObj?.division_name || (compId === "print" ? "Commercial & Digital Printing" : compId === "digital" ? "Digital Growth & SEO" : "Web & IT Solutions")
+                  const logoUrl = compObj ? getCompanyLogoUrl(compObj) : null
+
+                  return (
+                    <button
+                      key={compId}
+                      type="button"
+                      onClick={() => {
+                        const { userData, role, companyIds } = multiCompanyModal
+                        loginAs(role, {
+                          ...userData,
+                          companyId: compId as any,
+                          companyIds: companyIds,
+                        })
+                        switchCompany(compId)
+                        setMultiCompanyModal(null)
+                        setSuccess(true)
+                        
+                        if (role === "Clients") {
+                          router.push("/feature/projects")
+                        } else if (role === "Teams") {
+                          router.push("/feature/tasks")
+                        } else {
+                          router.push("/feature/dashboard")
+                        }
+                      }}
+                      className="w-full text-left p-4 rounded-2xl border border-border/80 bg-background hover:bg-surface hover:border-primary/50 hover:shadow-md transition-all flex items-center justify-between group"
+                    >
+                      <div className="flex items-center gap-3.5">
+                        <div className="w-11 h-11 rounded-xl bg-surface border border-border flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
+                          {logoUrl ? (
+                            <img src={logoUrl} alt={compName} className="w-full h-full object-contain p-1" />
+                          ) : (
+                            <span className="font-black text-sm text-primary uppercase">
+                              {compName.slice(0, 2)}
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <div className="font-bold text-foreground group-hover:text-primary transition-colors">
+                            {compName}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {compSubtitle}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs font-semibold text-primary">
+                        <span className="hidden sm:inline opacity-0 group-hover:opacity-100 transition-opacity">Launch</span>
+                        <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* Footer Notice */}
+              <div className="mt-6 pt-4 border-t border-border/60 text-center">
+                <p className="text-xs text-muted-foreground">
+                  💡 You can switch workspaces anytime from the top navigation bar.
+                </p>
+              </div>
             </motion.div>
           </div>
         )}

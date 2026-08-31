@@ -19,7 +19,7 @@ interface AddTaskModalProps {
 }
 
 export function AddTaskModal({ isOpen, onClose, onTaskAdded, onSelectTask }: AddTaskModalProps) {
-  const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
+  const { user, activeCompanyId, activeBranchId, activeSubBranchId, branches, subBranches } = useAuthStore()
   const [teamMembers, setTeamMembers] = React.useState<{ id: string; name: string; role?: string }[]>([])
   const [allUsers, setAllUsers] = React.useState<UserItem[]>([])
   const [title, setTitle] = React.useState("")
@@ -148,6 +148,9 @@ export function AddTaskModal({ isOpen, onClose, onTaskAdded, onSelectTask }: Add
       const finalBranchName = currentBranchObj?.name || user?.branchName || undefined
       const finalRelatedTo = selectedRelatedTo.length > 0 ? selectedRelatedTo.join(", ") : undefined
 
+      const targetSubBranchObj = (subBranches || []).find(sb => sb.id === activeSubBranchId)
+      const finalSubBranchName = targetSubBranchObj?.name || undefined
+
       const created = await taskService.addTask({
         title,
         description,
@@ -167,6 +170,8 @@ export function AddTaskModal({ isOpen, onClose, onTaskAdded, onSelectTask }: Add
         isRecurring,
         branchId: activeBranchId || user?.branchId || undefined,
         branchName: finalBranchName,
+        subBranchId: activeSubBranchId || (user as any)?.subBranchId || undefined,
+        subBranchName: finalSubBranchName,
         companyId: activeCompanyId || user?.companyId || "tech",
       })
 

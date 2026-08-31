@@ -19,7 +19,7 @@ interface EditTaskModalProps {
 }
 
 export function EditTaskModal({ isOpen, task, onClose, onTaskUpdated, onDeleteTask }: EditTaskModalProps) {
-  const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
+  const { user, activeCompanyId, activeBranchId, activeSubBranchId, branches, subBranches } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
   const canDeleteTask = canPerformAction(user, "Tasks", "delete")
 
@@ -184,6 +184,8 @@ export function EditTaskModal({ isOpen, task, onClose, onTaskUpdated, onDeleteTa
         isRecurring,
         branchId: task.branchId || activeBranchId || user?.branchId || undefined,
         branchName: task.branchName || user?.branchName || undefined,
+        subBranchId: task.subBranchId || activeSubBranchId || (user as any)?.subBranchId || undefined,
+        subBranchName: task.subBranchName || undefined,
         companyId: task.companyId || activeCompanyId || user?.companyId || "tech",
       })
 

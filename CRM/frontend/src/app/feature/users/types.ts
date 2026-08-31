@@ -32,6 +32,9 @@ export interface UserItem {
   branchId?: string; // Assigned specific branch
   branchIds?: string[]; // Multiple assigned branches
   branchName?: string; // Display branch name
+  subBranchId?: string; // Assigned specific sub-branch
+  subBranchIds?: string[]; // Multiple assigned sub-branches
+  subBranchName?: string; // Display sub-branch name
   status: UserStatus;
   avatarUrl?: string;
   avatar?: string;

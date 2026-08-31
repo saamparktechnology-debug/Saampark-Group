@@ -6,53 +6,110 @@ export const initialTasks: Task[] = []
 
 export const taskService = {
   getTasks: async (companyId?: string): Promise<Task[]> => {
-    // Fetch persisted data from MySQL app_data store across both keys
-    const [dbData, techData] = await Promise.all([
-      fetchModuleDataFromDB<Task[]>("tasks", [], companyId || "all").catch(() => []),
-      fetchModuleDataFromDB<Task[]>("tasks", [], "tech").catch(() => [])
-    ])
-    const map = new Map<string, Task>()
-    for (const t of (Array.isArray(dbData) ? dbData : [])) {
-      if (t && t.id) map.set(String(t.id).toLowerCase().trim(), t)
+    let targetComp = companyId
+    if (!targetComp && typeof window !== "undefined") {
+      try {
+        const { useAuthStore } = require("@/store/useAuthStore")
+        targetComp = useAuthStore.getState().activeCompanyId || undefined
+      } catch {}
     }
-    for (const t of (Array.isArray(techData) ? techData : [])) {
-      if (t && t.id) map.set(String(t.id).toLowerCase().trim(), t)
+
+    if (!targetComp || targetComp === "all") {
+      const allData = await fetchModuleDataFromDB<Task[]>("tasks", [], "all").catch(() => [])
+      return filterGlobalDeletedItems(Array.isArray(allData) ? allData : [])
     }
-    return Array.from(map.values())
+
+    // Strictly fetch tasks only for the specified company
+    const scopedData = await fetchModuleDataFromDB<Task[]>("tasks", [], targetComp).catch(() => [])
+    const filtered = (Array.isArray(scopedData) ? scopedData : []).filter(t => {
+      if (!t || !t.id) return false
+      const tComp = (t.companyId || targetComp).toLowerCase().trim()
+      return tComp === targetComp.toLowerCase().trim()
+    })
+
+    return filterGlobalDeletedItems(filtered)
   },
 
   addTask: async (taskData: Omit<Task, "id"> & { id?: string }, companyId?: string): Promise<Task> => {
     let activeBranch: string | undefined = undefined
+    let activeCompany: string | undefined = undefined
+    let activeSubBranch: string | undefined = undefined
+    let activeBranchName: string | undefined = undefined
+    let activeSubBranchName: string | undefined = undefined
+
     if (typeof window !== "undefined") {
       try {
         const { useAuthStore } = require("@/store/useAuthStore")
-        activeBranch = useAuthStore.getState().activeBranchId || useAuthStore.getState().user?.branchId || undefined
+        const state = useAuthStore.getState()
+        activeBranch = state.activeBranchId || state.user?.branchId || undefined
+        activeCompany = state.activeCompanyId || state.user?.companyId || "tech"
+        activeSubBranch = state.activeSubBranchId || (state.user as any)?.subBranchId || undefined
+        
+        if (activeBranch) {
+          const ab = activeBranch
+          const bObj = state.branches.find((b: any) => b.id === ab || (b.name && b.name.toLowerCase() === ab.toLowerCase()))
+          if (bObj) activeBranchName = bObj.name
+        }
+        if (activeSubBranch) {
+          const asb = activeSubBranch
+          const sbObj = state.subBranches.find((sb: any) => sb.id === asb || (sb.name && sb.name.toLowerCase() === asb.toLowerCase()))
+          if (sbObj) activeSubBranchName = sbObj.name
+        }
       } catch {}
     }
 
-    const current = await taskService.getTasks(companyId)
+    const effectiveComp = companyId || taskData.companyId || activeCompany || "tech"
+    const effectiveBranch = (taskData as any).branchId || activeBranch || undefined
+    const effectiveBranchName = (taskData as any).branchName || activeBranchName || undefined
+    const effectiveSubBranch = (taskData as any).subBranchId || activeSubBranch || undefined
+    const effectiveSubBranchName = (taskData as any).subBranchName || activeSubBranchName || undefined
+
+    const currentScoped = await taskService.getTasks(effectiveComp)
+    const currentAll = await fetchModuleDataFromDB<Task[]>("tasks", [], "all").catch(() => [])
+
     let nextId = taskData.id
     if (!nextId) {
-      const maxIdNum = current.reduce((max, t) => {
+      const maxIdNum = [...currentScoped, ...currentAll].reduce((max, t) => {
         const n = parseInt(String(t.id).replace(/[^0-9]/g, "")) || 0
         return Math.max(max, n)
       }, 3650)
       nextId = (maxIdNum + 1).toString()
     }
+
     const newTask: Task = { 
       ...taskData, 
       id: nextId,
-      branchId: (taskData as any).branchId || activeBranch || undefined
+      companyId: effectiveComp,
+      branchId: effectiveBranch,
+      branchName: effectiveBranchName,
+      subBranchId: effectiveSubBranch,
+      subBranchName: effectiveSubBranchName,
     }
-    const updated = [newTask, ...current.filter(t => String(t.id).toLowerCase().trim() !== String(nextId).toLowerCase().trim())]
-    await saveModuleDataToDB("tasks", updated, companyId)
+
+    const updatedScoped = [newTask, ...currentScoped.filter(t => String(t.id).toLowerCase().trim() !== String(nextId).toLowerCase().trim())]
+    const updatedAll = [newTask, ...currentAll.filter(t => String(t.id).toLowerCase().trim() !== String(nextId).toLowerCase().trim())]
+
+    await Promise.all([
+      saveModuleDataToDB("tasks", updatedScoped, effectiveComp),
+      saveModuleDataToDB("tasks", updatedAll, "all"),
+    ])
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("storage"))
+      window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+      window.dispatchEvent(new CustomEvent("saampark_tasks_updated"))
+    }
+
     return newTask
   },
 
   addTasks: async (taskDataList: (Omit<Task, "id"> & { id?: string })[], companyId?: string): Promise<Task[]> => {
     if (!taskDataList || taskDataList.length === 0) return []
-    const current = await taskService.getTasks(companyId)
-    let maxIdNum = current.reduce((max, t) => {
+    const effectiveComp = companyId || "tech"
+    const currentScoped = await taskService.getTasks(effectiveComp)
+    const currentAll = await fetchModuleDataFromDB<Task[]>("tasks", [], "all").catch(() => [])
+
+    let maxIdNum = [...currentScoped, ...currentAll].reduce((max, t) => {
       const n = parseInt(String(t.id).replace(/[^0-9]/g, "")) || 0
       return Math.max(max, n)
     }, 3650)
@@ -63,46 +120,95 @@ export const taskService = {
       return {
         ...t,
         id,
+        companyId: t.companyId || effectiveComp,
       }
     })
+
     const newIds = new Set(newTasks.map(t => String(t.id).toLowerCase().trim()))
-    const updated = [...newTasks, ...current.filter(t => !newIds.has(String(t.id).toLowerCase().trim()))]
-    await saveModuleDataToDB("tasks", updated, companyId)
+    const updatedScoped = [...newTasks, ...currentScoped.filter(t => !newIds.has(String(t.id).toLowerCase().trim()))]
+    const updatedAll = [...newTasks, ...currentAll.filter(t => !newIds.has(String(t.id).toLowerCase().trim()))]
+
+    await Promise.all([
+      saveModuleDataToDB("tasks", updatedScoped, effectiveComp),
+      saveModuleDataToDB("tasks", updatedAll, "all"),
+    ])
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("storage"))
+      window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+      window.dispatchEvent(new CustomEvent("saampark_tasks_updated"))
+    }
+
     return newTasks
   },
 
   updateTask: async (id: string, updates: Partial<Task>, companyId?: string): Promise<Task> => {
     const strId = String(id).toLowerCase().trim()
-    const current = await fetchModuleDataFromDB<Task[]>("tasks", [], companyId)
+    const targetComp = companyId || updates.companyId || "all"
+    const current = await fetchModuleDataFromDB<Task[]>("tasks", [], targetComp)
+    const currentAll = await fetchModuleDataFromDB<Task[]>("tasks", [], "all").catch(() => [])
+
     const idx = current.findIndex((t) => String(t.id).toLowerCase().trim() === strId)
-    
+    let updatedTask: Task
+
     if (idx !== -1) {
-      current[idx] = { ...current[idx], ...updates }
-      await saveModuleDataToDB("tasks", current, companyId)
-      return { ...current[idx] }
+      updatedTask = { ...current[idx], ...updates }
+      current[idx] = updatedTask
+      await saveModuleDataToDB("tasks", current, targetComp)
+    } else {
+      updatedTask = {
+        id: String(id),
+        title: updates.title || "Task",
+        startDate: updates.startDate || "-",
+        deadline: updates.deadline || "-",
+        status: updates.status || "To do",
+        priority: updates.priority || "Normal",
+        ...updates,
+      } as Task
+      await saveModuleDataToDB("tasks", [updatedTask, ...current], targetComp)
     }
 
-    // Fallback: create or return updated placeholder if task not found
-    const fallbackTask: Task = {
-      id: String(id),
-      title: updates.title || "Task",
-      startDate: updates.startDate || "-",
-      deadline: updates.deadline || "-",
-      status: updates.status || "To do",
-      priority: updates.priority || "Normal",
-      ...updates,
-    } as Task
-    const combined = [fallbackTask, ...current]
-    await saveModuleDataToDB("tasks", combined, companyId)
-    return fallbackTask
+    if (targetComp !== "all") {
+      const allList = Array.isArray(currentAll) ? currentAll : []
+      const allIdx = allList.findIndex((t) => String(t.id).toLowerCase().trim() === strId)
+      let nextAll: Task[]
+      if (allIdx !== -1) {
+        allList[allIdx] = { ...allList[allIdx], ...updates }
+        nextAll = [...allList]
+      } else {
+        nextAll = [updatedTask, ...allList]
+      }
+      await saveModuleDataToDB("tasks", nextAll, "all")
+    }
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("storage"))
+      window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+      window.dispatchEvent(new CustomEvent("saampark_tasks_updated"))
+    }
+
+    return updatedTask
   },
 
   deleteTask: async (id: string, companyId?: string): Promise<void> => {
     const strId = String(id).toLowerCase().trim()
-    await markGlobalItemDeleted(strId, "tasks")
+    markGlobalItemDeleted(strId, "tasks")
 
-    const current = await fetchModuleDataFromDB<Task[]>("tasks", [], companyId)
+    const targetComp = companyId || "all"
+    const current = await fetchModuleDataFromDB<Task[]>("tasks", [], targetComp)
     const filtered = current.filter((t) => String(t.id).toLowerCase().trim() !== strId)
-    await saveModuleDataToDB("tasks", filtered, companyId)
+    await saveModuleDataToDB("tasks", filtered, targetComp)
+
+    if (targetComp !== "all") {
+      const currentAll = await fetchModuleDataFromDB<Task[]>("tasks", [], "all").catch(() => [])
+      const filteredAll = currentAll.filter((t) => String(t.id).toLowerCase().trim() !== strId)
+      await saveModuleDataToDB("tasks", filteredAll, "all")
+    }
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("storage"))
+      window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+      window.dispatchEvent(new CustomEvent("saampark_tasks_updated"))
+    }
   },
 }

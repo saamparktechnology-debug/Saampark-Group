@@ -27,6 +27,10 @@ export interface Task {
   companyId?: string
   branchId?: string
   branchName?: string
+  branchCode?: string
+  subBranchId?: string
+  subBranchName?: string
+  subBranchCode?: string
   client?: string
   clientEmail?: string
   createdBy?: string

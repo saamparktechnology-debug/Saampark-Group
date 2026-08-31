@@ -19,7 +19,7 @@ export default function TasksMain() {
   const [activeViewTab, setActiveViewTab] = React.useState<"list" | "kanban" | "gantt">("list")
   const [isAddModalOpen, setIsAddModalOpen] = React.useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false)
-  const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
+  const { user, activeCompanyId, activeBranchId, activeSubBranchId, branches, subBranches, companies } = useAuthStore()
   const [selectedTask, setSelectedTask] = React.useState<Task | null>(null)
   const [isManageLabelsOpen, setIsManageLabelsOpen] = React.useState(false)
   const [isLoading, setIsLoading] = React.useState(true)
@@ -62,12 +62,14 @@ export default function TasksMain() {
     window.addEventListener("storage", handleReload)
     window.addEventListener("saampark_company_switched", handleReload)
     window.addEventListener("saampark_branch_switched", handleReload)
+    window.addEventListener("saampark_subbranch_switched", handleReload)
     window.addEventListener("saampark_tasks_updated", handleReload)
     window.addEventListener("saampark_data_synced", handleReload)
     return () => {
       window.removeEventListener("storage", handleReload)
       window.removeEventListener("saampark_company_switched", handleReload)
       window.removeEventListener("saampark_branch_switched", handleReload)
+      window.removeEventListener("saampark_subbranch_switched", handleReload)
       window.removeEventListener("saampark_tasks_updated", handleReload)
       window.removeEventListener("saampark_data_synced", handleReload)
     }
@@ -149,14 +151,26 @@ export default function TasksMain() {
     if (!user) return []
 
     const userComp = (activeCompanyId || user?.companyId || "").toLowerCase().trim()
-    const targetBranch = activeBranchId
+    const targetBranch = activeBranchId || user?.branchId
+    const targetSubBranch = activeSubBranchId || (user as any)?.subBranchId
 
     const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
     const targetBranchId = String(targetBranchObj?.id || targetBranch || "").toLowerCase().trim()
     const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
 
+    const targetSubBranchObj = subBranches.find(sb => sb.id === targetSubBranch || sb.name.toLowerCase() === (targetSubBranch || "").toLowerCase())
+    const targetSubBranchId = String(targetSubBranchObj?.id || targetSubBranch || "").toLowerCase().trim()
+    const targetSubBranchName = targetSubBranchObj?.name?.toLowerCase().trim() || ""
+
+    const checkCompany = (t: any) => {
+      if (!userComp || userComp === "all") return true
+      const tComp = (t.companyId || t.company_id || (t as any).company || "").toLowerCase().trim()
+      if (!tComp) return true
+      return tComp === userComp
+    }
+
     const checkBranch = (t: any) => {
-      if (!targetBranch) return true
+      if (!targetBranch || targetBranch === "all") return true
       const tBranch = String(t.branchId || t.branch_id || "").toLowerCase().trim()
       const tBranchName = String(t.branchName || t.branch_name || "").toLowerCase().trim()
       if (!tBranch && !tBranchName) return true
@@ -164,18 +178,19 @@ export default function TasksMain() {
              (tBranchName && (tBranchName === targetBranchName || tBranchName === targetBranchId))
     }
 
+    const checkSubBranch = (t: any) => {
+      if (!targetSubBranch || targetSubBranch === "all") return true
+      const tSub = String(t.subBranchId || t.sub_branch_id || "").toLowerCase().trim()
+      const tSubName = String(t.subBranchName || t.sub_branch_name || "").toLowerCase().trim()
+      if (!tSub && !tSubName) return true
+      return (tSub && (tSub === targetSubBranchId || (targetSubBranchName && tSub === targetSubBranchName))) ||
+             (tSubName && (tSubName === targetSubBranchName || tSubName === targetSubBranchId))
+    }
+
+    let scopedList = tasks.filter(t => checkCompany(t) && checkBranch(t) && checkSubBranch(t))
+
     if (isSuperAdmin || isAdmin) {
-      let filtered = tasks
-      if (userComp && userComp !== "all" && !isSuperAdmin) {
-        filtered = filtered.filter((t) => {
-          const tComp = (t.companyId || (t as any).company || "").toLowerCase().trim()
-          return !tComp || tComp === userComp || (userComp === "tech" && !t.companyId)
-        })
-      }
-      if (targetBranch && !isSuperAdmin) {
-        filtered = filtered.filter((t) => checkBranch(t))
-      }
-      return filtered
+      return scopedList
     }
 
     const normName = (user.name || (user as any).full_name || "").toLowerCase().trim()
@@ -183,16 +198,14 @@ export default function TasksMain() {
     const normId = String(user.id || "").toLowerCase().trim()
 
     if (isClient) {
-      return tasks.filter((t) => {
-        if (!checkBranch(t)) return false
+      return scopedList.filter((t) => {
         const { isRecordAssignedToClient } = require("@/lib/clientScopeUtils")
         return isRecordAssignedToClient(t, user)
       })
     }
 
-    return tasks.filter((t) => {
+    return scopedList.filter((t) => {
       if (!t) return false
-      if (!checkBranch(t)) return false
 
       const assigned = (t.assignedTo || (t as any).assigned_to || (t as any).assignee || "").toLowerCase().trim()
       const assignedEmail = ((t as any).assignedToEmail || "").toLowerCase().trim()
@@ -217,7 +230,7 @@ export default function TasksMain() {
 
       return checkMatch(assigned) || checkMatch(collab) || checkMatch(createdBy)
     })
-  }, [tasks, user, isSuperAdmin, isAdmin, isClient, activeCompanyId, activeBranchId, branches])
+  }, [tasks, user, isSuperAdmin, isAdmin, isClient, activeCompanyId, activeBranchId, activeSubBranchId, branches, subBranches])
 
   if (isLoading) {
     return <ThreeDotLoader text="Loading task board & assignees..." fullScreen={false} />
