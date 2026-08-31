@@ -14,14 +14,14 @@ export interface CompanyPaymentSettings {
 
 export const DEFAULT_COMPANY_PAYMENT_SETTINGS: CompanyPaymentSettings = {
   qrCodeUrl: "",
-  bankName: "State Bank of India",
-  accountHolderName: "Saampark Technology & Research Pvt. Ltd.",
-  accountNumber: "40912384759",
-  ifscCode: "SBIN0001234",
-  upiId: "saampark@sbi",
-  branch: "Balichak Station Road",
-  swiftCode: "SBININBB123",
-  notes: "Please scan QR or transfer via NEFT/RTGS/IMPS. Mention Invoice ID in transaction note.",
+  bankName: "",
+  accountHolderName: "",
+  accountNumber: "",
+  ifscCode: "",
+  upiId: "",
+  branch: "",
+  swiftCode: "",
+  notes: "",
 }
 
 export async function getCompanyPaymentSettings(companyId?: string): Promise<CompanyPaymentSettings> {
@@ -30,7 +30,7 @@ export async function getCompanyPaymentSettings(companyId?: string): Promise<Com
     DEFAULT_COMPANY_PAYMENT_SETTINGS,
     companyId
   )
-  if (data && typeof data === "object" && data.bankName) {
+  if (data && typeof data === "object") {
     return { ...DEFAULT_COMPANY_PAYMENT_SETTINGS, ...data }
   }
   return DEFAULT_COMPANY_PAYMENT_SETTINGS

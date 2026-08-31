@@ -386,26 +386,24 @@ export function OfficialInvoiceDocument({
     <div className="flex flex-col sm:flex-row justify-between items-stretch gap-4 border-b border-zinc-200 pb-3">
       {/* Left: Company Brand & Entity Info with Logo */}
       <div className="flex items-start gap-3.5 flex-1 min-w-0">
-        {/* Top-Left Premium Branded Logo Card with layered teal swooshes */}
-        <div className="relative w-28 h-32 sm:w-32 sm:h-36 rounded-2xl overflow-hidden shadow-md shrink-0 border border-teal-900/30 bg-gradient-to-b from-[#004e59] via-[#005c68] to-[#003840] flex flex-col items-center justify-center p-2.5">
-          {/* Layered Organic Bottom Wave Curves */}
-          <svg className="absolute bottom-0 left-0 right-0 w-full h-14 pointer-events-none" viewBox="0 0 100 45" preserveAspectRatio="none">
-            <path d="M0,28 C25,38 65,18 100,24 L100,45 L0,45 Z" fill="#008a99" fillOpacity="0.45" />
-            <path d="M0,34 C35,42 70,22 100,12 L100,45 L0,45 Z" fill="#0d9488" fillOpacity="0.7" />
-            <path d="M0,40 C30,44 75,28 100,4 L100,45 L0,45 Z" fill="#2dd4bf" fillOpacity="0.85" />
-            <path d="M55,45 C75,32 90,18 100,0 L100,45 Z" fill="#a7f3d0" fillOpacity="0.95" />
-          </svg>
-
-          {/* Logo Content */}
-          {resolvedLogoUrl ? (
-            <div className="relative z-10 w-full h-full flex flex-col items-center justify-center">
-              <img 
-                src={resolvedLogoUrl} 
-                alt={resolvedBrandName || "Entity Logo"} 
-                className="max-w-full max-h-20 object-contain drop-shadow-md brightness-110" 
-              />
-            </div>
-          ) : (
+        {/* Top-Left Logo Card */}
+        {resolvedLogoUrl ? (
+          <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-2xl overflow-hidden shadow-2xs shrink-0 border border-zinc-200/80 bg-white flex items-center justify-center p-2.5">
+            <img 
+              src={resolvedLogoUrl} 
+              alt={resolvedBrandName || "Entity Logo"} 
+              className="max-w-full max-h-full object-contain" 
+            />
+          </div>
+        ) : (
+          <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-2xl overflow-hidden shadow-md shrink-0 border border-teal-900/30 bg-gradient-to-b from-[#004e59] via-[#005c68] to-[#003840] flex flex-col items-center justify-center p-2.5">
+            {/* Layered Organic Bottom Wave Curves */}
+            <svg className="absolute bottom-0 left-0 right-0 w-full h-14 pointer-events-none" viewBox="0 0 100 45" preserveAspectRatio="none">
+              <path d="M0,28 C25,38 65,18 100,24 L100,45 L0,45 Z" fill="#008a99" fillOpacity="0.45" />
+              <path d="M0,34 C35,42 70,22 100,12 L100,45 L0,45 Z" fill="#0d9488" fillOpacity="0.7" />
+              <path d="M0,40 C30,44 75,28 100,4 L100,45 L0,45 Z" fill="#2dd4bf" fillOpacity="0.85" />
+              <path d="M55,45 C75,32 90,18 100,0 L100,45 Z" fill="#a7f3d0" fillOpacity="0.95" />
+            </svg>
             <div className="relative z-10 w-full h-full flex flex-col items-center justify-center text-center text-white pb-2">
               <div className="text-3xl mb-1 drop-shadow-sm">🚀</div>
               <div className="font-black text-xs tracking-wider uppercase leading-tight font-sans">
@@ -415,8 +413,8 @@ export function OfficialInvoiceDocument({
                 {resolvedDivisionName || "TECHNOLOGY"}
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Title, Subtitle, Legal IDs & Registered Office Coordinates */}
         <div className="space-y-1 flex-1 min-w-0 pt-0.5">
@@ -496,7 +494,7 @@ export function OfficialInvoiceDocument({
                 </span>
                 {(activeBranch?.code || activeSubBranch?.code) && (
                   <span className="font-mono text-[8.5px] px-1.5 py-0.2 rounded-md bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300 font-bold border border-blue-200/60 dark:border-blue-800/60">
-                    Branch Code: {activeBranch?.code || activeSubBranch?.code}
+                    Branch Code: {(activeBranch?.code || activeSubBranch?.code || '').toUpperCase()}
                   </span>
                 )}
                 {activeSubBranch && (
@@ -527,8 +525,8 @@ export function OfficialInvoiceDocument({
       </div>
 
       {/* Right: Header Card with Status Badge & Dates */}
-      <div className={`w-full sm:w-56 rounded-2xl ${theme.cardHeaderGradient} text-white p-3 shadow-md shrink-0 flex flex-col justify-between`}>
-        <div className="flex items-center justify-between border-b border-white/20 pb-1.5">
+      <div className={`w-full sm:w-56 rounded-2xl ${theme.cardHeaderGradient} text-white p-3 shadow-md shrink-0 flex flex-col self-start space-y-2.5`}>
+        <div className="flex items-center justify-between border-b border-white/20 pb-2">
           <span className="font-black text-xs tracking-wider uppercase">
             {theme.invoiceTypeLabel} {pageNumber ? `(P.${pageNumber}/2)` : ''}
           </span>
@@ -543,7 +541,7 @@ export function OfficialInvoiceDocument({
           </span>
         </div>
 
-        <div className="pt-2 space-y-1 text-[10px]">
+        <div className="space-y-1.5 text-[10px]">
           <div>
             <span className="text-white/80 text-[8.5px] uppercase tracking-wider font-semibold block">INVOICE NO:</span>
             <strong className="font-mono text-white text-xs font-bold break-all leading-tight block">
@@ -605,7 +603,7 @@ export function OfficialInvoiceDocument({
           </p>
           {(activeBranch || activeSubBranch) && (
             <p className="text-[10px] text-zinc-700 font-semibold">
-              <strong>Branch:</strong> {activeBranch?.name || activeSubBranch?.name} {((activeBranch?.code || activeSubBranch?.code)) ? `(Code: ${activeBranch?.code || activeSubBranch?.code})` : ''}
+              <strong>Branch:</strong> {activeBranch?.name || activeSubBranch?.name} {((activeBranch?.code || activeSubBranch?.code)) ? `(Code: ${(activeBranch?.code || activeSubBranch?.code || '').toUpperCase()})` : ''}
             </p>
           )}
         </div>
@@ -814,8 +812,8 @@ export function OfficialInvoiceDocument({
 
       {/* PAYMENT & BANK TRANSFER DETAILS */}
       {(hasUpiDetails || hasBankDetails) && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-          {hasUpiDetails ? (
+        <div className={`grid grid-cols-1 ${hasUpiDetails && hasBankDetails ? 'sm:grid-cols-2' : 'sm:grid-cols-1'} gap-3 pt-1`}>
+          {hasUpiDetails && (
             <div className={`p-2.5 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-1 shadow-2xs`}>
               <div className="flex items-center justify-between">
                 <span className="font-black text-[10px] uppercase tracking-wider text-zinc-800 flex items-center gap-1">
@@ -825,7 +823,7 @@ export function OfficialInvoiceDocument({
               </div>
 
               <div className="flex items-center gap-2.5">
-                {customPaymentQrUrl ? (
+                {customPaymentQrUrl && (
                   <div className="shrink-0 text-center space-y-0.5">
                     <img 
                       src={customPaymentQrUrl} 
@@ -834,11 +832,6 @@ export function OfficialInvoiceDocument({
                       style={{ imageRendering: 'pixelated' }}
                     />
                     <span className="text-[7px] font-black text-zinc-600 block uppercase">SCAN TO PAY</span>
-                  </div>
-                ) : (
-                  <div className="w-14 h-14 bg-white border border-zinc-200 flex flex-col items-center justify-center text-center p-0.5 shrink-0 text-zinc-500">
-                    <span className="text-sm">⚡</span>
-                    <span className="text-[7.5px] font-bold">UPI PAY</span>
                   </div>
                 )}
                 
@@ -864,9 +857,9 @@ export function OfficialInvoiceDocument({
                 </div>
               </div>
             </div>
-          ) : <div />}
+          )}
 
-          {hasBankDetails ? (
+          {hasBankDetails && (
             <div className={`p-2.5 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-0.5 shadow-2xs`}>
               <span className="font-black text-[10px] uppercase tracking-wider text-zinc-800 flex items-center gap-1">
                 <span>🏛️</span> BANK DETAILS
@@ -898,7 +891,7 @@ export function OfficialInvoiceDocument({
                 )}
               </div>
             </div>
-          ) : <div />}
+          )}
         </div>
       )}
 
@@ -906,7 +899,7 @@ export function OfficialInvoiceDocument({
       <div className="flex flex-row justify-between items-center gap-3 pt-2 border-t border-zinc-200">
         <div className="text-center space-y-0.5">
           <div className="h-14 flex items-end justify-center">
-            <span className="font-serif italic text-zinc-500 text-xs">Customer Signature</span>
+            {/* Blank signature space */}
           </div>
           <div className="w-36 border-t border-zinc-400 pt-0.5">
             <p className="text-[8px] font-black uppercase text-zinc-600">CUSTOMER SIGNATURE</p>

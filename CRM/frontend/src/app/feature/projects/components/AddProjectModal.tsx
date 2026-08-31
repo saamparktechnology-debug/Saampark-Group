@@ -17,7 +17,18 @@ interface AddProjectModalProps {
 }
 
 export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectModalProps) {
-  const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
+  const { user, activeCompanyId, activeBranchId, branches, companies } = useAuthStore()
+  const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>(activeCompanyId || user?.companyId || "tech")
+  const [selectedBranchId, setSelectedBranchId] = React.useState<string>(user?.branchId || activeBranchId || "")
+  const isBranchLocked = Boolean(user?.branchId && user?.role !== "Super Admin")
+
+  const availableBranches = React.useMemo(() => {
+    return (branches || []).filter((b) => {
+      if (!selectedCompanyId || selectedCompanyId === "all") return true
+      return b.companyId?.toLowerCase() === selectedCompanyId.toLowerCase()
+    })
+  }, [branches, selectedCompanyId])
+
   const [title, setTitle] = React.useState("")
   const [projectType, setProjectType] = React.useState<ProjectType>("Client Project")
   const [client, setClient] = React.useState("")
@@ -40,6 +51,8 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
 
   React.useEffect(() => {
     if (isOpen) {
+      setSelectedCompanyId(activeCompanyId || user?.companyId || "tech")
+      setSelectedBranchId(user?.branchId || activeBranchId || "")
       // 1. Fetch team members reliably
       Promise.all([
         getUsers("all").catch(() => []),
@@ -161,7 +174,8 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
       ? `₹${numericComputedPrice.toLocaleString("en-IN")}`
       : (price || "₹0")
 
-    const currentBranch = branches.find(b => b.id === activeBranchId)
+    const targetCompany = selectedCompanyId || activeCompanyId || user?.companyId || "tech"
+    const matchedBranch = branches.find(b => b.id === (selectedBranchId || (isBranchLocked ? user?.branchId : activeBranchId)) || b.name.toLowerCase() === ((selectedBranchId || user?.branchId || activeBranchId) || "").toLowerCase())
 
     const newProjData: Omit<Project, "id"> = {
       title,
@@ -176,9 +190,10 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
       description,
       members: assignedMembers,
       milestones: defaultMilestones,
-      companyId: activeCompanyId || user?.companyId || "tech",
-      branchId: activeBranchId || undefined,
-      branchName: currentBranch?.name || undefined,
+      companyId: targetCompany,
+      branchId: selectedBranchId || (isBranchLocked ? user?.branchId : activeBranchId) || undefined,
+      branchName: matchedBranch?.name || undefined,
+      branchCode: matchedBranch?.code ? matchedBranch.code.toUpperCase() : undefined,
       baseAmount: typeof baseAmount === "number" ? baseAmount : undefined,
       setupCharge: typeof setupCharge === "number" ? setupCharge : undefined,
       discount: typeof discount === "number" ? discount : undefined,
@@ -195,7 +210,7 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
     setIsSubmitting(true)
     try {
       const created = await executeWithFeedback(
-        () => addProject(newProjData),
+        () => addProject(newProjData, targetCompany),
         {
           loadingMsg: `Creating project "${title}"...`,
           successMsg: `Project "${title}" created successfully!`,
@@ -246,6 +261,54 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
 
         {/* Modal Body Form */}
         <div className="p-6 overflow-y-auto space-y-4 text-xs">
+          {/* Company & Branch Selector Card */}
+          <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/80 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
+                Company Entity
+              </label>
+              <select
+                value={selectedCompanyId}
+                onChange={(e) => {
+                  setSelectedCompanyId(e.target.value)
+                  if (!isBranchLocked) setSelectedBranchId("")
+                }}
+                className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-bold focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                {(companies as any[]).map((c: any) => (
+                  <option key={c.id} value={c.id}>
+                    {c.logo || "🏢"} {c.brand_name || c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
+                Branch Location
+              </label>
+              {isBranchLocked ? (
+                <div className="w-full px-2.5 py-1.5 bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg text-zinc-800 dark:text-zinc-200 text-xs font-bold flex items-center justify-between">
+                  <span className="truncate">📍 {branches.find(b => b.id === user?.branchId)?.name || user?.branchId || "Assigned Branch"}</span>
+                  <span className="text-[9px] text-amber-600 font-bold">🔒 Locked</span>
+                </div>
+              ) : (
+                <select
+                  value={selectedBranchId}
+                  onChange={(e) => setSelectedBranchId(e.target.value)}
+                  className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-bold focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="">🏢 Company HQ / Central Office</option>
+                  {availableBranches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      📍 {b.name} {b.code ? `[${b.code}]` : ""}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </div>
+
           {/* Title */}
           <div className="grid grid-cols-4 items-center gap-4">
             <label className="text-zinc-500 font-medium">Title *</label>

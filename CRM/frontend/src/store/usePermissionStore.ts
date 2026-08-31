@@ -494,6 +494,16 @@ export const usePermissionStore = create<PermissionState>()(
         // Super Admin ALWAYS has master access to all actions across all modules
         if (normRole === 'Super Admin') return true
 
+        // Clients can NEVER delete records in any module (Invoices, Projects, Orders, Payments, EMI, etc.)
+        if (normRole === 'Clients' && action === 'delete') {
+          return false
+        }
+
+        // Clients can only add/edit tickets and messages
+        if (normRole === 'Clients' && (action === 'edit' || action === 'add')) {
+          return ['Tickets', 'Messages'].includes(moduleName)
+        }
+
         const flags = get().getUserModuleActions(user, moduleName)
         return Boolean(flags && flags[action])
       },

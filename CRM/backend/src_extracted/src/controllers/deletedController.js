@@ -18,6 +18,11 @@ const markItemDeleted = async (req, res, next) => {
     const { id, moduleName } = req.body;
     if (!id) return errorResponse(res, 400, 'Item ID is required');
 
+    // Block Clients from deleting system items
+    if (req.user && (req.user.role_id === 4 || String(req.user.role_name || req.user.role || '').toLowerCase().includes('client'))) {
+      return errorResponse(res, 403, 'Permission Denied: Clients cannot delete system records');
+    }
+
     const strId = String(id).toLowerCase().trim();
     await pool.execute(
       'INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, ?)',

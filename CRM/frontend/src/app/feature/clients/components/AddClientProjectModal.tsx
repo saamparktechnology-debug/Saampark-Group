@@ -63,12 +63,80 @@ export function AddClientProjectModal({
   onProjectCreated,
   onInvoiceCreated,
 }: AddClientProjectModalProps) {
-  const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
-  const targetCompany = activeCompanyId || user?.companyId || "tech"
+  const { user, activeCompanyId, activeBranchId, branches, subBranches, companies } = useAuthStore()
+  
+  const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>(activeCompanyId || user?.companyId || "tech")
+  const [selectedBranchId, setSelectedBranchId] = React.useState<string>(user?.branchId || activeBranchId || "")
+  const [selectedSubBranchId, setSelectedSubBranchId] = React.useState<string>("")
+  const isBranchLocked = Boolean(user?.branchId && user?.role !== "Super Admin")
+
+  const availableBranches = React.useMemo(() => {
+    return (branches || []).filter((b) => {
+      if (!selectedCompanyId || selectedCompanyId === "all") return true
+      return b.companyId?.toLowerCase() === selectedCompanyId.toLowerCase()
+    })
+  }, [branches, selectedCompanyId])
+
+  const availableSubBranches = React.useMemo(() => {
+    return (subBranches || []).filter((sb) => {
+      if (!selectedCompanyId || selectedCompanyId === "all") return true
+      return sb.companyId?.toLowerCase() === selectedCompanyId.toLowerCase()
+    })
+  }, [subBranches, selectedCompanyId])
+
+  const handleCompanyChange = (comp: string) => {
+    setSelectedCompanyId(comp)
+    setSelectedSubBranchId("")
+    if (!isBranchLocked) {
+      setSelectedBranchId("")
+    }
+  }
 
   const [creationMode, setCreationMode] = React.useState<"project_and_invoice" | "invoice_only">("project_and_invoice")
-  const [projectTitle, setProjectTitle] = React.useState("")
+  const [projectTitle, setProjectTitle] = React.useState("Website Development")
   const [category, setCategory] = React.useState("Website Development")
+  const [customCategory, setCustomCategory] = React.useState("")
+  const [isCustomCategory, setIsCustomCategory] = React.useState(false)
+
+  const STANDARD_CATEGORIES = [
+    "Website Development",
+    "Software Development",
+    "Android / iOS App",
+    "Digital Marketing & SEO",
+    "UI/UX & Graphics Design",
+    "Cloud & Domain Hosting",
+    "Print & Media Works",
+    "General Consulting (Non-GST)",
+  ]
+
+  const effectiveCategory = (isCustomCategory || category === "custom")
+    ? (customCategory.trim() || "Custom Category")
+    : category
+
+  const handleCategorySelect = (val: string) => {
+    if (val === "custom") {
+      setIsCustomCategory(true)
+      setCategory("custom")
+      if (!projectTitle || STANDARD_CATEGORIES.includes(projectTitle) || projectTitle === category) {
+        if (customCategory.trim()) {
+          setProjectTitle(customCategory.trim())
+        }
+      }
+    } else {
+      setIsCustomCategory(false)
+      setCategory(val)
+      if (!projectTitle || STANDARD_CATEGORIES.includes(projectTitle) || projectTitle === customCategory || projectTitle === category) {
+        setProjectTitle(val)
+      }
+    }
+  }
+
+  const handleCustomCategoryChange = (val: string) => {
+    setCustomCategory(val)
+    if (!projectTitle || STANDARD_CATEGORIES.includes(projectTitle) || projectTitle === customCategory || projectTitle === category) {
+      setProjectTitle(val)
+    }
+  }
   const [billedByAdmin, setBilledByAdmin] = React.useState(user?.name || "Admin")
   const [assignedMembers, setAssignedMembers] = React.useState<string[]>([])
   const [startDate, setStartDate] = React.useState(new Date().toISOString().split("T")[0])
@@ -147,9 +215,14 @@ export function AddClientProjectModal({
 
   React.useEffect(() => {
     if (isOpen && client) {
+      setSelectedCompanyId(activeCompanyId || user?.companyId || "tech")
+      setSelectedBranchId(user?.branchId || activeBranchId || "")
+      setSelectedSubBranchId("")
       setCreationMode("project_and_invoice")
-      setProjectTitle("")
+      setProjectTitle("Website Development")
       setCategory("Website Development")
+      setCustomCategory("")
+      setIsCustomCategory(false)
       setAssignedMembers([])
       setDescription("")
       setStartDate(new Date().toISOString().split("T")[0])
@@ -438,6 +511,17 @@ export function AddClientProjectModal({
           amount: Number(d.amount),
         }))
 
+      const targetCompany = selectedCompanyId || activeCompanyId || user?.companyId || "tech"
+      const matchedBranch = branches.find(b => b.id === (selectedBranchId || (isBranchLocked ? user?.branchId : activeBranchId)) || b.name.toLowerCase() === ((selectedBranchId || user?.branchId || activeBranchId) || "").toLowerCase())
+      const matchedSubBranch = subBranches.find(sb => sb.id === selectedSubBranchId)
+
+      const effectiveBranchId = (selectedBranchId || (isBranchLocked ? user?.branchId : (activeBranchId || matchedSubBranch?.parentBranchId))) || undefined
+      const effectiveBranchName = matchedBranch?.name || undefined
+      const effectiveBranchCode = matchedBranch?.code ? matchedBranch.code.toUpperCase() : undefined
+      const effectiveSubBranchId = selectedSubBranchId || undefined
+      const effectiveSubBranchName = matchedSubBranch?.name || undefined
+      const effectiveSubBranchCode = matchedSubBranch?.code ? matchedSubBranch.code.toUpperCase() : undefined
+
       // 1. Add Project (Only in Project & Invoice mode)
       let createdProject: any = null
       if (creationMode === "project_and_invoice") {
@@ -517,9 +601,16 @@ export function AddClientProjectModal({
           items: finalInvoiceItems,
           discountsList: finalDiscounts,
           billedBy: billedByAdmin,
+          companyId: targetCompany,
+          branchId: effectiveBranchId,
+          branchName: effectiveBranchName,
+          branchCode: effectiveBranchCode,
+          subBranchId: effectiveSubBranchId,
+          subBranchName: effectiveSubBranchName,
+          subBranchCode: effectiveSubBranchCode,
           createdById: user?.id ? String(user.id) : undefined,
           createdByEmail: user?.email,
-          labels: [category, computedPaymentStatus, ...(paymentModel === "part" ? [`${subscriptionMonths}-Month Subscription`] : [])],
+          labels: [effectiveCategory, computedPaymentStatus, ...(paymentModel === "part" ? [`${subscriptionMonths}-Month Subscription`] : [])],
           description: description || `Client Project for ${client.name}. ${serviceItems.map(s => s.serviceName).join(", ")}. Billed by ${billedByAdmin}.`,
           members: projectMembers,
           milestones: starterMilestones,
@@ -531,7 +622,7 @@ export function AddClientProjectModal({
             const taskItems: any[] = projectMembers.map((m: any, idx: number) => ({
               id: `tsk_${Date.now()}_${idx}`,
               title: `[${projectTitle}] - Milestone & Core Deliverables`,
-              description: `Task for project "${projectTitle}". Client: ${client.name}. Category: ${category}. Assigned to: ${m.name}.`,
+              description: `Task for project "${projectTitle}". Client: ${client.name}. Category: ${effectiveCategory}. Assigned to: ${m.name}.`,
               startDate: startDate || new Date().toISOString().split("T")[0],
               deadline: effectiveDeadline,
               status: "In progress",
@@ -541,8 +632,11 @@ export function AddClientProjectModal({
               assignedToId: m.id || "",
               createdBy: billedByAdmin,
               companyId: targetCompany,
+              branchId: effectiveBranchId,
+              branchName: effectiveBranchName,
+              branchCode: effectiveBranchCode,
               projectName: projectTitle,
-              tags: [category, "Project Task"],
+              tags: [effectiveCategory, "Project Task"],
             }))
             await taskService.addTasks(taskItems, targetCompany)
           } catch (err) {
@@ -582,9 +676,12 @@ export function AddClientProjectModal({
         status: invoiceStatus,
         billedBy: billedByAdmin,
         companyId: targetCompany,
-        branchId: activeBranchId || user?.branchId || undefined,
-        branchName: branches.find(b => b.id === (activeBranchId || user?.branchId) || b.name.toLowerCase() === (activeBranchId || "").toLowerCase())?.name || undefined,
-        branchCode: branches.find(b => b.id === (activeBranchId || user?.branchId) || b.name.toLowerCase() === (activeBranchId || "").toLowerCase())?.code || undefined,
+        branchId: effectiveBranchId,
+        branchName: effectiveBranchName,
+        branchCode: effectiveBranchCode,
+        subBranchId: effectiveSubBranchId,
+        subBranchName: effectiveSubBranchName,
+        subBranchCode: effectiveSubBranchCode,
         items: finalInvoiceItems,
         discountsList: finalDiscounts,
       } as any, targetCompany)
@@ -834,6 +931,94 @@ export function AddClientProjectModal({
             </div>
           </div>
 
+          {/* ── Issuing Company Entity & Billing Branch / Location ── */}
+          <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/80 space-y-3">
+            <div className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-700/80 pb-2">
+              <Building2 size={15} className="text-blue-600 shrink-0" />
+              <span className="font-extrabold text-zinc-900 dark:text-zinc-100 text-xs uppercase tracking-wider">
+                Issuing Entity & Location
+              </span>
+              <span className="ml-auto text-[10px] text-zinc-500 font-medium">Company & Branch Scope</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
+                  Issuing Company Entity:
+                </label>
+                <select
+                  value={selectedCompanyId}
+                  onChange={(e) => handleCompanyChange(e.target.value)}
+                  className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-800 dark:text-zinc-200 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {(companies as any[]).map((c: any) => (
+                    <option key={c.id} value={c.id}>
+                      {c.logo || "🏢"} {c.brand_name || c.name} {c.division_name ? `(${c.division_name})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Billing Branch / Location */}
+              <div>
+                <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1 flex items-center justify-between">
+                  <span className="flex items-center gap-1">
+                    <MapPin size={12} className="text-amber-500" />
+                    <span>Billing Branch / Location:</span>
+                  </span>
+                  {isBranchLocked && (
+                    <span className="text-[9px] text-amber-600 font-bold bg-amber-50 dark:bg-amber-950/40 px-1 py-0.2 rounded border border-amber-200 dark:border-amber-800">
+                      🔒 Locked
+                    </span>
+                  )}
+                </label>
+                {isBranchLocked ? (
+                  <div className="w-full px-3 py-2 bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-xl text-zinc-800 dark:text-zinc-200 text-xs font-bold flex items-center justify-between">
+                    <span>📍 {branches.find(b => b.id === user?.branchId)?.name || user?.branchId || "Your Assigned Branch"}</span>
+                    <span className="text-[10px] text-amber-600 font-normal">Fixed</span>
+                  </div>
+                ) : (
+                  <select
+                    value={selectedBranchId}
+                    onChange={(e) => setSelectedBranchId(e.target.value)}
+                    className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-800 dark:text-zinc-200 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">🏢 Company HQ / Central Office</option>
+                    {availableBranches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        📍 {b.name} {b.city ? `(${b.city})` : ""} {b.code ? `• [${b.code}]` : ""}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            </div>
+
+            {/* Sub-Branch Attribution (% Share Partner) */}
+            {availableSubBranches.length > 0 && (
+              <div className="p-3 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-xl border border-emerald-200/60 dark:border-emerald-800/40 space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                    <span>🌿 Sub-Branch Partner Attribution (% Share)</span>
+                  </label>
+                  <span className="text-[10px] text-zinc-500">Optional Franchise Split</span>
+                </div>
+                <select
+                  value={selectedSubBranchId}
+                  onChange={(e) => setSelectedSubBranchId(e.target.value)}
+                  className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-emerald-300 dark:border-emerald-700 rounded-lg text-xs font-semibold text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="">🏢 Company HQ / Direct Operating Branch (100% Company)</option>
+                  {availableSubBranches.map((sb) => (
+                    <option key={sb.id} value={sb.id}>
+                      🌿 {sb.name} — {sb.revenueSharePct}% Partner Share / {100 - (sb.revenueSharePct ?? 30)}% Company
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
           {/* ── Client Details Card (pre-filled & editable) ── */}
           <div className="p-4 rounded-2xl bg-violet-50/60 dark:bg-violet-950/20 border border-violet-200 dark:border-violet-800/60 space-y-3">
             <div className="flex items-center gap-2 border-b border-violet-200/80 dark:border-violet-800/60 pb-2">
@@ -948,34 +1133,82 @@ export function AddClientProjectModal({
           {/* Project Title & Category */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-                Project / Order Title *
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block font-semibold text-zinc-700 dark:text-zinc-300">
+                  Project / Order Title *
+                </label>
+                {effectiveCategory && projectTitle !== effectiveCategory && (
+                  <button
+                    type="button"
+                    onClick={() => setProjectTitle(effectiveCategory)}
+                    className="text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer flex items-center gap-1"
+                    title="Copy category to project title"
+                  >
+                    ✨ Use "{effectiveCategory}"
+                  </button>
+                )}
+              </div>
               <input
                 type="text"
                 required
                 placeholder="e.g. Complete Digital Transformation Suite"
                 value={projectTitle}
                 onChange={(e) => setProjectTitle(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                className="w-full px-3.5 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-xs sm:text-sm"
               />
             </div>
 
             <div>
-              <label className="block font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-                Primary Category
-              </label>
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-              >
-                <option value="Website Development">Website Development</option>
-                <option value="Software Development">Software Development</option>
-                <option value="Android/iOS">Android/iOS</option>
-                <option value="Digital Marketing">Digital Marketing</option>
-                <option value="Domain & Hosting">Domain & Hosting</option>
-              </select>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block font-semibold text-zinc-700 dark:text-zinc-300">
+                  Primary Category
+                </label>
+                {isCustomCategory && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCustomCategory(false)
+                      setCategory("Website Development")
+                      if (!projectTitle || projectTitle === customCategory) {
+                        setProjectTitle("Website Development")
+                      }
+                    }}
+                    className="text-[10px] font-bold text-violet-600 dark:text-violet-400 hover:underline cursor-pointer"
+                  >
+                    ← Standard Presets
+                  </button>
+                )}
+              </div>
+
+              {isCustomCategory ? (
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    autoFocus
+                    placeholder="Type custom category name (e.g. AI Automation)"
+                    value={customCategory}
+                    onChange={(e) => handleCustomCategoryChange(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-xl bg-violet-50/50 dark:bg-violet-950/20 border border-violet-300 dark:border-violet-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-violet-500 font-bold text-xs sm:text-sm"
+                  />
+                  <span className="absolute right-3 top-2.5 text-[10px] uppercase font-black text-violet-600 dark:text-violet-400">
+                    Custom
+                  </span>
+                </div>
+              ) : (
+                <select
+                  value={category}
+                  onChange={(e) => handleCategorySelect(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-xs sm:text-sm cursor-pointer"
+                >
+                  {STANDARD_CATEGORIES.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                  <option value="custom">✨ + Custom Category...</option>
+                </select>
+              )}
             </div>
           </div>
 

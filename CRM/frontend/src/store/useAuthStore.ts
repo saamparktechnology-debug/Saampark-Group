@@ -296,12 +296,12 @@ export const DEFAULT_COMPANIES: Company[] = [
     phone: '+91 9901518567 / +91 9901518569',
     email: 'info@saamparktechnology.com',
     website: 'www.saamparktechnology.com',
-    upi_id: 'saampark@sbi',
-    account_holder: 'Saampark Technology & Research Pvt. Ltd.',
-    bank_name: 'State Bank of India',
-    account_number: '40912384759',
-    ifsc_code: 'SBIN0001234',
-    bank_branch: 'Balichak Station Road',
+    upi_id: '',
+    account_holder: '',
+    bank_name: '',
+    account_number: '',
+    ifsc_code: '',
+    bank_branch: '',
     terms_conditions: '1. E.& O.E.\n2. Total payment due to be paid within due date to avoid suspension/cancellation.\n3. Please include the invoice number in your payment notes.\n4. All disputes are subject to Paschim Medinipur jurisdiction only.\n5. For payment & refund related queries, read our Refund & Return Policy on website.',
     signatory_name: 'Authorized Signatory',
     signatory_designation: 'Managing Director'
@@ -324,12 +324,12 @@ export const DEFAULT_COMPANIES: Company[] = [
     phone: '+91 9901518570',
     email: 'digital@saampark.in',
     website: 'www.saamparkdigital.com',
-    upi_id: 'saamparkdigital@icici',
-    account_holder: 'Saampark Digital Marketing & Research',
-    bank_name: 'ICICI Bank',
-    account_number: '123405009876',
-    ifsc_code: 'ICIC0001234',
-    bank_branch: 'Sector V Kolkata',
+    upi_id: '',
+    account_holder: '',
+    bank_name: '',
+    account_number: '',
+    ifsc_code: '',
+    bank_branch: '',
     terms_conditions: '1. All marketing campaigns will be initiated after advance retainer clearance.\n2. Advertising budget spend is billed directly via client ad account.\n3. All disputes are subject to Kolkata jurisdiction only.',
     signatory_name: 'Authorized Signatory',
     signatory_designation: 'Agency Head'
@@ -514,14 +514,24 @@ export const useAuthStore = create<AuthState>()(
             }
           }
 
-          const filtered = list.filter(b => !isGlobalItemDeleted(b.id, deletedIds))
+          const filtered = list
+            .filter(b => !isGlobalItemDeleted(b.id, deletedIds))
+            .map(b => ({
+              ...b,
+              code: b.code ? b.code.toUpperCase() : b.code,
+            }))
           set({ branches: filtered })
           return filtered
         } catch (err) {
           console.warn("fetchBranches warning:", err)
         }
         const localDeleted = getLocalDeletedIds()
-        const currentFiltered = get().branches.filter(b => !isGlobalItemDeleted(b.id, localDeleted))
+        const currentFiltered = get().branches
+          .filter(b => !isGlobalItemDeleted(b.id, localDeleted))
+          .map(b => ({
+            ...b,
+            code: b.code ? b.code.toUpperCase() : b.code,
+          }))
         set({ branches: currentFiltered })
         return currentFiltered
       },
@@ -813,7 +823,7 @@ export const useAuthStore = create<AuthState>()(
           id: branchData.id || `branch_${Date.now()}`,
           companyId: targetCompanyId,
           name: branchData.name || 'New Branch',
-          code: branchData.code || `BR-${Math.floor(100 + Math.random() * 900)}`,
+          code: branchData.code ? branchData.code.trim().toUpperCase() : `BR-${Math.floor(100 + Math.random() * 900)}`,
           city: branchData.city || '',
           address: branchData.address || '',
           phone: branchData.phone || '',
@@ -840,7 +850,11 @@ export const useAuthStore = create<AuthState>()(
 
       updateBranch: async (branchId: string, updates: Partial<Branch>) => {
         const { branches } = get()
-        const updated = branches.map(b => b.id === branchId ? { ...b, ...updates } : b)
+        const sanitizedUpdates = {
+          ...updates,
+          ...(updates.code ? { code: updates.code.trim().toUpperCase() } : {}),
+        }
+        const updated = branches.map(b => b.id === branchId ? { ...b, ...sanitizedUpdates } : b)
         set({ branches: updated })
         await saveModuleDataToDB('branches', updated, 'all').catch(() => {})
 

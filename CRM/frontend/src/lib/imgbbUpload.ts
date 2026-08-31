@@ -74,6 +74,18 @@ export async function compressImage(
       ctx.imageSmoothingQuality = "high"
       ctx.drawImage(img, 0, 0, width, height)
 
+      // Preserve PNG/WebP alpha transparency so transparent images don't turn black
+      let mimeType = "image/jpeg"
+      if (fileOrBlob instanceof File || fileOrBlob instanceof Blob) {
+        if (fileOrBlob.type === "image/png" || fileOrBlob.type === "image/webp" || fileOrBlob.type === "image/svg+xml") {
+          mimeType = "image/png"
+        }
+      } else if (typeof fileOrBlob === "string") {
+        if (fileOrBlob.startsWith("data:image/png") || fileOrBlob.startsWith("data:image/webp") || fileOrBlob.startsWith("data:image/svg+xml")) {
+          mimeType = "image/png"
+        }
+      }
+
       canvas.toBlob(
         (blob) => {
           if (blob) {
@@ -82,8 +94,8 @@ export async function compressImage(
             resolve(fileOrBlob instanceof Blob ? fileOrBlob : new Blob())
           }
         },
-        "image/jpeg",
-        quality
+        mimeType,
+        mimeType === "image/png" ? undefined : quality
       )
     }
 
@@ -111,10 +123,10 @@ export async function uploadToImgBB(
 ): Promise<UploadResult> {
   let uploadableBlob: Blob | string = fileOrBase64
 
-  // 1. Auto-compress image before upload
+  // 1. Auto-compress image before upload while strictly preserving transparency
   try {
     if (typeof window !== "undefined") {
-      uploadableBlob = await compressImage(fileOrBase64, maxWidth, maxWidth, 0.88)
+      uploadableBlob = await compressImage(fileOrBase64, maxWidth, maxWidth, 0.92)
     }
   } catch (compErr) {
     console.warn("Image pre-compression note:", compErr)
@@ -131,7 +143,8 @@ export async function uploadToImgBB(
           : uploadableBlob
         formData.append("image", base64Clean)
       } else {
-        formData.append("image", uploadableBlob, `${name}.jpg`)
+        const isPng = uploadableBlob.type === "image/png"
+        formData.append("image", uploadableBlob, `${name}.${isPng ? 'png' : 'jpg'}`)
       }
 
       formData.append("name", name.replace(/[^a-zA-Z0-9_-]/g, "_"))

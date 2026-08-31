@@ -28,6 +28,20 @@ export function saveLocalDeletedId(id: string | number): void {
 export async function markGlobalItemDeleted(id: string | number, moduleName?: string): Promise<void> {
   if (!id) return
   const strId = String(id).toLowerCase().trim()
+
+  // Strict check: Clients can NEVER delete records assigned by Admin/Super Admin
+  if (typeof window !== "undefined") {
+    try {
+      const { useAuthStore } = require("@/store/useAuthStore")
+      const currentUser = useAuthStore.getState().user
+      const roleLower = (currentUser?.role || "").toLowerCase().trim()
+      if (roleLower.includes("client")) {
+        console.warn("Client blocked from deleting system items:", strId, moduleName)
+        return
+      }
+    } catch {}
+  }
+
   saveLocalDeletedId(strId)
 
   try {

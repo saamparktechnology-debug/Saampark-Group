@@ -143,6 +143,10 @@ export default function PaymentsPage() {
   }
 
   const handleDeletePayment = async (id: string) => {
+    if (isClientRole || !canDeletePayment) {
+      alert("Permission Denied: Clients cannot delete payment records.")
+      return
+    }
     if (confirm("Are you sure you want to delete this payment record?")) {
       await deletePayment(id)
       setPayments(prev => prev.filter(p => p.id !== id))

@@ -77,5 +77,9 @@ export interface Project {
   companyId?: string
   branchId?: string
   branchName?: string
+  branchCode?: string
+  subBranchId?: string
+  subBranchName?: string
+  subBranchCode?: string
 }
 

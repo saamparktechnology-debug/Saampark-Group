@@ -211,6 +211,10 @@ export default function OrderListPage() {
   }, [displayedOrders, searchQuery, activeTab])
 
   const handleDeleteOrder = async (id: string) => {
+    if (isClientRole || !canDeleteOrder) {
+      alert("Permission Denied: Clients cannot delete orders assigned to them.")
+      return
+    }
     const ord = orders.find(o => String(o.id).toLowerCase().trim() === String(id).toLowerCase().trim())
     const ordNum = ord?.orderNumber || "Order"
 

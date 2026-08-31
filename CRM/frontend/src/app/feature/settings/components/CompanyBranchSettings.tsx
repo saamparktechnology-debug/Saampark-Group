@@ -749,7 +749,7 @@ export function CompanyBranchSettings() {
     const payload: Partial<Branch> = {
       companyId: finalCompanyId,
       name: branchName.trim(),
-      code: branchCode.trim(),
+      code: branchCode.trim().toUpperCase(),
       brand_name: branchBrandName.trim(),
       division_name: branchDivisionName.trim(),
       subtitle: branchSubtitle.trim(),
@@ -916,7 +916,7 @@ export function CompanyBranchSettings() {
       parentBranchId: subBranchParentBranchId,
       companyId: subBranchCompanyId,
       name: subBranchName.trim(),
-      code: subBranchCode.trim(),
+      code: subBranchCode.trim().toUpperCase(),
       brand_name: subBranchBrandName.trim(),
       division_name: subBranchDivisionName.trim(),
       subtitle: subBranchSubtitle.trim(),
@@ -2384,7 +2384,7 @@ export function CompanyBranchSettings() {
                           type="text"
                           required
                           value={branchCode}
-                          onChange={(e) => setBranchCode(e.target.value)}
+                          onChange={(e) => setBranchCode(e.target.value.toUpperCase())}
                           placeholder="e.g. KOL-01, BLR-HQ"
                           className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold uppercase focus:outline-hidden"
                         />
@@ -3023,7 +3023,7 @@ export function CompanyBranchSettings() {
                         <input
                           type="text"
                           value={subBranchCode}
-                          onChange={(e) => setSubBranchCode(e.target.value)}
+                          onChange={(e) => setSubBranchCode(e.target.value.toUpperCase())}
                           placeholder="e.g. SB-DGP-01"
                           className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold uppercase focus:outline-hidden"
                         />

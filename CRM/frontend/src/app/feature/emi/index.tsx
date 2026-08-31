@@ -40,9 +40,9 @@ export default function EMIMain() {
   )
   const isClient = roleLower.includes("client")
 
-  const canAddEMI = canPerformAction(user, "EMI", "add") || isSuperAdmin || isAdmin
-  const canEditEMI = canPerformAction(user, "EMI", "edit") || isSuperAdmin || isAdmin
-  const canDeleteEMI = canPerformAction(user, "EMI", "delete") || isSuperAdmin || isAdmin
+  const canAddEMI = !isClient && (canPerformAction(user, "EMI", "add") || isSuperAdmin || isAdmin)
+  const canEditEMI = !isClient && (canPerformAction(user, "EMI", "edit") || isSuperAdmin || isAdmin)
+  const canDeleteEMI = !isClient && (canPerformAction(user, "EMI", "delete") || isSuperAdmin || isAdmin)
 
   // Data state
   const [installments, setInstallments] = React.useState<InstallmentItem[]>([])

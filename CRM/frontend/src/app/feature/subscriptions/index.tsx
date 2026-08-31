@@ -56,9 +56,9 @@ export default function SubscriptionsMain() {
   )
   const isClient = roleLower.includes("client")
 
-  const canAddSubscription = canPerformAction(user, "Subscriptions", "add") || isSuperAdmin || isAdmin
-  const canEditSubscription = canPerformAction(user, "Subscriptions", "edit") || isSuperAdmin || isAdmin
-  const canDeleteSubscription = canPerformAction(user, "Subscriptions", "delete") || isSuperAdmin || isAdmin
+  const canAddSubscription = !isClient && (canPerformAction(user, "Subscriptions", "add") || isSuperAdmin || isAdmin)
+  const canEditSubscription = !isClient && (canPerformAction(user, "Subscriptions", "edit") || isSuperAdmin || isAdmin)
+  const canDeleteSubscription = !isClient && (canPerformAction(user, "Subscriptions", "delete") || isSuperAdmin || isAdmin)
 
   // Active View Tab: "all" | "package" | "regular" | "emi"
   const [activeTab, setActiveTab] = React.useState<"all" | "package" | "regular" | "emi">("all")
@@ -523,6 +523,10 @@ export default function SubscriptionsMain() {
   }
 
   const handleDeleteSubscription = async (id: string) => {
+    if (isClient || !canDeleteSubscription) {
+      alert("Permission Denied: Clients cannot delete subscriptions.")
+      return
+    }
     if (confirm("Cancel and delete this subscription?")) {
       await deleteSubscription(id, activeCompanyId || "tech")
       setSubscriptions((prev) => prev.filter((s) => s.id !== id))

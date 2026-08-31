@@ -166,6 +166,10 @@ export default function ProjectsMain() {
   }
 
   const handleDeleteProject = async (id: string) => {
+    if (isClient) {
+      alert("Permission Denied: Clients cannot delete projects assigned to them.")
+      return
+    }
     const proj = projects.find(p => p.id === id)
     const projTitle = proj?.title || "Project"
     await executeWithFeedback(async () => {
