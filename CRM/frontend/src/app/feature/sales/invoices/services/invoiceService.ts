@@ -245,49 +245,62 @@ export const updateInvoice = async (
   updatedInvoice: InvoiceItem,
   companyId?: string
 ): Promise<InvoiceItem> => {
-  const targetComp = companyId || updatedInvoice.companyId || "all"
-  const current = await getInvoices(targetComp)
   const strId = String(updatedInvoice.id).toUpperCase().trim()
-  const idx = current.findIndex((i) => String(i.id).toUpperCase().trim() === strId)
+  const allInvoices = await getInvoices("all")
+  const existingInv = allInvoices.find(i => String(i.id).toUpperCase().trim() === strId)
 
-  let nextList: InvoiceItem[]
-  if (idx !== -1) {
-    const oldInv = current[idx]
-    const merged = { ...oldInv, ...updatedInvoice }
-    current[idx] = merged
-    nextList = [...current]
+  const oldCompanyId = (existingInv?.companyId || companyId || "tech").toLowerCase().trim()
+  const newCompanyId = (updatedInvoice.companyId || companyId || oldCompanyId).toLowerCase().trim()
+
+  const finalInvoice: InvoiceItem = {
+    ...existingInv,
+    ...updatedInvoice,
+    companyId: newCompanyId,
+  }
+
+  // Cross-Company Transfer
+  if (newCompanyId !== oldCompanyId && oldCompanyId !== "all") {
+    const oldList = await fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], oldCompanyId).catch(() => [])
+    const filteredOld = oldList.filter(i => String(i.id).toUpperCase().trim() !== strId)
+    await saveModuleDataToDB("invoices", filteredOld, oldCompanyId)
+
+    const newList = await fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], newCompanyId).catch(() => [])
+    const updatedNew = [finalInvoice, ...newList.filter(i => String(i.id).toUpperCase().trim() !== strId)]
+    await saveModuleDataToDB("invoices", updatedNew, newCompanyId)
   } else {
-    nextList = [updatedInvoice, ...current]
+    const targetComp = companyId || newCompanyId
+    const currentList = await fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], targetComp).catch(() => [])
+    const updatedList = [finalInvoice, ...currentList.filter(i => String(i.id).toUpperCase().trim() !== strId)]
+    await saveModuleDataToDB("invoices", updatedList, targetComp)
   }
 
-  await saveModuleDataToDB("invoices", nextList, targetComp)
-  if (targetComp !== "all") {
-    await saveModuleDataToDB("invoices", nextList, "all")
-  }
+  // Update in "all"
+  const updatedAll = [finalInvoice, ...allInvoices.filter(i => String(i.id).toUpperCase().trim() !== strId)]
+  await saveModuleDataToDB("invoices", updatedAll, "all")
 
   // Update client billing stats
   try {
-    const clients = await getClients(targetComp)
+    const clients = await getClients(newCompanyId)
     const clientIdx = clients.findIndex(c => 
       (c.name && c.name.toLowerCase().trim() === (updatedInvoice.client || "").toLowerCase().trim()) ||
       (updatedInvoice.clientEmail && c.email && c.email.toLowerCase().trim() === updatedInvoice.clientEmail.toLowerCase().trim())
     )
     if (clientIdx !== -1) {
       const c = clients[clientIdx]
-      const clientInvoices = nextList.filter(inv => 
+      const clientInvoices = updatedAll.filter((inv: InvoiceItem) => 
         (inv.client && inv.client.toLowerCase().trim() === c.name.toLowerCase().trim()) ||
         (inv.clientEmail && c.email && inv.clientEmail.toLowerCase().trim() === c.email.toLowerCase().trim())
       )
-      const sumInvoiced = clientInvoices.reduce((sum, i) => sum + (parseInt((i.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0), 0)
-      const sumReceived = clientInvoices.reduce((sum, i) => sum + (parseInt((i.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0), 0)
-      const sumDue = clientInvoices.reduce((sum, i) => sum + (parseInt((i.due || "0").replace(/[^0-9]/g, "")) || 0), 0)
+      const sumInvoiced = clientInvoices.reduce((sum: number, i: InvoiceItem) => sum + (parseInt((i.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0), 0)
+      const sumReceived = clientInvoices.reduce((sum: number, i: InvoiceItem) => sum + (parseInt((i.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0), 0)
+      const sumDue = clientInvoices.reduce((sum: number, i: InvoiceItem) => sum + (parseInt((i.due || "0").replace(/[^0-9]/g, "")) || 0), 0)
 
       await saveStoredClient({
         ...c,
         totalInvoiced: `₹${sumInvoiced.toLocaleString("en-IN")}`,
         paymentReceived: `₹${sumReceived.toLocaleString("en-IN")}`,
         due: `₹${sumDue.toLocaleString("en-IN")}`,
-      }, targetComp)
+      }, newCompanyId)
     }
   } catch (err) {
     console.warn("Error updating client balance after invoice update:", err)

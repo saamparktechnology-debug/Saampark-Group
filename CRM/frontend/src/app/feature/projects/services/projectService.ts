@@ -178,32 +178,56 @@ export const syncLinkedOrdersWithProject = async (
 
 export const updateProject = async (id: string, updates: Partial<Project>, companyId?: string): Promise<Project> => {
   const strId = String(id).toLowerCase().trim()
-  const current = await fetchModuleDataFromDB<Project[]>("projects", [], companyId)
-  const idx = current.findIndex(p => String(p.id).toLowerCase().trim() === strId)
-  if (idx === -1) {
-    const updatedProj = { id: String(id), title: "Project", ...updates } as Project
-    const nextList = [updatedProj, ...current]
-    await saveModuleDataToDB("projects", nextList, companyId)
-    if (updates.status === "Completed") {
-      sendProjectCompletionEmailNotification(updatedProj).catch(() => null)
-    }
-    if (updates.status) {
-      syncLinkedOrdersWithProject(updatedProj.title, updatedProj.id, updates.status, companyId).catch(() => null)
-    }
-    return updatedProj
+  const allProjects = await fetchModuleDataFromDB<Project[]>("projects", [], "all").catch(() => [])
+  const foundInAll = allProjects.find(p => String(p.id).toLowerCase().trim() === strId)
+
+  const oldCompanyId = (foundInAll?.companyId || companyId || "tech").toLowerCase().trim()
+  const newCompanyId = (updates.companyId || companyId || oldCompanyId).toLowerCase().trim()
+
+  const prevStatus = foundInAll?.status
+  const updatedProj: Project = {
+    id: String(id),
+    title: updates.title || foundInAll?.title || "Project",
+    ...foundInAll,
+    ...updates,
+    companyId: newCompanyId,
+  } as Project
+
+  // Cross-Company Transfer
+  if (newCompanyId !== oldCompanyId) {
+    const oldList = await fetchModuleDataFromDB<Project[]>("projects", [], oldCompanyId).catch(() => [])
+    const filteredOld = oldList.filter(p => String(p.id).toLowerCase().trim() !== strId)
+    await saveModuleDataToDB("projects", filteredOld, oldCompanyId)
+
+    const newList = await fetchModuleDataFromDB<Project[]>("projects", [], newCompanyId).catch(() => [])
+    const updatedNew = [updatedProj, ...newList.filter(p => String(p.id).toLowerCase().trim() !== strId)]
+    await saveModuleDataToDB("projects", updatedNew, newCompanyId)
+  } else {
+    const targetComp = companyId || newCompanyId
+    const currentList = await fetchModuleDataFromDB<Project[]>("projects", [], targetComp).catch(() => [])
+    const updatedList = [updatedProj, ...currentList.filter(p => String(p.id).toLowerCase().trim() !== strId)]
+    await saveModuleDataToDB("projects", updatedList, targetComp)
   }
-  const prevStatus = current[idx].status
-  current[idx] = { ...current[idx], ...updates }
-  await saveModuleDataToDB("projects", current, companyId)
+
+  // Update in "all"
+  const allList = Array.isArray(allProjects) ? allProjects : []
+  const updatedAll = [updatedProj, ...allList.filter(p => String(p.id).toLowerCase().trim() !== strId)]
+  await saveModuleDataToDB("projects", updatedAll, "all")
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("storage"))
+    window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+    window.dispatchEvent(new CustomEvent("saampark_projects_updated"))
+  }
 
   if (updates.status && updates.status !== prevStatus) {
-    syncLinkedOrdersWithProject(current[idx].title, current[idx].id, updates.status, companyId).catch(() => null)
+    syncLinkedOrdersWithProject(updatedProj.title, updatedProj.id, updates.status, newCompanyId).catch(() => null)
   }
 
   if (updates.status === "Completed" && prevStatus !== "Completed") {
-    sendProjectCompletionEmailNotification(current[idx]).catch(() => null)
+    sendProjectCompletionEmailNotification(updatedProj).catch(() => null)
   }
-  return { ...current[idx] }
+  return updatedProj
 }
 
 export const addOrUpdateProjectMilestone = async (

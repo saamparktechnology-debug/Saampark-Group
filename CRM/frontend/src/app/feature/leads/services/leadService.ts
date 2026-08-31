@@ -366,10 +366,20 @@ export const addLead = async (leadData: Omit<Lead, "id">, companyId?: string): P
 
 export const updateLead = async (id: string, updates: Partial<Lead>, userRole?: string, companyId?: string): Promise<Lead> => {
   const current = await fetchModuleDataFromDB<Lead[]>("leads", [], companyId)
-  const idx = current.findIndex((l) => l.id === id)
-  if (idx === -1) throw new Error("Lead not found")
+  let idx = current.findIndex((l) => l.id === id)
+  let target = idx !== -1 ? current[idx] : null
 
-  const target = current[idx]
+  // Fallback search across all leads if not found in current company partition
+  if (!target) {
+    const allLeads = await fetchModuleDataFromDB<Lead[]>("leads", [], "all").catch(() => [])
+    const found = allLeads.find(l => l.id === id)
+    if (found) {
+      target = found
+    }
+  }
+
+  if (!target) throw new Error("Lead not found")
+
   const isSuperOrAdmin = userRole === "Super Admin" || userRole === "Admin"
   
   const finalStatus = updates.status !== undefined ? updates.status : target.status
@@ -412,17 +422,48 @@ export const updateLead = async (id: string, updates: Partial<Lead>, userRole?: 
     nextReason = "Overdue: Lead reminder date expired."
   }
 
-  current[idx] = {
+  const oldCompanyId = (target.companyId || companyId || "tech").toLowerCase().trim()
+  const newCompanyId = (updates.companyId || oldCompanyId).toLowerCase().trim()
+
+  const updatedLead: Lead = {
     ...target,
     ...updates,
+    companyId: newCompanyId,
     isLocked: nextIsLocked,
     lockedReason: nextReason,
   }
 
-  await saveModuleDataToDB("leads", current, companyId)
-  syncLeadReminderTask(current[idx])
-  checkAndAutoConvertLeadToClient(current[idx], companyId)
-  return { ...current[idx] }
+  // Cross-Company Transfer: If company changed, immediately remove from old and add to new
+  if (newCompanyId !== oldCompanyId) {
+    const oldList = await fetchModuleDataFromDB<Lead[]>("leads", [], oldCompanyId).catch(() => [])
+    const filteredOld = oldList.filter(l => l.id !== id)
+    await saveModuleDataToDB("leads", filteredOld, oldCompanyId)
+
+    const newList = await fetchModuleDataFromDB<Lead[]>("leads", [], newCompanyId).catch(() => [])
+    const updatedNew = [updatedLead, ...newList.filter(l => l.id !== id)]
+    await saveModuleDataToDB("leads", updatedNew, newCompanyId)
+  } else {
+    const targetComp = companyId || newCompanyId
+    const currentList = await fetchModuleDataFromDB<Lead[]>("leads", [], targetComp).catch(() => [])
+    const updatedList = [updatedLead, ...currentList.filter(l => l.id !== id)]
+    await saveModuleDataToDB("leads", updatedList, targetComp)
+  }
+
+  // Update in "all" aggregation
+  const allList = await fetchModuleDataFromDB<Lead[]>("leads", [], "all").catch(() => [])
+  const updatedAll = [updatedLead, ...allList.filter(l => l.id !== id)]
+  await saveModuleDataToDB("leads", updatedAll, "all")
+
+  syncLeadReminderTask(updatedLead)
+  checkAndAutoConvertLeadToClient(updatedLead, newCompanyId)
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("storage"))
+    window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+    window.dispatchEvent(new CustomEvent("saampark_leads_updated"))
+  }
+
+  return updatedLead
 }
 
 export const deleteLead = async (id: string, companyId?: string): Promise<boolean> => {

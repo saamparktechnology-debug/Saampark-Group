@@ -144,42 +144,44 @@ export const taskService = {
 
   updateTask: async (id: string, updates: Partial<Task>, companyId?: string): Promise<Task> => {
     const strId = String(id).toLowerCase().trim()
-    const targetComp = companyId || updates.companyId || "all"
-    const current = await fetchModuleDataFromDB<Task[]>("tasks", [], targetComp)
     const currentAll = await fetchModuleDataFromDB<Task[]>("tasks", [], "all").catch(() => [])
+    const foundInAll = currentAll.find(t => String(t.id).toLowerCase().trim() === strId)
 
-    const idx = current.findIndex((t) => String(t.id).toLowerCase().trim() === strId)
-    let updatedTask: Task
+    const oldCompanyId = (foundInAll?.companyId || companyId || "tech").toLowerCase().trim()
+    const newCompanyId = (updates.companyId || companyId || oldCompanyId).toLowerCase().trim()
 
-    if (idx !== -1) {
-      updatedTask = { ...current[idx], ...updates }
-      current[idx] = updatedTask
-      await saveModuleDataToDB("tasks", current, targetComp)
+    const updatedTask: Task = {
+      id: String(id),
+      title: updates.title || foundInAll?.title || "Task",
+      startDate: updates.startDate || foundInAll?.startDate || "-",
+      deadline: updates.deadline || foundInAll?.deadline || "-",
+      status: updates.status || foundInAll?.status || "To do",
+      priority: updates.priority || foundInAll?.priority || "Normal",
+      ...foundInAll,
+      ...updates,
+      companyId: newCompanyId,
+    } as Task
+
+    // Cross-Company Transfer
+    if (newCompanyId !== oldCompanyId) {
+      const oldList = await fetchModuleDataFromDB<Task[]>("tasks", [], oldCompanyId).catch(() => [])
+      const filteredOld = oldList.filter(t => String(t.id).toLowerCase().trim() !== strId)
+      await saveModuleDataToDB("tasks", filteredOld, oldCompanyId)
+
+      const newList = await fetchModuleDataFromDB<Task[]>("tasks", [], newCompanyId).catch(() => [])
+      const updatedNew = [updatedTask, ...newList.filter(t => String(t.id).toLowerCase().trim() !== strId)]
+      await saveModuleDataToDB("tasks", updatedNew, newCompanyId)
     } else {
-      updatedTask = {
-        id: String(id),
-        title: updates.title || "Task",
-        startDate: updates.startDate || "-",
-        deadline: updates.deadline || "-",
-        status: updates.status || "To do",
-        priority: updates.priority || "Normal",
-        ...updates,
-      } as Task
-      await saveModuleDataToDB("tasks", [updatedTask, ...current], targetComp)
+      const targetComp = companyId || newCompanyId
+      const currentList = await fetchModuleDataFromDB<Task[]>("tasks", [], targetComp).catch(() => [])
+      const updatedList = [updatedTask, ...currentList.filter(t => String(t.id).toLowerCase().trim() !== strId)]
+      await saveModuleDataToDB("tasks", updatedList, targetComp)
     }
 
-    if (targetComp !== "all") {
-      const allList = Array.isArray(currentAll) ? currentAll : []
-      const allIdx = allList.findIndex((t) => String(t.id).toLowerCase().trim() === strId)
-      let nextAll: Task[]
-      if (allIdx !== -1) {
-        allList[allIdx] = { ...allList[allIdx], ...updates }
-        nextAll = [...allList]
-      } else {
-        nextAll = [updatedTask, ...allList]
-      }
-      await saveModuleDataToDB("tasks", nextAll, "all")
-    }
+    // Update in "all"
+    const allList = Array.isArray(currentAll) ? currentAll : []
+    const updatedAll = [updatedTask, ...allList.filter(t => String(t.id).toLowerCase().trim() !== strId)]
+    await saveModuleDataToDB("tasks", updatedAll, "all")
 
     if (typeof window !== "undefined") {
       window.dispatchEvent(new Event("storage"))

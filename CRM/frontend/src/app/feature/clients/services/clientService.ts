@@ -112,6 +112,26 @@ export async function saveStoredClient(client: ClientItem, companyId?: string): 
     createdAt: client.createdAt || Date.now(),
   }
 
+  const allClients = await getClients("all")
+  const existingClient = allClients.find(
+    (c) =>
+      c.id === client.id ||
+      (client.email && c.email && c.email.toLowerCase().trim() === client.email.toLowerCase().trim())
+  )
+  const oldCompanyId = (existingClient?.companyId || "").toLowerCase().trim()
+  const newCompanyId = effectiveCompanyId.toLowerCase().trim()
+
+  // If transferred to a different company, remove from old company
+  if (oldCompanyId && oldCompanyId !== newCompanyId && oldCompanyId !== "all") {
+    const oldList = await getClients(oldCompanyId)
+    const filteredOld = oldList.filter(
+      (c) =>
+        c.id !== enrichedClient.id &&
+        c.email?.toLowerCase().trim() !== enrichedClient.email?.toLowerCase().trim()
+    )
+    await saveModuleDataToDB("clients", filteredOld, oldCompanyId)
+  }
+
   const current = await getClients(effectiveCompanyId)
   const updated = [
     enrichedClient,
@@ -123,10 +143,9 @@ export async function saveStoredClient(client: ClientItem, companyId?: string): 
   ]
   await saveModuleDataToDB("clients", updated, effectiveCompanyId)
   if (effectiveCompanyId !== "all") {
-    const currentAll = await getClients("all")
     const updatedAll = [
       enrichedClient,
-      ...currentAll.filter(
+      ...allClients.filter(
         (c) =>
           c.id !== enrichedClient.id &&
           c.email?.toLowerCase().trim() !== enrichedClient.email?.toLowerCase().trim()

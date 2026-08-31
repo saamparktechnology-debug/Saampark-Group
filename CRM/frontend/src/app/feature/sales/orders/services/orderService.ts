@@ -121,13 +121,46 @@ export const addOrder = async (orderData: Omit<OrderItem, "id" | "orderNumber"> 
 
 export const updateOrder = async (id: string, updates: Partial<OrderItem>, companyId?: string): Promise<OrderItem> => {
   const strId = String(id).toLowerCase().trim()
-  const current = await getOrders(companyId)
-  const idx = current.findIndex(o => String(o.id).toLowerCase().trim() === strId)
-  if (idx === -1) throw new Error("Order not found")
+  const allOrders = await getOrders("all")
+  const existingOrder = allOrders.find(o => String(o.id).toLowerCase().trim() === strId)
 
-  current[idx] = { ...current[idx], ...updates }
-  await saveModuleDataToDB("orders", current, companyId)
-  return { ...current[idx] }
+  const oldCompanyId = (existingOrder?.companyId || companyId || "tech").toLowerCase().trim()
+  const newCompanyId = (updates.companyId || companyId || oldCompanyId).toLowerCase().trim()
+
+  const updatedOrder: OrderItem = {
+    ...existingOrder,
+    ...updates,
+    id: String(id),
+    companyId: newCompanyId,
+  } as OrderItem
+
+  // Cross-Company Transfer
+  if (newCompanyId !== oldCompanyId && oldCompanyId !== "all") {
+    const oldList = await fetchModuleDataFromDB<OrderItem[]>("orders", [], oldCompanyId).catch(() => [])
+    const filteredOld = oldList.filter(o => String(o.id).toLowerCase().trim() !== strId)
+    await saveModuleDataToDB("orders", filteredOld, oldCompanyId)
+
+    const newList = await fetchModuleDataFromDB<OrderItem[]>("orders", [], newCompanyId).catch(() => [])
+    const updatedNew = [updatedOrder, ...newList.filter(o => String(o.id).toLowerCase().trim() !== strId)]
+    await saveModuleDataToDB("orders", updatedNew, newCompanyId)
+  } else {
+    const targetComp = companyId || newCompanyId
+    const currentList = await fetchModuleDataFromDB<OrderItem[]>("orders", [], targetComp).catch(() => [])
+    const updatedList = [updatedOrder, ...currentList.filter(o => String(o.id).toLowerCase().trim() !== strId)]
+    await saveModuleDataToDB("orders", updatedList, targetComp)
+  }
+
+  // Update in "all"
+  const updatedAll = [updatedOrder, ...allOrders.filter(o => String(o.id).toLowerCase().trim() !== strId)]
+  await saveModuleDataToDB("orders", updatedAll, "all")
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("storage"))
+    window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+    window.dispatchEvent(new CustomEvent("saampark_orders_updated"))
+  }
+
+  return updatedOrder
 }
 
 export const deleteOrder = async (id: string, companyId?: string): Promise<boolean> => {
