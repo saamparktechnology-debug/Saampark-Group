@@ -123,7 +123,7 @@ const verifyEmail = async (req, res, next) => {
 const login = async (req, res, next) => {
   try {
     const { email, username, password } = req.body;
-    const identifier = (email || username || '').toLowerCase().trim();
+    const identifier = (email || username || '').toLowerCase().replace(/^@/, '').trim();
 
     if (!identifier || !password) {
       return errorResponse(res, 400, 'Email/Username and password are required.');
@@ -173,7 +173,7 @@ const login = async (req, res, next) => {
             if (Array.isArray(list)) {
               const matched = list.find((u) => 
                 (u.email && u.email.toLowerCase().trim() === identifier) || 
-                (u.username && u.username.toLowerCase().trim() === identifier)
+                (u.username && u.username.toLowerCase().replace(/^@/, '').trim() === identifier)
               );
               if (matched && (matched.password === password || password === 'Password123')) {
                 const token = generateToken({ id: matched.id, email: matched.email, role_id: 3 });
@@ -225,7 +225,7 @@ const login = async (req, res, next) => {
 // ─── CHECK USERNAME AVAILABILITY ─────────────────────────────────────────────
 const checkUsername = async (req, res, next) => {
   try {
-    const rawUsername = (req.params.username || req.query.username || req.body.username || '').toLowerCase().trim();
+    const rawUsername = (req.params.username || req.query.username || req.body.username || '').toLowerCase().replace(/^@/, '').trim();
     const excludeId = req.query.excludeId || req.body.excludeId;
     const excludeEmail = (req.query.excludeEmail || req.body.excludeEmail || '').toLowerCase().trim();
 
@@ -382,7 +382,7 @@ const resetPassword = async (req, res, next) => {
 const getProfile = async (req, res, next) => {
   try {
     const [users] = await pool.execute(
-      'SELECT u.id, u.full_name, u.email, u.phone, u.status, u.permissions, u.last_login, r.name as role_name FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id = ?',
+      'SELECT u.id, u.full_name, u.email, u.username, u.phone, u.status, u.permissions, u.last_login, r.name as role_name FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id = ?',
       [req.user.id]
     );
 

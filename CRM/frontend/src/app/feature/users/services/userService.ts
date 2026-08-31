@@ -767,6 +767,7 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
             id: String(u.id || existingItem?.id || `usr_${Math.random()}`),
             name: existingItem?.name || u.full_name || u.name || u.first_name || u.email || "User Account",
             email: preservedEmail,
+            username: u.username || existingItem?.username || undefined,
             role: existingItem?.role || finalRole,
             companyId: u.company_id || parsedCompanyIds[0] || "tech",
             companyIds: parsedCompanyIds,
@@ -782,7 +783,7 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
             status: u.status === "inactive" || u.is_active === false ? "Inactive" : "Active",
             department: u.department || existingItem?.department || "General",
             phone: u.phone || existingItem?.phone || "",
-            password: existingItem?.password || "Password123",
+            password: existingItem?.password || (u as any)?.password || undefined,
             lastLogin: u.last_login || existingItem?.lastLogin || "Active session",
             joinedDate: u.created_at ? u.created_at.split("T")[0] : existingItem?.joinedDate || new Date().toISOString().split("T")[0],
             allowedModules: permObj?.allowedModules || existingItem?.allowedModules,
@@ -799,6 +800,7 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
               email: preservedEmail,
               id: String(existingItem.id || u.id),
               name: existingItem.name || item.name,
+              username: existingItem.username || u.username || item.username || undefined,
               avatarUrl: existingItem.avatarUrl || item.avatarUrl,
               companyIds: (existingItem.companyIds && existingItem.companyIds.length > 0) ? existingItem.companyIds : parsedCompanyIds,
               companyId: (existingItem.companyIds && existingItem.companyIds[0]) || existingItem.companyId || item.companyId,
@@ -813,6 +815,7 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
               role: existingItem.role || item.role,
               status: existingItem.status || item.status,
               phone: existingItem.phone !== undefined ? existingItem.phone : item.phone,
+              password: existingItem.password || item.password || undefined,
               permissions: existingItem.permissions !== undefined ? existingItem.permissions : (permObj || item.permissions),
               allowedModules: existingItem.allowedModules || permObj?.allowedModules || item.allowedModules,
               kycStatus: existingItem.kycStatus || item.kycStatus,
@@ -923,7 +926,7 @@ export async function checkUsernameAvailabilityAsync(
   username: string,
   currentUserIdOrEmail?: string
 ): Promise<{ available: boolean; message: string }> {
-  const raw = (username || "").toLowerCase().trim();
+  const raw = (username || "").toLowerCase().replace(/^@/, "").trim();
   if (!raw) {
     return { available: false, message: "Username cannot be empty." };
   }
@@ -954,7 +957,7 @@ export async function checkUsernameAvailabilityAsync(
   const match = allUsers.find(
     (u) =>
       u.username &&
-      u.username.toLowerCase().trim() === raw &&
+      u.username.toLowerCase().replace(/^@/, "").trim() === raw &&
       u.email.toLowerCase().trim() !== currentNorm &&
       String(u.id).toLowerCase().trim() !== currentNorm
   );
@@ -971,7 +974,7 @@ export async function updateUserUsernameAsync(
   newUsername: string
 ): Promise<{ success: boolean; message: string; user?: UserItem }> {
   const normUser = String(idOrEmail).toLowerCase().trim();
-  const cleanUsername = (newUsername || "").toLowerCase().trim();
+  const cleanUsername = (newUsername || "").toLowerCase().replace(/^@/, "").trim();
 
   const availability = await checkUsernameAvailabilityAsync(cleanUsername, normUser);
   if (!availability.available && availability.message !== "This is your current username.") {

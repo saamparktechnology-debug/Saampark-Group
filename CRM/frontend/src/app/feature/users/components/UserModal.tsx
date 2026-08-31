@@ -200,7 +200,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
       setDepartment(editingUser.department || "")
       setPhone(editingUser.phone || "")
       setStatus(editingUser.status || "Active")
-      setPassword(editingUser.password || "Password123")
+      setPassword(editingUser.password || "")
       setAvatarUrl(editingUser.avatarUrl || (editingUser as any)?.avatar || "")
 
       const userIdStr = String(editingUser.id)
@@ -474,7 +474,8 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
       branchName: matchedBranch?.name || (selectedBranchId ? selectedBranchId : undefined),
       department: department || "General",
       phone,
-      password,
+      password: password && password.trim() ? password.trim() : (editingUser?.password || undefined),
+      username: editingUser?.username || undefined,
       status,
       avatarUrl: avatarUrl.trim() || editingUser?.avatarUrl || (editingUser as any)?.avatar || undefined,
       avatar: avatarUrl.trim() || editingUser?.avatarUrl || (editingUser as any)?.avatar || undefined,

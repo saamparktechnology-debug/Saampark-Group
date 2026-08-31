@@ -99,20 +99,40 @@ export function Topbar() {
 
         if (dbRecord) {
           const isSuperUser = myEmailNorm === "hiisupriya@gmail.com" || user.role === "Super Admin" || dbRecord.role === "Super Admin"
-          const freshCompanyIds = dbRecord.companyIds && dbRecord.companyIds.length > 0
-            ? dbRecord.companyIds
-            : [dbRecord.companyId || "tech"]
+          
+          let rawCompIds = dbRecord.companyIds || (dbRecord as any).company_ids || user.companyIds
+          let freshCompanyIds: string[] = []
+          if (typeof rawCompIds === 'string') {
+            try { freshCompanyIds = JSON.parse(rawCompIds) } catch { freshCompanyIds = [rawCompIds] }
+          } else if (Array.isArray(rawCompIds)) {
+            freshCompanyIds = rawCompIds
+          }
+          if (freshCompanyIds.length === 0) {
+            freshCompanyIds = [dbRecord.companyId || (dbRecord as any).company_id || "tech"]
+          }
 
-          // If current user is Super Admin, they have access to all companies - do NOT reset active company
+          // If current user is Super Admin or Admin with assigned companies, allow switching without reset
           const isSuper = isSuperUser
           const currentActive = useAuthStore.getState().activeCompanyId
+          const isAllowedActive = freshCompanyIds.some(id => isMatchingCompany({ id, slug: id } as any, currentActive || ""))
           const nextActive = isSuper
             ? (currentActive || freshCompanyIds[0] || "tech")
-            : (freshCompanyIds.includes(currentActive || "") ? currentActive : freshCompanyIds[0])
+            : (isAllowedActive && currentActive ? currentActive : freshCompanyIds[0])
 
           const finalCompanyIds = isSuper
             ? Array.from(new Set([...freshCompanyIds, currentActive || "tech", ...companies.map(c => c.id), ...companies.map(c => c.slug || "")].filter(Boolean)))
             : freshCompanyIds
+
+          let rawBranchIds = dbRecord.branchIds || (dbRecord as any).branch_ids || user.branchIds
+          let freshBranchIds: string[] = []
+          if (typeof rawBranchIds === 'string') {
+            try { freshBranchIds = JSON.parse(rawBranchIds) } catch { freshBranchIds = [rawBranchIds] }
+          } else if (Array.isArray(rawBranchIds)) {
+            freshBranchIds = rawBranchIds
+          }
+          if (freshBranchIds.length === 0 && dbRecord.branchId) {
+            freshBranchIds = [dbRecord.branchId]
+          }
 
           let freshPerms = dbRecord.permissions
           if (typeof freshPerms === "string") {
@@ -143,7 +163,7 @@ export function Topbar() {
               companyId: nextActive || "tech",
               companyIds: finalCompanyIds,
               branchId: dbRecord.branchId,
-              branchIds: dbRecord.branchIds,
+              branchIds: freshBranchIds.length > 0 ? freshBranchIds : undefined,
               branchName: dbRecord.branchName,
               department: dbRecord.department,
               phone: dbRecord.phone,
@@ -221,13 +241,37 @@ export function Topbar() {
   // Companies this specific user has access to
   const allowedCompanies = React.useMemo(() => {
     if (user.role === 'Super Admin') return companies
-    const userCompIds = user.companyIds && user.companyIds.length > 0
-      ? user.companyIds
-      : (user.companyId ? [user.companyId] : ['tech'])
+    let rawCompIds = user.companyIds || (user as any).company_ids
+    let userCompIds: string[] = []
+    if (typeof rawCompIds === 'string') {
+      try { userCompIds = JSON.parse(rawCompIds) } catch { userCompIds = [rawCompIds] }
+    } else if (Array.isArray(rawCompIds)) {
+      userCompIds = rawCompIds
+    }
+    if (userCompIds.length === 0) {
+      userCompIds = [user.companyId || 'tech']
+    }
     return companies.filter(c => {
       return userCompIds.some(id => isMatchingCompany(c, id))
     })
-  }, [user.companyIds, user.companyId, user.role, companies])
+  }, [user.companyIds, user.companyId, (user as any).company_ids, user.role, companies])
+
+  // Branches this specific user has access to
+  const allowedBranches = React.useMemo(() => {
+    if (user.role === 'Super Admin') return branches
+    let rawBranchIds = user.branchIds || (user as any).branch_ids
+    let userBranchIds: string[] = []
+    if (typeof rawBranchIds === 'string') {
+      try { userBranchIds = JSON.parse(rawBranchIds) } catch { userBranchIds = [rawBranchIds] }
+    } else if (Array.isArray(rawBranchIds)) {
+      userBranchIds = rawBranchIds
+    }
+    if (userBranchIds.length === 0 && user.branchId) {
+      userBranchIds = [user.branchId]
+    }
+    if (userBranchIds.length === 0) return branches
+    return branches.filter(b => userBranchIds.some(id => String(id).toLowerCase().trim() === String(b.id).toLowerCase().trim()))
+  }, [user.branchIds, user.branchId, (user as any).branch_ids, user.role, branches])
 
   const activeCompany = companies.find(c => isMatchingCompany(c, activeCompanyId)) ||
     companies.find(c => isMatchingCompany(c, user.companyId)) ||
@@ -235,6 +279,8 @@ export function Topbar() {
     companies[0]
 
   const activeCompanyName = getCompanyFullName(activeCompany)
+
+  const canSwitchEntities = allowedCompanies.length > 1 || allowedBranches.length > 1 || (allowedBranches.length > 0 && branches.length > 0 && user.role !== 'Clients')
 
   return (
     <header
@@ -284,7 +330,7 @@ export function Topbar() {
         {activeCompany && (
           <div className="relative ml-2 sm:ml-4">
             <div className="flex items-center gap-1.5">
-              {allowedCompanies.length > 1 || branches.some(b => b.companyId === activeCompany.id || b.companyId === activeCompany.slug) ? (
+              {canSwitchEntities ? (
                 <button
                   type="button"
                   onClick={(e) => { stop(e); setShowCompanyMenu(v => !v); setShowProfileMenu(false); setShowQuickAdd(false); setShowNotifications(false) }}
@@ -302,7 +348,7 @@ export function Topbar() {
               ) : (
                 <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-surface-pressed border border-border rounded-full text-xs font-medium text-muted-foreground">
                   {getCompanyLogoUrl(activeCompany) ? (
-                    <img src={getCompanyLogoUrl(activeCompany)!} alt={activeCompanyName} className="w-4 h-4 rounded-full object-contain shrink-0 bg-white/10" />
+                    <img src={getCompanyLogoUrl(activeCompany)!} alt={activeCompanyName} className="w-5 h-5 rounded-full object-contain shrink-0 bg-white/10" />
                   ) : (
                     <span className="text-sm">{activeCompany.logo || "🏢"}</span>
                   )}
@@ -317,7 +363,7 @@ export function Topbar() {
                   <span className="truncate max-w-[120px]">
                     {branches.find(b => b.id === activeBranchId)?.name || 'Branch'}
                   </span>
-                  {!user?.branchId && user?.role === "Super Admin" && (
+                  {(user?.role === "Super Admin" || !user?.branchId || (user.branchIds && user.branchIds.length > 1)) && (
                     <button
                       type="button"
                       onClick={(e) => { stop(e); switchBranch(null) }}
@@ -327,7 +373,7 @@ export function Topbar() {
                       ×
                     </button>
                   )}
-                  {user?.branchId && (
+                  {user?.branchId && (!user.branchIds || user.branchIds.length <= 1) && (
                     <span className="text-[9px] text-amber-500 font-mono ml-0.5">🔒</span>
                   )}
                 </div>
@@ -336,7 +382,7 @@ export function Topbar() {
 
             {/* Company & Branch Dropdown Menu */}
             <AnimatePresence>
-              {showCompanyMenu && !user?.branchId && (allowedCompanies.length > 1 || branches.some(b => b.companyId === activeCompany.id || b.companyId === activeCompany.slug)) && (
+              {showCompanyMenu && canSwitchEntities && (
                 <motion.div
                   initial={{ opacity: 0, y: 8, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -350,7 +396,7 @@ export function Topbar() {
                   <div className="space-y-1 px-2 max-h-72 overflow-y-auto">
                     {allowedCompanies.map((comp) => {
                       const isCurrentActive = isMatchingCompany(comp, activeCompanyId || activeCompany?.id || activeCompany?.slug)
-                      const compBranches = branches.filter(b => isMatchingCompany(comp, b.companyId))
+                      const compBranches = allowedBranches.filter(b => isMatchingCompany(comp, b.companyId))
                       const compLogoUrl = getCompanyLogoUrl(comp)
                       const compFullName = getCompanyFullName(comp)
 

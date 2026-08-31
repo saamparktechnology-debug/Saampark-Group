@@ -8,7 +8,7 @@ pool.execute('ALTER TABLE users ADD COLUMN avatar_url TEXT NULL').catch(() => {}
 const getAllUsers = async (req, res, next) => {
   try {
     const [users] = await pool.execute(
-      `SELECT u.id, u.full_name, u.email, u.phone, u.department, u.status, u.permissions, u.last_login, u.created_at,
+      `SELECT u.id, u.full_name, u.email, u.username, u.phone, u.department, u.status, u.permissions, u.last_login, u.created_at,
               u.company_id, u.company_ids, u.avatar_url,
               r.name as role_name, r.id as role_id
        FROM users u
@@ -27,7 +27,7 @@ const getUserById = async (req, res, next) => {
   try {
     const { id } = req.params;
     const [users] = await pool.execute(
-      `SELECT u.id, u.full_name, u.email, u.phone, u.department, u.status, u.permissions, u.company_id, u.company_ids, u.avatar_url,
+      `SELECT u.id, u.full_name, u.email, u.username, u.phone, u.department, u.status, u.permissions, u.company_id, u.company_ids, u.avatar_url,
               r.name as role_name, r.id as role_id
        FROM users u
        LEFT JOIN roles r ON u.role_id = r.id
@@ -49,7 +49,7 @@ const getUserById = async (req, res, next) => {
 const updateUser = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { full_name, name, email, username, phone, role_id, status, permissions, department, company_id, company_ids, companyIds, avatar_url, avatar, avatarUrl } = req.body;
+    const { full_name, name, email, username, password, phone, role_id, status, permissions, department, company_id, company_ids, companyIds, avatar_url, avatar, avatarUrl } = req.body;
 
     const displayName = full_name || name || null;
     const phoneVal = phone !== undefined ? (phone || null) : null;
@@ -99,6 +99,12 @@ const updateUser = async (req, res, next) => {
       const permStr = typeof permissions === 'string' ? permissions : JSON.stringify(permissions);
       setClauses.push('permissions = ?');
       params.push(permStr);
+    }
+    if (password && typeof password === 'string' && password.trim().length >= 6) {
+      const { hashPassword } = require('../utils/passwordHash');
+      const hashedPassword = await hashPassword(password.trim());
+      setClauses.push('password_hash = ?');
+      params.push(hashedPassword);
     }
 
     if (setClauses.length === 0) {

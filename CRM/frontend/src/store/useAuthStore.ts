@@ -950,24 +950,31 @@ export const useAuthStore = create<AuthState>()(
         const { user } = get()
         if (!user) return
 
-        // If the user is assigned strictly to a single branch (e.g. Branch Admin / Branch Staff), lock them to their branch
-        const isSingleBranchUser = Boolean(user.branchId && user.role !== 'Super Admin')
-        if (isSingleBranchUser && branchId && String(branchId).toLowerCase().trim() !== String(user.branchId).toLowerCase().trim()) {
-          return // Block switching to other branches
+        let rawBranchIds = user.branchIds || (user as any).branch_ids
+        let userBranchIds: string[] = []
+        if (typeof rawBranchIds === 'string') {
+          try { userBranchIds = JSON.parse(rawBranchIds) } catch { userBranchIds = [rawBranchIds] }
+        } else if (Array.isArray(rawBranchIds)) {
+          userBranchIds = rawBranchIds
+        }
+        if (userBranchIds.length === 0 && user.branchId) {
+          userBranchIds = [user.branchId]
         }
 
+        const isSuperAdmin = user.role === 'Super Admin'
+        const hasNoBranchRestriction = userBranchIds.length === 0
+
         const canSwitch =
-          user.role === 'Super Admin' ||
-          (!user.branchId && user.role === 'Admin') ||
-          !branchId ||
-          user.branchId === branchId ||
-          (user.branchIds && user.branchIds.includes(branchId))
+          isSuperAdmin ||
+          hasNoBranchRestriction ||
+          (!branchId && (userBranchIds.length > 1 || user.role === 'Admin')) ||
+          (branchId && userBranchIds.some(id => String(id).toLowerCase().trim() === String(branchId).toLowerCase().trim()))
 
         if (canSwitch) {
           invalidateModuleCache()
-          set({ activeBranchId: isSingleBranchUser ? (user.branchId || null) : branchId })
+          set({ activeBranchId: branchId })
           if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('saampark_branch_switched', { detail: isSingleBranchUser ? user.branchId : branchId }))
+            window.dispatchEvent(new CustomEvent('saampark_branch_switched', { detail: branchId }))
             window.dispatchEvent(new CustomEvent('saampark_data_synced'))
             window.dispatchEvent(new Event('storage'))
           }
@@ -1179,15 +1186,15 @@ export const useAuthStore = create<AuthState>()(
             user: updatedUser,
           })
 
-          // Save updated user companyIds to persistence
-          if (isSuperAdmin) {
-            import('@/app/feature/users/services/userService').then(({ recordUserAccount }) => {
-              recordUserAccount({
-                ...updatedUser,
-                id: String(updatedUser.id),
-              })
-            }).catch(() => {})
-          }
+          // Save updated active companyId to user account persistence
+          import('@/app/feature/users/services/userService').then(({ recordUserAccount }) => {
+            recordUserAccount({
+              ...updatedUser,
+              id: String(updatedUser.id),
+              companyId: effectiveId as any,
+              companyIds: updatedCompanyIds,
+            })
+          }).catch(() => {})
 
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('saampark_company_switched', { detail: effectiveId }))

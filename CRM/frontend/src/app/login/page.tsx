@@ -144,7 +144,7 @@ export default function LoginPage() {
     setIsLoading(true)
     setError("")
 
-    const normalizedInput = email.toLowerCase().trim()
+    const normalizedInput = email.toLowerCase().replace(/^@/, "").trim()
 
     try {
       // 1. Fetch active registered user accounts from MySQL database
@@ -170,7 +170,7 @@ export default function LoginPage() {
       let dbAccount = registeredAccounts.find(
         (acc) =>
           (acc.email || "").toLowerCase().trim() === normalizedInput ||
-          (acc.username && acc.username.toLowerCase().trim() === normalizedInput)
+          (acc.username && acc.username.toLowerCase().replace(/^@/, "").trim() === normalizedInput)
       )
 
       if (!dbAccount) {
@@ -191,7 +191,7 @@ export default function LoginPage() {
         dbAccount = allDbUsers.find(
           (acc) =>
             (acc.email || "").toLowerCase().trim() === normalizedInput ||
-            (acc.username && acc.username.toLowerCase().trim() === normalizedInput)
+            (acc.username && acc.username.toLowerCase().replace(/^@/, "").trim() === normalizedInput)
         )
       }
 
