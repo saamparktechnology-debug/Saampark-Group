@@ -147,7 +147,7 @@ export const getInvoices = async (companyId?: string): Promise<InvoiceItem[]> =>
   }
   for (const inv of (Array.isArray(scopedData) ? scopedData : [])) {
     if (inv && inv.id) {
-      map.set(String(inv.id).toUpperCase().trim(), inv)
+      map.set(String(inv.id).toUpperCase().trim(), { ...inv, companyId: inv.companyId || targetComp })
     }
   }
 

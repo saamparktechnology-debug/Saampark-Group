@@ -140,6 +140,8 @@ export async function recordUserAccountAsync(user: Partial<UserItem>, isNewRegis
     unmarkGlobalItemDeleted(String(user.id).toLowerCase().trim());
   }
 
+  let savedAccount: UserItem | null = null;
+
   try {
     const currentAccounts = await fetchModuleDataFromDB<UserItem[]>("users", DEFAULT_SYSTEM_ACCOUNTS, "all");
     const existing = currentAccounts.find(
@@ -181,9 +183,9 @@ export async function recordUserAccountAsync(user: Partial<UserItem>, isNewRegis
       companyId: user.companyId !== undefined ? user.companyId : (existing?.companyId || "tech"),
       companyIds: user.companyIds !== undefined ? user.companyIds : (existing?.companyIds || (existing?.companyId ? [existing.companyId] : ["tech"])),
       companyName: user.companyName !== undefined ? user.companyName : (existing?.companyName || (user.companyId === "digital" ? "SAAMPARK Digital Marketing" : "SAAMPARK Technology")),
-      branchId: user.branchId !== undefined ? user.branchId : (existing?.branchId || (user as any).branch_id || undefined),
-      branchIds: user.branchIds !== undefined ? user.branchIds : (existing?.branchIds || (user.branchId ? [user.branchId] : undefined)),
-      branchName: user.branchName !== undefined ? user.branchName : (existing?.branchName || (user as any).branch_name || undefined),
+      branchId: user.branchId !== undefined ? (user.branchId || undefined) : (existing?.branchId || undefined),
+      branchIds: user.branchIds !== undefined ? (user.branchIds || undefined) : (user.branchId !== undefined ? (user.branchId ? [user.branchId] : undefined) : (existing?.branchIds || (existing?.branchId ? [existing.branchId] : undefined))),
+      branchName: user.branchName !== undefined ? (user.branchName || undefined) : (user.branchId === undefined ? (existing?.branchName || undefined) : undefined),
       avatarUrl: user.avatarUrl !== undefined ? user.avatarUrl : (existing?.avatarUrl || (user as any)?.avatar || existing?.avatar || undefined),
       avatar: (user as any)?.avatar !== undefined ? (user as any)?.avatar : (existing?.avatar || user.avatarUrl || existing?.avatarUrl || undefined),
       status: user.status !== undefined ? user.status : (existing?.status || "Active"),
@@ -199,6 +201,8 @@ export async function recordUserAccountAsync(user: Partial<UserItem>, isNewRegis
       previousEmails: prevEmailsList.length > 0 ? prevEmailsList : undefined,
       previousEmail: prevEmailsList.length > 0 ? prevEmailsList[prevEmailsList.length - 1] : undefined,
     };
+
+    savedAccount = mergedAccount;
 
     // Strict 1:1 Email Uniqueness: Remove all other rows matching this ID or this email or previous email
     const cleaned = currentAccounts.filter((acc) => {
@@ -248,7 +252,7 @@ export async function recordUserAccountAsync(user: Partial<UserItem>, isNewRegis
     window.dispatchEvent(new Event("storage"));
     window.dispatchEvent(new CustomEvent("saampark_data_synced"));
   }
-  return null;
+  return savedAccount;
 }
 
 // Helper: record user account (sync wrapper)

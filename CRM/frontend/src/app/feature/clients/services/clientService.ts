@@ -37,7 +37,11 @@ export async function getClients(companyId?: string): Promise<ClientItem[]> {
   
   if (scopeId !== "all") {
     const data = await fetchModuleDataFromDB<ClientItem[]>("clients", [], scopeId).catch(() => [])
-    return Array.isArray(data) ? data.sort((a, b) => getClientTimestamp(b) - getClientTimestamp(a)) : []
+    const enriched = (Array.isArray(data) ? data : []).map(c => ({
+      ...c,
+      companyId: c.companyId || scopeId,
+    }))
+    return enriched.sort((a, b) => getClientTimestamp(b) - getClientTimestamp(a))
   }
 
   // For "all" scope (Super Admin): merge across all company scopes

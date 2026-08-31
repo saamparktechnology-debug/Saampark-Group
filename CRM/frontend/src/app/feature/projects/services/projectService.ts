@@ -40,7 +40,7 @@ export const getProjects = async (companyId?: string): Promise<Project[]> => {
     }
   }
   for (const p of (Array.isArray(scopedData) ? scopedData : [])) {
-    if (p && p.id) map.set(String(p.id).toLowerCase().trim(), p)
+    if (p && p.id) map.set(String(p.id).toLowerCase().trim(), { ...p, companyId: p.companyId || targetComp })
   }
   
   if (map.size === 0 && Array.isArray(allMaster) && allMaster.length > 0) {

@@ -459,7 +459,8 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
       }))
       .map((c) => c.name)
 
-    const matchedBranch = branches.find((b) => String(b.id).toLowerCase() === String(selectedBranchId).toLowerCase())
+    const effectiveBranchId = (role === "Admin" && adminScope === "company") ? "" : selectedBranchId
+    const matchedBranch = effectiveBranchId ? branches.find((b) => String(b.id).toLowerCase() === String(effectiveBranchId).toLowerCase()) : null
 
     const payload: Partial<UserType> = {
       name,
@@ -470,8 +471,9 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
       companyName: companyNamesList.length > 1
         ? `SAAMPARK Group (${companyNamesList.length} Companies)`
         : companyNamesList[0] || (primaryCompanyId === "digital" ? "SAAMPARK Digital Marketing" : "SAAMPARK Technology"),
-      branchId: selectedBranchId ? selectedBranchId : undefined,
-      branchName: matchedBranch?.name || (selectedBranchId ? selectedBranchId : undefined),
+      branchId: effectiveBranchId ? effectiveBranchId : undefined,
+      branchName: matchedBranch?.name || undefined,
+      branchIds: effectiveBranchId ? [effectiveBranchId] : undefined,
       department: department || "General",
       phone,
       password: password && password.trim() ? password.trim() : (editingUser?.password || undefined),
@@ -717,7 +719,10 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
-                      onClick={() => setAdminScope("company")}
+                      onClick={() => {
+                        setAdminScope("company")
+                        setSelectedBranchId("")
+                      }}
                       className={`px-3 py-2 rounded-xl text-xs font-semibold border flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
                         adminScope === "company"
                           ? "bg-blue-600 text-white border-blue-600 shadow-xs font-bold"

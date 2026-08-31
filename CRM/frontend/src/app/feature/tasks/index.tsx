@@ -159,6 +159,7 @@ export default function TasksMain() {
       if (!targetBranch) return true
       const tBranch = String(t.branchId || t.branch_id || "").toLowerCase().trim()
       const tBranchName = String(t.branchName || t.branch_name || "").toLowerCase().trim()
+      if (!tBranch && !tBranchName) return true
       return (tBranch && (tBranch === targetBranchId || (targetBranchName && tBranch === targetBranchName))) ||
              (tBranchName && (tBranchName === targetBranchName || tBranchName === targetBranchId))
     }
@@ -167,14 +168,14 @@ export default function TasksMain() {
       let filtered = tasks
       if (userComp && userComp !== "all" && !isSuperAdmin) {
         filtered = filtered.filter((t) => {
-          const tComp = (t.companyId || (t as any).company || "tech").toLowerCase().trim()
-          return tComp === userComp || (userComp === "tech" && !t.companyId)
+          const tComp = (t.companyId || (t as any).company || "").toLowerCase().trim()
+          return !tComp || tComp === userComp || (userComp === "tech" && !t.companyId)
         })
       }
       if (targetBranch && !isSuperAdmin) {
         filtered = filtered.filter((t) => checkBranch(t))
       }
-      return filtered.length > 0 ? filtered : tasks
+      return filtered
     }
 
     const normName = (user.name || (user as any).full_name || "").toLowerCase().trim()

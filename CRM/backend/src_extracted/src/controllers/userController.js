@@ -9,7 +9,7 @@ const getAllUsers = async (req, res, next) => {
   try {
     const [users] = await pool.execute(
       `SELECT u.id, u.full_name, u.email, u.username, u.phone, u.department, u.status, u.permissions, u.last_login, u.created_at,
-              u.company_id, u.company_ids, u.avatar_url,
+              u.company_id, u.company_ids, u.branch_id, u.avatar_url,
               r.name as role_name, r.id as role_id
        FROM users u
        LEFT JOIN roles r ON u.role_id = r.id
@@ -27,7 +27,7 @@ const getUserById = async (req, res, next) => {
   try {
     const { id } = req.params;
     const [users] = await pool.execute(
-      `SELECT u.id, u.full_name, u.email, u.username, u.phone, u.department, u.status, u.permissions, u.company_id, u.company_ids, u.avatar_url,
+      `SELECT u.id, u.full_name, u.email, u.username, u.phone, u.department, u.status, u.permissions, u.company_id, u.company_ids, u.branch_id, u.avatar_url,
               r.name as role_name, r.id as role_id
        FROM users u
        LEFT JOIN roles r ON u.role_id = r.id
@@ -49,13 +49,14 @@ const getUserById = async (req, res, next) => {
 const updateUser = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { full_name, name, email, username, password, phone, role_id, status, permissions, department, company_id, company_ids, companyIds, avatar_url, avatar, avatarUrl } = req.body;
+    const { full_name, name, email, username, password, phone, role_id, status, permissions, department, company_id, company_ids, companyIds, branch_id, branchId, avatar_url, avatar, avatarUrl } = req.body;
 
     const displayName = full_name || name || null;
     const phoneVal = phone !== undefined ? (phone || null) : null;
     const statusVal = status || null;
     const avatarVal = avatar_url || avatar || avatarUrl || null;
     const usernameVal = username !== undefined ? (username ? username.toLowerCase().trim() : null) : undefined;
+    const branchIdVal = branch_id !== undefined ? (branch_id || null) : (branchId !== undefined ? (branchId || null) : undefined);
     let roleIdVal = role_id ? parseInt(role_id, 10) : null;
     if (!roleIdVal && req.body.role) {
       const rLower = String(req.body.role).toLowerCase();
@@ -66,10 +67,10 @@ const updateUser = async (req, res, next) => {
     }
 
     // RBAC Hierarchy Enforcement:
-    // Only a Super Admin can promote/assign Super Admin (1) or Admin (2)
+    // Only a Super Admin or Admin can promote/assign Super Admin (1) or Admin (2)
     if (roleIdVal === 1 || roleIdVal === 2) {
-      if (req.user && req.user.role_id !== 1) {
-        return errorResponse(res, 403, 'Only a Super Admin can assign Super Admin or Admin roles.');
+      if (req.user && req.user.role_id > 2) {
+        return errorResponse(res, 403, 'Only a Super Admin or Admin can assign Super Admin or Admin roles.');
       }
     }
 
@@ -93,6 +94,7 @@ const updateUser = async (req, res, next) => {
     if (roleIdVal) { setClauses.push('role_id = ?'); params.push(roleIdVal); }
     if (company_id) { setClauses.push('company_id = ?'); params.push(company_id); }
     if (compIdsStr) { setClauses.push('company_ids = ?'); params.push(compIdsStr); }
+    if (branchIdVal !== undefined) { setClauses.push('branch_id = ?'); params.push(branchIdVal); }
     if (department !== undefined) { setClauses.push('department = ?'); params.push(department || null); }
     if (avatarVal !== null) { setClauses.push('avatar_url = ?'); params.push(avatarVal); }
     if (permissions !== undefined && permissions !== null) {

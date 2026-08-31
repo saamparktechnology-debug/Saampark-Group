@@ -172,18 +172,44 @@ export async function syncLeadReminderTask(lead: Lead): Promise<void> {
 }
 
 export const getLeads = async (companyId?: string): Promise<Lead[]> => {
-  const [dbData, techData] = await Promise.all([
-    fetchModuleDataFromDB<Lead[]>("leads", [], companyId || "all").catch(() => []),
-    fetchModuleDataFromDB<Lead[]>("leads", [], "tech").catch(() => [])
-  ])
-  const map = new Map<string, Lead>()
-  for (const l of (Array.isArray(dbData) ? dbData : [])) {
-    if (l && l.id) map.set(String(l.id).toLowerCase().trim(), l)
+  let targetComp = companyId
+  if (!targetComp && typeof window !== "undefined") {
+    try {
+      const { useAuthStore } = require("@/store/useAuthStore")
+      targetComp = useAuthStore.getState().activeCompanyId || undefined
+    } catch {}
   }
-  for (const l of (Array.isArray(techData) ? techData : [])) {
-    if (l && l.id) map.set(String(l.id).toLowerCase().trim(), l)
+
+  const effectiveComp = targetComp || "all"
+  let list: Lead[] = []
+
+  if (effectiveComp === "all") {
+    const knownCompanies = ["all", "tech", "digital", "saampark-ai-solutions", "fashion", "infotech"]
+    const results = await Promise.all(
+      knownCompanies.map(c => fetchModuleDataFromDB<Lead[]>("leads", [], c).catch(() => []))
+    )
+    const map = new Map<string, Lead>()
+    for (let i = 0; i < results.length; i++) {
+      const cScope = knownCompanies[i]
+      const items = Array.isArray(results[i]) ? results[i] : []
+      for (const l of items) {
+        if (l && l.id) {
+          const lCompany = l.companyId || (cScope !== "all" ? cScope : "tech")
+          map.set(String(l.id).toLowerCase().trim(), { ...l, companyId: lCompany })
+        }
+      }
+    }
+    list = Array.from(map.values())
+  } else {
+    const scopedData = await fetchModuleDataFromDB<Lead[]>("leads", [], effectiveComp).catch(() => [])
+    const map = new Map<string, Lead>()
+    for (const l of (Array.isArray(scopedData) ? scopedData : [])) {
+      if (l && l.id) {
+        map.set(String(l.id).toLowerCase().trim(), { ...l, companyId: l.companyId || effectiveComp })
+      }
+    }
+    list = Array.from(map.values())
   }
-  const list = Array.from(map.values())
 
   // Auto-lock leads if reminder date is overdue (locks at the end of the reminder date)
   // Leads in "Won" or "Lost" stages are NEVER locked

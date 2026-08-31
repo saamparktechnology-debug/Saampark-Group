@@ -84,6 +84,7 @@ export default function ClientsMain() {
         const uBranchIds = (c.branchIds && c.branchIds.length > 0)
           ? c.branchIds.map((id: any) => String(id).toLowerCase().trim())
           : []
+        if (!cBranch && !cBranchName && uBranchIds.length === 0) return true
         return (cBranch && (cBranch === targetBranchId || (targetBranchName && cBranch === targetBranchName))) ||
                (cBranchName && (cBranchName === targetBranchName || cBranchName === targetBranchId)) ||
                uBranchIds.includes(targetBranchId)
@@ -116,8 +117,8 @@ export default function ClientsMain() {
       let storedClients = storedClientsRaw
       if (targetComp && targetComp !== "all") {
         storedClients = storedClients.filter(c => {
-          const cComp = (c.companyId || (c as any).company || "tech").toLowerCase().trim()
-          return cComp === targetComp || (targetComp === "tech" && !c.companyId)
+          const cComp = (c.companyId || (c as any).company || "").toLowerCase().trim()
+          return !cComp || cComp === targetComp || (targetComp === "tech" && !c.companyId)
         })
       }
       if (targetBranch) {

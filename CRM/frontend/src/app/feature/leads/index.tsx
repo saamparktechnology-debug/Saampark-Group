@@ -173,13 +173,15 @@ export default function LeadsMain() {
 
     // Admins see all leads across companies and branches (or scoped to their assigned branch)
     if (isSuperOrAdmin) {
-      const res = leads.filter((l) => {
+      return leads.filter((l) => {
         const isClientPrivate = (l as any).isClientPrivate === true || l.createdByRole === "Clients"
         if (isClientPrivate) return false
 
-        if (userComp && userComp !== "all" && freshUser?.role !== "Super Admin" && !freshUser?.branchId) {
-          const lComp = (l.companyId || (l as any).company || "tech").toLowerCase().trim()
-          if (lComp !== userComp && !(userComp === "tech" && !l.companyId)) return false
+        if (userComp && userComp !== "all" && freshUser?.role !== "Super Admin") {
+          const lComp = (l.companyId || (l as any).company || "").toLowerCase().trim()
+          if (lComp && lComp !== userComp && !((userComp === "tech" || !lComp) && (!l.companyId || lComp === "tech"))) {
+            return false
+          }
         }
 
         if (targetBranch && freshUser?.role !== "Super Admin") {
@@ -189,16 +191,17 @@ export default function LeadsMain() {
           const targetBranchId = String(targetBranchObj?.id || targetBranch).toLowerCase().trim()
           const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
 
-          const isBranchMatch =
-            (lBranch && (lBranch === targetBranchId || (targetBranchName && lBranch === targetBranchName))) ||
-            (lBranchName && (lBranchName === targetBranchName || lBranchName === targetBranchId))
+          if (lBranch || lBranchName) {
+            const isBranchMatch =
+              (lBranch && (lBranch === targetBranchId || (targetBranchName && lBranch === targetBranchName))) ||
+              (lBranchName && (lBranchName === targetBranchName || lBranchName === targetBranchId))
 
-          if (!isBranchMatch) return false
+            if (!isBranchMatch) return false
+          }
         }
 
         return true
       })
-      return res.length > 0 ? res : (freshUser?.branchId ? [] : leads)
     }
 
     const uName = (user.name || (user as any).full_name || "").toLowerCase().trim()
