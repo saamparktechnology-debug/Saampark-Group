@@ -173,6 +173,39 @@ export async function recordUserAccountAsync(user: Partial<UserItem>, isNewRegis
     prevSet.delete(normalizedEmail);
     const prevEmailsList = Array.from(prevSet).filter(Boolean);
 
+    const effCompId = user.companyId !== undefined ? user.companyId : (existing?.companyId || "tech");
+    let resolvedCompName = user.companyName;
+    if (!resolvedCompName) {
+      if (user.companyId === undefined && existing?.companyName) {
+        resolvedCompName = existing.companyName;
+      } else {
+        if (typeof window !== "undefined") {
+          try {
+            const { useAuthStore } = require("@/store/useAuthStore");
+            const cObj = useAuthStore.getState().companies.find((c: any) => c.id?.toLowerCase() === effCompId.toLowerCase());
+            if (cObj) resolvedCompName = cObj.brand_name || cObj.name;
+          } catch {}
+        }
+        if (!resolvedCompName) {
+          if (effCompId === "print") resolvedCompName = "Print Space India";
+          else if (effCompId === "digital") resolvedCompName = "SAAMPARK Digital Marketing";
+          else resolvedCompName = "SAAMPARK Technology";
+        }
+      }
+    }
+
+    const effBranchId = user.branchId !== undefined ? (user.branchId || undefined) : (existing?.branchId || undefined);
+    let resolvedBranchName = user.branchName;
+    if (!resolvedBranchName && effBranchId) {
+      if (typeof window !== "undefined") {
+        try {
+          const { useAuthStore } = require("@/store/useAuthStore");
+          const bObj = useAuthStore.getState().branches.find((b: any) => b.id === effBranchId || b.name.toLowerCase() === effBranchId.toLowerCase());
+          if (bObj) resolvedBranchName = bObj.name;
+        } catch {}
+      }
+    }
+
     // Build the account object safely preserving existing role and properties
     const mergedAccount: UserItem = {
       id: user.id || existing?.id || `usr_${Date.now()}`,
@@ -180,12 +213,12 @@ export async function recordUserAccountAsync(user: Partial<UserItem>, isNewRegis
       email: normalizedEmail,
       username: user.username !== undefined ? (user.username ? user.username.toLowerCase().trim() : undefined) : existing?.username,
       role: user.role !== undefined ? user.role : (existing?.role || "Teams"),
-      companyId: user.companyId !== undefined ? user.companyId : (existing?.companyId || "tech"),
-      companyIds: user.companyIds !== undefined ? user.companyIds : (existing?.companyIds || (existing?.companyId ? [existing.companyId] : ["tech"])),
-      companyName: user.companyName !== undefined ? user.companyName : (existing?.companyName || (user.companyId === "digital" ? "SAAMPARK Digital Marketing" : "SAAMPARK Technology")),
-      branchId: user.branchId !== undefined ? (user.branchId || undefined) : (existing?.branchId || undefined),
-      branchIds: user.branchIds !== undefined ? (user.branchIds || undefined) : (user.branchId !== undefined ? (user.branchId ? [user.branchId] : undefined) : (existing?.branchIds || (existing?.branchId ? [existing.branchId] : undefined))),
-      branchName: user.branchName !== undefined ? (user.branchName || undefined) : (user.branchId === undefined ? (existing?.branchName || undefined) : undefined),
+      companyId: effCompId,
+      companyIds: user.companyIds !== undefined ? user.companyIds : (existing?.companyIds || (effCompId ? [effCompId] : ["tech"])),
+      companyName: resolvedCompName,
+      branchId: effBranchId,
+      branchIds: user.branchIds !== undefined ? (user.branchIds || undefined) : (effBranchId ? [effBranchId] : (existing?.branchIds || undefined)),
+      branchName: resolvedBranchName || (effBranchId ? existing?.branchName : undefined),
       avatarUrl: user.avatarUrl !== undefined ? user.avatarUrl : (existing?.avatarUrl || (user as any)?.avatar || existing?.avatar || undefined),
       avatar: (user as any)?.avatar !== undefined ? (user as any)?.avatar : (existing?.avatar || user.avatarUrl || existing?.avatarUrl || undefined),
       status: user.status !== undefined ? user.status : (existing?.status || "Active"),

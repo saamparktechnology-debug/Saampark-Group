@@ -69,20 +69,50 @@ export function getStoredClients(): ClientItem[] {
 /** Save (add or update) a client to MySQL */
 export async function saveStoredClient(client: ClientItem, companyId?: string): Promise<ClientItem[]> {
   let activeBranch: string | undefined = undefined
+  let activeCompany: string | undefined = undefined
+  let foundCompanyName: string | undefined = undefined
+  let foundBranchName: string | undefined = undefined
+  let foundBranchCode: string | undefined = undefined
+
   if (typeof window !== "undefined") {
     try {
       const { useAuthStore } = require("@/store/useAuthStore")
-      activeBranch = useAuthStore.getState().activeBranchId || useAuthStore.getState().user?.branchId || undefined
+      const authState = useAuthStore.getState()
+      activeBranch = authState.activeBranchId || authState.user?.branchId || undefined
+      activeCompany = authState.activeCompanyId || authState.user?.companyId || "tech"
+      const compIdToLookup = companyId || client.companyId || activeCompany
+      const compObj = authState.companies.find((c: any) => c.id?.toLowerCase() === compIdToLookup?.toLowerCase())
+      if (compObj) {
+        foundCompanyName = compObj.brand_name || compObj.name
+      }
+      const branchIdToLookup = client.branchId || activeBranch
+      if (branchIdToLookup) {
+        const brObj = authState.branches.find((b: any) => b.id === branchIdToLookup || b.name.toLowerCase() === branchIdToLookup.toLowerCase())
+        if (brObj) {
+          foundBranchName = brObj.name
+          foundBranchCode = brObj.code ? brObj.code.toUpperCase() : undefined
+        }
+      }
     } catch {}
   }
 
+  const effectiveCompanyId = companyId || client.companyId || activeCompany || "tech"
+  const effectiveCompanyName = client.companyName || foundCompanyName || (effectiveCompanyId === "print" ? "Print Space India" : "SAAMPARK Technology")
+  const effectiveBranchId = client.branchId || activeBranch || undefined
+  const effectiveBranchName = client.branchName || foundBranchName || undefined
+  const effectiveBranchCode = client.branchCode || foundBranchCode || undefined
+
   const enrichedClient: ClientItem = {
     ...client,
-    branchId: (client as any).branchId || activeBranch || undefined,
+    companyId: effectiveCompanyId,
+    companyName: effectiveCompanyName,
+    branchId: effectiveBranchId,
+    branchName: effectiveBranchName,
+    branchCode: effectiveBranchCode,
     createdAt: client.createdAt || Date.now(),
   }
 
-  const current = await getClients(companyId)
+  const current = await getClients(effectiveCompanyId)
   const updated = [
     enrichedClient,
     ...current.filter(
@@ -91,7 +121,19 @@ export async function saveStoredClient(client: ClientItem, companyId?: string): 
         c.email?.toLowerCase().trim() !== enrichedClient.email?.toLowerCase().trim()
     ),
   ]
-  await saveModuleDataToDB("clients", updated, companyId)
+  await saveModuleDataToDB("clients", updated, effectiveCompanyId)
+  if (effectiveCompanyId !== "all") {
+    const currentAll = await getClients("all")
+    const updatedAll = [
+      enrichedClient,
+      ...currentAll.filter(
+        (c) =>
+          c.id !== enrichedClient.id &&
+          c.email?.toLowerCase().trim() !== enrichedClient.email?.toLowerCase().trim()
+      ),
+    ]
+    await saveModuleDataToDB("clients", updatedAll, "all")
+  }
 
   const clientEmailNorm = (
     enrichedClient.email ||
@@ -109,7 +151,7 @@ export async function saveStoredClient(client: ClientItem, companyId?: string): 
       phone: enrichedClient.phone || "N/A",
       avatarSeed: enrichedClient.primaryContact || enrichedClient.name,
     },
-    companyId
+    effectiveCompanyId
   )
 
   // Automatically register client user account for login
@@ -120,8 +162,11 @@ export async function saveStoredClient(client: ClientItem, companyId?: string): 
         name: enrichedClient.primaryContact || enrichedClient.name,
         email: clientEmailNorm,
         role: "Clients",
-        companyId: companyId || "tech",
-        companyName: enrichedClient.name,
+        companyId: effectiveCompanyId,
+        companyIds: [effectiveCompanyId],
+        companyName: effectiveCompanyName,
+        branchId: effectiveBranchId,
+        branchName: effectiveBranchName,
         phone: enrichedClient.phone || "",
         password: "Password123",
         status: "Active",
@@ -137,9 +182,10 @@ export async function saveStoredClient(client: ClientItem, companyId?: string): 
         password: "Password123",
         role_id: 4,
         role: "Clients",
-        company_id: companyId || "tech",
-        company_ids: [companyId || "tech"],
-        companyName: enrichedClient.name,
+        company_id: effectiveCompanyId,
+        company_ids: [effectiveCompanyId],
+        companyName: effectiveCompanyName,
+        branch_id: effectiveBranchId,
         department: "Clients",
         phone: enrichedClient.phone || "",
       }).catch((err) => console.warn("Backend user create warning for client:", err))

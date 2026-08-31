@@ -287,7 +287,7 @@ export const updateInvoice = async (
         totalInvoiced: `₹${sumInvoiced.toLocaleString("en-IN")}`,
         paymentReceived: `₹${sumReceived.toLocaleString("en-IN")}`,
         due: `₹${sumDue.toLocaleString("en-IN")}`,
-      })
+      }, targetComp)
     }
   } catch (err) {
     console.warn("Error updating client balance after invoice update:", err)
@@ -639,7 +639,7 @@ export const deleteInvoice = async (id: string, companyId?: string): Promise<boo
           totalInvoiced: `₹${newInvoiced.toLocaleString("en-IN")}`,
           paymentReceived: `₹${newReceived.toLocaleString("en-IN")}`,
           due: `₹${newDue.toLocaleString("en-IN")}`,
-        })
+        }, companyId)
       }
     } catch (err) {
       console.warn("Cascade deduct client balance failed:", err)

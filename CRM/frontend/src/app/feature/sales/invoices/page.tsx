@@ -798,6 +798,15 @@ export default function InvoicesPage() {
       }))
 
     await executeWithFeedback(async () => {
+      const targetComp = invoiceCompanyId || activeCompanyId || "tech"
+      const selectedSb = (subBranches || []).find(sb => sb.id === invoiceSubBranchId)
+      const matchedBranch = branches.find(b => b.id === (invoiceBranchId || (isBranchLocked ? user?.branchId : (activeBranchId || selectedSb?.parentBranchId))) || b.name.toLowerCase() === ((invoiceBranchId || user?.branchId || activeBranchId) || "").toLowerCase())
+      const effectiveBranchId = (invoiceBranchId || (isBranchLocked ? user?.branchId : (activeBranchId || selectedSb?.parentBranchId))) || undefined
+      const effectiveBranchName = matchedBranch?.name || undefined
+      const effectiveBranchCode = matchedBranch?.code ? matchedBranch.code.toUpperCase() : undefined
+      const matchedCompObj = (companies as any[]).find(c => c.id?.toLowerCase() === targetComp.toLowerCase())
+      const effectiveCompanyName = matchedCompObj?.brand_name || matchedCompObj?.name || (targetComp === "print" ? "Print Space India" : "SAAMPARK Technology")
+
       // 1. Save or update client in database with complete billing details
       try {
         if (clientSelectionMode === "custom") {
@@ -820,7 +829,12 @@ export default function InvoicesPage() {
             type: "Organization",
             owner: user?.name || "Admin",
             createdAt: Date.now(),
-          })
+            companyId: targetComp,
+            companyName: effectiveCompanyName,
+            branchId: effectiveBranchId,
+            branchName: effectiveBranchName,
+            branchCode: effectiveBranchCode,
+          }, targetComp)
         } else {
           const matched = availableClients.find(c => c.name === finalClientName)
           if (matched) {
@@ -832,15 +846,17 @@ export default function InvoicesPage() {
               city: clientCity.trim() || matched.city,
               state: clientState.trim() || matched.state,
               gstNumber: clientGst.trim() || matched.gstNumber,
-            })
+              companyId: matched.companyId || targetComp,
+              companyName: matched.companyName || effectiveCompanyName,
+              branchId: matched.branchId || effectiveBranchId,
+              branchName: matched.branchName || effectiveBranchName,
+              branchCode: matched.branchCode || effectiveBranchCode,
+            }, targetComp)
           }
         }
       } catch (err) {
         console.warn("Error saving client details:", err)
       }
-
-      const targetComp = invoiceCompanyId || activeCompanyId || "tech"
-      const selectedSb = (subBranches || []).find(sb => sb.id === invoiceSubBranchId)
 
       // 2. Add Invoice
       const newInv = await addInvoice({
@@ -861,9 +877,9 @@ export default function InvoicesPage() {
         status: finalStatus,
         billedBy: user?.name || "Admin",
         companyId: targetComp,
-        branchId: (invoiceBranchId || (isBranchLocked ? user?.branchId : (activeBranchId || selectedSb?.parentBranchId))) || undefined,
-        branchName: branches.find(b => b.id === (invoiceBranchId || (isBranchLocked ? user?.branchId : (activeBranchId || selectedSb?.parentBranchId))) || b.name.toLowerCase() === ((invoiceBranchId || user?.branchId || activeBranchId) || "").toLowerCase())?.name || undefined,
-        branchCode: branches.find(b => b.id === (invoiceBranchId || (isBranchLocked ? user?.branchId : (activeBranchId || selectedSb?.parentBranchId))) || b.name.toLowerCase() === ((invoiceBranchId || user?.branchId || activeBranchId) || "").toLowerCase())?.code || undefined,
+        branchId: effectiveBranchId,
+        branchName: effectiveBranchName,
+        branchCode: effectiveBranchCode,
         subBranchId: selectedSb?.id,
         subBranchName: selectedSb?.name,
         subBranchCode: selectedSb?.code,
@@ -886,7 +902,11 @@ export default function InvoicesPage() {
           status: receivedNum > 0 ? "Processing" : "Pending",
           notes: `Order for: ${finalProjectName}. Services: ${invoiceServiceItems.map(s => s.serviceName).join(", ")}.`,
           invoiceId: invoiceId,
-        })
+          companyId: targetComp,
+          branchId: effectiveBranchId,
+          branchName: effectiveBranchName,
+          branchCode: effectiveBranchCode,
+        }, targetComp)
       } catch (err) {
         console.warn("Could not auto-create sales order:", err)
       }
@@ -910,7 +930,8 @@ export default function InvoicesPage() {
             amount: formattedReceived,
             amountNum: receivedNum,
             status: "Completed",
-          })
+            companyId: targetComp,
+          }, targetComp)
         } catch (err) {
           console.warn("Error creating payment entry:", err)
         }
@@ -927,7 +948,8 @@ export default function InvoicesPage() {
             amount: `₹${perPart.toLocaleString("en-IN")}`,
             billingCycle: billingCycle as any,
             nextBillingDate: calculatedDueDate,
-          })
+            companyId: targetComp,
+          }, targetComp)
         } catch (err) {
           console.warn("Error creating subscription for part payment:", err)
         }

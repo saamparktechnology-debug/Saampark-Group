@@ -302,10 +302,12 @@ export async function checkAndAutoConvertLeadToClient(lead: Lead, companyId?: st
         address: `${lead.city || ""}, ${lead.state || ""}, ${lead.country || ""}`.trim(),
         branchId: lead.branchId,
         branchName: lead.branchName,
+        branchCode: (lead as any).branchCode,
         companyId: lead.companyId || companyId || "tech",
       }
 
-      saveStoredClient(newClient as any)
+      const effLeadComp = lead.companyId || companyId || "tech"
+      await saveStoredClient(newClient as any, effLeadComp)
 
       // Register client account for login in background
       recordUserAccount({
@@ -313,8 +315,10 @@ export async function checkAndAutoConvertLeadToClient(lead: Lead, companyId?: st
         name: lead.primaryContact || lead.name,
         email: internalEmail,
         role: "Clients",
-        companyId: companyId || "tech",
-        companyName: clientName,
+        companyId: effLeadComp,
+        companyIds: [effLeadComp],
+        branchId: lead.branchId,
+        branchName: lead.branchName,
         phone: lead.phone,
         password: "Password123",
         status: "Active",

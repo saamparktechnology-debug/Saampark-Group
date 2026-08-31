@@ -20,6 +20,8 @@ export interface OrderItem {
   lastReminderSent?: string
   companyId?: string
   branchId?: string
+  branchName?: string
+  branchCode?: string
 }
 
 export const getOrders = async (companyId?: string): Promise<OrderItem[]> => {

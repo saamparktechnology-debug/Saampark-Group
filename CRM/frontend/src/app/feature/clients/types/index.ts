@@ -37,6 +37,7 @@ export interface ClientItem {
   companyName?: string;
   branchId?: string;
   branchName?: string;
+  branchCode?: string;
   createdAt?: number | string;
   createdBy?: string;
   createdById?: string;

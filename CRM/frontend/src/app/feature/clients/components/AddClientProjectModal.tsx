@@ -835,11 +835,15 @@ export function AddClientProjectModal({
             city: clientCity.trim() || currentStored.city,
             state: clientState.trim() || currentStored.state,
             gstNumber: clientGst.trim() || currentStored.gstNumber,
+            companyId: currentStored.companyId || targetCompany,
+            branchId: currentStored.branchId || effectiveBranchId,
+            branchName: currentStored.branchName || effectiveBranchName,
+            branchCode: currentStored.branchCode || effectiveBranchCode,
             totalInvoiced: `₹${(currentTotal + totalAmount).toLocaleString("en-IN")}`,
             paymentReceived: `₹${(currentPaid + effectiveAdvance).toLocaleString("en-IN")}`,
             due: `₹${(currentDue + remainingDue).toLocaleString("en-IN")}`,
             projectsCount: (currentStored.projectsCount || 0) + (creationMode === "project_and_invoice" ? 1 : 0),
-          })
+          }, targetCompany)
         }
       } catch (err) {
         console.warn("Could not sync client record:", err)

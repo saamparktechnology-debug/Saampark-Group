@@ -246,6 +246,8 @@ export default function EstimatesPage() {
     const invoiceId = `INV #${Math.floor(100 + Math.random() * 900)}`
 
     await executeWithFeedback(async () => {
+      const targetComp = est.companyId || activeCompanyId || "tech"
+
       const p = await addProject({
         title: pTitle,
         client: est.client,
@@ -262,7 +264,10 @@ export default function EstimatesPage() {
         gstRate: est.gstRate,
         gstAmount: est.gstAmount,
         totalAmount: est.totalAmount,
-      })
+        companyId: targetComp,
+        branchId: est.branchId,
+        branchName: est.branchName,
+      }, targetComp)
 
       await addInvoice({
         id: invoiceId,
@@ -279,7 +284,10 @@ export default function EstimatesPage() {
         due: est.formattedTotal,
         status: "Not paid",
         billedBy: user?.name || "Admin",
-      })
+        companyId: targetComp,
+        branchId: est.branchId,
+        branchName: est.branchName,
+      }, targetComp)
 
       await addOrder({
         client: est.client,
@@ -293,7 +301,10 @@ export default function EstimatesPage() {
         status: "Processing",
         notes: `Converted from Estimate ${est.estimateNumber}`,
         invoiceId,
-      })
+        companyId: targetComp,
+        branchId: est.branchId,
+        branchName: est.branchName,
+      }, targetComp)
 
       loadData()
     }, {

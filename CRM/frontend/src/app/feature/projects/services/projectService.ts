@@ -344,7 +344,7 @@ export const deleteProject = async (id: string, companyId?: string): Promise<boo
             totalInvoiced: `₹${Math.max(0, currInvoiced - removedInvoiced).toLocaleString("en-IN")}`,
             paymentReceived: `₹${Math.max(0, currPaid - removedPaid).toLocaleString("en-IN")}`,
             due: `₹${Math.max(0, currDue - removedDue).toLocaleString("en-IN")}`,
-          })
+          }, targetProject?.companyId || companyId)
         }
       }
     } catch (err) {
