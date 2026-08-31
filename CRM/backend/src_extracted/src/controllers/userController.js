@@ -49,12 +49,13 @@ const getUserById = async (req, res, next) => {
 const updateUser = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { full_name, name, email, phone, role_id, status, permissions, department, company_id, company_ids, companyIds, avatar_url, avatar, avatarUrl } = req.body;
+    const { full_name, name, email, username, phone, role_id, status, permissions, department, company_id, company_ids, companyIds, avatar_url, avatar, avatarUrl } = req.body;
 
     const displayName = full_name || name || null;
     const phoneVal = phone !== undefined ? (phone || null) : null;
     const statusVal = status || null;
     const avatarVal = avatar_url || avatar || avatarUrl || null;
+    const usernameVal = username !== undefined ? (username ? username.toLowerCase().trim() : null) : undefined;
     let roleIdVal = role_id ? parseInt(role_id, 10) : null;
     if (!roleIdVal && req.body.role) {
       const rLower = String(req.body.role).toLowerCase();
@@ -86,6 +87,7 @@ const updateUser = async (req, res, next) => {
 
     if (displayName !== null) { setClauses.push('full_name = COALESCE(?, full_name)'); params.push(displayName); }
     if (newEmailVal) { setClauses.push('email = ?'); params.push(newEmailVal); }
+    if (usernameVal !== undefined) { setClauses.push('username = ?'); params.push(usernameVal); }
     if (phoneVal !== null || phone === '') { setClauses.push('phone = ?'); params.push(phoneVal); }
     if (statusVal) { setClauses.push('status = ?'); params.push(statusVal); }
     if (roleIdVal) { setClauses.push('role_id = ?'); params.push(roleIdVal); }
@@ -158,6 +160,7 @@ const updateUser = async (req, res, next) => {
           id: String(u.id),
           name: u.full_name || u.email,
           email: emailNorm,
+          username: u.username || (usernameVal !== undefined ? usernameVal : undefined),
           role: u.role_name || (u.role_id === 1 ? 'Super Admin' : u.role_id === 2 ? 'Admin' : u.role_id === 4 ? 'Clients' : 'Teams'),
           companyId: u.company_id || 'tech',
           companyIds: parsedCompanyIds,
@@ -252,7 +255,7 @@ const deleteUser = async (req, res, next) => {
 // ─── CREATE USER (ADMIN CREATED - BYPASSES OTP) ─────────────────────────────
 const createUser = async (req, res, next) => {
   try {
-    const { full_name, name, email, password, phone, role_id, role, company_id, company_ids, companyIds, companyName, department, permissions } = req.body;
+    const { full_name, name, email, username, password, phone, role_id, role, company_id, company_ids, companyIds, companyName, department, permissions } = req.body;
     const displayName = full_name || name;
 
     if (!displayName || !email || !password) {
@@ -260,12 +263,10 @@ const createUser = async (req, res, next) => {
     }
 
     const normEmail = email.toLowerCase().trim();
+    const normUsername = username ? username.toLowerCase().trim() : null;
 
     // Check existing users (including soft-deleted)
     const [existing] = await pool.execute('SELECT id, deleted_at FROM users WHERE email = ?', [normEmail]);
-    if (existing.length > 0 && !existing[0].deleted_at) {
-      return errorResponse(res, 400, 'An account with this email address already exists.');
-    }
 
     // Map role string to ID if needed
     let targetRoleId = 3;
@@ -307,22 +308,22 @@ const createUser = async (req, res, next) => {
 
     let userId = null;
 
-    if (existing.length > 0 && existing[0].deleted_at) {
-      // Re-activate soft deleted account
+    if (existing.length > 0) {
+      // Update existing or reactivate soft deleted account
       userId = existing[0].id;
       await pool.execute(
         `UPDATE users 
-         SET full_name = ?, password_hash = ?, phone = ?, department = ?, company_id = ?, company_ids = ?, role_id = ?, permissions = ?, is_verified = 1, status = 'active', deleted_at = NULL, updated_at = NOW() 
+         SET full_name = ?, username = COALESCE(?, username), password_hash = ?, phone = ?, department = ?, company_id = ?, company_ids = ?, role_id = ?, permissions = ?, is_verified = 1, status = 'active', deleted_at = NULL, updated_at = NOW() 
          WHERE id = ?`,
-        [displayName, hashedPassword, phone || null, department || null, compVal, compIdsStr, targetRoleId, permStr, userId]
+        [displayName, normUsername, hashedPassword, phone || null, department || null, compVal, compIdsStr, targetRoleId, permStr, userId]
       );
       // Remove from deleted_items tracking
-      await pool.execute('DELETE FROM deleted_items WHERE item_id = ? AND module_name = "users"', [normEmail]);
+      await pool.execute('DELETE FROM deleted_items WHERE item_id = ? AND module_name = "users"', [normEmail]).catch(() => {});
     } else {
       // Admin created users are marked is_verified = 1 automatically!
       const [result] = await pool.execute(
-        'INSERT INTO users (role_id, full_name, email, password_hash, phone, department, company_id, company_ids, permissions, is_verified, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)',
-        [targetRoleId, displayName, normEmail, hashedPassword, phone || null, department || null, compVal, compIdsStr, permStr, 'active']
+        'INSERT INTO users (role_id, full_name, email, username, password_hash, phone, department, company_id, company_ids, permissions, is_verified, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)',
+        [targetRoleId, displayName, normEmail, normUsername, hashedPassword, phone || null, department || null, compVal, compIdsStr, permStr, 'active']
       );
       userId = result.insertId;
     }
@@ -340,6 +341,7 @@ const createUser = async (req, res, next) => {
         id: String(userId),
         name: displayName,
         email: normEmail,
+        username: normUsername || undefined,
         role: roleName,
         companyId: compVal,
         companyIds: parsedCompList,
@@ -371,21 +373,18 @@ const createUser = async (req, res, next) => {
     }
 
     // Send Welcome Email with credentials and change password instructions
-    const compName = companyName || (company_id === 'digital' ? 'SAAMPARK Digital Marketing' : 'SAAMPARK Technology');
+    const compName = companyName || (compVal === 'digital' ? 'SAAMPARK Digital Marketing' : 'SAAMPARK Technology');
+    let emailSent = false;
     try {
       const { sendAdminCreatedAccountEmail } = require('../utils/emailService');
-      await sendAdminCreatedAccountEmail(normEmail, displayName, roleName, compName, password);
-      console.log(`Welcome credentials email sent to ${normEmail}`);
+      await sendAdminCreatedAccountEmail(normEmail, displayName, roleName, compName, password, compVal);
+      emailSent = true;
+      console.log(`Welcome credentials email sent successfully to ${normEmail}`);
     } catch (emailErr) {
       console.warn('Welcome email warning:', emailErr.message);
     }
 
-    return successResponse(res, 201, 'User account created successfully and welcome credentials email sent!', {
-      id: userId,
-      full_name: displayName,
-      email: normEmail,
-      role_name: roleName,
-    });
+    return successResponse(res, 201, `User account saved successfully${emailSent ? ' and welcome credentials email sent!' : ' (email sending queued).'}`);
   } catch (error) {
     next(error);
   }

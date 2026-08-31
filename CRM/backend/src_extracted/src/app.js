@@ -37,9 +37,10 @@ app.get('/api/health', (req, res) => {
 });
 
 // ==========================================
-// 3. API ROUTES (Mounting routes under /api/v1)
+// 3. API ROUTES (Mounting routes under /api/v1 and /api)
 // ==========================================
 app.use('/api/v1', apiRoutes);
+app.use('/api', apiRoutes);
 
 // ==========================================
 // 4. UNHANDLED ROUTES HANDLER (404)

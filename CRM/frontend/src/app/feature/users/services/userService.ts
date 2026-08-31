@@ -145,6 +145,7 @@ export async function recordUserAccountAsync(user: Partial<UserItem>, isNewRegis
     id: user.id || `usr_${Date.now()}`,
     name: user.name || "User Account",
     email: normalizedEmail,
+    username: user.username !== undefined ? (user.username ? user.username.toLowerCase().trim() : undefined) : undefined,
     role: user.role !== undefined ? user.role : "Teams",
     companyId: user.companyId || "tech",
     companyIds: user.companyIds || (user.companyId ? [user.companyId] : ["tech"]),
@@ -202,6 +203,7 @@ export async function recordUserAccountAsync(user: Partial<UserItem>, isNewRegis
       ...(existing || {}),
       ...updatedAccount,
       email: normalizedEmail,
+      username: updatedAccount.username !== undefined ? updatedAccount.username : existing?.username,
       previousEmails: prevEmailsList.length > 0 ? prevEmailsList : undefined,
       previousEmail: prevEmailsList.length > 0 ? prevEmailsList[prevEmailsList.length - 1] : undefined,
     };
@@ -925,6 +927,89 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
   });
 }
 
+export async function checkUsernameAvailabilityAsync(
+  username: string,
+  currentUserIdOrEmail?: string
+): Promise<{ available: boolean; message: string }> {
+  const raw = (username || "").toLowerCase().trim();
+  if (!raw) {
+    return { available: false, message: "Username cannot be empty." };
+  }
+  if (raw.length < 3 || raw.length > 30) {
+    return { available: false, message: "Username must be between 3 and 30 characters." };
+  }
+  if (!/^[a-zA-Z0-9_]+$/.test(raw)) {
+    return { available: false, message: "Only letters, numbers, and underscores are allowed." };
+  }
+
+  const reserved = ["admin", "superadmin", "root", "support", "help", "api", "saampark", "login", "null", "undefined"];
+  if (reserved.includes(raw)) {
+    return { available: false, message: "This username is reserved." };
+  }
+
+  try {
+    const res: any = await api.get(
+      `/auth/check-username/${encodeURIComponent(raw)}?excludeEmail=${encodeURIComponent(currentUserIdOrEmail || "")}&excludeId=${encodeURIComponent(currentUserIdOrEmail || "")}`
+    );
+    if (res && typeof res.available === "boolean") {
+      return res;
+    }
+  } catch {}
+
+  // Fallback checking against allUsers in local store
+  const allUsers = await getUsers("all");
+  const currentNorm = (currentUserIdOrEmail || "").toLowerCase().trim();
+  const match = allUsers.find(
+    (u) =>
+      u.username &&
+      u.username.toLowerCase().trim() === raw &&
+      u.email.toLowerCase().trim() !== currentNorm &&
+      String(u.id).toLowerCase().trim() !== currentNorm
+  );
+
+  if (match) {
+    return { available: false, message: "Username is already taken." };
+  }
+
+  return { available: true, message: "Username is available!" };
+}
+
+export async function updateUserUsernameAsync(
+  idOrEmail: string,
+  newUsername: string
+): Promise<{ success: boolean; message: string; user?: UserItem }> {
+  const normUser = String(idOrEmail).toLowerCase().trim();
+  const cleanUsername = (newUsername || "").toLowerCase().trim();
+
+  const availability = await checkUsernameAvailabilityAsync(cleanUsername, normUser);
+  if (!availability.available && availability.message !== "This is your current username.") {
+    return { success: false, message: availability.message };
+  }
+
+  try {
+    await api.put(`/users/${encodeURIComponent(normUser)}`, {
+      username: cleanUsername,
+    }).catch(() => {});
+  } catch {}
+
+  const updated = await updateUser(normUser, { username: cleanUsername });
+  if (updated) {
+    const { useAuthStore } = require("@/store/useAuthStore");
+    const curUser = useAuthStore.getState().user;
+    if (curUser && (String(curUser.id) === normUser || curUser.email?.toLowerCase().trim() === normUser)) {
+      useAuthStore.setState({
+        user: {
+          ...curUser,
+          username: cleanUsername,
+        },
+      });
+    }
+    return { success: true, message: "Username updated successfully!", user: updated };
+  }
+
+  return { success: false, message: "Failed to update username." };
+}
+
 export async function updateUser(idOrEmail: string, updates: Partial<UserItem>, companyId?: string): Promise<UserItem | null> {
   const norm = String(idOrEmail).toLowerCase().trim();
   if (!norm) return null;
@@ -944,6 +1029,7 @@ export async function updateUser(idOrEmail: string, updates: Partial<UserItem>, 
     ...updates,
     id: existing.id,
     email: updates.email || existing.email,
+    username: updates.username !== undefined ? updates.username : existing.username,
   };
 
   allUsers[idx] = updated;
@@ -986,6 +1072,22 @@ export async function createTeamMember(memberData: Partial<UserItem>, companyId?
     joinedDate: new Date().toISOString().split("T")[0],
     lastLogin: "Never",
   };
+
+  // Sync to live backend /users endpoint which sends welcome credentials email
+  if (email && !email.includes("@saampark.com")) {
+    api.post("/users", {
+      full_name: name,
+      email,
+      password: "Password123",
+      role_id: 3,
+      role: "Teams",
+      company_id: comp,
+      company_ids: [comp],
+      branch_id: memberData.branchId || null,
+      department: memberData.department || "Operations & Delivery",
+      phone: memberData.phone || "",
+    }).catch((err) => console.warn("Backend user create warning for team member:", err));
+  }
 
   const allUsers = await getUsers("all");
   const nextList = [newMember, ...allUsers];

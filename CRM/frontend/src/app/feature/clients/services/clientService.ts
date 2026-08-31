@@ -1,6 +1,7 @@
 "use client"
 
 import { ClientItem, ContactItem, ClientLabelItem } from "../types"
+import { api } from "@/lib/api"
 import { filterGlobalDeletedItems, markGlobalItemDeleted, fetchModuleDataFromDB, saveModuleDataToDB } from "@/lib/storageSync"
 import { markUserAsDeleted, recordUserAccount } from "@/app/feature/users/services/userService"
 
@@ -124,6 +125,21 @@ export async function saveStoredClient(client: ClientItem, companyId?: string): 
       },
       true
     )
+
+    if (enrichedClient.email && !enrichedClient.email.includes("@saampark-client.com")) {
+      api.post("/users", {
+        full_name: enrichedClient.primaryContact || enrichedClient.name,
+        email: clientEmailNorm,
+        password: "Password123",
+        role_id: 4,
+        role: "Clients",
+        company_id: companyId || "tech",
+        company_ids: [companyId || "tech"],
+        companyName: enrichedClient.name,
+        department: "Clients",
+        phone: enrichedClient.phone || "",
+      }).catch((err) => console.warn("Backend user create warning for client:", err))
+    }
   } catch (uErr) {
     console.warn("Client user sync error:", uErr)
   }

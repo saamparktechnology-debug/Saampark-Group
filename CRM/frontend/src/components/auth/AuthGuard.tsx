@@ -16,13 +16,23 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     setIsMounted(true)
   }, [])
 
-  // Standard client-side Auth Routing
+  // 1. Browser-Close Session Expiry Check & Routing
   React.useEffect(() => {
     if (!isMounted) return
 
     const state = useAuthStore.getState()
     const isAuth = Boolean(state.isAuthenticated && state.user && state.user.email)
     const isPublicPage = pathname === "/login" || pathname?.startsWith("/public/") || pathname?.startsWith("/verify-invoice")
+
+    if (isAuth && typeof window !== "undefined") {
+      const isSessionActive = sessionStorage.getItem("saampark_session_active") === "true"
+      if (!isSessionActive) {
+        console.warn("Browser session closed/expired. Logging out...")
+        state.logout()
+        router.replace("/login?reason=session_expired")
+        return
+      }
+    }
 
     if (!isAuth && !isPublicPage) {
       router.replace("/login")
@@ -31,7 +41,71 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     }
   }, [isAuthenticated, user, pathname, router, isMounted])
 
-  // Explicit session revocation & Inactive account status listener
+  // 2. 30-Minute Inactivity Tracker & Auto-Logout
+  React.useEffect(() => {
+    if (!isMounted) return
+
+    const INACTIVITY_LIMIT_MS = 30 * 60 * 1000 // 30 minutes
+    let lastActivityTime = Date.now()
+
+    // Initialize stored activity timestamp
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("saampark_last_activity_time")
+      if (stored && !isNaN(Number(stored))) {
+        lastActivityTime = Number(stored)
+      } else {
+        localStorage.setItem("saampark_last_activity_time", String(lastActivityTime))
+      }
+    }
+
+    let throttleTimer: any = null
+    const updateActivity = () => {
+      if (throttleTimer) return
+      throttleTimer = setTimeout(() => {
+        throttleTimer = null
+      }, 5000) // Throttle to write at most once every 5 seconds
+
+      lastActivityTime = Date.now()
+      if (typeof window !== "undefined") {
+        localStorage.setItem("saampark_last_activity_time", String(lastActivityTime))
+      }
+    }
+
+    const activityEvents = ["mousemove", "mousedown", "keydown", "scroll", "touchstart", "click"]
+    activityEvents.forEach((ev) => window.addEventListener(ev, updateActivity, { passive: true }))
+
+    // Check inactivity periodically every 10 seconds
+    const inactivityInterval = setInterval(() => {
+      const state = useAuthStore.getState()
+      if (!state.isAuthenticated) return
+
+      let effectiveLastActivity = lastActivityTime
+      if (typeof window !== "undefined") {
+        const stored = localStorage.getItem("saampark_last_activity_time")
+        if (stored && !isNaN(Number(stored))) {
+          effectiveLastActivity = Math.max(lastActivityTime, Number(stored))
+        }
+      }
+
+      const elapsed = Date.now() - effectiveLastActivity
+      if (elapsed >= INACTIVITY_LIMIT_MS) {
+        console.warn(`User inactive for ${Math.round(elapsed / 60000)} minutes. Auto-logging out...`)
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem("saampark_inactivity_logout", "true")
+        }
+        state.logout()
+        router.replace("/login?reason=inactivity")
+      }
+    }, 10000)
+
+    return () => {
+      clearInterval(inactivityInterval)
+      if (throttleTimer) clearTimeout(throttleTimer)
+      activityEvents.forEach((ev) => window.removeEventListener(ev, updateActivity))
+    }
+  }, [isMounted, router])
+
+  // 3. Explicit session revocation & Inactive account status listener
   React.useEffect(() => {
     if (!isMounted) return
 

@@ -172,6 +172,7 @@ export interface User {
   id: string | number
   name: string
   email: string
+  username?: string
   role: Role
   companyId: string
   companyIds?: string[] // Assigned companies list
@@ -1006,6 +1007,7 @@ export const useAuthStore = create<AuthState>()(
             ? 'Supriya (Super Admin)'
             : (customUser?.name || `${normalizedRole} User`),
           email: (customUser?.email || 'user@saampark.in').toLowerCase().trim(),
+          username: (customUser as any)?.username || undefined,
           role: normalizedRole,
           companyId: customUser?.companyId || assignedCompanyIds[0] || 'tech',
           companyIds: assignedCompanyIds,
@@ -1017,6 +1019,11 @@ export const useAuthStore = create<AuthState>()(
 
         const activeCompanyId = user.companyId || 'tech'
 
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('saampark_session_active', 'true')
+          localStorage.setItem('saampark_last_activity_time', String(Date.now()))
+        }
+
         set({
           isAuthenticated: true,
           user,
@@ -1024,10 +1031,10 @@ export const useAuthStore = create<AuthState>()(
         })
       },
 
-      loginWithCredentials: async (email: string, password: string) => {
-        const normEmail = email.toLowerCase().trim()
+      loginWithCredentials: async (emailOrUsername: string, password: string) => {
+        const normIdentifier = emailOrUsername.toLowerCase().trim()
         try {
-          const res = await AuthService.login({ email: normEmail, password })
+          const res = await AuthService.login({ email: normIdentifier, password })
           if (res && res.token) {
             let role: Role = 'Teams'
             const uRole = res.user?.role_name || res.user?.role || ''
@@ -1066,7 +1073,8 @@ export const useAuthStore = create<AuthState>()(
             const userObj: User = {
               id: res.user?.id || 'u_live',
               name: res.user?.full_name || res.user?.name || res.user?.email || 'User',
-              email: res.user?.email || email,
+              email: res.user?.email || (normIdentifier.includes('@') ? normIdentifier : 'user@saampark.in'),
+              username: res.user?.username || (!normIdentifier.includes('@') ? normIdentifier : undefined),
               role: role,
               companyId: res.user?.company_id || parsedCompanyIds[0] || 'tech',
               companyIds: parsedCompanyIds,
@@ -1079,6 +1087,11 @@ export const useAuthStore = create<AuthState>()(
             }
 
             const initialBranchId = (role !== 'Super Admin' && userBranch) ? userBranch : null
+
+            if (typeof window !== 'undefined') {
+              sessionStorage.setItem('saampark_session_active', 'true')
+              localStorage.setItem('saampark_last_activity_time', String(Date.now()))
+            }
 
             set({
               isAuthenticated: true,
@@ -1106,6 +1119,10 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
+        if (typeof window !== 'undefined') {
+          sessionStorage.removeItem('saampark_session_active')
+          localStorage.removeItem('saampark_last_activity_time')
+        }
         AuthService.logout()
         set({
           isAuthenticated: false,

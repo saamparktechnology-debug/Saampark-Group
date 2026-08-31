@@ -6,6 +6,7 @@ const {
   register,
   verifyEmail,
   login,
+  checkUsername,
   sendForgotPasswordOTP,
   verifyResetOTP,
   resetPassword,
@@ -34,6 +35,8 @@ const otpLimiter = rateLimit({
 router.post('/register', register);
 router.post('/verify-email', verifyEmail);
 router.post('/login', loginLimiter, login);
+router.get('/check-username/:username', checkUsername);
+router.get('/check-username', checkUsername);
 router.post('/forgot-password', otpLimiter, sendForgotPasswordOTP);
 router.post('/verify-reset-otp', verifyResetOTP);
 router.post('/reset-password', resetPassword);

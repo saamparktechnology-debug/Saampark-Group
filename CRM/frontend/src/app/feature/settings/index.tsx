@@ -14,7 +14,13 @@ import { Input } from "@/components/ui/Input"
 import { useAuthStore } from "@/store/useAuthStore"
 import { useTheme } from "next-themes"
 import { fetchModuleDataFromDB, saveModuleDataToDB } from "@/lib/storageSync"
-import { getUsers, recordUserAccount, cascadeUserAvatarChange } from "@/app/feature/users/services/userService"
+import { 
+  getUsers, 
+  recordUserAccount, 
+  cascadeUserAvatarChange, 
+  checkUsernameAvailabilityAsync, 
+  updateUserUsernameAsync 
+} from "@/app/feature/users/services/userService"
 import { CompanyBranchSettings } from "./components/CompanyBranchSettings"
 import { uploadToImgBB } from "@/lib/imgbbUpload"
 import { KycData, KycStatus } from "@/app/feature/users/types"
@@ -42,6 +48,12 @@ export default function SettingsMain() {
   // ── Profile Form State ──
   const [name, setName] = React.useState(user?.name || "")
   const [email, setEmail] = React.useState(user?.email || "")
+  const [username, setUsername] = React.useState(user?.username || "")
+  const [usernameStatus, setUsernameStatus] = React.useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle")
+  const [usernameStatusMsg, setUsernameStatusMsg] = React.useState("")
+  const [showUsernameConfirmModal, setShowUsernameConfirmModal] = React.useState(false)
+  const [pendingUsername, setPendingUsername] = React.useState("")
+  const [isSavingUsername, setIsSavingUsername] = React.useState(false)
   const [phone, setPhone] = React.useState(user?.phone || "")
   const [jobTitle, setJobTitle] = React.useState((user as any)?.jobTitle || user?.role || "Team Member")
   const [department, setDepartment] = React.useState(user?.department || "")
@@ -173,6 +185,7 @@ export default function SettingsMain() {
     if (user) {
       setName(user.name || "")
       setEmail(user.email || "")
+      if (user.username) setUsername(user.username)
       if (user.phone) setPhone(user.phone)
       if (user.avatar || (user as any).avatarUrl) setAvatar(user.avatar || (user as any).avatarUrl)
       if (user.department) setDepartment(user.department)
@@ -194,6 +207,87 @@ export default function SettingsMain() {
       }
     }
   }, [user])
+
+  // Real-time debounced username availability checker
+  React.useEffect(() => {
+    const raw = (username || "").toLowerCase().trim()
+    const cur = (user?.username || "").toLowerCase().trim()
+
+    if (!raw) {
+      setUsernameStatus("idle")
+      setUsernameStatusMsg("")
+      return
+    }
+
+    if (raw === cur) {
+      setUsernameStatus("idle")
+      setUsernameStatusMsg("This is your current username.")
+      return
+    }
+
+    if (raw.length < 3 || raw.length > 30) {
+      setUsernameStatus("invalid")
+      setUsernameStatusMsg("Username must be between 3 and 30 characters.")
+      return
+    }
+
+    if (!/^[a-zA-Z0-9_]+$/.test(raw)) {
+      setUsernameStatus("invalid")
+      setUsernameStatusMsg("Only letters, numbers, and underscores allowed.")
+      return
+    }
+
+    setUsernameStatus("checking")
+    setUsernameStatusMsg("Checking availability...")
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await checkUsernameAvailabilityAsync(raw, String(user?.id || user?.email))
+        if (res.available) {
+          setUsernameStatus("available")
+          setUsernameStatusMsg(res.message || "Username is available!")
+        } else {
+          setUsernameStatus("taken")
+          setUsernameStatusMsg(res.message || "Username is already taken.")
+        }
+      } catch {
+        setUsernameStatus("idle")
+        setUsernameStatusMsg("")
+      }
+    }, 400)
+
+    return () => clearTimeout(timer)
+  }, [username, user?.username, user?.id, user?.email])
+
+  const handleOpenUsernameConfirm = (e: React.MouseEvent) => {
+    e.preventDefault()
+    const clean = (username || "").toLowerCase().trim()
+    if (!clean || usernameStatus !== "available") return
+    setPendingUsername(clean)
+    setShowUsernameConfirmModal(true)
+  }
+
+  const handleConfirmSaveUsername = async () => {
+    if (!pendingUsername) return
+    setIsSavingUsername(true)
+    setErrorMsg("")
+    try {
+      const res = await updateUserUsernameAsync(String(user?.id || user?.email), pendingUsername)
+      if (res.success) {
+        setShowUsernameConfirmModal(false)
+        setSuccessMsg(`✅ Username updated to @${pendingUsername}! You can now sign in using this username or your email.`)
+        setUsernameStatus("idle")
+        setUsernameStatusMsg("This is your current username.")
+        setTimeout(() => setSuccessMsg(""), 5000)
+      } else {
+        setErrorMsg(res.message || "Failed to update username.")
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to update username.")
+    } finally {
+      setIsSavingUsername(false)
+    }
+  }
 
   // Handle Photo Upload directly with permanent ImgBB Cloud Hosting & Automatic Compression
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -907,6 +1001,85 @@ export default function SettingsMain() {
               placeholder="Tell team members and clients about your responsibilities..."
               className="w-full px-3 py-2 text-xs bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden focus:ring-1 focus:ring-blue-500"
             />
+          </div>
+
+          {/* ── CUSTOM USERNAME & DUAL LOGIN SECTION ── */}
+          <div className="p-4 bg-gradient-to-r from-blue-500/5 via-indigo-500/5 to-purple-500/5 dark:from-blue-500/10 dark:via-indigo-500/10 dark:to-purple-500/10 rounded-2xl border border-blue-200/50 dark:border-blue-800/40 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-foreground font-bold text-xs">
+                <Tag size={15} className="text-blue-600 dark:text-blue-400" />
+                <span>Custom Username & Dual Login</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                  Login with Email or Username
+                </span>
+              </div>
+              {user?.username && (
+                <span className="text-[11px] font-mono text-zinc-500 bg-white dark:bg-zinc-800 px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700">
+                  Current: <strong className="text-foreground">@{user.username}</strong>
+                </span>
+              )}
+            </div>
+
+            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
+              Set a unique personal username. Once saved, you can log into the CRM using either your registered email address or your username.
+            </p>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
+              <div className="relative flex-1">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-xs">@</span>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+                  placeholder="choose_username"
+                  maxLength={30}
+                  className="w-full pl-7 pr-3 py-2 text-xs bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500 font-medium"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={handleOpenUsernameConfirm}
+                disabled={usernameStatus !== "available" || isSavingUsername}
+                className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+              >
+                <Save size={13} />
+                <span>Set Username</span>
+              </button>
+            </div>
+
+            {/* Status indicator */}
+            {usernameStatusMsg && (
+              <div className="flex items-center gap-1.5 text-[11px] pt-0.5">
+                {usernameStatus === "checking" && (
+                  <>
+                    <RefreshCw size={12} className="animate-spin text-blue-500" />
+                    <span className="text-blue-500">{usernameStatusMsg}</span>
+                  </>
+                )}
+                {usernameStatus === "available" && (
+                  <>
+                    <CheckCircle2 size={12} className="text-emerald-500" />
+                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{usernameStatusMsg}</span>
+                  </>
+                )}
+                {usernameStatus === "taken" && (
+                  <>
+                    <AlertCircle size={12} className="text-rose-500" />
+                    <span className="text-rose-600 dark:text-rose-400 font-semibold">{usernameStatusMsg}</span>
+                  </>
+                )}
+                {usernameStatus === "invalid" && (
+                  <>
+                    <AlertCircle size={12} className="text-amber-500" />
+                    <span className="text-amber-600 dark:text-amber-400">{usernameStatusMsg}</span>
+                  </>
+                )}
+                {usernameStatus === "idle" && (
+                  <span className="text-zinc-500 dark:text-zinc-400">{usernameStatusMsg}</span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* ── SECURE PASSWORD CHANGE SECTION ── */}
@@ -1782,6 +1955,54 @@ export default function SettingsMain() {
               </div>
             </button>
           </div>
+        </div>
+      )}
+
+      {/* ── USERNAME SAVE CONFIRMATION MODAL ── */}
+      {showUsernameConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xl">
+              <Tag size={24} />
+            </div>
+
+            <div>
+              <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Confirm New Username</h3>
+              <p className="text-xs text-zinc-500 mt-1">
+                Are you sure you want to set your username to:
+              </p>
+              <div className="my-3 p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-center">
+                <span className="text-base font-extrabold font-mono text-blue-600 dark:text-blue-400">
+                  @{pendingUsername}
+                </span>
+              </div>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                After saving, you will be able to log in to your account with either your registered email address or <strong>@{pendingUsername}</strong> using your password.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowUsernameConfirmModal(false)}
+                disabled={isSavingUsername}
+                className="text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleConfirmSaveUsername}
+                disabled={isSavingUsername}
+                className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold"
+              >
+                {isSavingUsername ? "Saving..." : "Confirm & Save"}
+              </Button>
+            </div>
+          </motion.div>
         </div>
       )}
     </motion.div>

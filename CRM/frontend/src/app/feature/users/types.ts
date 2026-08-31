@@ -24,6 +24,7 @@ export interface UserItem {
   id: string;
   name: string;
   email: string;
+  username?: string;
   role: UserRole;
   companyId: string; // Primary/initial company e.g. "tech", "digital"
   companyIds?: string[]; // Multiple assigned companies e.g. ["tech", "digital"]

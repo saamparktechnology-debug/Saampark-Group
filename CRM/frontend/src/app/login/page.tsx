@@ -112,14 +112,21 @@ export default function LoginPage() {
     }
   }, [resendCooldown])
 
-  // Check for inactive session logout redirect notice
+  // Check for inactive session logout redirect notice or session expiry
   React.useEffect(() => {
     if (typeof window !== "undefined") {
       const notice = sessionStorage.getItem("saampark_inactive_logout")
-      const searchParamError = new URLSearchParams(window.location.search).get("error")
-      if (notice || searchParamError === "inactive") {
-        setError("Your account is on inactive stage, please contact your administration.")
+      const searchParams = new URLSearchParams(window.location.search)
+      const searchParamError = searchParams.get("error")
+      const searchParamReason = searchParams.get("reason")
+
+      if (notice || searchParamReason === "inactivity") {
+        setError("You have been automatically logged out due to 30 minutes of inactivity. Please log in again.")
         sessionStorage.removeItem("saampark_inactive_logout")
+      } else if (searchParamReason === "session_expired") {
+        setError("Your session ended after closing the browser. Please log in to continue.")
+      } else if (searchParamError === "inactive") {
+        setError("Your account is on inactive stage, please contact your administration.")
       }
     }
   }, [])
@@ -137,11 +144,11 @@ export default function LoginPage() {
     setIsLoading(true)
     setError("")
 
-    const normalizedEmail = email.toLowerCase().trim()
+    const normalizedInput = email.toLowerCase().trim()
 
     try {
       // 1. Fetch active registered user accounts from MySQL database
-      unmarkUserAsDeleted(normalizedEmail)
+      unmarkUserAsDeleted(normalizedInput)
       const registeredAccounts = await getStoredUserAccountsAsync()
 
       // Check if user is attempting to log in with an old transferred/obsolete email address
@@ -151,16 +158,20 @@ export default function LoginPage() {
           ? acc.previousEmails.map((pe) => (pe || "").toLowerCase().trim())
           : []
         const altEmail = ((acc as any).previousEmail || "").toLowerCase().trim()
-        return mainEmail !== normalizedEmail && (prevEmails.includes(normalizedEmail) || altEmail === normalizedEmail)
+        return mainEmail !== normalizedInput && (prevEmails.includes(normalizedInput) || altEmail === normalizedInput)
       })
 
       if (obsoleteAccount) {
         setIsLoading(false)
-        setError(`This email address (${normalizedEmail}) has been transferred to a new email. Please log in using your updated active email address.`)
+        setError(`This email address (${normalizedInput}) has been transferred to a new email. Please log in using your updated active email address.`)
         return
       }
 
-      let dbAccount = registeredAccounts.find((acc) => (acc.email || "").toLowerCase().trim() === normalizedEmail)
+      let dbAccount = registeredAccounts.find(
+        (acc) =>
+          (acc.email || "").toLowerCase().trim() === normalizedInput ||
+          (acc.username && acc.username.toLowerCase().trim() === normalizedInput)
+      )
 
       if (!dbAccount) {
         const allDbUsers = await fetchModuleDataFromDB<UserItem[]>("users", [], "all").catch(() => [])
@@ -170,14 +181,18 @@ export default function LoginPage() {
             ? acc.previousEmails.map((pe) => (pe || "").toLowerCase().trim())
             : []
           const altEmail = ((acc as any).previousEmail || "").toLowerCase().trim()
-          return mainEmail !== normalizedEmail && (prevEmails.includes(normalizedEmail) || altEmail === normalizedEmail)
+          return mainEmail !== normalizedInput && (prevEmails.includes(normalizedInput) || altEmail === normalizedInput)
         })
         if (obsoleteInAll) {
           setIsLoading(false)
-          setError(`This email address (${normalizedEmail}) has been transferred to a new email. Please log in using your updated active email address.`)
+          setError(`This email address (${normalizedInput}) has been transferred to a new email. Please log in using your updated active email address.`)
           return
         }
-        dbAccount = allDbUsers.find((acc) => (acc.email || "").toLowerCase().trim() === normalizedEmail)
+        dbAccount = allDbUsers.find(
+          (acc) =>
+            (acc.email || "").toLowerCase().trim() === normalizedInput ||
+            (acc.username && acc.username.toLowerCase().trim() === normalizedInput)
+        )
       }
 
       // Ensure active account is un-suppressed
@@ -190,7 +205,7 @@ export default function LoginPage() {
 
       // 2. Attempt backend API authentication
       try {
-        const backendRes: any = await AuthService.login({ email: normalizedEmail, password })
+        const backendRes: any = await AuthService.login({ email: normalizedInput, password })
         if (backendRes?.data?.user || backendRes?.user) {
           backendUser = backendRes.data?.user || backendRes.user
           backendRole = normalizeRole(backendUser.role_name || backendUser.role || "")
@@ -201,7 +216,7 @@ export default function LoginPage() {
         } else if (backendRes?.status === "error" || (backendRes && backendRes.message)) {
           const msg: string = backendRes.message || ""
           if (msg.toLowerCase().includes("not verified")) {
-            setVerifyEmail(normalizedEmail)
+            setVerifyEmail(normalizedInput)
             setVerifyEmailModal(true)
             setIsLoading(false)
             return
@@ -211,7 +226,7 @@ export default function LoginPage() {
       } catch (backendErr: any) {
         const msg: string = backendErr?.response?.data?.message || backendErr?.message || ""
         if (msg.toLowerCase().includes("not verified")) {
-          setVerifyEmail(normalizedEmail)
+          setVerifyEmail(normalizedInput)
           setVerifyEmailModal(true)
           setIsLoading(false)
           return
@@ -248,7 +263,7 @@ export default function LoginPage() {
       } else if (!matchedRole) {
         // Check demo accounts
         const matchedDemoKey = (Object.keys(DEMO_USERS) as Role[]).find(
-          (r) => DEMO_USERS[r]?.email?.toLowerCase() === normalizedEmail
+          (r) => DEMO_USERS[r]?.email?.toLowerCase() === normalizedInput
         )
         if (matchedDemoKey && DEMO_USERS[matchedDemoKey]) {
           const demoObj = DEMO_USERS[matchedDemoKey]!
@@ -285,14 +300,16 @@ export default function LoginPage() {
         return
       }
 
+      const effectiveEmail = (matchedAccount.email || dbAccount?.email || (normalizedInput.includes("@") ? normalizedInput : "user@saampark.in")).toLowerCase().trim()
+
       // ── ROLE & PORTAL AUTO-ALIGNMENT ─────────────────────────────────────────
       if (
-        normalizedEmail === "hiisupriya@gmail.com" || 
-        normalizedEmail === "supriyo.main@gmail.com" || 
-        normalizedEmail === "saampark.official@gmail.com"
+        effectiveEmail === "hiisupriya@gmail.com" || 
+        effectiveEmail === "supriyo.main@gmail.com" || 
+        effectiveEmail === "saampark.official@gmail.com"
       ) {
         matchedRole = "Super Admin"
-      } else if (normalizedEmail === "saamparktechnologyresearch@gmail.com") {
+      } else if (effectiveEmail === "saamparktechnologyresearch@gmail.com") {
         matchedRole = "Admin"
       }
 
@@ -323,10 +340,10 @@ export default function LoginPage() {
       }
 
       // ── SUCCESS ──────────────────────────────────────────────────────────────
-      const displayName = normalizedEmail === "hiisupriya@gmail.com" 
+      const displayName = effectiveEmail === "hiisupriya@gmail.com" 
         ? "Supriya (Super Admin)" 
-        : (matchedAccount.full_name || matchedAccount.name || dbAccount?.name || normalizedEmail)
-      recordUserAccount({ ...matchedAccount, name: displayName, lastLogin: "Just now" })
+        : (matchedAccount.full_name || matchedAccount.name || dbAccount?.name || effectiveEmail)
+      recordUserAccount({ ...matchedAccount, name: displayName, email: effectiveEmail, lastLogin: "Just now" })
       setSuccessMessage(`Welcome back, ${displayName}! 👋`)
       setSuccess(true)
 
@@ -345,11 +362,12 @@ export default function LoginPage() {
       loginAs(matchedRole, {
         id: String(matchedAccount.id || matchedAccount.email),
         name: displayName,
-        email: normalizedEmail,
+        email: effectiveEmail,
+        username: matchedAccount.username || dbAccount?.username || (!normalizedInput.includes("@") ? normalizedInput : undefined),
         role: matchedRole,
         companyId: (parsedCompanyIds[0] || "tech") as any,
         companyIds: parsedCompanyIds,
-        avatar: matchedAccount.avatarUrl || (matchedAccount as any).avatar || matchedAccount.avatar_url || dbAccount?.avatarUrl || (dbAccount as any)?.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${normalizedEmail}`,
+        avatar: matchedAccount.avatarUrl || (matchedAccount as any).avatar || matchedAccount.avatar_url || dbAccount?.avatarUrl || (dbAccount as any)?.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${effectiveEmail}`,
         avatarUrl: matchedAccount.avatarUrl || (matchedAccount as any).avatar || matchedAccount.avatar_url || dbAccount?.avatarUrl || (dbAccount as any)?.avatar || undefined,
         phone: matchedAccount.phone || dbAccount?.phone,
         allowedModules: matchedAccount.allowedModules || dbAccount?.allowedModules || (matchedAccount as any)?.permissions?.allowedModules,
@@ -639,16 +657,16 @@ export default function LoginPage() {
                   )}
                 </AnimatePresence>
 
-                {/* Email */}
+                {/* Email or Username */}
                 <div>
-                  <label className="block text-xs font-medium mb-1">Email Address *</label>
+                  <label className="block text-xs font-medium mb-1">Email Address or Username *</label>
                   <Input
                     id="login-email"
-                    type="email"
+                    type="text"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="h-11 bg-surface"
-                    placeholder="e.g. user@saampark.in"
+                    placeholder="e.g. user@saampark.in or your_username"
                     leftIcon={<Mail size={18} />}
                     required
                   />
