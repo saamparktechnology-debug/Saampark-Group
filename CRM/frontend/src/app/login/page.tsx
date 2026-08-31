@@ -466,8 +466,14 @@ export default function LoginPage() {
     setForgotError("")
     try {
       await AuthService.resetPassword({ email: forgotEmail.toLowerCase(), newPassword: forgotNewPass, resetToken: forgotResetToken })
-      // Also update localStorage password
-      recordUserAccount({ email: forgotEmail.toLowerCase(), password: forgotNewPass } as any)
+      // Safely update password in stored accounts without resetting role
+      const stored = await getStoredUserAccountsAsync()
+      const existing = stored.find(a => a.email.toLowerCase().trim() === forgotEmail.toLowerCase().trim())
+      if (existing) {
+        recordUserAccount({ ...existing, password: forgotNewPass })
+      } else {
+        recordUserAccount({ email: forgotEmail.toLowerCase().trim(), password: forgotNewPass })
+      }
       setForgotStep("done")
       setForgotMsg("Password reset successfully! You can now log in.")
       setEmail(forgotEmail.toLowerCase())

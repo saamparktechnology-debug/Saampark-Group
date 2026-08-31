@@ -351,7 +351,26 @@ const resetPassword = async (req, res, next) => {
     }
 
     const hashedPassword = await hashPassword(newPassword);
-    await pool.execute('UPDATE users SET password_hash = ? WHERE email = ?', [hashedPassword, email.toLowerCase()]);
+    await pool.execute('UPDATE users SET password_hash = ? WHERE email = ?', [hashedPassword, email.toLowerCase().trim()]);
+
+    // Also update password in app_data JSON users store
+    try {
+      const [appDataRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "users"');
+      if (appDataRows.length > 0) {
+        let list = JSON.parse(appDataRows[0].data_json);
+        if (Array.isArray(list)) {
+          const idx = list.findIndex((u) => u.email && u.email.toLowerCase().trim() === email.toLowerCase().trim());
+          if (idx >= 0) {
+            list[idx].password = newPassword;
+            await pool.execute(
+              `INSERT INTO app_data (module_key, data_json) VALUES ('users', ?)
+               ON DUPLICATE KEY UPDATE data_json = VALUES(data_json), updated_at = NOW()`,
+              [JSON.stringify(list)]
+            );
+          }
+        }
+      }
+    } catch {}
 
     return successResponse(res, 200, 'Password reset successfully. You can now log in with your new password.');
   } catch (error) {

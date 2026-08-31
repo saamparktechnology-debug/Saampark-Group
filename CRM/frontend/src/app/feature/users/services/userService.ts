@@ -140,34 +140,6 @@ export async function recordUserAccountAsync(user: Partial<UserItem>, isNewRegis
     unmarkGlobalItemDeleted(String(user.id).toLowerCase().trim());
   }
 
-  // Build the account object
-  const updatedAccount: UserItem = {
-    id: user.id || `usr_${Date.now()}`,
-    name: user.name || "User Account",
-    email: normalizedEmail,
-    username: user.username !== undefined ? (user.username ? user.username.toLowerCase().trim() : undefined) : undefined,
-    role: user.role !== undefined ? user.role : "Teams",
-    companyId: user.companyId || "tech",
-    companyIds: user.companyIds || (user.companyId ? [user.companyId] : ["tech"]),
-    companyName: user.companyName || (user.companyId === "digital" ? "SAAMPARK Digital Marketing" : "SAAMPARK Technology"),
-    branchId: user.branchId || (user as any).branch_id || undefined,
-    branchIds: user.branchIds || (user.branchId ? [user.branchId] : undefined),
-    branchName: user.branchName || (user as any).branch_name || undefined,
-    avatarUrl: user.avatarUrl || (user as any).avatar || undefined,
-    status: user.status || "Active",
-    department: user.department || "General",
-    phone: user.phone || "",
-    password: user.password !== undefined ? user.password : "Password123",
-    lastLogin: user.lastLogin || "Just now",
-    joinedDate: user.joinedDate || new Date().toISOString().split("T")[0],
-    permissions: (user as any).permissions,
-    allowedModules: (user as any).allowedModules,
-    kycStatus: user.kycStatus || (user as any).kyc_status || "Pending",
-    kycData: user.kycData || (user as any).kyc_data || undefined,
-    previousEmails: (user as any).previousEmails || ((user as any).previousEmail ? [(user as any).previousEmail] : undefined),
-    previousEmail: (user as any).previousEmail || undefined,
-  };
-
   try {
     const currentAccounts = await fetchModuleDataFromDB<UserItem[]>("users", DEFAULT_SYSTEM_ACCOUNTS, "all");
     const existing = currentAccounts.find(
@@ -199,11 +171,31 @@ export async function recordUserAccountAsync(user: Partial<UserItem>, isNewRegis
     prevSet.delete(normalizedEmail);
     const prevEmailsList = Array.from(prevSet).filter(Boolean);
 
+    // Build the account object safely preserving existing role and properties
     const mergedAccount: UserItem = {
-      ...(existing || {}),
-      ...updatedAccount,
+      id: user.id || existing?.id || `usr_${Date.now()}`,
+      name: user.name !== undefined ? user.name : (existing?.name || "User Account"),
       email: normalizedEmail,
-      username: updatedAccount.username !== undefined ? updatedAccount.username : existing?.username,
+      username: user.username !== undefined ? (user.username ? user.username.toLowerCase().trim() : undefined) : existing?.username,
+      role: user.role !== undefined ? user.role : (existing?.role || "Teams"),
+      companyId: user.companyId !== undefined ? user.companyId : (existing?.companyId || "tech"),
+      companyIds: user.companyIds !== undefined ? user.companyIds : (existing?.companyIds || (existing?.companyId ? [existing.companyId] : ["tech"])),
+      companyName: user.companyName !== undefined ? user.companyName : (existing?.companyName || (user.companyId === "digital" ? "SAAMPARK Digital Marketing" : "SAAMPARK Technology")),
+      branchId: user.branchId !== undefined ? user.branchId : (existing?.branchId || (user as any).branch_id || undefined),
+      branchIds: user.branchIds !== undefined ? user.branchIds : (existing?.branchIds || (user.branchId ? [user.branchId] : undefined)),
+      branchName: user.branchName !== undefined ? user.branchName : (existing?.branchName || (user as any).branch_name || undefined),
+      avatarUrl: user.avatarUrl !== undefined ? user.avatarUrl : (existing?.avatarUrl || (user as any)?.avatar || existing?.avatar || undefined),
+      avatar: (user as any)?.avatar !== undefined ? (user as any)?.avatar : (existing?.avatar || user.avatarUrl || existing?.avatarUrl || undefined),
+      status: user.status !== undefined ? user.status : (existing?.status || "Active"),
+      department: user.department !== undefined ? user.department : (existing?.department || "General"),
+      phone: user.phone !== undefined ? user.phone : (existing?.phone || ""),
+      password: user.password !== undefined ? user.password : (existing?.password || "Password123"),
+      lastLogin: user.lastLogin !== undefined ? user.lastLogin : (existing?.lastLogin || "Just now"),
+      joinedDate: user.joinedDate !== undefined ? user.joinedDate : (existing?.joinedDate || new Date().toISOString().split("T")[0]),
+      permissions: (user as any).permissions !== undefined ? (user as any).permissions : existing?.permissions,
+      allowedModules: (user as any).allowedModules !== undefined ? (user as any).allowedModules : existing?.allowedModules,
+      kycStatus: user.kycStatus !== undefined ? user.kycStatus : (existing?.kycStatus || (user as any).kyc_status || "Pending"),
+      kycData: user.kycData !== undefined ? user.kycData : (existing?.kycData || (user as any).kyc_data || undefined),
       previousEmails: prevEmailsList.length > 0 ? prevEmailsList : undefined,
       previousEmail: prevEmailsList.length > 0 ? prevEmailsList[prevEmailsList.length - 1] : undefined,
     };
@@ -221,8 +213,8 @@ export async function recordUserAccountAsync(user: Partial<UserItem>, isNewRegis
 
     const updatedList = [mergedAccount, ...cleaned];
 
-    if (prevName && prevName.trim() !== updatedAccount.name.trim()) {
-      cascadeUserNameChange(prevName, normalizedEmail, updatedAccount.name).catch(() => {});
+    if (prevName && prevName.trim() !== mergedAccount.name.trim()) {
+      cascadeUserNameChange(prevName, normalizedEmail, mergedAccount.name).catch(() => {});
     }
 
     await saveUserAccounts(updatedList);
@@ -256,7 +248,7 @@ export async function recordUserAccountAsync(user: Partial<UserItem>, isNewRegis
     window.dispatchEvent(new Event("storage"));
     window.dispatchEvent(new CustomEvent("saampark_data_synced"));
   }
-  return updatedAccount;
+  return null;
 }
 
 // Helper: record user account (sync wrapper)
