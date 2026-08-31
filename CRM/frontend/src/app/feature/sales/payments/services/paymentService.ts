@@ -304,7 +304,7 @@ export const settleOrUpdatePaymentToCompleted = async (params: {
         due: "₹0",
         paymentReceived: `₹${newPaid.toLocaleString("en-IN")}`,
       }
-      await saveStoredClient(updatedClient, targetClient.companyId || companyId)
+      await saveStoredClient(updatedClient, targetClient.companyId)
     }
   } catch (err) {
     console.warn("Error syncing client in settleOrUpdatePaymentToCompleted:", err)
