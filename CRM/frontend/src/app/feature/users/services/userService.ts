@@ -115,6 +115,8 @@ export async function saveUserAccounts(accounts: UserItem[]): Promise<void> {
     saveModuleDataToDB("users", accounts, "tech"),
     saveModuleDataToDB("users", accounts, "digital")
   ]);
+  // Bust users cache so next read always fetches fresh data after a write
+  invalidateUsersCache();
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("storage"));
     window.dispatchEvent(new CustomEvent("saampark_data_synced"));
@@ -635,6 +637,29 @@ export async function deleteUser(id: string, email?: string): Promise<boolean> {
 
 const HIDDEN_MASTER_EMAILS = ["supriyo.main@gmail.com"];
 
+// ── Users Cache ──────────────────────────────────────────────────────────────
+// Prevents repeated API calls on every render — only fetches fresh when
+// company/branch switches or after a write (add/edit/delete user).
+const USERS_CACHE_TTL_MS = 60_000; // 1 minute
+let _usersCacheData: UserItem[] | null = null;
+let _usersCacheTime = 0;
+let _usersCacheKey = ""; // tracks last company scope used
+
+export function invalidateUsersCache(): void {
+  _usersCacheData = null;
+  _usersCacheTime = 0;
+  _usersCacheKey = "";
+}
+
+// Listen for company/branch switch events to bust the cache automatically
+if (typeof window !== "undefined") {
+  const bustCache = () => invalidateUsersCache();
+  window.addEventListener("saampark_company_switched", bustCache);
+  window.addEventListener("saampark_branch_switched", bustCache);
+  window.addEventListener("saampark_subbranch_switched", bustCache);
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Fetch user accounts persistently synced across all devices via MySQL DB
 export async function getUsers(companyId?: string): Promise<UserItem[]> {
   const mapRoleName = (r?: string, rId?: number): UserRole => {
@@ -751,6 +776,15 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
   } catch {}
 
   // 2. Merge with live backend /users database table if available
+  // Use cache if data is fresh and same scope requested — avoids repeated API hits
+  const cacheKey = companyId || "all";
+  const now = Date.now();
+  const cacheValid = _usersCacheData !== null && (now - _usersCacheTime) < USERS_CACHE_TTL_MS && _usersCacheKey === cacheKey;
+
+  if (cacheValid) {
+    return _usersCacheData!;
+  }
+
   try {
     const res = await api.get("/users");
     const rawData = Array.isArray(res) ? res : res?.data?.users || res?.data || [];
@@ -940,6 +974,11 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
 
   const cleanUsers = Array.from(uniqueUsersMap.values());
   saveModuleDataToDB("users", cleanUsers, "all").catch(() => {});
+
+  // Store result in cache
+  _usersCacheData = cleanUsers;
+  _usersCacheTime = Date.now();
+  _usersCacheKey = cacheKey;
 
   if (!companyId || companyId === "all") {
     return cleanUsers;
