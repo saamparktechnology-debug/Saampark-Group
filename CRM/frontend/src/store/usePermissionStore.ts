@@ -2,83 +2,162 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { Role, User } from './useAuthStore'
 
-export const ALL_NAV_MODULES = [
+// The complete, clean list of all real CRM modules in the application
+export const ALL_APP_MODULES = [
+  // CRM & Sales
+  'Leads',
+  'Clients',
+  'Proposals',
+  'Quotations',
+  'Estimates',
+  'Sales Orders',
+  'Invoices',
+  'Payments',
+  'Credit Notes',
+  'Debit Notes',
+  'Services & Store',
+
+  // Projects & Operations
+  'Projects',
+  'Tasks',
+
+  // Subscriptions & Retainers
+  'Subscriptions',
+  'EMI',
+
+  // HR & Workforce
+  'Teams',
+  'Attendance',
+  'Leave',
+  'Payroll',
+
+  // Support & Communication
+  'Tickets',
+  'Knowledge base',
+  'Messages',
+  'Events',
+  'Notes',
+  'Files',
+
+  // Organisation & Administration
   'Dashboard',
-  'Events',
-  'Clients',
-  'Projects',
-  'Tasks',
-  'Leads',
-  'Subscriptions',
-  'EMI',
-  'Sales',
-  'Estimates',
-  'Notes',
-  'Messages',
-  'Teams',
+  'Companies',
+  'Branches',
+  'Departments',
   'Users',
-  'Tickets',
-  'Knowledge base',
-  'Files',
+  'Permissions',
   'Expenses',
   'Reports',
   'Settings',
+  'Activity Logs',
 ] as const
 
-// Configurable modules in permission matrix (Dashboard is removed from configurable CRUD since it's global view)
-export const CONFIGURABLE_MODULES = [
-  'Events',
-  'Clients',
-  'Projects',
-  'Tasks',
-  'Leads',
-  'Subscriptions',
-  'EMI',
-  'Sales',
-  'Estimates',
-  'Notes',
-  'Messages',
-  'Teams',
-  'Users',
-  'Tickets',
-  'Knowledge base',
-  'Files',
-  'Expenses',
-  'Reports',
-  'Settings',
-] as const
+export type AppModuleName = typeof ALL_APP_MODULES[number]
+export type ModuleName = AppModuleName | string
 
+// Configurable modules (Dashboard is global view)
+export const CONFIGURABLE_MODULES = ALL_APP_MODULES.filter(m => m !== 'Dashboard')
 export const ALL_MODULE_NAMES = CONFIGURABLE_MODULES
+export const ALL_NAV_MODULES = ALL_APP_MODULES
 
-export type ModuleName = typeof ALL_NAV_MODULES[number]
+// Core CRUD actions
+export const ALL_ACTIONS = ['view', 'add', 'edit', 'delete'] as const
+export type ActionType = typeof ALL_ACTIONS[number]
 
 export interface ModuleActionFlags {
   view: boolean
   add: boolean
   edit: boolean
   delete: boolean
+  [key: string]: boolean | undefined
 }
 
-export const MODULE_ACTION_CONFIG: Record<string, { hasAdd: boolean; hasEdit: boolean; hasDelete: boolean; description: string }> = {
-  Events: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage calendar schedules & reminders" },
-  Clients: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage customer profiles & accounts" },
-  Projects: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage delivery roadmaps & milestones" },
-  Tasks: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage deliverables, kanban & status" },
-  Leads: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage sales pipeline & telecalling" },
-  Subscriptions: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage recurring retainers & billing cycles" },
-  EMI: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage part-payment contracts & milestone installments" },
-  Sales: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage tax invoices, orders & payments" },
-  Estimates: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage dynamic itemized service quotes" },
-  Notes: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage global broadcasts & scratchpads" },
-  Messages: { hasAdd: true, hasEdit: false, hasDelete: true, description: "Real-time multi-user live chat" },
-  Teams: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage team directory, member banking & salary/payout ledger" },
-  Users: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage account logins & RBAC permissions" },
-  Tickets: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage dispute inquiries & resolutions" },
-  'Knowledge base': { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage help center articles & guides" },
-  Files: { hasAdd: true, hasEdit: false, hasDelete: true, description: "Manage cloud document & Google Drive links" },
-  Expenses: { hasAdd: true, hasEdit: true, hasDelete: true, description: "Manage operating expenses & approvals" },
-  Reports: { hasAdd: false, hasEdit: true, hasDelete: false, description: "View & export business analytics" },
-  Settings: { hasAdd: false, hasEdit: true, hasDelete: false, description: "Configure system & workspace preferences" },
+export const MODULE_ACTION_CONFIG: Record<string, { view: boolean; add: boolean; edit: boolean; delete: boolean; hasAdd: boolean; hasEdit: boolean; hasDelete: boolean; description: string }> = ALL_APP_MODULES.reduce((acc, mod) => {
+  acc[mod] = {
+    view: true,
+    add: true,
+    edit: true,
+    delete: true,
+    hasAdd: true,
+    hasEdit: true,
+    hasDelete: true,
+    description: `Manage ${mod} records with view, add, edit, delete capabilities`
+  }
+  return acc
+}, {} as any)
+
+// Clean module categories for intuitive UI display
+export const CLEAN_MODULE_CATEGORIES: Record<string, { label: string; icon: string; modules: { key: string; name: string; description: string }[] }> = {
+  crm: {
+    label: "CRM & Sales Pipeline",
+    icon: "Target",
+    modules: [
+      { key: "Leads", name: "Leads", description: "Telecalling pipeline, cold leads & status progression" },
+      { key: "Clients", name: "Clients", description: "Client accounts, contact directories & profiles" },
+      { key: "Proposals", name: "Proposals", description: "Digital commercial proposals & e-signatures" },
+      { key: "Quotations", name: "Quotations", description: "Itemized formal customer price quotes" },
+      { key: "Estimates", name: "Estimates", description: "Dynamic cost estimations with tax calculations" },
+      { key: "Sales Orders", name: "Sales Orders", description: "Confirmed customer purchase & sales orders" },
+      { key: "Invoices", name: "Invoices", description: "Tax invoices, billing releases & payment tracking" },
+      { key: "Payments", name: "Payments", description: "Payment collections, bank receipts & ledger" },
+      { key: "Credit Notes", name: "Credit Notes", description: "Credit adjustments and bill reversals" },
+      { key: "Debit Notes", name: "Debit Notes", description: "Supplementary debit claims and debits" },
+      { key: "Services & Store", name: "Services & Store", description: "Standardized service catalog and pricing" },
+    ]
+  },
+  projects: {
+    label: "Projects & Tasks",
+    icon: "KanbanSquare",
+    modules: [
+      { key: "Projects", name: "Projects", description: "Client deliverables, execution phases & progress" },
+      { key: "Tasks", name: "Tasks", description: "Kanban task boards, milestones & priorities" },
+    ]
+  },
+  subscriptions: {
+    label: "Subscriptions & EMI",
+    icon: "CreditCard",
+    modules: [
+      { key: "Subscriptions", name: "Subscriptions", description: "Recurring retainers and recurring billing cycles" },
+      { key: "EMI", name: "EMI Milestone Plans", description: "Installment payment contracts and milestones" },
+    ]
+  },
+  hr: {
+    label: "HR & Workforce Management",
+    icon: "UserCheck",
+    modules: [
+      { key: "Teams", name: "Teams & Members", description: "Staff directory, profiles & bank details" },
+      { key: "Attendance", name: "Attendance & Timecards", description: "Real-time shift punch clock and timesheets" },
+      { key: "Leave", name: "Leave Management", description: "Leave requests, balances & annual holidays" },
+      { key: "Payroll", name: "Payroll & Payouts", description: "Monthly salary calculations, payslips & payouts" },
+    ]
+  },
+  support: {
+    label: "Support & Communication",
+    icon: "HeadphonesIcon",
+    modules: [
+      { key: "Tickets", name: "Tickets", description: "Customer support tickets, SLAs & resolutions" },
+      { key: "Knowledge base", name: "Knowledge Base", description: "Help center articles, FAQs & tutorials" },
+      { key: "Messages", name: "Messages", description: "Real-time internal and team live messaging" },
+      { key: "Events", name: "Events", description: "Shared corporate calendar and milestone reminders" },
+      { key: "Notes", name: "Notes", description: "Global announcements and scratchpads" },
+      { key: "Files", name: "Files", description: "Cloud documents, attachments & vault" },
+    ]
+  },
+  admin: {
+    label: "Organisation & Governance",
+    icon: "Building2",
+    modules: [
+      { key: "Companies", name: "Companies", description: "Multi-tenant company profiles and branding" },
+      { key: "Branches", name: "Branches", description: "Branch offices, locations & regional centers" },
+      { key: "Departments", name: "Departments", description: "Corporate business units & divisions" },
+      { key: "Users", name: "Users", description: "User account credentials and login management" },
+      { key: "Permissions", name: "Permissions", description: "Role-based access control and matrices" },
+      { key: "Expenses", name: "Expenses", description: "Operating overheads, approvals & claims" },
+      { key: "Reports", name: "Reports", description: "Financial audits, P&L exports & analytics" },
+      { key: "Settings", name: "Settings", description: "Workspace preferences and system configuration" },
+      { key: "Activity Logs", name: "Activity Logs", description: "Tamper-evident system activity and login logs" },
+    ]
+  }
 }
 
 export const DEFAULT_FULL_ACTIONS: ModuleActionFlags = {
@@ -114,16 +193,18 @@ export function normalizeRole(role: string): Role {
 }
 
 export const DEFAULT_ROLE_PERMISSIONS: Record<Role, ModuleName[]> = {
-  'Super Admin': [...ALL_NAV_MODULES],
-  'Admin': [...ALL_NAV_MODULES],
+  'Super Admin': [...ALL_APP_MODULES],
+  'Admin': [...ALL_APP_MODULES],
   'Teams': [
-    'Dashboard', 'Events', 'Clients', 'Projects', 'Tasks',
-    'Leads', 'Subscriptions', 'EMI', 'Sales', 'Estimates', 'Notes',
-    'Messages', 'Tickets', 'Knowledge base', 'Files',
-    'Expenses', 'Reports', 'Settings'
+    'Dashboard', 'Leads', 'Clients', 'Proposals', 'Quotations', 'Estimates',
+    'Sales Orders', 'Invoices', 'Payments', 'Services & Store', 'Projects',
+    'Tasks', 'Teams', 'Attendance', 'Leave', 'Tickets', 'Knowledge base',
+    'Messages', 'Events', 'Notes', 'Files', 'Expenses', 'Reports', 'Settings'
   ],
   'Clients': [
-    'Dashboard', 'Projects', 'Subscriptions', 'EMI', 'Sales', 'Estimates', 'Messages', 'Tickets', 'Files', 'Settings'
+    'Dashboard', 'Projects', 'Tasks', 'Subscriptions', 'EMI', 'Invoices',
+    'Payments', 'Tickets', 'Knowledge base', 'Messages', 'Files', 'Settings',
+    'Leads', 'Proposals', 'Estimates'
   ]
 }
 
@@ -135,47 +216,35 @@ export const DEFAULT_ROLE_ACTION_PERMISSIONS: Record<Role, Record<string, Module
   })(),
   'Admin': (() => {
     const init: Record<string, ModuleActionFlags> = {}
-    const adminMods = DEFAULT_ROLE_PERMISSIONS['Admin']
     CONFIGURABLE_MODULES.forEach((m) => {
-      const isAllowed = adminMods.includes(m as ModuleName)
-      const config = MODULE_ACTION_CONFIG[m] || { hasAdd: true, hasEdit: true, hasDelete: true }
-      init[m] = isAllowed
-        ? {
-            view: true,
-            add: config.hasAdd !== false,
-            edit: config.hasEdit !== false,
-            delete: config.hasDelete !== false,
-          }
-        : { view: false, add: false, edit: false, delete: false }
+      init[m] = { view: true, add: true, edit: true, delete: true }
     })
     return init
   })(),
   'Teams': (() => {
     const init: Record<string, ModuleActionFlags> = {}
-    const teamMods = DEFAULT_ROLE_PERMISSIONS['Teams']
     CONFIGURABLE_MODULES.forEach((m) => {
-      const isAllowed = teamMods.includes(m as ModuleName)
-      const config = MODULE_ACTION_CONFIG[m] || { hasAdd: true, hasEdit: true, hasDelete: true }
-      init[m] = isAllowed
-        ? {
-            view: true,
-            add: config.hasAdd !== false,
-            edit: config.hasEdit !== false,
-            delete: false,
-          }
-        : { view: false, add: false, edit: false, delete: false }
+      const isRestricted = ['Companies', 'Branches', 'Permissions', 'Payroll', 'Settings'].includes(m)
+      init[m] = {
+        view: !isRestricted,
+        add: !isRestricted,
+        edit: !isRestricted,
+        delete: false,
+      }
     })
     return init
   })(),
   'Clients': (() => {
     const init: Record<string, ModuleActionFlags> = {}
-    const clientMods = DEFAULT_ROLE_PERMISSIONS['Clients']
+    const clientAllowed = ['Dashboard', 'Projects', 'Tasks', 'Subscriptions', 'EMI', 'Invoices', 'Tickets', 'Knowledge base', 'Messages', 'Files', 'Leads', 'Proposals', 'Estimates']
     CONFIGURABLE_MODULES.forEach((m) => {
-      const isAllowed = clientMods.includes(m as ModuleName)
-      const canAdd = ['Tickets', 'Messages'].includes(m)
-      init[m] = isAllowed
-        ? { view: true, add: canAdd, edit: false, delete: false }
-        : { view: false, add: false, edit: false, delete: false }
+      const allowed = clientAllowed.includes(m)
+      init[m] = {
+        view: allowed,
+        add: ['Tickets', 'Messages', 'Leads'].includes(m),
+        edit: ['Tickets', 'Leads'].includes(m),
+        delete: false,
+      }
     })
     return init
   })(),
@@ -193,7 +262,7 @@ interface PermissionState {
   setRolePermissions: (role: Role, modules: ModuleName[]) => void
   setRoleAllModuleActions: (role: Role, matrix: Record<string, ModuleActionFlags>) => void
   setUserPermissions: (userId: string, modules: ModuleName[]) => void
-  setUserModuleAction: (userId: string, moduleName: ModuleName, action: keyof ModuleActionFlags, value: boolean) => void
+  setUserModuleAction: (userId: string, moduleName: ModuleName, action: ActionType, value: boolean) => void
   setUserAllModuleActions: (userId: string, matrix: Record<string, ModuleActionFlags>) => void
   resetToDefaults: () => void
   
@@ -201,7 +270,7 @@ interface PermissionState {
   isModuleAllowed: (user: User | null, moduleName: string) => boolean
   getModulesForUser: (user: User | null) => ModuleName[]
   getUserModuleActions: (user: User | null, moduleName: string) => ModuleActionFlags
-  canPerformAction: (user: User | null, moduleName: string, action: keyof ModuleActionFlags) => boolean
+  canPerformAction: (user: User | null, moduleName: string, action: ActionType) => boolean
 }
 
 export const usePermissionStore = create<PermissionState>()(
@@ -214,26 +283,18 @@ export const usePermissionStore = create<PermissionState>()(
 
       fetchRolePermissions: async () => {
         try {
-          const { fetchModuleDataFromDB } = await import('@/lib/storageSync')
-          const dbData = await fetchModuleDataFromDB<any>('role_permissions', null, 'all')
-          if (dbData && typeof dbData === 'object') {
-            const updates: Partial<PermissionState> = {}
-            if (dbData.rolePermissions && typeof dbData.rolePermissions === 'object') {
-              updates.rolePermissions = { ...get().rolePermissions, ...dbData.rolePermissions }
-            }
-            if (dbData.roleActionPermissions && typeof dbData.roleActionPermissions === 'object') {
-              const currentActionPerms = get().roleActionPermissions || {}
-              const mergedActionPerms: Record<string, Record<string, ModuleActionFlags>> = { ...currentActionPerms }
-              for (const [r, matrix] of Object.entries(dbData.roleActionPermissions)) {
-                if (matrix && typeof matrix === 'object') {
-                  mergedActionPerms[r] = { ...(matrix as any) }
-                }
+          const { PermissionService } = await import('@/services/permissionService')
+          const res = await PermissionService.getAllRoleMatrices()
+          const data = res?.data?.data || res?.data
+          if (data && typeof data === 'object') {
+            const current = get().roleActionPermissions || DEFAULT_ROLE_ACTION_PERMISSIONS
+            const updated = { ...current }
+            for (const [r, matrix] of Object.entries(data)) {
+              if (matrix && typeof matrix === 'object') {
+                updated[r as Role] = { ...(updated[r as Role] || {}), ...(matrix as any) }
               }
-              updates.roleActionPermissions = mergedActionPerms as any
             }
-            if (Object.keys(updates).length > 0) {
-              set(updates)
-            }
+            set({ roleActionPermissions: updated })
           }
         } catch (err) {
           console.warn('fetchRolePermissions error:', err)
@@ -241,27 +302,18 @@ export const usePermissionStore = create<PermissionState>()(
       },
 
       fetchUserPermissions: async (userId?: string) => {
+        if (!userId) return
         try {
-          const { fetchModuleDataFromDB } = await import('@/lib/storageSync')
-          const dbData = await fetchModuleDataFromDB<any>('user_permissions', null, 'all')
-          if (dbData && typeof dbData === 'object') {
-            const updates: Partial<PermissionState> = {}
-            if (dbData.userPermissions && typeof dbData.userPermissions === 'object') {
-              updates.userPermissions = { ...get().userPermissions, ...dbData.userPermissions }
-            }
-            if (dbData.userActionPermissions && typeof dbData.userActionPermissions === 'object') {
-              const currentActionPerms = get().userActionPermissions || {}
-              const merged: Record<string, Record<string, ModuleActionFlags>> = { ...currentActionPerms }
-              for (const [uId, matrix] of Object.entries(dbData.userActionPermissions)) {
-                if (matrix && typeof matrix === 'object') {
-                  merged[uId] = { ...(matrix as any) }
-                }
+          const { PermissionService } = await import('@/services/permissionService')
+          const res = await PermissionService.getUserMatrix(userId)
+          const data = res?.data?.data || res?.data
+          if (data && typeof data === 'object') {
+            set((state) => ({
+              userActionPermissions: {
+                ...state.userActionPermissions,
+                [userId]: data
               }
-              updates.userActionPermissions = merged
-            }
-            if (Object.keys(updates).length > 0) {
-              set(updates)
-            }
+            }))
           }
         } catch (err) {
           console.warn('fetchUserPermissions error:', err)
@@ -283,7 +335,10 @@ export const usePermissionStore = create<PermissionState>()(
         set((state) => ({
           roleActionPermissions: {
             ...(state.roleActionPermissions || DEFAULT_ROLE_ACTION_PERMISSIONS),
-            [norm]: matrix,
+            [norm]: {
+              ...((state.roleActionPermissions || {})[norm] || {}),
+              ...matrix,
+            },
           },
         }))
       },
@@ -297,7 +352,7 @@ export const usePermissionStore = create<PermissionState>()(
         }))
       },
 
-      setUserModuleAction: (userId: string, moduleName: ModuleName, action: keyof ModuleActionFlags, value: boolean) => {
+      setUserModuleAction: (userId: string, moduleName: ModuleName, action: ActionType, value: boolean) => {
         set((state) => {
           const userMatrix = state.userActionPermissions[userId] || {}
           const currentFlags = userMatrix[moduleName] || { view: false, add: false, edit: false, delete: false }
@@ -340,11 +395,10 @@ export const usePermissionStore = create<PermissionState>()(
       isModuleAllowed: (user: User | null, moduleName: string) => {
         if (!user) return false
         
-        // Dashboard is ALWAYS accessible to all logged in users
-        if (moduleName === 'Dashboard') return true
+        const mKey = String(moduleName || '').toLowerCase().trim()
+        if (mKey === 'dashboard') return true
 
         const normRole = normalizeRole(user.role)
-        // Super Admin ALWAYS has master access to all modules
         if (normRole === 'Super Admin') return true
 
         const state = get()
@@ -352,7 +406,6 @@ export const usePermissionStore = create<PermissionState>()(
         const emailStr = (user.email || '').toLowerCase().trim()
 
         const uAny = user as any
-        // 1. Extract explicit user allowed modules array from user object or Zustand store
         let userAllowed: string[] | undefined = undefined
         if (Array.isArray(uAny.allowedModules) && uAny.allowedModules.length > 0) {
           userAllowed = uAny.allowedModules
@@ -370,12 +423,11 @@ export const usePermissionStore = create<PermissionState>()(
           userAllowed = state.userPermissions[userIdStr] || (emailStr ? state.userPermissions[emailStr] : undefined)
         }
 
-        // If user explicitly has an allowed modules list, strictly restrict access to ONLY those modules!
         if (userAllowed && Array.isArray(userAllowed)) {
-          return userAllowed.includes(moduleName as ModuleName)
+          return userAllowed.some(m => m.toLowerCase().trim() === mKey)
         }
 
-        // 2. Check explicit userActionPermissions matrix
+        // Check userActionPermissions matrix
         let userMatrix = state.userActionPermissions[userIdStr] || (emailStr ? state.userActionPermissions[emailStr] : undefined)
         if (!userMatrix && uAny.permissions) {
           let pObj: any = uAny.permissions
@@ -387,86 +439,36 @@ export const usePermissionStore = create<PermissionState>()(
           }
         }
 
-        if (userMatrix && userMatrix[moduleName] !== undefined) {
-          const flags = userMatrix[moduleName]
-          return !!(flags && (flags.view || flags.add || flags.edit || flags.delete))
+        if (userMatrix) {
+          const matchedKey = Object.keys(userMatrix).find(k => k.toLowerCase().trim() === mKey)
+          if (matchedKey && userMatrix[matchedKey]) {
+            const flags = userMatrix[matchedKey]
+            return !!(flags.view || flags.add || flags.edit || flags.delete)
+          }
         }
 
-        // 3. Fallback to role permissions
+        // Fallback to role permissions
         const roleMods = state.rolePermissions[normRole] || DEFAULT_ROLE_PERMISSIONS[normRole] || []
-        return roleMods.includes(moduleName as ModuleName)
+        return roleMods.some(m => m.toLowerCase().trim() === mKey)
       },
 
       getModulesForUser: (user: User | null) => {
         if (!user) return ['Dashboard']
-        
         const normRole = normalizeRole(user.role)
-        if (normRole === 'Super Admin') return [...ALL_NAV_MODULES]
+        if (normRole === 'Super Admin') return [...ALL_APP_MODULES]
 
         const state = get()
-        const userIdStr = String(user.id)
-        const emailStr = (user.email || '').toLowerCase().trim()
-
-        const uAny = user as any
-        let userAllowed: string[] | undefined = undefined
-        if (Array.isArray(uAny.allowedModules) && uAny.allowedModules.length > 0) {
-          userAllowed = uAny.allowedModules
-        } else if (uAny.permissions) {
-          let pObj: any = uAny.permissions
-          if (typeof pObj === 'string') {
-            try { pObj = JSON.parse(pObj) } catch {}
-          }
-          if (pObj && Array.isArray(pObj.allowedModules) && pObj.allowedModules.length > 0) {
-            userAllowed = pObj.allowedModules
-          }
-        }
-
-        if (!userAllowed) {
-          userAllowed = state.userPermissions[userIdStr] || (emailStr ? state.userPermissions[emailStr] : undefined)
-        }
-
-        if (userAllowed && Array.isArray(userAllowed)) {
-          const activeMods = ALL_NAV_MODULES.filter((m) => userAllowed!.includes(m as ModuleName))
-          return activeMods.includes('Dashboard') ? activeMods : ['Dashboard', ...activeMods]
-        }
-
-        let userMatrix = state.userActionPermissions[userIdStr] || (emailStr ? state.userActionPermissions[emailStr] : undefined)
-        if (!userMatrix && uAny.permissions) {
-          let pObj: any = uAny.permissions
-          if (typeof pObj === 'string') {
-            try { pObj = JSON.parse(pObj) } catch {}
-          }
-          if (pObj && pObj.actionMatrix && typeof pObj.actionMatrix === 'object') {
-            userMatrix = pObj.actionMatrix
-          }
-        }
-
-        const roleMods = state.rolePermissions[normRole] || DEFAULT_ROLE_PERMISSIONS[normRole] || ['Dashboard']
-
-        const activeMods = ALL_NAV_MODULES.filter((m) => {
-          if (userMatrix && userMatrix[m] !== undefined) {
-            const flags = userMatrix[m]
-            return flags ? (flags.view || flags.add || flags.edit || flags.delete) : false
-          }
-          return roleMods.includes(m as ModuleName)
-        })
-
-        return activeMods.includes('Dashboard') ? activeMods : ['Dashboard', ...activeMods]
+        return ALL_APP_MODULES.filter(m => state.isModuleAllowed(user, m))
       },
 
       getUserModuleActions: (user: User | null, moduleName: string): ModuleActionFlags => {
         if (!user) return { view: false, add: false, edit: false, delete: false }
         
-        // Dashboard is always viewable
-        if (moduleName === 'Dashboard') return { view: true, add: false, edit: false, delete: false }
+        const mKey = String(moduleName || '').toLowerCase().trim()
+        if (mKey === 'dashboard') return { ...DEFAULT_FULL_ACTIONS }
 
         const normRole = normalizeRole(user.role)
-        // Super Admin ALWAYS has full action rights
         if (normRole === 'Super Admin') return { ...DEFAULT_FULL_ACTIONS }
-
-        // FIRST check if module itself is allowed for this user
-        const isAllowed = get().isModuleAllowed(user, moduleName)
-        if (!isAllowed) return { view: false, add: false, edit: false, delete: false }
 
         const state = get()
         const userIdStr = String(user.id)
@@ -484,81 +486,35 @@ export const usePermissionStore = create<PermissionState>()(
           }
         }
 
-        if (userMatrix && userMatrix[moduleName]) {
-          return userMatrix[moduleName]
+        if (userMatrix) {
+          const matchedKey = Object.keys(userMatrix).find(k => k.toLowerCase().trim() === mKey)
+          if (matchedKey && userMatrix[matchedKey]) {
+            return userMatrix[matchedKey]
+          }
         }
 
         const roleActionMatrix = (state.roleActionPermissions && state.roleActionPermissions[normRole]) || (DEFAULT_ROLE_ACTION_PERMISSIONS[normRole])
-        if (roleActionMatrix && roleActionMatrix[moduleName]) {
-          return roleActionMatrix[moduleName]
+        if (roleActionMatrix) {
+          const matchedKey = Object.keys(roleActionMatrix).find(k => k.toLowerCase().trim() === mKey)
+          if (matchedKey && roleActionMatrix[matchedKey]) {
+            return roleActionMatrix[matchedKey]
+          }
         }
 
-        const roleMods = state.rolePermissions[normRole] || DEFAULT_ROLE_PERMISSIONS[normRole] || []
-        const isModInRole = roleMods.includes(moduleName as ModuleName)
-        if (!isModInRole) return { view: false, add: false, edit: false, delete: false }
-
-        const config = MODULE_ACTION_CONFIG[moduleName] || { hasAdd: true, hasEdit: true, hasDelete: true }
-        if (normRole === 'Teams') {
-          return { view: true, add: config.hasAdd !== false, edit: config.hasEdit !== false, delete: false }
-        }
-        if (normRole === 'Clients') {
-          const canAdd = ['Tickets', 'Messages', 'Leads'].includes(moduleName)
-          const canEdit = ['Leads'].includes(moduleName)
-          const canDelete = ['Leads'].includes(moduleName)
-          return { view: true, add: canAdd, edit: canEdit, delete: canDelete }
-        }
-        return {
-          view: true,
-          add: config.hasAdd !== false,
-          edit: config.hasEdit !== false,
-          delete: config.hasDelete !== false,
-        }
+        return { view: false, add: false, edit: false, delete: false }
       },
 
-      canPerformAction: (user: User | null, moduleName: string, action: keyof ModuleActionFlags): boolean => {
+      canPerformAction: (user: User | null, moduleName: string, action: ActionType): boolean => {
         if (!user) return false
-        
-        // Dashboard is view-only
-        if (moduleName === 'Dashboard') return action === 'view'
-
         const normRole = normalizeRole(user.role)
-        // Super Admin ALWAYS has master access to all actions across all modules
         if (normRole === 'Super Admin') return true
 
-        const flags = get().getUserModuleActions(user, moduleName)
-
-        // Clients can NEVER delete records in administrative modules (Invoices, Projects, Orders, Payments, EMI, etc.)
-        // But if granted Leads permission, they can manage their own private leads
-        if (normRole === 'Clients' && action === 'delete') {
-          if (moduleName === 'Leads') {
-            return Boolean(flags && flags.delete)
-          }
-          return false
-        }
-
-        // Clients can add/edit tickets, messages, and leads (when permitted)
-        if (normRole === 'Clients' && (action === 'edit' || action === 'add')) {
-          if (['Tickets', 'Messages', 'Leads'].includes(moduleName)) {
-            return Boolean(flags && flags[action])
-          }
-          return false
-        }
-
-        return Boolean(flags && flags[action])
-      },
+        const actions = get().getUserModuleActions(user, moduleName)
+        return !!actions[action]
+      }
     }),
     {
-      name: 'saampark-module-permissions',
+      name: 'saampark_clean_permissions_store_v3',
     }
   )
 )
-
-if (typeof window !== 'undefined') {
-  setTimeout(() => {
-    usePermissionStore.getState().fetchRolePermissions?.()
-  }, 100)
-  window.addEventListener('saampark_data_synced', () => {
-    usePermissionStore.getState().fetchRolePermissions?.()
-  })
-}
-

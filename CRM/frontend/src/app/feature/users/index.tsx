@@ -13,6 +13,7 @@ import { UserList } from "./components/UserList"
 import { UserModal } from "./components/UserModal"
 import { UserOverviewModal } from "./components/UserOverviewModal"
 import { ModulePermissionsModal } from "./components/ModulePermissionsModal"
+import { UserPermissionsModal } from "./components/UserPermissionsModal"
 
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { ThreeDotLoader } from "@/components/ui/ThreeDotLoader"
@@ -26,6 +27,7 @@ export default function UsersMain() {
   const [users, setUsers] = React.useState<UserItem[]>([])
   const [isModalOpen, setIsModalOpen] = React.useState(false)
   const [isPermissionsModalOpen, setIsPermissionsModalOpen] = React.useState(false)
+  const [selectedUserForPermissions, setSelectedUserForPermissions] = React.useState<UserItem | null>(null)
   const [editingUser, setEditingUser] = React.useState<UserItem | null>(null)
   const [selectedUserForOverview, setSelectedUserForOverview] = React.useState<UserItem | null>(null)
   const [isOverviewModalOpen, setIsOverviewModalOpen] = React.useState(false)
@@ -571,6 +573,7 @@ export default function UsersMain() {
           onEdit={handleOpenEditModal}
           onToggleStatus={handleToggleStatus}
           onDelete={handleDeleteUser}
+          onManageUserModules={(targetUser) => setSelectedUserForPermissions(targetUser)}
           onViewOverview={(targetUser) => {
             setSelectedUserForOverview(targetUser)
             setIsOverviewModalOpen(true)
@@ -606,6 +609,16 @@ export default function UsersMain() {
       />
 
       {/* Role-Level Module Access Control Modal */}
+      <UserPermissionsModal
+        isOpen={!!selectedUserForPermissions}
+        user={selectedUserForPermissions}
+        onClose={() => setSelectedUserForPermissions(null)}
+        onSaved={() => {
+          setSelectedUserForPermissions(null)
+          fetchUsers()
+        }}
+      />
+
       <ModulePermissionsModal
         isOpen={isPermissionsModalOpen}
         onClose={() => setIsPermissionsModalOpen(false)}

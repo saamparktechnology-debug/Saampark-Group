@@ -298,6 +298,15 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
                       {/* Actions */}
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1">
+                          {onManageUserModules && (
+                            <button
+                              onClick={() => onManageUserModules(u)}
+                              title="Manage User Permissions (View, Add, Edit, Delete)"
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-amber-400 hover:bg-amber-500/10 transition-colors cursor-pointer"
+                            >
+                              <Shield size={16} />
+                            </button>
+                          )}
                           {canEditUsers && (
                             <button
                               onClick={() => onEdit(u)}

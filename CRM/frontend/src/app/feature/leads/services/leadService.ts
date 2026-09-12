@@ -269,7 +269,26 @@ export const getLeads = async (companyId?: string): Promise<Lead[]> => {
     saveModuleDataToDB("leads", processed, companyId)
   }
 
-  return processed
+  // Client Isolation: If client user, only return their private leads.
+  // If Super Admin, Admin, or Teams, never show client private leads.
+  let currentUser: any = null
+  if (typeof window !== "undefined") {
+    try {
+      const { useAuthStore } = require("@/store/useAuthStore")
+      currentUser = useAuthStore.getState().user
+    } catch {}
+  }
+
+  if (currentUser?.role === "Clients") {
+    return processed.filter(l => 
+      l.isClientPrivate === true && 
+      (l.createdById === currentUser.id || l.createdByEmail === currentUser.email || (l as any).clientOwnerId === currentUser.id)
+    )
+  }
+
+  // Super Admin / Admin / Teams: strictly hide client private leads
+  const visibleToAdmins = processed.filter(l => !l.isClientPrivate)
+  return visibleToAdmins
 }
 
 export async function checkAndAutoConvertLeadToClient(lead: Lead, companyId?: string): Promise<void> {
@@ -345,6 +364,16 @@ export const addLead = async (leadData: Omit<Lead, "id">, companyId?: string): P
   const randomSuffix = Math.random().toString(36).substring(2, 6)
   const newId = `lead_${timestamp}_${randomSuffix}`
   
+  let currentUser: any = null
+  if (typeof window !== "undefined") {
+    try {
+      const { useAuthStore } = require("@/store/useAuthStore")
+      currentUser = useAuthStore.getState().user
+    } catch {}
+  }
+
+  const isClientRole = currentUser?.role === "Clients"
+
   const newLead: Lead = {
     ...leadData,
     id: newId,
@@ -354,8 +383,12 @@ export const addLead = async (leadData: Omit<Lead, "id">, companyId?: string): P
     source: leadData.source || "Social Media",
     reminderDate: leadData.reminderDate || "None",
     reminderNotes: leadData.reminderNotes || "",
-    caller: leadData.caller || leadData.owner || "Team",
+    caller: leadData.caller || leadData.owner || (isClientRole ? (currentUser.name || "Client") : "Team"),
     isLocked: false,
+    isClientPrivate: isClientRole ? true : (leadData.isClientPrivate || false),
+    createdById: isClientRole ? currentUser.id : leadData.createdById,
+    createdByEmail: isClientRole ? currentUser.email : leadData.createdByEmail,
+    createdByRole: isClientRole ? "Clients" : leadData.createdByRole,
   }
   const updated = [newLead, ...current.filter((l) => l.id !== newId)]
   await saveModuleDataToDB("leads", updated, companyId)
