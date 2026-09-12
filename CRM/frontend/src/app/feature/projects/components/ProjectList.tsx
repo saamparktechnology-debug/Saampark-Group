@@ -14,19 +14,21 @@ import {
   User,
   MapPin,
   Info,
+  Receipt,
 } from "lucide-react"
 import { Project } from "../types"
 import { ProjectFiltersDropdown } from "./ProjectFiltersDropdown"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
+import { getUserAvatar } from "@/app/feature/users/services/userService"
 
 interface ProjectListProps {
   projects: Project[]
   onOpenAddModal: () => void
   onOpenEditModal: (project: Project) => void
   onDeleteProject: (projectId: string) => void
-  onSelectProjectDetail: (project: Project) => void
+  onSelectProjectDetail: (project: Project, tab?: string) => void
 }
 
 export function ProjectList({
@@ -252,6 +254,7 @@ export function ProjectList({
                   </div>
                 </th>
                 <th className="py-3 px-4">Price</th>
+                <th className="py-3 px-4">Assigned Team</th>
                 <th className="py-3 px-4">Start date</th>
                 <th className="py-3 px-4">Deadline</th>
                 <th className="py-3 px-4 w-32">Progress</th>
@@ -349,6 +352,55 @@ export function ProjectList({
                           <span className="text-amber-600 dark:text-amber-400">Due: ₹{p.dueAmount.toLocaleString("en-IN")}</span>
                         </div>
                       ) : null}
+                    </td>
+
+                    {/* Assigned Team Profile Pictures */}
+                    <td className="py-3.5 px-4">
+                      {Array.isArray(p.members) && p.members.length > 0 ? (
+                        <div className="flex items-center gap-1">
+                          <div className="flex -space-x-2 overflow-hidden hover:space-x-1 transition-all py-1">
+                            {p.members.slice(0, 4).map((m: any, idx: number) => {
+                              const mName = typeof m === "string" ? m : (m.name || "Member")
+                              const mRole = typeof m === "string" ? "Developer" : (m.role || "Developer")
+                              const mAvatar = (m as any).avatarUrl || (m as any).avatar || getUserAvatar(mName, undefined, mName)
+                              return (
+                                <div
+                                  key={idx}
+                                  className="relative group/avatar cursor-pointer shrink-0"
+                                  title={`${mName} (${mRole})`}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    onSelectProjectDetail(p)
+                                  }}
+                                >
+                                  <img
+                                    src={mAvatar}
+                                    alt={mName}
+                                    className="w-7 h-7 rounded-full object-cover border-2 border-white dark:border-zinc-900 bg-surface shadow-2xs hover:scale-115 hover:z-20 transition-transform"
+                                  />
+                                </div>
+                              )
+                            })}
+                          </div>
+                          {p.members.length > 4 && (
+                            <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded-full border border-zinc-200 dark:border-zinc-700">
+                              +{p.members.length - 4}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onSelectProjectDetail(p)
+                          }}
+                          className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                        >
+                          <Plus size={12} />
+                          <span>Assign</span>
+                        </button>
+                      )}
                     </td>
 
                     {/* Start date */}
@@ -459,6 +511,16 @@ export function ProjectList({
                           title="View project details"
                         >
                           <Layout size={14} />
+                        </button>
+
+                        {/* Quick jump to project invoices & billing */}
+                        <button
+                          type="button"
+                          onClick={() => onSelectProjectDetail(p, "Invoices")}
+                          className="p-1 text-zinc-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 rounded transition-colors"
+                          title="Project Invoices & Billing"
+                        >
+                          <Receipt size={14} />
                         </button>
 
                         {canEditProject && (

@@ -34,11 +34,12 @@ export function CompanyBranchSettings() {
     switchCompany
   } = useAuthStore()
 
-  const isSuperAdmin = user?.role === "Super Admin"
-  const isAdmin = user?.role === "Admin"
+  const normRole = (user?.role || "").toLowerCase().trim()
+  const isSuperAdmin = normRole === "super admin" || normRole.includes("super")
+  const isAdmin = !isSuperAdmin && (normRole === "admin" || normRole.includes("admin"))
 
   // Filter companies visible for this user (Clients only see their own created entities)
-  const isClientRole = user?.role === "Clients" || (user?.role as string) === "Client"
+  const isClientRole = normRole.includes("client")
   const visibleCompanies = React.useMemo(() => {
     if (isSuperAdmin) return companies
     if (isClientRole && user) {
@@ -50,7 +51,9 @@ export function CompanyBranchSettings() {
         return (uId && cOwnerId === uId) || (uEmail && cOwnerEmail === uEmail)
       })
     }
-    const adminCompanyIds = user?.companyIds || (user?.companyId ? [user.companyId] : ["tech"])
+    const adminCompanyIds = (user?.companyIds && user.companyIds.length > 0)
+      ? user.companyIds
+      : (user?.companyId ? [user.companyId] : ["tech"])
     return companies.filter((c) => adminCompanyIds.some(id => isMatchingCompany(c, id)))
   }, [isSuperAdmin, isClientRole, companies, user])
 
@@ -1100,7 +1103,7 @@ export function CompanyBranchSettings() {
                       <CheckCircle2 size={13} />
                       <span>Active Workspace</span>
                     </span>
-                  ) : (
+                  ) : (isSuperAdmin || visibleCompanies.length > 1) ? (
                     <button
                       type="button"
                       onClick={() => switchCompany(company.id)}
@@ -1110,7 +1113,7 @@ export function CompanyBranchSettings() {
                       <Building2 size={13} />
                       <span>Switch to this Company</span>
                     </button>
-                  )}
+                  ) : null}
 
                   {/* Super Admin Edit Company & Invoice Details Button */}
                   {isSuperAdmin ? (

@@ -17,6 +17,7 @@ import { addOrder } from "@/app/feature/sales/orders/services/orderService"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 import { executeWithFeedback, useActionFeedbackStore } from "@/store/useActionFeedbackStore"
 import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
+import { OfficialEstimateDocument } from "./components/OfficialEstimateDocument"
 
 export default function EstimatesPage() {
   const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
@@ -666,159 +667,21 @@ export default function EstimatesPage() {
         </div>
       </div>
 
-      {/* ---------------- ESTIMATE DETAIL & QUOTE MODAL ---------------- */}
+      {/* ---------------- ESTIMATE DETAIL & QUOTE MODAL (OFFICIAL PDF DOCUMENT) ---------------- */}
       <AnimatePresence>
         {isDetailModalOpen && selectedEstimate && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.96 }}
-              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden my-8"
-            >
-              {/* Modal Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/40">
-                <div className="flex items-center gap-2">
-                  <Calculator className="text-blue-600" size={20} />
-                  <div>
-                    <h3 className="font-bold text-base text-zinc-900 dark:text-zinc-100">{selectedEstimate.estimateNumber} — Official Quote</h3>
-                    <p className="text-[11px] text-zinc-400">{selectedEstimate.title}</p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsDetailModalOpen(false)}
-                  className="p-1.5 text-zinc-400 hover:text-zinc-600 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-
-              {/* Modal Body */}
-              <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
-                {/* Meta Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 bg-zinc-50 dark:bg-zinc-800/40 rounded-xl text-xs">
-                  <div>
-                    <span className="text-zinc-400 block text-[10px] uppercase font-bold">Client</span>
-                    <span className="font-bold text-zinc-800 dark:text-zinc-200">{selectedEstimate.client}</span>
-                    <span className="text-zinc-400 block text-[10px]">{selectedEstimate.clientEmail}</span>
-                  </div>
-                  <div>
-                    <span className="text-zinc-400 block text-[10px] uppercase font-bold">Quote Date</span>
-                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">{selectedEstimate.date}</span>
-                  </div>
-                  <div>
-                    <span className="text-zinc-400 block text-[10px] uppercase font-bold">Valid Until</span>
-                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">{selectedEstimate.validUntil}</span>
-                  </div>
-                  <div>
-                    <span className="text-zinc-400 block text-[10px] uppercase font-bold">Status</span>
-                    <span className="font-bold text-blue-600 uppercase">{selectedEstimate.status}</span>
-                  </div>
-                </div>
-
-                {/* Service Line Items Table */}
-                <div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Itemized Services & Pricing</h4>
-                  <table className="w-full text-xs text-left border border-zinc-200 dark:border-zinc-700 rounded-lg overflow-hidden">
-                    <thead className="bg-zinc-50 dark:bg-zinc-800 text-zinc-500 uppercase font-semibold text-[10px]">
-                      <tr>
-                        <th className="py-2.5 px-3">Service Name & Scope</th>
-                        <th className="py-2.5 px-3 text-center">Qty</th>
-                        <th className="py-2.5 px-3 text-right">Unit Price</th>
-                        <th className="py-2.5 px-3 text-right">Line Total</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800 text-zinc-700 dark:text-zinc-300">
-                      {selectedEstimate.services.map((s, idx) => (
-                        <tr key={s.id || idx}>
-                          <td className="py-2.5 px-3">
-                            <div className="font-semibold text-zinc-900 dark:text-zinc-100">{s.name}</div>
-                            {s.description && <div className="text-[11px] text-zinc-400">{s.description}</div>}
-                          </td>
-                          <td className="py-2.5 px-3 text-center font-mono">{s.quantity}</td>
-                          <td className="py-2.5 px-3 text-right font-mono">₹{s.unitPrice.toLocaleString("en-IN")}</td>
-                          <td className="py-2.5 px-3 text-right font-bold font-mono">₹{s.total.toLocaleString("en-IN")}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Calculation Summary */}
-                <div className="flex justify-end">
-                  <div className="w-64 space-y-2 text-xs">
-                    <div className="flex justify-between text-zinc-600 dark:text-zinc-400">
-                      <span>Services Subtotal:</span>
-                      <span className="font-semibold">₹{selectedEstimate.subtotal.toLocaleString("en-IN")}</span>
-                    </div>
-                    <div className="flex justify-between text-zinc-600 dark:text-zinc-400">
-                      <span>GST ({selectedEstimate.gstRate}%):</span>
-                      <span className="font-semibold">₹{selectedEstimate.gstAmount.toLocaleString("en-IN")}</span>
-                    </div>
-                    <div className="flex justify-between text-sm font-bold border-t border-zinc-200 dark:border-zinc-700 pt-2 text-zinc-900 dark:text-zinc-100">
-                      <span>Grand Total:</span>
-                      <span className="text-blue-600 dark:text-blue-400">{selectedEstimate.formattedTotal}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {selectedEstimate.notes && (
-                  <div className="p-3 bg-zinc-50 dark:bg-zinc-800/40 rounded-lg text-xs text-zinc-500">
-                    <span className="font-semibold text-zinc-700 dark:text-zinc-300 block mb-1">Terms & Deliverables:</span>
-                    {selectedEstimate.notes}
-                  </div>
-                )}
-              </div>
-
-              {/* Modal Footer Actions */}
-              <div className="flex items-center justify-between px-6 py-4 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/40">
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50"
-                >
-                  <Printer size={13} />
-                  <span>Print Quote</span>
-                </button>
-
-                <div className="flex items-center gap-2">
-                  {isClientRole && selectedEstimate.status === "Sent" && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => handleClientDecline(selectedEstimate)}
-                        className="px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg hover:bg-rose-100"
-                      >
-                        Decline
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleClientAccept(selectedEstimate)}
-                        className="px-4 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm flex items-center gap-1"
-                      >
-                        <Check size={13} />
-                        <span>Accept Estimate</span>
-                      </button>
-                    </>
-                  )}
-
-                  {!isClientRole && selectedEstimate.status === "Accepted" && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsDetailModalOpen(false)
-                        handleConvertToProject(selectedEstimate)
-                      }}
-                      className="px-4 py-1.5 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-lg shadow-sm flex items-center gap-1"
-                    >
-                      <ArrowRight size={13} />
-                      <span>Convert to Project & Invoice</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            </motion.div>
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/75 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto print:p-0 print:bg-white">
+            <OfficialEstimateDocument
+              estimate={selectedEstimate}
+              onClose={() => setIsDetailModalOpen(false)}
+              onAccept={() => handleClientAccept(selectedEstimate)}
+              onDecline={() => handleClientDecline(selectedEstimate)}
+              onConvert={() => {
+                setIsDetailModalOpen(false)
+                handleConvertToProject(selectedEstimate)
+              }}
+              isClientRole={isClientRole}
+            />
           </div>
         )}
       </AnimatePresence>

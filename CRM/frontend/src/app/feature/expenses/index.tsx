@@ -24,6 +24,7 @@ export interface ProjectExtraCharge {
   amount: number
   category: string
   date: string
+  payee?: string
   vendor?: string
   notes?: string
 }
@@ -416,7 +417,7 @@ export default function ExpensesMain() {
                       c.category,
                       `₹${c.amount.toLocaleString("en-IN")}`,
                       c.date,
-                      c.vendor || "Direct Vendor",
+                      c.payee || c.vendor || "Direct Payee",
                     ]),
                     ["SUMMARY", "Contract Billed Revenue", "-", `₹${projectRevenueNum.toLocaleString("en-IN")}`, "-", "-"],
                     ["SUMMARY", "Total Project Expenses", "-", `₹${totalProjectExpenses.toLocaleString("en-IN")}`, "-", "-"],
@@ -455,7 +456,7 @@ export default function ExpensesMain() {
               printPDFReport({
                 title: activeViewTab === "project_wise" && currentProject ? `Project Cost & Net Profit: ${currentProject.title}` : "Operational Expenses Report",
                 subtitle: activeViewTab === "project_wise" && currentProject ? `Contract: ₹${projectRevenueNum.toLocaleString("en-IN")} | Net Profit: ₹${netProfit.toLocaleString("en-IN")} (${profitMarginPct}%)` : (selectedCategory === "all" ? "All Expenses" : selectedCategory),
-                headers: ["Ref #", "Title", "Category", "Amount", "Date", "Member / Vendor", "Status"],
+                headers: ["Ref #", "Title", "Category", "Amount", "Date", "Member / Payee", "Status"],
                 rows: (activeViewTab === "project_wise" ? projectExpenses : filteredExpenses).map((exp, idx) => [
                   exp.expenseNumber,
                   exp.title,
@@ -714,7 +715,7 @@ export default function ExpensesMain() {
                 </div>
                 <div>
                   <h3 className="font-bold text-xs text-zinc-900 dark:text-zinc-100">Select Project to Inspect Profitability</h3>
-                  <p className="text-[11px] text-zinc-500">Live reconciliation of contract billing vs. assigned member costs &amp; custom vendor expenses</p>
+                  <p className="text-[11px] text-zinc-500">Live reconciliation of contract billing vs. assigned member costs &amp; custom payee expenses</p>
                 </div>
               </div>
 
@@ -818,7 +819,7 @@ export default function ExpensesMain() {
               <p className="text-2xl font-black text-purple-600 dark:text-purple-400">
                 ₹{totalExtraChargesNum.toLocaleString("en-IN")}
               </p>
-              <p className="text-[11px] text-zinc-500">{projectExtraCharges.length} subcontractor / vendor charges</p>
+              <p className="text-[11px] text-zinc-500">{projectExtraCharges.length} subcontractor / supplier charges</p>
             </div>
 
             {/* 4. Net Profit & Margin */}
@@ -968,7 +969,7 @@ export default function ExpensesMain() {
                   <Tag size={16} className="text-purple-600" />
                   <span>Custom Direct Extra Charges &amp; Subcontracting Costs</span>
                 </h3>
-                <p className="text-[11px] text-zinc-500">Dedicated vendor supplies, cloud servers, specialized APIs, or subcontractor invoices</p>
+                <p className="text-[11px] text-zinc-500">Dedicated supplies, cloud servers, specialized APIs, or subcontractor invoices</p>
               </div>
 
               <button
@@ -984,7 +985,7 @@ export default function ExpensesMain() {
             {projectExtraCharges.length === 0 ? (
               <div className="p-6 rounded-xl bg-purple-50/20 dark:bg-purple-950/10 border border-dashed border-purple-200/60 dark:border-purple-800/40 text-center text-xs text-zinc-500 space-y-1">
                 <p className="font-semibold text-zinc-800 dark:text-zinc-200">No custom extra charges recorded for this project.</p>
-                <p className="text-[11px]">Click above to add vendor invoices, subcontractor bills, or domain/hosting fees.</p>
+                <p className="text-[11px]">Click above to add supplier bills, subcontractor charges, or domain/hosting fees.</p>
               </div>
             ) : (
               <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
@@ -993,7 +994,7 @@ export default function ExpensesMain() {
                     <tr>
                       <th className="py-2.5 px-3.5">Charge Item</th>
                       <th className="py-2.5 px-3.5">Category</th>
-                      <th className="py-2.5 px-3.5">Vendor / Payee</th>
+                      <th className="py-2.5 px-3.5">Payee / Supplier</th>
                       <th className="py-2.5 px-3.5">Date</th>
                       <th className="py-2.5 px-3.5 text-right">Amount</th>
                       <th className="py-2.5 px-3.5 text-center">Actions</th>
@@ -1008,7 +1009,7 @@ export default function ExpensesMain() {
                             {c.category}
                           </span>
                         </td>
-                        <td className="py-2.5 px-3.5 text-zinc-600 dark:text-zinc-400">{c.vendor || "Direct Vendor"}</td>
+                        <td className="py-2.5 px-3.5 text-zinc-600 dark:text-zinc-400">{c.payee || c.vendor || "Direct Payee"}</td>
                         <td className="py-2.5 px-3.5 font-mono text-zinc-500 text-[11px]">{c.date}</td>
                         <td className="py-2.5 px-3.5 text-right font-mono font-bold text-purple-600 dark:text-purple-400">
                           ₹{c.amount.toLocaleString("en-IN")}
@@ -1312,7 +1313,7 @@ export default function ExpensesMain() {
                       className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden"
                     >
                       <option value="Subcontractor & Specialist Fees">Subcontractor &amp; Specialist Fees</option>
-                      <option value="Vendor / Material Supply">Vendor / Material Supply</option>
+                      <option value="Material & Direct Supply">Material &amp; Direct Supply</option>
                       <option value="Dedicated Cloud VM & Hosting">Dedicated Cloud VM &amp; Hosting</option>
                       <option value="Domain & SSL Certificates">Domain &amp; SSL Certificates</option>
                       <option value="Third-Party API Licenses">Third-Party API Licenses</option>
@@ -1336,7 +1337,7 @@ export default function ExpensesMain() {
                 </div>
 
                 <div>
-                  <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Vendor / Payee Name</label>
+                  <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Payee / Supplier Name</label>
                   <input
                     type="text"
                     placeholder="e.g. CloudTech Solutions Ltd / Rajib Sen"

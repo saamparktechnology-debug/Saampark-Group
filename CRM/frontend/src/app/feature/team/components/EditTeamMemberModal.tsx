@@ -8,6 +8,7 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { updateUser } from "@/app/feature/users/services/userService"
 import { updateMemberBankingDetails } from "../services/teamPaymentService"
 import { Button } from "@/components/ui/Button"
+import { ImageUploadField } from "@/components/ui/ImageUploadField"
 
 interface EditTeamMemberModalProps {
   isOpen: boolean
@@ -27,6 +28,7 @@ export function EditTeamMemberModal({
   const [name, setName] = React.useState("")
   const [email, setEmail] = React.useState("")
   const [phone, setPhone] = React.useState("")
+  const [avatarUrl, setAvatarUrl] = React.useState("")
   const [jobTitle, setJobTitle] = React.useState("")
   const [department, setDepartment] = React.useState("")
   const [branchId, setBranchId] = React.useState("")
@@ -40,6 +42,7 @@ export function EditTeamMemberModal({
       setName(member.name || "")
       setEmail(member.email || "")
       setPhone(member.phone || "")
+      setAvatarUrl(member.avatarUrl || (member as any).avatar || "")
       setJobTitle(member.jobTitle || "")
       setDepartment(member.department || "Engineering & Delivery")
       setBranchId(member.branchId || "")
@@ -76,6 +79,8 @@ export function EditTeamMemberModal({
         branchId: branchId || undefined,
         branchName: selectedBranch?.name || undefined,
         status: status === "Online" ? "Active" : "Active",
+        avatarUrl: avatarUrl.trim() || undefined,
+        avatar: avatarUrl.trim() || undefined,
       }, activeCompanyId || "tech")
 
       if (typeof baseSalary === "number" && baseSalary >= 0) {
@@ -133,6 +138,19 @@ export function EditTeamMemberModal({
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-900 dark:text-zinc-100 font-semibold"
+            />
+          </div>
+
+          {/* Profile Picture Upload */}
+          <div className="p-3 bg-zinc-50 dark:bg-zinc-800/40 rounded-xl border border-zinc-200/80 dark:border-zinc-700/80">
+            <ImageUploadField
+              label="Profile Picture / Avatar"
+              value={avatarUrl}
+              onChange={(url) => setAvatarUrl(url)}
+              placeholder="https://... or upload from device"
+              uploadNamePrefix={`team_${name || "member"}`}
+              maxWidth={400}
+              aspectRatio="square"
             />
           </div>
 

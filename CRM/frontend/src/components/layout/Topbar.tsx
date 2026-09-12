@@ -98,7 +98,7 @@ export function Topbar() {
         const dbRecord = accounts.find((a) => a.email.toLowerCase().trim() === myEmailNorm)
 
         if (dbRecord) {
-          const isSuperUser = myEmailNorm === "hiisupriya@gmail.com" || user.role === "Super Admin" || dbRecord.role === "Super Admin"
+          const isSuperUser = user.role === "Super Admin"
           
           let rawCompIds = dbRecord.companyIds || (dbRecord as any).company_ids || user.companyIds
           let freshCompanyIds: string[] = []
@@ -111,7 +111,7 @@ export function Topbar() {
             freshCompanyIds = [dbRecord.companyId || (dbRecord as any).company_id || "tech"]
           }
 
-          // If current user is Super Admin or Admin with assigned companies, allow switching without reset
+          // If user is Admin, they can only switch between their assigned companies
           const isSuper = isSuperUser
           const currentActive = useAuthStore.getState().activeCompanyId
           const isAllowedActive = freshCompanyIds.some(id => isMatchingCompany({ id, slug: id } as any, currentActive || ""))
@@ -156,8 +156,8 @@ export function Topbar() {
           useAuthStore.setState({
             user: {
               ...user,
-              name: myEmailNorm === "hiisupriya@gmail.com" ? "Supriya (Super Admin)" : (dbRecord.name || user.name),
-              role: isSuper ? "Super Admin" : dbRecord.role,
+              name: dbRecord.name || user.name,
+              role: user.role,
               avatar: freshAvatar,
               avatarUrl: freshAvatar,
               companyId: nextActive || "tech",
@@ -287,231 +287,54 @@ export function Topbar() {
       style={{ left: isMobile ? 0 : (isSidebarCollapsed ? 64 : 256) }}
       className="fixed top-0 right-0 h-16 glass-panel border-b border-border/50 flex items-center justify-between px-3 sm:px-6 z-30 transition-[left] duration-300 ease-in-out bg-surface/90 backdrop-blur-md"
     >
-      {/* ── LEFT: Hamburger + Nav shortcuts ─────────────────────────────── */}
-      <div className="flex items-center gap-1">
+      {/* ── LEFT: Hamburger + Page Title with Verified Badge ── */}
+      <div className="flex items-center gap-3">
         <Button
           variant="ghost" size="icon"
           onClick={(e) => { stop(e); toggleSidebar() }}
-          className="text-muted-foreground hover:text-primary mr-1"
+          className="text-slate-500 hover:text-slate-900 dark:hover:text-white shrink-0"
           title="Toggle Sidebar"
         >
           <Menu size={20} />
         </Button>
 
-        {user.role !== 'Clients' && (
-          <div className="hidden md:flex items-center gap-1">
-            <Button
-              variant="ghost" size="icon"
-              onClick={(e) => { stop(e); openModal("isTodoModalOpen") }}
-              className="text-muted-foreground hover:text-primary"
-              title="Quick To-Do"
-            >
-              <CheckSquare size={20} />
-            </Button>
-            <Link href="/feature/dashboard" onClick={stop}>
-              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary" title="Dashboard">
-                <Monitor size={20} />
-              </Button>
-            </Link>
-            <Link href="/feature/clients" onClick={stop}>
-              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary" title="Clients">
-                <Briefcase size={20} />
-              </Button>
-            </Link>
-            <Link href="/feature/projects" onClick={stop}>
-              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary" title="Projects">
-                <LayoutGrid size={20} />
-              </Button>
-            </Link>
-          </div>
-        )}
-
-        {/* Display Current Company Badge & Switcher */}
-        {activeCompany && (
-          <div className="relative ml-2 sm:ml-4">
-            <div className="flex items-center gap-1.5">
-              {canSwitchEntities ? (
-                <button
-                  type="button"
-                  onClick={(e) => { stop(e); setShowCompanyMenu(v => !v); setShowProfileMenu(false); setShowQuickAdd(false); setShowNotifications(false) }}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-surface-pressed border border-primary/30 hover:border-primary/60 rounded-full text-xs font-semibold text-foreground transition-all cursor-pointer shadow-2xs"
-                  title="Click to switch active company or branch"
-                >
-                  {getCompanyLogoUrl(activeCompany) ? (
-                    <img src={getCompanyLogoUrl(activeCompany)!} alt={activeCompanyName} className="w-5 h-5 rounded-full object-contain shrink-0 bg-white/10" />
-                  ) : (
-                    <span className="text-sm">{activeCompany.logo || "🏢"}</span>
-                  )}
-                  <span className="truncate max-w-[160px] sm:max-w-[220px] font-bold">{activeCompanyName}</span>
-                  <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-bold">Switch ▾</span>
-                </button>
-              ) : (
-                <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-surface-pressed border border-border rounded-full text-xs font-medium text-muted-foreground">
-                  {getCompanyLogoUrl(activeCompany) ? (
-                    <img src={getCompanyLogoUrl(activeCompany)!} alt={activeCompanyName} className="w-5 h-5 rounded-full object-contain shrink-0 bg-white/10" />
-                  ) : (
-                    <span className="text-sm">{activeCompany.logo || "🏢"}</span>
-                  )}
-                  <span className="truncate max-w-[180px] font-bold">{activeCompanyName}</span>
-                </div>
-              )}
-
-              {/* Active Branch Badge */}
-              {activeBranchId && (
-                <div className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10.5px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shadow-2xs">
-                  <MapPin size={12} className="text-amber-500 shrink-0" />
-                  <span className="truncate max-w-[120px]">
-                    {branches.find(b => b.id === activeBranchId)?.name || 'Branch'}
-                  </span>
-                  {(user?.role === "Super Admin" || !user?.branchId || (user.branchIds && user.branchIds.length > 1)) && (
-                    <button
-                      type="button"
-                      onClick={(e) => { stop(e); switchBranch(null) }}
-                      className="hover:text-rose-500 ml-0.5 cursor-pointer text-xs leading-none"
-                      title="Clear branch filter (view all branches)"
-                    >
-                      ×
-                    </button>
-                  )}
-                  {user?.branchId && (!user.branchIds || user.branchIds.length <= 1) && (
-                    <span className="text-[9px] text-amber-500 font-mono ml-0.5">🔒</span>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Company & Branch Dropdown Menu */}
-            <AnimatePresence>
-              {showCompanyMenu && canSwitchEntities && (
-                <motion.div
-                  initial={{ opacity: 0, y: 8, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                  transition={{ duration: 0.13 }}
-                  className="absolute left-0 top-full mt-2 w-80 bg-surface border border-border shadow-2xl rounded-3xl overflow-hidden z-50 py-2.5"
-                >
-                  <p className="px-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1.5">
-                    Select Active Company
-                  </p>
-                  <div className="space-y-1 px-2 max-h-72 overflow-y-auto">
-                    {allowedCompanies.map((comp) => {
-                      const isCurrentActive = isMatchingCompany(comp, activeCompanyId || activeCompany?.id || activeCompany?.slug)
-                      const compBranches = allowedBranches.filter(b => isMatchingCompany(comp, b.companyId))
-                      const compLogoUrl = getCompanyLogoUrl(comp)
-                      const compFullName = getCompanyFullName(comp)
-
-                      return (
-                        <div key={comp.id} className="space-y-1">
-                          <button
-                            type="button"
-                            onClick={() => { switchCompany(comp.id); switchBranch(null); setShowCompanyMenu(false) }}
-                            className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-xl transition-all cursor-pointer ${
-                              isCurrentActive
-                                ? "bg-primary text-primary-foreground font-bold shadow-xs"
-                                : "text-muted-foreground hover:bg-surface-hover hover:text-foreground"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2.5 truncate">
-                              {compLogoUrl ? (
-                                <img src={compLogoUrl} alt={compFullName} className="w-5 h-5 rounded-full object-contain shrink-0 bg-white/20" />
-                              ) : (
-                                <span className="text-base">{comp.logo || "🏢"}</span>
-                              )}
-                              <div className="truncate text-left">
-                                <span className="block truncate font-bold text-xs">{compFullName}</span>
-                                {comp.subtitle && compFullName.toLowerCase() !== comp.subtitle.toLowerCase().trim() && !compFullName.toLowerCase().endsWith(comp.subtitle.toLowerCase().trim()) && (
-                                  <span className="block text-[9.5px] opacity-75 truncate">{comp.subtitle}</span>
-                                )}
-                              </div>
-                            </div>
-                            {isCurrentActive && <Check size={14} className="shrink-0 ml-2" />}
-                          </button>
-
-                          {/* Branches for this company */}
-                          {isCurrentActive && compBranches.length > 0 && (
-                            <div className="pl-6 pr-2 py-1 space-y-1 border-l-2 border-primary/20 ml-4 my-1">
-                              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                                Branches
-                              </p>
-                              <button
-                                type="button"
-                                onClick={() => { switchBranch(null); setShowCompanyMenu(false) }}
-                                className={`w-full text-left px-2 py-1 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
-                                  !activeBranchId
-                                    ? "bg-primary/10 text-primary font-bold"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-surface-hover"
-                                }`}
-                              >
-                                🏢 All Branches / HQ
-                              </button>
-                              {compBranches.map(b => {
-                                const bSubBranches = (subBranches || []).filter(sb => sb.parentBranchId === b.id)
-                                return (
-                                  <div key={b.id} className="space-y-1">
-                                    <button
-                                      type="button"
-                                      onClick={() => { switchBranch(b.id); switchSubBranch(null); setShowCompanyMenu(false) }}
-                                      className={`w-full flex items-center justify-between px-2 py-1 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
-                                        activeBranchId === b.id && !activeSubBranchId
-                                          ? "bg-primary/10 text-primary font-bold"
-                                          : "text-muted-foreground hover:text-foreground hover:bg-surface-hover"
-                                      }`}
-                                    >
-                                      <span className="flex items-center gap-1.5 truncate">
-                                        <MapPin size={12} className="text-primary shrink-0" />
-                                        {b.name}
-                                      </span>
-                                      {activeBranchId === b.id && !activeSubBranchId && <Check size={12} className="shrink-0" />}
-                                    </button>
-
-                                    {/* Nested Sub-Branches with % Share Badge */}
-                                    {bSubBranches.length > 0 && (
-                                      <div className="pl-4 space-y-0.5 border-l border-emerald-500/30 ml-2">
-                                        {bSubBranches.map(sb => (
-                                          <button
-                                            key={sb.id}
-                                            type="button"
-                                            onClick={() => { 
-                                              switchBranch(b.id)
-                                              switchSubBranch(sb.id)
-                                              setShowCompanyMenu(false) 
-                                            }}
-                                            className={`w-full flex items-center justify-between px-2 py-0.5 rounded text-[10.5px] transition-colors cursor-pointer ${
-                                              activeSubBranchId === sb.id
-                                                ? "bg-emerald-500/15 text-emerald-600 font-bold"
-                                                : "text-muted-foreground hover:text-foreground hover:bg-surface-hover"
-                                            }`}
-                                          >
-                                            <span className="flex items-center gap-1 truncate">
-                                              <span>🌿</span>
-                                              <span className="truncate">{sb.name}</span>
-                                              <span className="text-[9px] font-mono text-emerald-600 dark:text-emerald-400">
-                                                ({sb.revenueSharePct}%)
-                                              </span>
-                                            </span>
-                                            {activeSubBranchId === sb.id && <Check size={10} className="text-emerald-600 shrink-0" />}
-                                          </button>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white flex items-center gap-1.5 truncate">
+            <span>{user.role === "Super Admin" ? "Super Admin Dashboard" : `${activeCompanyName} Dashboard`}</span>
+            <span className="w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold shadow-xs">✓</span>
+          </h2>
+          {activeBranchId && (
+            <span className="hidden lg:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+              <MapPin size={11} className="text-amber-500" />
+              {branches.find(b => b.id === activeBranchId)?.name || 'Branch'}
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* ── RIGHT: Actions + Profile ────────────────────────────────────── */}
-      <div className="flex items-center gap-1" onClick={stop}>
+      {/* ── RIGHT: Actions + Profile ── */}
+      <div className="flex items-center gap-2 sm:gap-3" onClick={stop}>
+        {/* Search bar matching screenshot */}
+        <div className="relative hidden md:block w-52 lg:w-64">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search anything..."
+            onClick={() => openModal("isGlobalSearchOpen")}
+            readOnly
+            className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-100 dark:bg-zinc-800/80 border border-slate-200/80 dark:border-zinc-700 rounded-full cursor-pointer placeholder:text-slate-400 focus:outline-hidden hover:bg-slate-200/50 transition-colors"
+          />
+        </div>
+
+        {/* Quick Search on mobile */}
+        <button
+          type="button"
+          onClick={() => openModal("isGlobalSearchOpen")}
+          className="p-1.5 text-slate-500 hover:text-slate-900 dark:hover:text-white rounded-lg md:hidden"
+          title="Search"
+        >
+          <Search size={18} />
+        </button>
 
         {/* Search */}
         {user.role !== 'Clients' && (
@@ -674,18 +497,27 @@ export function Topbar() {
 
         <div className="h-6 w-[1px] bg-border mx-1" />
 
-        {/* Profile dropdown */}
+        {/* Profile chip matching screenshot */}
         <div className="relative">
-          <motion.div
-            whileHover={{ scale: 1.02 }}
+          <div
             onClick={() => { setShowProfileMenu(v => !v); setShowQuickAdd(false); setShowNotifications(false); setShowCompanyMenu(false) }}
-            className="flex items-center gap-2 cursor-pointer p-1 rounded-full hover:bg-surface-hover/50 transition-colors pr-2 sm:pr-3 select-none"
+            className="flex items-center gap-2.5 cursor-pointer p-1 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors select-none"
           >
-            <div className="w-8 h-8 rounded-full bg-border overflow-hidden shrink-0 border border-border">
-              <img src={(user as any).avatarUrl || user.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${user.name}`} alt={user.name} className="w-full h-full object-cover bg-surface" />
+            <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 border border-slate-200 dark:border-zinc-700 shadow-xs">
+              <img
+                key={(user as any)?.avatarUrl || user?.avatar || user?.name || "topbar_avatar"}
+                src={(user as any).avatarUrl || user.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${user.name}`}
+                alt={user.name}
+                className="w-full h-full object-cover"
+              />
             </div>
-            <span className="text-sm text-foreground/80 hidden sm:block font-medium truncate max-w-[120px]">{user.name}</span>
-          </motion.div>
+            <div className="hidden lg:block text-left leading-tight pr-1">
+              <span className="text-xs text-slate-900 dark:text-white font-bold block truncate max-w-[140px]">{user.name}</span>
+              <span className="text-[10px] text-slate-400 font-medium block truncate max-w-[140px]">
+                {user.role === "Super Admin" ? "Super Administrator" : user.role}
+              </span>
+            </div>
+          </div>
 
           <AnimatePresence>
             {showProfileMenu && (

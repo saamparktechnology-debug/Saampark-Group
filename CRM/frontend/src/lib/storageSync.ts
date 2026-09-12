@@ -91,7 +91,10 @@ export async function syncGlobalDeletedIds(): Promise<string[]> {
       const res = await api.get("/deleted")
       if (res && res.status !== "error" && !res.error && res.data !== undefined && res.data !== null) {
         const serverIds: string[] = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : [])
-        const merged = Array.from(new Set([...local, ...serverIds.map((s) => String(s).toLowerCase().trim())]))
+        const cleanServer = serverIds
+          .map((s) => String(s).toLowerCase().trim())
+          .filter(id => !PROTECTED_ACCOUNTS.includes(id))
+        const merged = Array.from(new Set([...local, ...cleanServer]))
         deletedCache = merged
         lastDeletedSyncTime = Date.now()
         if (typeof window !== "undefined") {
@@ -112,9 +115,10 @@ export async function syncGlobalDeletedIds(): Promise<string[]> {
   return inFlightDeletedSync
 }
 
-export function isGlobalItemDeleted(id: string | number, deletedIds?: string[]): boolean {
+export function isGlobalItemDeleted(id: string | number, deletedIds?: string[], moduleName?: string): boolean {
   if (!id || !deletedIds || !Array.isArray(deletedIds) || deletedIds.length === 0) return false
   const strId = String(id).toLowerCase().trim()
+  if (PROTECTED_ACCOUNTS.includes(strId)) return false
   return deletedIds.includes(strId)
 }
 
@@ -158,10 +162,25 @@ export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: 
   let targetCompany = companyId
 
   try {
-    if (!targetCompany && typeof window !== "undefined") {
+    if (typeof window !== "undefined") {
       try {
         const { useAuthStore } = require("@/store/useAuthStore")
-        targetCompany = useAuthStore.getState().activeCompanyId || undefined
+        const authState = useAuthStore.getState()
+        const authUser = authState.user
+        if (!targetCompany) {
+          targetCompany = authState.activeCompanyId || undefined
+        }
+        // Strict company assignment validation for non-Super Admin
+        if (authUser && authUser.role !== "Super Admin" && targetCompany && targetCompany !== "all") {
+          const rawIds = authUser.companyIds || (authUser.companyId ? [authUser.companyId] : ["tech"])
+          const allowedIds = (Array.isArray(rawIds) ? rawIds : [rawIds]).map((id: any) => String(id).toLowerCase().trim())
+          const targetNorm = String(targetCompany).toLowerCase().trim()
+          const isAllowed = allowedIds.some((id: string) => id === targetNorm)
+          if (!isAllowed) {
+            console.warn(`Access denied: User ${authUser.email} cannot access unassigned company ${targetCompany}`)
+            return (Array.isArray(fallbackData) ? [] : fallbackData) as any
+          }
+        }
       } catch {}
     }
 
@@ -225,12 +244,26 @@ export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: 
  * Save module data to MySQL DB — single source of truth.
  */
 export async function saveModuleDataToDB<T>(moduleKey: string, data: T, companyId?: string): Promise<void> {
+  let targetCompany = companyId
   try {
-    let targetCompany = companyId
-    if (!targetCompany && typeof window !== "undefined") {
+    if (typeof window !== "undefined") {
       try {
         const { useAuthStore } = require("@/store/useAuthStore")
-        targetCompany = useAuthStore.getState().activeCompanyId || undefined
+        const authState = useAuthStore.getState()
+        const authUser = authState.user
+        if (!targetCompany) {
+          targetCompany = authState.activeCompanyId || undefined
+        }
+        if (authUser && authUser.role !== "Super Admin" && targetCompany && targetCompany !== "all") {
+          const rawIds = authUser.companyIds || (authUser.companyId ? [authUser.companyId] : ["tech"])
+          const allowedIds = (Array.isArray(rawIds) ? rawIds : [rawIds]).map((id: any) => String(id).toLowerCase().trim())
+          const targetNorm = String(targetCompany).toLowerCase().trim()
+          const isAllowed = allowedIds.some((id: string) => id === targetNorm)
+          if (!isAllowed) {
+            console.warn(`Save denied: User ${authUser.email} cannot write to unassigned company ${targetCompany}`)
+            return
+          }
+        }
       } catch {}
     }
 

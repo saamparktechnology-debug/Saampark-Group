@@ -6,6 +6,8 @@ import { Topbar } from "./Topbar"
 import { useUIStore } from "@/store/useUIStore"
 import { usePathname } from "next/navigation"
 
+import { AppModuleGuard } from "@/components/auth/AppModuleGuard"
+
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const { isSidebarCollapsed } = useUIStore()
   const pathname = usePathname()
@@ -40,7 +42,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         className="relative pt-16 min-h-screen transition-[padding-left] duration-300 ease-in-out w-full min-w-0"
       >
         <div className="p-2.5 sm:p-4 md:p-6 lg:p-8 max-w-[1800px] mx-auto w-full min-w-0 overflow-x-hidden">
-          {children}
+          <AppModuleGuard>
+            {children}
+          </AppModuleGuard>
         </div>
       </main>
     </div>

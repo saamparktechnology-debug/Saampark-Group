@@ -239,6 +239,7 @@ export default function UsersMain() {
           branch_id: userData.branchId || null,
           department: userData.department || "General",
           phone: userData.phone || "",
+          avatar_url: userData.avatarUrl || (userData as any).avatar || undefined,
           permissions: (userData as any).permissions,
         }).catch((err) => {
           console.warn("Backend user create warning:", err)
@@ -261,6 +262,7 @@ export default function UsersMain() {
           company_ids: userData.companyIds,
           branch_id: userData.branchId || null,
           department: userData.department,
+          avatar_url: userData.avatarUrl || (userData as any).avatar || undefined,
           permissions: (userData as any).permissions,
         }).catch((err) => console.warn("Backend user update warning:", err))
       }
@@ -385,6 +387,9 @@ export default function UsersMain() {
           avatarUrl: saved.avatarUrl || currentUser.avatarUrl,
         }
       })
+      if (saved.avatarUrl || (saved as any).avatar) {
+        window.dispatchEvent(new CustomEvent("crm_avatar_changed", { detail: { avatar: saved.avatarUrl || (saved as any).avatar } }))
+      }
     }
 
     if (saved.status === "Inactive") {

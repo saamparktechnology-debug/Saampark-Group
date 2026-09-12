@@ -7,7 +7,7 @@ import {
   Printer, AlertCircle, Share2
 } from "lucide-react"
 import { getInvoices, InvoiceItem } from "@/app/feature/sales/invoices/services/invoiceService"
-import { getCompanyPaymentSettings, CompanyPaymentSettings } from "@/app/feature/settings/services/companyPaymentService"
+import { getCompanyPaymentSettings, CompanyPaymentSettings, DEFAULT_COMPANY_PAYMENT_SETTINGS } from "@/app/feature/settings/services/companyPaymentService"
 import { getClients } from "@/app/feature/clients/services/clientService"
 import { ClientItem } from "@/app/feature/clients/types"
 import { OfficialInvoiceDocument } from "@/app/feature/sales/invoices/components/OfficialInvoiceDocument"
@@ -20,15 +20,7 @@ function PublicInvoiceContent() {
   const invoiceQuery = rawParam.replace(/^#/, "").trim()
 
   const [invoice, setInvoice] = React.useState<InvoiceItem | null>(null)
-  const [paySettings, setPaySettings] = React.useState<CompanyPaymentSettings>({
-    upiId: "saampark@sbi",
-    accountHolderName: "Saampark Technology & Research Pvt. Ltd.",
-    bankName: "State Bank of India",
-    accountNumber: "40912384759",
-    ifscCode: "SBIN0001234",
-    branch: "Balichak Station Road",
-    qrCodeUrl: "",
-  })
+  const [paySettings, setPaySettings] = React.useState<CompanyPaymentSettings>(DEFAULT_COMPANY_PAYMENT_SETTINGS)
   const [clientDetails, setClientDetails] = React.useState<ClientItem | null>(null)
   const [resolvedCompany, setResolvedCompany] = React.useState<Company | null>(null)
   const [isLoading, setIsLoading] = React.useState(true)
@@ -40,15 +32,7 @@ function PublicInvoiceContent() {
       try {
         const [allInvoices, settings, allClients, allCompanies] = await Promise.all([
           getInvoices("all").catch(() => []),
-          getCompanyPaymentSettings("all").catch(() => ({
-            upiId: "saampark@sbi",
-            accountHolderName: "Saampark Technology & Research Pvt. Ltd.",
-            bankName: "State Bank of India",
-            accountNumber: "40912384759",
-            ifscCode: "SBIN0001234",
-            branch: "Balichak Station Road",
-            qrCodeUrl: "",
-          })),
+          getCompanyPaymentSettings("all").catch(() => DEFAULT_COMPANY_PAYMENT_SETTINGS),
           getClients("all").catch(() => []),
           fetchModuleDataFromDB<Company[]>("companies", DEFAULT_COMPANIES, "all").catch(() => DEFAULT_COMPANIES),
         ])

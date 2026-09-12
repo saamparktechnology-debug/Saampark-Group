@@ -6,8 +6,10 @@ import {
   CheckSquare, Clock, Calendar, DollarSign, Plus, Edit2, 
   Trash2, Download, Search, CheckCircle2, MoreHorizontal,
   FileText, PieChart, Users, AlertCircle, TrendingUp, Bell, Grid, Briefcase, Monitor,
-  ShieldCheck, Lock, Unlock, PhoneCall, Check, ExternalLink, UserCheck, Building2, MapPin
+  ShieldCheck, Lock, Unlock, PhoneCall, Check, ExternalLink, UserCheck, Building2, MapPin,
+  ChevronDown, GitBranch, ArrowUp, Eye, ArrowRight
 } from "lucide-react"
+import Link from "next/link"
 import { useAuthStore } from "@/store/useAuthStore"
 import { useTimerStore } from "@/store/useTimerStore"
 import { Button } from "@/components/ui/Button"
@@ -15,7 +17,7 @@ import { Widget } from "./components/Widget"
 import { KPICard } from "./components/KPICard"
 import { DonutChart } from "./components/DonutChart"
 import { BarChartMockup } from "./components/BarChartMockup"
-import { getStoredUserAccountsAsync, getUsers } from "../users/services/userService"
+import { getStoredUserAccountsAsync, getUsers, getUserAvatar } from "../users/services/userService"
 import { taskService } from "../tasks/services/taskService"
 import { getProjects } from "../projects/services/projectService"
 import { getInvoices, InvoiceItem } from "../sales/invoices/services/invoiceService"
@@ -53,6 +55,10 @@ export default function DashboardMain() {
   const [liveInvoices, setLiveInvoices] = React.useState<InvoiceItem[]>([])
   const [liveOrders, setLiveOrders] = React.useState<OrderItem[]>([])
   const [liveExpenses, setLiveExpenses] = React.useState<any[]>([])
+
+  const [activeOverviewTab, setActiveOverviewTab] = React.useState<"companies" | "branches">("companies")
+  const [revenueTimeframe, setRevenueTimeframe] = React.useState("This Year")
+  const [showAttendanceDrawer, setShowAttendanceDrawer] = React.useState(false)
 
   const targetComp = activeCompanyId || user?.companyId || "tech"
   const targetBranch = activeBranchId || user?.branchId || null
@@ -970,7 +976,16 @@ export default function DashboardMain() {
                       liveTasks.slice(0, 5).map((t, i) => (
                         <tr key={t.id || i} className="hover:bg-surface-hover/20 transition-colors">
                           <td className="px-3 py-2.5 font-bold text-foreground">{t.title}</td>
-                          <td className="px-3 py-2.5 text-muted-foreground">{t.assignedTo || "Unassigned"}</td>
+                          <td className="px-3 py-2.5 text-muted-foreground">
+                            <div className="flex items-center gap-2">
+                              <img
+                                src={getUserAvatar(t.assignedTo, undefined, t.assignedTo)}
+                                alt={t.assignedTo || "User"}
+                                className="w-5 h-5 rounded-full border border-border object-cover shrink-0"
+                              />
+                              <span className="font-medium text-foreground">{t.assignedTo || "Unassigned"}</span>
+                            </div>
+                          </td>
                           <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{t.deadline || "-"}</td>
                           <td className="px-3 py-2.5 text-right">
                             <span className={`px-2 py-0.5 text-[10px] font-bold rounded text-white ${

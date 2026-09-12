@@ -42,14 +42,8 @@ export const getProjects = async (companyId?: string): Promise<Project[]> => {
   for (const p of (Array.isArray(scopedData) ? scopedData : [])) {
     if (p && p.id) map.set(String(p.id).toLowerCase().trim(), { ...p, companyId: p.companyId || targetComp })
   }
-  
-  if (map.size === 0 && Array.isArray(allMaster) && allMaster.length > 0) {
-    for (const p of allMaster) {
-      if (p && p.id) map.set(String(p.id).toLowerCase().trim(), p)
-    }
-  }
 
-  return Array.from(map.values())
+  return filterGlobalDeletedItems(Array.from(map.values()))
 }
 
 export const addProject = async (project: Omit<Project, "id">, companyId?: string): Promise<Project> => {
@@ -113,12 +107,6 @@ export const addProject = async (project: Omit<Project, "id">, companyId?: strin
   // Save to effective company
   const updatedScoped = [newProject, ...currentScoped.filter(p => String(p?.id) !== String(newId))]
   await saveModuleDataToDB("projects", updatedScoped, effectiveComp)
-  
-  // Save to default tech company
-  if (effectiveComp !== "tech") {
-    const updatedTech = [newProject, ...currentTech.filter(p => String(p?.id) !== String(newId))]
-    await saveModuleDataToDB("projects", updatedTech, "tech")
-  }
 
   // Save to master "all"
   const updatedAll = [newProject, ...currentAll.filter(p => String(p?.id) !== String(newId))]

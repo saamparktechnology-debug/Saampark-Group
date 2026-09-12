@@ -56,6 +56,13 @@ export interface Branch {
   ifsc_code?: string
   bank_branch?: string
   payment_qr_url?: string
+  bankDetails?: {
+    accountHolder?: string
+    bankName?: string
+    accountNumber?: string
+    ifscCode?: string
+    upiId?: string
+  }
   terms_conditions?: string
   invoice_notes?: string
   status: 'Active' | 'Inactive'
@@ -120,6 +127,7 @@ export interface SubBranch {
 
 export interface Company {
   id: string
+  numeric_id?: number
   name: string
   brand_name?: string
   division_name?: string
@@ -273,6 +281,8 @@ export function isMatchingCompany(
   return (
     String(comp.id || "").toLowerCase().trim() === target ||
     String(comp.slug || "").toLowerCase().trim() === target ||
+    String((comp as any).numeric_id || "").toLowerCase().trim() === target ||
+    String((comp as any).company_id || "").toLowerCase().trim() === target ||
     String(comp.name || "").toLowerCase().trim() === target
   )
 }
@@ -280,6 +290,7 @@ export function isMatchingCompany(
 export const DEFAULT_COMPANIES: Company[] = [
   { 
     id: 'tech', 
+    numeric_id: 1,
     brand_name: 'SAAMPARK',
     division_name: 'TECHNOLOGY',
     name: 'SAAMPARK TECHNOLOGY', 
@@ -289,9 +300,9 @@ export const DEFAULT_COMPANIES: Company[] = [
     slug: 'tech', 
     currency: 'INR',
     currency_symbol: '₹',
-    cin: 'U72900WB2024PTC271234',
-    gstin: '19ABFCS1234D1ZS',
-    pan: 'ABFCS1234D',
+    cin: '',
+    gstin: '',
+    pan: '',
     address: 'Madinipur, Kolkata, Durgapur, West Bengal, India - 721101',
     phone: '+91 9901518567 / +91 9901518569',
     email: 'info@saamparktechnology.com',
@@ -308,6 +319,7 @@ export const DEFAULT_COMPANIES: Company[] = [
   },
   { 
     id: 'digital', 
+    numeric_id: 2,
     brand_name: 'SAAMPARK',
     division_name: 'DIGITAL MARKETING',
     name: 'SAAMPARK DIGITAL MARKETING', 
@@ -317,9 +329,9 @@ export const DEFAULT_COMPANIES: Company[] = [
     slug: 'digital', 
     currency: 'INR',
     currency_symbol: '₹',
-    cin: 'U74999WB2024PTC271890',
-    gstin: '19AAGCS5678E1ZT',
-    pan: 'AAGCS5678E',
+    cin: '',
+    gstin: '',
+    pan: '',
     address: 'Salt Lake Sector V, Bidhannagar, Kolkata, West Bengal - 700091',
     phone: '+91 9901518570',
     email: 'digital@saampark.in',
@@ -399,62 +411,72 @@ export const useAuthStore = create<AuthState>()(
           // 1. Fetch companies from MySQL module data store (primary single source of truth)
           const dbCompanies = await fetchModuleDataFromDB<Company[]>('companies', [], 'all').catch(() => [])
 
-          // 2. Fetch from backend API if available
+          // 2. Fetch from backend API (companies table directly)
           let apiList: Company[] = []
           const res: any = await api.get('/companies').catch(() => null)
           if (res && (Array.isArray(res.data) || Array.isArray(res))) {
             const list = Array.isArray(res.data) ? res.data : res
             apiList = list.map((c: any) => ({
               id: c.slug || String(c.id),
+              numeric_id: c.id,
               name: c.name,
-              brand_name: c.brand_name || c.name,
-              division_name: c.division_name || '',
+              brand_name: c.brand_name || (c.name?.startsWith('SAAMPARK') ? 'SAAMPARK' : c.name),
+              division_name: c.division_name || (c.name ? c.name.replace(/^SAAMPARK\s+/i, '') : ''),
               subtitle: c.subtitle || '',
               slug: c.slug || String(c.id),
-              logo: c.logo || (c.slug === 'digital' ? '📈' : '💻'),
-              logo_url: c.logo_url || '/saampark-logo.png',
+              logo: c.logo || (c.slug === 'digital' ? '📈' : (c.slug === 'saampark-ai-solutions' ? '🤖' : '💻')),
+              logo_url: c.logo_url || '',
               currency: c.currency || 'INR',
               currency_symbol: c.currency_symbol || '₹',
+              industry: c.industry || 'Technology',
+              address: c.address || '',
             }))
           }
 
           const map = new Map<string, Company>()
 
+          const getCanonicalKey = (c: Partial<Company>) => {
+            return String(c.slug || c.id || '').toLowerCase().trim()
+          }
+
           // 1. First add DEFAULT_COMPANIES as baseline
           DEFAULT_COMPANIES.forEach(c => {
             if (!isGlobalItemDeleted(c.id, deletedIds) && !isGlobalItemDeleted(c.slug || '', deletedIds)) {
-              map.set(String(c.id).toLowerCase(), {
+              const key = getCanonicalKey(c)
+              map.set(key, {
                 ...c,
                 name: getCompanyFullName(c),
               })
             }
           })
 
-          // 2. Overlay API list
-          apiList.forEach(c => {
+          // 2. Overlay currently cached store companies (preserves custom local fields)
+          const currentStoreCompanies = get().companies || []
+          currentStoreCompanies.forEach(c => {
             if (!isGlobalItemDeleted(c.id, deletedIds) && !isGlobalItemDeleted(c.slug || '', deletedIds)) {
-              const key = String(c.slug || c.id).toLowerCase()
-              const existing = map.get(key) || map.get(String(c.id).toLowerCase())
+              const key = getCanonicalKey(c)
+              const existing = map.get(key)
               map.set(key, {
                 ...existing,
                 ...c,
-                brand_name: existing?.brand_name || c.brand_name || c.name,
-                division_name: existing?.division_name !== undefined ? existing.division_name : (c.division_name || ''),
-                subtitle: existing?.subtitle !== undefined ? existing.subtitle : (c.subtitle || ''),
+                brand_name: c.brand_name || existing?.brand_name || 'SAAMPARK',
+                division_name: c.division_name !== undefined ? c.division_name : (existing?.division_name || ''),
+                subtitle: c.subtitle !== undefined ? c.subtitle : (existing?.subtitle || ''),
                 name: getCompanyFullName({ ...existing, ...c }),
               })
             }
           })
 
-          // 3. Overlay DB module store (user created/updated companies)
+          // 3. Overlay DB module store (app_data table)
           if (Array.isArray(dbCompanies) && dbCompanies.length > 0) {
             dbCompanies.forEach(c => {
               if (!isGlobalItemDeleted(c.id, deletedIds) && !isGlobalItemDeleted(c.slug || '', deletedIds)) {
-                const key = String(c.slug || c.id).toLowerCase()
-                const existing = map.get(key) || map.get(String(c.id).toLowerCase())
+                const key = getCanonicalKey(c)
+                const existing = map.get(key)
                 map.set(key, {
                   ...existing,
                   ...c,
+                  logo_url: (c.logo_url && c.logo_url.trim() !== '') ? c.logo_url : (existing?.logo_url || ''),
                   brand_name: c.brand_name || existing?.brand_name || 'SAAMPARK',
                   division_name: c.division_name !== undefined ? c.division_name : (existing?.division_name || ''),
                   subtitle: c.subtitle !== undefined ? c.subtitle : (existing?.subtitle || ''),
@@ -464,18 +486,18 @@ export const useAuthStore = create<AuthState>()(
             })
           }
 
-          // 4. Also preserve any companies currently in state (so newly added or edited companies are never dropped)
-          const currentStoreCompanies = get().companies || []
-          currentStoreCompanies.forEach(c => {
+          // 4. Overlay Live Backend API (MySQL companies table - HIGHEST PRECEDENCE for live DB values!)
+          apiList.forEach(c => {
             if (!isGlobalItemDeleted(c.id, deletedIds) && !isGlobalItemDeleted(c.slug || '', deletedIds)) {
-              const key = String(c.slug || c.id).toLowerCase()
-              const existing = map.get(key) || map.get(String(c.id).toLowerCase())
+              const key = getCanonicalKey(c)
+              const existing = map.get(key)
               map.set(key, {
                 ...existing,
                 ...c,
-                brand_name: c.brand_name || existing?.brand_name || 'SAAMPARK',
-                division_name: c.division_name !== undefined ? c.division_name : (existing?.division_name || ''),
-                subtitle: c.subtitle !== undefined ? c.subtitle : (existing?.subtitle || ''),
+                logo_url: (c.logo_url && c.logo_url.trim() !== '') ? c.logo_url : (existing?.logo_url || ''),
+                brand_name: existing?.brand_name || c.brand_name || c.name,
+                division_name: existing?.division_name !== undefined ? existing.division_name : (c.division_name || ''),
+                subtitle: existing?.subtitle !== undefined ? existing.subtitle : (c.subtitle || ''),
                 name: getCompanyFullName({ ...existing, ...c }),
               })
             }
@@ -515,11 +537,16 @@ export const useAuthStore = create<AuthState>()(
           }
 
           const filtered = list
-            .filter(b => !isGlobalItemDeleted(b.id, deletedIds))
-            .map(b => ({
-              ...b,
-              code: b.code ? b.code.toUpperCase() : b.code,
-            }))
+            .filter(b => !isGlobalItemDeleted(b.id, deletedIds, 'branches'))
+            .map(b => {
+              const compSlug = (b as any).company_id === 1 ? 'tech' : (b as any).company_id === 2 ? 'digital' : (b as any).company_id === 3 ? 'saampark-ai-solutions' : String((b as any).company_id || b.companyId || 'tech')
+              return {
+                ...b,
+                companyId: b.companyId || (b as any).company_slug || compSlug,
+                company_id: (b as any).company_id || (compSlug === 'tech' ? 1 : compSlug === 'digital' ? 2 : compSlug === 'saampark-ai-solutions' ? 3 : 1),
+                code: b.code ? b.code.toUpperCase() : b.code,
+              }
+            })
           set({ branches: filtered })
           return filtered
         } catch (err) {
@@ -527,11 +554,16 @@ export const useAuthStore = create<AuthState>()(
         }
         const localDeleted = getLocalDeletedIds()
         const currentFiltered = get().branches
-          .filter(b => !isGlobalItemDeleted(b.id, localDeleted))
-          .map(b => ({
-            ...b,
-            code: b.code ? b.code.toUpperCase() : b.code,
-          }))
+          .filter(b => !isGlobalItemDeleted(b.id, localDeleted, 'branches'))
+          .map(b => {
+            const compSlug = (b as any).company_id === 1 ? 'tech' : (b as any).company_id === 2 ? 'digital' : (b as any).company_id === 3 ? 'saampark-ai-solutions' : String((b as any).company_id || b.companyId || 'tech')
+            return {
+              ...b,
+              companyId: b.companyId || (b as any).company_slug || compSlug,
+              company_id: (b as any).company_id || (compSlug === 'tech' ? 1 : compSlug === 'digital' ? 2 : compSlug === 'saampark-ai-solutions' ? 3 : 1),
+              code: b.code ? b.code.toUpperCase() : b.code,
+            }
+          })
         set({ branches: currentFiltered })
         return currentFiltered
       },
@@ -683,6 +715,7 @@ export const useAuthStore = create<AuthState>()(
         const compIndex = companies.findIndex(c => 
           String(c.id).toLowerCase() === String(companyId).toLowerCase() || 
           String(c.slug || '').toLowerCase() === String(companyId).toLowerCase() ||
+          String((c as any).numeric_id || '').toLowerCase() === String(companyId).toLowerCase() ||
           isMatchingCompany(c, companyId)
         )
         if (compIndex === -1) return null
@@ -694,12 +727,14 @@ export const useAuthStore = create<AuthState>()(
           brand_name: updates.brand_name !== undefined ? updates.brand_name : (target.brand_name || 'SAAMPARK'),
           division_name: updates.division_name !== undefined ? updates.division_name : (target.division_name || ''),
           subtitle: updates.subtitle !== undefined ? updates.subtitle : (target.subtitle || ''),
+          logo_url: updates.logo_url !== undefined ? updates.logo_url : (target.logo_url || ''),
           name: updates.name || getCompanyFullName({ ...target, ...updates }),
         }
 
         // Try backend API update if available
         try {
-          await api.put(`/companies/${target.id}`, {
+          const apiTargetId = (target as any).numeric_id || target.id
+          await api.put(`/companies/${apiTargetId}`, {
             name: merged.name,
             slug: merged.slug || merged.id,
             currency: merged.currency,

@@ -188,13 +188,16 @@ export default function ProjectsMain() {
     })
   }
 
+  const [initialDetailTab, setInitialDetailTab] = React.useState<string>("Overview")
+
   const handleOpenEditModal = (p: Project) => {
     setEditingProject(p)
     setIsEditModalOpen(true)
   }
 
-  const handleSelectProjectDetail = (p: Project) => {
+  const handleSelectProjectDetail = (p: Project, tab: string = "Overview") => {
     setSelectedProject(p)
+    setInitialDetailTab(tab)
     setViewMode("detail")
   }
 
@@ -222,6 +225,7 @@ export default function ProjectsMain() {
           <ProjectDetailView
             projects={visibleProjects}
             selectedProject={selectedProject}
+            initialTab={initialDetailTab}
             onSelectProject={setSelectedProject}
             onBackToTable={() => setViewMode("table")}
             onOpenEditModal={handleOpenEditModal}

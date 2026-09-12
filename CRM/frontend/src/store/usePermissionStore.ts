@@ -189,6 +189,7 @@ interface PermissionState {
   
   // Actions
   fetchRolePermissions: () => Promise<void>
+  fetchUserPermissions: (userId?: string) => Promise<void>
   setRolePermissions: (role: Role, modules: ModuleName[]) => void
   setRoleAllModuleActions: (role: Role, matrix: Record<string, ModuleActionFlags>) => void
   setUserPermissions: (userId: string, modules: ModuleName[]) => void
@@ -236,6 +237,34 @@ export const usePermissionStore = create<PermissionState>()(
           }
         } catch (err) {
           console.warn('fetchRolePermissions error:', err)
+        }
+      },
+
+      fetchUserPermissions: async (userId?: string) => {
+        try {
+          const { fetchModuleDataFromDB } = await import('@/lib/storageSync')
+          const dbData = await fetchModuleDataFromDB<any>('user_permissions', null, 'all')
+          if (dbData && typeof dbData === 'object') {
+            const updates: Partial<PermissionState> = {}
+            if (dbData.userPermissions && typeof dbData.userPermissions === 'object') {
+              updates.userPermissions = { ...get().userPermissions, ...dbData.userPermissions }
+            }
+            if (dbData.userActionPermissions && typeof dbData.userActionPermissions === 'object') {
+              const currentActionPerms = get().userActionPermissions || {}
+              const merged: Record<string, Record<string, ModuleActionFlags>> = { ...currentActionPerms }
+              for (const [uId, matrix] of Object.entries(dbData.userActionPermissions)) {
+                if (matrix && typeof matrix === 'object') {
+                  merged[uId] = { ...(matrix as any) }
+                }
+              }
+              updates.userActionPermissions = merged
+            }
+            if (Object.keys(updates).length > 0) {
+              set(updates)
+            }
+          }
+        } catch (err) {
+          console.warn('fetchUserPermissions error:', err)
         }
       },
 
@@ -473,8 +502,10 @@ export const usePermissionStore = create<PermissionState>()(
           return { view: true, add: config.hasAdd !== false, edit: config.hasEdit !== false, delete: false }
         }
         if (normRole === 'Clients') {
-          const canAdd = ['Tickets', 'Messages'].includes(moduleName)
-          return { view: true, add: canAdd, edit: false, delete: false }
+          const canAdd = ['Tickets', 'Messages', 'Leads'].includes(moduleName)
+          const canEdit = ['Leads'].includes(moduleName)
+          const canDelete = ['Leads'].includes(moduleName)
+          return { view: true, add: canAdd, edit: canEdit, delete: canDelete }
         }
         return {
           view: true,
@@ -494,17 +525,25 @@ export const usePermissionStore = create<PermissionState>()(
         // Super Admin ALWAYS has master access to all actions across all modules
         if (normRole === 'Super Admin') return true
 
-        // Clients can NEVER delete records in any module (Invoices, Projects, Orders, Payments, EMI, etc.)
+        const flags = get().getUserModuleActions(user, moduleName)
+
+        // Clients can NEVER delete records in administrative modules (Invoices, Projects, Orders, Payments, EMI, etc.)
+        // But if granted Leads permission, they can manage their own private leads
         if (normRole === 'Clients' && action === 'delete') {
+          if (moduleName === 'Leads') {
+            return Boolean(flags && flags.delete)
+          }
           return false
         }
 
-        // Clients can only add/edit tickets and messages
+        // Clients can add/edit tickets, messages, and leads (when permitted)
         if (normRole === 'Clients' && (action === 'edit' || action === 'add')) {
-          return ['Tickets', 'Messages'].includes(moduleName)
+          if (['Tickets', 'Messages', 'Leads'].includes(moduleName)) {
+            return Boolean(flags && flags[action])
+          }
+          return false
         }
 
-        const flags = get().getUserModuleActions(user, moduleName)
         return Boolean(flags && flags[action])
       },
     }),

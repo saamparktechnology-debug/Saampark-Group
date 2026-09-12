@@ -221,15 +221,6 @@ export const addInvoice = async (invoice: Omit<InvoiceItem, "id"> & { id?: strin
     saveModuleDataToDB("invoices", updatedAll, "all"),
   ]
 
-  if (effectiveComp !== "tech") {
-    saveTasks.push(
-      fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], "tech").catch(() => []).then(techList => {
-        const updatedTech = [newInvoice, ...(Array.isArray(techList) ? techList.filter(i => String(i.id).toUpperCase().trim() !== nextId.toUpperCase().trim()) : [])]
-        return saveModuleDataToDB("invoices", updatedTech, "tech")
-      })
-    )
-  }
-
   await Promise.all(saveTasks)
 
   if (typeof window !== "undefined") {

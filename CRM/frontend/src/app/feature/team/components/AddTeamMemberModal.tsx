@@ -6,6 +6,7 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { createTeamMember } from "@/app/feature/users/services/userService"
 import { updateMemberBankingDetails } from "../services/teamPaymentService"
 import { Button } from "@/components/ui/Button"
+import { ImageUploadField } from "@/components/ui/ImageUploadField"
 
 interface AddTeamMemberModalProps {
   isOpen: boolean
@@ -23,6 +24,7 @@ export function AddTeamMemberModal({
   const [name, setName] = React.useState("")
   const [email, setEmail] = React.useState("")
   const [phone, setPhone] = React.useState("")
+  const [avatarUrl, setAvatarUrl] = React.useState("")
   const [jobTitle, setJobTitle] = React.useState("Developer")
   const [department, setDepartment] = React.useState("Engineering & Delivery")
   const [branchId, setBranchId] = React.useState("")
@@ -62,6 +64,8 @@ export function AddTeamMemberModal({
         branchName: selectedBranch?.name || undefined,
         companyId: activeCompanyId || "tech",
         status: "Active",
+        avatarUrl: avatarUrl.trim() || undefined,
+        avatar: avatarUrl.trim() || undefined,
       }, activeCompanyId || "tech")
 
       if (created && (baseSalary !== "" || bankName || accountNumber || upiId)) {
@@ -125,6 +129,19 @@ export function AddTeamMemberModal({
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-900 dark:text-zinc-100 font-semibold"
+            />
+          </div>
+
+          {/* Profile Picture Upload */}
+          <div className="p-3 bg-zinc-50 dark:bg-zinc-800/40 rounded-xl border border-zinc-200/80 dark:border-zinc-700/80">
+            <ImageUploadField
+              label="Profile Picture / Avatar"
+              value={avatarUrl}
+              onChange={(url) => setAvatarUrl(url)}
+              placeholder="https://... or upload from device"
+              uploadNamePrefix={`team_${name || "member"}`}
+              maxWidth={400}
+              aspectRatio="square"
             />
           </div>
 

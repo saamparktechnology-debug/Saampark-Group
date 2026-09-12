@@ -127,7 +127,7 @@ export function OfficialInvoiceDocument({
 
   // Resolve Issuing Branch / Sub-Branch Details
   const activeBranch: Branch | null = React.useMemo(() => {
-    const targetBranchId = String(invoice.branchId || (invoice as any).branch_id || activeBranchId || "").toLowerCase().trim()
+    const targetBranchId = String(invoice.branchId || (invoice as any).branch_id || "").toLowerCase().trim()
     const targetBranchName = String(invoice.branchName || (invoice as any).branch_name || "").toLowerCase().trim()
 
     if (!targetBranchId && !targetBranchName) return null
@@ -156,7 +156,7 @@ export function OfficialInvoiceDocument({
       } as Branch
     }
     return null
-  }, [invoice.branchId, invoice.branchName, (invoice as any).branch_id, (invoice as any).branch_name, (invoice as any).branchCode, activeBranchId, branches])
+  }, [invoice.branchId, invoice.branchName, (invoice as any).branch_id, (invoice as any).branch_name, (invoice as any).branchCode, branches])
 
   const activeSubBranch = React.useMemo(() => {
     const targetSbId = String(invoice.subBranchId || (invoice as any).sub_branch_id || "").toLowerCase().trim()
@@ -173,8 +173,12 @@ export function OfficialInvoiceDocument({
     }) || null
   }, [invoice.subBranchId, invoice.subBranchName, (invoice as any).sub_branch_id, (invoice as any).sub_branch_name, subBranches])
 
-  // ── Unified Entity Resolution (SubBranch -> Branch -> Company Fallback) ──
-  const resolvedBrandName = activeSubBranch?.brand_name || activeBranch?.brand_name || activeCompany?.brand_name || activeCompany?.name || "SAAMPARK"
+  // ── Unified Entity Resolution (Specific Issuing Entity Priority) ──
+  // If issued by SubBranch: use SubBranch details; if Branch: use Branch details; else: Company details.
+  const isSubBranchIssued = Boolean(activeSubBranch)
+  const isBranchIssued = Boolean(activeBranch) && !isSubBranchIssued
+
+  const resolvedBrandName = activeSubBranch?.brand_name || activeSubBranch?.name || activeBranch?.brand_name || activeCompany?.brand_name || activeCompany?.name || "SAAMPARK"
   const resolvedDivisionName = (activeSubBranch?.division_name && activeSubBranch.division_name.trim()) 
     ? activeSubBranch.division_name.trim() 
     : ((activeBranch?.division_name && activeBranch.division_name.trim()) 
@@ -183,46 +187,78 @@ export function OfficialInvoiceDocument({
   const resolvedSubtitle = activeSubBranch?.subtitle || activeBranch?.subtitle || activeCompany?.subtitle || ""
   const resolvedLogoUrl = activeSubBranch?.logo_url || activeBranch?.logo_url || getCompanyLogoUrl(activeCompany) || activeCompany?.logo_url || ""
 
-  const resolvedCin = activeSubBranch?.cin || activeBranch?.cin || activeCompany?.cin || ""
-  const resolvedGstin = activeSubBranch?.gstin || activeBranch?.gstin || activeCompany?.gstin || ""
-  const resolvedPan = activeSubBranch?.pan || activeBranch?.pan || activeCompany?.pan || ""
+  // Specific Entity Legal IDs (Strict: if empty on this entity, do NOT fallback to dummy/random values)
+  const resolvedCin = (isSubBranchIssued ? activeSubBranch?.cin : isBranchIssued ? activeBranch?.cin : activeCompany?.cin)?.trim() || ""
+  const resolvedGstin = (isSubBranchIssued ? activeSubBranch?.gstin : isBranchIssued ? activeBranch?.gstin : activeCompany?.gstin)?.trim() || ""
+  const resolvedPan = (isSubBranchIssued ? activeSubBranch?.pan : isBranchIssued ? activeBranch?.pan : activeCompany?.pan)?.trim() || ""
 
-  const resolvedAddress = activeSubBranch?.address || activeBranch?.address || activeCompany?.address || ""
-  const resolvedPhone = activeSubBranch?.phone || (activeSubBranch as any)?.partnerPhone || activeBranch?.phone || activeCompany?.phone || ""
-  const resolvedEmail = activeSubBranch?.email || (activeSubBranch as any)?.partnerEmail || activeBranch?.email || activeCompany?.email || ""
-  const resolvedWebsite = activeSubBranch?.website || activeBranch?.website || activeCompany?.website || ""
+  // Address & Contact Information (Strict to issuing entity)
+  const resolvedAddress = (isSubBranchIssued ? activeSubBranch?.address : isBranchIssued ? activeBranch?.address : activeCompany?.address)?.trim() || ""
+  const resolvedPhone = (isSubBranchIssued ? (activeSubBranch?.phone || (activeSubBranch as any)?.partnerPhone) : isBranchIssued ? activeBranch?.phone : activeCompany?.phone)?.trim() || ""
+  const resolvedEmail = (isSubBranchIssued ? (activeSubBranch?.email || (activeSubBranch as any)?.partnerEmail) : isBranchIssued ? activeBranch?.email : activeCompany?.email)?.trim() || ""
+  const resolvedWebsite = (isSubBranchIssued ? activeSubBranch?.website : isBranchIssued ? activeBranch?.website : activeCompany?.website)?.trim() || ""
 
-  // Bank & UPI details resolved with Branch / SubBranch prioritization
-  const resolvedUpiId = activeSubBranch?.upi_id || (activeSubBranch as any)?.bankDetails?.upiId || activeBranch?.upi_id || activeCompany?.upi_id || paySettings?.upiId || ""
-  const resolvedAccountHolder = activeSubBranch?.account_holder || (activeSubBranch as any)?.bankDetails?.accountHolder || activeBranch?.account_holder || activeCompany?.account_holder || paySettings?.accountHolderName || activeCompany?.name || ""
-  const resolvedBankName = activeSubBranch?.bank_name || (activeSubBranch as any)?.bankDetails?.bankName || activeBranch?.bank_name || activeCompany?.bank_name || paySettings?.bankName || ""
-  const resolvedAccountNumber = activeSubBranch?.account_number || (activeSubBranch as any)?.bankDetails?.accountNumber || activeBranch?.account_number || activeCompany?.account_number || paySettings?.accountNumber || ""
-  const resolvedIfscCode = activeSubBranch?.ifsc_code || (activeSubBranch as any)?.bankDetails?.ifscCode || activeBranch?.ifsc_code || activeCompany?.ifsc_code || paySettings?.ifscCode || ""
-  const resolvedBankBranch = activeSubBranch?.bank_branch || activeBranch?.bank_branch || activeCompany?.bank_branch || paySettings?.branch || ""
+  // Bank & UPI details resolved specifically for issuing entity
+  const resolvedUpiId = (isSubBranchIssued 
+    ? (activeSubBranch?.upi_id || (activeSubBranch as any)?.bankDetails?.upiId) 
+    : isBranchIssued 
+    ? activeBranch?.upi_id 
+    : (activeCompany?.upi_id || paySettings?.upiId))?.trim() || ""
 
-  // Signatory & Stamp Image URLs
-  const resolvedSignatureUrl = 
-    activeSubBranch?.signature_image_url ||
-    activeBranch?.signature_image_url ||
-    activeCompany?.signature_image_url ||
-    (activeCompany as any)?.signatureImageUrl ||
-    (activeCompany as any)?.signature_url ||
-    ""
-  const resolvedStampUrl = 
-    activeSubBranch?.stamp_image_url ||
-    activeBranch?.stamp_image_url ||
-    activeCompany?.stamp_image_url ||
-    ""
-  const resolvedSignatoryName = 
-    activeSubBranch?.signatory_name || 
-    activeBranch?.signatory_name || 
-    activeCompany?.signatory_name || 
-    "AUTHORISED SIGNATORY"
-  const resolvedSignatoryDesignation = 
-    activeSubBranch?.signatory_designation || 
-    activeBranch?.signatory_designation || 
-    activeCompany?.signatory_designation || 
-    (activeBranch ? "Branch Authorized Signatory" : "")
+  const resolvedAccountHolder = (isSubBranchIssued 
+    ? (activeSubBranch?.account_holder || (activeSubBranch as any)?.bankDetails?.accountHolder) 
+    : isBranchIssued 
+    ? activeBranch?.account_holder 
+    : (activeCompany?.account_holder || paySettings?.accountHolderName))?.trim() || ""
+
+  const resolvedBankName = (isSubBranchIssued 
+    ? (activeSubBranch?.bank_name || (activeSubBranch as any)?.bankDetails?.bankName) 
+    : isBranchIssued 
+    ? activeBranch?.bank_name 
+    : (activeCompany?.bank_name || paySettings?.bankName))?.trim() || ""
+
+  const resolvedAccountNumber = (isSubBranchIssued 
+    ? (activeSubBranch?.account_number || (activeSubBranch as any)?.bankDetails?.accountNumber) 
+    : isBranchIssued 
+    ? activeBranch?.account_number 
+    : (activeCompany?.account_number || paySettings?.accountNumber))?.trim() || ""
+
+  const resolvedIfscCode = (isSubBranchIssued 
+    ? (activeSubBranch?.ifsc_code || (activeSubBranch as any)?.bankDetails?.ifscCode) 
+    : isBranchIssued 
+    ? activeBranch?.ifsc_code 
+    : (activeCompany?.ifsc_code || paySettings?.ifscCode))?.trim() || ""
+
+  const resolvedBankBranch = (isSubBranchIssued 
+    ? activeSubBranch?.bank_branch 
+    : isBranchIssued 
+    ? activeBranch?.bank_branch 
+    : (activeCompany?.bank_branch || paySettings?.branch))?.trim() || ""
+
+  // Signatory & Stamp URLs (Strict to issuing entity)
+  const resolvedSignatureUrl = (isSubBranchIssued 
+    ? activeSubBranch?.signature_image_url 
+    : isBranchIssued 
+    ? activeBranch?.signature_image_url 
+    : (activeCompany?.signature_image_url || (activeCompany as any)?.signatureImageUrl || (activeCompany as any)?.signature_url))?.trim() || ""
+
+  const resolvedStampUrl = (isSubBranchIssued 
+    ? activeSubBranch?.stamp_image_url 
+    : isBranchIssued 
+    ? activeBranch?.stamp_image_url 
+    : activeCompany?.stamp_image_url)?.trim() || ""
+
+  const resolvedSignatoryName = (isSubBranchIssued 
+    ? activeSubBranch?.signatory_name 
+    : isBranchIssued 
+    ? activeBranch?.signatory_name 
+    : activeCompany?.signatory_name)?.trim() || ""
+
+  const resolvedSignatoryDesignation = (isSubBranchIssued 
+    ? activeSubBranch?.signatory_designation 
+    : isBranchIssued 
+    ? activeBranch?.signatory_designation 
+    : activeCompany?.signatory_designation)?.trim() || ""
 
   // 2. Determine if GST (>0%) or Non-GST / 0% GST Bill
   const isExplicitNonGst = 
@@ -915,21 +951,19 @@ export function OfficialInvoiceDocument({
                   alt="Authorized Signature / Stamp" 
                   className="max-h-14 max-w-[150px] object-contain drop-shadow-xs" 
                 />
-              ) : (
-                <span className="font-serif italic text-zinc-700 text-xs font-bold">
-                  {`${resolvedBrandName.split(" ")[0]} Authorized`}
-                </span>
-              )}
+              ) : null}
             </div>
             <div className="w-36 border-t border-zinc-400 pt-0.5">
-              <p className="text-[8px] font-black uppercase text-zinc-700 font-bold">
-                {resolvedSignatoryName}
-              </p>
-              {resolvedSignatoryDesignation && (
+              {resolvedSignatoryName ? (
+                <p className="text-[8px] font-black uppercase text-zinc-700 font-bold">
+                  {resolvedSignatoryName}
+                </p>
+              ) : null}
+              {resolvedSignatoryDesignation ? (
                 <p className="text-[7.5px] text-zinc-500 font-medium">
                   {resolvedSignatoryDesignation}
                 </p>
-              )}
+              ) : null}
             </div>
           </div>
 
@@ -937,17 +971,7 @@ export function OfficialInvoiceDocument({
             <div className="w-14 h-14 flex items-center justify-center p-0.5 shadow-2xs shrink-0 select-none">
               <img src={resolvedStampUrl} alt="Official Seal" className="max-h-14 max-w-14 object-contain" />
             </div>
-          ) : (
-            <div className={`w-12 h-12 rounded-full border-2 border-dashed ${theme.sealColor} flex flex-col items-center justify-center text-center p-0.5 shadow-2xs shrink-0 select-none`}>
-              <span className="text-[4.5px] font-black tracking-tighter uppercase leading-none truncate max-w-[40px]">
-                {resolvedBrandName.substring(0, 10)}
-              </span>
-              <span className="text-[5.5px] font-black my-0.2">★ SEAL ★</span>
-              <span className="text-[4.5px] font-bold tracking-tighter uppercase leading-none truncate max-w-[40px]">
-                {resolvedDivisionName ? resolvedDivisionName.substring(0, 10) : "AUTHORISED"}
-              </span>
-            </div>
-          )}
+          ) : null}
         </div>
       </div>
 

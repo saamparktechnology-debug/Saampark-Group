@@ -81,6 +81,13 @@ async function request<T = any>(endpoint: string, options: RequestInit = {}): Pr
   }
 }
 
+export function unwrapList(res: any): any[] {
+  if (Array.isArray(res)) return res
+  if (res && Array.isArray(res.data)) return res.data
+  if (res && res.data && Array.isArray(res.data.items)) return res.data.items
+  return []
+}
+
 export const api = {
   get: <T = any>(endpoint: string) => request<T>(endpoint, { method: 'GET' }),
   post: <T = any>(endpoint: string, body?: any) => 
@@ -91,3 +98,4 @@ export const api = {
     request<T>(endpoint, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: <T = any>(endpoint: string) => request<T>(endpoint, { method: 'DELETE' }),
 }
+

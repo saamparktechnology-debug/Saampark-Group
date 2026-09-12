@@ -63,6 +63,73 @@ export const DEFAULT_SYSTEM_ACCOUNTS: UserItem[] = [
     lastLogin: "Active Session",
     joinedDate: "2024-01-01",
   },
+  {
+    id: "usr_admin_vikram",
+    name: "Vikram Malhotra (Admin)",
+    email: "admin@saampark.in",
+    role: "Admin",
+    companyId: "tech",
+    companyIds: ["tech", "digital"],
+    companyName: "SAAMPARK Technology & Digital",
+    branchId: "1",
+    branchName: "Head Office - Mumbai & Kolkata Technology Center",
+    branchIds: ["1"],
+    status: "Active",
+    department: "Operations",
+    phone: "+91 98765 11111",
+    password: "admin123",
+    lastLogin: "Active Session",
+    joinedDate: "2024-01-01",
+  },
+  {
+    id: "usr_team_aman",
+    name: "Aman Verma (Team Member)",
+    email: "team@saampark.in",
+    role: "Teams",
+    companyId: "tech",
+    companyIds: ["tech"],
+    companyName: "SAAMPARK Technology",
+    branchId: "1",
+    branchName: "Head Office - Mumbai & Kolkata Technology Center",
+    branchIds: ["1"],
+    status: "Active",
+    department: "Engineering",
+    phone: "+91 98765 22222",
+    password: "Password123",
+    lastLogin: "Active Session",
+    joinedDate: "2024-01-01",
+  },
+  {
+    id: "usr_client_acme",
+    name: "Acme Corp (Client)",
+    email: "client@saampark.in",
+    role: "Clients",
+    companyId: "tech",
+    companyIds: ["tech"],
+    companyName: "SAAMPARK Technology",
+    branchId: "1",
+    branchName: "Head Office - Mumbai & Kolkata Technology Center",
+    branchIds: ["1"],
+    status: "Active",
+    department: "Client Accounts",
+    phone: "+91 98765 33333",
+    password: "Password123",
+    lastLogin: "Active Session",
+    joinedDate: "2024-01-01",
+    allowedModules: [
+      "Dashboard",
+      "Projects",
+      "Subscriptions",
+      "EMI",
+      "Sales",
+      "Estimates",
+      "Messages",
+      "Tickets",
+      "Files",
+      "Settings",
+      "Leads",
+    ],
+  },
 ];
 
 // Helper: get deleted user emails (synced from MySQL deleted table)
@@ -250,12 +317,11 @@ export async function recordUserAccountAsync(user: Partial<UserItem>, isNewRegis
       return true;
     });
 
-    const updatedList = [mergedAccount, ...cleaned];
-
     if (prevName && prevName.trim() !== mergedAccount.name.trim()) {
       cascadeUserNameChange(prevName, normalizedEmail, mergedAccount.name).catch(() => {});
     }
 
+    const updatedList = [mergedAccount, ...cleaned];
     await saveUserAccounts(updatedList);
 
     // ── CRITICAL FIX: also clean old/new email from company-specific scopes ──
@@ -450,9 +516,15 @@ export function getUserAvatar(
     }
   } catch {}
 
-  // 2. Check allUsers list if provided
-  if (Array.isArray(allUsers) && allUsers.length > 0) {
-    const matched = allUsers.find((u) => {
+  // 2. Check candidate list (allUsers, or cached _usersCacheData, or DEFAULT_SYSTEM_ACCOUNTS)
+  const candidateUsers: UserItem[] = (Array.isArray(allUsers) && allUsers.length > 0)
+    ? allUsers
+    : (_usersCacheData && _usersCacheData.length > 0)
+      ? _usersCacheData
+      : DEFAULT_SYSTEM_ACCOUNTS;
+
+  if (candidateUsers.length > 0) {
+    const matched = candidateUsers.find((u) => {
       const uEmail = (u.email || "").toLowerCase().trim();
       const uName = (u.name || "").toLowerCase().trim();
       const uId = String(u.id || "").toLowerCase().trim();
@@ -467,7 +539,18 @@ export function getUserAvatar(
     }
   }
 
-  // 3. If userIdentifier is already a real valid image URL
+  // 3. Fallback check across DEFAULT_SYSTEM_ACCOUNTS if candidateUsers didn't include it
+  const defMatched = DEFAULT_SYSTEM_ACCOUNTS.find((u) => {
+    return (u.email || "").toLowerCase().trim() === norm || (u.name || "").toLowerCase().trim() === norm;
+  });
+  if (defMatched) {
+    const defAv = defMatched.avatarUrl || (defMatched as any).avatar;
+    if (defAv && defAv.trim() && !defAv.includes("dicebear")) {
+      return defAv;
+    }
+  }
+
+  // 4. If userIdentifier is already a real valid image URL
   if (userIdentifier.startsWith("http://") || userIdentifier.startsWith("https://") || userIdentifier.startsWith("data:")) {
     if (!userIdentifier.includes("dicebear")) {
       return userIdentifier;
@@ -1095,13 +1178,51 @@ export async function updateUser(idOrEmail: string, updates: Partial<UserItem>, 
   if (idx === -1) return null;
 
   const existing = allUsers[idx];
+  const newAvatar = updates.avatarUrl !== undefined ? updates.avatarUrl : (updates as any).avatar;
   const updated: UserItem = {
     ...existing,
     ...updates,
     id: existing.id,
     email: updates.email || existing.email,
     username: updates.username !== undefined ? updates.username : existing.username,
+    avatarUrl: newAvatar !== undefined ? newAvatar : existing.avatarUrl,
+    avatar: newAvatar !== undefined ? newAvatar : (existing as any).avatar,
   };
+
+  if (newAvatar && newAvatar !== existing.avatarUrl && newAvatar !== (existing as any).avatar) {
+    cascadeUserAvatarChange(updated.name, updated.email, newAvatar).catch(() => {});
+  }
+
+  // Sync to live backend /users endpoint
+  try {
+    await api.put(`/users/${encodeURIComponent(existing.id || norm)}`, {
+      avatar_url: newAvatar || undefined,
+      avatar: newAvatar || undefined,
+      avatarUrl: newAvatar || undefined,
+      full_name: updated.name,
+      phone: updated.phone,
+      department: updated.department,
+      branch_id: updated.branchId || null,
+    }).catch(() => {});
+  } catch {}
+
+  // Live update active session if current logged-in user is updated
+  try {
+    const curUser = useAuthStore.getState().user;
+    if (curUser && (String(curUser.id) === String(existing.id) || curUser.email?.toLowerCase().trim() === norm)) {
+      useAuthStore.setState({
+        user: {
+          ...curUser,
+          avatarUrl: newAvatar || curUser.avatarUrl,
+          avatar: newAvatar || curUser.avatar,
+          name: updated.name,
+        }
+      });
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("crm_avatar_changed", { detail: { avatar: newAvatar } }));
+      }
+    }
+  } catch {}
 
   allUsers[idx] = updated;
 
@@ -1125,6 +1246,7 @@ export async function createTeamMember(memberData: Partial<UserItem>, companyId?
   const newId = `usr_tm_${Date.now()}`;
   const name = memberData.name || "Team Member";
   const email = (memberData.email || `team_${Date.now()}@saampark.com`).toLowerCase().trim();
+  const rawAv = memberData.avatarUrl || (memberData as any).avatar;
 
   const newMember: UserItem = {
     id: newId,
@@ -1139,7 +1261,8 @@ export async function createTeamMember(memberData: Partial<UserItem>, companyId?
     branchId: memberData.branchId,
     branchName: memberData.branchName,
     status: memberData.status || "Active",
-    avatarUrl: memberData.avatarUrl || getUserAvatar(name, undefined, name),
+    avatarUrl: rawAv || getUserAvatar(name, undefined, name),
+    avatar: rawAv || undefined,
     joinedDate: new Date().toISOString().split("T")[0],
     lastLogin: "Never",
   };
@@ -1157,6 +1280,7 @@ export async function createTeamMember(memberData: Partial<UserItem>, companyId?
       branch_id: memberData.branchId || null,
       department: memberData.department || "Operations & Delivery",
       phone: memberData.phone || "",
+      avatar_url: rawAv || undefined,
     }).catch((err) => console.warn("Backend user create warning for team member:", err));
   }
 

@@ -86,17 +86,22 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
     if (!branches || branches.length === 0) return []
     if (selectedCompanyIds.length === 0) return branches
     return branches.filter((b) => {
-      const bComp = String(b.companyId || "").toLowerCase().trim()
+      const bComp = String(b.companyId || (b as any).company_slug || "").toLowerCase().trim()
+      const bCompNum = String((b as any).company_id || "").toLowerCase().trim()
       return selectedCompanyIds.some((cId) => {
         const norm = String(cId || "").toLowerCase().trim()
-        if (norm === bComp) return true
+        if (bComp && (norm === bComp || bComp.includes(norm) || norm.includes(bComp))) return true
+        if (bCompNum && norm === bCompNum) return true
         const matchedComp = companies.find(
-          (c) => String(c.id).toLowerCase() === norm || String(c.slug || "").toLowerCase() === norm
+          (c) => String(c.id).toLowerCase() === norm || String(c.slug || "").toLowerCase() === norm || String((c as any).numeric_id || "") === norm
         )
+        if (!matchedComp) return false
+        const mId = String(matchedComp.id || "").toLowerCase().trim()
+        const mSlug = String(matchedComp.slug || "").toLowerCase().trim()
+        const mNum = String((matchedComp as any).numeric_id || "").toLowerCase().trim()
         return (
-          matchedComp &&
-          (String(matchedComp.id).toLowerCase() === bComp ||
-            String(matchedComp.slug || "").toLowerCase() === bComp)
+          (bComp && (bComp === mId || bComp === mSlug)) ||
+          (bCompNum && (bCompNum === mNum || bCompNum === mId || bCompNum === mSlug))
         )
       })
     })
@@ -511,6 +516,15 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
     // Sync to email key as well
     setUserPermissions(emailNorm, finalAllowedModules)
     setUserAllModuleActions(emailNorm, finalActionMatrix)
+
+    // Save to MySQL database via PermissionService so permissions sync with database
+    try {
+      const { PermissionService } = await import("@/services/permissionService")
+      PermissionService.saveUserMatrix(userIdStr, finalActionMatrix).catch(() => {})
+      if (emailNorm) {
+        PermissionService.saveUserMatrix(emailNorm, finalActionMatrix).catch(() => {})
+      }
+    } catch {}
 
     const permissions = { actionMatrix: finalActionMatrix, allowedModules: finalAllowedModules }
 

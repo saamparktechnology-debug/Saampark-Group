@@ -5,8 +5,9 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
-  Calendar, 
-  Briefcase, 
+  Calendar,
+  Mail, 
+  Briefcase,
   ShoppingCart,
   File,
   Book,
@@ -28,13 +29,77 @@ import {
   UserCheck,
   ChevronDown,
   ShoppingBag,
-  X
+  X,
+  Building2,
+  GitBranch,
+  MapPin,
+  Shield,
+  UserPlus,
+  Handshake,
+  HelpCircle,
+  Phone,
+  MessageCircle,
+  ClipboardList,
+  FileOutput,
+  FileInput,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  Banknote,
+  Wallet,
+  PiggyBank,
+  BarChart3,
+  Package,
+  Tag,
+  Award,
+  Boxes,
+  Warehouse,
+    QrCode,
+  UserCog,
+  GraduationCap,
+  BadgeCheck,
+  DollarSign,
+  FileStack,
+  Ticket,
+  Bell,
+  FileCheck,
+  ShieldCheck,
+  Zap,
+  LogOut
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { useUIStore } from "@/store/useUIStore"
-import { useAuthStore } from "@/store/useAuthStore"
+import { useAuthStore, getCompanyLogoUrl, getCompanyFullName, isMatchingCompany } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
+
+export function SaamparkVortexLogo({ className = "w-8 h-8" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+      <circle cx="50" cy="50" r="46" stroke="rgba(255,255,255,0.08)" strokeWidth="2" />
+      <g transform="translate(50,50)">
+        {[
+          { angle: 0, color: "#2563EB" },
+          { angle: 45, color: "#06B6D4" },
+          { angle: 90, color: "#10B981" },
+          { angle: 135, color: "#84CC16" },
+          { angle: 180, color: "#EAB308" },
+          { angle: 225, color: "#F97316" },
+          { angle: 270, color: "#EF4444" },
+          { angle: 315, color: "#8B5CF6" },
+        ].map((petal, i) => (
+          <path
+            key={i}
+            d="M 0 -10 C 12 -28, 24 -34, 32 -20 C 38 -8, 28 0, 0 0 Z"
+            fill={petal.color}
+            transform={`rotate(${petal.angle})`}
+            opacity="0.95"
+          />
+        ))}
+        <circle cx="0" cy="0" r="8" fill="#0B132B" stroke="#ffffff" strokeWidth="2" />
+      </g>
+    </svg>
+  )
+}
 
 export interface SubNavItem {
   name: string
@@ -52,48 +117,154 @@ export interface NavItem {
 
 const ALL_NAV_ITEMS: NavItem[] = [
   { name: "Dashboard", href: "/feature/dashboard", icon: LayoutDashboard },
-  { name: "Events", href: "/feature/events", icon: Calendar },
-  { name: "Clients", href: "/feature/clients", icon: Briefcase },
-  { name: "Projects", href: "/feature/projects", icon: KanbanSquare },
-  { name: "Tasks", href: "/feature/tasks", icon: CheckSquare },
-  { name: "Leads", href: "/feature/leads", icon: Target },
-  { name: "Subscriptions", href: "/feature/subscriptions", icon: CreditCard },
-  { name: "EMI", href: "/feature/emi", icon: Receipt },
-  { 
-    name: "Sales", 
-    href: "/feature/sales/invoices", 
-    icon: ShoppingCart,
+  {
+    name: "Organisation",
+    href: "/feature/companies",
+    icon: Building2,
     subItems: [
-      { name: "Invoices", href: "/feature/sales/invoices", icon: FileText },
-      { name: "Order list", href: "/feature/sales/orders", icon: ShoppingBag },
-      { name: "Payments", href: "/feature/sales/payments", icon: CreditCard },
-    ]
-  },
-  { name: "Estimates", href: "/feature/estimates", icon: Calculator },
-  { name: "Notes", href: "/feature/notes", icon: Book },
-  { name: "Messages", href: "/feature/messages", icon: MessageSquare },
-  { 
-    name: "Teams", 
-    href: "/feature/team/members", 
-    icon: UserCheck,
-    subItems: [
-      { name: "Team Members", href: "/feature/team/members", icon: UserCheck },
-      { name: "Payments & Payroll", href: "/feature/team/payments", icon: CreditCard },
+      { name: "Companies", href: "/feature/companies", icon: Building2 },
+      { name: "Branches", href: "/feature/branches", icon: GitBranch },
+      { name: "Departments", href: "/feature/team/members", icon: Users },
+      { name: "Teams", href: "/feature/teams", icon: UserCheck },
     ]
   },
   { name: "Users", href: "/feature/users", icon: Users },
-  { name: "Tickets", href: "/feature/tickets", icon: HeadphonesIcon },
-  { name: "Knowledge base", href: "/feature/knowledge-base", icon: LifeBuoy },
+  { name: "Permissions", href: "/feature/permissions", icon: Shield },
+  {
+    name: "CRM",
+    href: "/feature/leads",
+    icon: Target,
+    subItems: [
+      { name: "Leads", href: "/feature/leads", icon: Target },
+      { name: "Clients", href: "/feature/clients", icon: Briefcase },
+      { name: "Proposals", href: "/feature/proposals", icon: FileOutput },
+    ]
+  },
+  { name: "Projects", href: "/feature/projects", icon: KanbanSquare },
+  { name: "Tasks", href: "/feature/tasks", icon: CheckSquare },
+  {
+    name: "Sales",
+    href: "/feature/sales/invoices",
+    icon: ShoppingCart,
+    subItems: [
+      { name: "Quotations", href: "/feature/quotations", icon: FileOutput },
+      { name: "Estimates", href: "/feature/estimates", icon: Calculator },
+      { name: "Sales Orders", href: "/feature/sales/orders", icon: ShoppingBag },
+      { name: "Invoices", href: "/feature/sales/invoices", icon: FileText },
+      { name: "Payments", href: "/feature/sales/payments", icon: CreditCard },
+      { name: "Credit Notes", href: "/feature/sales/credit-notes", icon: ArrowUpCircle },
+      { name: "Debit Notes", href: "/feature/sales/debit-notes", icon: ArrowDownCircle },
+      { name: "Services & Store", href: "/feature/sales/store", icon: Package },
+    ]
+  },
+  {
+    name: "Subscriptions",
+    href: "/feature/subscriptions",
+    icon: CreditCard,
+    subItems: [
+      { name: "Packages & Retainers", href: "/feature/subscriptions", icon: CreditCard },
+      { name: "EMI Milestone Plans", href: "/feature/emi", icon: Receipt },
+    ]
+  },
+  {
+    name: "HR & Employees",
+    href: "/feature/team/members",
+    icon: UserCheck,
+    subItems: [
+      { name: "Team Members", href: "/feature/team/members", icon: UserCheck },
+      { name: "Payments & Payroll", href: "/feature/team/payments", icon: DollarSign },
+      { name: "Leave Management", href: "/feature/team/leave", icon: Calendar },
+      { name: "Attendance & Timecards", href: "/feature/team/timecards", icon: Clock },
+    ]
+  },
+  {
+    name: "Support",
+    href: "/feature/tickets",
+    icon: HeadphonesIcon,
+    subItems: [
+      { name: "Tickets", href: "/feature/tickets", icon: HeadphonesIcon },
+      { name: "Knowledge Base", href: "/feature/knowledge-base", icon: LifeBuoy },
+    ]
+  },
+  { name: "Events", href: "/feature/events", icon: Calendar },
+  { name: "Notes", href: "/feature/notes", icon: Book },
+  { name: "Messages", href: "/feature/messages", icon: MessageSquare },
   { name: "Files", href: "/feature/files", icon: Folder },
   { name: "Expenses", href: "/feature/expenses", icon: Calculator },
-  { name: "Reports", href: "/feature/reports", icon: Clock },
+  { name: "Reports", href: "/feature/reports", icon: BarChart3 },
   { name: "Settings", href: "/feature/settings", icon: Settings },
 ]
 
 export function Sidebar() {
   const pathname = usePathname()
   const { isSidebarCollapsed, setSidebarCollapsed } = useUIStore()
-  const { user, activeCompanyId } = useAuthStore()
+  const { 
+    user, 
+    activeCompanyId, 
+    activeBranchId, 
+    activeSubBranchId,
+    switchCompany, 
+    switchBranch, 
+    switchSubBranch,
+    logout, 
+    companies, 
+    branches, 
+    subBranches, 
+    fetchCompanies, 
+    fetchBranches, 
+    fetchSubBranches 
+  } = useAuthStore()
+
+  const [showCompanySwitchModal, setShowCompanySwitchModal] = React.useState(false)
+
+  React.useEffect(() => {
+    fetchCompanies?.().catch(() => {})
+    fetchBranches?.().catch(() => {})
+    fetchSubBranches?.().catch(() => {})
+  }, [fetchCompanies, fetchBranches, fetchSubBranches])
+
+  const allowedCompanies = React.useMemo(() => {
+    if (!user) return []
+    if (user.role === 'Super Admin') return companies
+    let rawCompIds = user.companyIds || (user as any).company_ids
+    let userCompIds: string[] = []
+    if (typeof rawCompIds === 'string') {
+      try { userCompIds = JSON.parse(rawCompIds) } catch { userCompIds = [rawCompIds] }
+    } else if (Array.isArray(rawCompIds)) {
+      userCompIds = rawCompIds
+    }
+    if (userCompIds.length === 0) {
+      userCompIds = [user.companyId || 'tech']
+    }
+    return companies.filter(c => userCompIds.some(id => isMatchingCompany(c, id)))
+  }, [user, companies])
+
+  const allowedBranches = React.useMemo(() => {
+    if (!user) return []
+    if (user.role === 'Super Admin') return branches
+    let rawBranchIds = user.branchIds || (user as any).branch_ids
+    let userBranchIds: string[] = []
+    if (typeof rawBranchIds === 'string') {
+      try { userBranchIds = JSON.parse(rawBranchIds) } catch { userBranchIds = [rawBranchIds] }
+    } else if (Array.isArray(rawBranchIds)) {
+      userBranchIds = rawBranchIds
+    }
+    if (userBranchIds.length === 0 && user.branchId) {
+      userBranchIds = [user.branchId]
+    }
+    if (userBranchIds.length === 0) return branches
+    return branches.filter(b => userBranchIds.some(id => String(id).toLowerCase().trim() === String(b.id).toLowerCase().trim()))
+  }, [user, branches])
+
+  const activeCompany = React.useMemo(() => {
+    if (!activeCompanyId || activeCompanyId === "all") {
+      return companies.find(c => isMatchingCompany(c, user?.companyId)) || allowedCompanies[0] || companies[0] || null
+    }
+    return companies.find(c => isMatchingCompany(c, activeCompanyId)) || companies.find(c => isMatchingCompany(c, user?.companyId)) || allowedCompanies[0] || companies[0] || null
+  }, [activeCompanyId, user?.companyId, companies, allowedCompanies])
+
+  const activeCompanyName = activeCompany ? getCompanyFullName(activeCompany) : "SAAMPARK"
+  const activeCompanyLogo = activeCompany ? getCompanyLogoUrl(activeCompany) : null
   const { isModuleAllowed, userActionPermissions, userPermissions } = usePermissionStore()
 
   const [rawCounts, setRawCounts] = React.useState<Record<string, number>>({})
@@ -120,6 +291,17 @@ export function Sidebar() {
       }, 30 * 60 * 1000) // every 30 minutes
 
       return () => clearInterval(interval)
+    }
+  }, [])
+
+  const [, setAvatarUpdateTick] = React.useState(0)
+  React.useEffect(() => {
+    const handleAvatarChange = () => setAvatarUpdateTick(t => t + 1)
+    window.addEventListener("crm_avatar_changed", handleAvatarChange)
+    window.addEventListener("storage", handleAvatarChange)
+    return () => {
+      window.removeEventListener("crm_avatar_changed", handleAvatarChange)
+      window.removeEventListener("storage", handleAvatarChange)
     }
   }, [])
 
@@ -175,17 +357,23 @@ export function Sidebar() {
 
   React.useEffect(() => {
     loadDynamicBadges()
-    const interval = setInterval(loadDynamicBadges, 5000)
-    window.addEventListener("storage", loadDynamicBadges)
-    window.addEventListener("saampark_data_synced", loadDynamicBadges)
-    window.addEventListener("saampark_company_switched", loadDynamicBadges)
+    const interval = setInterval(loadDynamicBadges, 30000)
+    const handleCompSync = () => {
+      loadDynamicBadges()
+      fetchCompanies?.().catch(() => {})
+    }
+    window.addEventListener("storage", handleCompSync)
+    window.addEventListener("saampark_data_synced", handleCompSync)
+    window.addEventListener("saampark_company_switched", handleCompSync)
+    window.addEventListener("saampark_company_updated", handleCompSync)
     return () => {
       clearInterval(interval)
-      window.removeEventListener("storage", loadDynamicBadges)
-      window.removeEventListener("saampark_data_synced", loadDynamicBadges)
-      window.removeEventListener("saampark_company_switched", loadDynamicBadges)
+      window.removeEventListener("storage", handleCompSync)
+      window.removeEventListener("saampark_data_synced", handleCompSync)
+      window.removeEventListener("saampark_company_switched", handleCompSync)
+      window.removeEventListener("saampark_company_updated", handleCompSync)
     }
-  }, [loadDynamicBadges])
+  }, [loadDynamicBadges, fetchCompanies])
 
   // Load visited counts from localStorage
   React.useEffect(() => {
@@ -211,11 +399,40 @@ export function Sidebar() {
     }
   }, [pathname, rawCounts])
 
+  // Check permission for any nav or sub-nav item
+  const checkNavAllowed = React.useCallback((u: any, name: string): boolean => {
+    if (!u) return false
+    if (name === "Dashboard") return true
+    if (u.role === "Super Admin") return true
+    if (name === "Organisation" || name === "Companies" || name === "Branches" || name === "Departments" || name === "Teams") return u.role === "Admin" || isModuleAllowed(u, "Teams")
+    if (name === "Users" || name === "Permissions") return u.role === "Admin" || isModuleAllowed(u, "Users")
+    if (name === "CRM" || name === "Leads" || name === "Clients" || name === "Proposals") return isModuleAllowed(u, "Leads") || isModuleAllowed(u, "Clients")
+    if (name === "Projects") return isModuleAllowed(u, "Projects")
+    if (name === "Tasks") return isModuleAllowed(u, "Tasks")
+    if (name === "HR & Employees" || name === "Team Members" || name === "Payments & Payroll" || name === "Leave Management" || name === "Attendance & Timecards") return isModuleAllowed(u, "Teams") || u.role === "Admin"
+    if (name === "Subscriptions" || name === "Packages & Retainers" || name === "EMI Milestone Plans" || name === "EMI") return isModuleAllowed(u, "Subscriptions") || isModuleAllowed(u, "EMI") || isModuleAllowed(u, "Sales") || u.role === "Admin"
+    if (name === "Support" || name === "Tickets" || name === "Knowledge Base") return isModuleAllowed(u, "Tickets") || isModuleAllowed(u, "Knowledge base")
+    if (name === "Files" || name === "Documents") return isModuleAllowed(u, "Files")
+    if (name === "Sales" || name === "Quotations" || name === "Estimates" || name === "Sales Orders" || name === "Invoices" || name === "Payments" || name === "Credit Notes" || name === "Debit Notes") return isModuleAllowed(u, "Sales") || isModuleAllowed(u, "Estimates") || u.role === "Admin"
+    return isModuleAllowed(u, name)
+  }, [isModuleAllowed])
+
   // Filter items by role & permissions
   const allowedNavItems = React.useMemo(() => {
     if (!user) return []
-    return ALL_NAV_ITEMS.filter((item) => isModuleAllowed(user, item.name))
-  }, [user, isModuleAllowed, userActionPermissions, userPermissions])
+    return ALL_NAV_ITEMS.map((item) => {
+      if (item.subItems && item.subItems.length > 0) {
+        const filteredSubs = item.subItems.filter((sub) => checkNavAllowed(user, sub.name))
+        const isParentAllowed = checkNavAllowed(user, item.name) || filteredSubs.length > 0
+        if (!isParentAllowed) return null
+        return {
+          ...item,
+          subItems: filteredSubs,
+        }
+      }
+      return checkNavAllowed(user, item.name) ? item : null
+    }).filter(Boolean) as NavItem[]
+  }, [user, checkNavAllowed, userActionPermissions, userPermissions])
 
   const [isMobile, setIsMobile] = React.useState(false)
 
@@ -234,12 +451,32 @@ export function Sidebar() {
   }, [setSidebarCollapsed])
 
   const [openSubmenus, setOpenSubmenus] = React.useState<Record<string, boolean>>({
+    Organisation: false,
+    CRM: false,
     Sales: true,
+    Subscriptions: false,
+    "HR & Employees": false,
+    Support: false,
   })
 
   React.useEffect(() => {
-    if (pathname.startsWith('/feature/sales')) {
+    if (pathname.startsWith('/feature/branches') || pathname.startsWith('/feature/companies')) {
+      setOpenSubmenus(prev => ({ ...prev, Organisation: true }))
+    }
+    if (pathname.startsWith('/feature/leads') || pathname.startsWith('/feature/clients')) {
+      setOpenSubmenus(prev => ({ ...prev, CRM: true }))
+    }
+    if (pathname.startsWith('/feature/sales') || pathname.startsWith('/feature/quotations') || pathname.startsWith('/feature/estimates') || pathname.startsWith('/feature/credit-notes') || pathname.startsWith('/feature/debit-notes')) {
       setOpenSubmenus(prev => ({ ...prev, Sales: true }))
+    }
+    if (pathname.startsWith('/feature/subscriptions') || pathname.startsWith('/feature/emi')) {
+      setOpenSubmenus(prev => ({ ...prev, Subscriptions: true }))
+    }
+    if (pathname.startsWith('/feature/team')) {
+      setOpenSubmenus(prev => ({ ...prev, "HR & Employees": true }))
+    }
+    if (pathname.startsWith('/feature/tickets') || pathname.startsWith('/feature/knowledge-base')) {
+      setOpenSubmenus(prev => ({ ...prev, Support: true }))
     }
   }, [pathname])
 
@@ -292,28 +529,49 @@ export function Sidebar() {
         }
         transition={{ duration: 0.25, ease: "easeInOut" }}
         className={cn(
-          "fixed top-0 left-0 h-screen glass-panel border-r border-border flex flex-col overflow-hidden bg-surface/98 backdrop-blur-md shadow-2xl lg:shadow-none",
+          "fixed top-0 left-0 h-screen bg-[#0A1128] text-slate-300 border-r border-slate-800/80 flex flex-col overflow-hidden shadow-2xl z-40",
           isMobile ? "z-50" : "z-40"
         )}
       >
-        {/* Header */}
-        <div className="h-16 flex items-center justify-between px-3.5 border-b border-border/50 shrink-0">
-          <Link href="/feature/dashboard" onClick={handleLinkClick} className="flex items-center gap-2.5 group">
-            <img 
-              src="/logo.png?v=root_logo_v3" 
-              alt="SAAMPARK Logo" 
-              className="w-11 h-11 min-w-[44px] object-contain shrink-0 group-hover:scale-105 transition-transform" 
-            />
-            <AnimatePresence>
+        {/* Header - Selected Active Company Name & Logo */}
+        <div className="h-16 flex items-center justify-between px-3.5 border-b border-slate-800/80 shrink-0">
+          <Link href="/feature/dashboard" onClick={handleLinkClick} className="flex items-center gap-2.5 group min-w-0 flex-1">
+            <div className="w-10 h-10 min-w-[40px] rounded-xl bg-slate-800/80 border border-slate-700/60 p-1 flex items-center justify-center overflow-hidden shrink-0 group-hover:scale-105 transition-transform shadow-xs">
+              {activeCompanyLogo ? (
+                <img
+                  key={activeCompanyLogo || activeCompany?.id}
+                  src={activeCompanyLogo}
+                  alt={activeCompanyName}
+                  className="w-full h-full object-contain"
+                />
+              ) : activeCompany?.logo ? (
+                <span className="text-xl">{activeCompany.logo}</span>
+              ) : (
+                <SaamparkVortexLogo className="w-8 h-8" />
+              )}
+            </div>
+
+            <AnimatePresence mode="wait">
               {(!isSidebarCollapsed || isMobile) && (
-                <motion.span 
-                  initial={{ opacity: 0, width: 0 }}
-                  animate={{ opacity: 1, width: "auto" }}
-                  exit={{ opacity: 0, width: 0 }}
-                  className="font-extrabold text-xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-primary to-info whitespace-nowrap overflow-hidden"
+                <motion.div 
+                  initial={{ opacity: 0, x: -6 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 6 }}
+                  transition={{ duration: 0.2 }}
+                  className="min-w-0 flex-1 overflow-hidden text-left"
                 >
-                  SAAMPARK
-                </motion.span>
+                  <span 
+                    className="font-black text-xs sm:text-sm tracking-wide text-white block truncate uppercase"
+                    title={activeCompanyName}
+                  >
+                    {activeCompanyName}
+                  </span>
+                  <span className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider block truncate -mt-0.5">
+                    {activeCompany?.subtitle 
+                      ? activeCompany.subtitle.replace(/\s+(pvt\.?\s*ltd\.?|private\s+limited)$/i, "") 
+                      : (activeCompany?.brand_name || "GROUP")}
+                  </span>
+                </motion.div>
               )}
             </AnimatePresence>
           </Link>
@@ -323,7 +581,7 @@ export function Sidebar() {
             <button
               type="button"
               onClick={() => setSidebarCollapsed(true)}
-              className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-surface-hover transition-colors"
+              className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors shrink-0"
               title="Close menu"
             >
               <X size={18} />
@@ -332,48 +590,42 @@ export function Sidebar() {
         </div>
 
         {/* Navigation list */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 space-y-1 scrollbar-hide">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden py-3 space-y-1 scrollbar-hide px-2">
           {allowedNavItems.map((item) => {
             const hasSubItems = Boolean(item.subItems && item.subItems.length > 0)
             const isSubActive = hasSubItems && item.subItems?.some(
               sub => pathname === sub.href || pathname.startsWith(sub.href + '/')
             )
-            const isActive = pathname === item.href || pathname.startsWith(item.href + '/') || isSubActive
-            const isDropdownOpen = (!isSidebarCollapsed || isMobile) && Boolean(openSubmenus[item.name] ?? isActive)
-            
-            const raw = rawCounts[item.name] !== undefined ? rawCounts[item.name] : (typeof item.badge === "number" ? item.badge : 0)
-            const visited = visitedCounts[item.name] || 0
-            const unreadDiff = raw - visited
-            const showBadge = unreadDiff > 0 && !isActive
-            const itemBadge = showBadge ? unreadDiff : null
+            const isActive = pathname === item.href || (item.href !== "/feature/dashboard" && pathname.startsWith(item.href + '/')) || isSubActive
+            const isDropdownOpen = Boolean(openSubmenus[item.name])
+            const getItemBadge = (name: string) => {
+              const raw = rawCounts[name] !== undefined ? rawCounts[name] : (typeof item.badge === "number" ? item.badge : 0)
+              const visited = visitedCounts[name] || 0
+              const unread = raw - visited
+              return unread > 0 ? unread : null
+            }
+            const itemBadge = getItemBadge(item.name)
 
             return (
-              <div key={item.name} className="px-3">
+              <div key={item.name}>
                 {hasSubItems && (!isSidebarCollapsed || isMobile) ? (
                   <button
                     type="button"
                     onClick={(e) => toggleSubmenu(item.name, e)}
                     className="w-full block text-left"
                   >
-                    <motion.div
-                      whileHover={{ x: 4 }}
-                      whileTap={{ scale: 0.98 }}
+                    <div
                       className={cn(
-                        "flex items-center gap-3 py-2 px-3 rounded-lg transition-colors relative group h-9 cursor-pointer",
-                        isActive ? "text-primary font-medium" : "text-muted-foreground hover:text-foreground hover:bg-surface-hover/50"
+                        "flex items-center gap-3 py-2.5 px-3 rounded-xl transition-all relative group cursor-pointer text-xs font-medium",
+                        isActive 
+                          ? "bg-[#1D4ED8] text-white font-bold shadow-xs" 
+                          : "text-slate-400 hover:text-white hover:bg-slate-800/60"
                       )}
                     >
-                      {isActive && (
-                        <motion.div 
-                          layoutId="sidebar-active-parent"
-                          className="absolute inset-0 bg-primary/10 rounded-lg border border-primary/20"
-                          transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                        />
-                      )}
-                      <item.icon size={18} className="relative z-10 shrink-0" strokeWidth={isActive ? 2.5 : 2} />
+                      <item.icon size={17} className="shrink-0" strokeWidth={isActive ? 2.5 : 2} />
                       
-                      <div className="relative z-10 flex items-center justify-between w-full overflow-hidden">
-                        <span className="text-sm whitespace-nowrap overflow-hidden">
+                      <div className="flex items-center justify-between w-full overflow-hidden">
+                        <span className="whitespace-nowrap overflow-hidden">
                           {item.name}
                         </span>
                         <div className="flex items-center gap-1.5 ml-auto">
@@ -385,57 +637,45 @@ export function Sidebar() {
                           <ChevronDown 
                             size={14} 
                             className={cn(
-                              "text-muted-foreground transition-transform duration-200 shrink-0",
-                              isDropdownOpen && "rotate-180 text-primary"
+                              "text-slate-400 transition-transform duration-200 shrink-0",
+                              isDropdownOpen && "rotate-180 text-white"
                             )} 
                           />
                         </div>
                       </div>
-                    </motion.div>
+                    </div>
                   </button>
                 ) : (
                   <Link href={item.href} onClick={handleLinkClick} className="block">
-                    <motion.div
-                      whileHover={{ x: isSidebarCollapsed && !isMobile ? 0 : 4 }}
-                      whileTap={{ scale: 0.98 }}
+                    <div
                       className={cn(
-                        "flex items-center gap-3 py-2 rounded-lg transition-colors relative group h-9",
+                        "flex items-center gap-3 py-2.5 rounded-xl transition-all relative group text-xs font-medium",
                         isSidebarCollapsed && !isMobile ? "justify-center px-0" : "px-3",
-                        isActive ? "text-primary font-medium" : "text-muted-foreground hover:text-foreground hover:bg-surface-hover/50"
+                        isActive 
+                          ? "bg-[#1D4ED8] text-white font-bold shadow-xs" 
+                          : "text-slate-400 hover:text-white hover:bg-slate-800/60"
                       )}
                       title={isSidebarCollapsed && !isMobile ? item.name : undefined}
                     >
-                      {isActive && (
-                        <motion.div 
-                          layoutId="sidebar-active"
-                          className="absolute inset-0 bg-primary/10 rounded-lg border border-primary/20"
-                          transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                        />
-                      )}
-                      <item.icon size={18} className="relative z-10 shrink-0" strokeWidth={isActive ? 2.5 : 2} />
+                      <item.icon size={17} className="shrink-0" strokeWidth={isActive ? 2.5 : 2} />
                       
                       <AnimatePresence>
                         {(!isSidebarCollapsed || isMobile) && (
-                          <motion.div 
-                            initial={{ opacity: 0, width: 0 }}
-                            animate={{ opacity: 1, width: "100%" }}
-                            exit={{ opacity: 0, width: 0 }}
-                            className="relative z-10 flex items-center justify-between w-full overflow-hidden"
-                          >
-                            <span className="text-sm whitespace-nowrap overflow-hidden">
+                          <div className="flex items-center justify-between w-full overflow-hidden">
+                            <span className="whitespace-nowrap overflow-hidden">
                               {item.name}
                             </span>
                             {itemBadge && (
                               <span className={`ml-auto text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-xs shrink-0 ${
-                                item.name === "Projects" || item.name === "Leads" ? "bg-rose-600 animate-pulse" : "bg-indigo-600"
+                                item.name === "Projects" || item.name === "Leads" ? "bg-rose-600 animate-pulse" : "bg-blue-600"
                               }`}>
                                 {itemBadge}
                               </span>
                             )}
-                          </motion.div>
+                          </div>
                         )}
                       </AnimatePresence>
-                    </motion.div>
+                    </div>
                   </Link>
                 )}
 
@@ -454,18 +694,17 @@ export function Sidebar() {
 
                         return (
                           <Link key={sub.name} href={sub.href} onClick={handleLinkClick} className="block">
-                            <motion.div
-                              whileHover={{ x: 3 }}
+                            <div
                               className={cn(
-                                "flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors relative",
+                                "flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors",
                                 isSubActiveItem
-                                  ? "text-primary bg-primary/10 font-semibold border-l-2 border-primary"
-                                  : "text-muted-foreground hover:text-foreground hover:bg-surface-hover/50"
+                                  ? "text-blue-400 bg-blue-500/15 font-semibold"
+                                  : "text-slate-400 hover:text-white hover:bg-slate-800/40"
                               )}
                             >
-                              <sub.icon size={13} className={cn("shrink-0", isSubActiveItem ? "text-primary" : "text-muted-foreground")} />
+                              <sub.icon size={13} className={cn("shrink-0", isSubActiveItem ? "text-blue-400" : "text-slate-500")} />
                               <span className="truncate">{sub.name}</span>
-                            </motion.div>
+                            </div>
                           </Link>
                         )
                       })}
@@ -476,7 +715,335 @@ export function Sidebar() {
             )
           })}
         </div>
+
+        {/* Current Company View Selector Card */}
+        {(!isSidebarCollapsed || isMobile) && (
+          <div className="px-3 py-2 border-t border-slate-800/80 shrink-0">
+            <div className="flex items-center justify-between mb-1.5 px-1">
+              <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                Current Company View
+              </p>
+              {activeBranchId && (
+                <span className="text-[9.5px] font-bold text-amber-400 bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 rounded-full truncate max-w-[90px]">
+                  {branches.find(b => b.id === activeBranchId)?.name || 'Branch'}
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowCompanySwitchModal(true)}
+              className="w-full flex items-center justify-between p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800/90 border border-slate-800 hover:border-slate-700 text-xs text-white transition-all group cursor-pointer shadow-xs"
+              title="Click to switch active Company, Branch, or Sub-Branch"
+            >
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                {activeCompanyLogo ? (
+                  <img
+                    src={activeCompanyLogo}
+                    alt={activeCompanyName}
+                    className="w-6 h-6 rounded-full object-contain shrink-0 bg-white/10 p-0.5 border border-slate-700/60"
+                  />
+                ) : (
+                  <div className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/30">
+                    <Building2 size={13} />
+                  </div>
+                )}
+                <div className="text-left truncate flex-1 min-w-0">
+                  <span className="truncate font-bold text-xs block text-white leading-tight">
+                    {activeCompanyName}
+                  </span>
+                  <span className="text-[10px] text-slate-400 block truncate">
+                    {activeBranchId 
+                      ? (branches.find(b => b.id === activeBranchId)?.name || 'Branch Active') 
+                      : 'All Branches / Main HQ'}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 text-slate-400 group-hover:text-white shrink-0 ml-1">
+                <span className="text-[10px] font-bold bg-blue-600/20 group-hover:bg-blue-600 text-blue-400 group-hover:text-white px-2 py-0.5 rounded-full transition-all border border-blue-500/30">
+                  Switch ▾
+                </span>
+              </div>
+            </button>
+          </div>
+        )}
+
+        {/* User Profile Section in Sidebar */}
+        {user && (
+          <div className="p-3 border-t border-slate-800/80 bg-slate-900/50 shrink-0">
+            <div className="flex items-center justify-between gap-2">
+              <Link
+                href="/feature/settings"
+                onClick={handleLinkClick}
+                className="flex items-center gap-2.5 min-w-0 flex-1 p-1 rounded-xl hover:bg-slate-800/60 transition-colors"
+                title="View Profile & Settings"
+              >
+                <div className="relative w-8 h-8 rounded-full overflow-hidden shrink-0 border border-slate-700 shadow-xs">
+                  <img
+                    key={(user as any)?.avatarUrl || user?.avatar || user?.name || "sidebar_avatar"}
+                    src={(user as any).avatarUrl || user.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${user.name}`}
+                    alt={user.name}
+                    className="w-full h-full object-cover bg-slate-800"
+                  />
+                  <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-[#0A1128]" />
+                </div>
+                {(!isSidebarCollapsed || isMobile) && (
+                  <div className="min-w-0 flex-1 text-left">
+                    <p className="text-xs font-bold text-white truncate">{user.name}</p>
+                    <p className="text-[10px] text-emerald-400 flex items-center gap-1 font-medium truncate">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                      Online
+                    </p>
+                  </div>
+                )}
+              </Link>
+              {(!isSidebarCollapsed || isMobile) && (
+                <Link
+                  href="/feature/settings"
+                  onClick={handleLinkClick}
+                  className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+                  title="Settings"
+                >
+                  <Settings size={15} />
+                </Link>
+              )}
+            </div>
+          </div>
+        )}
       </motion.aside>
+
+      {/* ── WORKSPACE HIERARCHICAL SWITCHER MODAL ── */}
+      <AnimatePresence>
+        {showCompanySwitchModal && (
+          <div 
+            onClick={() => setShowCompanySwitchModal(false)}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.18 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-[#0B132B] border border-slate-700/80 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
+            >
+              {/* Modal Header */}
+              <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/60">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-blue-600/20 text-blue-400 flex items-center justify-center border border-blue-500/30">
+                    <Building2 size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white tracking-wide">
+                      Switch Active Workspace
+                    </h3>
+                    <p className="text-[11px] text-slate-400">
+                      Select Company, Branch, or Sub-Branch to filter operations
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCompanySwitchModal(false)}
+                  className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Companies & Hierarchical Branches List */}
+              <div className="p-4 space-y-3 overflow-y-auto flex-1 scrollbar-hide">
+                {allowedCompanies.map((comp) => {
+                  const isCurrentActive = isMatchingCompany(comp, activeCompanyId || activeCompany?.id || activeCompany?.slug)
+                  const compBranches = allowedBranches.filter(b => isMatchingCompany(comp, b.companyId))
+                  const compLogoUrl = getCompanyLogoUrl(comp)
+                  const compFullName = getCompanyFullName(comp)
+
+                  return (
+                    <div 
+                      key={comp.id} 
+                      className={cn(
+                        "rounded-xl border transition-all overflow-hidden",
+                        isCurrentActive 
+                          ? "bg-slate-900/90 border-blue-500/50 shadow-md" 
+                          : "bg-slate-900/40 border-slate-800 hover:border-slate-700"
+                      )}
+                    >
+                      {/* Company Header Row */}
+                      <div className="p-3 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          {compLogoUrl ? (
+                            <img
+                              src={compLogoUrl}
+                              alt={compFullName}
+                              className="w-9 h-9 rounded-xl object-contain shrink-0 bg-white/10 p-1 border border-slate-700/50"
+                            />
+                          ) : (
+                            <div className="w-9 h-9 rounded-xl bg-blue-500/20 text-base flex items-center justify-center shrink-0 border border-blue-500/30">
+                              {comp.logo || "🏢"}
+                            </div>
+                          )}
+                          <div className="min-w-0 text-left">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-xs text-white truncate block">
+                                {compFullName}
+                              </span>
+                              {isCurrentActive && (
+                                <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 shrink-0">
+                                  Active
+                                </span>
+                              )}
+                            </div>
+                            {comp.subtitle && (
+                              <span className="text-[10px] text-slate-400 block truncate">
+                                {comp.subtitle}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Switch to Company (HQ) Button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            switchCompany(comp.id)
+                            switchBranch(null)
+                            switchSubBranch(null)
+                            setShowCompanySwitchModal(false)
+                          }}
+                          className={cn(
+                            "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 cursor-pointer",
+                            isCurrentActive && !activeBranchId
+                              ? "bg-blue-600 text-white font-bold shadow-xs"
+                              : "bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white"
+                          )}
+                        >
+                          {isCurrentActive && !activeBranchId ? "✓ Selected (HQ)" : "Select HQ"}
+                        </button>
+                      </div>
+
+                      {/* Branches Tree for Company */}
+                      {compBranches.length > 0 && (
+                        <div className="px-3 pb-3 pt-1 border-t border-slate-800/80 bg-slate-950/40 space-y-2">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">
+                            Branches & Sub-Branches ({compBranches.length})
+                          </p>
+
+                          <div className="space-y-1.5">
+                            {compBranches.map((b) => {
+                              const isBranchActive = isCurrentActive && activeBranchId === b.id && !activeSubBranchId
+                              const bSubBranches = (subBranches || []).filter(sb => sb.parentBranchId === b.id)
+
+                              return (
+                                <div key={b.id} className="rounded-lg bg-slate-900/60 border border-slate-800/80 overflow-hidden">
+                                  <div className="p-2 flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <MapPin size={13} className="text-amber-400 shrink-0" />
+                                      <div className="truncate">
+                                        <span className="text-xs font-semibold text-slate-200 block truncate">
+                                          {b.name}
+                                        </span>
+                                        {b.city && (
+                                          <span className="text-[9.5px] text-slate-400 block truncate">
+                                            {b.city} {b.state ? `· ${b.state}` : ""}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        switchCompany(comp.id)
+                                        switchBranch(b.id)
+                                        switchSubBranch(null)
+                                        setShowCompanySwitchModal(false)
+                                      }}
+                                      className={cn(
+                                        "px-2.5 py-1 rounded text-[11px] font-semibold transition-all shrink-0 cursor-pointer",
+                                        isBranchActive
+                                          ? "bg-amber-500 text-slate-950 font-bold"
+                                          : "bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white"
+                                      )}
+                                    >
+                                      {isBranchActive ? "✓ Active Branch" : "Switch Branch"}
+                                    </button>
+                                  </div>
+
+                                  {/* Nested Sub-branches */}
+                                  {bSubBranches.length > 0 && (
+                                    <div className="px-2.5 pb-2 pt-1 border-t border-slate-800/60 bg-slate-950/60 space-y-1 pl-4">
+                                      {bSubBranches.map((sb) => {
+                                        const isSubBranchActive = isCurrentActive && activeSubBranchId === sb.id
+
+                                        return (
+                                          <div key={sb.id} className="flex items-center justify-between gap-2 py-1">
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                              <span className="text-xs">🌿</span>
+                                              <div className="truncate">
+                                                <span className="text-[11px] font-medium text-slate-300 truncate block">
+                                                  {sb.name}
+                                                </span>
+                                                <span className="text-[9px] text-emerald-400 font-semibold block">
+                                                  {sb.partnerType || "Franchise"} ({sb.revenueSharePct}% Share)
+                                                </span>
+                                              </div>
+                                            </div>
+
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                switchCompany(comp.id)
+                                                switchBranch(b.id)
+                                                switchSubBranch(sb.id)
+                                                setShowCompanySwitchModal(false)
+                                              }}
+                                              className={cn(
+                                                "px-2 py-0.5 rounded text-[10px] font-semibold transition-all shrink-0 cursor-pointer",
+                                                isSubBranchActive
+                                                  ? "bg-emerald-500 text-slate-950 font-bold"
+                                                  : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white"
+                                              )}
+                                            >
+                                              {isSubBranchActive ? "✓ Active Sub" : "Select Sub"}
+                                            </button>
+                                          </div>
+                                        )
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="px-5 py-3 border-t border-slate-800 bg-slate-900/60 flex items-center justify-between">
+                <Link
+                  href="/feature/companies"
+                  onClick={() => setShowCompanySwitchModal(false)}
+                  className="text-xs text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1"
+                >
+                  <Building2 size={13} />
+                  Manage Companies & Branches →
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setShowCompanySwitchModal(false)}
+                  className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition-colors cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </>
   )
 }

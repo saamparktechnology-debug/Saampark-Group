@@ -14,22 +14,14 @@ const getStoreData = async (req, res, next) => {
       if (compRows.length > 0) {
         try {
           const parsedComp = JSON.parse(compRows[0].data_json);
-          if (Array.isArray(parsedComp) && parsedComp.length > 0) {
-            return successResponse(res, 200, 'Company-isolated module data fetched from MySQL', parsedComp);
-          }
-        } catch {}
+          return successResponse(res, 200, 'Company-isolated module data fetched from MySQL', parsedComp);
+        } catch {
+          return successResponse(res, 200, 'Company module data fetched', []);
+        }
       }
 
-      // Fallback: check base key and tech key
-      const [defaultRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = ? OR module_key = ?', [key, `${key}_tech`]);
-      if (defaultRows.length > 0) {
-        try {
-          const bestRow = defaultRows.sort((a, b) => (b.data_json?.length || 0) - (a.data_json?.length || 0))[0];
-          const parsed = JSON.parse(bestRow.data_json);
-          return successResponse(res, 200, 'Company module data fetched from MySQL', parsed);
-        } catch {}
-      }
-
+      // Strict company isolation: If this company does not have a record yet, return empty list.
+      // NEVER leak or fall back to tech or other companies!
       return successResponse(res, 200, 'Company module data fetched', []);
     }
 

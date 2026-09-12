@@ -277,3 +277,57 @@ html, body, input, textarea, select, button, table, span, div, p {
   font-feature-settings: "zero" 0, "cv01" 0 !important;
 }
 
+/* ========================================================
+   OFFICIAL PRINT & PDF EXPORT STYLES (Invoices, Estimates, Quotations)
+   ======================================================== */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide standard CRM web chrome when printing documents */
+  header, nav, aside, footer, [role="navigation"], .no-print, button:not(.print-include) {
+    display: none !important;
+  }
+
+  /* Reset modal containers so the PDF fills the A4 canvas */
+  .fixed.inset-0 {
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+  }
+
+  .official-estimate-modal-root,
+  .official-quotation-modal-root,
+  #printable-invoice,
+  #printable-estimate,
+  #printable-quotation {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  tr, .avoid-break {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+}
+
