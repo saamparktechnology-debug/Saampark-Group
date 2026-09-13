@@ -41,16 +41,16 @@ function Modal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="absolute inset-0 bg-background/80 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/50 backdrop-blur-md"
           />
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className={`relative w-full ${maxW} bg-surface border border-border shadow-2xl rounded-xl overflow-hidden`}
+            className={`relative w-full ${maxW} liquid-glass-dropdown rounded-3xl overflow-hidden shadow-[0_25px_60px_-15px_rgba(0,0,0,0.35)] border border-white/30 dark:border-white/10`}
           >
-            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-white/20 dark:border-white/10 bg-white/20 dark:bg-white/[0.02]">
               <h2 className="text-base font-semibold text-foreground">{title}</h2>
               <Button
                 variant="ghost"

@@ -121,7 +121,7 @@ export function ActionFeedbackModal() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 10 }}
             transition={{ type: "spring", stiffness: 380, damping: 28 }}
-            className="relative w-full max-w-sm bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-2xl overflow-hidden p-6 text-center z-10"
+            className="relative w-full max-w-sm liquid-glass-dropdown border border-white/30 dark:border-white/10 rounded-3xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.4)] overflow-hidden p-6 text-center z-10"
           >
             {/* Top Atmospheric Gradient Glow */}
             <div className={`absolute top-0 left-0 right-0 h-28 bg-gradient-to-b ${currentTheme.gradient} pointer-events-none`} />

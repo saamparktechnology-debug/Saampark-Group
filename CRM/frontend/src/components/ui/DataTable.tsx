@@ -66,10 +66,10 @@ export function DataTable<TData, TValue>({
           />
         </div>
       )}
-      <div className="rounded-xl border border-border bg-surface overflow-hidden shadow-soft">
+      <div className="rounded-2xl liquid-glass border border-white/20 dark:border-white/10 overflow-hidden shadow-lg">
         <div className="w-full overflow-auto">
           <table className="w-full caption-bottom text-sm">
-            <thead className="[&_tr]:border-b bg-surface-hover/50">
+            <thead className="[&_tr]:border-b bg-white/40 dark:bg-white/[0.03] backdrop-blur-md">
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id} className="border-b border-border transition-colors hover:bg-surface-hover/50">
                   {headerGroup.headers.map((header) => {
@@ -117,7 +117,7 @@ export function DataTable<TData, TValue>({
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, x: -10 }}
                       transition={{ duration: 0.2 }}
-                      className="border-b border-border transition-colors hover:bg-surface-hover data-[state=selected]:bg-surface-pressed"
+                      className="border-b border-border/60 transition-colors hover:bg-primary/[0.04] dark:hover:bg-white/[0.04] data-[state=selected]:bg-primary/10"
                     >
                       {row.getVisibleCells().map((cell) => (
                         <td

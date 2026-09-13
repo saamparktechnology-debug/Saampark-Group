@@ -23,7 +23,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       outline: "border border-border bg-transparent hover:bg-surface-hover text-foreground",
       danger: "bg-danger text-danger-foreground hover:bg-danger/90 shadow-soft",
       ghost: "hover:bg-surface-hover text-foreground",
-      glass: "glass-panel text-foreground shadow-float hover:bg-surface-hover/50"
+      glass: "liquid-glass-pill text-foreground shadow-float hover:border-primary/40 hover:scale-[1.02] active:scale-[0.98]"
     }
     
     const sizes = {

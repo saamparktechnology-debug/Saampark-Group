@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { 
   Menu, CheckSquare, LayoutGrid, Briefcase, Monitor, Calendar, Command, CheckCircle, Check,
   Search, Plus, Clock, Bell, Mail,
-  Settings, LogOut, User, Sun, Moon, X, Building2, CreditCard, MapPin
+  Settings, LogOut, User, Sun, Moon, X, Building2, GitBranch, CreditCard, MapPin
 } from "lucide-react"
 import { useTheme } from "next-themes"
 import Link from "next/link"
@@ -303,12 +303,6 @@ export function Topbar() {
             <span>{user.role === "Super Admin" ? "Super Admin Dashboard" : `${activeCompanyName} Dashboard`}</span>
             <span className="w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold shadow-xs">✓</span>
           </h2>
-          {activeBranchId && (
-            <span className="hidden lg:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-              <MapPin size={11} className="text-amber-500" />
-              {branches.find(b => b.id === activeBranchId)?.name || 'Branch'}
-            </span>
-          )}
         </div>
       </div>
 
@@ -336,17 +330,7 @@ export function Topbar() {
           <Search size={18} />
         </button>
 
-        {/* Search */}
-        {user.role !== 'Clients' && (
-          <Button
-            variant="ghost" size="icon"
-            onClick={() => openModal("isGlobalSearchOpen")}
-            className="text-muted-foreground hover:text-foreground"
-            title="Search"
-          >
-            <Search size={20} />
-          </Button>
-        )}
+
 
         {/* Quick Add dropdown */}
         {['Super Admin', 'Admin', 'Teams'].includes(user.role) && (
@@ -498,7 +482,7 @@ export function Topbar() {
         <div className="h-6 w-[1px] bg-border mx-1" />
 
         {/* Profile chip matching screenshot */}
-        <div className="relative">
+        <div className="relative shrink-0">
           <div
             onClick={() => { setShowProfileMenu(v => !v); setShowQuickAdd(false); setShowNotifications(false); setShowCompanyMenu(false) }}
             className="flex items-center gap-2.5 cursor-pointer p-1 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors select-none"

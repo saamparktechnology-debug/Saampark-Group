@@ -6,10 +6,8 @@ import {
   CheckSquare, Clock, Calendar, DollarSign, Plus, Edit2, 
   Trash2, Download, Search, CheckCircle2, MoreHorizontal,
   FileText, PieChart, Users, AlertCircle, TrendingUp, Bell, Grid, Briefcase, Monitor,
-  ShieldCheck, Lock, Unlock, PhoneCall, Check, ExternalLink, UserCheck, Building2, MapPin,
-  ChevronDown, GitBranch, ArrowUp, Eye, ArrowRight
+  ShieldCheck, Lock, Unlock, PhoneCall, Check, ExternalLink, UserCheck, Building2, MapPin
 } from "lucide-react"
-import Link from "next/link"
 import { useAuthStore } from "@/store/useAuthStore"
 import { useTimerStore } from "@/store/useTimerStore"
 import { Button } from "@/components/ui/Button"
@@ -27,6 +25,7 @@ import { Project } from "../projects/types"
 import { filterGlobalDeletedItems, fetchModuleDataFromDB } from "@/lib/storageSync"
 import { normalizeRole } from "@/store/usePermissionStore"
 import { ClientDashboard } from "./components/ClientDashboard"
+import { SuperAdminDashboard } from "./components/SuperAdminDashboard"
 
 export default function DashboardMain() {
   const { activeCompanyId, activeBranchId, companies, branches, user } = useAuthStore()
@@ -35,6 +34,11 @@ export default function DashboardMain() {
   // If logged in as Client, display dedicated Client Portal Dashboard
   if (user.role === "Clients" || (user.role as string) === "Client") {
     return <ClientDashboard />
+  }
+
+  // Super Admin & Admin Dashboard matching master visual blueprint
+  if (user.role === "Super Admin" || user.role === "Admin") {
+    return <SuperAdminDashboard />
   }
 
   const { isClockedIn, clockIn, clockOut, secondsElapsed, tick } = useTimerStore()
@@ -55,10 +59,6 @@ export default function DashboardMain() {
   const [liveInvoices, setLiveInvoices] = React.useState<InvoiceItem[]>([])
   const [liveOrders, setLiveOrders] = React.useState<OrderItem[]>([])
   const [liveExpenses, setLiveExpenses] = React.useState<any[]>([])
-
-  const [activeOverviewTab, setActiveOverviewTab] = React.useState<"companies" | "branches">("companies")
-  const [revenueTimeframe, setRevenueTimeframe] = React.useState("This Year")
-  const [showAttendanceDrawer, setShowAttendanceDrawer] = React.useState(false)
 
   const targetComp = activeCompanyId || user?.companyId || "tech"
   const targetBranch = activeBranchId || user?.branchId || null
@@ -579,7 +579,7 @@ export default function DashboardMain() {
             )}
           </div>
           <h1 className="text-xl font-bold text-foreground">
-            {user.role === "Super Admin" ? "Super Admin Executive Dashboard" : `${currentCompanyObj.name} Admin Dashboard`}
+            {(user?.role as string) === "Super Admin" ? "Super Admin Executive Dashboard" : `${currentCompanyObj.name} Admin Dashboard`}
           </h1>
         </div>
 

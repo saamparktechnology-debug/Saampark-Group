@@ -1,5 +1,7 @@
 "use client"
 
+import { usePermissionStore } from "@/store/usePermissionStore"
+
 import * as React from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { useAuthStore } from "@/store/useAuthStore"
@@ -151,9 +153,9 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // Check on mount and periodically every 3 seconds
+    // Check on mount and periodically every 30 seconds
     checkActiveUserStatus()
-    const interval = setInterval(checkActiveUserStatus, 3000)
+    const interval = setInterval(checkActiveUserStatus, 30000)
 
     window.addEventListener("storage", handleStorageChange)
     window.addEventListener("saampark_session_revoked", handleCustomRevoke)
@@ -167,6 +169,13 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     }
   }, [isMounted, router])
 
+  // 4. Real-time individual user permissions synchronization
+  React.useEffect(() => {
+    if (!isMounted || !user?.id) return
+    usePermissionStore.getState().fetchUserPermissions?.(String(user.id))
+    usePermissionStore.getState().fetchRolePermissions?.()
+  }, [isMounted, user?.id])
+
   // Prevent rendering protected content before hydration completes
   if (!isMounted) return null
 
@@ -177,6 +186,94 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   // If not authenticated and not on public page, render nothing while redirecting
   if (!isAuthenticated || !user) return null
 
-  // Authenticated user on protected page
+  // Authenticated user on protected page: Enforce URL Route Access Permissions
+  const isSuperAdmin = user.role === "Super Admin"
+  const isPublicOrDashboard = !pathname || pathname === "/" || pathname === "/feature/dashboard"
+
+  if (!isSuperAdmin && !isPublicOrDashboard) {
+    const routeModuleMap: Record<string, string> = {
+      "/feature/companies": "Companies",
+      "/feature/permissions": "Permissions",
+      "/feature/users": "Users",
+      "/feature/clients": "Clients",
+      "/feature/projects": "Projects",
+      "/feature/tasks": "Tasks",
+      "/feature/leads": "Leads",
+      "/feature/enquiries": "Leads",
+      "/feature/follow-ups": "Leads",
+      "/feature/calls": "Leads",
+      "/feature/meetings": "Leads",
+      "/feature/subscriptions": "Subscriptions",
+      "/feature/emi": "EMI",
+      "/feature/quotations": "Sales",
+      "/feature/estimates": "Estimates",
+      "/feature/sales-orders": "Sales",
+      "/feature/sales/invoices": "Sales",
+      "/feature/sales/payments": "Sales",
+      "/feature/sales": "Sales",
+      "/feature/purchase": "Sales",
+      "/feature/purchase-orders": "Sales",
+      "/feature/purchase-invoices": "Sales",
+      "/feature/purchase-returns": "Sales",
+      "/feature/transactions": "Expenses",
+      "/feature/bank-accounts": "Expenses",
+      "/feature/tax-rates": "Settings",
+      "/feature/products": "Sales",
+      "/feature/product-categories": "Sales",
+      "/feature/product-brands": "Sales",
+      "/feature/units": "Sales",
+      "/feature/warehouses": "Sales",
+      "/feature/employees": "Teams",
+      "/feature/attendance": "Teams",
+      "/feature/leave-management": "Teams",
+      "/feature/payroll": "Teams",
+      "/feature/performance": "Teams",
+      "/feature/tickets": "Tickets",
+      "/feature/knowledge-base": "Knowledge base",
+      "/feature/documents": "Files",
+      "/feature/files": "Files",
+      "/feature/expenses": "Expenses",
+      "/feature/reports": "Reports",
+      "/feature/settings": "Settings",
+      "/feature/notes": "Notes",
+      "/feature/messages": "Messages",
+      "/feature/events": "Events",
+      "/feature/branches": "Teams",
+      "/feature/departments": "Teams",
+      "/feature/teams": "Teams",
+    }
+
+    const matchedRoute = Object.keys(routeModuleMap).find(r => pathname === r || pathname.startsWith(r + "/"))
+    if (matchedRoute) {
+      const targetModule = routeModuleMap[matchedRoute]
+      let isAllowed = false
+      if (targetModule === "Companies" || targetModule === "Permissions") {
+        isAllowed = user.role === "Admin"
+      } else {
+        isAllowed = usePermissionStore.getState().isModuleAllowed(user, targetModule)
+      }
+
+      if (!isAllowed) {
+        return (
+          <div className="min-h-[70vh] flex flex-col items-center justify-center p-6 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-rose-500/10 text-rose-600 flex items-center justify-center text-3xl mb-4 shadow-xs">
+              🛡️
+            </div>
+            <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Access Restricted</h2>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 max-w-md mt-2 mb-6">
+              You do not have permission to view the <strong>{targetModule}</strong> module. Please contact your administrator if you require access.
+            </p>
+            <a
+              href="/feature/dashboard"
+              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl shadow-xs transition-colors"
+            >
+              Return to Dashboard
+            </a>
+          </div>
+        )
+      }
+    }
+  }
+
   return <>{children}</>
 }

@@ -1,5 +1,8 @@
 "use client"
 
+import { CompanyApiService } from "@/app/feature/companies/services/companyService"
+import { api } from "@/lib/api"
+
 import * as React from "react"
 import { motion } from "framer-motion"
 import { 
@@ -21,7 +24,6 @@ import {
   checkUsernameAvailabilityAsync, 
   updateUserUsernameAsync 
 } from "@/app/feature/users/services/userService"
-import { CompanyBranchSettings } from "./components/CompanyBranchSettings"
 import { uploadToImgBB } from "@/lib/imgbbUpload"
 import { KycData, KycStatus } from "@/app/feature/users/types"
 import { 
@@ -31,7 +33,7 @@ import {
   DEFAULT_COMPANY_PAYMENT_SETTINGS 
 } from "./services/companyPaymentService"
 
-type SettingsTab = "profile" | "kyc" | "payments" | "organization" | "company" | "smtp" | "theme"
+type SettingsTab = "profile" | "kyc" | "payments" | "company" | "smtp" | "theme"
 
 export default function SettingsMain() {
   const { user, loginAs } = useAuthStore()
@@ -729,7 +731,7 @@ export default function SettingsMain() {
     if (isSuperAdmin || user?.role === "Admin") {
       base.push(
         { id: "payments", label: "💳 Invoice Payment QR & Bank", icon: QrCode },
-        { id: "organization", label: "🏢 Companies & Branches", icon: Building2 }
+
       )
     }
     if (isSuperAdmin) {
@@ -793,10 +795,7 @@ export default function SettingsMain() {
         })}
       </div>
 
-      {/* ── TAB: COMPANIES & BRANCHES (Super Admin & Admin) ──────────────────── */}
-      {activeTab === "organization" && (isSuperAdmin || user?.role === "Admin") && (
-        <CompanyBranchSettings />
-      )}
+
 
       {/* ── TAB 1: COMPLETE USER PROFILE & PERMANENT AVATAR ─────────────────── */}
       {activeTab === "profile" && (
@@ -2008,3 +2007,5 @@ export default function SettingsMain() {
     </motion.div>
   )
 }
+
+

@@ -193,6 +193,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { name: "Expenses", href: "/feature/expenses", icon: Calculator },
   { name: "Reports", href: "/feature/reports", icon: BarChart3 },
   { name: "Settings", href: "/feature/settings", icon: Settings },
+  { name: "Activity Logs", href: "/feature/activity-logs", icon: ClipboardList },
 ]
 
 export function Sidebar() {
@@ -256,15 +257,17 @@ export function Sidebar() {
     return branches.filter(b => userBranchIds.some(id => String(id).toLowerCase().trim() === String(b.id).toLowerCase().trim()))
   }, [user, branches])
 
+  const isAllCompanies = !activeCompanyId || activeCompanyId === "all"
+
   const activeCompany = React.useMemo(() => {
-    if (!activeCompanyId || activeCompanyId === "all") {
-      return companies.find(c => isMatchingCompany(c, user?.companyId)) || allowedCompanies[0] || companies[0] || null
+    if (isAllCompanies) {
+      return null
     }
     return companies.find(c => isMatchingCompany(c, activeCompanyId)) || companies.find(c => isMatchingCompany(c, user?.companyId)) || allowedCompanies[0] || companies[0] || null
-  }, [activeCompanyId, user?.companyId, companies, allowedCompanies])
+  }, [isAllCompanies, activeCompanyId, user?.companyId, companies, allowedCompanies])
 
-  const activeCompanyName = activeCompany ? getCompanyFullName(activeCompany) : "SAAMPARK"
-  const activeCompanyLogo = activeCompany ? getCompanyLogoUrl(activeCompany) : null
+  const activeCompanyName = isAllCompanies ? "SAAMPARK GROUP" : (activeCompany ? getCompanyFullName(activeCompany) : "SAAMPARK GROUP")
+  const activeCompanyLogo = isAllCompanies ? null : (activeCompany ? getCompanyLogoUrl(activeCompany) : null)
   const { isModuleAllowed, userActionPermissions, userPermissions } = usePermissionStore()
 
   const [rawCounts, setRawCounts] = React.useState<Record<string, number>>({})
@@ -537,7 +540,9 @@ export function Sidebar() {
         <div className="h-16 flex items-center justify-between px-3.5 border-b border-slate-800/80 shrink-0">
           <Link href="/feature/dashboard" onClick={handleLinkClick} className="flex items-center gap-2.5 group min-w-0 flex-1">
             <div className="w-10 h-10 min-w-[40px] rounded-xl bg-slate-800/80 border border-slate-700/60 p-1 flex items-center justify-center overflow-hidden shrink-0 group-hover:scale-105 transition-transform shadow-xs">
-              {activeCompanyLogo ? (
+              {isAllCompanies ? (
+                <SaamparkVortexLogo className="w-8 h-8" />
+              ) : activeCompanyLogo ? (
                 <img
                   key={activeCompanyLogo || activeCompany?.id}
                   src={activeCompanyLogo}
@@ -560,17 +565,33 @@ export function Sidebar() {
                   transition={{ duration: 0.2 }}
                   className="min-w-0 flex-1 overflow-hidden text-left"
                 >
-                  <span 
-                    className="font-black text-xs sm:text-sm tracking-wide text-white block truncate uppercase"
-                    title={activeCompanyName}
-                  >
-                    {activeCompanyName}
-                  </span>
-                  <span className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider block truncate -mt-0.5">
-                    {activeCompany?.subtitle 
-                      ? activeCompany.subtitle.replace(/\s+(pvt\.?\s*ltd\.?|private\s+limited)$/i, "") 
-                      : (activeCompany?.brand_name || "GROUP")}
-                  </span>
+                  {isAllCompanies ? (
+                    <div>
+                      <span 
+                        className="font-black text-xs sm:text-sm tracking-wide text-white block truncate uppercase"
+                        title="SAAMPARK GROUP"
+                      >
+                        SAAMPARK
+                      </span>
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block truncate -mt-0.5">
+                        GROUP
+                      </span>
+                    </div>
+                  ) : (
+                    <div>
+                      <span 
+                        className="font-black text-xs sm:text-sm tracking-wide text-white block truncate uppercase"
+                        title={activeCompanyName}
+                      >
+                        {activeCompanyName}
+                      </span>
+                      <span className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider block truncate -mt-0.5">
+                        {activeCompany?.subtitle 
+                          ? activeCompany.subtitle.replace(/\s+(pvt\.?\s*ltd\.?|private\s+limited)$/i, "") 
+                          : (activeCompany?.brand_name || "COMPANY")}
+                      </span>
+                    </div>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -736,7 +757,11 @@ export function Sidebar() {
               title="Click to switch active Company, Branch, or Sub-Branch"
             >
               <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                {activeCompanyLogo ? (
+                {isAllCompanies ? (
+                  <div className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/30">
+                    <SaamparkVortexLogo className="w-4 h-4" />
+                  </div>
+                ) : activeCompanyLogo ? (
                   <img
                     src={activeCompanyLogo}
                     alt={activeCompanyName}
@@ -749,12 +774,14 @@ export function Sidebar() {
                 )}
                 <div className="text-left truncate flex-1 min-w-0">
                   <span className="truncate font-bold text-xs block text-white leading-tight">
-                    {activeCompanyName}
+                    {isAllCompanies ? "SAAMPARK GROUP" : activeCompanyName}
                   </span>
                   <span className="text-[10px] text-slate-400 block truncate">
-                    {activeBranchId 
-                      ? (branches.find(b => b.id === activeBranchId)?.name || 'Branch Active') 
-                      : 'All Branches / Main HQ'}
+                    {isAllCompanies
+                      ? 'All Companies & Branches'
+                      : (activeBranchId 
+                        ? (branches.find(b => b.id === activeBranchId)?.name || 'Branch Active') 
+                        : 'All Branches / Main HQ')}
                   </span>
                 </div>
               </div>

@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useSearchParams } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
   Plus, 
@@ -61,7 +62,7 @@ import { printPDFReport, exportToExcel } from "@/lib/exportUtils"
 import { executeWithFeedback, useActionFeedbackStore } from "@/store/useActionFeedbackStore"
 import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
 
-export default function InvoicesPage() {
+function InvoicesPageContent() {
   const { user, activeCompanyId, activeBranchId, branches, subBranches, companies } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
 
@@ -79,6 +80,30 @@ export default function InvoicesPage() {
   const [selectedInvoice, setSelectedInvoice] = React.useState<InvoiceItem | null>(null)
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = React.useState(false)
   const [isAddModalOpen, setIsAddModalOpen] = React.useState(false)
+
+  // Auto-fill from query params (e.g. redirected from Project or Client)
+  const searchParams = useSearchParams()
+  React.useEffect(() => {
+    if (!searchParams) return
+    const action = searchParams.get("action")
+    const isNew = searchParams.get("new") === "true" || action === "new"
+    const proj = searchParams.get("project") || searchParams.get("projectTitle")
+    const cli = searchParams.get("client")
+    if (isNew || proj || cli) {
+      if (proj) {
+        setProjectName(proj)
+        setProjectSelectionMode("existing")
+      }
+      if (cli) {
+        setClientName(cli)
+        setClientSelectionMode("existing")
+      }
+      if (isNew) {
+        setIsAddModalOpen(true)
+      }
+    }
+  }, [searchParams])
+
   const [isGeneratingInvoice, setIsGeneratingInvoice] = React.useState(false)
   const [toastMessage, setToastMessage] = React.useState<string | null>(null)
 
@@ -275,6 +300,7 @@ export default function InvoicesPage() {
     setEditInvoiceType(isNonGst ? "nongst" : "gst")
     setEditCompanyId(inv.companyId || activeCompanyId || "tech")
     setEditBranchId(inv.branchId || (inv as any).branch_id || (isBranchLocked ? (user?.branchId || "") : ""))
+    setEditSubBranchId(inv.subBranchId || (inv as any).sub_branch_id || "")
     setEditingInvoice(inv)
     setEditClientName(inv.client || "")
     setEditClientEmail(inv.clientEmail || "")
@@ -489,6 +515,10 @@ export default function InvoicesPage() {
       branchId: editBranchId || (isBranchLocked ? user?.branchId : editingInvoice.branchId) || undefined,
       branchName: branches.find(b => b.id === (editBranchId || (isBranchLocked ? user?.branchId : editingInvoice.branchId)))?.name || editingInvoice.branchName || undefined,
       branchCode: branches.find(b => b.id === (editBranchId || (isBranchLocked ? user?.branchId : editingInvoice.branchId)))?.code || editingInvoice.branchCode || undefined,
+      subBranchId: editSubBranchId || editingInvoice.subBranchId || undefined,
+      subBranchName: (subBranches || []).find(sb => sb.id === (editSubBranchId || editingInvoice.subBranchId))?.name || editingInvoice.subBranchName || undefined,
+      subBranchCode: (subBranches || []).find(sb => sb.id === (editSubBranchId || editingInvoice.subBranchId))?.code || editingInvoice.subBranchCode || undefined,
+      subBranchSharePct: (subBranches || []).find(sb => sb.id === (editSubBranchId || editingInvoice.subBranchId))?.revenueSharePct || editingInvoice.subBranchSharePct || undefined,
     }
 
     await executeWithFeedback(async () => {
@@ -2567,7 +2597,10 @@ export default function InvoicesPage() {
                       ) : (
                         <select
                           value={editBranchId}
-                          onChange={(e) => setEditBranchId(e.target.value)}
+                          onChange={(e) => {
+                            setEditBranchId(e.target.value);
+                            setEditSubBranchId("");
+                          }}
                           className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-800 dark:text-zinc-200 font-bold"
                         >
                           <option value="">🏢 Company HQ / Central Office</option>
@@ -2578,6 +2611,28 @@ export default function InvoicesPage() {
                           ))}
                         </select>
                       )}
+                    </div>
+
+                    {/* Sub-Branch Selector in Edit */}
+                    <div>
+                      <label className="block text-zinc-600 dark:text-zinc-400 font-bold mb-1 flex items-center justify-between">
+                        <span>🌿 Partner Sub-Branch (% Share)</span>
+                        <span className="text-[10px] text-zinc-400 font-normal">Optional</span>
+                      </label>
+                      <select
+                        value={editSubBranchId}
+                        onChange={(e) => setEditSubBranchId(e.target.value)}
+                        className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-800 dark:text-zinc-200 font-bold"
+                      >
+                        <option value="">None (Main Branch Direct Bill)</option>
+                        {(subBranches || [])
+                          .filter(sb => !editBranchId || sb.parentBranchId === editBranchId)
+                          .map((sb) => (
+                            <option key={sb.id} value={sb.id}>
+                              🌿 {sb.name} {sb.code ? `• [${sb.code}]` : ""} ({sb.revenueSharePct}% Share)
+                            </option>
+                          ))}
+                      </select>
                     </div>
                   </div>
                 </div>
@@ -2979,5 +3034,19 @@ export default function InvoicesPage() {
         )}
       </AnimatePresence>
     </motion.div>
+  )
+}
+
+
+export default function InvoicesPage() {
+  return (
+    <React.Suspense fallback={
+      <div className="p-12 flex flex-col items-center justify-center gap-3">
+        <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        <p className="text-xs text-zinc-500">Loading Invoices...</p>
+      </div>
+    }>
+      <InvoicesPageContent />
+    </React.Suspense>
   )
 }

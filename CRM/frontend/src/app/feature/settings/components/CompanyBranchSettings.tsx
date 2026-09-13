@@ -273,38 +273,46 @@ export function CompanyBranchSettings() {
     )
   }
 
-  // Handle Logo Upload
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle Logo Upload with ImgBB
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 5 * 1024 * 1024) {
-      alert("Logo image size should not exceed 5MB.")
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Logo image size should not exceed 10MB.")
       return
     }
-    const reader = new FileReader()
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        setCompanyLogoUrl(reader.result)
+    try {
+      const { uploadToImgBB } = await import("@/lib/imgbbUpload")
+      const res = await uploadToImgBB(file, "company_logo", 800)
+      if (res && res.success && res.url) {
+        setCompanyLogoUrl(res.url)
+      } else {
+        alert("Failed to upload logo to ImgBB cloud.")
       }
+    } catch (err: any) {
+      alert("Upload error: " + err.message)
     }
-    reader.readAsDataURL(file)
   }
 
-  // Handle Signature Upload
-  const handleSignatureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle Signature Upload with ImgBB
+  const handleSignatureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 5 * 1024 * 1024) {
-      alert("Signature image size should not exceed 5MB.")
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Signature image size should not exceed 10MB.")
       return
     }
-    const reader = new FileReader()
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        setCompanySignatureImageUrl(reader.result)
+    try {
+      const { uploadToImgBB } = await import("@/lib/imgbbUpload")
+      const res = await uploadToImgBB(file, "company_signature", 800)
+      if (res && res.success && res.url) {
+        setCompanySignatureImageUrl(res.url)
+      } else {
+        alert("Failed to upload signature to ImgBB cloud.")
       }
+    } catch (err: any) {
+      alert("Upload error: " + err.message)
     }
-    reader.readAsDataURL(file)
   }
 
   // Handle QR Image Upload
@@ -599,59 +607,77 @@ export function CompanyBranchSettings() {
   }
 
   // Branch Upload Handlers
-  const handleBranchSignatureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBranchSignatureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 5 * 1024 * 1024) { alert("Signature image size should not exceed 5MB."); return; }
-    const reader = new FileReader()
-    reader.onload = () => { if (typeof reader.result === "string") setBranchSignatureImageUrl(reader.result) }
-    reader.readAsDataURL(file)
+    if (file.size > 10 * 1024 * 1024) { alert("Signature image size should not exceed 10MB."); return; }
+    try {
+      const { uploadToImgBB } = await import("@/lib/imgbbUpload")
+      const res = await uploadToImgBB(file, "branch_signature", 800)
+      if (res && res.success && res.url) setBranchSignatureImageUrl(res.url)
+      else alert("Failed to upload branch signature to ImgBB.")
+    } catch (err: any) { alert("Upload error: " + err.message) }
   }
 
-  const handleBranchStampUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBranchStampUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 5 * 1024 * 1024) { alert("Stamp image size should not exceed 5MB."); return; }
-    const reader = new FileReader()
-    reader.onload = () => { if (typeof reader.result === "string") setBranchStampImageUrl(reader.result) }
-    reader.readAsDataURL(file)
+    if (file.size > 10 * 1024 * 1024) { alert("Stamp image size should not exceed 10MB."); return; }
+    try {
+      const { uploadToImgBB } = await import("@/lib/imgbbUpload")
+      const res = await uploadToImgBB(file, "branch_stamp", 800)
+      if (res && res.success && res.url) setBranchStampImageUrl(res.url)
+      else alert("Failed to upload branch stamp to ImgBB.")
+    } catch (err: any) { alert("Upload error: " + err.message) }
   }
 
-  const handleBranchQrUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBranchQrUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 5 * 1024 * 1024) { alert("QR Code image size should not exceed 5MB."); return; }
-    const reader = new FileReader()
-    reader.onload = () => { if (typeof reader.result === "string") setBranchPaymentQrUrl(reader.result) }
-    reader.readAsDataURL(file)
+    if (file.size > 10 * 1024 * 1024) { alert("QR Code image size should not exceed 10MB."); return; }
+    try {
+      const { uploadToImgBB } = await import("@/lib/imgbbUpload")
+      const res = await uploadToImgBB(file, "branch_upi_qr", 800)
+      if (res && res.success && res.url) setBranchPaymentQrUrl(res.url)
+      else alert("Failed to upload branch UPI QR to ImgBB.")
+    } catch (err: any) { alert("Upload error: " + err.message) }
   }
 
   // Sub-Branch Upload Handlers
-  const handleSubBranchSignatureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSubBranchSignatureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 5 * 1024 * 1024) { alert("Signature image size should not exceed 5MB."); return; }
-    const reader = new FileReader()
-    reader.onload = () => { if (typeof reader.result === "string") setSubBranchSignatureImageUrl(reader.result) }
-    reader.readAsDataURL(file)
+    if (file.size > 10 * 1024 * 1024) { alert("Signature image size should not exceed 10MB."); return; }
+    try {
+      const { uploadToImgBB } = await import("@/lib/imgbbUpload")
+      const res = await uploadToImgBB(file, "subbranch_signature", 800)
+      if (res && res.success && res.url) setSubBranchSignatureImageUrl(res.url)
+      else alert("Failed to upload sub-branch signature to ImgBB.")
+    } catch (err: any) { alert("Upload error: " + err.message) }
   }
 
-  const handleSubBranchStampUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSubBranchStampUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 5 * 1024 * 1024) { alert("Stamp image size should not exceed 5MB."); return; }
-    const reader = new FileReader()
-    reader.onload = () => { if (typeof reader.result === "string") setSubBranchStampImageUrl(reader.result) }
-    reader.readAsDataURL(file)
+    if (file.size > 10 * 1024 * 1024) { alert("Stamp image size should not exceed 10MB."); return; }
+    try {
+      const { uploadToImgBB } = await import("@/lib/imgbbUpload")
+      const res = await uploadToImgBB(file, "subbranch_stamp", 800)
+      if (res && res.success && res.url) setSubBranchStampImageUrl(res.url)
+      else alert("Failed to upload sub-branch stamp to ImgBB.")
+    } catch (err: any) { alert("Upload error: " + err.message) }
   }
 
-  const handleSubBranchQrUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSubBranchQrUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 5 * 1024 * 1024) { alert("QR Code image size should not exceed 5MB."); return; }
-    const reader = new FileReader()
-    reader.onload = () => { if (typeof reader.result === "string") setSubBranchPaymentQrUrl(reader.result) }
-    reader.readAsDataURL(file)
+    if (file.size > 10 * 1024 * 1024) { alert("QR Code image size should not exceed 10MB."); return; }
+    try {
+      const { uploadToImgBB } = await import("@/lib/imgbbUpload")
+      const res = await uploadToImgBB(file, "subbranch_upi_qr", 800)
+      if (res && res.success && res.url) setSubBranchPaymentQrUrl(res.url)
+      else alert("Failed to upload sub-branch UPI QR to ImgBB.")
+    } catch (err: any) { alert("Upload error: " + err.message) }
   }
 
   // ── BRANCH HANDLERS (Admin & Super Admin) ────────────────────────────────────

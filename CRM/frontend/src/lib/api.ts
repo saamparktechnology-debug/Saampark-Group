@@ -81,7 +81,7 @@ async function request<T = any>(endpoint: string, options: RequestInit = {}): Pr
   }
 }
 
-export function unwrapList(res: any): any[] {
+export function unwrapList<T = any>(res: any): T[] {
   if (Array.isArray(res)) return res
   if (res && Array.isArray(res.data)) return res.data
   if (res && res.data && Array.isArray(res.data.items)) return res.data.items

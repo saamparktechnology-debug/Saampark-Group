@@ -10,11 +10,15 @@ interface WidgetProps {
 
 export function Widget({ title, children, className = "", action, icon: Icon }: WidgetProps) {
   return (
-    <div className={`bg-surface border border-border shadow-soft rounded-lg p-5 flex flex-col bg-white dark:bg-surface ${className}`}>
-      <div className="flex items-center justify-between mb-4 pb-3 border-b border-border/40 shrink-0">
-        <div className="flex items-center gap-2">
-          {Icon && <Icon size={16} className="text-muted-foreground" />}
-          <h3 className="font-semibold text-[15px] text-foreground/90">{title}</h3>
+    <div className={`liquid-glass-card rounded-2xl p-5 flex flex-col ${className}`}>
+      <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/20 dark:border-white/10 shrink-0">
+        <div className="flex items-center gap-2.5">
+          {Icon && (
+            <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+              <Icon size={16} />
+            </div>
+          )}
+          <h3 className="font-bold text-[15px] tracking-tight text-foreground">{title}</h3>
         </div>
         {action}
       </div>

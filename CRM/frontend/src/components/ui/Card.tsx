@@ -17,8 +17,8 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
         className={cn(
-          "rounded-xl border border-border shadow-soft",
-          glass ? "glass-panel" : "bg-surface",
+          "rounded-2xl transition-all duration-300",
+          glass !== false ? "liquid-glass-card" : "bg-surface border border-border shadow-soft",
           className
         )}
         {...props}
