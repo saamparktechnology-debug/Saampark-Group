@@ -23,9 +23,18 @@ router.get('/attendance/company', attendanceController.getByCompany);
 router.get('/leave/types', leaveController.getTypes);
 router.post('/leave/types', leaveController.createType);
 router.post('/leave/request', leaveController.requestLeave);
+router.post('/leave/requests', leaveController.requestLeave);
 router.get('/leave/requests', leaveController.getRequests);
 router.put('/leave/approve/:id', leaveController.approve);
 router.put('/leave/reject/:id', leaveController.reject);
+router.put('/leave/requests/:id/approve', leaveController.approve);
+router.put('/leave/requests/:id/reject', leaveController.reject);
+router.put('/leave/requests/:id/status', (req, res) => {
+  if (req.body?.status?.toLowerCase() === 'rejected') {
+    return leaveController.reject(req, res);
+  }
+  return leaveController.approve(req, res);
+});
 
 // Payroll
 router.get('/payroll', payrollController.getAll);

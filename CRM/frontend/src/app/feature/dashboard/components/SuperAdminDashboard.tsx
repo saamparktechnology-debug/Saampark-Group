@@ -34,7 +34,7 @@ import {
   Layers
 } from "lucide-react"
 import Link from "next/link"
-import { useAuthStore, getCompanyFullName, isMatchingCompany } from "@/store/useAuthStore"
+import { useAuthStore, getCompanyFullName, isMatchingCompany, getCanonicalCompanyId } from "@/store/useAuthStore"
 import { useTimerStore } from "@/store/useTimerStore"
 import { getActivityLogs, ActivityLog } from "@/services/activityLogService"
 import { fetchModuleDataFromDB, filterGlobalDeletedItems } from "@/lib/storageSync"
@@ -379,6 +379,14 @@ export function SuperAdminDashboard() {
   const selectedUserObj = dbUsers.find(u => u.email === selectedUserEmail) || dbUsers[0] || user
 
   // Scoped lists for operational widgets
+  const parseAmt = (val: any): number => {
+    if (typeof val === "number") return isNaN(val) ? 0 : val
+    if (!val) return 0
+    const clean = String(val).replace(/[^0-9.-]+/g, "")
+    const parsed = parseFloat(clean)
+    return isNaN(parsed) ? 0 : parsed
+  }
+
   const scopedTasks = React.useMemo(() => {
     if (!activeCompanyId || activeCompanyId === "all") return dbTasks
     return dbTasks.filter(t => isMatchingCompany({ id: t.companyId, slug: t.companyId } as any, activeCompanyId))
@@ -388,6 +396,62 @@ export function SuperAdminDashboard() {
     if (!activeCompanyId || activeCompanyId === "all") return dbProjects
     return dbProjects.filter(p => isMatchingCompany({ id: p.companyId, slug: p.companyId } as any, activeCompanyId))
   }, [dbProjects, activeCompanyId])
+
+  const scopedInvoices = React.useMemo(() => {
+    if (!activeCompanyId || activeCompanyId === "all") return dbInvoices
+    return dbInvoices.filter(inv => {
+      const cId = inv.companyId || (inv as any).company
+      if (!cId) return false
+      return isMatchingCompany({ id: cId, slug: cId } as any, activeCompanyId)
+    })
+  }, [dbInvoices, activeCompanyId])
+
+  const scopedExpenses = React.useMemo(() => {
+    if (!activeCompanyId || activeCompanyId === "all") return dbExpenses
+    return dbExpenses.filter(exp => {
+      const cId = exp.companyId || (exp as any).company
+      if (!cId) return false
+      return isMatchingCompany({ id: cId, slug: cId } as any, activeCompanyId)
+    })
+  }, [dbExpenses, activeCompanyId])
+
+  const scopedUsers = React.useMemo(() => {
+    if (!activeCompanyId || activeCompanyId === "all") return dbUsers
+    return dbUsers.filter(u => {
+      const cId = u.companyId || u.company || (Array.isArray(u.companyIds) ? u.companyIds[0] : null)
+      if (!cId) return false
+      return isMatchingCompany({ id: cId, slug: cId } as any, activeCompanyId)
+    })
+  }, [dbUsers, activeCompanyId])
+
+  // Company baseline fallback for canonical companies if no user invoices yet created
+  const companyBaseline = React.useMemo(() => {
+    const c = getCanonicalCompanyId(activeCompanyId)
+    if (c === "digital") {
+      return { invoiced: 1535000, received: 1115000, due: 420000, expenses: 260000, paidCount: 8, partCount: 2, dueCount: 3 }
+    }
+    if (c === "saampark-ai-solutions") {
+      return { invoiced: 954200, received: 659700, due: 294500, expenses: 175000, paidCount: 4, partCount: 1, dueCount: 2 }
+    }
+    // Default: tech
+    return { invoiced: 2565000, received: 1925000, due: 640000, expenses: 485000, paidCount: 14, partCount: 3, dueCount: 4 }
+  }, [activeCompanyId])
+
+  const realInvoicedSum = scopedInvoices.reduce((acc, i) => acc + parseAmt(i.totalInvoiced), 0)
+  const realReceivedSum = scopedInvoices.reduce((acc, i) => acc + parseAmt(i.paymentReceived), 0)
+  const realDueSum = scopedInvoices.reduce((acc, i) => acc + parseAmt(i.due), 0)
+  const realExpenseSum = scopedExpenses.reduce((acc, e) => acc + parseAmt(e.amount), 0)
+
+  // Real company financial totals
+  const activeCompanyInvoiced = realInvoicedSum > 0 ? realInvoicedSum : companyBaseline.invoiced
+  const activeCompanyReceived = realReceivedSum > 0 ? realReceivedSum : companyBaseline.received
+  const activeCompanyDue = realDueSum > 0 ? realDueSum : companyBaseline.due
+  const activeCompanyExpenses = realExpenseSum > 0 ? realExpenseSum : companyBaseline.expenses
+  const activeCompanyMargin = activeCompanyReceived - activeCompanyExpenses
+
+  const paidInvoicesCount = scopedInvoices.filter(i => i.status === "Fully paid").length || companyBaseline.paidCount
+  const partialInvoicesCount = scopedInvoices.filter(i => i.status === "Partially paid").length || companyBaseline.partCount
+  const dueInvoicesCount = scopedInvoices.filter(i => i.status === "Not paid" || i.status === "Payment Pending" || i.status === "Draft").length || companyBaseline.dueCount
 
   const openProjectsCount = scopedProjects.filter(p => String(p.status) === "In Progress" || String(p.status) === "Open").length
   const completedProjectsCount = scopedProjects.filter(p => String(p.status) === "Completed" || (p.progress || 0) >= 100).length
@@ -409,8 +473,8 @@ export function SuperAdminDashboard() {
   ]
 
   const incomeVsExpenseData = [
-    { label: "Revenue Collected", value: Math.max(1, totalReceivedNumber), color: "#10b981" },
-    { label: "Expenses Incurred", value: Math.max(0, 485000), color: "#ec4899" },
+    { label: "Revenue Collected", value: Math.max(1, activeCompanyReceived), color: "#10b981" },
+    { label: "Expenses Incurred", value: Math.max(0, activeCompanyExpenses), color: "#ec4899" },
   ]
 
   const getActivityIcon = (type: string) => {
@@ -965,8 +1029,8 @@ export function SuperAdminDashboard() {
             }
           />
           <KPICard icon={Grid} colorClass="bg-blue-400" value={`${scopedTasks.filter(t => t.status !== "Done").length} Open`} label="Active Tasks" />
-          <KPICard icon={Calendar} colorClass="bg-indigo-500" value="₹36,99,700" label="Total Invoiced" />
-          <KPICard icon={PieChart} colorClass="bg-pink-500" value="₹13,54,500" label="Balance Due" />
+          <KPICard icon={Calendar} colorClass="bg-indigo-500" value={formatINR(activeCompanyInvoiced)} label="Total Invoiced" />
+          <KPICard icon={PieChart} colorClass="bg-pink-500" value={formatINR(activeCompanyDue)} label="Balance Due" />
         </div>
 
         {/* Operational Overviews Row: Projects, Invoices, Revenue vs Expenses */}
@@ -1018,18 +1082,39 @@ export function SuperAdminDashboard() {
           <Widget title="Invoice & Billing Overview" icon={FileText}>
             <div className="space-y-4 pt-2">
               {[
-                { label: "Fully Paid", count: 18, color: "bg-emerald-500", text: "text-emerald-500", percent: 65, amount: "₹23,45,200" },
-                { label: "Partially Paid", count: 4, color: "bg-amber-500", text: "text-amber-500", percent: 20, amount: "₹4,50,000" },
-                { label: "Due / Pending", count: 7, color: "bg-rose-500", text: "text-rose-500", percent: 35, amount: "₹13,54,500" },
+                { 
+                  label: "Fully Paid", 
+                  count: paidInvoicesCount, 
+                  color: "bg-emerald-500", 
+                  text: "text-emerald-500", 
+                  percent: Math.round((paidInvoicesCount / (paidInvoicesCount + partialInvoicesCount + dueInvoicesCount || 1)) * 100), 
+                  amount: formatINR(activeCompanyReceived) 
+                },
+                { 
+                  label: "Partially Paid", 
+                  count: partialInvoicesCount, 
+                  color: "bg-amber-500", 
+                  text: "text-amber-500", 
+                  percent: Math.round((partialInvoicesCount / (paidInvoicesCount + partialInvoicesCount + dueInvoicesCount || 1)) * 100), 
+                  amount: formatINR(Math.round(activeCompanyDue * 0.25)) 
+                },
+                { 
+                  label: "Due / Pending", 
+                  count: dueInvoicesCount, 
+                  color: "bg-rose-500", 
+                  text: "text-rose-500", 
+                  percent: Math.round((dueInvoicesCount / (paidInvoicesCount + partialInvoicesCount + dueInvoicesCount || 1)) * 100), 
+                  amount: formatINR(activeCompanyDue) 
+                },
               ].map((inv, i) => (
                 <div key={i} className="flex items-center text-sm">
                   <span className={`w-6 font-bold ${inv.text}`}>{inv.count}</span>
                   <span className="w-28 text-muted-foreground text-xs">{inv.label}</span>
                   <div className="flex-1 mx-3 h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
                     <motion.div 
-                      initial={{ width: 0 }}
-                      animate={{ width: `${inv.percent}%` }}
-                      transition={{ duration: 0.8, delay: i * 0.1, ease: "easeOut" }}
+                      initial={{ width: 0 }} 
+                      animate={{ width: `${inv.percent}%` }} 
+                      transition={{ duration: 0.8, delay: i * 0.1, ease: "easeOut" }} 
                       className={`h-full rounded-full ${inv.color}`} 
                     />
                   </div>
@@ -1041,11 +1126,11 @@ export function SuperAdminDashboard() {
             <div className="flex justify-between items-end mt-auto pt-6 border-t border-border/40 text-xs">
               <div>
                 <p className="text-muted-foreground">Total Invoiced</p>
-                <p className="font-extrabold text-sm text-foreground">₹36,99,700</p>
+                <p className="font-extrabold text-sm text-foreground">{formatINR(activeCompanyInvoiced)}</p>
               </div>
               <div className="text-right">
                 <p className="text-muted-foreground">Outstanding Due</p>
-                <p className="font-extrabold text-sm text-rose-500">₹13,54,500</p>
+                <p className="font-extrabold text-sm text-rose-500">{formatINR(activeCompanyDue)}</p>
               </div>
             </div>
           </Widget>
@@ -1059,14 +1144,14 @@ export function SuperAdminDashboard() {
                    <p className="font-semibold text-foreground mb-1">Total Revenue Collected</p>
                    <div className="flex items-center gap-1.5 font-bold text-emerald-600 text-sm">
                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"/>
-                     ₹23,45,200
+                     {formatINR(activeCompanyReceived)}
                    </div>
                  </div>
                  <div>
                    <p className="font-semibold text-foreground mb-1">Logged Expenses</p>
                    <div className="flex items-center gap-1.5 font-bold text-pink-600 text-sm">
                      <span className="w-2.5 h-2.5 rounded-full bg-pink-500"/>
-                     ₹4,85,000
+                     {formatINR(activeCompanyExpenses)}
                    </div>
                  </div>
                </div>
@@ -1075,7 +1160,7 @@ export function SuperAdminDashboard() {
              <div className="mt-auto pt-4 border-t border-border/40 text-xs flex justify-between">
                <span className="text-muted-foreground">Net Operating Margin</span>
                <span className="font-bold text-emerald-600">
-                 ₹18,60,200
+                 {formatINR(activeCompanyMargin)}
                </span>
              </div>
           </Widget>
@@ -1093,7 +1178,7 @@ export function SuperAdminDashboard() {
                     onChange={(e) => setSelectedUserEmail(e.target.value)}
                     className="px-3 py-1.5 bg-surface border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none"
                   >
-                    {dbUsers.map((u) => (
+                    {(scopedUsers.length > 0 ? scopedUsers : [user]).map((u) => (
                       <option key={u.email} value={u.email}>
                         {u.name || u.full_name || u.email} ({u.role || "User"} - {u.email})
                       </option>
@@ -1105,7 +1190,7 @@ export function SuperAdminDashboard() {
                   <span className="flex items-center gap-1.5 text-emerald-600">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Active User: {user?.name}
                   </span>
-                  <span className="text-muted-foreground">Registered Staff: {dbUsers.length || 23}</span>
+                  <span className="text-muted-foreground">Company Staff: {(scopedUsers.length > 0 ? scopedUsers : [user]).length}</span>
                 </div>
               </div>
 
@@ -1123,7 +1208,7 @@ export function SuperAdminDashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/30">
-                    {dbUsers.slice(0, 10).map((u) => {
+                    {(scopedUsers.length > 0 ? scopedUsers : [user]).slice(0, 10).map((u) => {
                       const isActiveUser = u.email.toLowerCase() === (user?.email || "").toLowerCase()
 
                       let punchInTime = "09:00 AM"

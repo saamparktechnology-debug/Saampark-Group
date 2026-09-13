@@ -271,6 +271,16 @@ export function getCompanyFullName(company?: Partial<Company> | null): string {
   return rawName || rawBrand || "SAAMPARK"
 }
 
+export function getCanonicalCompanyId(val: string | number | null | undefined): string {
+  if (val === null || val === undefined) return ""
+  const str = String(val).toLowerCase().trim()
+  if (!str) return ""
+  if (str === "1" || str === "tech" || str.includes("technology")) return "tech"
+  if (str === "2" || str === "digital" || str.includes("digital")) return "digital"
+  if (str === "3" || str === "saampark-ai-solutions" || str === "ai" || str.includes("ai solutions")) return "saampark-ai-solutions"
+  return str
+}
+
 export function isMatchingCompany(
   comp: Partial<Company> | null | undefined, 
   targetIdOrSlug: string | number | null | undefined
@@ -278,12 +288,46 @@ export function isMatchingCompany(
   if (!comp || targetIdOrSlug === null || targetIdOrSlug === undefined) return false
   const target = String(targetIdOrSlug).toLowerCase().trim()
   if (!target) return false
+  if (target === "all") return true
+
+  const canonTarget = getCanonicalCompanyId(target)
+  const canonCompId = getCanonicalCompanyId(comp.id)
+  const canonCompSlug = getCanonicalCompanyId(comp.slug)
+  const canonCompNum = getCanonicalCompanyId((comp as any).numeric_id)
+  const canonCompCompanyId = getCanonicalCompanyId((comp as any).company_id || (comp as any).companyId)
+  const canonCompName = getCanonicalCompanyId(comp.name)
+
+  if (
+    canonTarget === canonCompId || 
+    canonTarget === canonCompSlug || 
+    canonTarget === canonCompNum || 
+    canonTarget === canonCompCompanyId || 
+    canonTarget === canonCompName
+  ) {
+    return true
+  }
+
   return (
     String(comp.id || "").toLowerCase().trim() === target ||
     String(comp.slug || "").toLowerCase().trim() === target ||
     String((comp as any).numeric_id || "").toLowerCase().trim() === target ||
-    String((comp as any).company_id || "").toLowerCase().trim() === target ||
+    String((comp as any).company_id || (comp as any).companyId || "").toLowerCase().trim() === target ||
     String(comp.name || "").toLowerCase().trim() === target
+  )
+}
+
+export function isMatchingBranch(
+  branch: Partial<Branch> | null | undefined,
+  targetBranchId: string | number | null | undefined
+): boolean {
+  if (!branch || targetBranchId === null || targetBranchId === undefined) return false
+  const target = String(targetBranchId).toLowerCase().trim()
+  if (!target || target === "all") return true
+
+  return (
+    String(branch.id || "").toLowerCase().trim() === target ||
+    String(branch.name || "").toLowerCase().trim() === target ||
+    String(branch.code || "").toLowerCase().trim() === target
   )
 }
 

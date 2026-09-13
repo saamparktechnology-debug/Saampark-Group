@@ -79,27 +79,32 @@ export default function TimeCardsPage() {
         const todayStr = new Date().toISOString().split("T")[0]
         const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0]
 
-        cleanCards = (usersList.length > 0 ? usersList : [
-          { name: "Supriya Kumar", email: "supriya@saampark.com", role: "Super Admin", companyId: "tech" },
-          { name: "Rahul Sharma", email: "rahul@saampark.com", role: "Admin", companyId: "tech" },
-          { name: "Priya Ghosh", email: "priya@saampark.com", role: "Teams", companyId: "digital" },
-          { name: "Anand Verma", email: "anand@saampark.com", role: "Teams", companyId: "saampark-ai-solutions" }
-        ]).map((m: any, idx: number) => ({
+        const defaultSeedTeam = [
+          { name: "Supriya (Super Admin)", email: "hiisupriya@gmail.com", role: "Super Admin", companyId: "tech", branchName: "Kolkata HQ" },
+          { name: "Chiranjit Mahapatra", email: "saamparktechnologyresearch@gmail.com", role: "Admin", companyId: "tech", branchName: "Kolkata HQ" },
+          { name: "Rakhi Ghosh", email: "rakhighosh25899@gmail.com", role: "Teams", companyId: "tech", branchName: "New Town Branch" },
+          { name: "Priya Ghosh", email: "priya@saampark.com", role: "Teams", companyId: "digital", branchName: "Salt Lake Branch" },
+          { name: "Rohan Sengupta", email: "rohan@saampark.com", role: "Admin", companyId: "digital", branchName: "Salt Lake Branch" },
+          { name: "Anand Verma", email: "anand@saampark.com", role: "Teams", companyId: "saampark-ai-solutions", branchName: "AI Lab Branch" },
+          { name: "Kavita Roy", email: "kavita@saampark.com", role: "Teams", companyId: "saampark-ai-solutions", branchName: "AI Lab Branch" }
+        ]
+
+        cleanCards = defaultSeedTeam.map((m: any, idx: number) => ({
           id: `tc_init_${idx + 1}`,
-          userId: String(m.id || idx),
-          memberName: m.name || "Team Member",
-          memberEmail: m.email || "member@saampark.com",
-          memberRole: m.role || "Teams",
-          memberAvatar: m.avatar || m.avatarUrl || getUserAvatar(m.name, undefined, m.name),
-          companyId: m.companyId || "tech",
-          branchName: idx % 2 === 0 ? "Head Office" : "Branch Office",
-          inDate: idx === 0 ? todayStr : yesterday,
-          inTime: idx === 0 ? "09:30 AM" : "09:45 AM",
-          outDate: idx === 0 ? undefined : yesterday,
-          outTime: idx === 0 ? undefined : "06:45 PM",
+          userId: String(idx + 1),
+          memberName: m.name,
+          memberEmail: m.email,
+          memberRole: m.role,
+          memberAvatar: getUserAvatar(m.name, undefined, m.name),
+          companyId: m.companyId,
+          branchName: m.branchName,
+          inDate: idx % 2 === 0 ? todayStr : yesterday,
+          inTime: idx % 2 === 0 ? "09:30 AM" : "09:45 AM",
+          outDate: idx === 0 ? undefined : (idx % 2 === 0 ? todayStr : yesterday),
+          outTime: idx === 0 ? undefined : "06:30 PM",
           durationSecs: idx === 0 ? 14400 : 32400,
           status: idx === 0 ? "Active Shift" : "Completed",
-          notes: idx === 0 ? "Currently active on project sprint" : "Regular full shift"
+          notes: idx === 0 ? "Currently active on sprint session" : "Regular completed shift"
         }))
 
         await saveModuleDataToDB("timecards", cleanCards, "all").catch(() => {})
@@ -121,6 +126,7 @@ export default function TimeCardsPage() {
     const now = new Date()
     const timeStr = now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
     const dateStr = now.toISOString().split("T")[0]
+    const effectiveCompanyId = (activeCompanyId && activeCompanyId !== "all") ? activeCompanyId : (user.companyId || "tech")
 
     if (!isClockedIn) {
       // Clock in
@@ -132,7 +138,7 @@ export default function TimeCardsPage() {
         memberEmail: user.email,
         memberRole: user.role,
         memberAvatar: user.avatar || (user as any).avatarUrl || getUserAvatar(user.name, undefined, user.name),
-        companyId: user.companyId || activeCompanyId || "tech",
+        companyId: effectiveCompanyId,
         branchName: (user as any).branchName || "Main HQ",
         inDate: dateStr,
         inTime: timeStr,
@@ -168,13 +174,11 @@ export default function TimeCardsPage() {
   // Handle Manual Timecard Add
   const handleManualAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!manualForm.memberEmail) {
-      alert("Please select a team member")
-      return
-    }
+    if (!manualForm.memberEmail) return
 
-    const memberObj = teamMembers.find(m => m.email === manualForm.memberEmail) || {
+    const memberObj = teamMembers.find(m => m.email.toLowerCase() === manualForm.memberEmail.toLowerCase()) || {
       name: manualForm.memberEmail.split("@")[0],
+      email: manualForm.memberEmail,
       role: "Teams",
       companyId: activeCompanyId || "tech"
     }
@@ -185,6 +189,10 @@ export default function TimeCardsPage() {
     let totalMins = (outH * 60 + outM) - (inH * 60 + inM)
     if (totalMins < 0) totalMins += 24 * 60
 
+    const effectiveCompanyId = (activeCompanyId && activeCompanyId !== "all") 
+      ? activeCompanyId 
+      : (memberObj.companyId || user?.companyId || "tech")
+
     const newCard: TimeCardRecord = {
       id: `tc_manual_${Date.now()}`,
       userId: String(memberObj.id || ""),
@@ -192,7 +200,7 @@ export default function TimeCardsPage() {
       memberEmail: manualForm.memberEmail,
       memberRole: memberObj.role || "Teams",
       memberAvatar: memberObj.avatar || memberObj.avatarUrl || getUserAvatar(memberObj.name, undefined, memberObj.name),
-      companyId: memberObj.companyId || activeCompanyId || "tech",
+      companyId: effectiveCompanyId,
       branchName: memberObj.branchName || "Main HQ",
       inDate: manualForm.date,
       inTime: manualForm.inTime,
@@ -225,27 +233,36 @@ export default function TimeCardsPage() {
     await saveModuleDataToDB("timecards", updated, "all").catch(() => {})
   }
 
-  // Filtered Timecards
+  // Scoped Team Members (STRICTLY by active company)
+  const scopedTeamMembers = React.useMemo(() => {
+    if (!activeCompanyId || activeCompanyId === "all") return teamMembers
+    return teamMembers.filter(m => {
+      const cId = m.companyId || m.company || (Array.isArray(m.companyIds) ? m.companyIds[0] : null)
+      if (!cId) return false
+      return isMatchingCompany({ id: cId, slug: cId } as any, activeCompanyId)
+    })
+  }, [teamMembers, activeCompanyId])
+
+  // Company Scoped Timecards for stats & aggregate KPIs
+  const companyScopedTimecards = React.useMemo(() => {
+    if (!activeCompanyId || activeCompanyId === "all") return timecards
+    return timecards.filter(tc => isMatchingCompany({ id: tc.companyId, slug: tc.companyId } as any, activeCompanyId))
+  }, [timecards, activeCompanyId])
+
+  // Filtered Timecards (with member & tab filters applied on top of company scope)
   const todayStr = new Date().toISOString().split("T")[0]
   const filteredTimecards = React.useMemo(() => {
-    return timecards.filter(tc => {
-      // 1. Company filter
-      if (activeCompanyId && activeCompanyId !== "all") {
-        if (!isMatchingCompany({ id: tc.companyId, slug: tc.companyId } as any, activeCompanyId)) {
-          return false
-        }
-      }
-
-      // 2. Member filter
+    return companyScopedTimecards.filter(tc => {
+      // 1. Member filter
       if (selectedMemberFilter !== "all") {
         if (tc.memberEmail.toLowerCase() !== selectedMemberFilter.toLowerCase()) return false
       }
 
-      // 3. Tab filter
+      // 2. Tab filter
       if (activeTab === "clocked_in" && tc.status !== "Active Shift") return false
       if (activeTab === "today" && tc.inDate !== todayStr) return false
 
-      // 4. Search query
+      // 3. Search query
       if (searchQuery) {
         const q = searchQuery.toLowerCase()
         return (
@@ -257,11 +274,12 @@ export default function TimeCardsPage() {
 
       return true
     })
-  }, [timecards, activeCompanyId, selectedMemberFilter, activeTab, searchQuery, todayStr])
+  }, [companyScopedTimecards, selectedMemberFilter, activeTab, searchQuery, todayStr])
 
-  // Aggregate Stats
-  const activeClockedInCount = timecards.filter(tc => tc.status === "Active Shift").length
-  const totalCompletedHours = Math.round(timecards.reduce((acc, tc) => acc + (tc.durationSecs || 0), 0) / 3600)
+  // Aggregate Stats (CALCULATED ON REAL COMPANY SCOPED CARDS)
+  const activeClockedInCount = companyScopedTimecards.filter(tc => tc.status === "Active Shift").length
+  const completedLogsCount = companyScopedTimecards.filter(t => t.status === "Completed").length
+  const totalCompletedHours = Math.round(companyScopedTimecards.reduce((acc, tc) => acc + (tc.durationSecs || 0), 0) / 3600)
 
   const formatDuration = (secs: number) => {
     const h = Math.floor(secs / 3600)
@@ -341,7 +359,7 @@ export default function TimeCardsPage() {
           <div>
             <p className="text-xs text-slate-400 font-medium">Registered Members</p>
             <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">
-              {teamMembers.length || 4}
+              {scopedTeamMembers.length || 1}
             </p>
           </div>
           <div className="w-11 h-11 rounded-2xl bg-blue-50 dark:bg-blue-950 text-blue-600 flex items-center justify-center border border-blue-200 dark:border-blue-900">
@@ -365,7 +383,7 @@ export default function TimeCardsPage() {
           <div>
             <p className="text-xs text-slate-400 font-medium">Completed Logs</p>
             <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">
-              {timecards.filter(t => t.status === "Completed").length}
+              {completedLogsCount}
             </p>
           </div>
           <div className="w-11 h-11 rounded-2xl bg-purple-50 dark:bg-purple-950 text-purple-600 flex items-center justify-center border border-purple-200 dark:border-purple-900">
@@ -399,7 +417,7 @@ export default function TimeCardsPage() {
                   : "text-slate-500 hover:bg-slate-100 dark:hover:bg-zinc-800"
               }`}
             >
-              All Records ({timecards.length})
+              All Records ({companyScopedTimecards.length})
             </button>
             <button
               onClick={() => setActiveTab("clocked_in")}
@@ -433,8 +451,8 @@ export default function TimeCardsPage() {
                 onChange={(e) => setSelectedMemberFilter(e.target.value)}
                 className="text-xs bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl px-3 py-2 pr-8 text-slate-700 dark:text-zinc-200 font-semibold cursor-pointer outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="all">All Team Members</option>
-                {teamMembers.map(m => (
+                <option value="all">All Team Members ({scopedTeamMembers.length})</option>
+                {scopedTeamMembers.map(m => (
                   <option key={m.id || m.email} value={m.email}>
                     {m.name} ({m.email})
                   </option>
@@ -619,7 +637,7 @@ export default function TimeCardsPage() {
                     className="w-full bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl p-2.5 text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
                   >
                     <option value="">-- Choose Employee / Member --</option>
-                    {teamMembers.map(m => (
+                    {(scopedTeamMembers.length > 0 ? scopedTeamMembers : teamMembers).map(m => (
                       <option key={m.id || m.email} value={m.email}>
                         {m.name} ({m.email})
                       </option>

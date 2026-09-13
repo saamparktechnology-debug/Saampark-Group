@@ -15,7 +15,7 @@ export const getProjects = async (companyId?: string): Promise<Project[]> => {
   }
   
   if (!targetComp || targetComp === "all") {
-    const knownCompanies = ["all", "tech", "infotech", "fashion", "digital", "consultancy", "jewellers"]
+    const knownCompanies = ["all", "tech", "infotech", "fashion", "digital", "consultancy", "jewellers", "saampark-ai-solutions"]
     const results = await Promise.all(
       knownCompanies.map(c => fetchModuleDataFromDB<Project[]>("projects", [], c).catch(() => []))
     )
@@ -28,6 +28,7 @@ export const getProjects = async (companyId?: string): Promise<Project[]> => {
     return filterGlobalDeletedItems(Array.from(map.values()))
   }
 
+  const { isMatchingCompany } = await import("@/store/useAuthStore")
   const scopedData = await fetchModuleDataFromDB<Project[]>("projects", [], targetComp)
   const allMaster = await fetchModuleDataFromDB<Project[]>("projects", [], "all").catch(() => [])
   
@@ -35,7 +36,7 @@ export const getProjects = async (companyId?: string): Promise<Project[]> => {
   for (const p of (Array.isArray(allMaster) ? allMaster : [])) {
     if (p && p.id) {
       const pComp = p.companyId || (p as any).company || "tech"
-      if (pComp === targetComp || (targetComp === "tech" && !p.companyId)) {
+      if (isMatchingCompany({ id: pComp, slug: pComp } as any, targetComp)) {
         map.set(String(p.id).toLowerCase().trim(), p)
       }
     }
