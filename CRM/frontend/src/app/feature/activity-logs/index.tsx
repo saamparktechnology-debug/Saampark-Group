@@ -6,7 +6,8 @@ import {
   ClipboardList, Search, Building2, GitBranch, User, 
   FolderKanban, CreditCard, CheckCircle2, Clock, Filter, 
   ArrowLeft, Shield, Target, Briefcase, FileText, CheckSquare,
-  RotateCcw, Sparkles, AlertCircle, Trash2, Calendar
+  RotateCcw, Sparkles, AlertCircle, Trash2, Calendar, Crown,
+  UserCheck, ShieldAlert, Users, Layers, ExternalLink
 } from "lucide-react"
 import Link from "next/link"
 import { useAuthStore, getCompanyFullName } from "@/store/useAuthStore"
@@ -19,10 +20,14 @@ export default function ActivityLogsMain() {
   const [loading, setLoading] = React.useState(true)
   const [searchQuery, setSearchQuery] = React.useState("")
   const [selectedCompany, setSelectedCompany] = React.useState<string>(activeCompanyId || "all")
+  const [selectedActor, setSelectedActor] = React.useState<string>("all")
   const [typeFilter, setTypeFilter] = React.useState<string>("all")
 
   const isSuperAdmin = user?.role === "Super Admin"
+  const isAdmin = user?.role === "Admin"
+  const isAuthorized = isSuperAdmin || isAdmin
 
+  // Company scope filtering
   const allowedCompanies = React.useMemo(() => {
     if (!user) return []
     if (isSuperAdmin) return companies
@@ -30,22 +35,29 @@ export default function ActivityLogsMain() {
     return companies.filter(c => compIds.includes(String(c.id).toLowerCase().trim()) || (c.slug && compIds.includes(String(c.slug).toLowerCase().trim())))
   }, [user, companies, isSuperAdmin])
 
-
   const loadLogs = React.useCallback(async () => {
     setLoading(true)
     try {
-      const data = await getActivityLogs(selectedCompany)
+      // If Admin, strictly constrain company scope to their allowed companies
+      let targetComp = selectedCompany
+      if (!isSuperAdmin && targetComp === "all") {
+        targetComp = allowedCompanies[0]?.id || user?.companyId || "tech"
+      }
+      const data = await getActivityLogs(targetComp)
       setLogs(data)
     } finally {
       setLoading(false)
     }
-  }, [selectedCompany])
+  }, [selectedCompany, isSuperAdmin, allowedCompanies, user])
 
   React.useEffect(() => {
-    loadLogs()
-  }, [loadLogs])
+    if (isAuthorized) {
+      loadLogs()
+    }
+  }, [loadLogs, isAuthorized])
 
   React.useEffect(() => {
+    if (!isAuthorized) return
     const handleSync = () => loadLogs()
     window.addEventListener("saampark_activity_logged", handleSync)
     window.addEventListener("storage", handleSync)
@@ -53,16 +65,41 @@ export default function ActivityLogsMain() {
       window.removeEventListener("saampark_activity_logged", handleSync)
       window.removeEventListener("storage", handleSync)
     }
-  }, [loadLogs])
+  }, [loadLogs, isAuthorized])
 
   const handleClearLogs = async () => {
+    if (!isSuperAdmin) return
     if (confirm("Are you sure you want to clear the activity log history? This action cannot be undone.")) {
       await clearAllActivityLogs()
       setLogs([])
     }
   }
 
-  // Filter logs by search, company, and category type
+  // Extract distinct actors/admins for the Actor Filter
+  const actorsList = React.useMemo(() => {
+    const map = new Map<string, { key: string; name: string; role: string; email?: string }>()
+    logs.forEach(l => {
+      const key = (l.userName || l.userEmail || "System").trim()
+      if (key && !map.has(key)) {
+        map.set(key, {
+          key,
+          name: l.userName || key,
+          role: l.userRole || "User",
+          email: l.userEmail,
+        })
+      }
+    })
+    return Array.from(map.values()).sort((a, b) => {
+      // Super Admin and Admin first
+      if (a.role === "Super Admin" && b.role !== "Super Admin") return -1
+      if (b.role === "Super Admin" && a.role !== "Super Admin") return 1
+      if (a.role === "Admin" && b.role !== "Admin") return -1
+      if (b.role === "Admin" && a.role !== "Admin") return 1
+      return a.name.localeCompare(b.name)
+    })
+  }, [logs])
+
+  // Filter logs by search, company, category type, and actor/admin
   const filteredLogs = React.useMemo(() => {
     const q = searchQuery.toLowerCase().trim()
     return logs.filter(log => {
@@ -71,6 +108,8 @@ export default function ActivityLogsMain() {
         (log.description || "").toLowerCase().includes(q) ||
         (log.companyName || "").toLowerCase().includes(q) ||
         (log.userName || "").toLowerCase().includes(q) ||
+        (log.userRole || "").toLowerCase().includes(q) ||
+        (log.userEmail || "").toLowerCase().includes(q) ||
         (log.module || "").toLowerCase().includes(q) ||
         (log.details || "").toLowerCase().includes(q)
 
@@ -85,14 +124,29 @@ export default function ActivityLogsMain() {
         }
       }
 
-      return matchesSearch && matchesType
+      let matchesActor = true
+      if (selectedActor !== "all") {
+        if (selectedActor === "__admins_only__") {
+          const roleLower = (log.userRole || "").toLowerCase().trim()
+          matchesActor = roleLower === "admin" || roleLower === "super admin"
+        } else {
+          const actorKey = (log.userName || log.userEmail || "").trim().toLowerCase()
+          matchesActor = actorKey === selectedActor.toLowerCase()
+        }
+      }
+
+      return matchesSearch && matchesType && matchesActor
     })
-  }, [logs, searchQuery, typeFilter])
+  }, [logs, searchQuery, typeFilter, selectedActor])
 
   // Count categories for KPI cards
   const stats = React.useMemo(() => {
     return {
       total: logs.length,
+      adminActions: logs.filter(l => {
+        const r = (l.userRole || "").toLowerCase()
+        return r === "admin" || r === "super admin"
+      }).length,
       permissions: logs.filter(l => l.type === "permission").length,
       leadsAndClients: logs.filter(l => l.type === "lead" || l.type === "client").length,
       billing: logs.filter(l => l.type === "invoice" || l.type === "payment" || l.type === "quotation" || l.type === "estimate").length,
@@ -119,63 +173,85 @@ export default function ActivityLogsMain() {
       case "client":
         return {
           icon: Briefcase,
-          color: "text-indigo-500",
-          bg: "bg-indigo-500/10 border-indigo-500/20 text-indigo-600 dark:text-indigo-400",
-          label: "Client Account",
+          color: "text-purple-500",
+          bg: "bg-purple-500/10 border-purple-500/20 text-purple-600 dark:text-purple-400",
+          label: "Client Accounts",
         }
       case "invoice":
+      case "payment":
+        return {
+          icon: CreditCard,
+          color: "text-emerald-500",
+          bg: "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400",
+          label: "Billing & Revenue",
+        }
       case "quotation":
       case "estimate":
         return {
           icon: FileText,
-          color: "text-emerald-500",
-          bg: "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400",
-          label: "Invoice & Billing",
-        }
-      case "payment":
-        return {
-          icon: CreditCard,
-          color: "text-teal-500",
-          bg: "bg-teal-500/10 border-teal-500/20 text-teal-600 dark:text-teal-400",
-          label: "Payment Collection",
+          color: "text-indigo-500",
+          bg: "bg-indigo-500/10 border-indigo-500/20 text-indigo-600 dark:text-indigo-400",
+          label: "Estimates & Proposals",
         }
       case "project":
         return {
           icon: FolderKanban,
-          color: "text-purple-500",
-          bg: "bg-purple-500/10 border-purple-500/20 text-purple-600 dark:text-purple-400",
-          label: "Project",
+          color: "text-cyan-500",
+          bg: "bg-cyan-500/10 border-cyan-500/20 text-cyan-600 dark:text-cyan-400",
+          label: "Projects & Operations",
         }
       case "task":
         return {
           icon: CheckSquare,
-          color: "text-rose-500",
-          bg: "bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400",
-          label: "Task Milestone",
+          color: "text-teal-500",
+          bg: "bg-teal-500/10 border-teal-500/20 text-teal-600 dark:text-teal-400",
+          label: "Task Operations",
         }
       case "user":
         return {
           icon: User,
-          color: "text-sky-500",
-          bg: "bg-sky-500/10 border-sky-500/20 text-sky-600 dark:text-sky-400",
-          label: "User Account",
-        }
-      case "company":
-      case "branch":
-        return {
-          icon: Building2,
-          color: "text-violet-500",
-          bg: "bg-violet-500/10 border-violet-500/20 text-violet-600 dark:text-violet-400",
-          label: "Organisation",
+          color: "text-rose-500",
+          bg: "bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400",
+          label: "User Accounts",
         }
       default:
         return {
-          icon: CheckCircle2,
+          icon: ClipboardList,
           color: "text-zinc-500",
           bg: "bg-zinc-500/10 border-zinc-500/20 text-zinc-600 dark:text-zinc-400",
-          label: "Activity",
+          label: "System Action",
         }
     }
+  }
+
+  const getActorRoleBadge = (role?: string) => {
+    const rLower = (role || "").toLowerCase().trim()
+    if (rLower === "super admin") {
+      return (
+        <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+          <Crown size={10} className="text-purple-600 dark:text-purple-400" /> Super Admin
+        </span>
+      )
+    }
+    if (rLower === "admin") {
+      return (
+        <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+          <Shield size={10} className="text-blue-600 dark:text-blue-400" /> Admin
+        </span>
+      )
+    }
+    if (rLower === "clients") {
+      return (
+        <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+          <Briefcase size={10} className="text-amber-600 dark:text-amber-400" /> Client
+        </span>
+      )
+    }
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700">
+        <Users size={10} /> {role || "Team Member"}
+      </span>
+    )
   }
 
   const formatTime = (ts: string) => {
@@ -184,15 +260,15 @@ export default function ActivityLogsMain() {
       if (isNaN(d.getTime())) return "Recently"
       const now = new Date()
       const diffMs = now.getTime() - d.getTime()
-      const diffMins = Math.floor(diffMs / 60000)
-      const diffHrs = Math.floor(diffMs / 3600000)
-      const diffDays = Math.floor(diffMs / 86400000)
-      if (diffMins < 1) return "Just now"
-      if (diffMins < 60) return `${diffMins}m ago`
+      const diffMin = Math.floor(diffMs / 60000)
+      if (diffMin < 1) return "Just now"
+      if (diffMin < 60) return `${diffMin}m ago`
+      const diffHrs = Math.floor(diffMin / 60)
       if (diffHrs < 24) return `${diffHrs}h ago`
+      const diffDays = Math.floor(diffHrs / 24)
       if (diffDays === 1) return "Yesterday"
       if (diffDays < 7) return `${diffDays}d ago`
-      return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+      return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" })
     } catch {
       return "Recently"
     }
@@ -206,6 +282,41 @@ export default function ActivityLogsMain() {
     } catch {
       return ""
     }
+  }
+
+  // ACCESS GUARD: Strict restriction for Super Admin and Admin only
+  if (!isAuthorized) {
+    return (
+      <div className="min-h-[70vh] flex items-center justify-center p-4 sm:p-6">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="max-w-md w-full bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-3xl p-8 shadow-2xl text-center space-y-5"
+        >
+          <div className="w-16 h-16 rounded-2xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 border border-rose-200 dark:border-rose-800 flex items-center justify-center mx-auto shadow-sm">
+            <ShieldAlert size={32} />
+          </div>
+
+          <div className="space-y-2">
+            <span className="inline-block px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
+              {user?.role || "User"} Access Restricted
+            </span>
+            <h2 className="text-xl font-black text-zinc-900 dark:text-zinc-100">
+              Admin Authorization Required
+            </h2>
+            <p className="text-xs text-zinc-500 leading-relaxed">
+              The Activity & Audit Logs are strictly restricted to Super Admin and Admin accounts to safeguard system security and sensitive organizational records.
+            </p>
+          </div>
+
+          <Link href="/feature/dashboard" className="block w-full">
+            <Button variant="outline" className="w-full text-xs font-semibold gap-2 cursor-pointer">
+              <ArrowLeft size={14} /> Back to Dashboard
+            </Button>
+          </Link>
+        </motion.div>
+      </div>
+    )
   }
 
   return (
@@ -222,12 +333,20 @@ export default function ActivityLogsMain() {
           <h1 className="text-xl sm:text-2xl font-bold text-foreground flex items-center gap-2.5">
             <ClipboardList className="text-primary" size={24} />
             <span>Audit & Activity Logs</span>
-            <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-primary/10 text-primary border border-primary/20">
-              Live Real-Time Tracker
-            </span>
+            {isSuperAdmin ? (
+              <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300 border border-purple-200 dark:border-purple-800 flex items-center gap-1">
+                <Crown size={11} /> Super Admin Audit (All Activities)
+              </span>
+            ) : (
+              <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border border-blue-200 dark:border-blue-800 flex items-center gap-1">
+                <Shield size={11} /> Admin Activity View
+              </span>
+            )}
           </h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Complete audit trail of system events: permission changes, new leads, client conversions, billing, and team actions
+            {isSuperAdmin 
+              ? "Comprehensive audit trail tracking every action, admin event, permission change, lead, client, and financial transaction across all companies"
+              : "Audit trail for your assigned company and operational activities"}
           </p>
         </div>
 
@@ -240,7 +359,7 @@ export default function ActivityLogsMain() {
             className="text-xs font-semibold gap-1.5 cursor-pointer"
           >
             <RotateCcw size={13} className={loading ? "animate-spin" : ""} />
-            <span>Refresh Logs</span>
+            <span>Refresh</span>
           </Button>
 
           {isSuperAdmin && (
@@ -259,11 +378,11 @@ export default function ActivityLogsMain() {
       </div>
 
       {/* Metric Cards Overview */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div 
-          onClick={() => setTypeFilter("all")}
+          onClick={() => { setTypeFilter("all"); setSelectedActor("all") }}
           className={`p-4 rounded-2xl border transition-all cursor-pointer ${
-            typeFilter === "all" ? "bg-primary/5 border-primary shadow-xs" : "bg-card border-border hover:border-primary/50"
+            typeFilter === "all" && selectedActor === "all" ? "bg-primary/5 border-primary shadow-xs" : "bg-card border-border hover:border-primary/50"
           }`}
         >
           <div className="flex items-center justify-between">
@@ -273,34 +392,48 @@ export default function ActivityLogsMain() {
           <p className="text-2xl font-black text-foreground mt-2">{stats.total}</p>
         </div>
 
+        {/* What Admins Did Card */}
         <div 
-          onClick={() => setTypeFilter("permission")}
+          onClick={() => { setSelectedActor("__admins_only__"); setTypeFilter("all") }}
+          className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+            selectedActor === "__admins_only__" ? "bg-purple-500/10 border-purple-500 shadow-xs" : "bg-card border-border hover:border-purple-500/50"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground font-medium">Admin Actions</span>
+            <Crown size={16} className="text-purple-500" />
+          </div>
+          <p className="text-2xl font-black text-foreground mt-2">{stats.adminActions}</p>
+        </div>
+
+        <div 
+          onClick={() => { setTypeFilter("permission"); setSelectedActor("all") }}
           className={`p-4 rounded-2xl border transition-all cursor-pointer ${
             typeFilter === "permission" ? "bg-amber-500/10 border-amber-500 shadow-xs" : "bg-card border-border hover:border-amber-500/50"
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground font-medium">Permission Changes</span>
+            <span className="text-xs text-muted-foreground font-medium">Permissions & RBAC</span>
             <Shield size={16} className="text-amber-500" />
           </div>
           <p className="text-2xl font-black text-foreground mt-2">{stats.permissions}</p>
         </div>
 
         <div 
-          onClick={() => setTypeFilter("lead")}
+          onClick={() => { setTypeFilter("lead"); setSelectedActor("all") }}
           className={`p-4 rounded-2xl border transition-all cursor-pointer ${
             typeFilter === "lead" ? "bg-blue-500/10 border-blue-500 shadow-xs" : "bg-card border-border hover:border-blue-500/50"
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground font-medium">Leads & Clients</span>
+            <span className="text-xs text-muted-foreground font-medium">Leads & Deals</span>
             <Target size={16} className="text-blue-500" />
           </div>
           <p className="text-2xl font-black text-foreground mt-2">{stats.leadsAndClients}</p>
         </div>
 
         <div 
-          onClick={() => setTypeFilter("finance")}
+          onClick={() => { setTypeFilter("finance"); setSelectedActor("all") }}
           className={`p-4 rounded-2xl border transition-all cursor-pointer ${
             typeFilter === "finance" ? "bg-emerald-500/10 border-emerald-500 shadow-xs" : "bg-card border-border hover:border-emerald-500/50"
           }`}
@@ -314,12 +447,12 @@ export default function ActivityLogsMain() {
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="bg-card border border-border rounded-2xl p-3 sm:p-4 flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+      <div className="bg-card border border-border rounded-2xl p-3 sm:p-4 flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between">
         <div className="relative flex-1">
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
-            placeholder="Search activities by action, user, module, or description..."
+            placeholder="Search by action, admin name, role, module, or description..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-9 pr-4 py-2 bg-background border border-border rounded-xl text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
@@ -327,7 +460,7 @@ export default function ActivityLogsMain() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Company Filter */}
+          {/* Company Filter (Super Admin sees all, Admin sees assigned) */}
           <div className="flex items-center gap-1.5 bg-background border border-border rounded-xl px-2.5 py-1.5 text-xs">
             <Building2 size={13} className="text-muted-foreground" />
             <select
@@ -335,7 +468,7 @@ export default function ActivityLogsMain() {
               onChange={(e) => setSelectedCompany(e.target.value)}
               className="bg-transparent text-xs text-foreground font-medium focus:outline-none cursor-pointer"
             >
-              <option value="all">All Companies</option>
+              {isSuperAdmin && <option value="all">All Companies</option>}
               {allowedCompanies.map(c => (
                 <option key={c.id} value={c.id}>
                   {getCompanyFullName(c)}
@@ -344,7 +477,26 @@ export default function ActivityLogsMain() {
             </select>
           </div>
 
-          {/* Type Filter Buttons */}
+          {/* Actor / Admin Filter Dropdown */}
+          <div className="flex items-center gap-1.5 bg-background border border-border rounded-xl px-2.5 py-1.5 text-xs">
+            <UserCheck size={13} className="text-primary" />
+            <select
+              value={selectedActor}
+              onChange={(e) => setSelectedActor(e.target.value)}
+              className="bg-transparent text-xs text-foreground font-medium focus:outline-none cursor-pointer max-w-[180px] truncate"
+            >
+              <option value="all">All Actors</option>
+              <option value="__admins_only__">🛡️ All Admins Only</option>
+              {actorsList.map((a) => (
+                <option key={a.key} value={a.key}>
+                  {a.role === "Super Admin" ? "👑 " : a.role === "Admin" ? "🛡️ " : "👤 "}
+                  {a.name} ({a.role})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Category Type Filter Buttons */}
           <div className="flex items-center gap-1 bg-background border border-border rounded-xl p-1 overflow-x-auto text-[11px]">
             {[
               { key: "all", label: "All" },
@@ -371,6 +523,37 @@ export default function ActivityLogsMain() {
         </div>
       </div>
 
+      {/* Active Filter Indicators */}
+      {(selectedActor !== "all" || typeFilter !== "all" || searchQuery) && (
+        <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
+          <span className="font-semibold">Active Filters:</span>
+          {selectedActor !== "all" && (
+            <span className="px-2.5 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20 flex items-center gap-1 font-medium">
+              Actor: {selectedActor === "__admins_only__" ? "All Admins" : selectedActor}
+              <button onClick={() => setSelectedActor("all")} className="hover:text-primary/70 cursor-pointer ml-1">✕</button>
+            </span>
+          )}
+          {typeFilter !== "all" && (
+            <span className="px-2.5 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20 flex items-center gap-1 font-medium">
+              Category: {typeFilter}
+              <button onClick={() => setTypeFilter("all")} className="hover:text-primary/70 cursor-pointer ml-1">✕</button>
+            </span>
+          )}
+          {searchQuery && (
+            <span className="px-2.5 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20 flex items-center gap-1 font-medium">
+              Search: &quot;{searchQuery}&quot;
+              <button onClick={() => setSearchQuery("")} className="hover:text-primary/70 cursor-pointer ml-1">✕</button>
+            </span>
+          )}
+          <button 
+            onClick={() => { setSelectedActor("all"); setTypeFilter("all"); setSearchQuery("") }}
+            className="text-xs text-rose-500 hover:underline font-semibold cursor-pointer ml-2"
+          >
+            Clear All Filters
+          </button>
+        </div>
+      )}
+
       {/* Activity Timeline List */}
       {loading ? (
         <div className="py-20 text-center space-y-3">
@@ -384,17 +567,17 @@ export default function ActivityLogsMain() {
           </div>
           <h3 className="text-sm font-bold text-foreground">No Activities Found</h3>
           <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-            {searchQuery || typeFilter !== "all" 
+            {searchQuery || typeFilter !== "all" || selectedActor !== "all"
               ? "No activities matched your search criteria. Try resetting the filters."
               : "System actions such as creating leads, updating clients, modifying permissions, or billing will appear here automatically."}
           </p>
-          {(searchQuery || typeFilter !== "all") && (
+          {(searchQuery || typeFilter !== "all" || selectedActor !== "all") && (
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => { setSearchQuery(""); setTypeFilter("all") }}
-              className="text-xs font-semibold"
+              onClick={() => { setSearchQuery(""); setTypeFilter("all"); setSelectedActor("all") }}
+              className="text-xs font-semibold cursor-pointer"
             >
               Reset Filters
             </Button>
@@ -451,20 +634,22 @@ export default function ActivityLogsMain() {
                   </div>
                 </div>
 
-                {/* Actor & Timestamp */}
-                <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-border text-right">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold">
+                {/* Actor (Who did what) & Timestamp */}
+                <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-border text-right gap-1">
+                  <div 
+                    onClick={() => {
+                      if (log.userName) setSelectedActor(log.userName)
+                    }}
+                    title={`Click to filter only actions by ${log.userName || "this user"}`}
+                    className="flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
+                  >
+                    <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[11px] font-bold shrink-0">
                       {(log.userName || "U")[0].toUpperCase()}
                     </div>
-                    <span className="text-xs font-bold text-foreground">
+                    <span className="text-xs font-bold text-foreground hover:underline">
                       {log.userName || "System"}
                     </span>
-                    {log.userRole && (
-                      <span className="text-[10px] text-muted-foreground font-normal">
-                        ({log.userRole})
-                      </span>
-                    )}
+                    {getActorRoleBadge(log.userRole)}
                   </div>
 
                   <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-0.5" title={new Date(log.timestamp).toLocaleString()}>

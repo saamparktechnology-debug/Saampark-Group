@@ -450,11 +450,15 @@ export function Sidebar() {
   const checkNavAllowed = React.useCallback((u: any, name: string): boolean => {
     if (!u) return false
     if (name === "Dashboard") return true
+    if (name === "Activity Logs") {
+      return u.role === "Super Admin" || u.role === "Admin"
+    }
     if (u.role === "Super Admin") return true
 
     const targetModule = NAV_TO_MODULE_MAP[name] || name
     return isModuleAllowed(u, targetModule)
   }, [isModuleAllowed])
+
 
   // Filter items strictly by individual module permissions
   const allowedNavItems = React.useMemo(() => {

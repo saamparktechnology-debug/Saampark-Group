@@ -98,7 +98,10 @@ export function AppModuleGuard({ children }: { children: React.ReactNode }) {
   }
 
   // Verify user has permission to view this module
-  const allowed = isModuleAllowed(user, matched.moduleName)
+  let allowed = isModuleAllowed(user, matched.moduleName)
+  if (matched.moduleName === "Activity Logs") {
+    allowed = user.role === "Super Admin" || user.role === "Admin"
+  }
 
   if (!allowed) {
     return (
