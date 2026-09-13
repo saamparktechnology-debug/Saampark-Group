@@ -11,6 +11,7 @@ import {
   syncGlobalDeletedIds,
   getLocalDeletedIds 
 } from "@/lib/storageSync";
+import { recordActivityLog } from "@/services/activityLogService";
 
 // Deleted user emails tracked in MySQL via markGlobalItemDeleted
 const DELETED_KEY = "saampark_deleted_user_emails"
@@ -210,10 +211,11 @@ export async function recordUserAccountAsync(user: Partial<UserItem>, isNewRegis
   }
 
   let savedAccount: UserItem | null = null;
+  let existing: UserItem | undefined = undefined;
 
   try {
     const currentAccounts = await fetchModuleDataFromDB<UserItem[]>("users", DEFAULT_SYSTEM_ACCOUNTS, "all");
-    const existing = currentAccounts.find(
+    existing = currentAccounts.find(
       (acc) =>
         (user.id && String(acc.id) === String(user.id)) ||
         acc.email.toLowerCase().trim() === normalizedEmail
@@ -349,12 +351,39 @@ export async function recordUserAccountAsync(user: Partial<UserItem>, isNewRegis
     console.warn("recordUserAccountAsync error:", err);
   }
 
+  if (savedAccount) {
+    if (isNewRegistration || !existing) {
+      recordActivityLog({
+        type: "user",
+        module: "Users",
+        action: "User Account Registered",
+        description: `New user account "${savedAccount.name}" (${savedAccount.role}) registered`,
+        companyId: savedAccount.companyId,
+        branchId: savedAccount.branchId,
+        branchName: savedAccount.branchName,
+        details: `Email: ${savedAccount.email} | Role: ${savedAccount.role} | Department: ${savedAccount.department || "General"}`
+      }).catch(() => {});
+    } else if (existing) {
+      recordActivityLog({
+        type: "user",
+        module: "Users",
+        action: "User Account Updated",
+        description: `User account "${savedAccount.name}" profile details updated`,
+        companyId: savedAccount.companyId,
+        branchId: savedAccount.branchId,
+        branchName: savedAccount.branchName,
+        details: `Email: ${savedAccount.email} | Role: ${savedAccount.role}`
+      }).catch(() => {});
+    }
+  }
+
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("storage"));
     window.dispatchEvent(new CustomEvent("saampark_data_synced"));
   }
   return savedAccount;
 }
+
 
 // Helper: record user account (sync wrapper)
 export function recordUserAccount(user: Partial<UserItem>, isNewRegistration = false): UserItem | null {
@@ -715,8 +744,27 @@ export async function deleteUser(id: string, email?: string): Promise<boolean> {
     }
   }
 
+  const deletedUser = currentAccounts.find((acc) => {
+    const accEmail = (acc.email || "").toLowerCase().trim();
+    const accId = String(acc.id || "").toLowerCase().trim();
+    const targetId = String(id).toLowerCase().trim();
+    return accId === targetId || (normEmail && accEmail === normEmail);
+  });
+
+  recordActivityLog({
+    type: "user",
+    module: "Users",
+    action: "User Account Deleted",
+    description: `User account "${deletedUser?.name || id}" (${deletedUser?.email || normEmail || 'N/A'}) deleted`,
+    companyId: deletedUser?.companyId,
+    branchId: deletedUser?.branchId,
+    branchName: deletedUser?.branchName,
+    details: `Role: ${deletedUser?.role || "Teams"}`
+  }).catch(() => {});
+
   return true;
 }
+
 
 const HIDDEN_MASTER_EMAILS = ["supriyo.main@gmail.com"];
 

@@ -16,6 +16,7 @@ import {
   DEFAULT_ROLE_ACTION_PERMISSIONS,
 } from "@/store/usePermissionStore"
 import { saveModuleDataToDB } from "@/lib/storageSync"
+import { recordActivityLog } from "@/services/activityLogService"
 
 interface ModulePermissionsModalProps {
   isOpen: boolean
@@ -229,11 +230,20 @@ export function ModulePermissionsModal({ isOpen, onClose }: ModulePermissionsMod
         window.dispatchEvent(new Event("saampark_data_synced"))
       }
 
+      recordActivityLog({
+        type: "permission",
+        module: "Permissions",
+        action: "Role Module Permissions Saved",
+        description: `Granular role module permissions updated for roles: ${Object.keys(roleMatrices).join(", ")}`,
+        details: `Configured roles: ${Object.keys(roleMatrices).join(", ")}`
+      }).catch(() => {})
+
       alert(`Granular module action permissions updated and saved successfully!`)
       onClose()
     } finally {
       setIsSaving(false)
     }
+
   }
 
   if (!isOpen) return null

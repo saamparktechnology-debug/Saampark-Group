@@ -1,4 +1,5 @@
 import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted, filterGlobalDeletedItems } from "@/lib/storageSync"
+import { recordActivityLog } from "@/services/activityLogService"
 
 export type OrderStatus = "Pending" | "Processing" | "Completed" | "Cancelled"
 export type OrderPaymentStatus = "Paid" | "Partially paid" | "Unpaid"
@@ -116,6 +117,17 @@ export const addOrder = async (orderData: Omit<OrderItem, "id" | "orderNumber"> 
     window.dispatchEvent(new CustomEvent("saampark_orders_updated"))
   }
 
+  recordActivityLog({
+    type: "invoice",
+    module: "Orders",
+    action: "Order Created",
+    description: `Order ${newOrder.orderNumber} placed for ${newOrder.client} (${newOrder.totalAmount})`,
+    companyId: newOrder.companyId,
+    branchId: newOrder.branchId,
+    branchName: newOrder.branchName,
+    details: `Project: ${newOrder.project} | Status: ${newOrder.status}`
+  }).catch(() => {})
+
   return newOrder
 }
 
@@ -160,6 +172,18 @@ export const updateOrder = async (id: string, updates: Partial<OrderItem>, compa
     window.dispatchEvent(new CustomEvent("saampark_orders_updated"))
   }
 
+  if (updates.status && updates.status !== existingOrder?.status) {
+    recordActivityLog({
+      type: "invoice",
+      module: "Orders",
+      action: `Order ${updates.status}`,
+      description: `Order ${updatedOrder.orderNumber} status changed to ${updates.status}`,
+      companyId: updatedOrder.companyId,
+      branchId: updatedOrder.branchId,
+      branchName: updatedOrder.branchName,
+    }).catch(() => {})
+  }
+
   return updatedOrder
 }
 
@@ -167,7 +191,18 @@ export const deleteOrder = async (id: string, companyId?: string): Promise<boole
   const strId = String(id).toLowerCase().trim()
   await markGlobalItemDeleted(strId, "orders")
   const current = await getOrders(companyId)
+  const target = current.find(o => String(o.id).toLowerCase().trim() === strId)
   const filtered = current.filter(o => String(o.id).toLowerCase().trim() !== strId)
   await saveModuleDataToDB("orders", filtered, companyId)
+
+  recordActivityLog({
+    type: "invoice",
+    module: "Orders",
+    action: "Order Deleted",
+    description: `Order ${target?.orderNumber || strId} removed from system`,
+    companyId: target?.companyId || companyId,
+  }).catch(() => {})
+
   return true
 }
+

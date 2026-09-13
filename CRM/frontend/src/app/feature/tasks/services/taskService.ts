@@ -1,6 +1,7 @@
 import { Task } from "../types"
 import { api } from "@/lib/api"
 import { filterGlobalDeletedItems, markGlobalItemDeleted, fetchModuleDataFromDB, saveModuleDataToDB } from "@/lib/storageSync"
+import { recordActivityLog } from "@/services/activityLogService"
 
 export const initialTasks: Task[] = []
 
@@ -100,8 +101,20 @@ export const taskService = {
       window.dispatchEvent(new CustomEvent("saampark_tasks_updated"))
     }
 
+    recordActivityLog({
+      type: "task",
+      module: "Tasks",
+      action: "Task Created",
+      description: `Task "${newTask.title}" assigned to ${newTask.assignedTo || "Team Member"}`,
+      companyId: newTask.companyId,
+      branchId: newTask.branchId,
+      branchName: newTask.branchName,
+      details: `Priority: ${newTask.priority || "Normal"} | Deadline: ${newTask.deadline || "None"}`
+    }).catch(() => {})
+
     return newTask
   },
+
 
   addTasks: async (taskDataList: (Omit<Task, "id"> & { id?: string })[], companyId?: string): Promise<Task[]> => {
     if (!taskDataList || taskDataList.length === 0) return []
@@ -189,6 +202,20 @@ export const taskService = {
       window.dispatchEvent(new CustomEvent("saampark_tasks_updated"))
     }
 
+    const prevStatus = foundInAll?.status
+    if (updates.status && updates.status !== prevStatus) {
+      recordActivityLog({
+        type: "task",
+        module: "Tasks",
+        action: `Task ${updatedTask.status}`,
+        description: `Task "${updatedTask.title}" status changed to ${updatedTask.status}`,
+        companyId: updatedTask.companyId,
+        branchId: updatedTask.branchId,
+        branchName: updatedTask.branchName,
+        details: `Assigned To: ${updatedTask.assignedTo || "Team"} | Priority: ${updatedTask.priority || "Normal"}`
+      }).catch(() => {})
+    }
+
     return updatedTask
   },
 
@@ -198,6 +225,7 @@ export const taskService = {
 
     const targetComp = companyId || "all"
     const current = await fetchModuleDataFromDB<Task[]>("tasks", [], targetComp)
+    const target = current.find(t => String(t.id).toLowerCase().trim() === strId)
     const filtered = current.filter((t) => String(t.id).toLowerCase().trim() !== strId)
     await saveModuleDataToDB("tasks", filtered, targetComp)
 
@@ -212,5 +240,16 @@ export const taskService = {
       window.dispatchEvent(new CustomEvent("saampark_data_synced"))
       window.dispatchEvent(new CustomEvent("saampark_tasks_updated"))
     }
+
+    recordActivityLog({
+      type: "task",
+      module: "Tasks",
+      action: "Task Deleted",
+      description: `Task "${target?.title || strId}" removed from the system`,
+      companyId: target?.companyId || companyId,
+      branchId: target?.branchId,
+      branchName: target?.branchName,
+    }).catch(() => {})
   },
 }
+

@@ -1,6 +1,7 @@
 import { Project, ProjectMilestone, ActivityItem } from "../types"
 import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted, filterGlobalDeletedItems } from "@/lib/storageSync"
 import { sendProjectCompletionEmailNotification } from "@/services/emailNotificationService"
+import { recordActivityLog } from "@/services/activityLogService"
 
 export const initialProjects: Project[] = []
 
@@ -117,8 +118,21 @@ export const addProject = async (project: Omit<Project, "id">, companyId?: strin
     window.dispatchEvent(new CustomEvent("saampark_data_synced"))
     window.dispatchEvent(new CustomEvent("saampark_projects_updated"))
   }
+
+  recordActivityLog({
+    type: "project",
+    module: "Projects",
+    action: "Project Launched",
+    description: `Project "${newProject.title}" launched for client "${newProject.client || 'Client'}"`,
+    companyId: newProject.companyId,
+    branchId: newProject.branchId,
+    branchName: newProject.branchName,
+    details: `Deadline: ${newProject.deadline || "N/A"} | Value: ${newProject.price || "₹0"}`
+  }).catch(() => {})
+
   return newProject
 }
+
 
 
 export const syncLinkedOrdersWithProject = async (
@@ -210,6 +224,16 @@ export const updateProject = async (id: string, updates: Partial<Project>, compa
 
   if (updates.status && updates.status !== prevStatus) {
     syncLinkedOrdersWithProject(updatedProj.title, updatedProj.id, updates.status, newCompanyId).catch(() => null)
+    recordActivityLog({
+      type: "project",
+      module: "Projects",
+      action: `Project ${updates.status}`,
+      description: `Project "${updatedProj.title}" status changed to ${updates.status}`,
+      companyId: updatedProj.companyId,
+      branchId: updatedProj.branchId,
+      branchName: updatedProj.branchName,
+      details: `Client: ${updatedProj.client || "Client"} | Progress: ${updatedProj.progress || 0}%`
+    }).catch(() => {})
   }
 
   if (updates.status === "Completed" && prevStatus !== "Completed") {
@@ -217,6 +241,7 @@ export const updateProject = async (id: string, updates: Partial<Project>, compa
   }
   return updatedProj
 }
+
 
 export const addOrUpdateProjectMilestone = async (
   projectId: string,
@@ -372,5 +397,16 @@ export const deleteProject = async (id: string, companyId?: string): Promise<boo
     window.dispatchEvent(new CustomEvent("saampark_orders_updated"))
   }
 
+  recordActivityLog({
+    type: "project",
+    module: "Projects",
+    action: "Project Deleted",
+    description: `Project "${targetProject?.title || id}" deleted from the system`,
+    companyId: targetProject?.companyId || companyId,
+    branchId: targetProject?.branchId,
+    branchName: targetProject?.branchName,
+  }).catch(() => {})
+
   return true
 }
+

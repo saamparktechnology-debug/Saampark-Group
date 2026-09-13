@@ -1,6 +1,7 @@
 import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted, filterGlobalDeletedItems, getLocalDeletedIds } from "@/lib/storageSync"
 import { getClients, saveStoredClient } from "@/app/feature/clients/services/clientService"
 import { sendPaymentReceiptEmailNotification, sendPaymentDueReminderEmailNotification } from "@/services/emailNotificationService"
+import { recordActivityLog } from "@/services/activityLogService"
 
 export type InvoiceStatus = "Draft" | "Partially paid" | "Fully paid" | "Not paid" | "Credited" | "Payment Pending"
 
@@ -229,8 +230,21 @@ export const addInvoice = async (invoice: Omit<InvoiceItem, "id"> & { id?: strin
     window.dispatchEvent(new CustomEvent("saampark_invoices_updated"))
   }
 
+  recordActivityLog({
+    type: "invoice",
+    module: "Invoices",
+    action: "Tax Invoice Generated",
+    description: `Tax Invoice #${newInvoice.id} issued for ${newInvoice.client} (${newInvoice.totalInvoiced})`,
+    companyId: newInvoice.companyId,
+    branchId: newInvoice.branchId,
+    branchName: newInvoice.branchName,
+    details: `Project: ${newInvoice.project || "General"} | Due Date: ${newInvoice.dueDate} | Total: ${newInvoice.totalInvoiced}`
+  }).catch(() => {})
+
   return newInvoice
 }
+
+
 
 export const updateInvoice = async (
   updatedInvoice: InvoiceItem,
@@ -334,8 +348,21 @@ export const updateInvoiceStatus = async (
     window.dispatchEvent(new Event("saampark_data_synced"))
     window.dispatchEvent(new Event("storage"))
   }
+
+  recordActivityLog({
+    type: "invoice",
+    module: "Invoices",
+    action: `Invoice ${status}`,
+    description: `Invoice #${current[idx].id} status changed to ${status} for ${current[idx].client}`,
+    companyId: targetComp,
+    branchId: current[idx].branchId,
+    branchName: current[idx].branchName,
+    details: `Total: ${current[idx].totalInvoiced} | Paid: ${current[idx].paymentReceived} | Due: ${current[idx].due}`
+  }).catch(() => {})
+
   return current[idx]
 }
+
 
 export const recordPartialPayment = async (
   invoiceId: string,
@@ -436,6 +463,17 @@ export const recordPartialPayment = async (
     console.warn("Error updating payment entry in recordPartialPayment:", err)
   }
 
+  recordActivityLog({
+    type: "payment",
+    module: "Billing",
+    action: isFullySettled ? "Invoice Fully Paid" : "Partial Payment Received",
+    description: `Payment of ₹${paidAmountNum.toLocaleString("en-IN")} received for Invoice #${target.id} (${target.client})`,
+    companyId: target.companyId,
+    branchId: target.branchId,
+    branchName: target.branchName,
+    details: `Method: ${paymentMethod} | Remaining Due: ₹${newDueNum.toLocaleString("en-IN")}`
+  }).catch(() => {})
+
   return updated
 }
 
@@ -486,8 +524,20 @@ export const markPaymentCompleted = async (
     console.warn("Error settling payment entry in markPaymentCompleted:", err)
   }
 
+  recordActivityLog({
+    type: "payment",
+    module: "Billing",
+    action: "Invoice Settled",
+    description: `Invoice #${target.id} marked as fully paid (${target.totalInvoiced}) for ${target.client}`,
+    companyId: target.companyId,
+    branchId: target.branchId,
+    branchName: target.branchName,
+    details: `Method: ${paymentMethod} | Txn: ${transactionRef || "N/A"}`
+  }).catch(() => {})
+
   return updated
 }
+
 
 export const sendPaymentReminder = async (invoiceId: string): Promise<{ success: boolean; message: string }> => {
   const current = await getInvoices()
@@ -660,7 +710,18 @@ export const deleteInvoice = async (id: string, companyId?: string): Promise<boo
       window.dispatchEvent(new Event("saampark_installments_updated"))
       window.dispatchEvent(new Event("storage"))
     }
+
+    recordActivityLog({
+      type: "invoice",
+      module: "Invoices",
+      action: "Invoice Deleted",
+      description: `Invoice #${strId} ${target?.client ? `for "${target.client}"` : ""} deleted from the system`,
+      companyId: target?.companyId || companyId,
+      branchId: target?.branchId,
+      branchName: target?.branchName,
+    }).catch(() => {})
   }
 
   return true
 }
+

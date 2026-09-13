@@ -4,6 +4,7 @@ import { ClientItem, ContactItem, ClientLabelItem } from "../types"
 import { api } from "@/lib/api"
 import { filterGlobalDeletedItems, markGlobalItemDeleted, fetchModuleDataFromDB, saveModuleDataToDB } from "@/lib/storageSync"
 import { markUserAsDeleted, recordUserAccount } from "@/app/feature/users/services/userService"
+import { recordActivityLog } from "@/services/activityLogService"
 
 // ── Default client labels seeded to DB ─────────────────────────────────────
 const DEFAULT_CLIENT_LABELS: ClientLabelItem[] = [
@@ -213,6 +214,31 @@ export async function saveStoredClient(client: ClientItem, companyId?: string): 
     console.warn("Client user sync error:", uErr)
   }
 
+  // Automated Activity Logging for Client Lifecycle
+  if (existingClient) {
+    recordActivityLog({
+      type: "client",
+      module: "Clients",
+      action: "Client Profile Updated",
+      description: `Client account "${enrichedClient.name}" details updated`,
+      companyId: effectiveCompanyId,
+      branchId: effectiveBranchId,
+      branchName: effectiveBranchName,
+      details: `Email: ${enrichedClient.email || "N/A"} | Phone: ${enrichedClient.phone || "N/A"}`
+    }).catch(() => {})
+  } else {
+    recordActivityLog({
+      type: "client",
+      module: "Clients",
+      action: "New Client Registered",
+      description: `New client "${enrichedClient.name}" (${enrichedClient.primaryContact || "Primary Contact"}) registered`,
+      companyId: effectiveCompanyId,
+      branchId: effectiveBranchId,
+      branchName: effectiveBranchName,
+      details: `Group: ${enrichedClient.group || "Standard"} | Value: ${enrichedClient.totalInvoiced || "₹0"}`
+    }).catch(() => {})
+  }
+
   return updated
 }
 
@@ -229,10 +255,23 @@ export async function deleteStoredClient(id: string, email?: string, companyId?:
   }
 
   const current = await getClients(companyId)
+  const target = current.find(c => c.id === id || (email && c.email?.toLowerCase().trim() === email.toLowerCase().trim()))
   const updated = current.filter(
     (c) => c.id !== id && (!email || c.email?.toLowerCase().trim() !== email.toLowerCase().trim())
   )
   await saveModuleDataToDB("clients", updated, companyId)
+
+  recordActivityLog({
+    type: "client",
+    module: "Clients",
+    action: "Client Account Deleted",
+    description: `Client account "${target?.name || id}" removed from the system`,
+    companyId: target?.companyId || companyId,
+    branchId: target?.branchId,
+    branchName: target?.branchName,
+    details: `Client ID: ${id} | Email: ${email || "N/A"}`
+  }).catch(() => {})
+
   return updated
 }
 

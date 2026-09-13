@@ -28,6 +28,7 @@ import {
   DEFAULT_ROLE_ACTION_PERMISSIONS
 } from "@/store/usePermissionStore"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
+import { recordActivityLog } from "@/services/activityLogService"
 
 const ACTIONS = [
   { key: "view", label: "View", icon: "👁️" },
@@ -187,6 +188,16 @@ export function UserPermissionsModal({ isOpen, onClose, user: targetUser, onSave
           setUserAllModuleActions(targetUser.email, typed)
         }
         await fetchUserPermissions(targetUser.id)
+        recordActivityLog({
+          type: "permission",
+          module: "Permissions",
+          action: "User Permissions Overridden",
+          description: `Custom permissions saved for user ${targetUser.name} (${targetUser.role || "Teams"})`,
+          companyId: targetUser.companyId || (targetUser.companyIds && targetUser.companyIds[0]),
+          branchId: targetUser.branchId,
+          branchName: targetUser.branchName,
+          details: `User: ${targetUser.name} (${targetUser.email || targetUser.id})`
+        }).catch(() => {})
       }, {
         actionType: "update", 
         successTitle: "User Permissions Saved", 

@@ -1,4 +1,5 @@
 import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted, filterGlobalDeletedItems } from "@/lib/storageSync"
+import { recordActivityLog } from "@/services/activityLogService"
 
 export interface EstimateServiceItem {
   id: string
@@ -106,6 +107,18 @@ export const addEstimate = async (estimateData: Omit<EstimateItem, "id" | "estim
 
   const updated = [newEst, ...current.filter(e => e.id !== nextId)]
   await saveModuleDataToDB("estimates", updated, effectiveComp)
+
+  recordActivityLog({
+    type: "estimate",
+    module: "Estimates",
+    action: "Quotation Generated",
+    description: `Quotation / Estimate ${newEst.estimateNumber} issued for ${newEst.client} (${newEst.formattedTotal})`,
+    companyId: newEst.companyId,
+    branchId: newEst.branchId,
+    branchName: newEst.branchName,
+    details: `Title: ${newEst.title || "Services"} | Total: ${newEst.formattedTotal}`
+  }).catch(() => {})
+
   return newEst
 }
 
@@ -121,6 +134,17 @@ export const updateEstimateStatus = async (id: string, status: EstimateStatus, e
     ...(extra || {})
   }
   await saveModuleDataToDB("estimates", current, companyId)
+
+  recordActivityLog({
+    type: "estimate",
+    module: "Estimates",
+    action: `Estimate ${status}`,
+    description: `Quotation / Estimate ${current[idx].estimateNumber} status changed to ${status}`,
+    companyId: current[idx].companyId || companyId,
+    branchId: current[idx].branchId,
+    branchName: current[idx].branchName,
+  }).catch(() => {})
+
   return { ...current[idx] }
 }
 
@@ -128,7 +152,18 @@ export const deleteEstimate = async (id: string, companyId?: string): Promise<bo
   const strId = String(id).toLowerCase().trim()
   await markGlobalItemDeleted(strId, "estimates")
   const current = await getEstimates(companyId)
+  const target = current.find(e => String(e.id).toLowerCase().trim() === strId)
   const filtered = current.filter(e => String(e.id).toLowerCase().trim() !== strId)
   await saveModuleDataToDB("estimates", filtered, companyId)
+
+  recordActivityLog({
+    type: "estimate",
+    module: "Estimates",
+    action: "Estimate Deleted",
+    description: `Estimate ${target?.estimateNumber || strId} deleted from system`,
+    companyId: target?.companyId || companyId,
+  }).catch(() => {})
+
   return true
 }
+

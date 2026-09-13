@@ -4,6 +4,7 @@ import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted, filte
 import { taskService } from "../../tasks/services/taskService"
 import { saveStoredClient, getClients } from "../../clients/services/clientService"
 import { recordUserAccount } from "../../users/services/userService"
+import { recordActivityLog } from "@/services/activityLogService"
 
 export const initialLeads: Lead[] = []
 
@@ -394,6 +395,17 @@ export const addLead = async (leadData: Omit<Lead, "id">, companyId?: string): P
   await saveModuleDataToDB("leads", updated, companyId)
   syncLeadReminderTask(newLead)
   checkAndAutoConvertLeadToClient(newLead, companyId)
+
+  recordActivityLog({
+    type: "lead",
+    module: "Leads",
+    action: "New Lead Created",
+    description: `New lead "${newLead.name}" registered for ${newLead.service || "General Inquiry"}`,
+    companyId: newLead.companyId || companyId,
+    branchId: newLead.branchId,
+    details: `Source: ${newLead.source || "Direct"} | Value: ${newLead.value || "₹0"} | Caller: ${newLead.caller || "Team"}`
+  }).catch(() => {})
+
   return newLead
 }
 
@@ -490,6 +502,50 @@ export const updateLead = async (id: string, updates: Partial<Lead>, userRole?: 
   syncLeadReminderTask(updatedLead)
   checkAndAutoConvertLeadToClient(updatedLead, newCompanyId)
 
+  // Automated Activity Logging for Lead Events
+  if (statusLower === "won" && (target.status || "").toLowerCase().trim() !== "won") {
+    recordActivityLog({
+      type: "lead",
+      module: "Leads",
+      action: "Lead Deal Won",
+      description: `Lead deal "${updatedLead.name}" marked as WON & auto-converted to Client!`,
+      companyId: updatedLead.companyId,
+      branchId: updatedLead.branchId,
+      branchName: updatedLead.branchName,
+      details: `Deal Value: ${updatedLead.value || "₹0"}`
+    }).catch(() => {})
+  } else if (statusLower === "lost" && (target.status || "").toLowerCase().trim() !== "lost") {
+    recordActivityLog({
+      type: "lead",
+      module: "Leads",
+      action: "Lead Marked Lost",
+      description: `Lead "${updatedLead.name}" marked as Lost`,
+      companyId: updatedLead.companyId,
+      branchId: updatedLead.branchId,
+      branchName: updatedLead.branchName,
+    }).catch(() => {})
+  } else if (updates.status && updates.status !== target.status) {
+    recordActivityLog({
+      type: "lead",
+      module: "Leads",
+      action: "Lead Stage Updated",
+      description: `Lead "${updatedLead.name}" moved from "${target.status || 'New'}" to "${updatedLead.status}"`,
+      companyId: updatedLead.companyId,
+      branchId: updatedLead.branchId,
+      branchName: updatedLead.branchName,
+    }).catch(() => {})
+  } else if (updates.caller && updates.caller !== target.caller) {
+    recordActivityLog({
+      type: "lead",
+      module: "Leads",
+      action: "Lead Reassigned",
+      description: `Lead "${updatedLead.name}" assigned to caller/owner "${updatedLead.caller}"`,
+      companyId: updatedLead.companyId,
+      branchId: updatedLead.branchId,
+      branchName: updatedLead.branchName,
+    }).catch(() => {})
+  }
+
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("storage"))
     window.dispatchEvent(new CustomEvent("saampark_data_synced"))
@@ -502,8 +558,20 @@ export const updateLead = async (id: string, updates: Partial<Lead>, userRole?: 
 export const deleteLead = async (id: string, companyId?: string): Promise<boolean> => {
   await markGlobalItemDeleted(id, "leads")
   const current = await fetchModuleDataFromDB<Lead[]>("leads", [], companyId)
+  const target = current.find(l => l.id === id)
   const filtered = current.filter((l) => l.id !== id)
   await saveModuleDataToDB("leads", filtered, companyId)
+
+  recordActivityLog({
+    type: "lead",
+    module: "Leads",
+    action: "Lead Deleted",
+    description: `Lead "${target?.name || id}" removed from the system`,
+    companyId: target?.companyId || companyId,
+    branchId: target?.branchId,
+    branchName: target?.branchName,
+  }).catch(() => {})
+
   return true
 }
 
@@ -577,11 +645,16 @@ export const transferLeadsToBranch = async (
   })
   await saveModuleDataToDB("leads", masterUpdated, "all")
 
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(new Event("storage"))
-    window.dispatchEvent(new CustomEvent("saampark_data_synced"))
-    window.dispatchEvent(new CustomEvent("saampark_leads_updated"))
-  }
+  recordActivityLog({
+    type: "lead",
+    module: "Leads",
+    action: "Leads Transferred to Branch",
+    description: `${leadIds.length} lead(s) transferred to branch "${branchName}" by ${transferredBy}`,
+    companyId,
+    branchId,
+    branchName,
+  }).catch(() => {})
 
   return updated.filter(l => idSet.has(String(l.id)))
 }
+
