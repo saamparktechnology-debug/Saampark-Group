@@ -167,11 +167,27 @@ const matrixController = {
       const pool = require('../config/db');
       const userId = req.params.userId;
       const key = `user_permissions_matrix_${String(userId).toLowerCase().replace(/\s+|@/g, '_')}`;
-      const [rows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = ?', [key]);
-      if (rows.length > 0) {
+      let [rows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = ?', [key]);
+      if (rows.length > 0 && rows[0].data_json) {
         const parsed = JSON.parse(rows[0].data_json);
         return res.json({ status: 'success', data: parsed });
       }
+
+      // Check if user has an email or alt id in `users` table
+      try {
+        const [users] = await pool.execute('SELECT id, email FROM users WHERE id = ? OR email = ?', [userId, userId]);
+        if (users.length > 0) {
+          const u = users[0];
+          const kId = `user_permissions_matrix_${String(u.id).toLowerCase().replace(/\s+|@/g, '_')}`;
+          const kEmail = `user_permissions_matrix_${String(u.email || '').toLowerCase().replace(/\s+|@/g, '_')}`;
+          const [altRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key IN (?, ?)', [kId, kEmail]);
+          if (altRows.length > 0 && altRows[0].data_json) {
+            const parsed = JSON.parse(altRows[0].data_json);
+            return res.json({ status: 'success', data: parsed });
+          }
+        }
+      } catch {}
+
       return res.json({ status: 'success', data: null });
     } catch (err) {
       return res.status(500).json({ status: 'error', message: err.message });
@@ -194,33 +210,56 @@ const matrixController = {
         [key, dataJson]
       );
 
-      // Find numeric user id
-      const [users] = await pool.execute('SELECT id FROM users WHERE id = ? OR email = ?', [userId, userId]);
-      if (users.length > 0) {
-        const numericUserId = users[0].id;
-        const [allPerms] = await pool.execute('SELECT id, module, action FROM permissions');
-        const permMap = new Map();
-        for (const p of allPerms) {
-          permMap.set(`${p.module.toLowerCase()}::${p.action.toLowerCase()}`, p.id);
-        }
+      // Find user to also save counterpart key (id and email)
+      try {
+        const [users] = await pool.execute('SELECT id, email FROM users WHERE id = ? OR email = ?', [userId, userId]);
+        if (users.length > 0) {
+          const u = users[0];
+          const kId = `user_permissions_matrix_${String(u.id).toLowerCase().replace(/\s+|@/g, '_')}`;
+          const kEmail = `user_permissions_matrix_${String(u.email || '').toLowerCase().replace(/\s+|@/g, '_')}`;
+          
+          if (kId !== key) {
+            await pool.execute(
+              `INSERT INTO app_data (module_key, data_json) VALUES (?, ?)
+               ON DUPLICATE KEY UPDATE data_json = VALUES(data_json), updated_at = NOW()`,
+              [kId, dataJson]
+            );
+          }
+          if (kEmail !== key && u.email) {
+            await pool.execute(
+              `INSERT INTO app_data (module_key, data_json) VALUES (?, ?)
+               ON DUPLICATE KEY UPDATE data_json = VALUES(data_json), updated_at = NOW()`,
+              [kEmail, dataJson]
+            );
+          }
 
-        const grantedPermIds = [];
-        for (const [mod, actions] of Object.entries(matrix)) {
-          if (actions && typeof actions === 'object') {
-            for (const [act, val] of Object.entries(actions)) {
-              if (val) {
-                const pid = permMap.get(`${mod.toLowerCase()}::${act.toLowerCase()}`);
-                if (pid) grantedPermIds.push(pid);
+          const numericUserId = u.id;
+          const [allPerms] = await pool.execute('SELECT id, module, action FROM permissions');
+          const permMap = new Map();
+          for (const p of allPerms) {
+            permMap.set(`${p.module.toLowerCase()}::${p.action.toLowerCase()}`, p.id);
+          }
+
+          const grantedPermIds = [];
+          for (const [mod, actions] of Object.entries(matrix)) {
+            if (actions && typeof actions === 'object') {
+              for (const [act, val] of Object.entries(actions)) {
+                if (val) {
+                  const pid = permMap.get(`${mod.toLowerCase()}::${act.toLowerCase()}`);
+                  if (pid) grantedPermIds.push(pid);
+                }
               }
             }
           }
-        }
 
-        if (grantedPermIds.length > 0) {
-          await pool.execute('DELETE FROM user_permissions WHERE user_id = ?', [numericUserId]);
-          const values = grantedPermIds.map(id => `(${numericUserId}, ${id}, 1)`).join(',');
-          await pool.execute(`INSERT IGNORE INTO user_permissions (user_id, permission_id, granted) VALUES ${values}`);
+          if (grantedPermIds.length > 0) {
+            await pool.execute('DELETE FROM user_permissions WHERE user_id = ?', [numericUserId]);
+            const values = grantedPermIds.map(id => `(${numericUserId}, ${id}, 1)`).join(',');
+            await pool.execute(`INSERT IGNORE INTO user_permissions (user_id, permission_id, granted) VALUES ${values}`);
+          }
         }
+      } catch (innerErr) {
+        console.warn('saveUserMatrix sync warning:', innerErr.message);
       }
 
       return res.json({ status: 'success', message: 'User matrix saved and synced to database' });

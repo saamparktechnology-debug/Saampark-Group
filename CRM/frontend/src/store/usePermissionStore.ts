@@ -308,10 +308,21 @@ export const usePermissionStore = create<PermissionState>()(
           const res = await PermissionService.getUserMatrix(userId)
           const data = res?.data?.data || res?.data
           if (data && typeof data === 'object') {
+            const allowedMods = Object.keys(data).filter(m => {
+              const f = data[m]
+              return f && (f.view || f.add || f.edit || f.delete)
+            })
+            const normId = String(userId).toLowerCase().trim()
             set((state) => ({
               userActionPermissions: {
                 ...state.userActionPermissions,
-                [userId]: data
+                [userId]: data,
+                [normId]: data,
+              },
+              userPermissions: {
+                ...state.userPermissions,
+                [userId]: allowedMods,
+                [normId]: allowedMods,
               }
             }))
           }
@@ -344,10 +355,12 @@ export const usePermissionStore = create<PermissionState>()(
       },
 
       setUserPermissions: (userId: string, modules: ModuleName[]) => {
+        const normId = String(userId).toLowerCase().trim()
         set((state) => ({
           userPermissions: {
             ...state.userPermissions,
             [userId]: modules,
+            [normId]: modules,
           },
         }))
       },
@@ -372,6 +385,11 @@ export const usePermissionStore = create<PermissionState>()(
       },
 
       setUserAllModuleActions: (userId: string, matrix: Record<string, ModuleActionFlags>) => {
+        const normId = String(userId).toLowerCase().trim()
+        const allowedMods = Object.keys(matrix).filter(m => {
+          const f = matrix[m]
+          return f && (f.view || f.add || f.edit || f.delete)
+        })
         set((state) => ({
           userActionPermissions: {
             ...state.userActionPermissions,
@@ -379,7 +397,16 @@ export const usePermissionStore = create<PermissionState>()(
               ...(state.userActionPermissions[userId] || {}),
               ...matrix,
             },
+            [normId]: {
+              ...(state.userActionPermissions[normId] || {}),
+              ...matrix,
+            },
           },
+          userPermissions: {
+            ...state.userPermissions,
+            [userId]: allowedMods,
+            [normId]: allowedMods,
+          }
         }))
       },
 
@@ -404,41 +431,14 @@ export const usePermissionStore = create<PermissionState>()(
         const state = get()
         const userIdStr = String(user.id)
         const emailStr = (user.email || '').toLowerCase().trim()
-
+        const normId = userIdStr.toLowerCase().trim()
         const uAny = user as any
-        let userAllowed: string[] | undefined = undefined
-        let hasCustomOverride = false
 
-        if (Array.isArray(uAny.allowedModules)) {
-          userAllowed = uAny.allowedModules
-          hasCustomOverride = true
-        } else if (uAny.permissions) {
-          let pObj: any = uAny.permissions
-          if (typeof pObj === 'string') {
-            try { pObj = JSON.parse(pObj) } catch {}
-          }
-          if (pObj && Array.isArray(pObj.allowedModules)) {
-            userAllowed = pObj.allowedModules
-            hasCustomOverride = true
-          }
-        }
+        // 1. FIRST PRIORITY: User custom action matrix (exact source of truth)
+        let userMatrix = state.userActionPermissions[userIdStr] || 
+          (emailStr ? state.userActionPermissions[emailStr] : undefined) ||
+          state.userActionPermissions[normId]
 
-        if (userAllowed === undefined) {
-          if (state.userPermissions[userIdStr] !== undefined) {
-            userAllowed = state.userPermissions[userIdStr]
-            hasCustomOverride = true
-          } else if (emailStr && state.userPermissions[emailStr] !== undefined) {
-            userAllowed = state.userPermissions[emailStr]
-            hasCustomOverride = true
-          }
-        }
-
-        if (hasCustomOverride && userAllowed && Array.isArray(userAllowed)) {
-          return userAllowed.some(m => m.toLowerCase().trim() === mKey)
-        }
-
-        // Check userActionPermissions matrix
-        let userMatrix = state.userActionPermissions[userIdStr] || (emailStr ? state.userActionPermissions[emailStr] : undefined)
         if (!userMatrix && uAny.permissions) {
           let pObj: any = uAny.permissions
           if (typeof pObj === 'string') {
@@ -453,13 +453,54 @@ export const usePermissionStore = create<PermissionState>()(
           const matchedKey = Object.keys(userMatrix).find(k => k.toLowerCase().trim() === mKey)
           if (matchedKey && userMatrix[matchedKey]) {
             const flags = userMatrix[matchedKey]
-            return !!(flags.view || flags.add || flags.edit || flags.delete)
+            return Boolean(flags.view || flags.add || flags.edit || flags.delete)
           }
-          // If a custom action matrix is explicitly configured for this user, anything unlisted is disabled
+          // Explicit custom matrix configured: if unlisted or all false, disallow
           return false
         }
 
-        // Fallback to role permissions only if user has no custom overrides
+        // 2. SECOND PRIORITY: Custom allowedModules list
+        let userAllowed: string[] | undefined = undefined
+        let hasCustomOverride = false
+
+        if (state.userPermissions[userIdStr] !== undefined) {
+          userAllowed = state.userPermissions[userIdStr]
+          hasCustomOverride = true
+        } else if (emailStr && state.userPermissions[emailStr] !== undefined) {
+          userAllowed = state.userPermissions[emailStr]
+          hasCustomOverride = true
+        } else if (state.userPermissions[normId] !== undefined) {
+          userAllowed = state.userPermissions[normId]
+          hasCustomOverride = true
+        } else if (Array.isArray(uAny.allowedModules)) {
+          userAllowed = uAny.allowedModules
+          hasCustomOverride = true
+        } else if (uAny.permissions) {
+          let pObj: any = uAny.permissions
+          if (typeof pObj === 'string') {
+            try { pObj = JSON.parse(pObj) } catch {}
+          }
+          if (pObj && Array.isArray(pObj.allowedModules)) {
+            userAllowed = pObj.allowedModules
+            hasCustomOverride = true
+          }
+        }
+
+        if (hasCustomOverride && userAllowed && Array.isArray(userAllowed)) {
+          return userAllowed.some(m => m.toLowerCase().trim() === mKey)
+        }
+
+        // 3. THIRD PRIORITY: Fallback to role action matrix
+        const roleMatrix = state.roleActionPermissions[normRole] || (DEFAULT_ROLE_ACTION_PERMISSIONS as any)[normRole]
+        if (roleMatrix && typeof roleMatrix === 'object') {
+          const matchedKey = Object.keys(roleMatrix).find(k => k.toLowerCase().trim() === mKey)
+          if (matchedKey && roleMatrix[matchedKey]) {
+            const flags = roleMatrix[matchedKey]
+            return Boolean(flags.view || flags.add || flags.edit || flags.delete)
+          }
+        }
+
+        // 4. Fallback to role permissions list
         const roleMods = state.rolePermissions[normRole] || DEFAULT_ROLE_PERMISSIONS[normRole] || []
         return roleMods.some(m => m.toLowerCase().trim() === mKey)
       },

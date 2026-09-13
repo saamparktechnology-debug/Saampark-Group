@@ -171,10 +171,15 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   // 4. Real-time individual user permissions synchronization
   React.useEffect(() => {
-    if (!isMounted || !user?.id) return
-    usePermissionStore.getState().fetchUserPermissions?.(String(user.id))
+    if (!isMounted || !user) return
+    if (user.id) {
+      usePermissionStore.getState().fetchUserPermissions?.(String(user.id))
+    }
+    if (user.email) {
+      usePermissionStore.getState().fetchUserPermissions?.(user.email.toLowerCase().trim())
+    }
     usePermissionStore.getState().fetchRolePermissions?.()
-  }, [isMounted, user?.id])
+  }, [isMounted, user?.id, user?.email])
 
   // Prevent rendering protected content before hydration completes
   if (!isMounted) return null

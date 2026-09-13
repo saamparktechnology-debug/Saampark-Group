@@ -293,17 +293,37 @@ export default function PermissionsMain() {
   }, [selectedUserId, usersList, roleActionPermissions])
 
   const handlePermissionToggle = (module: string, action: string) => {
-    setPermissionMatrix(prev => ({
-      ...prev,
-      [module]: { ...prev[module], [action]: !prev[module]?.[action] }
-    }))
+    setPermissionMatrix(prev => {
+      const current = prev[module] || {}
+      const nextVal = !current[action]
+      const updated = { ...current, [action]: nextVal }
+      if (action === "view" && !nextVal) {
+        updated.add = false
+        updated.edit = false
+        updated.delete = false
+      }
+      if ((action === "add" || action === "edit" || action === "delete") && nextVal) {
+        updated.view = true
+      }
+      return { ...prev, [module]: updated }
+    })
   }
 
   const handleUserPermissionToggle = (module: string, action: string) => {
-    setUserPermissionMatrix(prev => ({
-      ...prev,
-      [module]: { ...prev[module], [action]: !prev[module]?.[action] }
-    }))
+    setUserPermissionMatrix(prev => {
+      const current = prev[module] || {}
+      const nextVal = !current[action]
+      const updated = { ...current, [action]: nextVal }
+      if (action === "view" && !nextVal) {
+        updated.add = false
+        updated.edit = false
+        updated.delete = false
+      }
+      if ((action === "add" || action === "edit" || action === "delete") && nextVal) {
+        updated.view = true
+      }
+      return { ...prev, [module]: updated }
+    })
   }
 
   const handleToggleRow = (module: string, isUser = false) => {
@@ -372,10 +392,21 @@ export default function PermissionsMain() {
         }
       })
 
+      const activeModules = CONFIGURABLE_MODULES.filter((m) => {
+        const flags = typed[m]
+        return flags && (flags.view || flags.add || flags.edit || flags.delete)
+      })
+
       await executeWithFeedback(async () => { 
         await PermissionService.saveRoleMatrix(selectedRole, typed)
         setRoleAllModuleActions(selectedRole as any, typed)
+        usePermissionStore.getState().setRolePermissions(selectedRole as any, activeModules)
         await fetchRolePermissions()
+
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("saampark_data_synced"))
+          window.dispatchEvent(new Event("storage"))
+        }
       }, {
         actionType: "update", 
         successTitle: "Role Permissions Saved", 
@@ -400,6 +431,11 @@ export default function PermissionsMain() {
         }
       })
 
+      const allowedModules = CONFIGURABLE_MODULES.filter(m => {
+        const flags = typed[m]
+        return flags && (flags.view || flags.add || flags.edit || flags.delete)
+      })
+
       const selectedUser = usersList.find(u => u.id === selectedUserId)
       const userLabel = selectedUser ? selectedUser.name + " (" + selectedUser.email + ")" : selectedUserId
 
@@ -409,10 +445,47 @@ export default function PermissionsMain() {
           await PermissionService.saveUserMatrix(selectedUser.email, typed)
         }
         setUserAllModuleActions(selectedUserId, typed)
+        usePermissionStore.getState().setUserPermissions(selectedUserId, allowedModules)
         if (selectedUser?.email) {
           setUserAllModuleActions(selectedUser.email, typed)
+          usePermissionStore.getState().setUserPermissions(selectedUser.email, allowedModules)
         }
         await fetchUserPermissions(selectedUserId)
+
+        // Sync with userService so users table & UserModal see the update
+        try {
+          const { updateUser } = await import("@/app/feature/users/services/userService")
+          await updateUser(selectedUserId, {
+            allowedModules,
+            permissions: {
+              actionMatrix: typed,
+              allowedModules,
+            }
+          })
+        } catch {}
+
+        // If current auth user, update session
+        try {
+          const curAuth = useAuthStore.getState().user
+          if (curAuth && (String(curAuth.id) === String(selectedUserId) || curAuth.email?.toLowerCase().trim() === selectedUser?.email?.toLowerCase().trim())) {
+            useAuthStore.setState({
+              user: {
+                ...curAuth,
+                allowedModules,
+                permissions: {
+                  actionMatrix: typed,
+                  allowedModules,
+                }
+              }
+            })
+          }
+        } catch {}
+
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("saampark_users_updated"))
+          window.dispatchEvent(new Event("saampark_data_synced"))
+          window.dispatchEvent(new Event("storage"))
+        }
       }, {
         actionType: "update", 
         successTitle: "User Overrides Saved", 

@@ -222,39 +222,65 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
 
       const fallbackMatrix = getMatrixForRole(editingUser.role || "Teams")
 
-      const fullMatrix: Record<string, ModuleActionFlags> = {}
-      CONFIGURABLE_MODULES.forEach((m) => {
-        const adminFlags = isCurrentSuperAdmin ? DEFAULT_FULL_ACTIONS : getUserModuleActions(currentUser, m)
+      const applyMatrix = (sourceMatrix: any) => {
+        const fullMatrix: Record<string, ModuleActionFlags> = {}
+        CONFIGURABLE_MODULES.forEach((m) => {
+          const adminFlags = isCurrentSuperAdmin ? DEFAULT_FULL_ACTIONS : getUserModuleActions(currentUser, m)
 
-        if (existingMatrix && existingMatrix[m]) {
-          const ef = existingMatrix[m]
-          fullMatrix[m] = {
-            view: Boolean(adminFlags.view && ef.view),
-            add: Boolean(adminFlags.add && ef.add),
-            edit: Boolean(adminFlags.edit && ef.edit),
-            delete: Boolean(adminFlags.delete && ef.delete),
+          if (sourceMatrix && sourceMatrix[m]) {
+            const ef = sourceMatrix[m]
+            fullMatrix[m] = {
+              view: Boolean(adminFlags.view && ef.view),
+              add: Boolean(adminFlags.add && ef.add),
+              edit: Boolean(adminFlags.edit && ef.edit),
+              delete: Boolean(adminFlags.delete && ef.delete),
+            }
+          } else if (existingMods && existingMods.length > 0) {
+            const isAllowed = existingMods.includes(m as ModuleName)
+            const base = fallbackMatrix[m] || { view: true, add: false, edit: false, delete: false }
+            fullMatrix[m] = isAllowed
+              ? {
+                  view: Boolean(adminFlags.view && base.view),
+                  add: Boolean(adminFlags.add && base.add),
+                  edit: Boolean(adminFlags.edit && base.edit),
+                  delete: Boolean(adminFlags.delete && base.delete),
+                }
+              : { view: false, add: false, edit: false, delete: false }
+          } else {
+            fullMatrix[m] = fallbackMatrix[m] || { view: false, add: false, edit: false, delete: false }
           }
-        } else if (existingMods && existingMods.length > 0) {
-          const isAllowed = existingMods.includes(m as ModuleName)
-          const base = fallbackMatrix[m] || { view: true, add: false, edit: false, delete: false }
-          fullMatrix[m] = isAllowed
-            ? {
-                view: Boolean(adminFlags.view && base.view),
-                add: Boolean(adminFlags.add && base.add),
-                edit: Boolean(adminFlags.edit && base.edit),
-                delete: Boolean(adminFlags.delete && base.delete),
-              }
-            : { view: false, add: false, edit: false, delete: false }
-        } else {
-          fullMatrix[m] = fallbackMatrix[m] || { view: false, add: false, edit: false, delete: false }
-        }
-      })
+        })
 
-      setActionMatrix(fullMatrix)
-      setAllowedModules(CONFIGURABLE_MODULES.filter(m => {
-        const flags = fullMatrix[m]
-        return flags ? (flags.view || flags.add || flags.edit || flags.delete) : false
-      }))
+        setActionMatrix(fullMatrix)
+        setAllowedModules(CONFIGURABLE_MODULES.filter(m => {
+          const flags = fullMatrix[m]
+          return flags ? (flags.view || flags.add || flags.edit || flags.delete) : false
+        }))
+      }
+
+      applyMatrix(existingMatrix)
+
+      let isMounted = true
+      const fetchFreshMatrix = async () => {
+        try {
+          const { PermissionService } = await import("@/services/permissionService")
+          let res = await PermissionService.getUserMatrix(userIdStr)
+          let dbMatrix = res?.data?.data
+          if (!dbMatrix && emailNorm) {
+            try {
+              res = await PermissionService.getUserMatrix(emailNorm)
+              dbMatrix = res?.data?.data
+            } catch {}
+          }
+          if (isMounted && dbMatrix && typeof dbMatrix === "object") {
+            setUserAllModuleActions(userIdStr, dbMatrix)
+            if (emailNorm) setUserAllModuleActions(emailNorm, dbMatrix)
+            applyMatrix(dbMatrix)
+          }
+        } catch {}
+      }
+      fetchFreshMatrix()
+      return () => { isMounted = false }
     } else {
       setName("")
       setEmail("")

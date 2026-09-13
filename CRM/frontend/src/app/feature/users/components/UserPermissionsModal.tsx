@@ -67,10 +67,19 @@ export function UserPermissionsModal({ isOpen, onClose, user: targetUser, onSave
       setIsLoading(true)
       try {
         const userRole = targetUser.role || "Teams"
-        const res = await PermissionService.getUserMatrix(targetUser.id)
-        const dbUserMatrix = res?.data?.data
+        let res = await PermissionService.getUserMatrix(targetUser.id)
+        let dbUserMatrix = res?.data?.data
+        if (!dbUserMatrix && targetUser.email) {
+          try {
+            res = await PermissionService.getUserMatrix(targetUser.email)
+            dbUserMatrix = res?.data?.data
+          } catch {}
+        }
         
+        const uAny = targetUser as any
         const fallbackMatrix = (userActionPermissions as any)[targetUser.id] || 
+          (targetUser.email ? (userActionPermissions as any)[targetUser.email] : undefined) ||
+          uAny.permissions?.actionMatrix ||
           (roleActionPermissions as any)[userRole] || 
           (DEFAULT_ROLE_ACTION_PERMISSIONS as any)[userRole] || {}
         
@@ -86,7 +95,9 @@ export function UserPermissionsModal({ isOpen, onClose, user: targetUser, onSave
         if (isMounted) setMatrix(filled)
       } catch {
         const userRole = targetUser.role || "Teams"
-        const fallbackMatrix = (roleActionPermissions as any)[userRole] || 
+        const uAny = targetUser as any
+        const fallbackMatrix = uAny.permissions?.actionMatrix || 
+          (roleActionPermissions as any)[userRole] || 
           (DEFAULT_ROLE_ACTION_PERMISSIONS as any)[userRole] || {}
         const filled: Record<string, Record<string, boolean>> = {}
         CONFIGURABLE_MODULES.forEach(m => {
@@ -105,10 +116,23 @@ export function UserPermissionsModal({ isOpen, onClose, user: targetUser, onSave
   }, [isOpen, targetUser, userActionPermissions, roleActionPermissions])
 
   const handleToggleAction = (module: string, actionKey: string) => {
-    setMatrix(prev => ({
-      ...prev,
-      [module]: { ...prev[module], [actionKey]: !prev[module]?.[actionKey] }
-    }))
+    setMatrix(prev => {
+      const current = prev[module] || {}
+      const nextVal = !current[actionKey]
+      const updated = { ...current, [actionKey]: nextVal }
+      if (actionKey === "view" && !nextVal) {
+        updated.add = false
+        updated.edit = false
+        updated.delete = false
+      }
+      if ((actionKey === "add" || actionKey === "edit" || actionKey === "delete") && nextVal) {
+        updated.view = true
+      }
+      return {
+        ...prev,
+        [module]: updated
+      }
+    })
   }
 
   const handleToggleRow = (module: string) => {
@@ -178,16 +202,59 @@ export function UserPermissionsModal({ isOpen, onClose, user: targetUser, onSave
         }
       })
 
+      const allowedModules = CONFIGURABLE_MODULES.filter(m => {
+        const flags = typed[m]
+        return flags && (flags.view || flags.add || flags.edit || flags.delete)
+      })
+
       await executeWithFeedback(async () => { 
         await PermissionService.saveUserMatrix(targetUser.id, typed)
         if (targetUser.email) {
           await PermissionService.saveUserMatrix(targetUser.email, typed)
         }
         setUserAllModuleActions(targetUser.id, typed)
+        usePermissionStore.getState().setUserPermissions(targetUser.id, allowedModules)
         if (targetUser.email) {
           setUserAllModuleActions(targetUser.email, typed)
+          usePermissionStore.getState().setUserPermissions(targetUser.email, allowedModules)
         }
         await fetchUserPermissions(targetUser.id)
+
+        // Sync with user service and persist to DB users table
+        try {
+          const { updateUser } = await import("../services/userService")
+          await updateUser(targetUser.id, {
+            allowedModules,
+            permissions: {
+              actionMatrix: typed,
+              allowedModules,
+            }
+          })
+        } catch (uErr) {
+          console.warn("Could not sync user object in userService:", uErr)
+        }
+
+        // Live update active auth session if targetUser is the logged in user
+        try {
+          const currentAuthUser = useAuthStore.getState().user
+          const isCurrent = currentAuthUser && (
+            String(currentAuthUser.id) === String(targetUser.id) ||
+            currentAuthUser.email?.toLowerCase().trim() === targetUser.email?.toLowerCase().trim()
+          )
+          if (isCurrent) {
+            useAuthStore.setState({
+              user: {
+                ...currentAuthUser,
+                allowedModules,
+                permissions: {
+                  actionMatrix: typed,
+                  allowedModules,
+                }
+              }
+            })
+          }
+        } catch {}
+
         recordActivityLog({
           type: "permission",
           module: "Permissions",
@@ -196,8 +263,14 @@ export function UserPermissionsModal({ isOpen, onClose, user: targetUser, onSave
           companyId: targetUser.companyId || (targetUser.companyIds && targetUser.companyIds[0]),
           branchId: targetUser.branchId,
           branchName: targetUser.branchName,
-          details: `User: ${targetUser.name} (${targetUser.email || targetUser.id})`
+          details: `User: ${targetUser.name} (${targetUser.email || targetUser.id}) • ${allowedModules.length} active module(s)`
         }).catch(() => {})
+
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("saampark_users_updated"))
+          window.dispatchEvent(new Event("saampark_data_synced"))
+          window.dispatchEvent(new Event("storage"))
+        }
       }, {
         actionType: "update", 
         successTitle: "User Permissions Saved", 

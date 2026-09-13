@@ -115,6 +115,28 @@ export function ModulePermissionsModal({ isOpen, onClose }: ModulePermissionsMod
     })
 
     setRoleMatrices(initialMatrices as Record<Role, Record<string, ModuleActionFlags>>)
+
+    let isMounted = true
+    const fetchFreshRoleMatrices = async () => {
+      try {
+        const { PermissionService } = await import("@/services/permissionService")
+        const res = await PermissionService.getAllRoleMatrices()
+        const allMatrices = res?.data?.data || res?.data
+        if (isMounted && allMatrices && typeof allMatrices === "object") {
+          setRoleMatrices((prev) => {
+            const next = { ...prev }
+            allRoles.forEach((r) => {
+              if (allMatrices[r]) {
+                next[r] = { ...(next[r] || {}), ...allMatrices[r] }
+              }
+            })
+            return next
+          })
+        }
+      } catch {}
+    }
+    fetchFreshRoleMatrices()
+    return () => { isMounted = false }
   }, [isOpen])
 
   const currentRoleMatrix: Record<string, ModuleActionFlags> = React.useMemo(() => {
@@ -206,7 +228,8 @@ export function ModulePermissionsModal({ isOpen, onClose }: ModulePermissionsMod
       const updatedRoleActionPermissions: Record<string, Record<string, ModuleActionFlags>> = { ...usePermissionStore.getState().roleActionPermissions }
 
       // Save permissions for all roles configured in roleMatrices
-      Object.entries(roleMatrices).forEach(([r, matrix]) => {
+      const { PermissionService } = await import("@/services/permissionService")
+      for (const [r, matrix] of Object.entries(roleMatrices)) {
         const roleKey = r as Role
         const activeModules = ALL_MODULE_NAMES.filter((m) => {
           const flags = matrix[m]
@@ -218,7 +241,13 @@ export function ModulePermissionsModal({ isOpen, onClose }: ModulePermissionsMod
 
         updatedRolePermissions[roleKey] = activeModules
         updatedRoleActionPermissions[roleKey] = matrix
-      })
+
+        try {
+          await PermissionService.saveRoleMatrix(roleKey, matrix)
+        } catch (rErr) {
+          console.warn("saveRoleMatrix sync warning for", roleKey, rErr)
+        }
+      }
 
       // Persist all roles to MySQL database table
       await saveModuleDataToDB("role_permissions", {
@@ -228,6 +257,7 @@ export function ModulePermissionsModal({ isOpen, onClose }: ModulePermissionsMod
 
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("saampark_data_synced"))
+        window.dispatchEvent(new Event("storage"))
       }
 
       recordActivityLog({
