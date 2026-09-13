@@ -615,7 +615,7 @@ export default function UsersMain() {
         onClose={() => setSelectedUserForPermissions(null)}
         onSaved={() => {
           setSelectedUserForPermissions(null)
-          fetchUsers()
+          loadUsers()
         }}
       />
 
