@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/Input"
 import { CompanyApiService, BranchApiService, SubBranchApiService } from "./services/companyService"
 import { Company, Branch, SubBranch } from "./types"
 import { useAuthStore } from "@/store/useAuthStore"
-import { markGlobalItemDeleted } from "@/lib/storageSync"
+import { markGlobalItemDeleted, fetchModuleDataFromDB, saveModuleDataToDB } from "@/lib/storageSync"
 import { ImageUploadField } from "@/components/ui/ImageUploadField"
 
 const INDUSTRIES = [
@@ -34,19 +34,141 @@ const PARTNER_TYPES = [
   "Agency Partner", "Regional Associate", "Satellite Office"
 ]
 
+const CANONICAL_COMPANIES: Company[] = [
+  {
+    id: "tech",
+    name: "SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED",
+    slug: "tech",
+    brand_name: "SAAMPARK",
+    division_name: "TECHNOLOGY",
+    subtitle: "AND RESEARCH PRIVATE LIMITED",
+    industry: "Technology",
+    currency: "INR",
+    currency_symbol: "₹",
+    logo_url: "/saampark-logo.png",
+    address: "Madinipur, Kolkata, Durgapur, West Bengal, India - 721101",
+    phone: "+91 9901518567 / +91 9901518569",
+    email: "info@saamparktechnology.com",
+    website: "www.saamparktechnology.com",
+    status: "active",
+    member_count: 18,
+    signatory_name: "Authorized Signatory",
+    signatory_designation: "Managing Director",
+  },
+  {
+    id: "digital",
+    name: "SAAMPARK DIGITAL MARKETING RESEARCH & CREATIVE MEDIA AGENCY",
+    slug: "digital",
+    brand_name: "SAAMPARK",
+    division_name: "DIGITAL MARKETING",
+    subtitle: "RESEARCH & CREATIVE MEDIA AGENCY",
+    industry: "Media & Marketing",
+    currency: "INR",
+    currency_symbol: "₹",
+    logo_url: "/saampark-logo.png",
+    address: "Salt Lake Sector V, Bidhannagar, Kolkata, West Bengal - 700091",
+    phone: "+91 9901518570",
+    email: "digital@saampark.in",
+    website: "www.saamparkdigital.com",
+    status: "active",
+    member_count: 3,
+    signatory_name: "Authorized Signatory",
+    signatory_designation: "Agency Head",
+  },
+  {
+    id: "saampark-ai-solutions",
+    name: "SAAMPARK AI SOLUTIONS",
+    slug: "saampark-ai-solutions",
+    brand_name: "SAAMPARK",
+    division_name: "AI SOLUTIONS",
+    subtitle: "INTELLIGENT SYSTEMS & AUTOMATION",
+    industry: "Artificial Intelligence & Software",
+    currency: "INR",
+    currency_symbol: "₹",
+    logo_url: "/saampark-logo.png",
+    address: "Outer Ring Road, Bellandur, Bengaluru, Karnataka - 560103",
+    phone: "+91 9901518572",
+    email: "ai@saampark.com",
+    website: "www.saamparkai.com",
+    status: "active",
+    member_count: 2,
+    signatory_name: "Authorized Signatory",
+    signatory_designation: "Head of AI",
+  }
+]
+
+const CANONICAL_BRANCHES: Branch[] = [
+  {
+    id: "br-1",
+    company_id: "tech",
+    name: "Head Office - Mumbai & Kolkata Technology Center",
+    code: "STR-HO",
+    city: "Mumbai / Kolkata",
+    state: "Maharashtra / West Bengal",
+    country: "India",
+    phone: "+91 9901518567",
+    email: "ho@saamparktechnology.com",
+    manager_name: "Supriya Kumar",
+    status: "active",
+    user_count: 14,
+  },
+  {
+    id: "br-2",
+    company_id: "tech",
+    name: "Branch - Delhi NCR",
+    code: "STR-DEL",
+    city: "New Delhi",
+    state: "Delhi",
+    country: "India",
+    phone: "+91 9901518568",
+    email: "delhi@saamparktechnology.com",
+    manager_name: "Regional Director",
+    status: "active",
+    user_count: 4,
+  },
+  {
+    id: "br-3",
+    company_id: "digital",
+    name: "Head Office - Kolkata Creative Hub",
+    code: "SDM-HQ",
+    city: "Kolkata",
+    state: "West Bengal",
+    country: "India",
+    phone: "+91 9901518570",
+    email: "kolkata@saamparkdigital.com",
+    manager_name: "Creative Lead",
+    status: "active",
+    user_count: 3,
+  },
+  {
+    id: "br-5",
+    company_id: "saampark-ai-solutions",
+    name: "Head Office - Bengaluru Innovation Center",
+    code: "SAI-HQ",
+    city: "Bengaluru",
+    state: "Karnataka",
+    country: "India",
+    phone: "+91 9901518572",
+    email: "ai@saampark.com",
+    manager_name: "AI Architect",
+    status: "active",
+    user_count: 2,
+  }
+]
+
 export default function CompaniesMain() {
   const { user, fetchCompanies } = useAuthStore()
   const isSuperAdmin = user?.role === "Super Admin"
 
-  const [companies, setCompanies] = React.useState<Company[]>([])
-  const [branches, setBranches] = React.useState<Branch[]>([])
+  const [companies, setCompanies] = React.useState<Company[]>(CANONICAL_COMPANIES)
+  const [branches, setBranches] = React.useState<Branch[]>(CANONICAL_BRANCHES)
   const [subBranches, setSubBranches] = React.useState<SubBranch[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
 
   const [searchQuery, setSearchQuery] = React.useState("")
   const [industryFilter, setIndustryFilter] = React.useState("")
-  const [expandedCompanies, setExpandedCompanies] = React.useState<Set<string>>(new Set())
+  const [expandedCompanies, setExpandedCompanies] = React.useState<Set<string>>(new Set(["tech", "digital", "saampark-ai-solutions"]))
   const [expandedBranches, setExpandedBranches] = React.useState<Set<string>>(new Set())
 
   // Modal states
@@ -102,14 +224,58 @@ export default function CompaniesMain() {
     setLoading(true)
     setError(null)
     try {
-      const [compRes, branchRes, subBranchRes] = await Promise.all([
-        CompanyApiService.getAll(),
-        BranchApiService.getAll(),
-        SubBranchApiService.getAll(),
+      const [compRes, branchRes, subBranchRes, dbComps, dbBranches, dbSubBranches] = await Promise.all([
+        CompanyApiService.getAll().catch(() => []),
+        BranchApiService.getAll().catch(() => []),
+        SubBranchApiService.getAll().catch(() => []),
+        fetchModuleDataFromDB<Company[]>("companies", [], "all").catch(() => []),
+        fetchModuleDataFromDB<Branch[]>("branches", [], "all").catch(() => []),
+        fetchModuleDataFromDB<SubBranch[]>("sub_branches", [], "all").catch(() => []),
       ])
-      setCompanies(compRes || [])
-      setBranches(branchRes || [])
-      setSubBranches(subBranchRes || [])
+
+      // 1. Merge Companies
+      const compMap = new Map<string, Company>()
+      CANONICAL_COMPANIES.forEach(c => compMap.set(c.slug || c.id, c))
+      if (Array.isArray(dbComps) && dbComps.length > 0) {
+        dbComps.forEach(c => {
+          const k = c.slug || c.id
+          compMap.set(k, { ...compMap.get(k), ...c })
+        })
+      }
+      if (Array.isArray(compRes) && compRes.length > 0) {
+        compRes.forEach(c => {
+          const k = c.slug || String(c.id)
+          compMap.set(k, { ...compMap.get(k), ...c })
+        })
+      }
+      const finalCompanies = Array.from(compMap.values())
+      setCompanies(finalCompanies)
+
+      // 2. Merge Branches
+      const branchMap = new Map<string, Branch>()
+      CANONICAL_BRANCHES.forEach(b => branchMap.set(b.id, b))
+      if (Array.isArray(dbBranches) && dbBranches.length > 0) {
+        dbBranches.forEach(b => {
+          branchMap.set(b.id, { ...branchMap.get(b.id), ...b })
+        })
+      }
+      if (Array.isArray(branchRes) && branchRes.length > 0) {
+        branchRes.forEach(b => {
+          branchMap.set(b.id, { ...branchMap.get(b.id), ...b })
+        })
+      }
+      const finalBranches = Array.from(branchMap.values())
+      setBranches(finalBranches)
+
+      // 3. Merge SubBranches
+      const subList = (Array.isArray(dbSubBranches) && dbSubBranches.length > 0)
+        ? dbSubBranches
+        : (Array.isArray(subBranchRes) ? subBranchRes : [])
+      setSubBranches(subList)
+
+      // Persist baseline to DB so it is permanently cached
+      saveModuleDataToDB("companies", finalCompanies, "all").catch(() => {})
+      saveModuleDataToDB("branches", finalBranches, "all").catch(() => {})
     } catch (err: any) {
       setError(err?.message || "Failed to load data")
     } finally {
@@ -135,7 +301,17 @@ export default function CompaniesMain() {
     })
   }
 
-  const getBranchesForCompany = (companyId: string) => branches.filter(b => String(b.company_id) === String(companyId))
+  const getBranchesForCompany = (companyId: string) => {
+    const target = String(companyId || "").toLowerCase().trim()
+    const comp = companies.find(c => String(c.id).toLowerCase().trim() === target || String(c.slug || "").toLowerCase().trim() === target)
+    const compSlug = comp?.slug?.toLowerCase().trim()
+    const compNum = (comp as any)?.numeric_id ? String((comp as any).numeric_id) : (target === "tech" ? "1" : target === "digital" ? "2" : target === "saampark-ai-solutions" ? "3" : "")
+
+    return branches.filter(b => {
+      const bCompId = String(b.company_id || (b as any).companyId || "").toLowerCase().trim()
+      return bCompId === target || (compSlug && bCompId === compSlug) || (compNum && bCompId === compNum)
+    })
+  }
   const getSubBranchesForBranch = (branchId: string) => subBranches.filter(sb => String(sb.branch_id) === String(branchId))
   const getUserCountForCompany = (companyId: string) => getBranchesForCompany(companyId).reduce((sum, b) => sum + (b.user_count || 0), 0)
 

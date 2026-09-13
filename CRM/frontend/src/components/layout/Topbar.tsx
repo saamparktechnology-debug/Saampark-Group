@@ -273,21 +273,28 @@ export function Topbar() {
     return branches.filter(b => userBranchIds.some(id => String(id).toLowerCase().trim() === String(b.id).toLowerCase().trim()))
   }, [user.branchIds, user.branchId, (user as any).branch_ids, user.role, branches])
 
-  const activeCompany = companies.find(c => isMatchingCompany(c, activeCompanyId)) ||
+  const isSuperAdmin = user.role === 'Super Admin'
+  const isAllCompanies = isSuperAdmin && (!activeCompanyId || activeCompanyId === 'all')
+
+  const activeCompany = isAllCompanies ? null : (
+    companies.find(c => isMatchingCompany(c, activeCompanyId)) ||
     companies.find(c => isMatchingCompany(c, user.companyId)) ||
     allowedCompanies[0] ||
     companies[0]
+  )
 
-  const activeCompanyName = getCompanyFullName(activeCompany)
+  const activeCompanyName = isAllCompanies ? "SAAMPARK GROUP" : (activeCompany ? getCompanyFullName(activeCompany) : "SAAMPARK GROUP")
+  const activeCompanyLogo = isAllCompanies ? null : (activeCompany ? getCompanyLogoUrl(activeCompany) : null)
+  const activeBranch = branches.find(b => b.id === activeBranchId)
 
-  const canSwitchEntities = allowedCompanies.length > 1 || allowedBranches.length > 1 || (allowedBranches.length > 0 && branches.length > 0 && user.role !== 'Clients')
+  const canSwitchEntities = isSuperAdmin || allowedCompanies.length > 1 || allowedBranches.length > 1 || (allowedBranches.length > 0 && branches.length > 0 && user.role !== 'Clients')
 
   return (
     <header
       style={{ left: isMobile ? 0 : (isSidebarCollapsed ? 64 : 256) }}
       className="fixed top-0 right-0 h-16 glass-panel border-b border-border/50 flex items-center justify-between px-3 sm:px-6 z-30 transition-[left] duration-300 ease-in-out bg-surface/90 backdrop-blur-md"
     >
-      {/* ── LEFT: Hamburger + Page Title with Verified Badge ── */}
+      {/* ── LEFT: Hamburger + Current Company View & Workspace Switcher ── */}
       <div className="flex items-center gap-3">
         <Button
           variant="ghost" size="icon"
@@ -298,11 +305,248 @@ export function Topbar() {
           <Menu size={20} />
         </Button>
 
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white flex items-center gap-1.5 truncate">
-            <span>{user.role === "Super Admin" ? "Super Admin Dashboard" : `${activeCompanyName} Dashboard`}</span>
-            <span className="w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold shadow-xs">✓</span>
-          </h2>
+        {/* Current Company View & Workspace Switcher in Top Navbar */}
+        <div className="relative" onClick={stop}>
+          <button
+            type="button"
+            onClick={() => {
+              setShowCompanyMenu(prev => !prev)
+              setShowQuickAdd(false)
+              setShowNotifications(false)
+              setShowProfileMenu(false)
+            }}
+            className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-100/90 hover:bg-slate-200/90 dark:bg-zinc-800/90 dark:hover:bg-zinc-800 border border-slate-200/80 dark:border-zinc-700/80 text-xs text-slate-900 dark:text-white transition-all group cursor-pointer shadow-2xs max-w-[220px] sm:max-w-[360px]"
+            title="Click to switch active Company or Branch"
+          >
+            {isAllCompanies ? (
+              <div className="w-6 h-6 rounded-lg bg-blue-600/20 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/30">
+                <Building2 size={13} />
+              </div>
+            ) : activeCompanyLogo ? (
+              <img
+                src={activeCompanyLogo}
+                alt={activeCompanyName}
+                className="w-6 h-6 rounded-lg object-contain shrink-0 bg-white dark:bg-zinc-900 p-0.5 border border-slate-200 dark:border-zinc-700"
+              />
+            ) : (
+              <div className="w-6 h-6 rounded-lg bg-blue-600/20 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/30">
+                <Building2 size={13} />
+              </div>
+            )}
+
+            <div className="text-left truncate min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <span className="truncate font-bold text-xs text-slate-900 dark:text-white leading-tight">
+                  {isAllCompanies ? "SAAMPARK GROUP" : activeCompanyName}
+                </span>
+                <span className="w-3.5 h-3.5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[9px] font-bold shadow-xs shrink-0">✓</span>
+              </div>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 block truncate">
+                {isAllCompanies
+                  ? "All Companies (Group View)"
+                  : (activeBranch
+                    ? `${activeBranch.name}`
+                    : "All Branches / Main HQ")}
+              </span>
+            </div>
+
+            {canSwitchEntities && (
+              <div className="flex items-center gap-1 shrink-0 ml-0.5">
+                <span className="text-[10px] font-bold bg-blue-50 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 px-1.5 py-0.5 rounded-md group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                  Switch ▾
+                </span>
+              </div>
+            )}
+          </button>
+
+          {/* Switcher Dropdown */}
+          <AnimatePresence>
+            {showCompanyMenu && canSwitchEntities && (
+              <motion.div
+                initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                transition={{ duration: 0.15 }}
+                className="absolute left-0 top-full mt-2 w-80 sm:w-96 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-2xl rounded-2xl overflow-hidden z-50 flex flex-col max-h-[82vh]"
+              >
+                {/* Dropdown Header */}
+                <div className="p-3.5 border-b border-slate-100 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-800/40 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Building2 size={16} className="text-blue-600" />
+                    <span className="font-bold text-xs text-slate-900 dark:text-white">Active Enterprise Workspace</span>
+                  </div>
+                  <button
+                    onClick={() => setShowCompanyMenu(false)}
+                    className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer"
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+
+                {/* Scrollable list */}
+                <div className="p-3 space-y-2 overflow-y-auto flex-1 scrollbar-hide">
+                  {/* Super Admin 'All Companies' Option */}
+                  {isSuperAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        switchCompany("all")
+                        switchBranch(null)
+                        switchSubBranch(null)
+                        setShowCompanyMenu(false)
+                      }}
+                      className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                        isAllCompanies
+                          ? "bg-blue-50/90 dark:bg-blue-950/70 border-blue-500/50 shadow-xs"
+                          : "bg-slate-50/60 dark:bg-zinc-800/40 border-slate-200/80 dark:border-zinc-700/60 hover:bg-slate-100 dark:hover:bg-zinc-800"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 font-black text-xs shadow-xs">
+                          🏢
+                        </div>
+                        <div className="truncate">
+                          <p className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                            All Companies (Group View)
+                          </p>
+                          <p className="text-[10px] text-slate-400 truncate">
+                            Consolidated multi-company analytics & overview
+                          </p>
+                        </div>
+                      </div>
+                      {isAllCompanies && (
+                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-600 text-white shadow-xs">
+                          ✓ Active
+                        </span>
+                      )}
+                    </button>
+                  )}
+
+                  {/* The 3 Companies List */}
+                  {allowedCompanies.map(comp => {
+                    const isCurrent = !isAllCompanies && isMatchingCompany(comp, activeCompanyId || activeCompany?.id || activeCompany?.slug)
+                    const compFullName = getCompanyFullName(comp)
+                    const compLogoUrl = getCompanyLogoUrl(comp)
+                    const compBranches = allowedBranches.filter(b => isMatchingCompany(comp, b.companyId || (b as any).company_id))
+
+                    return (
+                      <div
+                        key={comp.id}
+                        className={`rounded-xl border overflow-hidden transition-all ${
+                          isCurrent
+                            ? "bg-blue-50/40 dark:bg-blue-950/30 border-blue-500/40 shadow-2xs"
+                            : "bg-slate-50/40 dark:bg-zinc-800/30 border-slate-200/70 dark:border-zinc-800"
+                        }`}
+                      >
+                        {/* Company Row */}
+                        <div className="p-2.5 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            {compLogoUrl ? (
+                              <img
+                                src={compLogoUrl}
+                                alt={compFullName}
+                                className="w-7 h-7 rounded-lg object-contain shrink-0 bg-white dark:bg-zinc-900 p-0.5 border border-slate-200 dark:border-zinc-700"
+                              />
+                            ) : (
+                              <div className="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-950 text-blue-600 flex items-center justify-center text-sm shrink-0 border border-blue-200 dark:border-blue-900">
+                                {comp.logo || "🏢"}
+                              </div>
+                            )}
+                            <div className="truncate">
+                              <p className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                                {compFullName}
+                              </p>
+                              {comp.subtitle && (
+                                <p className="text-[9.5px] text-slate-400 truncate">
+                                  {comp.subtitle}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              switchCompany(comp.id)
+                              switchBranch(null)
+                              switchSubBranch(null)
+                              setShowCompanyMenu(false)
+                            }}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all shrink-0 cursor-pointer ${
+                              isCurrent && !activeBranchId
+                                ? "bg-blue-600 text-white shadow-xs"
+                                : "bg-slate-200/80 hover:bg-slate-300 dark:bg-zinc-700 dark:hover:bg-zinc-600 text-slate-700 dark:text-zinc-200"
+                            }`}
+                          >
+                            {isCurrent && !activeBranchId ? "✓ HQ Active" : "Select HQ"}
+                          </button>
+                        </div>
+
+                        {/* Branches List under company */}
+                        {compBranches.length > 0 && (
+                          <div className="px-2.5 pb-2.5 pt-1 border-t border-slate-200/60 dark:border-zinc-800/80 space-y-1 bg-white/60 dark:bg-zinc-900/60">
+                            <p className="text-[9.5px] uppercase font-bold text-slate-400 px-1">
+                              Operating Branches ({compBranches.length})
+                            </p>
+                            {compBranches.map(b => {
+                              const isBranchActive = isCurrent && activeBranchId === b.id
+                              return (
+                                <div
+                                  key={b.id}
+                                  className="flex items-center justify-between p-1.5 rounded-lg bg-slate-100/70 dark:bg-zinc-800/60 text-xs"
+                                >
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <MapPin size={12} className="text-amber-500 shrink-0" />
+                                    <span className="truncate text-slate-800 dark:text-zinc-200 font-medium">
+                                      {b.name}
+                                    </span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      switchCompany(comp.id)
+                                      switchBranch(b.id)
+                                      switchSubBranch(null)
+                                      setShowCompanyMenu(false)
+                                    }}
+                                    className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all shrink-0 cursor-pointer ${
+                                      isBranchActive
+                                        ? "bg-amber-500 text-slate-950 font-bold"
+                                        : "bg-slate-200 dark:bg-zinc-700 text-slate-600 dark:text-zinc-300 hover:bg-slate-300"
+                                    }`}
+                                  >
+                                    {isBranchActive ? "✓ Active" : "Switch"}
+                                  </button>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Footer Link */}
+                <div className="p-3 border-t border-slate-100 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-800/40 flex items-center justify-between">
+                  <Link
+                    href="/feature/companies"
+                    onClick={() => setShowCompanyMenu(false)}
+                    className="text-[11px] font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400 flex items-center gap-1"
+                  >
+                    <span>Manage Companies & Branches →</span>
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => setShowCompanyMenu(false)}
+                    className="px-2.5 py-1 text-[11px] font-semibold bg-slate-200 dark:bg-zinc-700 rounded-lg text-slate-700 dark:text-zinc-200 hover:bg-slate-300 cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 

@@ -107,6 +107,7 @@ export function SuperAdminDashboard() {
   const [todos, setTodos] = React.useState<{ id: number; text: string; done: boolean }[]>([])
 
   const isSuperAdmin = user?.role === "Super Admin"
+  const isAllCompanies = isSuperAdmin && (!activeCompanyId || activeCompanyId === "all")
 
   // Allowed companies for current user session (if assigned to 1, user cannot switch)
   const allowedCompanies = React.useMemo(() => {
@@ -447,241 +448,10 @@ export function SuperAdminDashboard() {
 
   return (
     <div className="space-y-8 max-w-[1550px] mx-auto p-4 sm:p-6 pb-24 bg-[#f8fafc] dark:bg-zinc-950 min-h-screen">
-      
-      {/* ── SECTION 1: TOP FILTER & QUICK COUNTERS SUB-BAR (PREMIUM GLASS-MORPHIC BAR) ── */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-slate-200/90 dark:border-zinc-800 shadow-sm">
-        
-        {/* Left: Premium Company & Branch Dropdown Selectors */}
-        <div className="flex flex-wrap items-center gap-3">
-          
-          {/* 1. Custom Premium Company Selector */}
-          {canSwitchCompany ? (
-            <div className="relative" onClick={(e) => e.stopPropagation()}>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsCompanyDropdownOpen(prev => !prev)
-                  setIsBranchDropdownOpen(false)
-                }}
-                className="flex items-center gap-2.5 px-3.5 py-2 bg-slate-50 hover:bg-slate-100 dark:bg-zinc-800/90 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-700/80 rounded-xl text-xs font-bold text-slate-800 dark:text-zinc-100 shadow-xs transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-              >
-                <div className="w-5 h-5 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 flex items-center justify-center shrink-0 border border-blue-200 dark:border-blue-800">
-                  <Building2 size={12} />
-                </div>
-                <span className="max-w-[200px] truncate">{currentCompanyDisplayName}</span>
-                <ChevronDown size={13} className={`text-slate-400 transition-transform duration-200 ${isCompanyDropdownOpen ? "rotate-180" : ""}`} />
-              </button>
-
-              <AnimatePresence>
-                {isCompanyDropdownOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 6, scale: 0.98 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 6, scale: 0.98 }}
-                    transition={{ duration: 0.15, ease: "easeOut" }}
-                    className="absolute left-0 top-full mt-2 w-72 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-2xl shadow-2xl z-50 p-2 overflow-hidden"
-                  >
-                    <div className="px-3 py-2 border-b border-slate-100 dark:border-zinc-800">
-                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Select Enterprise Entity</p>
-                    </div>
-
-                    <div className="py-1 space-y-1 max-h-60 overflow-y-auto">
-                      {isSuperAdmin && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            switchCompany("all")
-                            setIsCompanyDropdownOpen(false)
-                          }}
-                          className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-xl transition-colors cursor-pointer text-left ${
-                            activeCompanyId === "all" || !activeCompanyId
-                              ? "bg-blue-50 dark:bg-blue-950/60 text-blue-600 font-bold"
-                              : "hover:bg-slate-50 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-200"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5 truncate">
-                            <div className="w-7 h-7 rounded-lg bg-blue-100 dark:bg-blue-950 text-blue-600 flex items-center justify-center shrink-0">
-                              <Building2 size={14} />
-                            </div>
-                            <div>
-                              <p className="truncate font-semibold">All Companies</p>
-                              <p className="text-[10px] text-slate-400 font-normal">Aggregated 3 Companies</p>
-                            </div>
-                          </div>
-                          {(activeCompanyId === "all" || !activeCompanyId) && <Check size={14} className="text-blue-600 shrink-0" />}
-                        </button>
-                      )}
-
-                      {allowedCompanies.map(c => {
-                        const isCurrent = isMatchingCompany(c, activeCompanyId)
-                        const fullName = getCompanyFullName(c)
-                        return (
-                          <button
-                            key={c.id}
-                            type="button"
-                            onClick={() => {
-                              switchCompany(c.id)
-                              setIsCompanyDropdownOpen(false)
-                            }}
-                            className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-xl transition-colors cursor-pointer text-left ${
-                              isCurrent
-                                ? "bg-blue-50 dark:bg-blue-950/60 text-blue-600 font-bold"
-                                : "hover:bg-slate-50 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-200"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2.5 truncate">
-                              <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 flex items-center justify-center shrink-0 border border-slate-200 dark:border-zinc-700">
-                                <Building2 size={14} />
-                              </div>
-                              <div className="truncate">
-                                <p className="truncate font-semibold">{fullName}</p>
-                                <p className="text-[10px] text-slate-400 font-normal">Active Company</p>
-                              </div>
-                            </div>
-                            {isCurrent && <Check size={14} className="text-blue-600 shrink-0" />}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          ) : (
-            <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-zinc-800 text-xs font-bold text-slate-800 dark:text-zinc-200 border border-slate-200 dark:border-zinc-700 shadow-2xs">
-              <Building2 size={14} className="text-blue-600" />
-              <span>{currentCompanyDisplayName}</span>
-              <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-200 dark:bg-zinc-700 text-slate-500 font-medium ml-1">Assigned</span>
-            </div>
-          )}
-
-          {/* 2. Custom Premium Branch Selector */}
-          {canSwitchBranch ? (
-            <div className="relative" onClick={(e) => e.stopPropagation()}>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsBranchDropdownOpen(prev => !prev)
-                  setIsCompanyDropdownOpen(false)
-                }}
-                className="flex items-center gap-2.5 px-3.5 py-2 bg-slate-50 hover:bg-slate-100 dark:bg-zinc-800/90 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-700/80 rounded-xl text-xs font-bold text-slate-800 dark:text-zinc-100 shadow-xs transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-              >
-                <div className="w-5 h-5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-200 dark:border-emerald-800">
-                  <GitBranch size={12} />
-                </div>
-                <span className="max-w-[200px] truncate">{currentBranchDisplayName}</span>
-                <ChevronDown size={13} className={`text-slate-400 transition-transform duration-200 ${isBranchDropdownOpen ? "rotate-180" : ""}`} />
-              </button>
-
-              <AnimatePresence>
-                {isBranchDropdownOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 6, scale: 0.98 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 6, scale: 0.98 }}
-                    transition={{ duration: 0.15, ease: "easeOut" }}
-                    className="absolute left-0 top-full mt-2 w-72 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-2xl shadow-2xl z-50 p-2 overflow-hidden"
-                  >
-                    <div className="px-3 py-2 border-b border-slate-100 dark:border-zinc-800">
-                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Select Operating Branch</p>
-                    </div>
-
-                    <div className="py-1 space-y-1 max-h-60 overflow-y-auto">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          switchBranch(null)
-                          setIsBranchDropdownOpen(false)
-                        }}
-                        className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-xl transition-colors cursor-pointer text-left ${
-                          activeBranchId === "all" || !activeBranchId
-                            ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 font-bold"
-                            : "hover:bg-slate-50 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-200"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5 truncate">
-                          <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-600 flex items-center justify-center shrink-0">
-                            <GitBranch size={14} />
-                          </div>
-                          <div>
-                            <p className="truncate font-semibold">All Branches</p>
-                            <p className="text-[10px] text-slate-400 font-normal">All Regional Centers</p>
-                          </div>
-                        </div>
-                        {(activeBranchId === "all" || !activeBranchId) && <Check size={14} className="text-emerald-600 shrink-0" />}
-                      </button>
-
-                      {allowedBranches.map(b => {
-                        const isCurrent = b.id === activeBranchId
-                        return (
-                          <button
-                            key={b.id}
-                            type="button"
-                            onClick={() => {
-                              switchBranch(b.id)
-                              setIsBranchDropdownOpen(false)
-                            }}
-                            className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-xl transition-colors cursor-pointer text-left ${
-                              isCurrent
-                                ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 font-bold"
-                                : "hover:bg-slate-50 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-200"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2.5 truncate">
-                              <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 flex items-center justify-center shrink-0 border border-slate-200 dark:border-zinc-700">
-                                <GitBranch size={14} />
-                              </div>
-                              <div className="truncate">
-                                <p className="truncate font-semibold">{b.name}</p>
-                                <p className="text-[10px] text-slate-400 font-normal">{b.city || "Branch Location"}</p>
-                              </div>
-                            </div>
-                            {isCurrent && <Check size={14} className="text-emerald-600 shrink-0" />}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          ) : (
-            <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-zinc-800 text-xs font-bold text-slate-800 dark:text-zinc-200 border border-slate-200 dark:border-zinc-700 shadow-2xs">
-              <MapPin size={14} className="text-amber-500" />
-              <span>{currentBranchDisplayName}</span>
-              <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-200 dark:bg-zinc-700 text-slate-500 font-medium ml-1">Assigned</span>
-            </div>
-          )}
-
-          <span className="text-xs text-slate-400 font-medium hidden sm:inline-block">
-            {activeCompanyId === "all" || !activeCompanyId
-              ? "Showing overall summary of all companies and branches"
-              : `Showing overall summary for ${currentCompanyDisplayName}`}
-          </span>
-        </div>
-
-        {/* Right: Quick Stat Counters matching exact reference screenshot */}
-        <div className="flex items-center gap-6 text-right">
-          <div>
-            <p className="text-[11px] text-slate-400 font-medium">Total Companies</p>
-            <p className="text-sm font-black text-slate-900 dark:text-white">{totalCompaniesCount}</p>
-          </div>
-          <div>
-            <p className="text-[11px] text-slate-400 font-medium">Total Branches</p>
-            <p className="text-sm font-black text-slate-900 dark:text-white">{totalBranchesCount}</p>
-          </div>
-          <div>
-            <p className="text-[11px] text-slate-400 font-medium">Active Users</p>
-            <p className="text-sm font-black text-slate-900 dark:text-white">{activeUsersCount}</p>
-          </div>
-          <div>
-            <p className="text-[11px] text-slate-400 font-medium">Active Projects</p>
-            <p className="text-sm font-black text-slate-900 dark:text-white">{activeProjectsCount}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* ── SECTION 2: 5 METRIC KPI CARDS ROW (EXACT LAYOUT & ACCURATE DATA) ── */}
+      {isAllCompanies ? (
+        <>
+          {/* ── 1ST DASHBOARD: GROUP MULTI-COMPANY OVERVIEW (SUPER ADMIN ALL COMPANIES VIEW) ── */}
+          {/* ── SECTION 2: 5 METRIC KPI CARDS ROW (EXACT LAYOUT & ACCURATE DATA) ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {/* Card 1: Total Companies */}
         <div className="bg-white dark:bg-zinc-900 p-5 rounded-2xl border border-slate-200/80 dark:border-zinc-800 shadow-xs flex flex-col justify-between">
@@ -1144,17 +914,18 @@ export function SuperAdminDashboard() {
           </div>
         </div>
       </div>
-
-      {/* ────────────────────────────────────────────────────────────────────────── */}
-      {/* ── SECTION 5: OPERATIONAL DATA & WIDGETS BELOW (PREVIOUS DASHBOARD DATA) ─ */}
-      {/* ────────────────────────────────────────────────────────────────────────── */}
-      <div className="pt-6 border-t border-slate-200 dark:border-zinc-800">
-        <div className="mb-6 flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-              <FolderKanban size={18} className="text-blue-600" />
-              <span>Operational Management & Shift Tracking</span>
-            </h2>
+    </>
+  ) : (
+    /* ────────────────────────────────────────────────────────────────────────── */
+    /* ── 2ND DASHBOARD: OPERATIONAL DATA & WIDGETS (SPECIFIC COMPANY DATA) ──── */
+    /* ────────────────────────────────────────────────────────────────────────── */
+    <div className="space-y-6">
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h2 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+            <FolderKanban size={18} className="text-blue-600" />
+            <span>Operational Management & Shift Tracking</span>
+          </h2>
             <p className="text-xs text-slate-400 mt-0.5">
               Live attendance clock, project pipelines, billing breakdown, and staff monitoring for {currentCompanyDisplayName}
             </p>
@@ -1583,7 +1354,8 @@ export function SuperAdminDashboard() {
           </div>
           
         </div>
-      </div>
+        </div>
+      )}
     </div>
   )
 }

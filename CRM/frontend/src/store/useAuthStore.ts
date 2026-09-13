@@ -346,9 +346,91 @@ export const DEFAULT_COMPANIES: Company[] = [
     signatory_name: 'Authorized Signatory',
     signatory_designation: 'Agency Head'
   },
+  { 
+    id: 'saampark-ai-solutions', 
+    numeric_id: 3,
+    brand_name: 'SAAMPARK',
+    division_name: 'AI SOLUTIONS',
+    name: 'SAAMPARK AI SOLUTIONS', 
+    subtitle: 'INTELLIGENT SYSTEMS & AUTOMATION',
+    logo: '🤖', 
+    logo_url: '/saampark-logo.png',
+    slug: 'saampark-ai-solutions', 
+    currency: 'INR',
+    currency_symbol: '₹',
+    cin: '',
+    gstin: '',
+    pan: '',
+    address: 'Outer Ring Road, Bellandur, Bengaluru, Karnataka - 560103',
+    phone: '+91 9901518572',
+    email: 'ai@saampark.com',
+    website: 'www.saamparkai.com',
+    upi_id: '',
+    account_holder: '',
+    bank_name: '',
+    account_number: '',
+    ifsc_code: '',
+    bank_branch: '',
+    terms_conditions: '1. All enterprise AI models and cloud APIs are governed by custom SLA commitments.\n2. Service continuity assured with 99.9% uptime.\n3. All disputes are subject to Bengaluru jurisdiction only.',
+    signatory_name: 'Authorized Signatory',
+    signatory_designation: 'Head of AI'
+  },
 ]
 
-export const DEFAULT_BRANCHES: Branch[] = []
+export const DEFAULT_BRANCHES: Branch[] = [
+  {
+    id: 'br-1',
+    companyId: 'tech',
+    name: 'Head Office - Mumbai & Kolkata Technology Center',
+    code: 'STR-HO',
+    city: 'Mumbai / Kolkata',
+    state: 'Maharashtra / West Bengal',
+    country: 'India',
+    phone: '+91 9901518567',
+    email: 'ho@saamparktechnology.com',
+    managerName: 'Supriya Kumar',
+    status: 'Active',
+  },
+  {
+    id: 'br-2',
+    companyId: 'tech',
+    name: 'Branch - Delhi NCR',
+    code: 'STR-DEL',
+    city: 'New Delhi',
+    state: 'Delhi',
+    country: 'India',
+    phone: '+91 9901518568',
+    email: 'delhi@saamparktechnology.com',
+    managerName: 'Regional Director',
+    status: 'Active',
+  },
+  {
+    id: 'br-3',
+    companyId: 'digital',
+    name: 'Head Office - Kolkata Creative Hub',
+    code: 'SDM-HQ',
+    city: 'Kolkata',
+    state: 'West Bengal',
+    country: 'India',
+    phone: '+91 9901518570',
+    email: 'kolkata@saamparkdigital.com',
+    managerName: 'Creative Lead',
+    status: 'Active',
+  },
+  {
+    id: 'br-5',
+    companyId: 'saampark-ai-solutions',
+    name: 'Head Office - Bengaluru Innovation Center',
+    code: 'SAI-HQ',
+    city: 'Bengaluru',
+    state: 'Karnataka',
+    country: 'India',
+    phone: '+91 9901518572',
+    email: 'ai@saampark.com',
+    managerName: 'AI Architect',
+    status: 'Active',
+  },
+]
 
 export const COMPANIES = DEFAULT_COMPANIES
 
@@ -1193,6 +1275,26 @@ export const useAuthStore = create<AuthState>()(
         if (!user) return
 
         const targetNorm = String(companyId || '').toLowerCase().trim()
+        const isSuperAdmin = user.role === 'Super Admin'
+
+        if (targetNorm === 'all' || targetNorm === 'all_companies' || !companyId) {
+          if (isSuperAdmin) {
+            invalidateModuleCache()
+            set({
+              activeCompanyId: 'all',
+              activeBranchId: null,
+              activeSubBranchId: null,
+            })
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('saampark_company_switched', { detail: 'all' }))
+              window.dispatchEvent(new CustomEvent('saampark_branch_switched', { detail: null }))
+              window.dispatchEvent(new CustomEvent('saampark_data_synced'))
+              window.dispatchEvent(new Event('storage'))
+            }
+            return
+          }
+        }
+
         const matchedComp = companies.find(c => 
           String(c.id).toLowerCase().trim() === targetNorm || 
           String(c.slug || '').toLowerCase().trim() === targetNorm ||
@@ -1202,7 +1304,6 @@ export const useAuthStore = create<AuthState>()(
         
         // Super Admin can switch to any company.
         // Admins, Teams, Clients can switch between any company they are assigned to.
-        const isSuperAdmin = user.role === 'Super Admin'
         const userCompIds = (user.companyIds && user.companyIds.length > 0)
           ? user.companyIds.map(id => String(id).toLowerCase().trim())
           : [String(user.companyId || 'tech').toLowerCase().trim()]
