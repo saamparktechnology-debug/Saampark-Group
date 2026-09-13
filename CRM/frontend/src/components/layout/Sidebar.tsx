@@ -402,32 +402,69 @@ export function Sidebar() {
     }
   }, [pathname, rawCounts])
 
-  // Check permission for any nav or sub-nav item
+  // Precise mapping between sidebar navigation item titles and CRM module keys
+  const NAV_TO_MODULE_MAP: Record<string, string> = {
+    "Dashboard": "Dashboard",
+    "Organisation": "Companies",
+    "Companies": "Companies",
+    "Branches": "Branches",
+    "Departments": "Departments",
+    "Teams": "Teams",
+    "Users": "Users",
+    "Permissions": "Permissions",
+    "CRM": "Leads",
+    "Leads": "Leads",
+    "Clients": "Clients",
+    "Proposals": "Proposals",
+    "Projects": "Projects",
+    "Tasks": "Tasks",
+    "Sales": "Invoices",
+    "Quotations": "Quotations",
+    "Estimates": "Estimates",
+    "Sales Orders": "Sales Orders",
+    "Invoices": "Invoices",
+    "Payments": "Payments",
+    "Credit Notes": "Credit Notes",
+    "Debit Notes": "Debit Notes",
+    "Services & Store": "Services & Store",
+    "Subscriptions": "Subscriptions",
+    "Packages & Retainers": "Subscriptions",
+    "EMI Milestone Plans": "EMI",
+    "EMI": "EMI",
+    "HR & Employees": "Teams",
+    "Team Members": "Teams",
+    "Payments & Payroll": "Payroll",
+    "Leave Management": "Leave",
+    "Attendance & Timecards": "Attendance",
+    "Support": "Tickets",
+    "Tickets": "Tickets",
+    "Knowledge Base": "Knowledge base",
+    "Files": "Files",
+    "Expenses": "Expenses",
+    "Reports": "Reports",
+    "Settings": "Settings",
+    "Activity Logs": "Activity Logs",
+  }
+
+  // Check permission for any nav or sub-nav item strictly and individually
   const checkNavAllowed = React.useCallback((u: any, name: string): boolean => {
     if (!u) return false
     if (name === "Dashboard") return true
     if (u.role === "Super Admin") return true
-    if (name === "Organisation" || name === "Companies" || name === "Branches" || name === "Departments" || name === "Teams") return u.role === "Admin" || isModuleAllowed(u, "Teams")
-    if (name === "Users" || name === "Permissions") return u.role === "Admin" || isModuleAllowed(u, "Users")
-    if (name === "CRM" || name === "Leads" || name === "Clients" || name === "Proposals") return isModuleAllowed(u, "Leads") || isModuleAllowed(u, "Clients")
-    if (name === "Projects") return isModuleAllowed(u, "Projects")
-    if (name === "Tasks") return isModuleAllowed(u, "Tasks")
-    if (name === "HR & Employees" || name === "Team Members" || name === "Payments & Payroll" || name === "Leave Management" || name === "Attendance & Timecards") return isModuleAllowed(u, "Teams") || u.role === "Admin"
-    if (name === "Subscriptions" || name === "Packages & Retainers" || name === "EMI Milestone Plans" || name === "EMI") return isModuleAllowed(u, "Subscriptions") || isModuleAllowed(u, "EMI") || isModuleAllowed(u, "Sales") || u.role === "Admin"
-    if (name === "Support" || name === "Tickets" || name === "Knowledge Base") return isModuleAllowed(u, "Tickets") || isModuleAllowed(u, "Knowledge base")
-    if (name === "Files" || name === "Documents") return isModuleAllowed(u, "Files")
-    if (name === "Sales" || name === "Quotations" || name === "Estimates" || name === "Sales Orders" || name === "Invoices" || name === "Payments" || name === "Credit Notes" || name === "Debit Notes") return isModuleAllowed(u, "Sales") || isModuleAllowed(u, "Estimates") || u.role === "Admin"
-    return isModuleAllowed(u, name)
+
+    const targetModule = NAV_TO_MODULE_MAP[name] || name
+    return isModuleAllowed(u, targetModule)
   }, [isModuleAllowed])
 
-  // Filter items by role & permissions
+  // Filter items strictly by individual module permissions
   const allowedNavItems = React.useMemo(() => {
     if (!user) return []
     return ALL_NAV_ITEMS.map((item) => {
       if (item.subItems && item.subItems.length > 0) {
+        // Filter every sub-item individually against the user's permissions
         const filteredSubs = item.subItems.filter((sub) => checkNavAllowed(user, sub.name))
-        const isParentAllowed = checkNavAllowed(user, item.name) || filteredSubs.length > 0
-        if (!isParentAllowed) return null
+        // Parent menu header is ONLY visible if at least one sub-item is granted to this user!
+        if (filteredSubs.length === 0) return null
         return {
           ...item,
           subItems: filteredSubs,

@@ -528,8 +528,22 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
 
     const permissions = { actionMatrix: finalActionMatrix, allowedModules: finalAllowedModules }
 
+    // If the currently logged in user is being edited, update their session immediately
+    try {
+      const { useAuthStore } = require("@/store/useAuthStore")
+      const currentAuthUser = useAuthStore.getState().user
+      if (currentAuthUser && (String(currentAuthUser.id) === userIdStr || currentAuthUser.email?.toLowerCase().trim() === emailNorm)) {
+        useAuthStore.getState().setUser({
+          ...currentAuthUser,
+          allowedModules: finalAllowedModules,
+          permissions,
+        })
+      }
+    } catch {}
+
     onSave({
       ...payload,
+      allowedModules: finalAllowedModules,
       permissions,
     } as any)
     onClose()

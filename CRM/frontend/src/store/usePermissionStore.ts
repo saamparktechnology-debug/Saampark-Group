@@ -407,23 +407,33 @@ export const usePermissionStore = create<PermissionState>()(
 
         const uAny = user as any
         let userAllowed: string[] | undefined = undefined
-        if (Array.isArray(uAny.allowedModules) && uAny.allowedModules.length > 0) {
+        let hasCustomOverride = false
+
+        if (Array.isArray(uAny.allowedModules)) {
           userAllowed = uAny.allowedModules
+          hasCustomOverride = true
         } else if (uAny.permissions) {
           let pObj: any = uAny.permissions
           if (typeof pObj === 'string') {
             try { pObj = JSON.parse(pObj) } catch {}
           }
-          if (pObj && Array.isArray(pObj.allowedModules) && pObj.allowedModules.length > 0) {
+          if (pObj && Array.isArray(pObj.allowedModules)) {
             userAllowed = pObj.allowedModules
+            hasCustomOverride = true
           }
         }
 
-        if (!userAllowed) {
-          userAllowed = state.userPermissions[userIdStr] || (emailStr ? state.userPermissions[emailStr] : undefined)
+        if (userAllowed === undefined) {
+          if (state.userPermissions[userIdStr] !== undefined) {
+            userAllowed = state.userPermissions[userIdStr]
+            hasCustomOverride = true
+          } else if (emailStr && state.userPermissions[emailStr] !== undefined) {
+            userAllowed = state.userPermissions[emailStr]
+            hasCustomOverride = true
+          }
         }
 
-        if (userAllowed && Array.isArray(userAllowed)) {
+        if (hasCustomOverride && userAllowed && Array.isArray(userAllowed)) {
           return userAllowed.some(m => m.toLowerCase().trim() === mKey)
         }
 
@@ -439,15 +449,17 @@ export const usePermissionStore = create<PermissionState>()(
           }
         }
 
-        if (userMatrix) {
+        if (userMatrix && typeof userMatrix === 'object' && Object.keys(userMatrix).length > 0) {
           const matchedKey = Object.keys(userMatrix).find(k => k.toLowerCase().trim() === mKey)
           if (matchedKey && userMatrix[matchedKey]) {
             const flags = userMatrix[matchedKey]
             return !!(flags.view || flags.add || flags.edit || flags.delete)
           }
+          // If a custom action matrix is explicitly configured for this user, anything unlisted is disabled
+          return false
         }
 
-        // Fallback to role permissions
+        // Fallback to role permissions only if user has no custom overrides
         const roleMods = state.rolePermissions[normRole] || DEFAULT_ROLE_PERMISSIONS[normRole] || []
         return roleMods.some(m => m.toLowerCase().trim() === mKey)
       },
