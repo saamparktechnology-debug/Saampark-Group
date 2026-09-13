@@ -485,31 +485,89 @@ export const usePermissionStore = create<PermissionState>()(
         const state = get()
         const userIdStr = String(user.id)
         const emailStr = (user.email || '').toLowerCase().trim()
-
         const uAny = user as any
+
+        // Check if user has custom action matrix in store or in user object
         let userMatrix = state.userActionPermissions[userIdStr] || (emailStr ? state.userActionPermissions[emailStr] : undefined)
-        if (!userMatrix && uAny.permissions) {
+        let hasCustomMatrix = !!(userMatrix && typeof userMatrix === 'object' && Object.keys(userMatrix).length > 0)
+        
+        if (!hasCustomMatrix && uAny.permissions) {
           let pObj: any = uAny.permissions
           if (typeof pObj === 'string') {
             try { pObj = JSON.parse(pObj) } catch {}
           }
           if (pObj && pObj.actionMatrix && typeof pObj.actionMatrix === 'object') {
             userMatrix = pObj.actionMatrix
+            hasCustomMatrix = Object.keys(userMatrix).length > 0
           }
         }
 
-        if (userMatrix) {
-          const matchedKey = Object.keys(userMatrix).find(k => k.toLowerCase().trim() === mKey)
+        // Module group alias mappings for backwards-compatible queries (e.g. "Sales" -> Invoices, etc.)
+        const ALIAS_MAP: Record<string, string> = {
+          'sales': 'Invoices',
+          'store': 'Services & Store',
+          'packages & retainers': 'Subscriptions',
+          'emi milestone plans': 'EMI',
+          'team members': 'Teams',
+          'payments & payroll': 'Payroll',
+          'leave management': 'Leave',
+          'attendance & timecards': 'Attendance',
+          'knowledge base': 'Knowledge base',
+          'documents': 'Files',
+        }
+
+        const resolvedName = ALIAS_MAP[mKey] ? ALIAS_MAP[mKey].toLowerCase().trim() : mKey
+
+        // If this user has custom matrix overrides:
+        if (hasCustomMatrix && userMatrix) {
+          const matchedKey = Object.keys(userMatrix).find(k => {
+            const kNorm = k.toLowerCase().trim()
+            return kNorm === mKey || kNorm === resolvedName
+          })
           if (matchedKey && userMatrix[matchedKey]) {
-            return userMatrix[matchedKey]
+            const flags = userMatrix[matchedKey]
+            return {
+              view: Boolean(flags.view),
+              add: Boolean(flags.view && flags.add),
+              edit: Boolean(flags.view && flags.edit),
+              delete: Boolean(flags.view && flags.delete),
+            }
+          }
+          // If custom matrix exists but module not listed, access is completely denied
+          return { view: false, add: false, edit: false, delete: false }
+        }
+
+        // If user has allowedModules list override:
+        let userAllowed: string[] | undefined = undefined
+        if (Array.isArray(uAny.allowedModules)) {
+          userAllowed = uAny.allowedModules
+        } else if (uAny.permissions && Array.isArray(uAny.permissions.allowedModules)) {
+          userAllowed = uAny.permissions.allowedModules
+        } else if (state.userPermissions[userIdStr] !== undefined) {
+          userAllowed = state.userPermissions[userIdStr]
+        } else if (emailStr && state.userPermissions[emailStr] !== undefined) {
+          userAllowed = state.userPermissions[emailStr]
+        }
+
+        if (userAllowed !== undefined && Array.isArray(userAllowed)) {
+          const isAllowed = userAllowed.some(m => {
+            const mNorm = m.toLowerCase().trim()
+            return mNorm === mKey || mNorm === resolvedName
+          })
+          if (!isAllowed) {
+            return { view: false, add: false, edit: false, delete: false }
           }
         }
 
+        // Fallback to role action permissions only if user has no custom overrides
         const roleActionMatrix = (state.roleActionPermissions && state.roleActionPermissions[normRole]) || (DEFAULT_ROLE_ACTION_PERMISSIONS[normRole])
         if (roleActionMatrix) {
-          const matchedKey = Object.keys(roleActionMatrix).find(k => k.toLowerCase().trim() === mKey)
+          const matchedKey = Object.keys(roleActionMatrix).find(k => {
+            const kNorm = k.toLowerCase().trim()
+            return kNorm === mKey || kNorm === resolvedName
+          })
           if (matchedKey && roleActionMatrix[matchedKey]) {
-            return roleActionMatrix[matchedKey]
+            return { ...roleActionMatrix[matchedKey] }
           }
         }
 
@@ -522,7 +580,9 @@ export const usePermissionStore = create<PermissionState>()(
         if (normRole === 'Super Admin') return true
 
         const actions = get().getUserModuleActions(user, moduleName)
-        return !!actions[action]
+        if (!actions.view) return false
+
+        return Boolean(actions[action])
       }
     }),
     {

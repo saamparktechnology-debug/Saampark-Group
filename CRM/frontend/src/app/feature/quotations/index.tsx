@@ -21,9 +21,9 @@ export default function QuotationsMain() {
   const { user, activeCompanyId, activeBranchId, companies, branches } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
   
-  const canAdd = canPerformAction(user, "Sales", "add") || user?.role === "Super Admin"
-  const canEdit = canPerformAction(user, "Sales", "edit") || user?.role === "Super Admin"
-  const canDelete = canPerformAction(user, "Sales", "delete") || user?.role === "Super Admin"
+  const canAdd = canPerformAction(user, "Quotations", "add") || user?.role === "Super Admin"
+  const canEdit = canPerformAction(user, "Quotations", "edit") || user?.role === "Super Admin"
+  const canDelete = canPerformAction(user, "Quotations", "delete") || user?.role === "Super Admin"
 
   const activeCompany = companies.find(c => c.id === activeCompanyId) || companies[0]
 

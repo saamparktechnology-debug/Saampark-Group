@@ -77,10 +77,10 @@ export default function OrderListPage() {
   const { user, activeCompanyId } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
 
-  const canViewOrder = canPerformAction(user, "Sales", "view")
-  const canAddOrder = canPerformAction(user, "Sales", "add")
-  const canEditOrder = canPerformAction(user, "Sales", "edit")
-  const canDeleteOrder = canPerformAction(user, "Sales", "delete")
+  const canViewOrder = canPerformAction(user, "Sales Orders", "view")
+  const canAddOrder = canPerformAction(user, "Sales Orders", "add")
+  const canEditOrder = canPerformAction(user, "Sales Orders", "edit")
+  const canDeleteOrder = canPerformAction(user, "Sales Orders", "delete")
 
   const targetComp = activeCompanyId || user?.companyId || "tech"
 

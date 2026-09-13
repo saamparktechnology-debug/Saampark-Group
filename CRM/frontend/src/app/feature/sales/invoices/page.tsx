@@ -66,10 +66,10 @@ function InvoicesPageContent() {
   const { user, activeCompanyId, activeBranchId, branches, subBranches, companies } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
 
-  const canViewInvoice = canPerformAction(user, "Sales", "view")
-  const canAddInvoice = canPerformAction(user, "Sales", "add")
-  const canEditInvoice = canPerformAction(user, "Sales", "edit")
-  const canDeleteInvoice = canPerformAction(user, "Sales", "delete")
+  const canViewInvoice = canPerformAction(user, "Invoices", "view")
+  const canAddInvoice = canPerformAction(user, "Invoices", "add")
+  const canEditInvoice = canPerformAction(user, "Invoices", "edit")
+  const canDeleteInvoice = canPerformAction(user, "Invoices", "delete")
   const isClientRole = user?.role === "Clients"
   const clientEmailNorm = (user?.email || "").toLowerCase().trim()
   const clientNameNorm = (user?.name || "").toLowerCase().trim()

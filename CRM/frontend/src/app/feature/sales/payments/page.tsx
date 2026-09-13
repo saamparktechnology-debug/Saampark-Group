@@ -36,10 +36,10 @@ export default function PaymentsPage() {
   const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
 
-  const canViewPayment = canPerformAction(user, "Sales", "view")
-  const canAddPayment = canPerformAction(user, "Sales", "add")
-  const canEditPayment = canPerformAction(user, "Sales", "edit")
-  const canDeletePayment = canPerformAction(user, "Sales", "delete")
+  const canViewPayment = canPerformAction(user, "Payments", "view")
+  const canAddPayment = canPerformAction(user, "Payments", "add")
+  const canEditPayment = canPerformAction(user, "Payments", "edit")
+  const canDeletePayment = canPerformAction(user, "Payments", "delete")
 
   const isClientRole = user?.role === "Clients"
   const clientEmailNorm = (user?.email || "").toLowerCase().trim()

@@ -56,9 +56,9 @@ export default function SubscriptionsMain() {
   )
   const isClient = roleLower.includes("client")
 
-  const canAddSubscription = !isClient && (canPerformAction(user, "Subscriptions", "add") || isSuperAdmin || isAdmin)
-  const canEditSubscription = !isClient && (canPerformAction(user, "Subscriptions", "edit") || isSuperAdmin || isAdmin)
-  const canDeleteSubscription = !isClient && (canPerformAction(user, "Subscriptions", "delete") || isSuperAdmin || isAdmin)
+  const canAddSubscription = !isClient && (canPerformAction(user, "Subscriptions", "add") || isSuperAdmin)
+  const canEditSubscription = !isClient && (canPerformAction(user, "Subscriptions", "edit") || isSuperAdmin)
+  const canDeleteSubscription = !isClient && (canPerformAction(user, "Subscriptions", "delete") || isSuperAdmin)
 
   // Active View Tab: "all" | "package" | "regular" | "emi"
   const [activeTab, setActiveTab] = React.useState<"all" | "package" | "regular" | "emi">("all")

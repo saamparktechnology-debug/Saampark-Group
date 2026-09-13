@@ -59,8 +59,8 @@ export default function CreditNotesPage() {
   const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
 
-  const canAdd = canPerformAction(user, "Sales", "add") || user?.role === "Super Admin"
-  const canDelete = canPerformAction(user, "Sales", "delete") || user?.role === "Super Admin"
+  const canAdd = canPerformAction(user, "Credit Notes", "add") || user?.role === "Super Admin"
+  const canDelete = canPerformAction(user, "Credit Notes", "delete") || user?.role === "Super Admin"
 
   const [notes, setNotes] = React.useState<CreditNoteItem[]>(DEFAULT_CREDIT_NOTES)
   const [searchQuery, setSearchQuery] = React.useState("")

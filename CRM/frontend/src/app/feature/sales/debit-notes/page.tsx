@@ -59,8 +59,8 @@ export default function DebitNotesPage() {
   const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
 
-  const canAdd = canPerformAction(user, "Sales", "add") || user?.role === "Super Admin"
-  const canDelete = canPerformAction(user, "Sales", "delete") || user?.role === "Super Admin"
+  const canAdd = canPerformAction(user, "Debit Notes", "add") || user?.role === "Super Admin"
+  const canDelete = canPerformAction(user, "Debit Notes", "delete") || user?.role === "Super Admin"
 
   const [notes, setNotes] = React.useState<DebitNoteItem[]>(DEFAULT_DEBIT_NOTES)
   const [searchQuery, setSearchQuery] = React.useState("")
