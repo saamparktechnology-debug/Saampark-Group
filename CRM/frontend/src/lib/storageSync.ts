@@ -2,7 +2,7 @@ import { api } from "@/lib/api"
 
 const UNIVERSAL_DELETED_KEY = "saampark_universal_deleted_ids"
 
-const PROTECTED_ACCOUNTS = ["hiisupriya@gmail.com", "1", "2", "3", "4", "tech", "digital"]
+const PROTECTED_ACCOUNTS = ["hiisupriya@gmail.com"]
 
 export function getLocalDeletedIds(): string[] {
   if (typeof window === "undefined") return []

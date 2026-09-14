@@ -418,7 +418,18 @@ export function SuperAdminDashboard() {
   const scopedUsers = React.useMemo(() => {
     if (!activeCompanyId || activeCompanyId === "all") return dbUsers
     return dbUsers.filter(u => {
-      const cId = u.companyId || u.company || (Array.isArray(u.companyIds) ? u.companyIds[0] : null)
+      if (Array.isArray(u.companyIds) && u.companyIds.length > 0) {
+        return u.companyIds.some((cid: any) => isMatchingCompany({ id: cid, slug: cid } as any, activeCompanyId))
+      }
+      if (typeof u.companyIds === "string") {
+        try {
+          const parsed = JSON.parse(u.companyIds)
+          if (Array.isArray(parsed)) {
+            return parsed.some((cid: any) => isMatchingCompany({ id: cid, slug: cid } as any, activeCompanyId))
+          }
+        } catch {}
+      }
+      const cId = u.companyId || u.company_id || u.company
       if (!cId) return false
       return isMatchingCompany({ id: cId, slug: cId } as any, activeCompanyId)
     })
@@ -426,15 +437,29 @@ export function SuperAdminDashboard() {
 
   // Company baseline fallback for canonical companies if no user invoices yet created
   const companyBaseline = React.useMemo(() => {
+    if (!activeCompanyId || activeCompanyId === "all") {
+      return { 
+        invoiced: 2565000 + 1535000 + 954200, 
+        received: 1925000 + 1115000 + 659700, 
+        due: 640000 + 420000 + 294500, 
+        expenses: 485000 + 260000 + 175000, 
+        paidCount: 14 + 8 + 4, 
+        partCount: 3 + 2 + 1, 
+        dueCount: 4 + 3 + 2 
+      }
+    }
     const c = getCanonicalCompanyId(activeCompanyId)
+    if (c === "tech") {
+      return { invoiced: 2565000, received: 1925000, due: 640000, expenses: 485000, paidCount: 14, partCount: 3, dueCount: 4 }
+    }
     if (c === "digital") {
       return { invoiced: 1535000, received: 1115000, due: 420000, expenses: 260000, paidCount: 8, partCount: 2, dueCount: 3 }
     }
     if (c === "saampark-ai-solutions") {
       return { invoiced: 954200, received: 659700, due: 294500, expenses: 175000, paidCount: 4, partCount: 1, dueCount: 2 }
     }
-    // Default: tech
-    return { invoiced: 2565000, received: 1925000, due: 640000, expenses: 485000, paidCount: 14, partCount: 3, dueCount: 4 }
+    // Custom/newly created companies default to real 0 data
+    return { invoiced: 0, received: 0, due: 0, expenses: 0, paidCount: 0, partCount: 0, dueCount: 0 }
   }, [activeCompanyId])
 
   const realInvoicedSum = scopedInvoices.reduce((acc, i) => acc + parseAmt(i.totalInvoiced), 0)
@@ -443,10 +468,11 @@ export function SuperAdminDashboard() {
   const realExpenseSum = scopedExpenses.reduce((acc, e) => acc + parseAmt(e.amount), 0)
 
   // Real company financial totals
-  const activeCompanyInvoiced = realInvoicedSum > 0 ? realInvoicedSum : companyBaseline.invoiced
-  const activeCompanyReceived = realReceivedSum > 0 ? realReceivedSum : companyBaseline.received
-  const activeCompanyDue = realDueSum > 0 ? realDueSum : companyBaseline.due
-  const activeCompanyExpenses = realExpenseSum > 0 ? realExpenseSum : companyBaseline.expenses
+  const hasRealInvoices = scopedInvoices.length > 0
+  const activeCompanyInvoiced = hasRealInvoices ? realInvoicedSum : companyBaseline.invoiced
+  const activeCompanyReceived = hasRealInvoices ? realReceivedSum : companyBaseline.received
+  const activeCompanyDue = hasRealInvoices ? realDueSum : companyBaseline.due
+  const activeCompanyExpenses = scopedExpenses.length > 0 ? realExpenseSum : companyBaseline.expenses
   const activeCompanyMargin = activeCompanyReceived - activeCompanyExpenses
 
   const paidInvoicesCount = scopedInvoices.filter(i => i.status === "Fully paid").length || companyBaseline.paidCount

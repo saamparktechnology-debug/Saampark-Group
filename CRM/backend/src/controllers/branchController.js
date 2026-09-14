@@ -1,4 +1,4 @@
-﻿const { successResponse, errorResponse } = require('../utils/apiResponse');
+const { successResponse, errorResponse } = require('../utils/apiResponse');
 const branchModel = require('../models/branchModel');
 const subBranchModel = require('../models/subBranchModel');
 
@@ -50,7 +50,16 @@ const branchController = {
 
   async delete(req, res) {
     try {
-      await branchModel.delete(req.params.id);
+      const userRoleId = Number(req.user?.role_id);
+      const userRole = String(req.user?.role || req.user?.role_name || '').toLowerCase();
+      if (userRoleId !== 1 && !userRole.includes('super')) {
+        return errorResponse(res, 403, 'Access denied: Only Super Admin can delete branches.');
+      }
+      const branchId = req.params.id;
+      const pool = require('../config/db');
+      await pool.execute('DELETE FROM sub_branches WHERE branch_id = ?', [branchId]).catch(() => {});
+      await pool.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "branches")', [String(branchId)]).catch(() => {});
+      await branchModel.delete(branchId);
       return successResponse(res, 200, 'Branch deleted');
     } catch (err) {
       return errorResponse(res, 500, err.message);
@@ -122,7 +131,15 @@ const subBranchController = {
 
   async delete(req, res) {
     try {
-      await subBranchModel.delete(req.params.id);
+      const userRoleId = Number(req.user?.role_id);
+      const userRole = String(req.user?.role || req.user?.role_name || '').toLowerCase();
+      if (userRoleId !== 1 && !userRole.includes('super')) {
+        return errorResponse(res, 403, 'Access denied: Only Super Admin can delete sub-branches.');
+      }
+      const subBranchId = req.params.id;
+      const pool = require('../config/db');
+      await pool.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "sub_branches")', [String(subBranchId)]).catch(() => {});
+      await subBranchModel.delete(subBranchId);
       return successResponse(res, 200, 'Sub-branch deleted');
     } catch (err) {
       return errorResponse(res, 500, err.message);

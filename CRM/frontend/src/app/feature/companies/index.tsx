@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/Input"
 import { CompanyApiService, BranchApiService, SubBranchApiService } from "./services/companyService"
 import { Company, Branch, SubBranch } from "./types"
 import { useAuthStore } from "@/store/useAuthStore"
-import { markGlobalItemDeleted, fetchModuleDataFromDB, saveModuleDataToDB } from "@/lib/storageSync"
+import { markGlobalItemDeleted, fetchModuleDataFromDB, saveModuleDataToDB, syncGlobalDeletedIds, isGlobalItemDeleted, getLocalDeletedIds } from "@/lib/storageSync"
 import { ImageUploadField } from "@/components/ui/ImageUploadField"
 
 const INDUSTRIES = [
@@ -224,6 +224,16 @@ export default function CompaniesMain() {
     setLoading(true)
     setError(null)
     try {
+      const deletedIds = await syncGlobalDeletedIds().catch(() => getLocalDeletedIds())
+      const localDel = getLocalDeletedIds()
+      const allDel = new Set([...deletedIds, ...localDel].map(d => String(d).toLowerCase().trim()))
+
+      const isDeleted = (id?: string | number, slug?: string) => {
+        if (id && (allDel.has(String(id).toLowerCase().trim()) || isGlobalItemDeleted(id))) return true
+        if (slug && (allDel.has(String(slug).toLowerCase().trim()) || isGlobalItemDeleted(slug))) return true
+        return false
+      }
+
       const [compRes, branchRes, subBranchRes, dbComps, dbBranches, dbSubBranches] = await Promise.all([
         CompanyApiService.getAll().catch(() => []),
         BranchApiService.getAll().catch(() => []),
@@ -233,49 +243,80 @@ export default function CompaniesMain() {
         fetchModuleDataFromDB<SubBranch[]>("sub_branches", [], "all").catch(() => []),
       ])
 
-      // 1. Merge Companies
+      // 1. Merge Companies (excluding deleted ones)
       const compMap = new Map<string, Company>()
-      CANONICAL_COMPANIES.forEach(c => compMap.set(c.slug || c.id, c))
+      CANONICAL_COMPANIES.forEach(c => {
+        if (!isDeleted(c.id, c.slug)) {
+          compMap.set(c.slug || c.id, c)
+        }
+      })
       if (Array.isArray(dbComps) && dbComps.length > 0) {
         dbComps.forEach(c => {
-          const k = c.slug || c.id
-          compMap.set(k, { ...compMap.get(k), ...c })
+          if (!isDeleted(c.id, c.slug)) {
+            const k = c.slug || c.id
+            compMap.set(k, { ...compMap.get(k), ...c })
+          }
         })
       }
       if (Array.isArray(compRes) && compRes.length > 0) {
         compRes.forEach(c => {
-          const k = c.slug || String(c.id)
-          compMap.set(k, { ...compMap.get(k), ...c })
+          if (!isDeleted(c.id, c.slug)) {
+            const k = c.slug || String(c.id)
+            compMap.set(k, { ...compMap.get(k), ...c })
+          }
         })
       }
       const finalCompanies = Array.from(compMap.values())
       setCompanies(finalCompanies)
 
-      // 2. Merge Branches
+      // Active company IDs set for cascade branch checks
+      const validCompanyIds = new Set(
+        finalCompanies.flatMap(c => [String(c.id).toLowerCase().trim(), String(c.slug || '').toLowerCase().trim()].filter(Boolean))
+      )
+
+      // 2. Merge Branches (excluding deleted ones and branches of deleted companies)
       const branchMap = new Map<string, Branch>()
-      CANONICAL_BRANCHES.forEach(b => branchMap.set(b.id, b))
+      CANONICAL_BRANCHES.forEach(b => {
+        const bComp = String(b.company_id || (b as any).companyId || '').toLowerCase().trim()
+        if (!isDeleted(b.id) && (!bComp || validCompanyIds.has(bComp))) {
+          branchMap.set(b.id, b)
+        }
+      })
       if (Array.isArray(dbBranches) && dbBranches.length > 0) {
         dbBranches.forEach(b => {
-          branchMap.set(b.id, { ...branchMap.get(b.id), ...b })
+          const bComp = String(b.company_id || (b as any).companyId || '').toLowerCase().trim()
+          if (!isDeleted(b.id) && (!bComp || validCompanyIds.has(bComp))) {
+            branchMap.set(b.id, { ...branchMap.get(b.id), ...b })
+          }
         })
       }
       if (Array.isArray(branchRes) && branchRes.length > 0) {
         branchRes.forEach(b => {
-          branchMap.set(b.id, { ...branchMap.get(b.id), ...b })
+          const bComp = String(b.company_id || (b as any).companyId || '').toLowerCase().trim()
+          if (!isDeleted(b.id) && (!bComp || validCompanyIds.has(bComp))) {
+            branchMap.set(b.id, { ...branchMap.get(b.id), ...b })
+          }
         })
       }
       const finalBranches = Array.from(branchMap.values())
       setBranches(finalBranches)
 
-      // 3. Merge SubBranches
-      const subList = (Array.isArray(dbSubBranches) && dbSubBranches.length > 0)
+      const validBranchIds = new Set(finalBranches.map(b => String(b.id).toLowerCase().trim()))
+
+      // 3. Merge SubBranches (excluding deleted ones and sub-branches of deleted branches)
+      const rawSubList = (Array.isArray(dbSubBranches) && dbSubBranches.length > 0)
         ? dbSubBranches
         : (Array.isArray(subBranchRes) ? subBranchRes : [])
+      const subList = rawSubList.filter(sb => {
+        const sbBranch = String(sb.branch_id || (sb as any).branchId || '').toLowerCase().trim()
+        return !isDeleted(sb.id) && (!sbBranch || validBranchIds.has(sbBranch))
+      })
       setSubBranches(subList)
 
-      // Persist baseline to DB so it is permanently cached
+      // Persist baseline to DB
       saveModuleDataToDB("companies", finalCompanies, "all").catch(() => {})
       saveModuleDataToDB("branches", finalBranches, "all").catch(() => {})
+      saveModuleDataToDB("sub_branches", subList, "all").catch(() => {})
     } catch (err: any) {
       setError(err?.message || "Failed to load data")
     } finally {
@@ -523,29 +564,74 @@ export default function CompaniesMain() {
 
   // ── DELETE HANDLER ─────────────────────────────────────────────────────────
   const confirmDelete = (type: "company" | "branch" | "sub_branch", id: string) => {
+    if (!isSuperAdmin) {
+      alert("Permission denied: Only Super Admin can delete companies or branches.")
+      return
+    }
     setDeleteTarget({ type, id })
     setShowDeleteConfirm(true)
   }
 
   const executeDelete = async () => {
     if (!deleteTarget) return
+    if (!isSuperAdmin) {
+      alert("Permission denied: Only Super Admin can delete companies or branches.")
+      return
+    }
     setSaving(true)
     try {
       if (deleteTarget.type === "company") {
+        const comp = companies.find(c => c.id === deleteTarget.id || c.slug === deleteTarget.id)
+        const targetId = comp?.id || deleteTarget.id
+        const targetSlug = comp?.slug || deleteTarget.id
+        const targetNumericId = (comp as any)?.numeric_id ? String((comp as any).numeric_id) : ""
+
+        // Mark deleted in universal registry
+        await markGlobalItemDeleted(targetId, "companies")
+        if (targetSlug && targetSlug !== targetId) {
+          await markGlobalItemDeleted(targetSlug, "companies")
+        }
+        if (targetNumericId) {
+          await markGlobalItemDeleted(targetNumericId, "companies")
+        }
+
+        // Call backend API
+        await CompanyApiService.delete(targetId).catch(() => {})
+
+        // Update auth store
         try {
-          await useAuthStore.getState().deleteCompany(deleteTarget.id)
+          await useAuthStore.getState().deleteCompany(targetId)
         } catch (e) {
           console.warn("deleteCompany store warning:", e)
         }
-        await CompanyApiService.delete(deleteTarget.id)
-        await markGlobalItemDeleted(deleteTarget.id, "companies")
-        await useAuthStore.getState().fetchCompanies()
+
+        // Immediately update state
+        const remainingComps = companies.filter(c => 
+          c.id !== targetId && 
+          c.slug !== targetSlug && 
+          c.id !== deleteTarget.id &&
+          String((c as any).numeric_id || "") !== String(targetId)
+        )
+        setCompanies(remainingComps)
+        await saveModuleDataToDB("companies", remainingComps, "all").catch(() => {})
       } else if (deleteTarget.type === "branch") {
-        await BranchApiService.delete(deleteTarget.id)
         await markGlobalItemDeleted(deleteTarget.id, "branches")
+        await BranchApiService.delete(deleteTarget.id).catch(() => {})
+        try {
+          await useAuthStore.getState().deleteBranch(deleteTarget.id)
+        } catch (e) {}
+        const remainingBranches = branches.filter(b => b.id !== deleteTarget.id)
+        setBranches(remainingBranches)
+        await saveModuleDataToDB("branches", remainingBranches, "all").catch(() => {})
       } else {
-        await SubBranchApiService.delete(deleteTarget.id)
         await markGlobalItemDeleted(deleteTarget.id, "sub_branches")
+        await SubBranchApiService.delete(deleteTarget.id).catch(() => {})
+        try {
+          await useAuthStore.getState().deleteSubBranch(deleteTarget.id)
+        } catch (e) {}
+        const remainingSub = subBranches.filter(sb => sb.id !== deleteTarget.id)
+        setSubBranches(remainingSub)
+        await saveModuleDataToDB("sub_branches", remainingSub, "all").catch(() => {})
       }
       setShowDeleteConfirm(false)
       setDeleteTarget(null)
@@ -631,7 +717,9 @@ export default function CompaniesMain() {
                 <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
                   <Button variant="ghost" size="sm" onClick={() => openAddBranch(company.id)} title="Add Branch"><Plus className="h-4 w-4" /></Button>
                   <Button variant="ghost" size="sm" onClick={() => openEditCompany(company)} title="Edit Full Company Details"><Edit2 className="h-4 w-4" /></Button>
-                  <Button variant="ghost" size="sm" onClick={() => confirmDelete("company", company.id)} title="Delete Company" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                  {isSuperAdmin && (
+                    <Button variant="ghost" size="sm" onClick={() => confirmDelete("company", company.id)} title="Delete Company" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                  )}
                 </div>
               </div>
 
@@ -678,7 +766,9 @@ export default function CompaniesMain() {
                                 <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
                                   <Button variant="ghost" size="sm" onClick={() => openAddSubBranch(branch.id, branch.company_id)} title="Add Sub-Branch" className="text-xs h-7 gap-1"><Plus className="h-3 w-3" />Sub-Branch</Button>
                                   <Button variant="ghost" size="sm" onClick={() => openEditBranch(branch)} title="Edit Branch" className="h-7 w-7 p-0"><Edit2 className="h-3 w-3" /></Button>
-                                  <Button variant="ghost" size="sm" onClick={() => confirmDelete("branch", branch.id)} title="Delete Branch" className="h-7 w-7 p-0 text-destructive"><Trash2 className="h-3 w-3" /></Button>
+                                  {isSuperAdmin && (
+                                    <Button variant="ghost" size="sm" onClick={() => confirmDelete("branch", branch.id)} title="Delete Branch" className="h-7 w-7 p-0 text-destructive"><Trash2 className="h-3 w-3" /></Button>
+                                  )}
                                 </div>
                               </div>
 
@@ -709,7 +799,9 @@ export default function CompaniesMain() {
                                         </div>
                                         <div className="flex items-center gap-1">
                                           <Button variant="ghost" size="sm" onClick={() => openEditSubBranch(sb)} className="h-7 w-7 p-0"><Edit2 className="h-3 w-3" /></Button>
-                                          <Button variant="ghost" size="sm" onClick={() => confirmDelete("sub_branch", sb.id)} className="h-7 w-7 p-0 text-destructive"><Trash2 className="h-3 w-3" /></Button>
+                                          {isSuperAdmin && (
+                                            <Button variant="ghost" size="sm" onClick={() => confirmDelete("sub_branch", sb.id)} className="h-7 w-7 p-0 text-destructive"><Trash2 className="h-3 w-3" /></Button>
+                                          )}
                                         </div>
                                       </div>
                                     ))

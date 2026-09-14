@@ -34,16 +34,41 @@ export function setAuthToken(token: string | null) {
   }
 }
 
+export function getActiveCompanyScope(): { companyId?: string; branchId?: string } {
+  if (typeof window === 'undefined') return {}
+  try {
+    const raw = localStorage.getItem('saampark-auth-v3')
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      const state = parsed?.state
+      return {
+        companyId: state?.activeCompanyId || state?.user?.companyId,
+        branchId: state?.activeBranchId || state?.user?.branchId,
+      }
+    }
+  } catch {}
+  return {}
+}
+
 async function request<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = getAuthToken()
+  const scope = getActiveCompanyScope()
   
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
   }
 
-  if (token) {
+  if (token && !headers['Authorization']) {
     headers['Authorization'] = `Bearer ${token}`
+  }
+
+  if (scope.companyId && !headers['x-company-id']) {
+    headers['x-company-id'] = String(scope.companyId)
+  }
+
+  if (scope.branchId && !headers['x-branch-id']) {
+    headers['x-branch-id'] = String(scope.branchId)
   }
 
   const baseUrl = getBaseUrl()

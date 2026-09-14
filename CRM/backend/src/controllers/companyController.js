@@ -72,30 +72,46 @@ const updateCompany = async (req, res, next) => {
 // ─── DELETE COMPANY (Super Admin Only) ────────────────────────────────────────
 const deleteCompany = async (req, res, next) => {
   try {
-    if (req.user.role_id !== 1 && req.user.role !== 'Super Admin') {
+    const userRoleId = Number(req.user?.role_id);
+    const userRole = String(req.user?.role || req.user?.role_name || '').toLowerCase();
+    if (userRoleId !== 1 && !userRole.includes('super')) {
       return errorResponse(res, 403, 'Access denied: Only Super Admin can delete companies.');
     }
     const { id } = req.params;
 
     const [comp] = await pool.execute('SELECT id, slug FROM companies WHERE id = ? OR slug = ?', [id, id]);
     if (!comp.length) return errorResponse(res, 404, 'Company not found.');
-    if (comp[0].id === 1 || comp[0].slug === 'tech') {
+    if (String(comp[0].id) === '1' || comp[0].slug === 'tech') {
       return errorResponse(res, 400, 'Cannot delete the primary default company.');
     }
 
     const compId = comp[0].id;
     const compSlug = comp[0].slug;
 
-    // Delete company record from database (cascades to all foreign key linked child tables)
-    await pool.execute('DELETE FROM companies WHERE id = ?', [compId]);
+    // Track deleted company in tombstone table so all users belonging to it can be blocked
+    await pool.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "companies")', [String(compId)]).catch(() => {});
+    await pool.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "companies")', [compSlug]).catch(() => {});
 
-    // Also clean up any unlinked tables or app_data store documents
+    // Mark company users as inactive before unlinking
+    await pool.execute('UPDATE users SET status = "inactive", updated_at = NOW() WHERE company_id = ?', [compId]).catch(() => {});
+
+    // Clean up dependent child tables to prevent foreign key errors
+    await pool.execute('DELETE FROM sub_branches WHERE company_id = ?', [compId]).catch(() => {});
+    await pool.execute('DELETE FROM branches WHERE company_id = ?', [compId]).catch(() => {});
+    await pool.execute('DELETE FROM employee_attendance WHERE company_id = ?', [compId]).catch(() => {});
+    await pool.execute('DELETE FROM employee_leaves WHERE company_id = ?', [compId]).catch(() => {});
+    await pool.execute('DELETE FROM payroll WHERE company_id = ?', [compId]).catch(() => {});
+    await pool.execute('DELETE FROM invoices WHERE company_id = ?', [compId]).catch(() => {});
+    await pool.execute('DELETE FROM projects WHERE company_id = ?', [compId]).catch(() => {});
     await pool.execute('DELETE FROM customers WHERE company_id = ?', [compId]).catch(() => {});
     await pool.execute('DELETE FROM leads WHERE company_id = ?', [compId]).catch(() => {});
     await pool.execute('DELETE FROM deals WHERE company_id = ?', [compId]).catch(() => {});
     await pool.execute('DELETE FROM expenses WHERE company_id = ?', [compId]).catch(() => {});
     await pool.execute('DELETE FROM tickets WHERE company_id = ?', [compId]).catch(() => {});
     await pool.execute('DELETE FROM app_data WHERE module_key LIKE ? OR module_key LIKE ?', [`%_${compId}`, `%_${compSlug}`]).catch(() => {});
+
+    // Delete company record from database
+    await pool.execute('DELETE FROM companies WHERE id = ?', [compId]);
 
     // Invalidate company scope cache
     try {

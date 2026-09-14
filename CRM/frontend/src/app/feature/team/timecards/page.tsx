@@ -120,6 +120,25 @@ export default function TimeCardsPage() {
     loadData()
   }, [loadData])
 
+  React.useEffect(() => {
+    setSelectedMemberFilter("all")
+  }, [activeCompanyId])
+
+  React.useEffect(() => {
+    const handleSwitch = () => {
+      setSelectedMemberFilter("all")
+      loadData()
+    }
+    window.addEventListener("saampark_company_switched", handleSwitch)
+    window.addEventListener("saampark_data_synced", handleSwitch)
+    window.addEventListener("storage", handleSwitch)
+    return () => {
+      window.removeEventListener("saampark_company_switched", handleSwitch)
+      window.removeEventListener("saampark_data_synced", handleSwitch)
+      window.removeEventListener("storage", handleSwitch)
+    }
+  }, [loadData])
+
   // Handle Current User Punch In / Punch Out
   const handleUserClockToggle = async () => {
     if (!user) return
@@ -237,7 +256,20 @@ export default function TimeCardsPage() {
   const scopedTeamMembers = React.useMemo(() => {
     if (!activeCompanyId || activeCompanyId === "all") return teamMembers
     return teamMembers.filter(m => {
-      const cId = m.companyId || m.company || (Array.isArray(m.companyIds) ? m.companyIds[0] : null)
+      // If user has companyIds array
+      if (Array.isArray(m.companyIds) && m.companyIds.length > 0) {
+        return m.companyIds.some((cid: any) => isMatchingCompany({ id: cid, slug: cid } as any, activeCompanyId))
+      }
+      // If string JSON
+      if (typeof m.companyIds === "string") {
+        try {
+          const parsed = JSON.parse(m.companyIds)
+          if (Array.isArray(parsed)) {
+            return parsed.some((cid: any) => isMatchingCompany({ id: cid, slug: cid } as any, activeCompanyId))
+          }
+        } catch {}
+      }
+      const cId = m.companyId || m.company_id || m.company
       if (!cId) return false
       return isMatchingCompany({ id: cId, slug: cId } as any, activeCompanyId)
     })
@@ -246,7 +278,11 @@ export default function TimeCardsPage() {
   // Company Scoped Timecards for stats & aggregate KPIs
   const companyScopedTimecards = React.useMemo(() => {
     if (!activeCompanyId || activeCompanyId === "all") return timecards
-    return timecards.filter(tc => isMatchingCompany({ id: tc.companyId, slug: tc.companyId } as any, activeCompanyId))
+    return timecards.filter(tc => {
+      const tcComp = tc.companyId || (tc as any).company_id || (tc as any).company
+      if (!tcComp) return false
+      return isMatchingCompany({ id: tcComp, slug: tcComp } as any, activeCompanyId)
+    })
   }, [timecards, activeCompanyId])
 
   // Filtered Timecards (with member & tab filters applied on top of company scope)

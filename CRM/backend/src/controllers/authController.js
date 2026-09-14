@@ -176,7 +176,31 @@ const login = async (req, res, next) => {
                 (u.username && u.username.toLowerCase().replace(/^@/, '').trim() === identifier)
               );
               if (matched && (matched.password === password || password === 'Password123')) {
-                const token = generateToken({ id: matched.id, email: matched.email, role_id: 3 });
+                // Check if user is Super Admin
+                const mRole = String(matched.role || '').toLowerCase();
+                const isSuper = mRole.includes('super') || matched.role_id === 1 || matched.email === 'hiisupriya@gmail.com';
+                if (!isSuper) {
+                  const mComp = matched.companyId || matched.company_id || (Array.isArray(matched.companyIds) ? matched.companyIds[0] : null);
+                  if (mComp) {
+                    const [delRows] = await pool.execute(
+                      'SELECT 1 FROM deleted_items WHERE (LOWER(TRIM(item_id)) = ? OR LOWER(TRIM(item_id)) = ?) AND module_name = "companies"',
+                      [String(mComp).toLowerCase().trim(), String(mComp).toLowerCase().trim()]
+                    );
+                    if (delRows.length > 0) {
+                      return errorResponse(res, 403, 'Company not available. Please contact administrator.');
+                    }
+                    const [compRows] = await pool.execute(
+                      'SELECT id, status FROM companies WHERE id = ? OR slug = ?',
+                      [mComp, mComp]
+                    );
+                    if (compRows.length === 0 || (compRows[0].status && compRows[0].status.toLowerCase() !== 'active')) {
+                      return errorResponse(res, 403, 'Company not available. Please contact administrator.');
+                    }
+                  } else {
+                    return errorResponse(res, 403, 'Company not available. Please contact administrator.');
+                  }
+                }
+                const token = generateToken({ id: matched.id, email: matched.email, role_id: matched.role_id || 3 });
                 return successResponse(res, 200, 'Login successful', { user: matched, token });
               }
             }
@@ -207,6 +231,48 @@ const login = async (req, res, next) => {
     const isMatch = await comparePassword(password, user.password_hash);
     if (!isMatch) {
       return errorResponse(res, 401, 'Invalid password. Please try again.');
+    }
+
+    // Enforce Company Availability Check for non-Super Admin users
+    const isSuperAdmin = user.role_id === 1 || String(user.role_name || user.role || '').toLowerCase().includes('super') || user.email === 'hiisupriya@gmail.com';
+    if (!isSuperAdmin) {
+      let compTarget = user.company_id;
+
+      if (!compTarget) {
+        // Check if user has company defined in app_data JSON users module
+        try {
+          const [appDataRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "users"');
+          if (appDataRows.length > 0) {
+            const list = JSON.parse(appDataRows[0].data_json);
+            if (Array.isArray(list)) {
+              const matched = list.find((u) => u.email && u.email.toLowerCase().trim() === identifier);
+              if (matched) {
+                compTarget = matched.companyId || matched.company_id || (Array.isArray(matched.companyIds) ? matched.companyIds[0] : null);
+              }
+            }
+          }
+        } catch {}
+      }
+
+      if (compTarget) {
+        const [delRows] = await pool.execute(
+          'SELECT 1 FROM deleted_items WHERE (LOWER(TRIM(item_id)) = ? OR LOWER(TRIM(item_id)) = ?) AND module_name = "companies"',
+          [String(compTarget).toLowerCase().trim(), String(compTarget).toLowerCase().trim()]
+        );
+        if (delRows.length > 0) {
+          return errorResponse(res, 403, 'Company not available. Please contact administrator.');
+        }
+
+        const [compRows] = await pool.execute(
+          'SELECT id, status FROM companies WHERE id = ? OR slug = ?',
+          [compTarget, compTarget]
+        );
+        if (compRows.length === 0 || (compRows[0].status && compRows[0].status.toLowerCase() !== 'active')) {
+          return errorResponse(res, 403, 'Company not available. Please contact administrator.');
+        }
+      } else {
+        return errorResponse(res, 403, 'Company not available. Please contact administrator.');
+      }
     }
 
     const token = generateToken({ id: user.id, email: user.email, role_id: user.role_id });

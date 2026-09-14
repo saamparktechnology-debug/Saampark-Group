@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/Input"
 import { useAuthStore, DEMO_USERS, Role } from "@/store/useAuthStore"
 import { recordUserAccount, getStoredUserAccountsAsync, isUserDeleted, unmarkUserAsDeleted } from "@/app/feature/users/services/userService"
 import { UserItem } from "@/app/feature/users/types"
-import { fetchModuleDataFromDB } from "@/lib/storageSync"
+import { fetchModuleDataFromDB, isGlobalItemDeleted, getLocalDeletedIds } from "@/lib/storageSync"
 import { normalizeRole } from "@/store/usePermissionStore"
 import { AuthService } from "@/services/apiServices"
 
@@ -224,6 +224,11 @@ export default function LoginPage() {
             setIsLoading(false)
             return
           }
+          if (msg.toLowerCase().includes("company not available") || msg.toLowerCase().includes("company unavailable")) {
+            setIsLoading(false)
+            setError("Company not available. Please contact administrator.")
+            return
+          }
           console.warn("Backend auth attempt failed, checking database account store:", msg)
         }
       } catch (backendErr: any) {
@@ -232,6 +237,11 @@ export default function LoginPage() {
           setVerifyEmail(normalizedInput)
           setVerifyEmailModal(true)
           setIsLoading(false)
+          return
+        }
+        if (msg.toLowerCase().includes("company not available") || msg.toLowerCase().includes("company unavailable")) {
+          setIsLoading(false)
+          setError("Company not available. Please contact administrator.")
           return
         }
         console.warn("Backend auth attempt failed, checking database account store:", msg)
@@ -301,6 +311,30 @@ export default function LoginPage() {
         setIsLoading(false)
         setError("Your account is on inactive stage, please contact your administration.")
         return
+      }
+
+      // ── DELETED COMPANY AVAILABILITY CHECK ──────────────────────────────────
+      if (matchedRole !== "Super Admin") {
+        if (matchedAccount.companyDeleted || matchedAccount.companyStatus === "deleted") {
+          setIsLoading(false)
+          setError("Company not available. Please contact administrator.")
+          return
+        }
+
+        const userCompId = String(
+          matchedAccount.companyId || 
+          matchedAccount.company_id || 
+          (Array.isArray(matchedAccount.companyIds) ? matchedAccount.companyIds[0] : "")
+        ).toLowerCase().trim()
+
+        if (userCompId) {
+          const deletedIds = getLocalDeletedIds().map(d => String(d).toLowerCase().trim())
+          if (deletedIds.includes(userCompId) || isGlobalItemDeleted(userCompId)) {
+            setIsLoading(false)
+            setError("Company not available. Please contact administrator.")
+            return
+          }
+        }
       }
 
       const effectiveEmail = (matchedAccount.email || dbAccount?.email || (normalizedInput.includes("@") ? normalizedInput : "user@saampark.in")).toLowerCase().trim()

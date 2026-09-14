@@ -890,16 +890,19 @@ export const useAuthStore = create<AuthState>()(
 
       deleteCompany: async (companyId: string) => {
         const { user, companies, branches, activeCompanyId } = get()
-        if (user?.role !== 'Super Admin') {
+        const isSuperAdmin = user?.role === 'Super Admin' || String(user?.role || '').toLowerCase().includes('super') || (user as any)?.role_id === 1
+        if (!isSuperAdmin) {
           throw new Error('Only Super Admin can delete companies.')
         }
 
-        const compToDelete = companies.find(c => c.id === companyId || c.slug === companyId)
+        const compToDelete = companies.find(c => c.id === companyId || c.slug === companyId || String((c as any).numeric_id) === String(companyId))
         const targetSlug = compToDelete?.slug || companyId
+        const targetNumericId = (compToDelete as any)?.numeric_id ? String((compToDelete as any).numeric_id) : ''
 
         // Mark deleted in universal tombstone registry
         markGlobalItemDeleted(companyId, 'companies')
         markGlobalItemDeleted(targetSlug, 'companies')
+        if (targetNumericId) markGlobalItemDeleted(targetNumericId, 'companies')
 
         try {
           await api.delete(`/companies/${companyId}`).catch(() => {})
@@ -909,7 +912,8 @@ export const useAuthStore = create<AuthState>()(
           c.id !== companyId && 
           c.slug !== companyId && 
           c.id !== targetSlug && 
-          c.slug !== targetSlug
+          c.slug !== targetSlug &&
+          String((c as any).numeric_id || '') !== String(companyId)
         )
         const remainingBranches = branches.filter(b => 
           b.companyId !== companyId && 
@@ -918,33 +922,41 @@ export const useAuthStore = create<AuthState>()(
           b.companyId?.toLowerCase() !== targetSlug.toLowerCase()
         )
 
-        // Clean up deleted company from all users in the database
+        // For users belonging to deleted company: keep their company affiliation as the deleted company
+        // and mark their status as Inactive / Company Deleted so login is blocked
         try {
           const currentUsers = await fetchModuleDataFromDB<any[]>('users', [], 'all')
           if (Array.isArray(currentUsers)) {
             const updatedUsers = currentUsers.map((u: any) => {
-              const uCompIds: string[] = Array.isArray(u.companyIds) ? u.companyIds : (u.companyId ? [u.companyId] : ['tech'])
-              const cleanedIds = uCompIds.filter((id: string) => 
-                id !== companyId && 
-                id !== targetSlug && 
-                id.toLowerCase() !== companyId.toLowerCase()
-              )
-              const fallbackId = remainingCompanies[0]?.id || remainingCompanies[0]?.slug || 'tech'
-              const validIds = cleanedIds.length > 0 ? cleanedIds : [fallbackId]
-              return {
-                ...u,
-                companyIds: validIds,
-                companyId: validIds[0],
+              const uCompId = String(u.companyId || u.company_id || (Array.isArray(u.companyIds) ? u.companyIds[0] : '')).toLowerCase().trim()
+              const isTargetComp = 
+                uCompId === String(companyId).toLowerCase().trim() ||
+                uCompId === String(targetSlug).toLowerCase().trim() ||
+                (targetNumericId && uCompId === targetNumericId)
+
+              if (isTargetComp) {
+                return {
+                  ...u,
+                  status: 'Inactive',
+                  companyDeleted: true,
+                  companyStatus: 'deleted',
+                }
               }
+              return u
             })
             await saveModuleDataToDB('users', updatedUsers, 'all')
           }
         } catch (e) {
-          console.warn('Error cleaning up deleted company from users:', e)
+          console.warn('Error flagging deleted company users:', e)
         }
 
         let newActiveCompany = activeCompanyId
-        if (activeCompanyId === companyId || activeCompanyId === targetSlug || activeCompanyId?.toLowerCase() === companyId.toLowerCase()) {
+        if (
+          activeCompanyId === companyId || 
+          activeCompanyId === targetSlug || 
+          activeCompanyId?.toLowerCase() === companyId.toLowerCase() ||
+          activeCompanyId?.toLowerCase() === targetSlug.toLowerCase()
+        ) {
           newActiveCompany = remainingCompanies[0]?.id || remainingCompanies[0]?.slug || 'tech'
         }
 
