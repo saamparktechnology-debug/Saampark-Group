@@ -2,8 +2,8 @@ import { api } from "@/lib/api"
 
 const UNIVERSAL_DELETED_KEY = "saampark_universal_deleted_ids"
 
-// Core protected system records that can NEVER be deleted
-const PROTECTED_ACCOUNTS = ["hiisupriya@gmail.com", "tech", "1", "br-1", "br-2"]
+// Core protected system records that can NEVER be deleted (Master Super Admin user account only)
+const PROTECTED_ACCOUNTS = ["hiisupriya@gmail.com"]
 
 export function getLocalDeletedIds(): string[] {
   if (typeof window === "undefined") return []
@@ -27,11 +27,15 @@ export function saveLocalDeletedId(id: string | number, moduleName?: string): vo
 
   const next = new Set(current)
   if (namespacedKey) next.add(namespacedKey)
-  // Only add naked string ID if it's not a pure number (to prevent cross-module collisions)
-  if (!/^\d+$/.test(strId)) {
-    next.add(strId)
-  }
-  localStorage.setItem(UNIVERSAL_DELETED_KEY, JSON.stringify(Array.from(next)))
+  // Also add naked string ID so callers checking with or without module find it
+  next.add(strId)
+
+  const merged = Array.from(next)
+  localStorage.setItem(UNIVERSAL_DELETED_KEY, JSON.stringify(merged))
+
+  // Immediately update in-memory deleted cache so subsequent checks see it instantly
+  deletedCache = merged
+  lastDeletedSyncTime = 0
 }
 
 // Global function to mark any item deleted across the entire application and sync to MySQL DB

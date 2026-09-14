@@ -89,9 +89,41 @@ const branchController = {
       }
       const branchId = req.params.id;
       const pool = require('../config/db');
+
+      // Find branch first to get both numeric ID and code
+      let branchCode = null;
+      let numericId = !isNaN(Number(branchId)) ? Number(branchId) : null;
+      try {
+        const [found] = await pool.execute('SELECT id, code FROM branches WHERE id = ? OR code = ?', [branchId, branchId]);
+        if (found && found.length > 0) {
+          numericId = found[0].id;
+          branchCode = found[0].code;
+        }
+      } catch (e) {}
+
+      // Unlink users and sub-branches
+      if (numericId) {
+        await pool.execute('UPDATE users SET branch_id = NULL WHERE branch_id = ?', [numericId]).catch(() => {});
+        await pool.execute('DELETE FROM sub_branches WHERE branch_id = ?', [numericId]).catch(() => {});
+      }
       await pool.execute('DELETE FROM sub_branches WHERE branch_id = ?', [branchId]).catch(() => {});
-      await pool.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "branches")', [String(branchId)]).catch(() => {});
-      await branchModel.delete(branchId);
+      await pool.execute('UPDATE users SET branch_id = NULL WHERE branch_id = ?', [branchId]).catch(() => {});
+
+      // Record in deleted_items table for all identifier variants
+      await pool.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "branches")', [String(branchId).toLowerCase().trim()]).catch(() => {});
+      if (numericId && String(numericId) !== String(branchId)) {
+        await pool.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "branches")', [String(numericId)]).catch(() => {});
+      }
+      if (branchCode) {
+        await pool.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "branches")', [String(branchCode).toLowerCase().trim()]).catch(() => {});
+      }
+
+      // Expunge from branches table
+      if (numericId) {
+        await pool.execute('DELETE FROM branches WHERE id = ?', [numericId]).catch(() => {});
+      }
+      await pool.execute('DELETE FROM branches WHERE id = ? OR code = ?', [branchId, branchId]).catch(() => {});
+
       return successResponse(res, 200, 'Branch deleted');
     } catch (err) {
       return errorResponse(res, 500, err.message);
@@ -193,8 +225,35 @@ const subBranchController = {
       }
       const subBranchId = req.params.id;
       const pool = require('../config/db');
-      await pool.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "sub_branches")', [String(subBranchId)]).catch(() => {});
-      await subBranchModel.delete(subBranchId);
+
+      let subCode = null;
+      let numericId = !isNaN(Number(subBranchId)) ? Number(subBranchId) : null;
+      try {
+        const [found] = await pool.execute('SELECT id, code FROM sub_branches WHERE id = ? OR code = ?', [subBranchId, subBranchId]);
+        if (found && found.length > 0) {
+          numericId = found[0].id;
+          subCode = found[0].code;
+        }
+      } catch (e) {}
+
+      if (numericId) {
+        await pool.execute('UPDATE users SET sub_branch_id = NULL WHERE sub_branch_id = ?', [numericId]).catch(() => {});
+      }
+      await pool.execute('UPDATE users SET sub_branch_id = NULL WHERE sub_branch_id = ?', [subBranchId]).catch(() => {});
+
+      await pool.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "sub_branches")', [String(subBranchId).toLowerCase().trim()]).catch(() => {});
+      if (numericId && String(numericId) !== String(subBranchId)) {
+        await pool.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "sub_branches")', [String(numericId)]).catch(() => {});
+      }
+      if (subCode) {
+        await pool.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "sub_branches")', [String(subCode).toLowerCase().trim()]).catch(() => {});
+      }
+
+      if (numericId) {
+        await pool.execute('DELETE FROM sub_branches WHERE id = ?', [numericId]).catch(() => {});
+      }
+      await pool.execute('DELETE FROM sub_branches WHERE id = ? OR code = ?', [subBranchId, subBranchId]).catch(() => {});
+
       return successResponse(res, 200, 'Sub-branch deleted');
     } catch (err) {
       return errorResponse(res, 500, err.message);

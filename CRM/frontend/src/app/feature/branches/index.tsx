@@ -477,6 +477,7 @@ export default function BranchesMain() {
       await executeWithFeedback(async () => {
         await deleteBranch(deleteConfirm.id)
         await BranchApiService.delete(deleteConfirm.id).catch(() => {})
+        await fetchBranches().catch(() => {})
       }, {
         actionType: "delete",
         successTitle: "Branch Deleted",
@@ -486,6 +487,7 @@ export default function BranchesMain() {
       await executeWithFeedback(async () => {
         await deleteSubBranch(deleteConfirm.id)
         await SubBranchApiService.delete(deleteConfirm.id).catch(() => {})
+        await fetchSubBranches().catch(() => {})
       }, {
         actionType: "delete",
         successTitle: "Sub-Branch Deleted",

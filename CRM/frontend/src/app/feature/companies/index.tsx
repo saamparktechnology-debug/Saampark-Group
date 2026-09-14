@@ -232,14 +232,16 @@ export default function CompaniesMain() {
         return false
       }
 
-      const isBranchDeleted = (id?: string | number) => {
-        if (!id) return false
-        return isGlobalItemDeleted(id, deletedIds, "branches")
+      const isBranchDeleted = (id?: string | number, code?: string) => {
+        if (id && isGlobalItemDeleted(id, deletedIds, "branches")) return true
+        if (code && isGlobalItemDeleted(code, deletedIds, "branches")) return true
+        return false
       }
 
-      const isSubBranchDeleted = (id?: string | number) => {
-        if (!id) return false
-        return isGlobalItemDeleted(id, deletedIds, "sub_branches")
+      const isSubBranchDeleted = (id?: string | number, code?: string) => {
+        if (id && isGlobalItemDeleted(id, deletedIds, "sub_branches")) return true
+        if (code && isGlobalItemDeleted(code, deletedIds, "sub_branches")) return true
+        return false
       }
 
       const [compRes, branchRes, subBranchRes, dbComps, dbBranches, dbSubBranches] = await Promise.all([
@@ -277,12 +279,12 @@ export default function CompaniesMain() {
       const finalCompanies = Array.from(compMap.values())
       setCompanies(finalCompanies)
 
-      // 2. Merge Branches: KEEP all branches belonging to active companies
+      // 2. Merge Branches: KEEP all branches belonging to active companies unless deleted
       const branchMap = new Map<string, Branch>()
 
       // First add baseline canonical branches for active companies (tech br-1, br-2)
       CANONICAL_BRANCHES.forEach(b => {
-        if (!isBranchDeleted(b.id)) {
+        if (!isBranchDeleted(b.id, b.code)) {
           const bComp = b.company_id || (b as any).companyId
           if (finalCompanies.some(c => isMatchingCompany(c, bComp))) {
             branchMap.set(String(b.id), { ...b, company_id: bComp, companyId: bComp })
@@ -293,7 +295,7 @@ export default function CompaniesMain() {
       // Overlay DB branches (from app_data)
       if (Array.isArray(dbBranches) && dbBranches.length > 0) {
         dbBranches.forEach(b => {
-          if (!isBranchDeleted(b.id)) {
+          if (!isBranchDeleted(b.id, b.code)) {
             const bComp = b.company_id || (b as any).companyId
             if (finalCompanies.some(c => isMatchingCompany(c, bComp))) {
               const strKey = String(b.id)
@@ -308,7 +310,7 @@ export default function CompaniesMain() {
       // Overlay API branches (from MySQL)
       if (Array.isArray(branchRes) && branchRes.length > 0) {
         branchRes.forEach(b => {
-          if (!isBranchDeleted(b.id)) {
+          if (!isBranchDeleted(b.id, b.code)) {
             const bComp = b.company_id || (b as any).companyId
             if (finalCompanies.some(c => isMatchingCompany(c, bComp))) {
               const strKey = String(b.id)
@@ -331,7 +333,7 @@ export default function CompaniesMain() {
         : (Array.isArray(subBranchRes) ? subBranchRes : [])
       const subList = rawSubList.filter(sb => {
         const sbBranch = String(sb.branch_id || (sb as any).branchId || '').toLowerCase().trim()
-        return !isSubBranchDeleted(sb.id) && (!sbBranch || validBranchIds.has(sbBranch))
+        return !isSubBranchDeleted(sb.id, sb.code) && (!sbBranch || validBranchIds.has(sbBranch))
       })
       setSubBranches(subList)
 
@@ -641,21 +643,65 @@ export default function CompaniesMain() {
         setBranches(remainingBranches)
         await saveModuleDataToDB("branches", remainingBranches, "all").catch(() => {})
       } else if (deleteTarget.type === "branch") {
+        const targetBranchId = String(deleteTarget.id).toLowerCase().trim()
+        const targetBranch = branches.find(b => 
+          String(b.id).toLowerCase().trim() === targetBranchId || 
+          (b.code && String(b.code).toLowerCase().trim() === targetBranchId)
+        )
         await markGlobalItemDeleted(deleteTarget.id, "branches")
+        if (targetBranch?.id) await markGlobalItemDeleted(targetBranch.id, "branches")
+        if (targetBranch?.code) await markGlobalItemDeleted(targetBranch.code, "branches")
+
         await BranchApiService.delete(deleteTarget.id).catch(() => {})
+        if (targetBranch?.id && String(targetBranch.id) !== deleteTarget.id) {
+          await BranchApiService.delete(String(targetBranch.id)).catch(() => {})
+        }
         try {
           await useAuthStore.getState().deleteBranch(deleteTarget.id)
         } catch (e) {}
-        const remainingBranches = branches.filter(b => b.id !== deleteTarget.id)
+
+        const targetId = targetBranch ? String(targetBranch.id).toLowerCase().trim() : targetBranchId
+        const targetCode = targetBranch?.code ? String(targetBranch.code).toLowerCase().trim() : ""
+
+        const remainingBranches = branches.filter(b => {
+          const bId = String(b.id).toLowerCase().trim()
+          const bCode = String(b.code || "").toLowerCase().trim()
+          if (bId === targetBranchId || bId === targetId) return false
+          if (targetCode && (bId === targetCode || bCode === targetCode)) return false
+          if (bCode && bCode === targetBranchId) return false
+          return true
+        })
         setBranches(remainingBranches)
         await saveModuleDataToDB("branches", remainingBranches, "all").catch(() => {})
       } else {
+        const targetSubId = String(deleteTarget.id).toLowerCase().trim()
+        const targetSub = subBranches.find(sb => 
+          String(sb.id).toLowerCase().trim() === targetSubId || 
+          (sb.code && String(sb.code).toLowerCase().trim() === targetSubId)
+        )
         await markGlobalItemDeleted(deleteTarget.id, "sub_branches")
+        if (targetSub?.id) await markGlobalItemDeleted(targetSub.id, "sub_branches")
+        if (targetSub?.code) await markGlobalItemDeleted(targetSub.code, "sub_branches")
+
         await SubBranchApiService.delete(deleteTarget.id).catch(() => {})
+        if (targetSub?.id && String(targetSub.id) !== deleteTarget.id) {
+          await SubBranchApiService.delete(String(targetSub.id)).catch(() => {})
+        }
         try {
           await useAuthStore.getState().deleteSubBranch(deleteTarget.id)
         } catch (e) {}
-        const remainingSub = subBranches.filter(sb => sb.id !== deleteTarget.id)
+
+        const targetId = targetSub ? String(targetSub.id).toLowerCase().trim() : targetSubId
+        const targetCode = targetSub?.code ? String(targetSub.code).toLowerCase().trim() : ""
+
+        const remainingSub = subBranches.filter(sb => {
+          const sId = String(sb.id).toLowerCase().trim()
+          const sCode = String(sb.code || "").toLowerCase().trim()
+          if (sId === targetSubId || sId === targetId) return false
+          if (targetCode && (sId === targetCode || sCode === targetCode)) return false
+          if (sCode && sCode === targetSubId) return false
+          return true
+        })
         setSubBranches(remainingSub)
         await saveModuleDataToDB("sub_branches", remainingSub, "all").catch(() => {})
       }
