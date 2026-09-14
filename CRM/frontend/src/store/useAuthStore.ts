@@ -19,6 +19,7 @@ export type CompanyId = string
 export interface Branch {
   id: string
   companyId: string
+  company_id?: string | number
   name: string
   code?: string
   // 1. Brand & Division Names
@@ -656,23 +657,42 @@ export const useAuthStore = create<AuthState>()(
           if (Array.isArray(dbBranches) && dbBranches.length > 0) {
             list = dbBranches
           } else {
-            const res: any = await api.get('/branches').catch(() => null)
+            const res: any = await api.get('/branches', { headers: { 'x-company-id': 'all' } }).catch(() => null)
             if (res && (Array.isArray(res.data) || Array.isArray(res))) {
               list = Array.isArray(res.data) ? res.data : res
             }
           }
 
-          const filtered = list
-            .filter(b => !isGlobalItemDeleted(b.id, deletedIds, 'branches'))
-            .map(b => {
-              const compSlug = (b as any).company_id === 1 ? 'tech' : (b as any).company_id === 2 ? 'digital' : (b as any).company_id === 3 ? 'saampark-ai-solutions' : String((b as any).company_id || b.companyId || 'tech')
-              return {
-                ...b,
-                companyId: b.companyId || (b as any).company_slug || compSlug,
-                company_id: (b as any).company_id || (compSlug === 'tech' ? 1 : compSlug === 'digital' ? 2 : compSlug === 'saampark-ai-solutions' ? 3 : 1),
-                code: b.code ? b.code.toUpperCase() : b.code,
-              }
-            })
+          // Ensure canonical default branches (tech br-1, br-2) are always preserved as baseline
+          const branchMap = new Map<string, Branch>()
+          DEFAULT_BRANCHES.forEach(b => {
+            if (!isGlobalItemDeleted(b.id, deletedIds, 'branches')) {
+              branchMap.set(String(b.id), { ...b, company_id: (b as any).company_id || (b.companyId === 'tech' ? 1 : 1) })
+            }
+          })
+
+          list.forEach(b => {
+            if (!isGlobalItemDeleted(b.id, deletedIds, 'branches')) {
+              const strKey = String(b.id)
+              const existing = branchMap.get(strKey)
+              branchMap.set(strKey, { ...existing, ...b })
+            }
+          })
+
+          const currentCompanies = get().companies || DEFAULT_COMPANIES
+          const filtered = Array.from(branchMap.values()).map(b => {
+            const rawComp = b.companyId || (b as any).company_id
+            const matchedComp = currentCompanies.find(c => isMatchingCompany(c, rawComp))
+            const compSlug = matchedComp?.slug || matchedComp?.id || (b as any).company_slug || String(rawComp || 'tech')
+            const numericId = matchedComp?.numeric_id || (compSlug === 'tech' ? 1 : compSlug === 'digital' ? 2 : compSlug === 'saampark-ai-solutions' ? 3 : Number((b as any).company_id) || 1)
+            return {
+              ...b,
+              companyId: b.companyId || compSlug,
+              company_id: (b as any).company_id || numericId,
+              code: b.code ? b.code.toUpperCase() : b.code,
+            }
+          })
+
           set({ branches: filtered })
           return filtered
         } catch (err) {
@@ -681,15 +701,6 @@ export const useAuthStore = create<AuthState>()(
         const localDeleted = getLocalDeletedIds()
         const currentFiltered = get().branches
           .filter(b => !isGlobalItemDeleted(b.id, localDeleted, 'branches'))
-          .map(b => {
-            const compSlug = (b as any).company_id === 1 ? 'tech' : (b as any).company_id === 2 ? 'digital' : (b as any).company_id === 3 ? 'saampark-ai-solutions' : String((b as any).company_id || b.companyId || 'tech')
-            return {
-              ...b,
-              companyId: b.companyId || (b as any).company_slug || compSlug,
-              company_id: (b as any).company_id || (compSlug === 'tech' ? 1 : compSlug === 'digital' ? 2 : compSlug === 'saampark-ai-solutions' ? 3 : 1),
-              code: b.code ? b.code.toUpperCase() : b.code,
-            }
-          })
         set({ branches: currentFiltered })
         return currentFiltered
       },
@@ -895,32 +906,37 @@ export const useAuthStore = create<AuthState>()(
           throw new Error('Only Super Admin can delete companies.')
         }
 
-        const compToDelete = companies.find(c => c.id === companyId || c.slug === companyId || String((c as any).numeric_id) === String(companyId))
+        const compToDelete = companies.find(c => isMatchingCompany(c, companyId))
+        const targetId = compToDelete?.id || companyId
         const targetSlug = compToDelete?.slug || companyId
         const targetNumericId = (compToDelete as any)?.numeric_id ? String((compToDelete as any).numeric_id) : ''
 
-        // Mark deleted in universal tombstone registry
-        markGlobalItemDeleted(companyId, 'companies')
-        markGlobalItemDeleted(targetSlug, 'companies')
-        if (targetNumericId) markGlobalItemDeleted(targetNumericId, 'companies')
+        // Mark deleted in universal tombstone registry with module 'companies'
+        await markGlobalItemDeleted(targetId, 'companies')
+        if (targetSlug && targetSlug !== targetId) {
+          await markGlobalItemDeleted(targetSlug, 'companies')
+        }
+        if (targetNumericId) {
+          await markGlobalItemDeleted(targetNumericId, 'companies')
+        }
 
         try {
-          await api.delete(`/companies/${companyId}`).catch(() => {})
+          await api.delete(`/companies/${targetId}`).catch(() => {})
         } catch {}
 
         const remainingCompanies = companies.filter(c => 
+          !isMatchingCompany(c, targetId) && 
+          !isMatchingCompany(c, targetSlug) && 
           c.id !== companyId && 
-          c.slug !== companyId && 
-          c.id !== targetSlug && 
-          c.slug !== targetSlug &&
-          String((c as any).numeric_id || '') !== String(companyId)
+          c.slug !== companyId
         )
-        const remainingBranches = branches.filter(b => 
-          b.companyId !== companyId && 
-          b.companyId !== targetSlug &&
-          b.companyId?.toLowerCase() !== companyId.toLowerCase() &&
-          b.companyId?.toLowerCase() !== targetSlug.toLowerCase()
-        )
+
+        // ONLY remove branches belonging strictly to the deleted company!
+        const remainingBranches = branches.filter(b => {
+          const bComp = b.companyId || (b as any).company_id
+          const isTargetBranch = isMatchingCompany({ id: targetId, slug: targetSlug, numeric_id: targetNumericId } as any, bComp)
+          return !isTargetBranch
+        })
 
         // For users belonging to deleted company: keep their company affiliation as the deleted company
         // and mark their status as Inactive / Company Deleted so login is blocked

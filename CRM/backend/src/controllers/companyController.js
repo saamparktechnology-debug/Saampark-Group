@@ -108,7 +108,15 @@ const deleteCompany = async (req, res, next) => {
     await pool.execute('DELETE FROM deals WHERE company_id = ?', [compId]).catch(() => {});
     await pool.execute('DELETE FROM expenses WHERE company_id = ?', [compId]).catch(() => {});
     await pool.execute('DELETE FROM tickets WHERE company_id = ?', [compId]).catch(() => {});
-    await pool.execute('DELETE FROM app_data WHERE module_key LIKE ? OR module_key LIKE ?', [`%_${compId}`, `%_${compSlug}`]).catch(() => {});
+    await pool.execute(
+      'DELETE FROM app_data WHERE module_key IN (?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        `branches_${compId}`, `branches_${compSlug}`,
+        `companies_${compId}`, `companies_${compSlug}`,
+        `invoices_${compId}`, `invoices_${compSlug}`,
+        `settings_${compId}`, `settings_${compSlug}`
+      ]
+    ).catch(() => {});
 
     // Delete company record from database
     await pool.execute('DELETE FROM companies WHERE id = ?', [compId]);

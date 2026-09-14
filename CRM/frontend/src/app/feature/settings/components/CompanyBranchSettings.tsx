@@ -1056,15 +1056,11 @@ export function CompanyBranchSettings() {
       <div className="space-y-4">
         {visibleCompanies.map((company) => {
           const compBranches = branches.filter((b) => 
-            (b.companyId && b.companyId.toLowerCase() === company.id.toLowerCase()) || 
-            (company.slug && b.companyId && b.companyId.toLowerCase() === company.slug.toLowerCase())
+            isMatchingCompany(company, b.companyId || (b as any).company_id)
           )
           const compUsers = allUsers.filter((u) => {
             const cIds = u.companyIds || (u.companyId ? [u.companyId] : [])
-            return cIds.some((id: string) => 
-              id.toLowerCase() === company.id.toLowerCase() || 
-              (company.slug && id.toLowerCase() === company.slug.toLowerCase())
-            )
+            return cIds.some((id: string) => isMatchingCompany(company, id))
           })
           const isExpanded = expandedCompanyIds.includes(company.id)
           const compFullName = getCompanyFullName(company)

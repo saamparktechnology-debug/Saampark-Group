@@ -9,7 +9,7 @@ import {
   AlertCircle, ExternalLink, Image as ImageIcon, Briefcase, Info,
   Landmark, Stamp, FileCheck
 } from "lucide-react"
-import { useAuthStore, Branch, SubBranch, Company } from "@/store/useAuthStore"
+import { useAuthStore, Branch, SubBranch, Company, isMatchingCompany } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
 import { ImageUploadField } from "@/components/ui/ImageUploadField"
@@ -169,7 +169,7 @@ export default function BranchesMain() {
         (b.gstin || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
         (b.brand_name || "").toLowerCase().includes(searchQuery.toLowerCase())
 
-      const matchesCompany = selectedCompanyFilter === "all" || String(b.companyId) === String(selectedCompanyFilter)
+      const matchesCompany = selectedCompanyFilter === "all" || isMatchingCompany({ id: b.companyId || (b as any).company_id, slug: b.companyId } as any, selectedCompanyFilter)
       return matchesSearch && matchesCompany
     })
   }, [branches, searchQuery, selectedCompanyFilter])
@@ -184,7 +184,7 @@ export default function BranchesMain() {
         (sb.partnerName || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
         (sb.partnerType || "").toLowerCase().includes(searchQuery.toLowerCase())
 
-      const matchesCompany = selectedCompanyFilter === "all" || String(sb.companyId) === String(selectedCompanyFilter)
+      const matchesCompany = selectedCompanyFilter === "all" || isMatchingCompany({ id: sb.companyId || (sb as any).company_id, slug: sb.companyId } as any, selectedCompanyFilter)
       return matchesSearch && matchesCompany
     })
   }, [subBranches, searchQuery, selectedCompanyFilter])

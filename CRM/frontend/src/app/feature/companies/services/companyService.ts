@@ -1,4 +1,4 @@
-﻿import { api } from '@/lib/api'
+import { api } from '@/lib/api'
 
 function unpack(res: any): any {
   if (!res || res.error || res.status === 'error') return null
@@ -59,8 +59,9 @@ export const CompanyApiService = {
 
 export const BranchApiService = {
   getAll: async (companyId?: string) => {
-    const headers: Record<string, string> = {}
-    if (companyId && companyId !== 'all') headers['x-company-id'] = companyId
+    const headers: Record<string, string> = {
+      'x-company-id': (companyId && companyId !== 'all') ? companyId : 'all'
+    }
     const res = await fetchWithAuth('/branches', { headers })
     return unpackArray(res)
   },
@@ -77,9 +78,12 @@ export const BranchApiService = {
 }
 
 export const SubBranchApiService = {
-  getAll: async (branchId?: string) => {
+  getAll: async (branchId?: string, companyId?: string) => {
     const query = branchId ? `?branch_id=${encodeURIComponent(branchId)}` : ''
-    const res = await api.get(`/branches/sub-branches/all${query}`)
+    const headers: Record<string, string> = {
+      'x-company-id': (companyId && companyId !== 'all') ? companyId : 'all'
+    }
+    const res = await fetchWithAuth(`/branches/sub-branches/all${query}`, { headers })
     return unpackArray(res)
   },
   create: async (companyId: string, data: any) => {

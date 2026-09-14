@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { CompanyApiService, BranchApiService, SubBranchApiService } from "./services/companyService"
 import { Company, Branch, SubBranch } from "./types"
-import { useAuthStore } from "@/store/useAuthStore"
+import { useAuthStore, isMatchingCompany } from "@/store/useAuthStore"
 import { markGlobalItemDeleted, fetchModuleDataFromDB, saveModuleDataToDB, syncGlobalDeletedIds, isGlobalItemDeleted, getLocalDeletedIds } from "@/lib/storageSync"
 import { ImageUploadField } from "@/components/ui/ImageUploadField"
 
@@ -225,19 +225,27 @@ export default function CompaniesMain() {
     setError(null)
     try {
       const deletedIds = await syncGlobalDeletedIds().catch(() => getLocalDeletedIds())
-      const localDel = getLocalDeletedIds()
-      const allDel = new Set([...deletedIds, ...localDel].map(d => String(d).toLowerCase().trim()))
 
-      const isDeleted = (id?: string | number, slug?: string) => {
-        if (id && (allDel.has(String(id).toLowerCase().trim()) || isGlobalItemDeleted(id))) return true
-        if (slug && (allDel.has(String(slug).toLowerCase().trim()) || isGlobalItemDeleted(slug))) return true
+      const isCompanyDeleted = (id?: string | number, slug?: string) => {
+        if (id && isGlobalItemDeleted(id, deletedIds, "companies")) return true
+        if (slug && isGlobalItemDeleted(slug, deletedIds, "companies")) return true
         return false
+      }
+
+      const isBranchDeleted = (id?: string | number) => {
+        if (!id) return false
+        return isGlobalItemDeleted(id, deletedIds, "branches")
+      }
+
+      const isSubBranchDeleted = (id?: string | number) => {
+        if (!id) return false
+        return isGlobalItemDeleted(id, deletedIds, "sub_branches")
       }
 
       const [compRes, branchRes, subBranchRes, dbComps, dbBranches, dbSubBranches] = await Promise.all([
         CompanyApiService.getAll().catch(() => []),
-        BranchApiService.getAll().catch(() => []),
-        SubBranchApiService.getAll().catch(() => []),
+        BranchApiService.getAll("all").catch(() => []),
+        SubBranchApiService.getAll(undefined, "all").catch(() => []),
         fetchModuleDataFromDB<Company[]>("companies", [], "all").catch(() => []),
         fetchModuleDataFromDB<Branch[]>("branches", [], "all").catch(() => []),
         fetchModuleDataFromDB<SubBranch[]>("sub_branches", [], "all").catch(() => []),
@@ -246,21 +254,21 @@ export default function CompaniesMain() {
       // 1. Merge Companies (excluding deleted ones)
       const compMap = new Map<string, Company>()
       CANONICAL_COMPANIES.forEach(c => {
-        if (!isDeleted(c.id, c.slug)) {
-          compMap.set(c.slug || c.id, c)
+        if (!isCompanyDeleted(c.id, c.slug)) {
+          compMap.set(c.slug || String(c.id), c)
         }
       })
       if (Array.isArray(dbComps) && dbComps.length > 0) {
         dbComps.forEach(c => {
-          if (!isDeleted(c.id, c.slug)) {
-            const k = c.slug || c.id
+          if (!isCompanyDeleted(c.id, c.slug)) {
+            const k = c.slug || String(c.id)
             compMap.set(k, { ...compMap.get(k), ...c })
           }
         })
       }
       if (Array.isArray(compRes) && compRes.length > 0) {
         compRes.forEach(c => {
-          if (!isDeleted(c.id, c.slug)) {
+          if (!isCompanyDeleted(c.id, c.slug)) {
             const k = c.slug || String(c.id)
             compMap.set(k, { ...compMap.get(k), ...c })
           }
@@ -269,35 +277,49 @@ export default function CompaniesMain() {
       const finalCompanies = Array.from(compMap.values())
       setCompanies(finalCompanies)
 
-      // Active company IDs set for cascade branch checks
-      const validCompanyIds = new Set(
-        finalCompanies.flatMap(c => [String(c.id).toLowerCase().trim(), String(c.slug || '').toLowerCase().trim()].filter(Boolean))
-      )
-
-      // 2. Merge Branches (excluding deleted ones and branches of deleted companies)
+      // 2. Merge Branches: KEEP all branches belonging to active companies
       const branchMap = new Map<string, Branch>()
+
+      // First add baseline canonical branches for active companies (tech br-1, br-2)
       CANONICAL_BRANCHES.forEach(b => {
-        const bComp = String(b.company_id || (b as any).companyId || '').toLowerCase().trim()
-        if (!isDeleted(b.id) && (!bComp || validCompanyIds.has(bComp))) {
-          branchMap.set(b.id, b)
+        if (!isBranchDeleted(b.id)) {
+          const bComp = b.company_id || (b as any).companyId
+          if (finalCompanies.some(c => isMatchingCompany(c, bComp))) {
+            branchMap.set(String(b.id), { ...b, company_id: bComp, companyId: bComp })
+          }
         }
       })
+
+      // Overlay DB branches (from app_data)
       if (Array.isArray(dbBranches) && dbBranches.length > 0) {
         dbBranches.forEach(b => {
-          const bComp = String(b.company_id || (b as any).companyId || '').toLowerCase().trim()
-          if (!isDeleted(b.id) && (!bComp || validCompanyIds.has(bComp))) {
-            branchMap.set(b.id, { ...branchMap.get(b.id), ...b })
+          if (!isBranchDeleted(b.id)) {
+            const bComp = b.company_id || (b as any).companyId
+            if (finalCompanies.some(c => isMatchingCompany(c, bComp))) {
+              const strKey = String(b.id)
+              const prev = branchMap.get(strKey)
+              const resolvedComp = bComp || prev?.company_id || prev?.companyId
+              branchMap.set(strKey, { ...prev, ...b, company_id: resolvedComp, companyId: resolvedComp })
+            }
           }
         })
       }
+
+      // Overlay API branches (from MySQL)
       if (Array.isArray(branchRes) && branchRes.length > 0) {
         branchRes.forEach(b => {
-          const bComp = String(b.company_id || (b as any).companyId || '').toLowerCase().trim()
-          if (!isDeleted(b.id) && (!bComp || validCompanyIds.has(bComp))) {
-            branchMap.set(b.id, { ...branchMap.get(b.id), ...b })
+          if (!isBranchDeleted(b.id)) {
+            const bComp = b.company_id || (b as any).companyId
+            if (finalCompanies.some(c => isMatchingCompany(c, bComp))) {
+              const strKey = String(b.id)
+              const prev = branchMap.get(strKey)
+              const resolvedComp = bComp || prev?.company_id || prev?.companyId
+              branchMap.set(strKey, { ...prev, ...b, company_id: resolvedComp, companyId: resolvedComp })
+            }
           }
         })
       }
+
       const finalBranches = Array.from(branchMap.values())
       setBranches(finalBranches)
 
@@ -309,7 +331,7 @@ export default function CompaniesMain() {
         : (Array.isArray(subBranchRes) ? subBranchRes : [])
       const subList = rawSubList.filter(sb => {
         const sbBranch = String(sb.branch_id || (sb as any).branchId || '').toLowerCase().trim()
-        return !isDeleted(sb.id) && (!sbBranch || validBranchIds.has(sbBranch))
+        return !isSubBranchDeleted(sb.id) && (!sbBranch || validBranchIds.has(sbBranch))
       })
       setSubBranches(subList)
 
@@ -343,14 +365,11 @@ export default function CompaniesMain() {
   }
 
   const getBranchesForCompany = (companyId: string) => {
-    const target = String(companyId || "").toLowerCase().trim()
-    const comp = companies.find(c => String(c.id).toLowerCase().trim() === target || String(c.slug || "").toLowerCase().trim() === target)
-    const compSlug = comp?.slug?.toLowerCase().trim()
-    const compNum = (comp as any)?.numeric_id ? String((comp as any).numeric_id) : (target === "tech" ? "1" : target === "digital" ? "2" : target === "saampark-ai-solutions" ? "3" : "")
-
+    const comp = companies.find(c => isMatchingCompany(c, companyId))
+    if (!comp) return []
     return branches.filter(b => {
-      const bCompId = String(b.company_id || (b as any).companyId || "").toLowerCase().trim()
-      return bCompId === target || (compSlug && bCompId === compSlug) || (compNum && bCompId === compNum)
+      const bComp = b.company_id || (b as any).companyId
+      return isMatchingCompany(comp, bComp)
     })
   }
   const getSubBranchesForBranch = (branchId: string) => subBranches.filter(sb => String(sb.branch_id) === String(branchId))
@@ -581,12 +600,12 @@ export default function CompaniesMain() {
     setSaving(true)
     try {
       if (deleteTarget.type === "company") {
-        const comp = companies.find(c => c.id === deleteTarget.id || c.slug === deleteTarget.id)
+        const comp = companies.find(c => isMatchingCompany(c, deleteTarget.id))
         const targetId = comp?.id || deleteTarget.id
         const targetSlug = comp?.slug || deleteTarget.id
         const targetNumericId = (comp as any)?.numeric_id ? String((comp as any).numeric_id) : ""
 
-        // Mark deleted in universal registry
+        // Mark deleted in universal registry with module 'companies'
         await markGlobalItemDeleted(targetId, "companies")
         if (targetSlug && targetSlug !== targetId) {
           await markGlobalItemDeleted(targetSlug, "companies")
@@ -605,15 +624,22 @@ export default function CompaniesMain() {
           console.warn("deleteCompany store warning:", e)
         }
 
-        // Immediately update state
+        // Immediately update state - keep all other companies intact
         const remainingComps = companies.filter(c => 
-          c.id !== targetId && 
-          c.slug !== targetSlug && 
-          c.id !== deleteTarget.id &&
-          String((c as any).numeric_id || "") !== String(targetId)
+          !isMatchingCompany(c, targetId) && 
+          !isMatchingCompany(c, targetSlug)
         )
         setCompanies(remainingComps)
         await saveModuleDataToDB("companies", remainingComps, "all").catch(() => {})
+
+        // ONLY filter out branches belonging to the deleted company!
+        // Preserve all branches belonging to remaining active companies!
+        const remainingBranches = branches.filter(b => {
+          const bComp = b.company_id || (b as any).companyId
+          return !isMatchingCompany({ id: targetId, slug: targetSlug, numeric_id: targetNumericId } as any, bComp)
+        })
+        setBranches(remainingBranches)
+        await saveModuleDataToDB("branches", remainingBranches, "all").catch(() => {})
       } else if (deleteTarget.type === "branch") {
         await markGlobalItemDeleted(deleteTarget.id, "branches")
         await BranchApiService.delete(deleteTarget.id).catch(() => {})

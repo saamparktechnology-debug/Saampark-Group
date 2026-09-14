@@ -5,12 +5,31 @@ const subBranchModel = require('../models/subBranchModel');
 const branchController = {
   async getAll(req, res) {
     try {
-      const companyId = req.headers['x-company-id'] || req.user?.company_id;
-      const isSuperAdmin = req.user?.role_id === 1;
+      const reqCompanyId = req.headers['x-company-id'];
+      const userRoleId = Number(req.user?.role_id);
+      const userRole = String(req.user?.role || req.user?.role_name || '').toLowerCase();
+      const isSuperAdmin = userRoleId === 1 || userRole.includes('super');
+
+      const companyId = (reqCompanyId && reqCompanyId !== 'all')
+        ? reqCompanyId
+        : (isSuperAdmin ? null : req.user?.company_id);
+
       // Super Admin can get all branches across all companies
       if (!companyId && !isSuperAdmin) return errorResponse(res, 400, 'Company ID required');
-      const branches = companyId
-        ? await branchModel.findByCompany(companyId)
+
+      let resolvedCompanyId = companyId;
+      if (companyId && isNaN(Number(companyId))) {
+        const pool = require('../config/db');
+        const [compRows] = await pool.execute('SELECT id FROM companies WHERE slug = ? OR name = ?', [companyId, companyId]).catch(() => [[]]);
+        if (compRows && compRows.length > 0) {
+          resolvedCompanyId = compRows[0].id;
+        } else if (companyId === 'tech') {
+          resolvedCompanyId = 1;
+        }
+      }
+
+      const branches = resolvedCompanyId
+        ? await branchModel.findByCompany(resolvedCompanyId)
         : await branchModel.findAll();
       return successResponse(res, 200, 'Branches fetched', branches);
     } catch (err) {
@@ -30,9 +49,22 @@ const branchController = {
 
   async create(req, res) {
     try {
-      const companyId = req.headers['x-company-id'] || req.user?.company_id;
+      let companyId = req.headers['x-company-id'] || req.body.company_id || req.user?.company_id;
+      if (!companyId || companyId === 'all') companyId = req.body.company_id || req.user?.company_id;
       if (!companyId) return errorResponse(res, 400, 'Company ID required');
-      const id = await branchModel.create({ ...req.body, company_id: companyId });
+
+      let resolvedCompanyId = companyId;
+      if (isNaN(Number(companyId))) {
+        const pool = require('../config/db');
+        const [compRows] = await pool.execute('SELECT id FROM companies WHERE slug = ? OR name = ?', [companyId, companyId]).catch(() => [[]]);
+        if (compRows && compRows.length > 0) {
+          resolvedCompanyId = compRows[0].id;
+        } else if (companyId === 'tech') {
+          resolvedCompanyId = 1;
+        }
+      }
+
+      const id = await branchModel.create({ ...req.body, company_id: resolvedCompanyId });
       return successResponse(res, 201, 'Branch created', { id });
     } catch (err) {
       return errorResponse(res, 500, err.message);
@@ -80,17 +112,29 @@ const branchController = {
 const subBranchController = {
   async getAll(req, res) {
     try {
-      const companyId = req.headers['x-company-id'] || req.user?.company_id;
-      const isSuperAdmin = req.user?.role_id === 1;
+      const reqCompanyId = req.headers['x-company-id'];
+      const userRoleId = Number(req.user?.role_id);
+      const userRole = String(req.user?.role || req.user?.role_name || '').toLowerCase();
+      const isSuperAdmin = userRoleId === 1 || userRole.includes('super');
       const { branch_id } = req.query;
+
       let subBranches;
       if (branch_id) {
         subBranches = await subBranchModel.findByBranch(branch_id);
-      } else if (companyId) {
-        subBranches = await subBranchModel.findByCompany(companyId);
+      } else if (reqCompanyId && reqCompanyId !== 'all') {
+        let resolvedCompanyId = reqCompanyId;
+        if (isNaN(Number(reqCompanyId))) {
+          const pool = require('../config/db');
+          const [compRows] = await pool.execute('SELECT id FROM companies WHERE slug = ? OR name = ?', [reqCompanyId, reqCompanyId]).catch(() => [[]]);
+          if (compRows && compRows.length > 0) resolvedCompanyId = compRows[0].id;
+          else if (reqCompanyId === 'tech') resolvedCompanyId = 1;
+        }
+        subBranches = await subBranchModel.findByCompany(resolvedCompanyId);
       } else if (isSuperAdmin) {
         // Super Admin gets all sub-branches across all companies
         subBranches = await subBranchModel.findAll();
+      } else if (req.user?.company_id) {
+        subBranches = await subBranchModel.findByCompany(req.user.company_id);
       } else {
         subBranches = [];
       }
@@ -112,8 +156,19 @@ const subBranchController = {
 
   async create(req, res) {
     try {
-      const companyId = req.headers['x-company-id'] || req.user?.company_id;
-      const id = await subBranchModel.create({ ...req.body, company_id: companyId });
+      let companyId = req.headers['x-company-id'] || req.body.company_id || req.user?.company_id;
+      if (!companyId || companyId === 'all') companyId = req.body.company_id || req.user?.company_id;
+      if (!companyId) return errorResponse(res, 400, 'Company ID required');
+
+      let resolvedCompanyId = companyId;
+      if (isNaN(Number(companyId))) {
+        const pool = require('../config/db');
+        const [compRows] = await pool.execute('SELECT id FROM companies WHERE slug = ? OR name = ?', [companyId, companyId]).catch(() => [[]]);
+        if (compRows && compRows.length > 0) resolvedCompanyId = compRows[0].id;
+        else if (companyId === 'tech') resolvedCompanyId = 1;
+      }
+
+      const id = await subBranchModel.create({ ...req.body, company_id: resolvedCompanyId });
       return successResponse(res, 201, 'Sub-branch created', { id });
     } catch (err) {
       return errorResponse(res, 500, err.message);

@@ -114,13 +114,13 @@ export function unwrapList<T = any>(res: any): T[] {
 }
 
 export const api = {
-  get: <T = any>(endpoint: string) => request<T>(endpoint, { method: 'GET' }),
-  post: <T = any>(endpoint: string, body?: any) => 
-    request<T>(endpoint, { method: 'POST', body: JSON.stringify(body) }),
-  put: <T = any>(endpoint: string, body?: any) => 
-    request<T>(endpoint, { method: 'PUT', body: JSON.stringify(body) }),
-  patch: <T = any>(endpoint: string, body?: any) => 
-    request<T>(endpoint, { method: 'PATCH', body: JSON.stringify(body) }),
-  delete: <T = any>(endpoint: string) => request<T>(endpoint, { method: 'DELETE' }),
+  get: <T = any>(endpoint: string, options?: RequestInit) => request<T>(endpoint, { method: 'GET', ...options }),
+  post: <T = any>(endpoint: string, body?: any, options?: RequestInit) => 
+    request<T>(endpoint, { method: 'POST', body: JSON.stringify(body), ...options }),
+  put: <T = any>(endpoint: string, body?: any, options?: RequestInit) => 
+    request<T>(endpoint, { method: 'PUT', body: JSON.stringify(body), ...options }),
+  patch: <T = any>(endpoint: string, body?: any, options?: RequestInit) => 
+    request<T>(endpoint, { method: 'PATCH', body: JSON.stringify(body), ...options }),
+  delete: <T = any>(endpoint: string, options?: RequestInit) => request<T>(endpoint, { method: 'DELETE', ...options }),
 }
 

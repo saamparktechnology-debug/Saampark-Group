@@ -37,6 +37,7 @@ export interface Company {
 export interface Branch {
   id: string
   company_id: string
+  companyId?: string
   name: string
   code?: string
   brand_name?: string

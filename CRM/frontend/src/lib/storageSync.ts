@@ -2,7 +2,8 @@ import { api } from "@/lib/api"
 
 const UNIVERSAL_DELETED_KEY = "saampark_universal_deleted_ids"
 
-const PROTECTED_ACCOUNTS = ["hiisupriya@gmail.com"]
+// Core protected system records that can NEVER be deleted
+const PROTECTED_ACCOUNTS = ["hiisupriya@gmail.com", "tech", "1", "br-1", "br-2"]
 
 export function getLocalDeletedIds(): string[] {
   if (typeof window === "undefined") return []
@@ -15,19 +16,29 @@ export function getLocalDeletedIds(): string[] {
   }
 }
 
-export function saveLocalDeletedId(id: string | number): void {
+export function saveLocalDeletedId(id: string | number, moduleName?: string): void {
   if (typeof window === "undefined" || !id) return
   const strId = String(id).toLowerCase().trim()
+  if (PROTECTED_ACCOUNTS.includes(strId)) return
+
   const current = getLocalDeletedIds()
-  if (!current.includes(strId)) {
-    localStorage.setItem(UNIVERSAL_DELETED_KEY, JSON.stringify([...current, strId]))
+  const mod = moduleName ? String(moduleName).toLowerCase().trim() : ""
+  const namespacedKey = mod ? `${mod}:${strId}` : ""
+
+  const next = new Set(current)
+  if (namespacedKey) next.add(namespacedKey)
+  // Only add naked string ID if it's not a pure number (to prevent cross-module collisions)
+  if (!/^\d+$/.test(strId)) {
+    next.add(strId)
   }
+  localStorage.setItem(UNIVERSAL_DELETED_KEY, JSON.stringify(Array.from(next)))
 }
 
 // Global function to mark any item deleted across the entire application and sync to MySQL DB
 export async function markGlobalItemDeleted(id: string | number, moduleName?: string): Promise<void> {
   if (!id) return
   const strId = String(id).toLowerCase().trim()
+  if (PROTECTED_ACCOUNTS.includes(strId)) return
 
   // Strict check: Clients can NEVER delete records assigned by Admin/Super Admin
   if (typeof window !== "undefined") {
@@ -42,24 +53,27 @@ export async function markGlobalItemDeleted(id: string | number, moduleName?: st
     } catch {}
   }
 
-  saveLocalDeletedId(strId)
+  saveLocalDeletedId(strId, moduleName)
 
   try {
-    await api.post("/deleted", { id: strId, moduleName })
+    await api.post("/deleted", { id: strId, moduleName: moduleName || "global" })
   } catch (err) {
     console.warn("Backend deleted sync warning:", err)
   }
 }
 
 // Global function to unmark/restore an item if created/re-added
-export function unmarkGlobalItemDeleted(id: string | number): void {
+export function unmarkGlobalItemDeleted(id: string | number, moduleName?: string): void {
   if (!id) return
   const strId = String(id).toLowerCase().trim()
-  const local = getLocalDeletedIds().filter(d => d !== strId)
+  const mod = moduleName ? String(moduleName).toLowerCase().trim() : ""
+  const namespacedKey = mod ? `${mod}:${strId}` : ""
+
+  const local = getLocalDeletedIds().filter(d => d !== strId && d !== namespacedKey && !d.endsWith(`:${strId}`))
   if (typeof window !== "undefined") {
     localStorage.setItem(UNIVERSAL_DELETED_KEY, JSON.stringify(local))
   }
-  deletedCache = deletedCache.filter(d => d !== strId)
+  deletedCache = deletedCache.filter(d => d !== strId && d !== namespacedKey && !d.endsWith(`:${strId}`))
   lastDeletedSyncTime = 0
 
   // Asynchronously purge from MySQL deleted table so it doesn't resurrect on next fetch
@@ -90,10 +104,26 @@ export async function syncGlobalDeletedIds(): Promise<string[]> {
     try {
       const res = await api.get("/deleted")
       if (res && res.status !== "error" && !res.error && res.data !== undefined && res.data !== null) {
-        const serverIds: string[] = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : [])
-        const cleanServer = serverIds
-          .map((s) => String(s).toLowerCase().trim())
-          .filter(id => !PROTECTED_ACCOUNTS.includes(id))
+        const rawServer: any[] = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : [])
+        const cleanServer: string[] = []
+
+        rawServer.forEach((item: any) => {
+          if (item && typeof item === "object" && item.item_id) {
+            const rawId = String(item.item_id).toLowerCase().trim()
+            if (PROTECTED_ACCOUNTS.includes(rawId)) return
+            const mod = String(item.module_name || "global").toLowerCase().trim()
+            cleanServer.push(`${mod}:${rawId}`)
+            if (!/^\d+$/.test(rawId)) {
+              cleanServer.push(rawId)
+            }
+          } else if (typeof item === "string" || typeof item === "number") {
+            const rawId = String(item).toLowerCase().trim()
+            if (!PROTECTED_ACCOUNTS.includes(rawId)) {
+              cleanServer.push(rawId)
+            }
+          }
+        })
+
         const merged = Array.from(new Set([...local, ...cleanServer]))
         deletedCache = merged
         lastDeletedSyncTime = Date.now()
@@ -116,18 +146,55 @@ export async function syncGlobalDeletedIds(): Promise<string[]> {
 }
 
 export function isGlobalItemDeleted(id: string | number, deletedIds?: string[], moduleName?: string): boolean {
-  if (!id || !deletedIds || !Array.isArray(deletedIds) || deletedIds.length === 0) return false
+  if (!id) return false
   const strId = String(id).toLowerCase().trim()
   if (PROTECTED_ACCOUNTS.includes(strId)) return false
-  return deletedIds.includes(strId)
+
+  const list = (deletedIds && Array.isArray(deletedIds) && deletedIds.length > 0) ? deletedIds : getLocalDeletedIds()
+  if (!list || list.length === 0) return false
+
+  const mod = moduleName ? String(moduleName).toLowerCase().trim() : ""
+  const namespacedKey = mod ? `${mod}:${strId}` : ""
+  const isPureNumber = /^\d+$/.test(strId)
+
+  for (const entry of list) {
+    if (!entry) continue
+    const strEntry = String(entry).toLowerCase().trim()
+
+    // 1. Exact namespaced match (e.g. "branches:br-1" === "branches:br-1")
+    if (namespacedKey && strEntry === namespacedKey) {
+      return true
+    }
+
+    // 2. If entry has module prefix like "companies:123"
+    if (strEntry.includes(":")) {
+      const [entryMod, ...rest] = strEntry.split(":")
+      const entryId = rest.join(":")
+      if (entryId === strId) {
+        if (mod && entryMod !== "global" && entryMod !== mod) {
+          // Different module! Not deleted in this module.
+          continue
+        }
+        return true
+      }
+    } else {
+      // 3. Naked string ID
+      if (strEntry === strId) {
+        // Pure number naked match without module qualification is disallowed to prevent collisions
+        if (isPureNumber && mod) {
+          continue
+        }
+        return true
+      }
+    }
+  }
+
+  return false
 }
 
-export function filterGlobalDeletedItems<T extends { id: string | number }>(items: T[], deletedIds?: string[]): T[] {
+export function filterGlobalDeletedItems<T extends { id: string | number }>(items: T[], deletedIds?: string[], moduleName?: string): T[] {
   if (!Array.isArray(items)) return []
-  const ids = (deletedIds && Array.isArray(deletedIds) && deletedIds.length > 0) ? deletedIds : getLocalDeletedIds()
-  if (!ids || ids.length === 0) return items
-  const set = new Set(ids.map((s) => String(s).toLowerCase().trim()))
-  return items.filter((item) => item?.id && !set.has(String(item.id).toLowerCase().trim()))
+  return items.filter((item) => item?.id && !isGlobalItemDeleted(item.id, deletedIds, moduleName))
 }
 
 // In-memory micro-cache & in-flight promise deduplication

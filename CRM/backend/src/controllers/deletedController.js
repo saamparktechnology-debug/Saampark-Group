@@ -1,12 +1,18 @@
 const pool = require('../config/db');
 const { successResponse, errorResponse } = require('../utils/apiResponse');
 
-// Get all deleted item IDs across all modules
+// Get all deleted item IDs across all modules (with optional module filtering)
 const getDeletedItems = async (req, res, next) => {
   try {
-    const [rows] = await pool.execute('SELECT item_id FROM deleted_items');
-    const ids = rows.map((r) => r.item_id);
-    return successResponse(res, 200, 'Deleted items fetched successfully', ids);
+    const { moduleName } = req.query;
+    let query = 'SELECT item_id, module_name FROM deleted_items';
+    const params = [];
+    if (moduleName && moduleName !== 'all') {
+      query += ' WHERE module_name = ?';
+      params.push(moduleName);
+    }
+    const [rows] = await pool.execute(query, params);
+    return successResponse(res, 200, 'Deleted items fetched successfully', rows);
   } catch (err) {
     next(err);
   }
@@ -24,9 +30,10 @@ const markItemDeleted = async (req, res, next) => {
     }
 
     const strId = String(id).toLowerCase().trim();
+    const mod = String(moduleName || 'global').toLowerCase().trim();
     await pool.execute(
       'INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, ?)',
-      [strId, moduleName || 'global']
+      [strId, mod]
     );
     return successResponse(res, 200, 'Item marked deleted successfully');
   } catch (err) {
