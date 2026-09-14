@@ -61,6 +61,12 @@ const branchController = {
           resolvedCompanyId = compRows[0].id;
         } else if (companyId === 'tech') {
           resolvedCompanyId = 1;
+        } else if (companyId === 'digital') {
+          resolvedCompanyId = 2;
+        } else if (companyId === 'saampark-ai-solutions' || companyId === 'ai') {
+          resolvedCompanyId = 3;
+        } else {
+          resolvedCompanyId = 1;
         }
       }
 
@@ -198,6 +204,9 @@ const subBranchController = {
         const [compRows] = await pool.execute('SELECT id FROM companies WHERE slug = ? OR name = ?', [companyId, companyId]).catch(() => [[]]);
         if (compRows && compRows.length > 0) resolvedCompanyId = compRows[0].id;
         else if (companyId === 'tech') resolvedCompanyId = 1;
+        else if (companyId === 'digital') resolvedCompanyId = 2;
+        else if (companyId === 'saampark-ai-solutions' || companyId === 'ai') resolvedCompanyId = 3;
+        else resolvedCompanyId = 1;
       }
 
       const id = await subBranchModel.create({ ...req.body, company_id: resolvedCompanyId });

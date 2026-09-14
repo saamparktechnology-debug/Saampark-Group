@@ -165,7 +165,7 @@ export default function ExpensesMain() {
 
       if (!matchSearch) return false
       const targetBranch = user?.branchId || activeBranchId
-      if (targetBranch) {
+      if (targetBranch && targetBranch !== "all") {
         const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === targetBranch.toLowerCase())
         const targetBranchId = String(targetBranchObj?.id || targetBranch).toLowerCase().trim()
         const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""

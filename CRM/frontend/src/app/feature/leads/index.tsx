@@ -177,14 +177,14 @@ export default function LeadsMain() {
         const isClientPrivate = (l as any).isClientPrivate === true || l.createdByRole === "Clients"
         if (isClientPrivate) return false
 
-        if (userComp && userComp !== "all" && freshUser?.role !== "Super Admin") {
+        if (userComp && userComp !== "all") {
           const lComp = (l.companyId || (l as any).company || "").toLowerCase().trim()
           if (lComp && lComp !== userComp && !((userComp === "tech" || !lComp) && (!l.companyId || lComp === "tech"))) {
             return false
           }
         }
 
-        if (targetBranch && freshUser?.role !== "Super Admin") {
+        if (targetBranch && targetBranch !== "all") {
           const lBranch = String(l.branchId || (l as any).assignedBranchId || (l as any).branch_id || "").toLowerCase().trim()
           const lBranchName = String(l.branchName || (l as any).assignedBranchName || (l as any).branch_name || "").toLowerCase().trim()
           const targetBranchObj = freshBranches.find(b => b.id === targetBranch || b.name.toLowerCase() === targetBranch.toLowerCase())

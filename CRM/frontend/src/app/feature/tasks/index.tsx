@@ -173,7 +173,6 @@ export default function TasksMain() {
       if (!targetBranch || targetBranch === "all") return true
       const tBranch = String(t.branchId || t.branch_id || "").toLowerCase().trim()
       const tBranchName = String(t.branchName || t.branch_name || "").toLowerCase().trim()
-      if (!tBranch && !tBranchName) return true
       return (tBranch && (tBranch === targetBranchId || (targetBranchName && tBranch === targetBranchName))) ||
              (tBranchName && (tBranchName === targetBranchName || tBranchName === targetBranchId))
     }

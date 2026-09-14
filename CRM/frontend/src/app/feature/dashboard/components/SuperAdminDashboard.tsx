@@ -34,7 +34,7 @@ import {
   Layers
 } from "lucide-react"
 import Link from "next/link"
-import { useAuthStore, getCompanyFullName, isMatchingCompany, getCanonicalCompanyId } from "@/store/useAuthStore"
+import { useAuthStore, getCompanyFullName, isMatchingCompany, isMatchingBranch, getCanonicalCompanyId } from "@/store/useAuthStore"
 import { useTimerStore } from "@/store/useTimerStore"
 import { getActivityLogs, ActivityLog } from "@/services/activityLogService"
 import { fetchModuleDataFromDB, filterGlobalDeletedItems } from "@/lib/storageSync"
@@ -107,7 +107,7 @@ export function SuperAdminDashboard() {
   const [todos, setTodos] = React.useState<{ id: number; text: string; done: boolean }[]>([])
 
   const isSuperAdmin = user?.role === "Super Admin"
-  const isAllCompanies = isSuperAdmin && (!activeCompanyId || activeCompanyId === "all")
+  const isAllCompanies = isSuperAdmin && (!activeCompanyId || activeCompanyId === "all") && (!activeBranchId || activeBranchId === "all")
 
   // Allowed companies for current user session (if assigned to 1, user cannot switch)
   const allowedCompanies = React.useMemo(() => {
@@ -262,107 +262,128 @@ export function SuperAdminDashboard() {
   // -------------------------------------------------------------------------
   // REAL 3 COMPANIES BREAKDOWN (STRICTLY 3 COMPANIES)
   // -------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
+  // DYNAMIC COMPANIES BREAKDOWN
+  // -------------------------------------------------------------------------
   const realCompaniesData: CompanyRow[] = React.useMemo(() => {
-    const compConfigs = [
-      {
-        id: "tech",
-        name: "SAAMPARK Technology",
-        branchesCount: 2, // HO Mumbai/Kolkata + Branch Delhi
-        usersCount: 18,
-        projectsCount: Math.max(dbProjects.filter(p => isMatchingCompany({ id: p.companyId, slug: p.companyId } as any, "tech")).length, 5),
-        baseRevenue: 1925000,
-        baseOutstanding: 640000,
-        color: "#2563eb"
-      },
-      {
-        id: "digital",
-        name: "SAAMPARK Digital Marketing & Research",
-        branchesCount: 1, // HO Kolkata
-        usersCount: 3,
-        projectsCount: Math.max(dbProjects.filter(p => isMatchingCompany({ id: p.companyId, slug: p.companyId } as any, "digital")).length, 2),
-        baseRevenue: 1115000,
-        baseOutstanding: 420000,
-        color: "#10b981"
-      },
-      {
-        id: "saampark-ai-solutions",
-        name: "SAAMPARK AI Solutions",
-        branchesCount: 1, // HO Bengaluru
-        usersCount: 2,
-        projectsCount: Math.max(dbProjects.filter(p => isMatchingCompany({ id: p.companyId, slug: p.companyId } as any, "saampark-ai-solutions")).length, 1),
-        baseRevenue: 659700,
-        baseOutstanding: 294500,
-        color: "#8b5cf6"
+    const palette = ["#2563eb", "#10b981", "#8b5cf6", "#f59e0b", "#ec4899", "#06b6d4"]
+    
+    const rows = companies.map((c, idx) => {
+      const cId = c.id
+      const compBranches = branches.filter(b => isMatchingCompany({ id: b.companyId, slug: b.companyId } as any, cId))
+      const compUsers = dbUsers.filter(u => {
+        if (Array.isArray(u.companyIds) && u.companyIds.length > 0) {
+          return u.companyIds.some((cid: any) => isMatchingCompany({ id: cid, slug: cid } as any, cId))
+        }
+        const uComp = u.companyId || u.company_id || u.company
+        return isMatchingCompany({ id: uComp, slug: uComp } as any, cId)
+      })
+      const compProjects = dbProjects.filter(p => isMatchingCompany({ id: p.companyId, slug: p.companyId } as any, cId))
+      const compInvoices = dbInvoices.filter(inv => {
+        const invComp = inv.companyId || (inv as any).company
+        return isMatchingCompany({ id: invComp, slug: invComp } as any, cId)
+      })
+
+      const realRev = compInvoices.reduce((s, inv) => s + parseAmt(inv.totalInvoiced || inv.paymentReceived), 0)
+      const realOut = compInvoices.reduce((s, inv) => s + parseAmt(inv.due), 0)
+
+      let fallbackRev = 0
+      let fallbackOut = 0
+      const canonId = getCanonicalCompanyId(cId)
+      if (canonId === "tech") {
+        fallbackRev = 1925000
+        fallbackOut = 640000
+      } else if (canonId === "digital") {
+        fallbackRev = 1115000
+        fallbackOut = 420000
+      } else if (canonId === "saampark-ai-solutions") {
+        fallbackRev = 659700
+        fallbackOut = 294500
       }
-    ]
 
-    const totalRev = compConfigs.reduce((s, c) => s + c.baseRevenue, 0)
+      return {
+        id: String(c.id),
+        name: getCompanyFullName(c),
+        branches: compBranches.length,
+        users: compUsers.length,
+        projects: compProjects.length,
+        revenue: realRev > 0 ? realRev : fallbackRev,
+        outstanding: compInvoices.length > 0 ? realOut : fallbackOut,
+        percent: 0,
+        color: palette[idx % palette.length]
+      }
+    })
 
-    return compConfigs.map(c => ({
-      id: c.id,
-      name: c.name,
-      branches: c.branchesCount,
-      users: c.usersCount,
-      projects: c.projectsCount,
-      revenue: c.baseRevenue,
-      outstanding: c.baseOutstanding,
-      percent: Math.round((c.baseRevenue / totalRev) * 1000) / 10,
-      color: c.color
+    const totalRev = rows.reduce((s, r) => s + r.revenue, 0) || 1
+    return rows.map(r => ({
+      ...r,
+      percent: Math.round((r.revenue / totalRev) * 1000) / 10
     }))
-  }, [dbProjects])
+  }, [companies, branches, dbUsers, dbProjects, dbInvoices])
 
-  // Total calculated metrics (Real: 3 companies, 4 branches, 23 users)
-  const totalCompaniesCount = 3
-  const totalBranchesCount = 4
-  const activeUsersCount = dbUsers.length > 0 ? dbUsers.length : 23
-  const activeProjectsCount = dbProjects.length > 0 ? dbProjects.length : 8
-  const totalRevenueNumber = 3699700
-  const totalOutstandingNumber = 1354500
-  const totalReceivedNumber = 2345200
+  // Total calculated metrics
+  const totalCompaniesCount = companies.length
+  const totalBranchesCount = branches.length
+  const activeUsersCount = dbUsers.length
+  const activeProjectsCount = dbProjects.length
+  const totalRevenueNumber = realCompaniesData.reduce((s, c) => s + c.revenue, 0)
+  const totalOutstandingNumber = realCompaniesData.reduce((s, c) => s + c.outstanding, 0)
+  const totalReceivedNumber = Math.max(0, totalRevenueNumber - totalOutstandingNumber)
 
   // -------------------------------------------------------------------------
-  // REAL 4 BRANCHES BREAKDOWN (STRICTLY 4 BRANCHES)
+  // DYNAMIC BRANCHES BREAKDOWN (INCLUDING ALL NEWLY CREATED BRANCHES)
   // -------------------------------------------------------------------------
   const realBranchesData: BranchRow[] = React.useMemo(() => {
-    return [
-      {
-        id: "br-1",
-        name: "Head Office - Mumbai & Kolkata Technology Center",
-        companyName: "SAAMPARK Technology",
-        users: 14,
-        projects: 4,
-        revenue: 1350000,
-        outstanding: 430000
-      },
-      {
-        id: "br-2",
-        name: "Branch - Delhi",
-        companyName: "SAAMPARK Technology",
-        users: 4,
-        projects: 1,
-        revenue: 575000,
-        outstanding: 210000
-      },
-      {
-        id: "br-3",
-        name: "Head Office - Kolkata",
-        companyName: "SAAMPARK Digital Marketing & Research",
-        users: 3,
-        projects: 2,
-        revenue: 1115000,
-        outstanding: 420000
-      },
-      {
-        id: "br-5",
-        name: "Head Office - Bengaluru",
-        companyName: "SAAMPARK AI Solutions",
-        users: 2,
-        projects: 1,
-        revenue: 659700,
-        outstanding: 294500
+    return branches.map((b) => {
+      const parentComp = companies.find(c => isMatchingCompany(c, b.companyId))
+      const compName = parentComp ? getCompanyFullName(parentComp) : (b.companyId || "SAAMPARK")
+
+      const bUsers = dbUsers.filter(u => {
+        const uBranch = u.branchId || (u as any).branch_id || (u as any).branch
+        return isMatchingBranch({ id: uBranch, code: uBranch, name: uBranch } as any, b.id)
+      })
+
+      const bProjects = dbProjects.filter(p => {
+        const pBranch = p.branchId || (p as any).branch_id || (p as any).branch
+        return isMatchingBranch({ id: pBranch, code: pBranch, name: pBranch } as any, b.id)
+      })
+
+      const bInvoices = dbInvoices.filter(inv => {
+        const invBranch = inv.branchId || (inv as any).branch_id || (inv as any).branch
+        return isMatchingBranch({ id: invBranch, code: invBranch, name: invBranch } as any, b.id)
+      })
+
+      const realRev = bInvoices.reduce((s, inv) => s + parseAmt(inv.totalInvoiced || inv.paymentReceived), 0)
+      const realOut = bInvoices.reduce((s, inv) => s + parseAmt(inv.due), 0)
+
+      let fallbackRev = 0
+      let fallbackOut = 0
+      const bCode = String(b.code || b.id).toLowerCase()
+      if (bCode.includes("br-1") || b.id === "br-1") {
+        fallbackRev = 1350000
+        fallbackOut = 430000
+      } else if (bCode.includes("br-2") || b.id === "br-2") {
+        fallbackRev = 575000
+        fallbackOut = 210000
+      } else if (bCode.includes("br-3") || b.id === "br-3") {
+        fallbackRev = 1115000
+        fallbackOut = 420000
+      } else if (bCode.includes("br-5") || b.id === "br-5") {
+        fallbackRev = 659700
+        fallbackOut = 294500
       }
-    ]
-  }, [])
+
+      return {
+        id: String(b.id),
+        name: b.name,
+        companyName: compName,
+        users: bUsers.length,
+        projects: bProjects.length,
+        revenue: realRev > 0 ? realRev : fallbackRev,
+        outstanding: bInvoices.length > 0 ? realOut : fallbackOut
+      }
+    })
+  }, [branches, companies, dbUsers, dbProjects, dbInvoices])
 
   // Active Company / Branch Display Names
   const activeCompanyObj = companies.find(c => isMatchingCompany(c, activeCompanyId))
@@ -370,7 +391,7 @@ export function SuperAdminDashboard() {
     ? "All Companies"
     : (activeCompanyObj ? getCompanyFullName(activeCompanyObj) : "Selected Company")
 
-  const currentBranchObj = branches.find(b => b.id === activeBranchId)
+  const currentBranchObj = branches.find(b => isMatchingBranch(b, activeBranchId))
   const currentBranchDisplayName = activeBranchId === "all" || !activeBranchId
     ? "All Branches"
     : (currentBranchObj ? currentBranchObj.name : "Selected Branch")
@@ -387,56 +408,127 @@ export function SuperAdminDashboard() {
     return isNaN(parsed) ? 0 : parsed
   }
 
+  const isBranchSelected = Boolean(activeBranchId && activeBranchId !== "all")
+
   const scopedTasks = React.useMemo(() => {
-    if (!activeCompanyId || activeCompanyId === "all") return dbTasks
-    return dbTasks.filter(t => isMatchingCompany({ id: t.companyId, slug: t.companyId } as any, activeCompanyId))
-  }, [dbTasks, activeCompanyId])
+    let list = dbTasks
+    if (activeCompanyId && activeCompanyId !== "all") {
+      list = list.filter(t => isMatchingCompany({ id: t.companyId, slug: t.companyId } as any, activeCompanyId))
+    }
+    if (isBranchSelected) {
+      list = list.filter(t => {
+        const bId = t.branchId || (t as any).branch_id || (t as any).branch
+        return isMatchingBranch({ id: bId, code: bId } as any, activeBranchId)
+      })
+    }
+    return list
+  }, [dbTasks, activeCompanyId, activeBranchId, isBranchSelected])
 
   const scopedProjects = React.useMemo(() => {
-    if (!activeCompanyId || activeCompanyId === "all") return dbProjects
-    return dbProjects.filter(p => isMatchingCompany({ id: p.companyId, slug: p.companyId } as any, activeCompanyId))
-  }, [dbProjects, activeCompanyId])
+    let list = dbProjects
+    if (activeCompanyId && activeCompanyId !== "all") {
+      list = list.filter(p => isMatchingCompany({ id: p.companyId, slug: p.companyId } as any, activeCompanyId))
+    }
+    if (isBranchSelected) {
+      list = list.filter(p => {
+        const bId = p.branchId || (p as any).branch_id || (p as any).branch
+        return isMatchingBranch({ id: bId, code: bId } as any, activeBranchId)
+      })
+    }
+    return list
+  }, [dbProjects, activeCompanyId, activeBranchId, isBranchSelected])
 
   const scopedInvoices = React.useMemo(() => {
-    if (!activeCompanyId || activeCompanyId === "all") return dbInvoices
-    return dbInvoices.filter(inv => {
-      const cId = inv.companyId || (inv as any).company
-      if (!cId) return false
-      return isMatchingCompany({ id: cId, slug: cId } as any, activeCompanyId)
-    })
-  }, [dbInvoices, activeCompanyId])
+    let list = dbInvoices
+    if (activeCompanyId && activeCompanyId !== "all") {
+      list = list.filter(inv => {
+        const cId = inv.companyId || (inv as any).company
+        if (!cId) return false
+        return isMatchingCompany({ id: cId, slug: cId } as any, activeCompanyId)
+      })
+    }
+    if (isBranchSelected) {
+      list = list.filter(inv => {
+        const bId = inv.branchId || (inv as any).branch_id || (inv as any).branch
+        return isMatchingBranch({ id: bId, code: bId } as any, activeBranchId)
+      })
+    }
+    return list
+  }, [dbInvoices, activeCompanyId, activeBranchId, isBranchSelected])
 
   const scopedExpenses = React.useMemo(() => {
-    if (!activeCompanyId || activeCompanyId === "all") return dbExpenses
-    return dbExpenses.filter(exp => {
-      const cId = exp.companyId || (exp as any).company
-      if (!cId) return false
-      return isMatchingCompany({ id: cId, slug: cId } as any, activeCompanyId)
-    })
-  }, [dbExpenses, activeCompanyId])
+    let list = dbExpenses
+    if (activeCompanyId && activeCompanyId !== "all") {
+      list = list.filter(exp => {
+        const cId = exp.companyId || (exp as any).company
+        if (!cId) return false
+        return isMatchingCompany({ id: cId, slug: cId } as any, activeCompanyId)
+      })
+    }
+    if (isBranchSelected) {
+      list = list.filter(exp => {
+        const bId = exp.branchId || (exp as any).branch_id || (exp as any).branch
+        return isMatchingBranch({ id: bId, code: bId } as any, activeBranchId)
+      })
+    }
+    return list
+  }, [dbExpenses, activeCompanyId, activeBranchId, isBranchSelected])
+
+  const scopedOrders = React.useMemo(() => {
+    let list = dbOrders
+    if (activeCompanyId && activeCompanyId !== "all") {
+      list = list.filter(ord => {
+        const cId = ord.companyId || (ord as any).company
+        if (!cId) return false
+        return isMatchingCompany({ id: cId, slug: cId } as any, activeCompanyId)
+      })
+    }
+    if (isBranchSelected) {
+      list = list.filter(ord => {
+        const bId = ord.branchId || (ord as any).branch_id || (ord as any).branch
+        return isMatchingBranch({ id: bId, code: bId } as any, activeBranchId)
+      })
+    }
+    return list
+  }, [dbOrders, activeCompanyId, activeBranchId, isBranchSelected])
 
   const scopedUsers = React.useMemo(() => {
-    if (!activeCompanyId || activeCompanyId === "all") return dbUsers
-    return dbUsers.filter(u => {
-      if (Array.isArray(u.companyIds) && u.companyIds.length > 0) {
-        return u.companyIds.some((cid: any) => isMatchingCompany({ id: cid, slug: cid } as any, activeCompanyId))
-      }
-      if (typeof u.companyIds === "string") {
-        try {
-          const parsed = JSON.parse(u.companyIds)
-          if (Array.isArray(parsed)) {
-            return parsed.some((cid: any) => isMatchingCompany({ id: cid, slug: cid } as any, activeCompanyId))
-          }
-        } catch {}
-      }
-      const cId = u.companyId || u.company_id || u.company
-      if (!cId) return false
-      return isMatchingCompany({ id: cId, slug: cId } as any, activeCompanyId)
-    })
-  }, [dbUsers, activeCompanyId])
+    let list = dbUsers
+    if (activeCompanyId && activeCompanyId !== "all") {
+      list = list.filter(u => {
+        if (Array.isArray(u.companyIds) && u.companyIds.length > 0) {
+          return u.companyIds.some((cid: any) => isMatchingCompany({ id: cid, slug: cid } as any, activeCompanyId))
+        }
+        if (typeof u.companyIds === "string") {
+          try {
+            const parsed = JSON.parse(u.companyIds)
+            if (Array.isArray(parsed)) {
+              return parsed.some((cid: any) => isMatchingCompany({ id: cid, slug: cid } as any, activeCompanyId))
+            }
+          } catch {}
+        }
+        const cId = u.companyId || u.company_id || u.company
+        if (!cId) return false
+        return isMatchingCompany({ id: cId, slug: cId } as any, activeCompanyId)
+      })
+    }
+    if (isBranchSelected) {
+      list = list.filter(u => {
+        if (Array.isArray(u.branchIds) && u.branchIds.length > 0) {
+          return u.branchIds.some((bid: any) => isMatchingBranch({ id: bid, code: bid } as any, activeBranchId))
+        }
+        const bId = u.branchId || u.branch_id || u.branch
+        return isMatchingBranch({ id: bId, code: bId } as any, activeBranchId)
+      })
+    }
+    return list
+  }, [dbUsers, activeCompanyId, activeBranchId, isBranchSelected])
 
   // Company baseline fallback for canonical companies if no user invoices yet created
   const companyBaseline = React.useMemo(() => {
+    if (isBranchSelected) {
+      return { invoiced: 0, received: 0, due: 0, expenses: 0, paidCount: 0, partCount: 0, dueCount: 0 }
+    }
     if (!activeCompanyId || activeCompanyId === "all") {
       return { 
         invoiced: 2565000 + 1535000 + 954200, 
@@ -460,7 +552,7 @@ export function SuperAdminDashboard() {
     }
     // Custom/newly created companies default to real 0 data
     return { invoiced: 0, received: 0, due: 0, expenses: 0, paidCount: 0, partCount: 0, dueCount: 0 }
-  }, [activeCompanyId])
+  }, [activeCompanyId, isBranchSelected])
 
   const realInvoicedSum = scopedInvoices.reduce((acc, i) => acc + parseAmt(i.totalInvoiced), 0)
   const realReceivedSum = scopedInvoices.reduce((acc, i) => acc + parseAmt(i.paymentReceived), 0)
@@ -469,15 +561,15 @@ export function SuperAdminDashboard() {
 
   // Real company financial totals
   const hasRealInvoices = scopedInvoices.length > 0
-  const activeCompanyInvoiced = hasRealInvoices ? realInvoicedSum : companyBaseline.invoiced
-  const activeCompanyReceived = hasRealInvoices ? realReceivedSum : companyBaseline.received
-  const activeCompanyDue = hasRealInvoices ? realDueSum : companyBaseline.due
-  const activeCompanyExpenses = scopedExpenses.length > 0 ? realExpenseSum : companyBaseline.expenses
+  const activeCompanyInvoiced = hasRealInvoices ? realInvoicedSum : (isBranchSelected ? 0 : companyBaseline.invoiced)
+  const activeCompanyReceived = hasRealInvoices ? realReceivedSum : (isBranchSelected ? 0 : companyBaseline.received)
+  const activeCompanyDue = hasRealInvoices ? realDueSum : (isBranchSelected ? 0 : companyBaseline.due)
+  const activeCompanyExpenses = scopedExpenses.length > 0 ? realExpenseSum : (isBranchSelected ? 0 : companyBaseline.expenses)
   const activeCompanyMargin = activeCompanyReceived - activeCompanyExpenses
 
-  const paidInvoicesCount = scopedInvoices.filter(i => i.status === "Fully paid").length || companyBaseline.paidCount
-  const partialInvoicesCount = scopedInvoices.filter(i => i.status === "Partially paid").length || companyBaseline.partCount
-  const dueInvoicesCount = scopedInvoices.filter(i => i.status === "Not paid" || i.status === "Payment Pending" || i.status === "Draft").length || companyBaseline.dueCount
+  const paidInvoicesCount = scopedInvoices.filter(i => i.status === "Fully paid").length || (isBranchSelected ? 0 : companyBaseline.paidCount)
+  const partialInvoicesCount = scopedInvoices.filter(i => i.status === "Partially paid").length || (isBranchSelected ? 0 : companyBaseline.partCount)
+  const dueInvoicesCount = scopedInvoices.filter(i => i.status === "Not paid" || i.status === "Payment Pending" || i.status === "Draft").length || (isBranchSelected ? 0 : companyBaseline.dueCount)
 
   const openProjectsCount = scopedProjects.filter(p => String(p.status) === "In Progress" || String(p.status) === "Open").length
   const completedProjectsCount = scopedProjects.filter(p => String(p.status) === "Completed" || (p.progress || 0) >= 100).length
@@ -492,14 +584,14 @@ export function SuperAdminDashboard() {
   const taskDoneCount = scopedTasks.filter(t => String(t.status) === "Done" || String(t.status) === "Completed").length
 
   const taskDonutData = [
-    { label: "To do", value: taskTodoCount || 1, color: "#eab308" },
-    { label: "In progress", value: taskInProgressCount || 0, color: "#3b82f6" },
-    { label: "Review", value: taskReviewCount || 0, color: "#a855f7" },
-    { label: "Done", value: taskDoneCount || 0, color: "#10b981" },
+    { label: "To do", value: taskTodoCount || (scopedTasks.length === 0 ? 0 : 1), color: "#eab308" },
+    { label: "In progress", value: taskInProgressCount, color: "#3b82f6" },
+    { label: "Review", value: taskReviewCount, color: "#a855f7" },
+    { label: "Done", value: taskDoneCount, color: "#10b981" },
   ]
 
   const incomeVsExpenseData = [
-    { label: "Revenue Collected", value: Math.max(1, activeCompanyReceived), color: "#10b981" },
+    { label: "Revenue Collected", value: Math.max(0, activeCompanyReceived), color: "#10b981" },
     { label: "Expenses Incurred", value: Math.max(0, activeCompanyExpenses), color: "#ec4899" },
   ]
 
@@ -623,7 +715,7 @@ export function SuperAdminDashboard() {
             </div>
             <div className="text-right">
               <p className="text-xs text-slate-400 font-medium">Total Revenue</p>
-              <p className="text-xl font-black text-slate-900 dark:text-white mt-0.5">₹36,99,700</p>
+              <p className="text-xl font-black text-slate-900 dark:text-white mt-0.5">{formatINR(totalRevenueNumber)}</p>
               <p className="text-[11px] text-slate-400">All Companies</p>
             </div>
           </div>
@@ -637,7 +729,7 @@ export function SuperAdminDashboard() {
       {/* ── SECTION 3: MIDDLE ROW (3 VISUAL ANALYSIS CARDS: 1/3, 1/3, 1/3) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Card 1: Company Wise Overview (Donut Chart - STRICTLY 3 REAL COMPANIES) */}
+        {/* Card 1: Company Wise Overview (Donut Chart - Dynamic Companies) */}
         <div className="bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-slate-200/80 dark:border-zinc-800 shadow-xs flex flex-col justify-between">
           <div>
             <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-6">
@@ -645,18 +737,31 @@ export function SuperAdminDashboard() {
             </h3>
 
             <div className="flex items-center justify-between gap-4">
-              {/* Donut Chart with Center Text for 3 Companies */}
+              {/* Donut Chart with Center Text for Companies */}
               <div className="relative flex items-center justify-center shrink-0 w-36 h-36">
                 <svg viewBox="0 0 100 100" className="w-36 h-36 -rotate-90 transform">
-                  {/* SAAMPARK Technology: 52% -> offset 0 */}
-                  <circle cx="50" cy="50" r="38" fill="none" stroke="#2563eb" strokeWidth="12" strokeDasharray="124 238.7" strokeDashoffset="0" />
-                  {/* SAAMPARK Digital Marketing: 30.1% -> offset -124 */}
-                  <circle cx="50" cy="50" r="38" fill="none" stroke="#10b981" strokeWidth="12" strokeDasharray="72 238.7" strokeDashoffset="-124" />
-                  {/* SAAMPARK AI Solutions: 17.9% -> offset -196 */}
-                  <circle cx="50" cy="50" r="38" fill="none" stroke="#8b5cf6" strokeWidth="12" strokeDasharray="42.7 238.7" strokeDashoffset="-196" />
+                  {realCompaniesData.map((item, idx) => {
+                    const circ = 238.76
+                    const strokeLen = Math.max(0, (item.percent / 100) * circ)
+                    const prevPercentSum = realCompaniesData.slice(0, idx).reduce((s, x) => s + x.percent, 0)
+                    const offset = -((prevPercentSum / 100) * circ)
+                    return (
+                      <circle
+                        key={item.id}
+                        cx="50"
+                        cy="50"
+                        r="38"
+                        fill="none"
+                        stroke={item.color}
+                        strokeWidth="12"
+                        strokeDasharray={`${strokeLen} ${circ}`}
+                        strokeDashoffset={offset}
+                      />
+                    )
+                  })}
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
-                  <span className="text-base font-black text-slate-900 dark:text-white">₹36.99L</span>
+                  <span className="text-base font-black text-slate-900 dark:text-white">{formatINR(totalRevenueNumber)}</span>
                   <span className="text-[10px] text-slate-400 font-medium">Total Revenue</span>
                 </div>
               </div>
@@ -771,15 +876,15 @@ export function SuperAdminDashboard() {
             <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-slate-100 dark:border-zinc-800/80 text-center">
               <div className="bg-slate-50 dark:bg-zinc-800/50 p-2.5 rounded-xl">
                 <p className="text-[10px] text-slate-400 font-medium">Total Invoiced</p>
-                <p className="text-xs font-black text-blue-600 mt-0.5">₹36,99,700</p>
+                <p className="text-xs font-black text-blue-600 mt-0.5">{formatINR(totalRevenueNumber)}</p>
               </div>
               <div className="bg-slate-50 dark:bg-zinc-800/50 p-2.5 rounded-xl">
                 <p className="text-[10px] text-slate-400 font-medium">Total Received</p>
-                <p className="text-xs font-black text-emerald-600 mt-0.5">₹23,45,200</p>
+                <p className="text-xs font-black text-emerald-600 mt-0.5">{formatINR(totalReceivedNumber)}</p>
               </div>
               <div className="bg-slate-50 dark:bg-zinc-800/50 p-2.5 rounded-xl">
                 <p className="text-[10px] text-slate-400 font-medium">Outstanding</p>
-                <p className="text-xs font-black text-rose-600 mt-0.5">₹13,54,500</p>
+                <p className="text-xs font-black text-rose-600 mt-0.5">{formatINR(totalOutstandingNumber)}</p>
               </div>
             </div>
           </div>
@@ -1016,11 +1121,11 @@ export function SuperAdminDashboard() {
             <FolderKanban size={18} className="text-blue-600" />
             <span>Operational Management & Shift Tracking</span>
           </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Live attendance clock, project pipelines, billing breakdown, and staff monitoring for {currentCompanyDisplayName}
-            </p>
-          </div>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Live attendance clock, project pipelines, billing breakdown, and staff monitoring for {currentCompanyDisplayName}{isBranchSelected ? ` — ${currentBranchDisplayName}` : ""}
+          </p>
         </div>
+      </div>
 
         {/* Operational KPI & Clock-In Row */}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-6">
@@ -1066,15 +1171,15 @@ export function SuperAdminDashboard() {
           <Widget title="Projects Overview" icon={Grid} className="flex flex-col">
             <div className="flex justify-around items-center py-6 text-center">
               <div>
-                <p className="text-2xl font-bold text-emerald-500">{openProjectsCount || 5}</p>
+                <p className="text-2xl font-bold text-emerald-500">{openProjectsCount}</p>
                 <p className="text-xs text-muted-foreground mt-1">In Progress</p>
               </div>
               <div>
-                <p className="text-2xl font-bold text-blue-500">{completedProjectsCount || 2}</p>
+                <p className="text-2xl font-bold text-blue-500">{completedProjectsCount}</p>
                 <p className="text-xs text-muted-foreground mt-1">Completed</p>
               </div>
               <div>
-                <p className="text-2xl font-bold text-yellow-500">{holdProjectsCount || 1}</p>
+                <p className="text-2xl font-bold text-yellow-500">{holdProjectsCount}</p>
                 <p className="text-xs text-muted-foreground mt-1">On Hold</p>
               </div>
             </div>
@@ -1082,24 +1187,24 @@ export function SuperAdminDashboard() {
               <div className="h-6 w-full rounded-full border border-emerald-500 p-0.5 relative flex items-center">
                 <motion.div 
                   initial={{ width: 0 }} 
-                  animate={{ width: `${averageProjectProgression || 65}%` }} 
-                  transition={{ duration: 1, ease: "easeOut" }}
+                  animate={{ width: `${averageProjectProgression}%` }} 
+                  transition={{ duration: 1, ease: "easeOut" }} 
                   className="h-full bg-emerald-300/50 rounded-full" 
                 />
                 <span className="absolute inset-0 flex items-center justify-center text-xs text-emerald-700 dark:text-emerald-300 font-bold z-10 pointer-events-none">
-                  Average Progression: {averageProjectProgression || 65}%
+                  Average Progression: {averageProjectProgression}%
                 </span>
               </div>
             </div>
             
             <div className="grid grid-cols-2 mt-6 pt-4 border-t border-border/40 gap-4 text-xs">
               <div className="text-center border-r border-border/40">
-                 <p className="text-lg font-bold text-foreground">{scopedProjects.length || 8}</p>
-                 <p className="text-[11px] text-muted-foreground mt-0.5">Total Company Projects</p>
+                 <p className="text-lg font-bold text-foreground">{scopedProjects.length}</p>
+                 <p className="text-[11px] text-muted-foreground mt-0.5">{isBranchSelected ? "Branch Projects" : "Total Company Projects"}</p>
               </div>
               <div className="text-center">
-                 <p className="text-lg font-bold text-blue-600">{dbOrders.length || 12}</p>
-                 <p className="text-[11px] text-muted-foreground mt-0.5">Sales Orders</p>
+                 <p className="text-lg font-bold text-blue-600">{scopedOrders.length}</p>
+                 <p className="text-[11px] text-muted-foreground mt-0.5">{isBranchSelected ? "Branch Orders" : "Sales Orders"}</p>
               </div>
             </div>
           </Widget>
@@ -1113,7 +1218,7 @@ export function SuperAdminDashboard() {
                   count: paidInvoicesCount, 
                   color: "bg-emerald-500", 
                   text: "text-emerald-500", 
-                  percent: Math.round((paidInvoicesCount / (paidInvoicesCount + partialInvoicesCount + dueInvoicesCount || 1)) * 100), 
+                  percent: (paidInvoicesCount + partialInvoicesCount + dueInvoicesCount) > 0 ? Math.round((paidInvoicesCount / (paidInvoicesCount + partialInvoicesCount + dueInvoicesCount)) * 100) : 0, 
                   amount: formatINR(activeCompanyReceived) 
                 },
                 { 
@@ -1121,7 +1226,7 @@ export function SuperAdminDashboard() {
                   count: partialInvoicesCount, 
                   color: "bg-amber-500", 
                   text: "text-amber-500", 
-                  percent: Math.round((partialInvoicesCount / (paidInvoicesCount + partialInvoicesCount + dueInvoicesCount || 1)) * 100), 
+                  percent: (paidInvoicesCount + partialInvoicesCount + dueInvoicesCount) > 0 ? Math.round((partialInvoicesCount / (paidInvoicesCount + partialInvoicesCount + dueInvoicesCount)) * 100) : 0, 
                   amount: formatINR(Math.round(activeCompanyDue * 0.25)) 
                 },
                 { 
@@ -1129,7 +1234,7 @@ export function SuperAdminDashboard() {
                   count: dueInvoicesCount, 
                   color: "bg-rose-500", 
                   text: "text-rose-500", 
-                  percent: Math.round((dueInvoicesCount / (paidInvoicesCount + partialInvoicesCount + dueInvoicesCount || 1)) * 100), 
+                  percent: (paidInvoicesCount + partialInvoicesCount + dueInvoicesCount) > 0 ? Math.round((dueInvoicesCount / (paidInvoicesCount + partialInvoicesCount + dueInvoicesCount)) * 100) : 0, 
                   amount: formatINR(activeCompanyDue) 
                 },
               ].map((inv, i) => (

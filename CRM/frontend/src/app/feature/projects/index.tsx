@@ -89,10 +89,9 @@ export default function ProjectsMain() {
     const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
 
     const checkBranch = (p: any) => {
-      if (!targetBranch) return true
+      if (!targetBranch || targetBranch === "all") return true
       const pBranch = String(p.branchId || p.branch_id || "").toLowerCase().trim()
       const pBranchName = String(p.branchName || p.branch_name || "").toLowerCase().trim()
-      if (!pBranch && !pBranchName) return true
       return (pBranch && (pBranch === targetBranchId || (targetBranchName && pBranch === targetBranchName))) ||
              (pBranchName && (pBranchName === targetBranchName || pBranchName === targetBranchId))
     }
@@ -106,7 +105,7 @@ export default function ProjectsMain() {
           return !pComp || pComp === userComp || (userComp === "tech" && !p.companyId)
         })
       }
-      if (targetBranch) {
+      if (targetBranch && targetBranch !== "all") {
         filtered = filtered.filter((p) => checkBranch(p))
       }
       return filtered

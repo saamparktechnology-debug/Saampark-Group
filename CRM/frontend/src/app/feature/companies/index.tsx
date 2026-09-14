@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/Input"
 import { CompanyApiService, BranchApiService, SubBranchApiService } from "./services/companyService"
 import { Company, Branch, SubBranch } from "./types"
 import { useAuthStore, isMatchingCompany } from "@/store/useAuthStore"
-import { markGlobalItemDeleted, fetchModuleDataFromDB, saveModuleDataToDB, syncGlobalDeletedIds, isGlobalItemDeleted, getLocalDeletedIds } from "@/lib/storageSync"
+import { markGlobalItemDeleted, unmarkGlobalItemDeleted, fetchModuleDataFromDB, saveModuleDataToDB, syncGlobalDeletedIds, isGlobalItemDeleted, getLocalDeletedIds } from "@/lib/storageSync"
 import { ImageUploadField } from "@/components/ui/ImageUploadField"
 
 const INDUSTRIES = [
@@ -322,16 +322,41 @@ export default function CompaniesMain() {
         })
       }
 
+      // Overlay Auth Store branches (created in branches section or companies section)
+      const storeBranches = useAuthStore.getState().branches || []
+      if (Array.isArray(storeBranches) && storeBranches.length > 0) {
+        storeBranches.forEach(b => {
+          if (!isBranchDeleted(b.id, b.code)) {
+            const bComp = b.company_id || (b as any).companyId
+            if (finalCompanies.some(c => isMatchingCompany(c, bComp))) {
+              const strKey = String(b.id)
+              const prev = branchMap.get(strKey)
+              const resolvedComp = bComp || prev?.company_id || prev?.companyId
+              branchMap.set(strKey, { ...prev, ...b, company_id: resolvedComp, companyId: resolvedComp })
+            }
+          }
+        })
+      }
+
       const finalBranches = Array.from(branchMap.values())
       setBranches(finalBranches)
 
       const validBranchIds = new Set(finalBranches.map(b => String(b.id).toLowerCase().trim()))
 
       // 3. Merge SubBranches (excluding deleted ones and sub-branches of deleted branches)
-      const rawSubList = (Array.isArray(dbSubBranches) && dbSubBranches.length > 0)
-        ? dbSubBranches
-        : (Array.isArray(subBranchRes) ? subBranchRes : [])
-      const subList = rawSubList.filter(sb => {
+      const storeSubBranches = useAuthStore.getState().subBranches || []
+      const combinedSubList = [
+        ...(Array.isArray(dbSubBranches) ? dbSubBranches : []),
+        ...(Array.isArray(subBranchRes) ? subBranchRes : []),
+        ...(Array.isArray(storeSubBranches) ? storeSubBranches : [])
+      ]
+      const subMap = new Map<string, any>()
+      combinedSubList.forEach(sb => {
+        if (sb && sb.id) {
+          subMap.set(String(sb.id), sb)
+        }
+      })
+      const subList = Array.from(subMap.values()).filter(sb => {
         const sbBranch = String(sb.branch_id || (sb as any).branchId || '').toLowerCase().trim()
         return !isSubBranchDeleted(sb.id, sb.code) && (!sbBranch || validBranchIds.has(sbBranch))
       })
@@ -498,20 +523,36 @@ export default function CompaniesMain() {
     if (!branchForm.name.trim()) return
     setSaving(true)
     try {
-      const payload = {
+      const payload: any = {
         ...branchForm,
         name: branchForm.name.trim(),
         code: branchForm.code.trim().toUpperCase(),
+        companyId: branchCompanyId,
+        company_id: branchCompanyId,
+        bankDetails: {
+          bankName: branchForm.bank_name,
+          accountHolder: branchForm.account_holder,
+          accountNumber: branchForm.account_number,
+          ifscCode: branchForm.ifsc_code,
+          upiId: branchForm.upi_id,
+        }
       }
+
+      unmarkGlobalItemDeleted(payload.code, "branches")
+      if (editingBranch?.id) unmarkGlobalItemDeleted(editingBranch.id, "branches")
+
       if (editingBranch) {
-        await BranchApiService.update(String(editingBranch.id), payload)
+        await useAuthStore.getState().updateBranch(editingBranch.id, payload).catch(() => {})
+        await BranchApiService.update(String(editingBranch.id), payload).catch(() => {})
       } else {
-        await BranchApiService.create(branchCompanyId, payload)
+        await useAuthStore.getState().addBranch(payload).catch(() => {})
+        await BranchApiService.create(branchCompanyId, payload).catch(() => {})
       }
       setShowBranchModal(false)
       setEditingBranch(null)
       setExpandedCompanies(prev => new Set([...prev, branchCompanyId]))
       await loadData()
+      await useAuthStore.getState().fetchBranches().catch(() => {})
     } catch (err) {
       console.error("Error saving branch:", err)
       alert("Failed to save branch.")
@@ -559,22 +600,33 @@ export default function CompaniesMain() {
     if (!subBranchForm.name.trim()) return
     setSaving(true)
     try {
-      const payload = {
+      const payload: any = {
         branch_id: subBranchBranchId,
+        parentBranchId: subBranchBranchId,
+        companyId: subBranchCompanyId,
+        company_id: subBranchCompanyId,
         ...subBranchForm,
         name: subBranchForm.name.trim(),
         code: subBranchForm.code.trim().toUpperCase(),
         revenue_share_pct: Number(subBranchForm.revenue_share_pct),
+        revenueSharePct: Number(subBranchForm.revenue_share_pct),
       }
+
+      unmarkGlobalItemDeleted(payload.code, "subBranches")
+      if (editingSubBranch?.id) unmarkGlobalItemDeleted(editingSubBranch.id, "subBranches")
+
       if (editingSubBranch) {
-        await SubBranchApiService.update(String(editingSubBranch.id), payload)
+        await useAuthStore.getState().updateSubBranch(editingSubBranch.id, payload).catch(() => {})
+        await SubBranchApiService.update(String(editingSubBranch.id), payload).catch(() => {})
       } else {
-        await SubBranchApiService.create(subBranchCompanyId, payload)
+        await useAuthStore.getState().addSubBranch(payload).catch(() => {})
+        await SubBranchApiService.create(subBranchCompanyId, payload).catch(() => {})
       }
       setShowSubBranchModal(false)
       setEditingSubBranch(null)
       setExpandedBranches(prev => new Set([...prev, subBranchBranchId]))
       await loadData()
+      await useAuthStore.getState().fetchSubBranches().catch(() => {})
     } catch (err) {
       console.error("Error saving sub-branch:", err)
       alert("Failed to save sub-branch.")

@@ -1020,7 +1020,7 @@ function InvoicesPageContent() {
     const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
 
     const checkBranch = (i: any) => {
-      if (!targetBranch) return true
+      if (!targetBranch || targetBranch === "all") return true
       const iBranch = String(i.branchId || i.branch_id || "").toLowerCase().trim()
       const iBranchName = String(i.branchName || i.branch_name || "").toLowerCase().trim()
       const iBranchCode = String(i.branchCode || i.branch_code || "").toLowerCase().trim()
@@ -1042,7 +1042,7 @@ function InvoicesPageContent() {
           return iComp === userComp || (userComp === "tech" && !i.companyId)
         })
       }
-      if (targetBranch) {
+      if (targetBranch && targetBranch !== "all") {
         filtered = filtered.filter((i) => checkBranch(i))
       }
     }
