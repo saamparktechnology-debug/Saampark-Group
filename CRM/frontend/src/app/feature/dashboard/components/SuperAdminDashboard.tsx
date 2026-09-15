@@ -71,6 +71,27 @@ interface BranchRow {
   outstanding: number
 }
 
+function parseAmt(val: any): number {
+  if (typeof val === "number") return isNaN(val) ? 0 : val
+  if (!val) return 0
+  const clean = String(val).replace(/[^0-9.-]+/g, "")
+  const parsed = parseFloat(clean)
+  return isNaN(parsed) ? 0 : parsed
+}
+
+function formatINR(val: any): string {
+  const num = typeof val === "number" ? (isNaN(val) ? 0 : val) : parseAmt(val)
+  return `₹${Math.round(num).toLocaleString("en-IN")}`
+}
+
+function formatTime(secs: number): string {
+  const s = Math.max(0, Number(secs) || 0)
+  const h = Math.floor(s / 3600).toString().padStart(2, "0")
+  const m = Math.floor((s % 3600) / 60).toString().padStart(2, "0")
+  const sec = (s % 60).toString().padStart(2, "0")
+  return `${h}:${m}:${sec}`
+}
+
 export function SuperAdminDashboard() {
   const { 
     user, 
@@ -248,17 +269,6 @@ export function SuperAdminDashboard() {
     }
   }
 
-  const formatTime = (secs: number) => {
-    const h = Math.floor(secs / 3600).toString().padStart(2, "0")
-    const m = Math.floor((secs % 3600) / 60).toString().padStart(2, "0")
-    const s = (secs % 60).toString().padStart(2, "0")
-    return `${h}:${m}:${s}`
-  }
-
-  const formatINR = (val: number) => {
-    return `₹${val.toLocaleString("en-IN")}`
-  }
-
   // -------------------------------------------------------------------------
   // REAL 3 COMPANIES BREAKDOWN (STRICTLY 3 COMPANIES)
   // -------------------------------------------------------------------------
@@ -268,18 +278,35 @@ export function SuperAdminDashboard() {
   const realCompaniesData: CompanyRow[] = React.useMemo(() => {
     const palette = ["#2563eb", "#10b981", "#8b5cf6", "#f59e0b", "#ec4899", "#06b6d4"]
     
-    const rows = companies.map((c, idx) => {
+    const validCompanies = Array.isArray(companies) ? companies : []
+    const validBranches = Array.isArray(branches) ? branches : []
+    const validUsers = Array.isArray(dbUsers) ? dbUsers : []
+    const validProjects = Array.isArray(dbProjects) ? dbProjects : []
+    const validInvoices = Array.isArray(dbInvoices) ? dbInvoices : []
+
+    const rows = validCompanies.map((c, idx) => {
+      if (!c) return null
       const cId = c.id
-      const compBranches = branches.filter(b => isMatchingCompany({ id: b.companyId, slug: b.companyId } as any, cId))
-      const compUsers = dbUsers.filter(u => {
+      const compBranches = validBranches.filter(b => b && isMatchingCompany({ id: b.companyId, slug: b.companyId } as any, cId))
+      const compUsers = validUsers.filter(u => {
+        if (!u) return false
         if (Array.isArray(u.companyIds) && u.companyIds.length > 0) {
           return u.companyIds.some((cid: any) => isMatchingCompany({ id: cid, slug: cid } as any, cId))
+        }
+        if (typeof u.companyIds === "string") {
+          try {
+            const parsed = JSON.parse(u.companyIds)
+            if (Array.isArray(parsed)) {
+              return parsed.some((cid: any) => isMatchingCompany({ id: cid, slug: cid } as any, cId))
+            }
+          } catch {}
         }
         const uComp = u.companyId || u.company_id || u.company
         return isMatchingCompany({ id: uComp, slug: uComp } as any, cId)
       })
-      const compProjects = dbProjects.filter(p => isMatchingCompany({ id: p.companyId, slug: p.companyId } as any, cId))
-      const compInvoices = dbInvoices.filter(inv => {
+      const compProjects = validProjects.filter(p => p && isMatchingCompany({ id: p.companyId, slug: p.companyId } as any, cId))
+      const compInvoices = validInvoices.filter(inv => {
+        if (!inv) return false
         const invComp = inv.companyId || (inv as any).company
         return isMatchingCompany({ id: invComp, slug: invComp } as any, cId)
       })
@@ -302,7 +329,7 @@ export function SuperAdminDashboard() {
       }
 
       return {
-        id: String(c.id),
+        id: String(c.id || idx),
         name: getCompanyFullName(c),
         branches: compBranches.length,
         users: compUsers.length,
@@ -312,43 +339,53 @@ export function SuperAdminDashboard() {
         percent: 0,
         color: palette[idx % palette.length]
       }
-    })
+    }).filter(Boolean) as CompanyRow[]
 
-    const totalRev = rows.reduce((s, r) => s + r.revenue, 0) || 1
+    const totalRev = rows.reduce((s, r) => s + (Number(r?.revenue) || 0), 0) || 1
     return rows.map(r => ({
       ...r,
-      percent: Math.round((r.revenue / totalRev) * 1000) / 10
+      percent: Math.round(((Number(r?.revenue) || 0) / totalRev) * 1000) / 10
     }))
   }, [companies, branches, dbUsers, dbProjects, dbInvoices])
 
   // Total calculated metrics
-  const totalCompaniesCount = companies.length
-  const totalBranchesCount = branches.length
-  const activeUsersCount = dbUsers.length
-  const activeProjectsCount = dbProjects.length
-  const totalRevenueNumber = realCompaniesData.reduce((s, c) => s + c.revenue, 0)
-  const totalOutstandingNumber = realCompaniesData.reduce((s, c) => s + c.outstanding, 0)
+  const totalCompaniesCount = (companies || []).length
+  const totalBranchesCount = (branches || []).length
+  const activeUsersCount = (dbUsers || []).length
+  const activeProjectsCount = (dbProjects || []).length
+  const totalRevenueNumber = (realCompaniesData || []).reduce((s, c) => s + (Number(c?.revenue) || 0), 0)
+  const totalOutstandingNumber = (realCompaniesData || []).reduce((s, c) => s + (Number(c?.outstanding) || 0), 0)
   const totalReceivedNumber = Math.max(0, totalRevenueNumber - totalOutstandingNumber)
 
   // -------------------------------------------------------------------------
   // DYNAMIC BRANCHES BREAKDOWN (INCLUDING ALL NEWLY CREATED BRANCHES)
   // -------------------------------------------------------------------------
   const realBranchesData: BranchRow[] = React.useMemo(() => {
-    return branches.map((b) => {
-      const parentComp = companies.find(c => isMatchingCompany(c, b.companyId))
+    const validBranches = Array.isArray(branches) ? branches : []
+    const validCompanies = Array.isArray(companies) ? companies : []
+    const validUsers = Array.isArray(dbUsers) ? dbUsers : []
+    const validProjects = Array.isArray(dbProjects) ? dbProjects : []
+    const validInvoices = Array.isArray(dbInvoices) ? dbInvoices : []
+
+    return validBranches.map((b) => {
+      if (!b) return null
+      const parentComp = validCompanies.find(c => c && isMatchingCompany(c, b.companyId))
       const compName = parentComp ? getCompanyFullName(parentComp) : (b.companyId || "SAAMPARK")
 
-      const bUsers = dbUsers.filter(u => {
+      const bUsers = validUsers.filter(u => {
+        if (!u) return false
         const uBranch = u.branchId || (u as any).branch_id || (u as any).branch
         return isMatchingBranch({ id: uBranch, code: uBranch, name: uBranch } as any, b.id)
       })
 
-      const bProjects = dbProjects.filter(p => {
+      const bProjects = validProjects.filter(p => {
+        if (!p) return false
         const pBranch = p.branchId || (p as any).branch_id || (p as any).branch
         return isMatchingBranch({ id: pBranch, code: pBranch, name: pBranch } as any, b.id)
       })
 
-      const bInvoices = dbInvoices.filter(inv => {
+      const bInvoices = validInvoices.filter(inv => {
+        if (!inv) return false
         const invBranch = inv.branchId || (inv as any).branch_id || (inv as any).branch
         return isMatchingBranch({ id: invBranch, code: invBranch, name: invBranch } as any, b.id)
       })
@@ -382,41 +419,34 @@ export function SuperAdminDashboard() {
         revenue: realRev > 0 ? realRev : fallbackRev,
         outstanding: bInvoices.length > 0 ? realOut : fallbackOut
       }
-    })
+    }).filter(Boolean) as BranchRow[]
   }, [branches, companies, dbUsers, dbProjects, dbInvoices])
 
   // Active Company / Branch Display Names
-  const activeCompanyObj = companies.find(c => isMatchingCompany(c, activeCompanyId))
+  const activeCompanyObj = (companies || []).find(c => c && isMatchingCompany(c, activeCompanyId))
   const currentCompanyDisplayName = activeCompanyId === "all" || !activeCompanyId
     ? "All Companies"
     : (activeCompanyObj ? getCompanyFullName(activeCompanyObj) : "Selected Company")
 
-  const currentBranchObj = branches.find(b => isMatchingBranch(b, activeBranchId))
+  const currentBranchObj = (branches || []).find(b => b && isMatchingBranch(b, activeBranchId))
   const currentBranchDisplayName = activeBranchId === "all" || !activeBranchId
     ? "All Branches"
     : (currentBranchObj ? currentBranchObj.name : "Selected Branch")
 
   // Selected User Object for Attendance Table
-  const selectedUserObj = dbUsers.find(u => u.email === selectedUserEmail) || dbUsers[0] || user
+  const selectedUserObj = (dbUsers || []).find(u => u && u.email === selectedUserEmail) || (dbUsers || [])[0] || user
 
   // Scoped lists for operational widgets
-  const parseAmt = (val: any): number => {
-    if (typeof val === "number") return isNaN(val) ? 0 : val
-    if (!val) return 0
-    const clean = String(val).replace(/[^0-9.-]+/g, "")
-    const parsed = parseFloat(clean)
-    return isNaN(parsed) ? 0 : parsed
-  }
-
   const isBranchSelected = Boolean(activeBranchId && activeBranchId !== "all")
 
   const scopedTasks = React.useMemo(() => {
-    let list = dbTasks
+    let list = Array.isArray(dbTasks) ? dbTasks : []
     if (activeCompanyId && activeCompanyId !== "all") {
-      list = list.filter(t => isMatchingCompany({ id: t.companyId, slug: t.companyId } as any, activeCompanyId))
+      list = list.filter(t => t && isMatchingCompany({ id: t.companyId, slug: t.companyId } as any, activeCompanyId))
     }
     if (isBranchSelected) {
       list = list.filter(t => {
+        if (!t) return false
         const bId = t.branchId || (t as any).branch_id || (t as any).branch
         return isMatchingBranch({ id: bId, code: bId } as any, activeBranchId)
       })
@@ -425,12 +455,13 @@ export function SuperAdminDashboard() {
   }, [dbTasks, activeCompanyId, activeBranchId, isBranchSelected])
 
   const scopedProjects = React.useMemo(() => {
-    let list = dbProjects
+    let list = Array.isArray(dbProjects) ? dbProjects : []
     if (activeCompanyId && activeCompanyId !== "all") {
-      list = list.filter(p => isMatchingCompany({ id: p.companyId, slug: p.companyId } as any, activeCompanyId))
+      list = list.filter(p => p && isMatchingCompany({ id: p.companyId, slug: p.companyId } as any, activeCompanyId))
     }
     if (isBranchSelected) {
       list = list.filter(p => {
+        if (!p) return false
         const bId = p.branchId || (p as any).branch_id || (p as any).branch
         return isMatchingBranch({ id: bId, code: bId } as any, activeBranchId)
       })
@@ -439,9 +470,10 @@ export function SuperAdminDashboard() {
   }, [dbProjects, activeCompanyId, activeBranchId, isBranchSelected])
 
   const scopedInvoices = React.useMemo(() => {
-    let list = dbInvoices
+    let list = Array.isArray(dbInvoices) ? dbInvoices : []
     if (activeCompanyId && activeCompanyId !== "all") {
       list = list.filter(inv => {
+        if (!inv) return false
         const cId = inv.companyId || (inv as any).company
         if (!cId) return false
         return isMatchingCompany({ id: cId, slug: cId } as any, activeCompanyId)
@@ -449,6 +481,7 @@ export function SuperAdminDashboard() {
     }
     if (isBranchSelected) {
       list = list.filter(inv => {
+        if (!inv) return false
         const bId = inv.branchId || (inv as any).branch_id || (inv as any).branch
         return isMatchingBranch({ id: bId, code: bId } as any, activeBranchId)
       })
@@ -457,9 +490,10 @@ export function SuperAdminDashboard() {
   }, [dbInvoices, activeCompanyId, activeBranchId, isBranchSelected])
 
   const scopedExpenses = React.useMemo(() => {
-    let list = dbExpenses
+    let list = Array.isArray(dbExpenses) ? dbExpenses : []
     if (activeCompanyId && activeCompanyId !== "all") {
       list = list.filter(exp => {
+        if (!exp) return false
         const cId = exp.companyId || (exp as any).company
         if (!cId) return false
         return isMatchingCompany({ id: cId, slug: cId } as any, activeCompanyId)
@@ -467,6 +501,7 @@ export function SuperAdminDashboard() {
     }
     if (isBranchSelected) {
       list = list.filter(exp => {
+        if (!exp) return false
         const bId = exp.branchId || (exp as any).branch_id || (exp as any).branch
         return isMatchingBranch({ id: bId, code: bId } as any, activeBranchId)
       })
@@ -475,9 +510,10 @@ export function SuperAdminDashboard() {
   }, [dbExpenses, activeCompanyId, activeBranchId, isBranchSelected])
 
   const scopedOrders = React.useMemo(() => {
-    let list = dbOrders
+    let list = Array.isArray(dbOrders) ? dbOrders : []
     if (activeCompanyId && activeCompanyId !== "all") {
       list = list.filter(ord => {
+        if (!ord) return false
         const cId = ord.companyId || (ord as any).company
         if (!cId) return false
         return isMatchingCompany({ id: cId, slug: cId } as any, activeCompanyId)
@@ -485,6 +521,7 @@ export function SuperAdminDashboard() {
     }
     if (isBranchSelected) {
       list = list.filter(ord => {
+        if (!ord) return false
         const bId = ord.branchId || (ord as any).branch_id || (ord as any).branch
         return isMatchingBranch({ id: bId, code: bId } as any, activeBranchId)
       })
@@ -493,9 +530,10 @@ export function SuperAdminDashboard() {
   }, [dbOrders, activeCompanyId, activeBranchId, isBranchSelected])
 
   const scopedUsers = React.useMemo(() => {
-    let list = dbUsers
+    let list = Array.isArray(dbUsers) ? dbUsers : []
     if (activeCompanyId && activeCompanyId !== "all") {
       list = list.filter(u => {
+        if (!u) return false
         if (Array.isArray(u.companyIds) && u.companyIds.length > 0) {
           return u.companyIds.some((cid: any) => isMatchingCompany({ id: cid, slug: cid } as any, activeCompanyId))
         }
@@ -514,6 +552,7 @@ export function SuperAdminDashboard() {
     }
     if (isBranchSelected) {
       list = list.filter(u => {
+        if (!u) return false
         if (Array.isArray(u.branchIds) && u.branchIds.length > 0) {
           return u.branchIds.some((bid: any) => isMatchingBranch({ id: bid, code: bid } as any, activeBranchId))
         }
@@ -740,22 +779,23 @@ export function SuperAdminDashboard() {
               {/* Donut Chart with Center Text for Companies */}
               <div className="relative flex items-center justify-center shrink-0 w-36 h-36">
                 <svg viewBox="0 0 100 100" className="w-36 h-36 -rotate-90 transform">
-                  {realCompaniesData.map((item, idx) => {
+                  {(realCompaniesData || []).map((item, idx) => {
                     const circ = 238.76
-                    const strokeLen = Math.max(0, (item.percent / 100) * circ)
-                    const prevPercentSum = realCompaniesData.slice(0, idx).reduce((s, x) => s + x.percent, 0)
+                    const pct = Math.max(0, Math.min(100, Number(item?.percent) || 0))
+                    const strokeLen = (pct / 100) * circ
+                    const prevPercentSum = (realCompaniesData || []).slice(0, idx).reduce((s, x) => s + (Number(x?.percent) || 0), 0)
                     const offset = -((prevPercentSum / 100) * circ)
                     return (
                       <circle
-                        key={item.id}
+                        key={item?.id || idx}
                         cx="50"
                         cy="50"
                         r="38"
                         fill="none"
-                        stroke={item.color}
+                        stroke={item?.color || "#3b82f6"}
                         strokeWidth="12"
-                        strokeDasharray={`${strokeLen} ${circ}`}
-                        strokeDashoffset={offset}
+                        strokeDasharray={`${strokeLen.toFixed(2)} ${circ.toFixed(2)}`}
+                        strokeDashoffset={Number(offset.toFixed(2)) || 0}
                       />
                     )
                   })}
@@ -766,17 +806,17 @@ export function SuperAdminDashboard() {
                 </div>
               </div>
 
-              {/* Legend List strictly for the 3 real companies */}
+              {/* Legend List strictly for the companies */}
               <div className="space-y-3 flex-1 min-w-0 text-xs">
-                {realCompaniesData.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between gap-1">
+                {(realCompaniesData || []).map((item, idx) => (
+                  <div key={item?.id || idx} className="flex items-center justify-between gap-1">
                     <div className="flex items-center gap-2 truncate">
-                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                      <span className="font-semibold text-slate-800 dark:text-zinc-200 truncate">{item.name}</span>
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item?.color || "#3b82f6" }} />
+                      <span className="font-semibold text-slate-800 dark:text-zinc-200 truncate">{item?.name || "Company"}</span>
                     </div>
                     <div className="text-right shrink-0">
-                      <span className="font-bold text-slate-900 dark:text-white">{formatINR(item.revenue)}</span>
-                      <span className="text-[10px] text-slate-400 ml-1.5">{item.percent}%</span>
+                      <span className="font-bold text-slate-900 dark:text-white">{formatINR(item?.revenue || 0)}</span>
+                      <span className="text-[10px] text-slate-400 ml-1.5">{Number(item?.percent || 0).toFixed(1)}%</span>
                     </div>
                   </div>
                 ))}
@@ -1309,11 +1349,16 @@ export function SuperAdminDashboard() {
                     onChange={(e) => setSelectedUserEmail(e.target.value)}
                     className="px-3 py-1.5 bg-surface border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none"
                   >
-                    {(scopedUsers.length > 0 ? scopedUsers : [user]).map((u) => (
-                      <option key={u.email} value={u.email}>
-                        {u.name || u.full_name || u.email} ({u.role || "User"} - {u.email})
-                      </option>
-                    ))}
+                    {(scopedUsers.length > 0 ? scopedUsers : (user ? [user] : [])).filter(Boolean).map((u, uIdx) => {
+                      const uEmail = u?.email || ""
+                      const uName = u?.name || u?.full_name || uEmail || "User"
+                      const uRole = u?.role || "User"
+                      return (
+                        <option key={uEmail || u?.id || uIdx} value={uEmail}>
+                          {uName} ({uRole}{uEmail ? ` - ${uEmail}` : ""})
+                        </option>
+                      )
+                    })}
                   </select>
                 </div>
 
@@ -1321,7 +1366,7 @@ export function SuperAdminDashboard() {
                   <span className="flex items-center gap-1.5 text-emerald-600">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Active User: {user?.name}
                   </span>
-                  <span className="text-muted-foreground">Company Staff: {(scopedUsers.length > 0 ? scopedUsers : [user]).length}</span>
+                  <span className="text-muted-foreground">Company Staff: {(scopedUsers.length > 0 ? scopedUsers : (user ? [user] : [])).length}</span>
                 </div>
               </div>
 
@@ -1339,8 +1384,10 @@ export function SuperAdminDashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/30">
-                    {(scopedUsers.length > 0 ? scopedUsers : [user]).slice(0, 10).map((u) => {
-                      const isActiveUser = u.email.toLowerCase() === (user?.email || "").toLowerCase()
+                    {(scopedUsers.length > 0 ? scopedUsers : (user ? [user] : [])).filter(Boolean).slice(0, 10).map((u, uIdx) => {
+                      const uEmail = (u?.email || "").toLowerCase().trim()
+                      const currentEmail = (user?.email || "").toLowerCase().trim()
+                      const isActiveUser = Boolean(uEmail && currentEmail && uEmail === currentEmail)
 
                       let punchInTime = "09:00 AM"
                       let punchOutTime = "-"
@@ -1358,19 +1405,21 @@ export function SuperAdminDashboard() {
                           workedHours = "08 hrs 15 mins"
                           statusBadge = <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 font-semibold">🔵 LOGGED IN</span>
                         }
-                      } else if (u.status === "Active") {
+                      } else if (u?.status === "Active") {
                         statusBadge = <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">ACTIVE</span>
                       }
 
+                      const displayName = u?.name || u?.full_name || u?.email || "User"
+
                       return (
-                        <tr key={u.email} className={`hover:bg-surface-hover/30 ${isActiveUser ? "bg-primary/5" : ""}`}>
+                        <tr key={u?.email || u?.id || uIdx} className={`hover:bg-surface-hover/30 ${isActiveUser ? "bg-primary/5" : ""}`}>
                           <td className="py-2.5 px-3 font-mono font-medium">Today</td>
                           <td className="py-2.5 px-3 font-bold text-foreground flex items-center gap-1.5">
-                            <img src={getUserAvatar(u.email, undefined, u.name || u.full_name)} alt={u.name || "User"} className="w-5 h-5 rounded-full border shrink-0" />
-                            <span>{u.name || u.full_name || u.email}</span>
+                            <img src={getUserAvatar(u?.email || "", undefined, displayName)} alt={displayName} className="w-5 h-5 rounded-full border shrink-0" />
+                            <span>{displayName}</span>
                             {isActiveUser && <span className="text-[9px] bg-primary text-primary-foreground px-1.5 py-0.2 rounded font-bold">YOU</span>}
                           </td>
-                          <td className="py-2.5 px-3 text-muted-foreground">{u.role || "User"}</td>
+                          <td className="py-2.5 px-3 text-muted-foreground">{u?.role || "User"}</td>
                           <td className="py-2.5 px-3 text-emerald-600 font-mono font-bold">{punchInTime}</td>
                           <td className="py-2.5 px-3 text-rose-600 font-mono font-bold">{punchOutTime}</td>
                           <td className="py-2.5 px-3 font-mono font-semibold">{workedHours}</td>
