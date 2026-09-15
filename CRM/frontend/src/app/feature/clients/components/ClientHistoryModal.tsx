@@ -15,6 +15,7 @@ import { getPayments, deletePayment, PaymentItem } from "@/app/feature/sales/pay
 import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted, filterGlobalDeletedItems } from "@/lib/storageSync"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
+import { confirmTwoStepDelete } from "@/lib/confirmDialog"
 
 interface ClientHistoryModalProps {
   isOpen: boolean
@@ -177,21 +178,21 @@ export function ClientHistoryModal({
 
   // Delete handlers with permissions
   const handleDeleteProject = async (projectId: string, projectTitle: string) => {
-    if (confirm(`Are you sure you want to delete project "${projectTitle}"? This will automatically remove associated invoices, orders, and payments.`)) {
+    if (await confirmTwoStepDelete(projectTitle, "project")) {
       await deleteProject(projectId)
       loadHistory()
     }
   }
 
   const handleDeleteInvoice = async (invId: string) => {
-    if (confirm(`Are you sure you want to delete invoice ${invId}?`)) {
+    if (await confirmTwoStepDelete(invId, "invoice")) {
       await deleteInvoice(invId)
       loadHistory()
     }
   }
 
   const handleDeleteOrder = async (orderId: string) => {
-    if (confirm(`Are you sure you want to delete this order?`)) {
+    if (await confirmTwoStepDelete(orderId, "order")) {
       await markGlobalItemDeleted(String(orderId), "orders")
       const currentOrders = await fetchModuleDataFromDB<any[]>("orders", [])
       const updated = currentOrders.filter(o => String(o.id) !== String(orderId) && String(o.orderNumber) !== String(orderId))
@@ -201,7 +202,7 @@ export function ClientHistoryModal({
   }
 
   const handleDeletePayment = async (paymentId: string) => {
-    if (confirm(`Are you sure you want to delete this payment record?`)) {
+    if (await confirmTwoStepDelete(paymentId, "payment")) {
       await deletePayment(paymentId)
       loadHistory()
     }

@@ -1,11 +1,25 @@
 const pool = require('../config/db');
 const { successResponse, errorResponse } = require('../utils/apiResponse');
 
+// Helper: Fetch deleted set for a module key
+async function getDeletedItemIds(moduleKey) {
+  try {
+    const [rows] = await pool.execute(
+      'SELECT LOWER(TRIM(item_id)) as item_id FROM deleted_items WHERE module_name = ? OR module_name = "global"',
+      [moduleKey.toLowerCase().trim()]
+    );
+    return new Set(rows.map(r => r.item_id));
+  } catch {
+    return new Set();
+  }
+}
+
 // Get module data stored in MySQL database (with seamless company isolation & full fallback)
 const getStoreData = async (req, res, next) => {
   try {
     const { key } = req.params;
     const companyId = req.query.company_id || req.query.companyId;
+    const deletedSet = await getDeletedItemIds(key);
 
     // 1. If companyId provided (and not 'all')
     if (companyId && companyId !== 'all') {
@@ -14,6 +28,17 @@ const getStoreData = async (req, res, next) => {
       if (compRows.length > 0) {
         try {
           const parsedComp = JSON.parse(compRows[0].data_json);
+          if (Array.isArray(parsedComp)) {
+            const filtered = parsedComp.filter(item => {
+              if (!item) return false;
+              const idStr = item.id !== undefined && item.id !== null ? String(item.id).toLowerCase().trim() : '';
+              const emailStr = item.email ? String(item.email).toLowerCase().trim() : '';
+              if (idStr && deletedSet.has(idStr)) return false;
+              if (emailStr && deletedSet.has(emailStr)) return false;
+              return true;
+            });
+            return successResponse(res, 200, 'Company-isolated module data fetched from MySQL', filtered);
+          }
           return successResponse(res, 200, 'Company-isolated module data fetched from MySQL', parsedComp);
         } catch {
           return successResponse(res, 200, 'Company module data fetched', []);
@@ -41,8 +66,13 @@ const getStoreData = async (req, res, next) => {
         const parsed = JSON.parse(r.data_json);
         if (Array.isArray(parsed)) {
           for (const item of parsed) {
-            if (item && item.id) {
-              itemsMap.set(String(item.id).toLowerCase().trim(), item);
+            if (item && item.id !== undefined && item.id !== null) {
+              const idStr = String(item.id).toLowerCase().trim();
+              const emailStr = item.email ? String(item.email).toLowerCase().trim() : '';
+              if (deletedSet.has(idStr) || (emailStr && deletedSet.has(emailStr))) {
+                continue;
+              }
+              itemsMap.set(idStr, item);
             }
           }
         } else if (parsed && typeof parsed === 'object' && itemsMap.size === 0) {

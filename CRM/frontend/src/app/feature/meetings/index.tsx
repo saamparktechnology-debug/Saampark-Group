@@ -52,6 +52,8 @@ export default function MeetingsMain() {
 
   const handleDelete = async () => {
     if (!deleteConfirm) return
+    const second = window.confirm(`⚠️ 2nd CONFIRMATION REQUIRED:\n\nAre you ABSOLUTELY sure you want to permanently delete meeting "${deleteConfirm.title}"?\n\nThis action cannot be undone.`)
+    if (!second) return
     await executeWithFeedback(async () => { await MeetingService.delete(deleteConfirm.id) }, { actionType: "delete", successTitle: "Meeting Deleted" })
     setDeleteConfirm(null); loadData()
   }

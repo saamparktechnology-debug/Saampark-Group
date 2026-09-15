@@ -54,6 +54,8 @@ export default function KnowledgeBaseMain() {
 
   const handleDelete = async () => {
     if (!deleteConfirm) return
+    const second = window.confirm(`⚠️ 2nd CONFIRMATION REQUIRED:\n\nAre you ABSOLUTELY sure you want to permanently delete article "${deleteConfirm.title}"?\n\nThis action cannot be undone.`)
+    if (!second) return
     await executeWithFeedback(async () => { await KnowledgeBaseService.delete(deleteConfirm.id) }, { actionType: "delete", successTitle: "Article Deleted" })
     setDeleteConfirm(null); loadData()
   }

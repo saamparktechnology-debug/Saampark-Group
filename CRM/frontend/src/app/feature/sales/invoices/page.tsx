@@ -61,6 +61,7 @@ import { usePermissionStore } from "@/store/usePermissionStore"
 import { printPDFReport, exportToExcel } from "@/lib/exportUtils"
 import { executeWithFeedback, useActionFeedbackStore } from "@/store/useActionFeedbackStore"
 import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
+import { confirmTwoStepDelete } from "@/lib/confirmDialog"
 
 function InvoicesPageContent() {
   const { user, activeCompanyId, activeBranchId, branches, subBranches, companies } = useAuthStore()
@@ -707,6 +708,12 @@ function InvoicesPageContent() {
       })
       return
     }
+
+    const inv = invoices.find(i => String(i.id).toLowerCase().trim() === String(id).toLowerCase().trim())
+    const label = inv ? `${inv.id} (${inv.client || 'Invoice'})` : id
+    const confirmed = await confirmTwoStepDelete(label, "invoice")
+    if (!confirmed) return
+
     await executeWithFeedback(async () => {
       await deleteInvoice(id, activeCompanyId || "all")
       setInvoices(prev => prev.filter(i => String(i.id).toLowerCase().trim() !== String(id).toLowerCase().trim()))

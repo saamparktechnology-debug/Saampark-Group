@@ -15,6 +15,7 @@ import { addInvoice } from "@/app/feature/sales/invoices/services/invoiceService
 import { addOrder } from "@/app/feature/sales/orders/services/orderService"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
+import { confirmTwoStepDelete } from "@/lib/confirmDialog"
 
 export interface ProposalItem {
   id: string
@@ -235,7 +236,9 @@ export default function ProposalsMain() {
   }
 
   const handleDelete = async (id: string) => {
-    if (confirm("Delete this proposal?")) {
+    const prop = proposals.find(p => p.id === id)
+    const label = prop?.title || id
+    if (await confirmTwoStepDelete(label, "proposal")) {
       await markGlobalItemDeleted(id, "proposals")
       const updated = proposals.filter(p => p.id !== id)
       setProposals(updated)

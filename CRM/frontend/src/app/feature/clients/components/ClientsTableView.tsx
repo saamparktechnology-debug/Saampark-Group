@@ -8,6 +8,7 @@ import { formatDisplayEmail } from "../services/clientService"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
+import { confirmTwoStepDelete, confirmTwoStepBulkDelete } from "@/lib/confirmDialog"
 
 interface ClientsTableViewProps {
   clients: ClientItem[]
@@ -102,8 +103,13 @@ export function ClientsTableView({
     )
   }
 
-  const handleDelete = (id: string) => {
-    onDeleteClient(id)
+  const handleDelete = async (id: string, name?: string) => {
+    const target = clients.find(c => c.id === id)
+    const displayName = name || target?.name || "Client"
+    const confirmed = await confirmTwoStepDelete(displayName, "client")
+    if (confirmed) {
+      onDeleteClient(id)
+    }
   }
 
   return (
@@ -165,8 +171,9 @@ export function ClientsTableView({
           {canDeleteClient && selectedClientIds.length > 0 && (
             <button
               type="button"
-              onClick={() => {
-                if (window.confirm(`Are you sure you want to delete ${selectedClientIds.length} selected client(s)?`)) {
+              onClick={async () => {
+                const confirmed = await confirmTwoStepBulkDelete(selectedClientIds.length, "client(s)")
+                if (confirmed) {
                   selectedClientIds.forEach((id) => onDeleteClient(id))
                   setSelectedClientIds([])
                 }
@@ -405,7 +412,7 @@ export function ClientsTableView({
                       {canDeleteClient && (
                         <button
                           type="button"
-                          onClick={() => handleDelete(client.id)}
+                          onClick={() => handleDelete(client.id, client.name)}
                           className="p-1 rounded text-slate-400 hover:text-rose-500 transition-colors"
                           title="Delete"
                         >

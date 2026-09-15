@@ -57,6 +57,8 @@ export default function ProductsMain() {
 
   const handleDelete = async () => {
     if (!deleteConfirm) return
+    const second = window.confirm(`⚠️ 2nd CONFIRMATION REQUIRED:\n\nAre you ABSOLUTELY sure you want to permanently delete product "${deleteConfirm.name}"?\n\nThis action cannot be undone.`)
+    if (!second) return
     await executeWithFeedback(async () => { await ProductService.delete(deleteConfirm.id) }, { actionType: "delete", successTitle: "Product Deleted" })
     setDeleteConfirm(null); loadData()
   }

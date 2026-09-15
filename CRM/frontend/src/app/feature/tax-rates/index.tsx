@@ -46,6 +46,8 @@ export default function TaxRatesMain() {
 
   const handleDelete = async () => {
     if (!deleteConfirm) return
+    const second = window.confirm(`⚠️ 2nd CONFIRMATION REQUIRED:\n\nAre you ABSOLUTELY sure you want to permanently delete tax rate "${deleteConfirm.name}"?\n\nThis action cannot be undone.`)
+    if (!second) return
     await executeWithFeedback(async () => { await TaxRateService.delete(deleteConfirm.id) }, { actionType: "delete", successTitle: "Tax Rate Deleted" })
     setDeleteConfirm(null); loadData()
   }

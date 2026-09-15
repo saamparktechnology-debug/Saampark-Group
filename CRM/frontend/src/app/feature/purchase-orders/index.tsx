@@ -70,6 +70,8 @@ export default function PurchaseOrdersMain() {
 
   const handleDelete = async () => {
     if (!deleteConfirm) return
+    const second = window.confirm(`⚠️ 2nd CONFIRMATION REQUIRED:\n\nAre you ABSOLUTELY sure you want to permanently delete purchase order "${deleteConfirm.number || deleteConfirm.id}"?\n\nThis action cannot be undone.`)
+    if (!second) return
     await executeWithFeedback(async () => { await PurchaseOrderService.delete(deleteConfirm.id) }, { actionType: "delete", successTitle: "PO Deleted" })
     setDeleteConfirm(null); loadData()
   }

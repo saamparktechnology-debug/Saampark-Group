@@ -35,6 +35,35 @@ const markItemDeleted = async (req, res, next) => {
       'INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, ?)',
       [strId, mod]
     );
+
+    // Also actively purge this item from app_data rows
+    if (mod && mod !== 'global') {
+      try {
+        const [appRows] = await pool.execute(
+          'SELECT id, module_key, data_json FROM app_data WHERE module_key = ? OR module_key LIKE ?',
+          [mod, `${mod}_%`]
+        );
+        for (const row of appRows) {
+          try {
+            const parsed = JSON.parse(row.data_json);
+            if (Array.isArray(parsed)) {
+              const cleaned = parsed.filter(item => {
+                if (!item) return false;
+                const itemIdStr = item.id !== undefined && item.id !== null ? String(item.id).toLowerCase().trim() : '';
+                const itemEmailStr = item.email ? String(item.email).toLowerCase().trim() : '';
+                return itemIdStr !== strId && itemEmailStr !== strId;
+              });
+              if (cleaned.length !== parsed.length) {
+                await pool.execute('UPDATE app_data SET data_json = ?, updated_at = NOW() WHERE id = ?', [JSON.stringify(cleaned), row.id]);
+              }
+            }
+          } catch {}
+        }
+      } catch (purgeErr) {
+        console.warn('app_data purge warning on delete:', purgeErr);
+      }
+    }
+
     return successResponse(res, 200, 'Item marked deleted successfully');
   } catch (err) {
     next(err);

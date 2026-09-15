@@ -52,6 +52,8 @@ export default function TeamsMain() {
 
   const handleDelete = async () => {
     if (!deleteConfirm) return
+    const second = window.confirm(`⚠️ 2nd CONFIRMATION REQUIRED:\n\nAre you ABSOLUTELY sure you want to permanently delete team "${deleteConfirm.name}"?\n\nThis action cannot be undone.`)
+    if (!second) return
     await executeWithFeedback(async () => { await OrgService.deleteTeam(deleteConfirm.id) }, { actionType: "delete", successTitle: "Team Deleted" })
     setDeleteConfirm(null); loadData()
   }

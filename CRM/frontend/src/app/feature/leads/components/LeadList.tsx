@@ -37,6 +37,7 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { getUsers } from "@/app/feature/users/services/userService"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
+import { confirmTwoStepBulkDelete } from "@/lib/confirmDialog"
 
 interface LeadListProps {
   leads: Lead[]
@@ -1168,8 +1169,8 @@ export function LeadList({
           {canDeleteLead && selectedLeadIds.length > 0 && (
             <button
               type="button"
-              onClick={() => {
-                if (window.confirm(`Are you sure you want to delete ${selectedLeadIds.length} selected lead(s)?`)) {
+              onClick={async () => {
+                if (await confirmTwoStepBulkDelete(selectedLeadIds.length, "lead(s)")) {
                   selectedLeadIds.forEach((id) => onDeleteLead(id))
                   setSelectedLeadIds([])
                 }

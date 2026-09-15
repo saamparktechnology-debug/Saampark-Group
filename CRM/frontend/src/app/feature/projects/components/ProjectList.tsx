@@ -22,6 +22,7 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 import { getUserAvatar } from "@/app/feature/users/services/userService"
+import { confirmTwoStepDelete } from "@/lib/confirmDialog"
 
 interface ProjectListProps {
   projects: Project[]
@@ -537,8 +538,8 @@ export function ProjectList({
                         {canDeleteProject && (
                           <button
                             type="button"
-                            onClick={() => {
-                              if (confirm(`Are you sure you want to delete project "${p.title}"?`)) {
+                            onClick={async () => {
+                              if (await confirmTwoStepDelete(p.title, "project")) {
                                 onDeleteProject(p.id)
                               }
                             }}

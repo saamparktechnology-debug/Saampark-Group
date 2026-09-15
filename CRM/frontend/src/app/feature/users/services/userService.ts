@@ -5,6 +5,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { 
   filterGlobalDeletedItems, 
   markGlobalItemDeleted, 
+  isGlobalItemDeleted,
   unmarkGlobalItemDeleted,
   fetchModuleDataFromDB, 
   saveModuleDataToDB,
@@ -704,10 +705,8 @@ export async function deleteUser(id: string, email?: string): Promise<boolean> {
 
   await saveModuleDataToDB("users", filtered, "all");
 
-  // ── CRITICAL FIX: also remove from company-specific scopes ──
-  // getUsers() reads from "tech" and "digital" scopes too;
-  // without cleaning those, the deleted user reappears on next reload.
-  const scopesToClean = ["tech", "digital"];
+  // ── CRITICAL FIX: also remove from all company-specific scopes ──
+  const scopesToClean = ["tech", "digital", "infotech", "fashion", "consultancy", "jewellers"];
   for (const scope of scopesToClean) {
     try {
       const scopeAccounts = await fetchModuleDataFromDB<any[]>("users", [], scope);
@@ -723,6 +722,9 @@ export async function deleteUser(id: string, email?: string): Promise<boolean> {
       }
     } catch {}
   }
+
+  // Bust users cache so next read immediately sees the deletion
+  invalidateUsersCache();
 
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("storage"));
@@ -823,12 +825,14 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
   const existingDbEmails = (Array.isArray(dbUsersBase) ? dbUsersBase : []).map(u => (u.email || '').toLowerCase().trim());
   const existingDbPrevEmails = (Array.isArray(dbUsersBase) ? dbUsersBase : []).flatMap(u => Array.isArray(u.previousEmails) ? u.previousEmails.map(pe => (pe || '').toLowerCase().trim()) : []);
 
-  // 1. Seed base default accounts ONLY IF they haven't been modified/registered in the database
+  // 1. Seed base default accounts ONLY IF they haven't been modified/registered in the database or deleted
   for (const sysAcc of DEFAULT_SYSTEM_ACCOUNTS) {
     const sysId = String(sysAcc.id || '').toLowerCase().trim();
     const sysEmail = sysAcc.email.toLowerCase().trim();
     if (!existingDbIds.includes(sysId) && !existingDbEmails.includes(sysEmail) && !existingDbPrevEmails.includes(sysEmail)) {
-      userMap.set(sysEmail, sysAcc);
+      if (!deletedEmails.includes(sysEmail) && !isGlobalItemDeleted(sysId, undefined, "users") && !isGlobalItemDeleted(sysEmail, undefined, "users")) {
+        userMap.set(sysEmail, sysAcc);
+      }
     }
   }
 
@@ -1078,11 +1082,14 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
     }
   });
 
-  // Filter out hidden master admin account and any obsolete transferred emails
+  // Filter out hidden master admin account and any obsolete transferred emails or deleted users
   const activeValidUsers = dbUsers.filter((u) => {
     const emailNorm = (u.email || "").toLowerCase().trim();
+    const uId = String(u.id || "").toLowerCase().trim();
     if (!emailNorm || HIDDEN_MASTER_EMAILS.includes(emailNorm)) return false;
     if (obsoleteEmailsSet.has(emailNorm)) return false;
+    if (deletedEmails.includes(emailNorm)) return false;
+    if (isGlobalItemDeleted(uId, undefined, "users") || isGlobalItemDeleted(emailNorm, undefined, "users")) return false;
     return true;
   });
 

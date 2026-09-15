@@ -13,6 +13,7 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { executeWithFeedback, useActionFeedbackStore } from "@/store/useActionFeedbackStore"
 import { ThreeDotLoader } from "@/components/ui/ThreeDotLoader"
+import { confirmTwoStepDelete } from "@/lib/confirmDialog"
 
 export default function TasksMain() {
   const [tasks, setTasks] = React.useState<Task[]>([])
@@ -128,6 +129,8 @@ export default function TasksMain() {
     const task = tasks.find(t => String(t.id).toLowerCase().trim() === String(id).toLowerCase().trim())
     const taskTitle = task?.title || "Task"
     const strId = String(id).toLowerCase().trim()
+
+    if (!await confirmTwoStepDelete(taskTitle, "task")) return
 
     await executeWithFeedback(async () => {
       setTasks((prev) => prev.filter((t) => String(t.id).toLowerCase().trim() !== strId))

@@ -21,6 +21,7 @@ import { Task, TaskStatus, getTaskCountdownChip } from "../types"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
+import { confirmTwoStepBulkDelete } from "@/lib/confirmDialog"
 import { getUsers, getUserAvatar } from "@/app/feature/users/services/userService"
 import { UserItem } from "@/app/feature/users/types"
 
@@ -407,8 +408,8 @@ export function TaskList({
           {canDeleteTask && selectedTaskIds.length > 0 && (
             <button
               type="button"
-              onClick={() => {
-                if (window.confirm(`Are you sure you want to delete ${selectedTaskIds.length} selected task(s)?`)) {
+              onClick={async () => {
+                if (await confirmTwoStepBulkDelete(selectedTaskIds.length, "task(s)")) {
                   selectedTaskIds.forEach((id) => onDeleteTask(id))
                   setSelectedTaskIds([])
                 }

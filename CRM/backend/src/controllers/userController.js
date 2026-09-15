@@ -387,12 +387,17 @@ const deleteUser = async (req, res, next) => {
     }
 
     // Fetch user details for deleted_items tracking
+    const idLower = String(id).toLowerCase().trim();
+    await pool.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "users")', [idLower]);
+
     const [targetUsers] = await pool.execute('SELECT id, email FROM users WHERE id = ? OR email = ?', [id, id]);
+    let emailNorm = '';
+    let dbIdStr = '';
     if (targetUsers.length > 0) {
-      const emailNorm = targetUsers[0].email.toLowerCase().trim();
-      const idStr = String(targetUsers[0].id).toLowerCase().trim();
+      emailNorm = targetUsers[0].email.toLowerCase().trim();
+      dbIdStr = String(targetUsers[0].id).toLowerCase().trim();
       await pool.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "users")', [emailNorm]);
-      await pool.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "users")', [idStr]);
+      await pool.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "users")', [dbIdStr]);
     }
 
     // Soft delete: set deleted_at and deactivate
@@ -400,6 +405,34 @@ const deleteUser = async (req, res, next) => {
       'UPDATE users SET deleted_at = NOW(), status = ? WHERE id = ? OR email = ?',
       ['inactive', id, id]
     );
+
+    // Actively purge user from all app_data storage keys
+    try {
+      const [appRows] = await pool.execute(
+        'SELECT id, module_key, data_json FROM app_data WHERE module_key = "users" OR module_key LIKE "users_%"'
+      );
+      for (const row of appRows) {
+        try {
+          const parsed = JSON.parse(row.data_json);
+          if (Array.isArray(parsed)) {
+            const cleaned = parsed.filter(u => {
+              if (!u) return false;
+              const uId = u.id !== undefined && u.id !== null ? String(u.id).toLowerCase().trim() : '';
+              const uEmail = u.email ? String(u.email).toLowerCase().trim() : '';
+              if (uId === idLower || (dbIdStr && uId === dbIdStr)) return false;
+              if (emailNorm && uEmail === emailNorm) return false;
+              if (idLower && (uId === idLower || uEmail === idLower)) return false;
+              return true;
+            });
+            if (cleaned.length !== parsed.length) {
+              await pool.execute('UPDATE app_data SET data_json = ?, updated_at = NOW() WHERE id = ?', [JSON.stringify(cleaned), row.id]);
+            }
+          }
+        } catch {}
+      }
+    } catch (purgeErr) {
+      console.warn('app_data user purge warning:', purgeErr);
+    }
 
     return successResponse(res, 200, 'User removed successfully');
   } catch (error) {

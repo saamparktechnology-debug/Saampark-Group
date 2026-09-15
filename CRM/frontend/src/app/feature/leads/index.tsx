@@ -12,6 +12,7 @@ import { ManageLabelsModal, LabelItem } from "./components/ManageLabelsModal"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { ThreeDotLoader } from "@/components/ui/ThreeDotLoader"
+import { confirmTwoStepDelete } from "@/lib/confirmDialog"
 
 export const INITIAL_LABELS: LabelItem[] = [
   { id: "lbl_3", name: "Call this week", color: "#a855f7" },
@@ -115,6 +116,10 @@ export default function LeadsMain() {
       alert("Action forbidden: You do not have permission to delete leads.")
       return
     }
+
+    const lead = leads.find(l => l.id === id)
+    const label = lead?.name || "Lead"
+    if (!await confirmTwoStepDelete(label, "lead")) return
 
     await deleteLead(id)
     setLeads((prev) => prev.filter((l) => l.id !== id))

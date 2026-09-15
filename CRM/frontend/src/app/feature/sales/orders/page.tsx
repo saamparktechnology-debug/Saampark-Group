@@ -43,6 +43,7 @@ import { getProjects } from "@/app/feature/projects/services/projectService"
 import { Project, ProjectMilestone } from "@/app/feature/projects/types"
 
 import { exportToExcel, printPDFReport, exportToCSV } from "@/lib/exportUtils"
+import { confirmTwoStepDelete } from "@/lib/confirmDialog"
 import { getUserAvatar } from "@/app/feature/users/services/userService"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
 import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
@@ -217,6 +218,8 @@ export default function OrderListPage() {
     }
     const ord = orders.find(o => String(o.id).toLowerCase().trim() === String(id).toLowerCase().trim())
     const ordNum = ord?.orderNumber || "Order"
+
+    if (!await confirmTwoStepDelete(ordNum, "sales order")) return
 
     await executeWithFeedback(async () => {
       const strId = String(id).toLowerCase().trim()

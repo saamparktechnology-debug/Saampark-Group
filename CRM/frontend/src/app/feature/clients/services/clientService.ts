@@ -30,7 +30,6 @@ export function getClientTimestamp(c: ClientItem): number {
 
 // ── Clients ─────────────────────────────────────────────────────────────────
 
-/** Fetch all clients from MySQL for the given company scope */
 export async function getClients(companyId?: string): Promise<ClientItem[]> {
   // When a specific company is requested, fetch only that scope
   // (avoid cross-company data leakage by NOT merging other company scopes)
@@ -42,7 +41,8 @@ export async function getClients(companyId?: string): Promise<ClientItem[]> {
       ...c,
       companyId: c.companyId || scopeId,
     }))
-    return enriched.sort((a, b) => getClientTimestamp(b) - getClientTimestamp(a))
+    const filtered = filterGlobalDeletedItems(enriched, undefined, "clients")
+    return filtered.sort((a, b) => getClientTimestamp(b) - getClientTimestamp(a))
   }
 
   // For "all" scope (Super Admin): merge across all company scopes
@@ -57,7 +57,7 @@ export async function getClients(companyId?: string): Promise<ClientItem[]> {
   for (const c of (Array.isArray(techData) ? techData : [])) {
     if (c && c.id) map.set(String(c.id).toLowerCase().trim(), c)
   }
-  const list = Array.from(map.values())
+  const list = filterGlobalDeletedItems(Array.from(map.values()), undefined, "clients")
   return list.sort((a, b) => getClientTimestamp(b) - getClientTimestamp(a))
 }
 
@@ -242,10 +242,11 @@ export async function saveStoredClient(client: ClientItem, companyId?: string): 
   return updated
 }
 
-/** Delete a client from MySQL */
+/** Delete a client and all associated invoices, projects, subscriptions, and records from MySQL */
 export async function deleteStoredClient(id: string, email?: string, companyId?: string): Promise<ClientItem[]> {
-  await markGlobalItemDeleted(id, "clients")
-  await markGlobalItemDeleted(id, "users")
+  const normId = String(id).toLowerCase().trim()
+  await markGlobalItemDeleted(normId, "clients")
+  await markGlobalItemDeleted(normId, "users")
 
   if (email) {
     const normEmail = email.toLowerCase().trim()
@@ -254,25 +255,198 @@ export async function deleteStoredClient(id: string, email?: string, companyId?:
     markUserAsDeleted(normEmail)
   }
 
-  const current = await getClients(companyId)
-  const target = current.find(c => c.id === id || (email && c.email?.toLowerCase().trim() === email.toLowerCase().trim()))
-  const updated = current.filter(
-    (c) => c.id !== id && (!email || c.email?.toLowerCase().trim() !== email.toLowerCase().trim())
+  // 1. Fetch current clients across all scopes to find full client details
+  const allClients = await getClients("all")
+  const target = allClients.find(c => String(c.id).toLowerCase().trim() === normId || (email && c.email?.toLowerCase().trim() === email.toLowerCase().trim()))
+  const targetNameNorm = target?.name ? target.name.toLowerCase().trim() : ""
+  const targetEmailNorm = (target?.email || email || "").toLowerCase().trim()
+
+  if (targetNameNorm) {
+    await markGlobalItemDeleted(targetNameNorm, "clients")
+  }
+
+  // 2. Remove client from all company keys in app_data
+  const knownCompanies = ["all", "tech", "digital", "infotech", "fashion", "consultancy", "jewellers"]
+  if (companyId && !knownCompanies.includes(companyId)) knownCompanies.push(companyId)
+
+  await Promise.all(
+    knownCompanies.map(async (c) => {
+      try {
+        const list = await fetchModuleDataFromDB<ClientItem[]>("clients", [], c)
+        if (Array.isArray(list)) {
+          const filtered = list.filter(
+            (item) =>
+              String(item.id).toLowerCase().trim() !== normId &&
+              (!targetEmailNorm || (item.email || "").toLowerCase().trim() !== targetEmailNorm) &&
+              (!targetNameNorm || (item.name || "").toLowerCase().trim() !== targetNameNorm)
+          )
+          if (filtered.length !== list.length) {
+            await saveModuleDataToDB("clients", filtered, c)
+          }
+        }
+      } catch {}
+    })
   )
-  await saveModuleDataToDB("clients", updated, companyId)
+
+  // 3. Cascade delete associated Invoices
+  try {
+    const { getInvoices, deleteInvoice } = await import("@/app/feature/sales/invoices/services/invoiceService")
+    const invoices = await getInvoices("all")
+    const matchingInvoices = invoices.filter(i => {
+      const invClient = (i.client || "").toLowerCase().trim()
+      const invClientId = ((i as any).clientId || "").toLowerCase().trim()
+      const invEmail = ((i as any).clientEmail || "").toLowerCase().trim()
+      return (
+        (targetNameNorm && invClient === targetNameNorm) ||
+        (invClientId && invClientId === normId) ||
+        (targetEmailNorm && invEmail === targetEmailNorm)
+      )
+    })
+    for (const inv of matchingInvoices) {
+      if (inv.id) await deleteInvoice(inv.id)
+    }
+  } catch (err) {
+    console.warn("Cascade delete client invoices error:", err)
+  }
+
+  // 4. Cascade delete associated Projects
+  try {
+    const { getProjects, deleteProject } = await import("@/app/feature/projects/services/projectService")
+    const projects = await getProjects()
+    const matchingProjects = projects.filter(p => {
+      const pClient = (p.client || "").toLowerCase().trim()
+      const pClientId = ((p as any).clientId || "").toLowerCase().trim()
+      return (
+        (targetNameNorm && pClient === targetNameNorm) ||
+        (pClientId && pClientId === normId)
+      )
+    })
+    for (const proj of matchingProjects) {
+      if (proj.id) await deleteProject(proj.id)
+    }
+  } catch (err) {
+    console.warn("Cascade delete client projects error:", err)
+  }
+
+  // 5. Cascade delete associated Subscriptions
+  try {
+    const { getSubscriptions, deleteSubscription } = await import("@/app/feature/subscriptions/services/subscriptionService")
+    const subs = await getSubscriptions("all")
+    const matchingSubs = subs.filter(s => {
+      const sClient = (s.clientName || "").toLowerCase().trim()
+      const sClientId = ((s as any).clientId || "").toLowerCase().trim()
+      const sEmail = ((s as any).clientEmail || "").toLowerCase().trim()
+      return (
+        (targetNameNorm && sClient === targetNameNorm) ||
+        (sClientId && sClientId === normId) ||
+        (targetEmailNorm && sEmail === targetEmailNorm)
+      )
+    })
+    for (const sub of matchingSubs) {
+      if (sub.id) await deleteSubscription(sub.id)
+    }
+  } catch (err) {
+    console.warn("Cascade delete client subscriptions error:", err)
+  }
+
+  // 6. Cascade delete associated Payments
+  try {
+    const { getPayments, deletePayment } = await import("@/app/feature/sales/payments/services/paymentService")
+    const payments = await getPayments("all")
+    const matchingPayments = payments.filter(p => {
+      const pClient = (p.client || "").toLowerCase().trim()
+      const pClientId = ((p as any).clientId || "").toLowerCase().trim()
+      return (
+        (targetNameNorm && pClient === targetNameNorm) ||
+        (pClientId && pClientId === normId)
+      )
+    })
+    for (const pay of matchingPayments) {
+      if (pay.id) await deletePayment(pay.id)
+    }
+  } catch (err) {
+    console.warn("Cascade delete client payments error:", err)
+  }
+
+  // 7. Cascade delete client orders, estimates, tasks
+  try {
+    const orders = await fetchModuleDataFromDB<any[]>("orders", [], "all")
+    const filteredOrders = orders.filter(o => {
+      const oClient = (o.client || "").toLowerCase().trim()
+      if (targetNameNorm && oClient === targetNameNorm) {
+        if (o.id) markGlobalItemDeleted(o.id, "orders")
+        return false
+      }
+      return true
+    })
+    if (filteredOrders.length !== orders.length) {
+      await saveModuleDataToDB("orders", filteredOrders, "all")
+    }
+  } catch {}
+
+  try {
+    const estimates = await fetchModuleDataFromDB<any[]>("estimates", [], "all")
+    const filteredEstimates = estimates.filter(e => {
+      const eClient = (e.client || e.clientName || "").toLowerCase().trim()
+      if (targetNameNorm && eClient === targetNameNorm) {
+        if (e.id) markGlobalItemDeleted(e.id, "estimates")
+        return false
+      }
+      return true
+    })
+    if (filteredEstimates.length !== estimates.length) {
+      await saveModuleDataToDB("estimates", filteredEstimates, "all")
+    }
+  } catch {}
+
+  try {
+    const tasks = await fetchModuleDataFromDB<any[]>("tasks", [], "all")
+    const filteredTasks = tasks.filter(t => {
+      const tClient = (t.client || t.clientName || "").toLowerCase().trim()
+      if (targetNameNorm && tClient === targetNameNorm) {
+        if (t.id) markGlobalItemDeleted(t.id, "tasks")
+        return false
+      }
+      return true
+    })
+    if (filteredTasks.length !== tasks.length) {
+      await saveModuleDataToDB("tasks", filteredTasks, "all")
+    }
+  } catch {}
+
+  // 8. Delete client contact and client portal user
+  await deleteStoredContact(id, email)
+  await deleteStoredContact(`cnt_${id}`, email)
+  try {
+    const { deleteUser } = await import("@/app/feature/users/services/userService")
+    await deleteUser(`usr_cli_${id}`, targetEmailNorm)
+    if (targetEmailNorm) {
+      await deleteUser(targetEmailNorm, targetEmailNorm)
+    }
+  } catch {}
 
   recordActivityLog({
     type: "client",
     module: "Clients",
     action: "Client Account Deleted",
-    description: `Client account "${target?.name || id}" removed from the system`,
+    description: `Client account "${target?.name || id}" and all associated invoices, projects, and records removed`,
     companyId: target?.companyId || companyId,
     branchId: target?.branchId,
     branchName: target?.branchName,
     details: `Client ID: ${id} | Email: ${email || "N/A"}`
   }).catch(() => {})
 
-  return updated
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("storage"))
+    window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+  }
+
+  return allClients.filter(
+    (c) =>
+      String(c.id).toLowerCase().trim() !== normId &&
+      (!targetEmailNorm || (c.email || "").toLowerCase().trim() !== targetEmailNorm) &&
+      (!targetNameNorm || (c.name || "").toLowerCase().trim() !== targetNameNorm)
+  )
 }
 
 // ── Contacts ─────────────────────────────────────────────────────────────────

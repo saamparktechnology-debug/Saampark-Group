@@ -12,6 +12,7 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { fetchModuleDataFromDB, saveModuleDataToDB, filterGlobalDeletedItems, markGlobalItemDeleted } from "@/lib/storageSync"
 import { uploadToImgBB } from "@/lib/imgbbUpload"
+import { confirmTwoStepDelete } from "@/lib/confirmDialog"
 
 export type TicketPriority = "Low" | "Normal" | "High" | "Critical"
 export type TicketStatus = "New" | "Open" | "In Progress" | "Under Review" | "Resolved" | "Closed"
@@ -271,7 +272,9 @@ export default function TicketsMain() {
   }
 
   const handleDelete = async (id: string) => {
-    if (confirm("Delete this ticket?")) {
+    const t = tickets.find(item => item.id === id)
+    const label = t?.subject ? `#${t.ticketNumber || t.id} ("${t.subject}")` : `#${id}`
+    if (await confirmTwoStepDelete(label, "ticket")) {
       await markGlobalItemDeleted(id, "tickets")
       const updated = tickets.filter(t => t.id !== id)
       setTickets(updated)

@@ -31,6 +31,7 @@ import { getInvoices, InvoiceItem } from "../invoices/services/invoiceService"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
 import { usePermissionStore } from "@/store/usePermissionStore"
+import { confirmTwoStepDelete } from "@/lib/confirmDialog"
 
 export default function PaymentsPage() {
   const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
@@ -147,7 +148,9 @@ export default function PaymentsPage() {
       alert("Permission Denied: Clients cannot delete payment records.")
       return
     }
-    if (confirm("Are you sure you want to delete this payment record?")) {
+    const payment = payments.find(p => p.id === id)
+    const label = payment ? `${payment.id} (${payment.amount || ''} from ${payment.client || 'Client'})` : id
+    if (await confirmTwoStepDelete(label, "payment record")) {
       await deletePayment(id)
       setPayments(prev => prev.filter(p => p.id !== id))
       showToast("Payment record removed.")

@@ -318,19 +318,34 @@ export const sendSubscriptionReminder = async (id: string, companyId?: string): 
   return ok
 }
 
-export const deleteSubscription = async (id: string, companyId?: string): Promise<void> => {
-  await markGlobalItemDeleted(id, "subscriptions")
-  const targetComp = companyId || "all"
-  const current = await fetchModuleDataFromDB<Subscription[]>("subscriptions", [], targetComp)
-  const updated = current.filter(s => s.id !== id)
-  await Promise.all([
-    saveModuleDataToDB("subscriptions", updated, targetComp),
-    saveModuleDataToDB("subscriptions", updated, "all"),
-  ])
+export const deleteSubscription = async (id: string, companyId?: string): Promise<boolean> => {
+  const strId = String(id).toLowerCase().trim()
+  await markGlobalItemDeleted(strId, "subscriptions")
+
+  const knownCompanies = ["all", "tech", "digital", "infotech", "fashion", "consultancy", "jewellers"]
+  if (companyId && !knownCompanies.includes(companyId)) knownCompanies.push(companyId)
+
+  await Promise.all(
+    knownCompanies.map(async (c) => {
+      try {
+        const list = await fetchModuleDataFromDB<Subscription[]>("subscriptions", [], c)
+        if (Array.isArray(list)) {
+          const filtered = list.filter(s => String(s.id).toLowerCase().trim() !== strId)
+          if (filtered.length !== list.length) {
+            await saveModuleDataToDB("subscriptions", filtered, c)
+          }
+        }
+      } catch {}
+    })
+  )
+
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("storage"))
     window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+    window.dispatchEvent(new CustomEvent("saampark_subscriptions_updated"))
   }
+
+  return true
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -772,6 +787,3 @@ export const deleteInstallmentRecord = async (id: string, companyId?: string): P
 
   return true
 }
-
-
-

@@ -235,6 +235,11 @@ export default function QuotationsMain() {
 
   const handleDelete = async () => {
     if (!deleteConfirm) return
+    const secondConfirm = window.confirm(
+      `⚠️ 2nd CONFIRMATION REQUIRED:\n\nAre you ABSOLUTELY sure you want to permanently delete quotation "${deleteConfirm.number}"?\n\nThis action cannot be undone.`
+    )
+    if (!secondConfirm) return
+
     await executeWithFeedback(async () => {
       await QuotationService.delete(deleteConfirm.id).catch(() => {})
       setQuotations(prev => prev.filter(q => q.id !== deleteConfirm.id))

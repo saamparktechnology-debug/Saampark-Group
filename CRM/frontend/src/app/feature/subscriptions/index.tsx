@@ -41,6 +41,7 @@ import { UserService } from "@/services/apiServices"
 import { ThreeDotLoader } from "@/components/ui/ThreeDotLoader"
 import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
+import { confirmTwoStepDelete } from "@/lib/confirmDialog"
 
 export default function SubscriptionsMain() {
   const { activeCompanyId, activeBranchId, branches, user } = useAuthStore()
@@ -527,7 +528,9 @@ export default function SubscriptionsMain() {
       alert("Permission Denied: Clients cannot delete subscriptions.")
       return
     }
-    if (confirm("Cancel and delete this subscription?")) {
+    const sub = subscriptions.find(s => s.id === id)
+    const label = sub ? `${sub.planName || "Subscription"} for ${sub.clientName || "Client"}` : id
+    if (await confirmTwoStepDelete(label, "subscription")) {
       await deleteSubscription(id, activeCompanyId || "tech")
       setSubscriptions((prev) => prev.filter((s) => s.id !== id))
       showToast("Subscription removed.")

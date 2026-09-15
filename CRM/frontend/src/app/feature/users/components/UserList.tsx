@@ -6,6 +6,7 @@ import { Search, Filter, Shield, Edit2, Trash2, CheckCircle2, XCircle, Clock, Bu
 import { UserItem, UserRole, UserStatus } from "../types"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { useAuthStore } from "@/store/useAuthStore"
+import { confirmTwoStepDelete } from "@/lib/confirmDialog"
 
 interface UserListProps {
   users: UserItem[]
@@ -318,8 +319,8 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
                           )}
                           {canDeleteUsers && u.role !== "Super Admin" && (
                             <button
-                              onClick={() => {
-                                if (confirm(`Are you sure you want to delete user "${u.name}" (${u.email})?\n\nThis account will be permanently deleted and will no longer be able to log in.`)) {
+                              onClick={async () => {
+                                if (await confirmTwoStepDelete(`${u.name} (${u.email})`, "user account")) {
                                   onDelete(u.id)
                                 }
                               }}

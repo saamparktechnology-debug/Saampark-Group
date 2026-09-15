@@ -23,6 +23,7 @@ import { ProjectUserEarningsRecord, TeamMemberBankingInfo } from "../types"
 import { AddTeamMemberModal } from "../components/AddTeamMemberModal"
 import { EditTeamMemberModal } from "../components/EditTeamMemberModal"
 import { RecordPayoutModal } from "../components/RecordPayoutModal"
+import { confirmTwoStepDelete } from "@/lib/confirmDialog"
 
 export type TeamMember = {
   id: string
@@ -256,7 +257,7 @@ export default function TeamMembersPage() {
       return
     }
 
-    if (confirm(`Are you sure you want to remove team member "${member.name}"? Their account, assigned deliverables, and banking profile will be cleanly purged.`)) {
+    if (await confirmTwoStepDelete(member.name, "team member")) {
       await deleteUser(member.id || member.email, activeCompanyId || "tech")
       showToast(`🗑️ Team member "${member.name}" removed successfully.`)
       if (selectedMember?.id === member.id) {

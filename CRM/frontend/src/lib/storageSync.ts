@@ -58,6 +58,12 @@ export async function markGlobalItemDeleted(id: string | number, moduleName?: st
   }
 
   saveLocalDeletedId(strId, moduleName)
+  invalidateModuleCache(moduleName)
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("storage"))
+    window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+  }
 
   try {
     await api.post("/deleted", { id: strId, moduleName: moduleName || "global" })
@@ -298,6 +304,9 @@ export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: 
     const serverData = await requestPromise
 
     if (serverData !== null && serverData !== undefined) {
+      if (Array.isArray(serverData)) {
+        return filterGlobalDeletedItems(serverData, undefined, moduleKey) as any
+      }
       return serverData as any
     }
 
@@ -305,8 +314,8 @@ export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: 
     console.warn(`MySQL fetch warning for module ${moduleKey}:`, err)
   }
 
-  if (Array.isArray(fallbackData) && (fallbackData as any[]).length === 0) {
-    return [] as any
+  if (Array.isArray(fallbackData)) {
+    return filterGlobalDeletedItems(fallbackData as any[], undefined, moduleKey) as any
   }
   return fallbackData
 }
