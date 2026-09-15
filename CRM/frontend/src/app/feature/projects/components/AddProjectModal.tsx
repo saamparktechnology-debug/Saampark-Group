@@ -19,7 +19,7 @@ interface AddProjectModalProps {
 export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectModalProps) {
   const { user, activeCompanyId, activeBranchId, branches, companies } = useAuthStore()
   const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>(activeCompanyId || user?.companyId || "tech")
-  const [selectedBranchId, setSelectedBranchId] = React.useState<string>(user?.branchId || activeBranchId || "")
+  const [selectedBranchId, setSelectedBranchId] = React.useState<string>(activeBranchId || user?.branchId || "")
   const isBranchLocked = Boolean(user?.branchId && user?.role !== "Super Admin")
 
   const availableBranches = React.useMemo(() => {
@@ -52,7 +52,7 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
   React.useEffect(() => {
     if (isOpen) {
       setSelectedCompanyId(activeCompanyId || user?.companyId || "tech")
-      setSelectedBranchId(user?.branchId || activeBranchId || "")
+      setSelectedBranchId(activeBranchId || user?.branchId || "")
       // 1. Fetch team members reliably
       Promise.all([
         getUsers("all").catch(() => []),

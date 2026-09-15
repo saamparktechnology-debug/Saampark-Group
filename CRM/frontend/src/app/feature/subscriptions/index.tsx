@@ -211,20 +211,32 @@ export default function SubscriptionsMain() {
 
     const { activeCompanyId: freshCompId, activeBranchId: freshBranchId, branches: freshBranches, user: freshUser } = useAuthStore.getState()
     const userComp = (freshCompId || freshUser?.companyId || "").toLowerCase().trim()
+    // Strict: activeBranchId takes precedence
     const targetBranch = freshBranchId
+
+    const branchObj = freshBranches.find(b =>
+      b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase()
+    )
+    const targetBranchId = String(branchObj?.id || targetBranch || "").toLowerCase().trim()
+    const targetBranchName = branchObj?.name?.toLowerCase().trim() || ""
 
     const checkCompany = (sub: Subscription) => {
       if (!userComp || userComp === "all") return true
-      const comp = (sub.companyId || "tech").toLowerCase().trim()
-      return comp === userComp || (userComp === "tech" && !sub.companyId)
+      const comp = (sub.companyId || "").toLowerCase().trim()
+      if (!comp) return false // strict: unassigned company hidden when scoped
+      return comp === userComp
     }
 
     const checkBranch = (sub: Subscription) => {
-      if (!targetBranch) return true
+      if (!targetBranch || targetBranch === "all") return true
       const bId = String(sub.branchId || "").toLowerCase().trim()
       const bName = String(sub.branchName || "").toLowerCase().trim()
-      const target = String(targetBranch).toLowerCase().trim()
-      return bId === target || bName === target
+      // Strict: subscription MUST have a branch when filter is active
+      if (!bId && !bName) return false
+      return bId === targetBranchId ||
+             (targetBranchName && bId === targetBranchName) ||
+             bName === targetBranchName ||
+             (targetBranchId && bName === targetBranchId)
     }
 
     // 1. Super Admin & Company Admin

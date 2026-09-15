@@ -33,7 +33,7 @@ export interface ProposalItem {
 }
 
 export default function ProposalsMain() {
-  const { user, activeCompanyId } = useAuthStore()
+  const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
 
   const canAddProposal = canPerformAction(user, "Proposals", "add")
@@ -78,10 +78,12 @@ export default function ProposalsMain() {
     window.addEventListener("storage", loadProposals)
     window.addEventListener("saampark_data_synced", loadProposals)
     window.addEventListener("saampark_company_switched", loadProposals)
+    window.addEventListener("saampark_branch_switched", loadProposals)
     return () => {
       window.removeEventListener("storage", loadProposals)
       window.removeEventListener("saampark_data_synced", loadProposals)
       window.removeEventListener("saampark_company_switched", loadProposals)
+      window.removeEventListener("saampark_branch_switched", loadProposals)
     }
   }, [loadProposals])
 
@@ -97,11 +99,34 @@ export default function ProposalsMain() {
     }
   }, [isCreateModalOpen])
 
-  // Filter for client
+  // Filter by company, branch, and role
   const displayedProposals = React.useMemo(() => {
-    if (!isClientRole) return proposals
-    return proposals.filter((p) => isRecordAssignedToClient(p, user))
-  }, [proposals, isClientRole, user])
+    const { activeCompanyId: freshComp, activeBranchId: freshBranch, branches: freshBranches } = useAuthStore.getState()
+    const userComp = (freshComp || user?.companyId || "").toLowerCase().trim()
+    const targetBranch = freshBranch
+    const branchObj = freshBranches.find(b => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
+    const targetBranchId = String(branchObj?.id || targetBranch || "").toLowerCase().trim()
+    const targetBranchName = branchObj?.name?.toLowerCase().trim() || ""
+
+    return proposals.filter((p) => {
+      // Company filter
+      if (userComp && userComp !== "all") {
+        const pComp = ((p as any).companyId || "").toLowerCase().trim()
+        if (pComp && pComp !== userComp) return false
+        if (!pComp && userComp !== "tech") return false
+      }
+      // Branch filter (strict)
+      if (targetBranch && targetBranch !== "all") {
+        const pBranch = String((p as any).branchId || "").toLowerCase().trim()
+        if (!pBranch) return false
+        const match = pBranch === targetBranchId || (targetBranchName && pBranch === targetBranchName)
+        if (!match) return false
+      }
+      // Client role: only their own proposals
+      if (isClientRole) return isRecordAssignedToClient(p, user)
+      return true
+    })
+  }, [proposals, isClientRole, user, activeCompanyId, activeBranchId, branches])
 
   const filteredProposals = React.useMemo(() => {
     return displayedProposals.filter((p) => {

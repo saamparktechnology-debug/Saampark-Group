@@ -155,34 +155,42 @@ export default function ExpensesMain() {
 
   // Filtered expenses for general view
   const filteredExpenses = React.useMemo(() => {
+    const { activeCompanyId: freshComp, activeBranchId: freshBranch, branches: freshBranches } = useAuthStore.getState()
+    const userComp = (freshComp || user?.companyId || "").toLowerCase().trim()
+    // Strict: activeBranchId takes priority
+    const targetBranch = freshBranch
+    const targetBranchObj = freshBranches.find(b => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
+    const targetBranchId = String(targetBranchObj?.id || targetBranch || "").toLowerCase().trim()
+    const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
+
     return expenses.filter((e) => {
+      // Company filter
+      if (userComp && userComp !== "all") {
+        const eComp = String((e as any).companyId || "").toLowerCase().trim()
+        if (eComp && eComp !== userComp) return false
+        if (!eComp && userComp !== "tech") return false
+      }
+      // Branch filter (strict)
+      if (targetBranch && targetBranch !== "all") {
+        const eBranch = String((e as any).branchId || (e as any).branch_id || "").toLowerCase().trim()
+        const eBranchName = String((e as any).branchName || (e as any).branch_name || "").toLowerCase().trim()
+        if (!eBranch && !eBranchName) return false
+        const isMatch =
+          (eBranch && (eBranch === targetBranchId || (targetBranchName && eBranch === targetBranchName))) ||
+          (eBranchName && (eBranchName === targetBranchName || eBranchName === targetBranchId))
+        if (!isMatch) return false
+      }
       const matchSearch =
         e.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         e.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
         e.member.toLowerCase().includes(searchQuery.toLowerCase()) ||
         e.amount.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (e.projectName && e.projectName.toLowerCase().includes(searchQuery.toLowerCase()))
-
       if (!matchSearch) return false
-      const targetBranch = user?.branchId || activeBranchId
-      if (targetBranch && targetBranch !== "all") {
-        const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === targetBranch.toLowerCase())
-        const targetBranchId = String(targetBranchObj?.id || targetBranch).toLowerCase().trim()
-        const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
-
-        const eBranch = String((e as any).branchId || (e as any).branch_id || "").toLowerCase().trim()
-        const eBranchName = String((e as any).branchName || (e as any).branch_name || "").toLowerCase().trim()
-
-        const isMatch =
-          (eBranch && (eBranch === targetBranchId || (targetBranchName && eBranch === targetBranchName))) ||
-          (eBranchName && (eBranchName === targetBranchName || eBranchName === targetBranchId))
-
-        if (!isMatch) return false
-      }
       if (selectedCategory === "all") return true
       return e.category === selectedCategory
     })
-  }, [expenses, searchQuery, selectedCategory, activeBranchId, branches, user?.branchId])
+  }, [expenses, searchQuery, selectedCategory, activeCompanyId, activeBranchId, branches, user])
 
   // Project-specific expenses
   const projectExpenses = React.useMemo(() => {

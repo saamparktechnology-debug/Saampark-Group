@@ -159,14 +159,14 @@ export default function PaymentsPage() {
 
   const displayedPayments = React.useMemo(() => {
     const userComp = (activeCompanyId || user?.companyId || "").toLowerCase().trim()
-    const targetBranch = activeBranchId
+    const targetBranch = activeBranchId || (user?.role !== "Super Admin" && user?.role !== "Admin" ? user?.branchId : null)
 
     const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
     const targetBranchId = String(targetBranchObj?.id || targetBranch || "").toLowerCase().trim()
     const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
 
     const checkBranch = (p: any) => {
-      if (!targetBranch) return true
+      if (!targetBranch || targetBranch === "all") return true
       const pBranch = String(p.branchId || p.branch_id || "").toLowerCase().trim()
       const pBranchName = String(p.branchName || p.branch_name || "").toLowerCase().trim()
       return (pBranch && (pBranch === targetBranchId || (targetBranchName && pBranch === targetBranchName))) ||
@@ -186,12 +186,12 @@ export default function PaymentsPage() {
           return pComp === userComp || (userComp === "tech" && !p.companyId)
         })
       }
-      if (targetBranch) {
+      if (targetBranch && targetBranch !== "all") {
         filtered = filtered.filter((p) => checkBranch(p))
       }
     }
     return filtered
-  }, [payments, isClientRole, clientEmailNorm, clientNameNorm, activeCompanyId, activeBranchId, branches, user?.companyId])
+  }, [payments, isClientRole, clientEmailNorm, clientNameNorm, activeCompanyId, activeBranchId, branches, user?.companyId, user?.branchId])
 
   const totalAmountNum = displayedPayments.reduce((sum, p) => sum + (p.amountNum || (parseInt(p.amount.replace(/[^0-9]/g, "")) || 0)), 0)
   const totalTransactions = displayedPayments.length

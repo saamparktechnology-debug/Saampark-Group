@@ -1383,7 +1383,7 @@ export const useAuthStore = create<AuthState>()(
               isAuthenticated: true,
               token: res.token,
               user: userObj,
-              activeCompanyId: userObj.companyId || 'tech',
+              activeCompanyId: role === 'Super Admin' ? 'all' : (userObj.companyId || 'tech'),
               activeBranchId: initialBranchId,
             })
 
@@ -1505,6 +1505,14 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'saampark-auth-v3',
+      onRehydrateStorage: () => (state) => {
+        if (state && state.user && state.user.role === 'Super Admin') {
+          if (!state.activeCompanyId) {
+            state.activeCompanyId = 'all'
+            state.activeBranchId = null
+          }
+        }
+      },
       partialize: (state) => ({
         isAuthenticated: state.isAuthenticated,
         token: state.token,
@@ -1515,4 +1523,3 @@ export const useAuthStore = create<AuthState>()(
     }
   )
 )
-

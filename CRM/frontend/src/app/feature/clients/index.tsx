@@ -71,20 +71,19 @@ export default function ClientsMain() {
       // Always read fresh from store — avoids stale closure after company/branch switch
       const { activeCompanyId: freshCompanyId, activeBranchId: freshBranchId, branches: freshBranches, user: freshUser } = useAuthStore.getState()
       const targetComp = (freshCompanyId || freshUser?.companyId || "").toLowerCase().trim()
-      const targetBranch = freshUser?.branchId || freshBranchId
+      const targetBranch = freshBranchId || (freshUser?.role !== "Super Admin" && freshUser?.role !== "Admin" ? freshUser?.branchId : null)
 
       const targetBranchObj = freshBranches.find(b => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
       const targetBranchId = String(targetBranchObj?.id || targetBranch || "").toLowerCase().trim()
       const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
 
       const checkBranch = (c: any) => {
-        if (!targetBranch) return true
+        if (!targetBranch || targetBranch === "all") return true
         const cBranch = String(c.branchId || c.branch_id || "").toLowerCase().trim()
         const cBranchName = String(c.branchName || c.branch_name || "").toLowerCase().trim()
         const uBranchIds = (c.branchIds && c.branchIds.length > 0)
           ? c.branchIds.map((id: any) => String(id).toLowerCase().trim())
           : []
-        if (!cBranch && !cBranchName && uBranchIds.length === 0) return true
         return (cBranch && (cBranch === targetBranchId || (targetBranchName && cBranch === targetBranchName))) ||
                (cBranchName && (cBranchName === targetBranchName || cBranchName === targetBranchId)) ||
                uBranchIds.includes(targetBranchId)
@@ -118,10 +117,10 @@ export default function ClientsMain() {
       if (targetComp && targetComp !== "all") {
         storedClients = storedClients.filter(c => {
           const cComp = (c.companyId || (c as any).company || "").toLowerCase().trim()
-          return !cComp || cComp === targetComp || (targetComp === "tech" && !c.companyId)
+          return cComp === targetComp || (targetComp === "tech" && !c.companyId)
         })
       }
-      if (targetBranch) {
+      if (targetBranch && targetBranch !== "all") {
         storedClients = storedClients.filter(c => checkBranch(c))
       }
 

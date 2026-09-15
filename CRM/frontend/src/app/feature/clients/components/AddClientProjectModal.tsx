@@ -66,7 +66,7 @@ export function AddClientProjectModal({
   const { user, activeCompanyId, activeBranchId, branches, subBranches, companies } = useAuthStore()
   
   const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>(activeCompanyId || user?.companyId || "tech")
-  const [selectedBranchId, setSelectedBranchId] = React.useState<string>(user?.branchId || activeBranchId || "")
+  const [selectedBranchId, setSelectedBranchId] = React.useState<string>(activeBranchId || user?.branchId || "")
   const [selectedSubBranchId, setSelectedSubBranchId] = React.useState<string>("")
   const isBranchLocked = Boolean(user?.branchId && user?.role !== "Super Admin")
 
@@ -216,7 +216,7 @@ export function AddClientProjectModal({
   React.useEffect(() => {
     if (isOpen && client) {
       setSelectedCompanyId(activeCompanyId || user?.companyId || "tech")
-      setSelectedBranchId(user?.branchId || activeBranchId || "")
+      setSelectedBranchId(activeBranchId || user?.branchId || "")
       setSelectedSubBranchId("")
       setCreationMode("project_and_invoice")
       setProjectTitle("Website Development")

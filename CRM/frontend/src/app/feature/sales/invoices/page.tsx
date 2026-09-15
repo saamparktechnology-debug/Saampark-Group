@@ -155,7 +155,7 @@ function InvoicesPageContent() {
   const [invoiceType, setInvoiceType] = React.useState<"gst" | "nongst">("gst")
   const [isNonGstMode, setIsNonGstMode] = React.useState(false)
   const [invoiceCompanyId, setInvoiceCompanyId] = React.useState<string>("tech")
-  const [invoiceBranchId, setInvoiceBranchId] = React.useState<string>(user?.branchId || activeBranchId || "")
+  const [invoiceBranchId, setInvoiceBranchId] = React.useState<string>(activeBranchId || user?.branchId || "")
   const [invoiceSubBranchId, setInvoiceSubBranchId] = React.useState<string>("")
   const [editInvoiceType, setEditInvoiceType] = React.useState<"gst" | "nongst">("gst")
   const [editCompanyId, setEditCompanyId] = React.useState<string>("tech")
@@ -1020,7 +1020,7 @@ function InvoicesPageContent() {
   // Client-specific vs Admin filtered invoices
   const displayedInvoices = React.useMemo(() => {
     const userComp = (activeCompanyId || user?.companyId || "").toLowerCase().trim()
-    const targetBranch = user?.branchId || activeBranchId
+    const targetBranch = activeBranchId || (user?.role !== "Super Admin" && user?.role !== "Admin" ? user?.branchId : null)
 
     const targetBranchObj = (branches as any[]).find((b: any) => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
     const targetBranchId = String(targetBranchObj?.id || targetBranch || "").toLowerCase().trim()

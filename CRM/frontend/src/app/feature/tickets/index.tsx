@@ -47,7 +47,7 @@ export interface DisputeTicket {
 }
 
 export default function TicketsMain() {
-  const { user, activeCompanyId } = useAuthStore()
+  const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
 
   // Super Admin = ONLY role with full ticket visibility + status change power
   const roleLower = (user?.role || "").toLowerCase().trim()
@@ -168,16 +168,31 @@ export default function TicketsMain() {
   }, [loadTickets])
 
   // Access Control Rules:
-  // Super Admin → sees ALL tickets across the company
+  // Super Admin → sees ALL tickets across the company (scoped by branch if selected)
   // Everyone else (Admin, Team, Client) → sees ONLY tickets they personally raised
   const accessibleTickets = React.useMemo(() => {
+    const { activeCompanyId: freshComp, activeBranchId: freshBranch, branches: freshBranches } = useAuthStore.getState()
+    const userComp = (freshComp || user?.companyId || "").toLowerCase().trim()
+    const targetBranch = freshBranch
+
+    const checkBranch = (t: DisputeTicket) => {
+      if (!targetBranch || targetBranch === "all") return true
+      const tBranch = String(t.branchId || "").toLowerCase().trim()
+      if (!tBranch) return false // strict: if branch selected, ticket must have one
+      const branchObj = freshBranches.find(b => b.id === targetBranch || b.name.toLowerCase() === targetBranch.toLowerCase())
+      const targetBranchId = String(branchObj?.id || targetBranch).toLowerCase().trim()
+      const targetBranchName = branchObj?.name?.toLowerCase().trim() || ""
+      return tBranch === targetBranchId || (targetBranchName && tBranch === targetBranchName)
+    }
+
     if (isSuperAdmin) {
-      // Super Admin sees everything — filter by company context if applicable
-      const userComp = (activeCompanyId || user?.companyId || "").toLowerCase().trim()
+      // Super Admin sees everything — filter by company + branch context
       return tickets.filter(t => {
-        if (!userComp || userComp === "all") return true
-        const tComp = (t.companyId || "tech").toLowerCase().trim()
-        return tComp === userComp || (userComp === "tech" && !t.companyId)
+        if (userComp && userComp !== "all") {
+          const tComp = (t.companyId || "tech").toLowerCase().trim()
+          if (tComp !== userComp && !(userComp === "tech" && !t.companyId)) return false
+        }
+        return checkBranch(t)
       })
     }
 
@@ -190,7 +205,7 @@ export default function TicketsMain() {
         (currentUserName && cName === currentUserName.toLowerCase().trim())
       )
     })
-  }, [tickets, isSuperAdmin, user, currentUserEmail, currentUserName, activeCompanyId])
+  }, [tickets, isSuperAdmin, user, currentUserEmail, currentUserName, activeCompanyId, activeBranchId, branches])
 
   const filteredTickets = React.useMemo(() => {
     return accessibleTickets.filter(t => {

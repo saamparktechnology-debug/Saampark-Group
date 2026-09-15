@@ -18,7 +18,7 @@ import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 import { OfficialQuotationDocument, QuotationData, QuotationLineItem } from "./components/OfficialQuotationDocument"
 
 export default function QuotationsMain() {
-  const { user, activeCompanyId, activeBranchId, companies, branches } = useAuthStore()
+  const { user, activeCompanyId, activeBranchId, branches, companies } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
   
   const canAdd = canPerformAction(user, "Quotations", "add") || user?.role === "Super Admin"
@@ -107,15 +107,49 @@ export default function QuotationsMain() {
     }
   }, [activeCompanyId])
 
-  React.useEffect(() => { loadData() }, [loadData])
+  React.useEffect(() => {
+    loadData()
+    const handleReload = () => loadData()
+    window.addEventListener("saampark_company_switched", handleReload)
+    window.addEventListener("saampark_branch_switched", handleReload)
+    window.addEventListener("saampark_data_synced", handleReload)
+    return () => {
+      window.removeEventListener("saampark_company_switched", handleReload)
+      window.removeEventListener("saampark_branch_switched", handleReload)
+      window.removeEventListener("saampark_data_synced", handleReload)
+    }
+  }, [loadData])
 
-  const filtered = quotations.filter(q => {
-    const match = q.number?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      q.customer?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (q.customerEmail && q.customerEmail.toLowerCase().includes(searchQuery.toLowerCase()))
-    if (statusFilter !== "all" && q.status !== statusFilter) return false
-    return match
-  })
+  const filtered = React.useMemo(() => {
+    const { activeCompanyId: freshComp, activeBranchId: freshBranch, branches: freshBranches } = useAuthStore.getState()
+    const userComp = (freshComp || user?.companyId || "").toLowerCase().trim()
+    const targetBranch = freshBranch
+    const branchObj = freshBranches.find(b => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
+    const targetBranchId = String(branchObj?.id || targetBranch || "").toLowerCase().trim()
+    const targetBranchName = branchObj?.name?.toLowerCase().trim() || ""
+
+    return quotations.filter(q => {
+      // Company filter
+      if (userComp && userComp !== "all") {
+        const qComp = (q.companyId || "").toLowerCase().trim()
+        if (qComp && qComp !== userComp) return false
+        if (!qComp && userComp !== "tech") return false
+      }
+      // Branch filter (strict)
+      if (targetBranch && targetBranch !== "all") {
+        const qBranch = String((q as any).branchId || "").toLowerCase().trim()
+        if (!qBranch) return false
+        const match = qBranch === targetBranchId || (targetBranchName && qBranch === targetBranchName)
+        if (!match) return false
+      }
+      // Search + status filter
+      if (statusFilter !== "all" && q.status !== statusFilter) return false
+      const match = q.number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        q.customer?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (q.customerEmail && q.customerEmail.toLowerCase().includes(searchQuery.toLowerCase()))
+      return match
+    })
+  }, [quotations, activeCompanyId, activeBranchId, branches, searchQuery, statusFilter, user])
 
   const subtotal = items.reduce((s, i) => s + (Number(i.quantity) * Number(i.unitPrice)), 0)
   const tax = Math.round(subtotal * 0.18)

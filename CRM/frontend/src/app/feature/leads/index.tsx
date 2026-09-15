@@ -174,7 +174,8 @@ export default function LeadsMain() {
     // Read fresh from store to avoid stale closure after company/branch switch
     const { activeCompanyId: freshCompanyId, activeBranchId: freshBranchId, branches: freshBranches, user: freshUser } = useAuthStore.getState()
     const userComp = (freshCompanyId || freshUser?.companyId || "").toLowerCase().trim()
-    const targetBranch = freshUser?.branchId || freshBranchId
+    // activeBranchId takes priority; fall back to user's assigned branch only for non-admin
+    const targetBranch = freshBranchId || (isSuperOrAdmin ? null : freshUser?.branchId)
 
     // Admins see all leads across companies and branches (or scoped to their assigned branch)
     if (isSuperOrAdmin) {
@@ -184,9 +185,8 @@ export default function LeadsMain() {
 
         if (userComp && userComp !== "all") {
           const lComp = (l.companyId || (l as any).company || "").toLowerCase().trim()
-          if (lComp && lComp !== userComp && !((userComp === "tech" || !lComp) && (!l.companyId || lComp === "tech"))) {
-            return false
-          }
+          if (lComp && lComp !== userComp) return false
+          if (!lComp && userComp !== "tech") return false
         }
 
         if (targetBranch && targetBranch !== "all") {
@@ -196,13 +196,12 @@ export default function LeadsMain() {
           const targetBranchId = String(targetBranchObj?.id || targetBranch).toLowerCase().trim()
           const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
 
-          if (lBranch || lBranchName) {
-            const isBranchMatch =
-              (lBranch && (lBranch === targetBranchId || (targetBranchName && lBranch === targetBranchName))) ||
-              (lBranchName && (lBranchName === targetBranchName || lBranchName === targetBranchId))
+          // Strict: if branch filter is active, lead MUST have a matching branchId/name
+          const isBranchMatch =
+            (lBranch && (lBranch === targetBranchId || (targetBranchName && lBranch === targetBranchName))) ||
+            (lBranchName && (lBranchName === targetBranchName || lBranchName === targetBranchId))
 
-            if (!isBranchMatch) return false
-          }
+          if (!isBranchMatch) return false
         }
 
         return true

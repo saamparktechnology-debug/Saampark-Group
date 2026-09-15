@@ -154,7 +154,8 @@ export default function TasksMain() {
     if (!user) return []
 
     const userComp = (activeCompanyId || user?.companyId || "").toLowerCase().trim()
-    const targetBranch = activeBranchId || user?.branchId
+    // activeBranchId takes strict priority
+    const targetBranch = activeBranchId || (isSuperAdmin || isAdmin ? null : user?.branchId)
     const targetSubBranch = activeSubBranchId || (user as any)?.subBranchId
 
     const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
@@ -168,7 +169,7 @@ export default function TasksMain() {
     const checkCompany = (t: any) => {
       if (!userComp || userComp === "all") return true
       const tComp = (t.companyId || t.company_id || (t as any).company || "").toLowerCase().trim()
-      if (!tComp) return true
+      if (!tComp) return false // strict: no companyId means not visible under a specific company
       return tComp === userComp
     }
 
@@ -176,6 +177,8 @@ export default function TasksMain() {
       if (!targetBranch || targetBranch === "all") return true
       const tBranch = String(t.branchId || t.branch_id || "").toLowerCase().trim()
       const tBranchName = String(t.branchName || t.branch_name || "").toLowerCase().trim()
+      // Strict: if branch filter active, task MUST have a matching branch
+      if (!tBranch && !tBranchName) return false
       return (tBranch && (tBranch === targetBranchId || (targetBranchName && tBranch === targetBranchName))) ||
              (tBranchName && (tBranchName === targetBranchName || tBranchName === targetBranchId))
     }
@@ -184,7 +187,7 @@ export default function TasksMain() {
       if (!targetSubBranch || targetSubBranch === "all") return true
       const tSub = String(t.subBranchId || t.sub_branch_id || "").toLowerCase().trim()
       const tSubName = String(t.subBranchName || t.sub_branch_name || "").toLowerCase().trim()
-      if (!tSub && !tSubName) return true
+      if (!tSub && !tSubName) return true // sub-branch is optional
       return (tSub && (tSub === targetSubBranchId || (targetSubBranchName && tSub === targetSubBranchName))) ||
              (tSubName && (tSubName === targetSubBranchName || tSubName === targetSubBranchId))
     }

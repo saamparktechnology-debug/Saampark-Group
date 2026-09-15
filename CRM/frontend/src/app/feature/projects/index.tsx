@@ -82,7 +82,7 @@ export default function ProjectsMain() {
     if (!user) return []
     
     const userComp = (activeCompanyId || user?.companyId || "").toLowerCase().trim()
-    const targetBranch = activeBranchId
+    const targetBranch = activeBranchId || (user?.role !== "Super Admin" && user?.role !== "Admin" ? user?.branchId : null)
 
     const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
     const targetBranchId = String(targetBranchObj?.id || targetBranch || "").toLowerCase().trim()
@@ -102,7 +102,7 @@ export default function ProjectsMain() {
       if (userComp && userComp !== "all") {
         filtered = filtered.filter((p) => {
           const pComp = (p.companyId || (p as any).company || "").toLowerCase().trim()
-          return !pComp || pComp === userComp || (userComp === "tech" && !p.companyId)
+          return pComp === userComp || (userComp === "tech" && !p.companyId)
         })
       }
       if (targetBranch && targetBranch !== "all") {
