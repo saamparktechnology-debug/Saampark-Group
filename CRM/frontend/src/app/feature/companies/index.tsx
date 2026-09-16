@@ -56,45 +56,25 @@ const CANONICAL_COMPANIES: Company[] = [
     signatory_designation: "Managing Director",
   },
   {
-    id: "digital",
-    name: "SAAMPARK DIGITAL MARKETING RESEARCH & CREATIVE MEDIA AGENCY",
-    slug: "digital",
+    id: "consultancy",
+    name: "SAAMPARK CONSULTANCY SERVICE",
+    slug: "consultancy",
     brand_name: "SAAMPARK",
-    division_name: "DIGITAL MARKETING",
-    subtitle: "RESEARCH & CREATIVE MEDIA AGENCY",
-    industry: "Media & Marketing",
+    division_name: "CONSULTANCY SERVICE",
+    subtitle: "MANAGEMENT & ADVISORY SERVICES",
+    industry: "Consulting",
     currency: "INR",
     currency_symbol: "₹",
     logo_url: "/saampark-logo.png",
     address: "Salt Lake Sector V, Bidhannagar, Kolkata, West Bengal - 700091",
     phone: "+91 9901518570",
-    email: "digital@saampark.in",
-    website: "www.saamparkdigital.com",
+    email: "consultancy@saampark.in",
+    website: "www.saampark.in",
     status: "active",
-    member_count: 3,
+    member_count: 8,
     signatory_name: "Authorized Signatory",
-    signatory_designation: "Agency Head",
+    signatory_designation: "Consulting Director",
   },
-  {
-    id: "saampark-ai-solutions",
-    name: "SAAMPARK AI SOLUTIONS",
-    slug: "saampark-ai-solutions",
-    brand_name: "SAAMPARK",
-    division_name: "AI SOLUTIONS",
-    subtitle: "INTELLIGENT SYSTEMS & AUTOMATION",
-    industry: "Artificial Intelligence & Software",
-    currency: "INR",
-    currency_symbol: "₹",
-    logo_url: "/saampark-logo.png",
-    address: "Outer Ring Road, Bellandur, Bengaluru, Karnataka - 560103",
-    phone: "+91 9901518572",
-    email: "ai@saampark.com",
-    website: "www.saamparkai.com",
-    status: "active",
-    member_count: 2,
-    signatory_name: "Authorized Signatory",
-    signatory_designation: "Head of AI",
-  }
 ]
 
 const CANONICAL_BRANCHES: Branch[] = [
@@ -784,11 +764,6 @@ export default function CompaniesMain() {
           </h1>
           <p className="text-xs text-muted-foreground mt-1">Configure corporate entities, divisions, legal tax IDs, authorized stamps, and percentage-share franchise sub-branches</p>
         </div>
-        {isSuperAdmin && (
-          <Button onClick={openAddCompany} className="flex items-center gap-2 font-bold shadow-md shadow-primary/20">
-            <Plus className="h-4 w-4" />Add Company
-          </Button>
-        )}
       </div>
 
       {/* Filter Toolbar */}
@@ -841,9 +816,6 @@ export default function CompaniesMain() {
                 <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
                   <Button variant="ghost" size="sm" onClick={() => openAddBranch(company.id)} title="Add Branch"><Plus className="h-4 w-4" /></Button>
                   <Button variant="ghost" size="sm" onClick={() => openEditCompany(company)} title="Edit Full Company Details"><Edit2 className="h-4 w-4" /></Button>
-                  {isSuperAdmin && (
-                    <Button variant="ghost" size="sm" onClick={() => confirmDelete("company", company.id)} title="Delete Company" className="text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
-                  )}
                 </div>
               </div>
 

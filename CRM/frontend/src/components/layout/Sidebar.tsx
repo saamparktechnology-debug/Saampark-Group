@@ -266,7 +266,7 @@ export function Sidebar() {
 
   const activeCompanyName = isAllCompanies ? "SAAMPARK GROUP" : (activeCompany ? getCompanyFullName(activeCompany) : "SAAMPARK GROUP")
   const activeCompanyLogo = isAllCompanies ? null : (activeCompany ? getCompanyLogoUrl(activeCompany) : null)
-  const { isModuleAllowed, userActionPermissions, userPermissions } = usePermissionStore()
+  const { isModuleAllowed, isCompanyModuleAllowed, userActionPermissions, userPermissions, companyEnabledModules } = usePermissionStore()
 
   const [rawCounts, setRawCounts] = React.useState<Record<string, number>>({})
   const [visitedCounts, setVisitedCounts] = React.useState<Record<string, number>>({})
@@ -448,14 +448,28 @@ export function Sidebar() {
   const checkNavAllowed = React.useCallback((u: any, name: string): boolean => {
     if (!u) return false
     if (name === "Dashboard") return true
+
+    const targetModule = NAV_TO_MODULE_MAP[name] || name
+
+    // Company-level module visibility restriction
+    if (activeCompanyId && activeCompanyId !== 'all') {
+      const allowedForCompany = isCompanyModuleAllowed(activeCompanyId, targetModule)
+      if (!allowedForCompany) {
+        // If Super Admin, let them see system governance (Dashboard, Companies, Branches, Settings, Permissions, Users, Activity Logs)
+        if (u.role === "Super Admin" && ["Dashboard", "Companies", "Branches", "Settings", "Permissions", "Users", "Activity Logs"].includes(targetModule)) {
+          return true
+        }
+        return false
+      }
+    }
+
     if (name === "Activity Logs") {
       return u.role === "Super Admin" || u.role === "Admin"
     }
     if (u.role === "Super Admin") return true
 
-    const targetModule = NAV_TO_MODULE_MAP[name] || name
     return isModuleAllowed(u, targetModule)
-  }, [isModuleAllowed])
+  }, [isModuleAllowed, isCompanyModuleAllowed, activeCompanyId])
 
 
   // Filter items strictly by individual module permissions

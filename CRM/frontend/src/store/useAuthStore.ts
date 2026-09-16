@@ -277,8 +277,9 @@ export function getCanonicalCompanyId(val: string | number | null | undefined): 
   const str = String(val).toLowerCase().trim()
   if (!str) return ""
   if (str === "1" || str === "tech" || str.includes("technology")) return "tech"
-  if (str === "2" || str === "digital" || str.includes("digital")) return "digital"
-  if (str === "3" || str === "saampark-ai-solutions" || str === "ai" || str.includes("ai solutions")) return "saampark-ai-solutions"
+  if (str === "2" || str === "consultancy" || str === "consult" || str.includes("consult")) return "consultancy"
+  if (str === "3" || str === "digital" || str.includes("digital")) return "digital"
+  if (str === "4" || str === "saampark-ai-solutions" || str === "ai" || str.includes("ai solutions")) return "saampark-ai-solutions"
   return str
 }
 
@@ -308,12 +309,14 @@ export function isMatchingCompany(
     return true
   }
 
-  return (
+  return Boolean(
     String(comp.id || "").toLowerCase().trim() === target ||
     String(comp.slug || "").toLowerCase().trim() === target ||
     String((comp as any).numeric_id || "").toLowerCase().trim() === target ||
     String((comp as any).company_id || (comp as any).companyId || "").toLowerCase().trim() === target ||
-    String(comp.name || "").toLowerCase().trim() === target
+    String(comp.name || "").toLowerCase().trim() === target ||
+    (comp.name && target && String(comp.name).toLowerCase().includes(target)) ||
+    (comp.name && target && target.includes(String(comp.name).toLowerCase()))
   )
 }
 
@@ -363,15 +366,15 @@ export const DEFAULT_COMPANIES: Company[] = [
     signatory_designation: 'Managing Director'
   },
   { 
-    id: 'digital', 
+    id: 'consultancy', 
     numeric_id: 2,
     brand_name: 'SAAMPARK',
-    division_name: 'DIGITAL MARKETING',
-    name: 'SAAMPARK DIGITAL MARKETING', 
-    subtitle: 'RESEARCH & CREATIVE MEDIA AGENCY',
-    logo: '📈', 
+    division_name: 'CONSULTANCY SERVICE',
+    name: 'SAAMPARK CONSULTANCY SERVICE', 
+    subtitle: 'MANAGEMENT & ADVISORY SERVICES',
+    logo: '🏢', 
     logo_url: '/saampark-logo.png',
-    slug: 'digital', 
+    slug: 'consultancy', 
     currency: 'INR',
     currency_symbol: '₹',
     cin: '',
@@ -379,46 +382,17 @@ export const DEFAULT_COMPANIES: Company[] = [
     pan: '',
     address: 'Salt Lake Sector V, Bidhannagar, Kolkata, West Bengal - 700091',
     phone: '+91 9901518570',
-    email: 'digital@saampark.in',
-    website: 'www.saamparkdigital.com',
+    email: 'consultancy@saampark.in',
+    website: 'www.saampark.in',
     upi_id: '',
     account_holder: '',
     bank_name: '',
     account_number: '',
     ifsc_code: '',
     bank_branch: '',
-    terms_conditions: '1. All marketing campaigns will be initiated after advance retainer clearance.\n2. Advertising budget spend is billed directly via client ad account.\n3. All disputes are subject to Kolkata jurisdiction only.',
+    terms_conditions: '1. All consulting engagements are initiated following signed scope of work.\n2. Retainer fees are payable in advance.\n3. All disputes are subject to Kolkata jurisdiction only.',
     signatory_name: 'Authorized Signatory',
-    signatory_designation: 'Agency Head'
-  },
-  { 
-    id: 'saampark-ai-solutions', 
-    numeric_id: 3,
-    brand_name: 'SAAMPARK',
-    division_name: 'AI SOLUTIONS',
-    name: 'SAAMPARK AI SOLUTIONS', 
-    subtitle: 'INTELLIGENT SYSTEMS & AUTOMATION',
-    logo: '🤖', 
-    logo_url: '/saampark-logo.png',
-    slug: 'saampark-ai-solutions', 
-    currency: 'INR',
-    currency_symbol: '₹',
-    cin: '',
-    gstin: '',
-    pan: '',
-    address: 'Outer Ring Road, Bellandur, Bengaluru, Karnataka - 560103',
-    phone: '+91 9901518572',
-    email: 'ai@saampark.com',
-    website: 'www.saamparkai.com',
-    upi_id: '',
-    account_holder: '',
-    bank_name: '',
-    account_number: '',
-    ifsc_code: '',
-    bank_branch: '',
-    terms_conditions: '1. All enterprise AI models and cloud APIs are governed by custom SLA commitments.\n2. Service continuity assured with 99.9% uptime.\n3. All disputes are subject to Bengaluru jurisdiction only.',
-    signatory_name: 'Authorized Signatory',
-    signatory_designation: 'Head of AI'
+    signatory_designation: 'Consulting Director'
   },
 ]
 
@@ -450,29 +424,29 @@ export const DEFAULT_BRANCHES: Branch[] = [
     status: 'Active',
   },
   {
-    id: 'br-3',
-    companyId: 'digital',
-    name: 'Head Office - Kolkata Creative Hub',
-    code: 'SDM-HQ',
+    id: 'br-consult-1',
+    companyId: 'consultancy',
+    name: 'Head Office - Kolkata Consulting Center',
+    code: 'SCS-HQ',
     city: 'Kolkata',
     state: 'West Bengal',
     country: 'India',
     phone: '+91 9901518570',
-    email: 'kolkata@saamparkdigital.com',
-    managerName: 'Creative Lead',
+    email: 'consultancy@saampark.in',
+    managerName: 'Consulting Director',
     status: 'Active',
   },
   {
-    id: 'br-5',
-    companyId: 'saampark-ai-solutions',
-    name: 'Head Office - Bengaluru Innovation Center',
-    code: 'SAI-HQ',
-    city: 'Bengaluru',
-    state: 'Karnataka',
+    id: 'br-consult-2',
+    companyId: 'consultancy',
+    name: 'Branch - Corporate Advisory Office',
+    code: 'SCS-ADV',
+    city: 'Kolkata',
+    state: 'West Bengal',
     country: 'India',
-    phone: '+91 9901518572',
-    email: 'ai@saampark.com',
-    managerName: 'AI Architect',
+    phone: '+91 9901518570',
+    email: 'advisory@saampark.in',
+    managerName: 'Advisory Lead',
     status: 'Active',
   },
 ]
@@ -630,10 +604,12 @@ export const useAuthStore = create<AuthState>()(
             }
           })
 
-          const combined = Array.from(map.values()).map(c => ({
-            ...c,
-            name: getCompanyFullName(c),
-          }))
+          const combined = Array.from(map.values())
+            .filter(c => isMatchingCompany(c, 'tech') || isMatchingCompany(c, 'consultancy'))
+            .map(c => ({
+              ...c,
+              name: getCompanyFullName(c),
+            }))
 
           if (combined.length > 0) {
             set({ companies: combined })
@@ -643,7 +619,9 @@ export const useAuthStore = create<AuthState>()(
           console.warn("fetchCompanies warning:", err)
         }
 
-        const currentFiltered = (get().companies && get().companies.length > 0) ? get().companies : DEFAULT_COMPANIES
+        const currentFiltered = (get().companies && get().companies.length > 0)
+          ? get().companies.filter(c => isMatchingCompany(c, 'tech') || isMatchingCompany(c, 'consultancy'))
+          : DEFAULT_COMPANIES
         set({ companies: currentFiltered })
         return currentFiltered
       },
@@ -1276,7 +1254,7 @@ export const useAuthStore = create<AuthState>()(
           else if (rLower.includes('client')) normalizedRole = 'Clients'
         }
 
-        const assignedCompanyIds = customUser?.companyIds || (normalizedRole === 'Super Admin' ? ['tech', 'digital'] : [customUser?.companyId || 'tech'])
+        const assignedCompanyIds = customUser?.companyIds || (normalizedRole === 'Super Admin' ? ['tech', 'consultancy'] : [customUser?.companyId || 'tech'])
 
         let parsedPerms: any = customUser?.permissions
         if (typeof parsedPerms === 'string') {
@@ -1286,6 +1264,9 @@ export const useAuthStore = create<AuthState>()(
         const userAllowedMods =
           customUser?.allowedModules ||
           (parsedPerms && Array.isArray(parsedPerms.allowedModules) ? parsedPerms.allowedModules : undefined)
+
+        const rawBranch = customUser?.branchId || (customUser as any)?.branch_id || undefined
+        const rawBranchName = customUser?.branchName || (customUser as any)?.branch_name || undefined
 
         const user: User = {
           id: customUser?.id || `u_${Date.now()}`,
@@ -1297,13 +1278,25 @@ export const useAuthStore = create<AuthState>()(
           role: normalizedRole,
           companyId: customUser?.companyId || assignedCompanyIds[0] || 'tech',
           companyIds: assignedCompanyIds,
+          branchId: rawBranch,
+          branchName: rawBranchName,
           avatar: customUser?.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${customUser?.email || normalizedRole}`,
           phone: customUser?.phone,
           allowedModules: normalizedRole === 'Super Admin' ? undefined : userAllowedMods,
           permissions: parsedPerms || customUser?.permissions,
         }
 
-        const activeCompanyId = user.companyId || 'tech'
+        // Direct company and branch routing
+        let activeCompanyId = 'tech'
+        if (normalizedRole === 'Super Admin') {
+          activeCompanyId = 'all'
+        } else if (user.companyId) {
+          activeCompanyId = user.companyId
+        } else if (assignedCompanyIds.length === 1) {
+          activeCompanyId = assignedCompanyIds[0]
+        }
+
+        const activeBranchId = (normalizedRole !== 'Super Admin' && rawBranch) ? rawBranch : null
 
         if (typeof window !== 'undefined') {
           sessionStorage.setItem('saampark_session_active', 'true')
@@ -1314,6 +1307,7 @@ export const useAuthStore = create<AuthState>()(
           isAuthenticated: true,
           user,
           activeCompanyId,
+          activeBranchId,
         })
       },
 
@@ -1356,13 +1350,15 @@ export const useAuthStore = create<AuthState>()(
 
             const userBranch = res.user?.branch_id || res.user?.branchId || res.user?.branch || undefined
 
+            const primaryCompany = res.user?.company_id || parsedCompanyIds[0] || 'tech'
+
             const userObj: User = {
               id: res.user?.id || 'u_live',
               name: res.user?.full_name || res.user?.name || res.user?.email || 'User',
               email: res.user?.email || (normIdentifier.includes('@') ? normIdentifier : 'user@saampark.in'),
               username: res.user?.username || (!normIdentifier.includes('@') ? normIdentifier : undefined),
               role: role,
-              companyId: res.user?.company_id || parsedCompanyIds[0] || 'tech',
+              companyId: primaryCompany,
               companyIds: parsedCompanyIds,
               branchId: userBranch,
               branchName: res.user?.branch_name || res.user?.branchName || undefined,
@@ -1372,6 +1368,7 @@ export const useAuthStore = create<AuthState>()(
               permissions: resPerms || res.user?.permissions,
             }
 
+            const effectiveCompanyId = (role === 'Super Admin') ? 'all' : primaryCompany
             const initialBranchId = (role !== 'Super Admin' && userBranch) ? userBranch : null
 
             if (typeof window !== 'undefined') {
@@ -1383,7 +1380,7 @@ export const useAuthStore = create<AuthState>()(
               isAuthenticated: true,
               token: res.token,
               user: userObj,
-              activeCompanyId: role === 'Super Admin' ? 'all' : (userObj.companyId || 'tech'),
+              activeCompanyId: effectiveCompanyId,
               activeBranchId: initialBranchId,
             })
 

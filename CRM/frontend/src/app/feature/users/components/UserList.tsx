@@ -5,7 +5,7 @@ import { motion } from "framer-motion"
 import { Search, Filter, Shield, Edit2, Trash2, CheckCircle2, XCircle, Clock, Building2, Mail, Phone, Lock, MapPin } from "lucide-react"
 import { UserItem, UserRole, UserStatus } from "../types"
 import { usePermissionStore } from "@/store/usePermissionStore"
-import { useAuthStore } from "@/store/useAuthStore"
+import { useAuthStore, isMatchingCompany, getCompanyFullName } from "@/store/useAuthStore"
 import { confirmTwoStepDelete } from "@/lib/confirmDialog"
 
 interface UserListProps {
@@ -224,30 +224,23 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
                               ? u.companyIds
                               : (u.companyId ? [u.companyId] : [])
                             ).filter(cId => {
-                              const norm = String(cId).toLowerCase().trim()
-                              return companies.some(c => 
-                                String(c.id).toLowerCase().trim() === norm || 
-                                String(c.slug || "").toLowerCase().trim() === norm
-                              )
+                              return companies.some(c => isMatchingCompany(c, cId))
                             })
 
                             if (activeUserCompanyIds.length > 1) {
                               return (
-                                <div className="flex flex-wrap gap-1 max-w-[220px]">
+                                <div className="flex flex-wrap gap-1 max-w-[240px]">
                                   {activeUserCompanyIds.map((cId) => {
-                                    const match = companies.find(c => 
-                                      String(c.id).toLowerCase().trim() === String(cId).toLowerCase().trim() ||
-                                      String(c.slug || "").toLowerCase().trim() === String(cId).toLowerCase().trim()
-                                    )
-                                    const codeOrShort = (match as any)?.code || (cId === "digital" ? "Digital" : cId === "tech" ? "Technology" : match?.name || cId)
-                                    const icon = (cId === "digital" || match?.slug === "digital") ? "📈" : "💻"
+                                    const match = companies.find(c => isMatchingCompany(c, cId))
+                                    const fullName = match ? getCompanyFullName(match) : (String(cId).toLowerCase().includes("consult") ? "SAAMPARK CONSULTANCY SERVICE" : "SAAMPARK TECHNOLOGY")
+                                    const icon = (String(cId).toLowerCase().includes("consult") || match?.slug === "consultancy") ? "🏢" : "💻"
                                     return (
                                       <span
                                         key={cId}
                                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60"
                                       >
                                         <span>{icon}</span>
-                                        <span>{codeOrShort}</span>
+                                        <span className="truncate max-w-[140px]">{fullName}</span>
                                       </span>
                                     )
                                   })}
@@ -256,16 +249,14 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
                             }
 
                             const primaryId = activeUserCompanyIds[0] || u.companyId || (companies[0]?.id || "tech")
-                            const matchedCompany = companies.find(c => 
-                              String(c.id).toLowerCase().trim() === String(primaryId).toLowerCase().trim() ||
-                              String(c.slug || "").toLowerCase().trim() === String(primaryId).toLowerCase().trim()
-                            )
-                            const displayName = matchedCompany?.name || u.companyName || (primaryId === 'digital' ? 'SAAMPARK Digital' : 'SAAMPARK Technology')
+                            const matchedCompany = companies.find(c => isMatchingCompany(c, primaryId))
+                            const displayName = matchedCompany ? getCompanyFullName(matchedCompany) : (u.companyName || (String(primaryId).toLowerCase().includes("consult") ? 'SAAMPARK CONSULTANCY SERVICE' : 'SAAMPARK TECHNOLOGY'))
+                            const icon = (String(primaryId).toLowerCase().includes("consult") || matchedCompany?.slug === "consultancy") ? "🏢" : "💻"
 
                             return (
                               <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-xs font-semibold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 w-fit">
-                                <Building2 size={11} className="shrink-0" />
-                                <span className="truncate max-w-[160px]">{displayName}</span>
+                                <span>{icon}</span>
+                                <span className="truncate max-w-[180px]">{displayName}</span>
                               </div>
                             )
                           })()}

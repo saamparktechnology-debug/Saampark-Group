@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { Users as UsersIcon, UserPlus, ShieldCheck, UserCheck, Briefcase, Download, Lock, CheckCircle2, AlertTriangle, X, Mail, ArrowRight } from "lucide-react"
 
 import { Button } from "@/components/ui/Button"
-import { useAuthStore } from "@/store/useAuthStore"
+import { useAuthStore, isMatchingCompany, isMatchingBranch } from "@/store/useAuthStore"
 import { UserItem, UserStatus } from "./types"
 import { getUsers, recordUserAccount, deleteUser } from "./services/userService"
 import { saveModuleDataToDB } from "@/lib/storageSync"
@@ -108,35 +108,23 @@ export default function UsersMain() {
 
     // 1. Company Filter
     if (targetComp && targetComp !== "all") {
-      const matchedCompany = companies.find(
-        (c) =>
-          String(c.id).toLowerCase().trim() === targetComp ||
-          String(c.slug || "").toLowerCase().trim() === targetComp ||
-          String(c.name || "").toLowerCase().trim() === targetComp
-      )
-      const validTargetCompIds = new Set<string>([
-        targetComp,
-        ...(matchedCompany?.id ? [String(matchedCompany.id).toLowerCase().trim()] : []),
-        ...(matchedCompany?.slug ? [String(matchedCompany.slug).toLowerCase().trim()] : []),
-        ...(matchedCompany?.name ? [String(matchedCompany.name).toLowerCase().trim()] : []),
-      ])
+      const activeCompObj = companies.find((c) => isMatchingCompany(c, targetComp)) || { id: targetComp }
 
       filtered = filtered.filter((u) => {
-        // Super Admin account is visible across its assigned companies or global view
+        // Super Admin account is visible across all companies in global view, or if explicitly assigned
         if (u.role === "Super Admin") {
-          const sCompIds = (u.companyIds || [u.companyId]).map(id => String(id || "").toLowerCase().trim())
-          return sCompIds.some(id => validTargetCompIds.has(id)) || u.email === "hiisupriya@gmail.com"
+          return true
         }
 
         const uCompIds = (u.companyIds && u.companyIds.length > 0)
-          ? u.companyIds.map(id => String(id).toLowerCase().trim())
-          : (u.companyId ? [String(u.companyId).toLowerCase().trim()] : [])
+          ? u.companyIds
+          : (u.companyId ? [u.companyId] : [])
         
         if (u.companyName) {
-          uCompIds.push(String(u.companyName).toLowerCase().trim())
+          uCompIds.push(u.companyName)
         }
 
-        return uCompIds.some(id => validTargetCompIds.has(id))
+        return uCompIds.some(id => isMatchingCompany(activeCompObj, id))
       })
     }
 

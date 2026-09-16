@@ -2,9 +2,9 @@ const pool = require('../config/db');
 const { successResponse, errorResponse } = require('../utils/apiResponse');
 
 // Helper: Fetch deleted set for a module key
-async function getDeletedItemIds(moduleKey) {
+async function getDeletedItemIds(targetPool, moduleKey) {
   try {
-    const [rows] = await pool.execute(
+    const [rows] = await targetPool.execute(
       'SELECT LOWER(TRIM(item_id)) as item_id FROM deleted_items WHERE module_name = ? OR module_name = "global"',
       [moduleKey.toLowerCase().trim()]
     );
@@ -14,17 +14,27 @@ async function getDeletedItemIds(moduleKey) {
   }
 }
 
-// Get module data stored in MySQL database (with seamless company isolation & full fallback)
+// Get module data stored in MySQL database with multi-database routing
 const getStoreData = async (req, res, next) => {
   try {
     const { key } = req.params;
     const companyId = req.query.company_id || req.query.companyId;
-    const deletedSet = await getDeletedItemIds(key);
+    const activePool = pool.getCompanyPool ? pool.getCompanyPool(companyId) : pool;
+    const deletedSet = await getDeletedItemIds(activePool, key);
 
     // 1. If companyId provided (and not 'all')
     if (companyId && companyId !== 'all') {
       const compKey = `${key}_${companyId}`;
-      const [compRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = ?', [compKey]);
+      let [compRows] = await activePool.execute('SELECT data_json FROM app_data WHERE module_key = ?', [compKey]);
+      
+      // Fallback check on base pool if separate DB is empty
+      if (compRows.length === 0 && activePool !== pool) {
+        try {
+          const [fallbackRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = ?', [compKey]);
+          if (fallbackRows.length > 0) compRows = fallbackRows;
+        } catch {}
+      }
+
       if (compRows.length > 0) {
         try {
           const parsedComp = JSON.parse(compRows[0].data_json);
@@ -45,13 +55,11 @@ const getStoreData = async (req, res, next) => {
         }
       }
 
-      // Strict company isolation: If this company does not have a record yet, return empty list.
-      // NEVER leak or fall back to tech or other companies!
       return successResponse(res, 200, 'Company module data fetched', []);
     }
 
     // 2. Query all matching module keys when companyId is 'all' or omitted
-    const [rows] = await pool.execute(
+    const [rows] = await activePool.execute(
       'SELECT module_key, data_json FROM app_data WHERE module_key = ? OR module_key LIKE ?',
       [key, `${key}_%`]
     );
@@ -100,18 +108,29 @@ const saveStoreData = async (req, res, next) => {
     }
 
     const dataJson = JSON.stringify(data);
+    const activePool = pool.getCompanyPool ? pool.getCompanyPool(targetCompanyId) : pool;
 
     // Save strictly to company key if targetCompanyId is specified
     if (targetCompanyId && targetCompanyId !== 'all') {
       const compKey = `${key}_${targetCompanyId}`;
-      await pool.execute(
+      await activePool.execute(
         `INSERT INTO app_data (module_key, data_json) VALUES (?, ?)
          ON DUPLICATE KEY UPDATE data_json = VALUES(data_json), updated_at = NOW()`,
         [compKey, dataJson]
       );
+      // Also sync to default pool for cross-company master indexing
+      if (activePool !== pool) {
+        try {
+          await pool.execute(
+            `INSERT INTO app_data (module_key, data_json) VALUES (?, ?)
+             ON DUPLICATE KEY UPDATE data_json = VALUES(data_json), updated_at = NOW()`,
+            [compKey, dataJson]
+          );
+        } catch {}
+      }
     } else {
       // Save to global key
-      await pool.execute(
+      await activePool.execute(
         `INSERT INTO app_data (module_key, data_json) VALUES (?, ?)
          ON DUPLICATE KEY UPDATE data_json = VALUES(data_json), updated_at = NOW()`,
         [key, dataJson]

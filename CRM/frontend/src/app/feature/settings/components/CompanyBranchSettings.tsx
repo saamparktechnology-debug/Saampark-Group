@@ -11,6 +11,7 @@ import {
 import { useAuthStore, Company, Branch, SubBranch, getCompanyFullName, getCompanyLogoUrl, isMatchingCompany } from "@/store/useAuthStore"
 import { getUsers } from "@/app/feature/users/services/userService"
 import { executeWithFeedback, useActionFeedbackStore } from "@/store/useActionFeedbackStore"
+import { usePermissionStore, ALL_APP_MODULES, CLEAN_MODULE_CATEGORIES } from "@/store/usePermissionStore"
 
 export function CompanyBranchSettings() {
   const { 
@@ -61,17 +62,25 @@ export function CompanyBranchSettings() {
   const [allUsers, setAllUsers] = React.useState<any[]>([])
 
   // Modal States
-  const COMPANY_TABS_LIST: Array<"basic" | "invoice" | "tax" | "contact" | "bank" | "smtp"> = React.useMemo(() => [
-    "basic",
-    "invoice",
-    "tax",
-    "contact",
-    "bank",
-    "smtp"
-  ], [])
+  const COMPANY_TABS_LIST: Array<"basic" | "invoice" | "tax" | "contact" | "bank" | "smtp" | "modules"> = React.useMemo(() => {
+    const list: Array<"basic" | "invoice" | "tax" | "contact" | "bank" | "smtp" | "modules"> = [
+      "basic",
+      "invoice",
+      "tax",
+      "contact",
+      "bank",
+      "smtp"
+    ]
+    if (isSuperAdmin) {
+      list.push("modules")
+    }
+    return list
+  }, [isSuperAdmin])
   const [isCompanyModalOpen, setIsCompanyModalOpen] = React.useState(false)
-  const [companyModalTab, setCompanyModalTab] = React.useState<"basic" | "invoice" | "tax" | "contact" | "bank" | "smtp">("basic")
+  const [companyModalTab, setCompanyModalTab] = React.useState<"basic" | "invoice" | "tax" | "contact" | "bank" | "smtp" | "modules">("basic")
   const [editingCompany, setEditingCompany] = React.useState<Company | null>(null)
+  const { getEnabledModulesForCompany, setCompanyEnabledModules } = usePermissionStore()
+  const [companyEnabledModulesState, setCompanyEnabledModulesState] = React.useState<string[]>([...ALL_APP_MODULES])
 
   // Company Form States (All invoice & enterprise configuration fields)
   const [companyBrandName, setCompanyBrandName] = React.useState("SAAMPARK")
@@ -445,6 +454,10 @@ export function CompanyBranchSettings() {
     setCompanySmtpTestResult(null)
     setCompanyTestEmail(company.smtp_user || "")
 
+    // Load Company Modules
+    const compModules = getEnabledModulesForCompany(company.id || company.slug)
+    setCompanyEnabledModulesState(compModules)
+
     setIsCompanyModalOpen(true)
   }
 
@@ -507,11 +520,21 @@ export function CompanyBranchSettings() {
     }
 
     const isEdit = !!editingCompany
+    const targetCompId = editingCompany ? (editingCompany.id || editingCompany.slug || slug) : slug
+
     await executeWithFeedback(async () => {
       if (editingCompany) {
         await updateCompany(editingCompany.id, payload)
       } else {
         await addCompany(payload)
+      }
+
+      if (isSuperAdmin && companyEnabledModulesState.length > 0) {
+        setCompanyEnabledModules(targetCompId, companyEnabledModulesState)
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent('saampark_data_synced'))
+          window.dispatchEvent(new Event('storage'))
+        }
       }
 
       await fetchCompanies().catch(() => {})
@@ -1038,18 +1061,6 @@ export function CompanyBranchSettings() {
             Configure enterprise legal entities, registered tax IDs, invoice branding, company signatures, and regional branch networks.
           </p>
         </div>
-
-        {/* Super Admin Top-Level Create Company Button */}
-        {isSuperAdmin && (
-          <button
-            type="button"
-            onClick={handleOpenCreateCompany}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs shadow-md hover:bg-primary/90 transition-all cursor-pointer shrink-0"
-          >
-            <Plus size={16} />
-            <span>Create New Company</span>
-          </button>
-        )}
       </div>
 
       {/* Companies & Branches Accordion List */}
@@ -1163,17 +1174,6 @@ export function CompanyBranchSettings() {
                     <Plus size={14} />
                     <span>Add Branch</span>
                   </button>
-
-                  {isSuperAdmin && companies.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteCompany(company.id, company.name)}
-                      className="p-2 rounded-xl text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors cursor-pointer"
-                      title="Delete Company"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  )}
                 </div>
               </div>
 
@@ -1469,6 +1469,21 @@ export function CompanyBranchSettings() {
                   <Mail size={13} />
                   <span>6. SMTP Email Dispatch</span>
                 </button>
+
+                {isSuperAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setCompanyModalTab("modules")}
+                    className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                      companyModalTab === "modules"
+                        ? "bg-surface text-primary shadow-xs border border-primary/20"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Layers size={13} />
+                    <span>7. Enabled Modules (Super Admin)</span>
+                  </button>
+                )}
               </div>
 
               {/* Form Content */}
@@ -2199,6 +2214,119 @@ export function CompanyBranchSettings() {
                   </div>
                 )}
 
+                {/* TAB 7: COMPANY-LEVEL ENABLED MODULES (SUPER ADMIN ONLY) */}
+                {companyModalTab === "modules" && isSuperAdmin && (
+                  <div className="space-y-4">
+                    <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                          <h4 className="font-black text-xs text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
+                            <Shield size={14} className="text-amber-600" />
+                            <span>Company Module Access Control (Super Admin Only)</span>
+                          </h4>
+                          <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-0.5 leading-relaxed">
+                            Configure which CRM modules are enabled for <strong>{companyName || "this company"}</strong>. When users or admins switch into this company, only the selected modules will be visible.
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setCompanyEnabledModulesState([...ALL_APP_MODULES])}
+                            className="px-2.5 py-1.5 rounded-xl bg-primary text-primary-foreground text-[10.5px] font-bold hover:bg-primary/90 transition-all cursor-pointer shadow-2xs"
+                          >
+                            Select All Modules
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCompanyEnabledModulesState(["Dashboard", "Settings"])}
+                            className="px-2.5 py-1.5 rounded-xl bg-surface border border-border text-foreground text-[10.5px] font-bold hover:bg-surface-hover transition-all cursor-pointer"
+                          >
+                            Reset to Minimal
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      {Object.entries(CLEAN_MODULE_CATEGORIES).map(([catKey, cat]) => (
+                        <div key={catKey} className="p-3.5 rounded-2xl bg-surface border border-border space-y-2.5 shadow-2xs">
+                          <div className="flex items-center justify-between border-b border-border/40 pb-2">
+                            <span className="font-bold text-xs text-foreground uppercase tracking-wider flex items-center gap-2">
+                              <span>{cat.label}</span>
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-surface-hover font-mono text-muted-foreground">
+                                {cat.modules.filter(m => companyEnabledModulesState.includes(m.key)).length}/{cat.modules.length} enabled
+                              </span>
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const catKeys = cat.modules.map(m => m.key)
+                                  setCompanyEnabledModulesState(prev => Array.from(new Set([...prev, ...catKeys])))
+                                }}
+                                className="text-[10px] font-bold text-primary hover:underline cursor-pointer"
+                              >
+                                Enable All
+                              </button>
+                              <span className="text-muted-foreground text-xs">•</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const catKeys = cat.modules.map(m => m.key)
+                                  setCompanyEnabledModulesState(prev => prev.filter(k => !catKeys.includes(k)))
+                                }}
+                                className="text-[10px] font-bold text-rose-500 hover:underline cursor-pointer"
+                              >
+                                Disable All
+                              </button>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                            {cat.modules.map(mod => {
+                              const isChecked = companyEnabledModulesState.includes(mod.key)
+                              const isLockedCore = mod.key === "Dashboard"
+                              return (
+                                <label
+                                  key={mod.key}
+                                  className={`flex items-start gap-2.5 p-2.5 rounded-xl border transition-all cursor-pointer select-none ${
+                                    isChecked
+                                      ? "bg-primary/5 border-primary/40 text-foreground shadow-2xs ring-1 ring-primary/20"
+                                      : "bg-surface-hover/30 border-border/50 text-muted-foreground opacity-60"
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    disabled={isLockedCore}
+                                    checked={isChecked}
+                                    onChange={(e) => {
+                                      if (isLockedCore) return
+                                      if (e.target.checked) {
+                                        setCompanyEnabledModulesState(prev => [...prev, mod.key])
+                                      } else {
+                                        setCompanyEnabledModulesState(prev => prev.filter(k => k !== mod.key))
+                                      }
+                                    }}
+                                    className="mt-0.5 rounded text-primary focus:ring-primary h-4 w-4 shrink-0"
+                                  />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="font-bold text-xs leading-tight flex items-center gap-1.5">
+                                      <span>{mod.name}</span>
+                                      {isLockedCore && (
+                                        <span className="text-[9px] font-semibold text-muted-foreground bg-surface-pressed px-1 rounded">Core</span>
+                                      )}
+                                    </div>
+                                    <div className="text-[10px] text-muted-foreground leading-tight mt-0.5 line-clamp-1">{mod.description}</div>
+                                  </div>
+                                </label>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Modal Action Buttons */}
                 {(() => {
                   const currentCompanyTabIndex = COMPANY_TABS_LIST.indexOf(companyModalTab)
@@ -2206,7 +2334,7 @@ export function CompanyBranchSettings() {
                     <div className="flex flex-col sm:flex-row items-center justify-between pt-4 border-t border-border/60 gap-3 shrink-0">
                       <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground w-full sm:w-auto">
                         <Sparkles size={13} className="text-teal-500 shrink-0" />
-                        <span>Step {currentCompanyTabIndex + 1} of 6 • Dynamic Multi-Company Sync</span>
+                        <span>Step {currentCompanyTabIndex + 1} of {COMPANY_TABS_LIST.length} • Dynamic Multi-Company Sync</span>
                       </div>
 
                       <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">

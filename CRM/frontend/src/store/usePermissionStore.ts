@@ -255,6 +255,7 @@ interface PermissionState {
   roleActionPermissions: Record<Role, Record<string, ModuleActionFlags>>
   userPermissions: Record<string, ModuleName[]>
   userActionPermissions: Record<string, Record<string, ModuleActionFlags>>
+  companyEnabledModules: Record<string, string[]>
   
   // Actions
   fetchRolePermissions: () => Promise<void>
@@ -264,10 +265,13 @@ interface PermissionState {
   setUserPermissions: (userId: string, modules: ModuleName[]) => void
   setUserModuleAction: (userId: string, moduleName: ModuleName, action: ActionType, value: boolean) => void
   setUserAllModuleActions: (userId: string, matrix: Record<string, ModuleActionFlags>) => void
+  setCompanyEnabledModules: (companyId: string, modules: string[]) => void
   resetToDefaults: () => void
   
   // Helpers
   isModuleAllowed: (user: User | null, moduleName: string) => boolean
+  isCompanyModuleAllowed: (companyId: string | null | undefined, moduleName: string) => boolean
+  getEnabledModulesForCompany: (companyId: string | null | undefined) => string[]
   getModulesForUser: (user: User | null) => ModuleName[]
   getUserModuleActions: (user: User | null, moduleName: string) => ModuleActionFlags
   canPerformAction: (user: User | null, moduleName: string, action: ActionType) => boolean
@@ -280,6 +284,10 @@ export const usePermissionStore = create<PermissionState>()(
       roleActionPermissions: DEFAULT_ROLE_ACTION_PERMISSIONS,
       userPermissions: {},
       userActionPermissions: {},
+      companyEnabledModules: {
+        tech: [...ALL_APP_MODULES],
+        consultancy: [...ALL_APP_MODULES],
+      },
 
       fetchRolePermissions: async () => {
         try {
@@ -410,12 +418,77 @@ export const usePermissionStore = create<PermissionState>()(
         }))
       },
 
+      setCompanyEnabledModules: (companyId: string, modules: string[]) => {
+        const cKey = String(companyId || '').toLowerCase().trim()
+        const canonKey = (cKey.includes('consult') || cKey === '2') ? 'consultancy' : (cKey.includes('tech') || cKey === '1' ? 'tech' : cKey)
+        set((state) => ({
+          companyEnabledModules: {
+            ...state.companyEnabledModules,
+            [companyId]: modules,
+            [canonKey]: modules,
+          }
+        }))
+      },
+
+      getEnabledModulesForCompany: (companyId: string | null | undefined): string[] => {
+        if (!companyId || companyId === 'all') return [...ALL_APP_MODULES]
+        const state = get()
+        const cKey = String(companyId).toLowerCase().trim()
+        const canonKey = (cKey.includes('consult') || cKey === '2') ? 'consultancy' : (cKey.includes('tech') || cKey === '1' ? 'tech' : cKey)
+        const enabled = state.companyEnabledModules?.[canonKey] || state.companyEnabledModules?.[companyId]
+        if (Array.isArray(enabled) && enabled.length > 0) {
+          return enabled
+        }
+        return [...ALL_APP_MODULES]
+      },
+
+      isCompanyModuleAllowed: (companyId: string | null | undefined, moduleName: string): boolean => {
+        if (!companyId || companyId === 'all') return true
+        const mKey = String(moduleName || '').toLowerCase().trim()
+        if (mKey === 'dashboard' || mKey === 'companies' || mKey === 'settings') return true
+
+        const state = get()
+        const cKey = String(companyId).toLowerCase().trim()
+        const canonKey = (cKey.includes('consult') || cKey === '2') ? 'consultancy' : (cKey.includes('tech') || cKey === '1' ? 'tech' : cKey)
+        const enabled = state.companyEnabledModules?.[canonKey] || state.companyEnabledModules?.[companyId]
+        if (!enabled || !Array.isArray(enabled) || enabled.length === 0) {
+          return true
+        }
+
+        const ALIAS_MAP: Record<string, string> = {
+          'sales': 'Invoices',
+          'store': 'Services & Store',
+          'packages & retainers': 'Subscriptions',
+          'emi milestone plans': 'EMI',
+          'team members': 'Teams',
+          'payments & payroll': 'Payroll',
+          'leave management': 'Leave',
+          'attendance & timecards': 'Attendance',
+          'knowledge base': 'Knowledge base',
+          'documents': 'Files',
+          'crm': 'Leads',
+          'organisation': 'Companies',
+          'hr & employees': 'Teams',
+          'support': 'Tickets'
+        }
+        const resolvedName = (ALIAS_MAP[mKey] || mKey).toLowerCase().trim()
+
+        return enabled.some(m => {
+          const modNorm = String(m).toLowerCase().trim()
+          return modNorm === mKey || modNorm === resolvedName || (ALIAS_MAP[modNorm] && ALIAS_MAP[modNorm].toLowerCase() === mKey)
+        })
+      },
+
       resetToDefaults: () => {
         set({
           rolePermissions: DEFAULT_ROLE_PERMISSIONS,
           roleActionPermissions: DEFAULT_ROLE_ACTION_PERMISSIONS,
           userPermissions: {},
           userActionPermissions: {},
+          companyEnabledModules: {
+            tech: [...ALL_APP_MODULES],
+            consultancy: [...ALL_APP_MODULES],
+          },
         })
       },
 
