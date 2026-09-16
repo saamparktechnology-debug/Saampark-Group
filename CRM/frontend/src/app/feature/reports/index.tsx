@@ -429,6 +429,22 @@ export default function ReportsMain() {
     })
   }, [tasks, selectedCompanyId, targetBranch, itemMatchesCompany, itemMatchesBranch])
 
+  // Helper to normalize amount to Monthly Recurring Revenue (MRR)
+  const getSubscriptionMRR = (sub: Subscription): number => {
+    const rawAmt = sub.numericAmount || parseInt(String(sub.amount || "0").replace(/[^0-9]/g, "")) || 0
+    if (rawAmt <= 0) return 0
+    switch (sub.billingCycle) {
+      case "Daily": return Math.round(rawAmt * 30)
+      case "Weekly": return Math.round(rawAmt * 4.33)
+      case "Monthly": return rawAmt
+      case "Quarterly": return Math.round(rawAmt / 3)
+      case "Half-Yearly": return Math.round(rawAmt / 6)
+      case "Annually": return Math.round(rawAmt / 12)
+      case "Custom Days": return Math.round((rawAmt / (sub.customDaysCount || 30)) * 30)
+      default: return rawAmt
+    }
+  }
+
   // Subscriptions KPIs
   const totalSubsCount = scopedSubscriptions.length
   const activeSubs = scopedSubscriptions.filter(s => s.status === "Active")
