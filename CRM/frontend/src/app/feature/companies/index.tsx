@@ -65,13 +65,13 @@ const CANONICAL_COMPANIES: Company[] = [
     industry: "Consulting",
     currency: "INR",
     currency_symbol: "₹",
-    logo_url: "/saampark-logo.png",
+    logo_url: "",
     address: "Salt Lake Sector V, Bidhannagar, Kolkata, West Bengal - 700091",
     phone: "+91 9901518570",
     email: "consultancy@saampark.in",
     website: "www.saampark.in",
     status: "active",
-    member_count: 8,
+    member_count: 0,
     signatory_name: "Authorized Signatory",
     signatory_designation: "Consulting Director",
   },
@@ -92,48 +92,6 @@ const CANONICAL_BRANCHES: Branch[] = [
     status: "active",
     user_count: 14,
   },
-  {
-    id: "br-2",
-    company_id: "tech",
-    name: "Branch - Delhi NCR",
-    code: "STR-DEL",
-    city: "New Delhi",
-    state: "Delhi",
-    country: "India",
-    phone: "+91 9901518568",
-    email: "delhi@saamparktechnology.com",
-    manager_name: "Regional Director",
-    status: "active",
-    user_count: 4,
-  },
-  {
-    id: "br-3",
-    company_id: "digital",
-    name: "Head Office - Kolkata Creative Hub",
-    code: "SDM-HQ",
-    city: "Kolkata",
-    state: "West Bengal",
-    country: "India",
-    phone: "+91 9901518570",
-    email: "kolkata@saamparkdigital.com",
-    manager_name: "Creative Lead",
-    status: "active",
-    user_count: 3,
-  },
-  {
-    id: "br-5",
-    company_id: "saampark-ai-solutions",
-    name: "Head Office - Bengaluru Innovation Center",
-    code: "SAI-HQ",
-    city: "Bengaluru",
-    state: "Karnataka",
-    country: "India",
-    phone: "+91 9901518572",
-    email: "ai@saampark.com",
-    manager_name: "AI Architect",
-    status: "active",
-    user_count: 2,
-  }
 ]
 
 export default function CompaniesMain() {
@@ -233,30 +191,79 @@ export default function CompaniesMain() {
         fetchModuleDataFromDB<SubBranch[]>("sub_branches", [], "all").catch(() => []),
       ])
 
-      // 1. Merge Companies (excluding deleted ones)
+      // 1. Merge Companies (strictly 2 canonical companies: tech and consultancy)
+      const getCanonKey = (c: any) => {
+        const str = String(c?.slug || c?.id || c?.numeric_id || c?.name || "").toLowerCase().trim()
+        if (str === "2" || str === "consultancy" || str.includes("consult")) return "consultancy"
+        return "tech"
+      }
+
       const compMap = new Map<string, Company>()
       CANONICAL_COMPANIES.forEach(c => {
-        if (!isCompanyDeleted(c.id, c.slug)) {
-          compMap.set(c.slug || String(c.id), c)
-        }
+        const k = getCanonKey(c)
+        compMap.set(k, { ...c, id: k, slug: k })
       })
+
       if (Array.isArray(dbComps) && dbComps.length > 0) {
         dbComps.forEach(c => {
           if (!isCompanyDeleted(c.id, c.slug)) {
-            const k = c.slug || String(c.id)
-            compMap.set(k, { ...compMap.get(k), ...c })
+            const k = getCanonKey(c)
+            const prev = compMap.get(k)
+            compMap.set(k, {
+              ...prev,
+              ...c,
+              id: k,
+              slug: k,
+              logo_url: (k === "consultancy" && c.logo_url === "/saampark-logo.png") ? "" : (c.logo_url !== undefined ? c.logo_url : (prev?.logo_url || "")),
+            })
           }
         })
       }
+
       if (Array.isArray(compRes) && compRes.length > 0) {
         compRes.forEach(c => {
           if (!isCompanyDeleted(c.id, c.slug)) {
-            const k = c.slug || String(c.id)
-            compMap.set(k, { ...compMap.get(k), ...c })
+            const k = getCanonKey(c)
+            const prev = compMap.get(k)
+            compMap.set(k, {
+              ...prev,
+              ...c,
+              id: k,
+              slug: k,
+              logo_url: (k === "consultancy" && c.logo_url === "/saampark-logo.png") ? "" : (c.logo_url !== undefined ? c.logo_url : (prev?.logo_url || "")),
+            })
           }
         })
       }
-      const finalCompanies = Array.from(compMap.values())
+
+      const rawTech = compMap.get("tech") || CANONICAL_COMPANIES[0]
+      const rawConsult = compMap.get("consultancy") || CANONICAL_COMPANIES[1]
+
+      const finalCompanies: Company[] = [
+        {
+          ...CANONICAL_COMPANIES[0],
+          ...rawTech,
+          id: "tech",
+          slug: "tech",
+          brand_name: "SAAMPARK",
+          division_name: "TECHNOLOGY",
+          subtitle: (rawTech.subtitle && !rawTech.subtitle.toLowerCase().includes("consult")) ? rawTech.subtitle : "AND RESEARCH PRIVATE LIMITED",
+          name: "SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED",
+          logo_url: (rawTech.logo_url && rawTech.logo_url.trim() !== "") ? rawTech.logo_url : "/saampark-logo.png",
+        },
+        {
+          ...CANONICAL_COMPANIES[1],
+          ...rawConsult,
+          id: "consultancy",
+          slug: "consultancy",
+          brand_name: "SAAMPARK",
+          division_name: "CONSULTANCY SERVICE",
+          subtitle: (rawConsult.subtitle && !rawConsult.subtitle.toLowerCase().includes("research")) ? rawConsult.subtitle : "MANAGEMENT & ADVISORY SERVICES",
+          name: "SAAMPARK CONSULTANCY SERVICE",
+          logo_url: (rawConsult.logo_url && rawConsult.logo_url !== "/saampark-logo.png") ? rawConsult.logo_url : "",
+          member_count: 0,
+        },
+      ]
       setCompanies(finalCompanies)
 
       // 2. Merge Branches: KEEP all branches belonging to active companies unless deleted

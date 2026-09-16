@@ -111,11 +111,6 @@ export default function UsersMain() {
       const isConsultancyTarget = targetComp.includes("consult") || targetComp === "2"
 
       filtered = filtered.filter((u) => {
-        // Super Admin account is visible across all companies in global view, or if explicitly assigned
-        if (u.role === "Super Admin") {
-          return true
-        }
-
         const rawCompList = (u.companyIds && u.companyIds.length > 0)
           ? u.companyIds
           : (u.companyId ? [u.companyId] : ["tech"])
