@@ -108,7 +108,7 @@ export default function UsersMain() {
 
     // 1. Company Filter
     if (targetComp && targetComp !== "all") {
-      const activeCompObj = companies.find((c) => isMatchingCompany(c, targetComp)) || { id: targetComp }
+      const isConsultancyTarget = targetComp.includes("consult") || targetComp === "2"
 
       filtered = filtered.filter((u) => {
         // Super Admin account is visible across all companies in global view, or if explicitly assigned
@@ -116,15 +116,25 @@ export default function UsersMain() {
           return true
         }
 
-        const uCompIds = (u.companyIds && u.companyIds.length > 0)
+        const rawCompList = (u.companyIds && u.companyIds.length > 0)
           ? u.companyIds
-          : (u.companyId ? [u.companyId] : [])
-        
-        if (u.companyName) {
-          uCompIds.push(u.companyName)
-        }
+          : (u.companyId ? [u.companyId] : ["tech"])
 
-        return uCompIds.some(id => isMatchingCompany(activeCompObj, id))
+        const isUserInConsultancy = rawCompList.some(id => {
+          const str = String(id).toLowerCase().trim()
+          return str === "consultancy" || str === "2" || str.includes("consult")
+        })
+
+        const isUserInTech = rawCompList.some(id => {
+          const str = String(id).toLowerCase().trim()
+          return str === "tech" || str === "1" || str.includes("tech")
+        })
+
+        if (isConsultancyTarget) {
+          return isUserInConsultancy
+        } else {
+          return isUserInTech
+        }
       })
     }
 

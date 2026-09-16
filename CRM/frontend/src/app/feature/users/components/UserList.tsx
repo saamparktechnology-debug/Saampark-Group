@@ -220,23 +220,26 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
                       <td className="py-3.5 px-4">
                         <div className="flex flex-col gap-1">
                           {(() => {
-                            const activeUserCompanyIds = (u.companyIds && u.companyIds.length > 0
+                            const rawCompList = (u.companyIds && u.companyIds.length > 0)
                               ? u.companyIds
-                              : (u.companyId ? [u.companyId] : [])
-                            ).filter(cId => {
-                              return companies.some(c => isMatchingCompany(c, cId))
-                            })
+                              : (u.companyId ? [u.companyId] : ["tech"])
 
-                            if (activeUserCompanyIds.length > 1) {
+                            // Cleanly resolve to unique canonical set (at most 1 tech, 1 consultancy)
+                            const uniqueCanonicals = Array.from(new Set(rawCompList.map(id => {
+                              const s = String(id).toLowerCase().trim()
+                              return (s === "consultancy" || s === "2" || s.includes("consult")) ? "consultancy" : "tech"
+                            })))
+
+                            if (uniqueCanonicals.length > 1) {
                               return (
                                 <div className="flex flex-wrap gap-1 max-w-[240px]">
-                                  {activeUserCompanyIds.map((cId) => {
-                                    const match = companies.find(c => isMatchingCompany(c, cId))
-                                    const fullName = match ? getCompanyFullName(match) : (String(cId).toLowerCase().includes("consult") ? "SAAMPARK CONSULTANCY SERVICE" : "SAAMPARK TECHNOLOGY")
-                                    const icon = (String(cId).toLowerCase().includes("consult") || match?.slug === "consultancy") ? "🏢" : "💻"
+                                  {uniqueCanonicals.map((canonId) => {
+                                    const isConsult = canonId === "consultancy"
+                                    const fullName = isConsult ? "SAAMPARK CONSULTANCY SERVICE" : "SAAMPARK TECHNOLOGY"
+                                    const icon = isConsult ? "🏢" : "💻"
                                     return (
                                       <span
-                                        key={cId}
+                                        key={canonId}
                                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60"
                                       >
                                         <span>{icon}</span>
@@ -248,10 +251,9 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
                               )
                             }
 
-                            const primaryId = activeUserCompanyIds[0] || u.companyId || (companies[0]?.id || "tech")
-                            const matchedCompany = companies.find(c => isMatchingCompany(c, primaryId))
-                            const displayName = matchedCompany ? getCompanyFullName(matchedCompany) : (u.companyName || (String(primaryId).toLowerCase().includes("consult") ? 'SAAMPARK CONSULTANCY SERVICE' : 'SAAMPARK TECHNOLOGY'))
-                            const icon = (String(primaryId).toLowerCase().includes("consult") || matchedCompany?.slug === "consultancy") ? "🏢" : "💻"
+                            const isConsult = uniqueCanonicals[0] === "consultancy"
+                            const displayName = isConsult ? "SAAMPARK CONSULTANCY SERVICE" : "SAAMPARK TECHNOLOGY"
+                            const icon = isConsult ? "🏢" : "💻"
 
                             return (
                               <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-xs font-semibold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 w-fit">
