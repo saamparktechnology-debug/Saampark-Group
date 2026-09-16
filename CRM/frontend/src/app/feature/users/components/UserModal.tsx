@@ -5,11 +5,12 @@ import { motion, AnimatePresence } from "framer-motion"
 import { 
   X, User, Mail, Shield, Building, Phone, Lock, UserCheck, ShieldCheck, 
   Check, Info, Crown, MapPin, Eye, EyeOff, Sparkles, RefreshCw, Search,
-  Briefcase, Percent, ChevronDown, ChevronRight, CheckCircle2, Layers
+  Briefcase, Percent, ChevronDown, ChevronRight, CheckCircle2, Layers,
+  Globe, Radio
 } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { UserItem as UserType, UserRole, UserStatus } from "../types"
-import { useAuthStore, isMatchingCompany, getCompanyFullName } from "@/store/useAuthStore"
+import { useAuthStore, isMatchingCompany, getCompanyFullName, getCanonicalCompanyId } from "@/store/useAuthStore"
 import { 
   usePermissionStore, 
   CONFIGURABLE_MODULES, 
@@ -88,16 +89,10 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
   
   const isCurrentSuperAdmin = currentUser?.role === "Super Admin"
 
-  // Active Company Object
-  const activeCompanyObj = React.useMemo(() => {
-    return companies.find(c => isMatchingCompany(c, activeCompanyId)) || companies[0] || {
-      id: "tech",
-      name: "SAAMPARK TECHNOLOGY",
-      brand_name: "SAAMPARK",
-      division_name: "TECHNOLOGY",
-      logo: "💻"
-    }
-  }, [companies, activeCompanyId])
+  // Company Selection State (allows Super Admin to pick target company)
+  const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>("tech")
+  // Access Scope Type: "company" (Entire company) or "branch" (Dedicated branch only)
+  const [scopeType, setScopeType] = React.useState<"company" | "branch">("company")
 
   // Form Fields
   const [name, setName] = React.useState("")
@@ -124,11 +119,22 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
   const [actionMatrix, setActionMatrix] = React.useState<Record<string, ModuleActionFlags>>({})
   const [allowedModules, setAllowedModules] = React.useState<ModuleName[]>([])
 
-  // Branches filtered to active company
+  // Resolve selected company object
+  const targetCompanyObj = React.useMemo(() => {
+    return companies.find(c => isMatchingCompany(c, selectedCompanyId)) || companies[0] || {
+      id: "tech",
+      name: "SAAMPARK TECHNOLOGY",
+      brand_name: "SAAMPARK",
+      division_name: "TECHNOLOGY",
+      logo: "💻"
+    }
+  }, [companies, selectedCompanyId])
+
+  // Available branches for the chosen company
   const availableBranches = React.useMemo(() => {
     if (!branches || branches.length === 0) return []
-    return branches.filter((b) => isMatchingCompany(activeCompanyObj, b.companyId))
-  }, [branches, activeCompanyObj])
+    return branches.filter((b) => isMatchingCompany(targetCompanyObj, b.companyId || (b as any).company_id))
+  }, [branches, targetCompanyObj])
 
   // Helper to compute standard action matrix for a role
   const getMatrixForRole = React.useCallback((targetRole: UserRole) => {
@@ -175,7 +181,18 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
       setName(editingUser.name || "")
       setEmail(editingUser.email || "")
       setRole(editingUser.role || "Teams")
-      setSelectedBranchId(editingUser.branchId || "")
+      
+      const initComp = editingUser.companyId || activeCompanyId || "tech"
+      setSelectedCompanyId(initComp)
+
+      if (editingUser.branchId) {
+        setScopeType("branch")
+        setSelectedBranchId(editingUser.branchId)
+      } else {
+        setScopeType("company")
+        setSelectedBranchId("")
+      }
+
       setDepartment(editingUser.department || "")
       setDesignation((editingUser as any).designation || "")
       setCommissionRate((editingUser as any).commissionRate || (editingUser as any).invoiceRate || "")
@@ -214,7 +231,12 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
       setEmailError(null)
       const defaultRole: UserRole = initialRole || "Teams"
       setRole(defaultRole)
+      
+      const defaultComp = (activeCompanyId && activeCompanyId !== "all") ? activeCompanyId : "tech"
+      setSelectedCompanyId(defaultComp)
+      setScopeType("company")
       setSelectedBranchId("")
+
       setDepartment("")
       setDesignation("")
       setCommissionRate("")
@@ -231,7 +253,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
         return flags ? (flags.view || flags.add || flags.edit || flags.delete) : false
       }))
     }
-  }, [isOpen, editingUser, initialRole, getMatrixForRole, fetchCompanies, fetchBranches, userActionPermissions])
+  }, [isOpen, editingUser, initialRole, activeCompanyId, getMatrixForRole, fetchCompanies, fetchBranches, userActionPermissions])
 
   // Handle Role change & apply default permission presets
   const handleRoleSelect = (newRole: UserRole) => {
@@ -317,22 +339,23 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
     e.preventDefault()
     if (!name.trim() || !email.trim()) return
 
-    const companyIdToSave = activeCompanyObj.id || "tech"
-    const companyNameToSave = getCompanyFullName(activeCompanyObj)
+    const canonCompId = getCanonicalCompanyId(selectedCompanyId) || "tech"
+    const companyNameToSave = getCompanyFullName(targetCompanyObj)
 
-    const matchedBranch = branches.find(b => String(b.id) === String(selectedBranchId))
-    const branchNameToSave = matchedBranch?.name || (selectedBranchId ? `Branch (${selectedBranchId})` : undefined)
+    const effectiveBranchId = scopeType === "branch" ? (selectedBranchId || undefined) : undefined
+    const matchedBranch = effectiveBranchId ? branches.find(b => String(b.id) === String(effectiveBranchId)) : undefined
+    const branchNameToSave = matchedBranch?.name || (effectiveBranchId ? `Branch (${effectiveBranchId})` : undefined)
 
     const userData: Partial<UserType> = {
       ...(editingUser ? { id: editingUser.id } : {}),
       name: name.trim(),
       email: email.trim().toLowerCase(),
       role,
-      companyId: companyIdToSave,
-      companyIds: [companyIdToSave],
+      companyId: canonCompId,
+      companyIds: [canonCompId],
       companyName: companyNameToSave,
-      branchId: selectedBranchId || undefined,
-      branchIds: selectedBranchId ? [selectedBranchId] : undefined,
+      branchId: effectiveBranchId,
+      branchIds: effectiveBranchId ? [effectiveBranchId] : undefined,
       branchName: branchNameToSave,
       department: department.trim() || (role === "Clients" ? "Client Accounts" : "General"),
       phone: phone.trim(),
@@ -355,41 +378,41 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
 
   if (!isOpen) return null
 
-  const companyDisplayName = getCompanyFullName(activeCompanyObj)
-  const isTechCompany = activeCompanyObj.slug === "tech" || activeCompanyObj.id === "tech"
+  const companyDisplayName = getCompanyFullName(targetCompanyObj)
+  const isTechCompany = targetCompanyObj.slug === "tech" || targetCompanyObj.id === "tech"
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/70 backdrop-blur-md overflow-y-auto">
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 15 }}
           transition={{ duration: 0.2 }}
-          className="relative w-full max-w-3xl my-8 bg-card border border-border/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+          className="relative w-full max-w-3xl my-6 bg-card border border-border/80 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-border/60 bg-surface/50 backdrop-blur-md sticky top-0 z-10">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-border/60 bg-surface/70 backdrop-blur-md sticky top-0 z-10">
             <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg shadow-inner ${
-                role === "Super Admin" ? "bg-purple-500/10 text-purple-400 border border-purple-500/30" :
-                role === "Admin" ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/30" :
-                role === "Clients" ? "bg-amber-500/10 text-amber-400 border border-amber-500/30" :
-                "bg-blue-500/10 text-blue-400 border border-blue-500/30"
+              <div className={`w-11 h-11 rounded-2xl flex items-center justify-center font-bold text-xl shadow-xs border ${
+                role === "Super Admin" ? "bg-purple-500/10 text-purple-400 border-purple-500/30" :
+                role === "Admin" ? "bg-indigo-500/10 text-indigo-400 border-indigo-500/30" :
+                role === "Clients" ? "bg-amber-500/10 text-amber-400 border-amber-500/30" :
+                "bg-blue-500/10 text-blue-400 border-blue-500/30"
               }`}>
                 {role === "Super Admin" ? "👑" : role === "Admin" ? "🛡️" : role === "Clients" ? "💼" : "👥"}
               </div>
               <div>
-                <h2 className="text-base font-bold text-foreground">
-                  {editingUser ? "Edit User Account" : "Add New User Account"}
+                <h2 className="text-base font-black tracking-tight text-foreground flex items-center gap-2">
+                  <span>{editingUser ? "Edit User Account" : "Add New User Account"}</span>
                 </h2>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                  <span className="inline-flex items-center gap-1 font-semibold text-primary">
+                  <span className="inline-flex items-center gap-1 font-bold text-primary">
                     <span>{isTechCompany ? "💻" : "🏢"}</span>
                     <span>{companyDisplayName}</span>
                   </span>
                   <span>•</span>
-                  <span>Auto-linked to active company context</span>
+                  <span>{scopeType === "branch" && selectedBranchId ? "📍 Branch-Restricted Access" : "🏢 Company-Wide Scope"}</span>
                 </div>
               </div>
             </div>
@@ -400,24 +423,24 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                 <button
                   type="button"
                   onClick={() => setActiveTab("profile")}
-                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  className={`px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
                     activeTab === "profile" 
                       ? "bg-primary text-primary-foreground shadow-xs font-bold" 
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  Profile & Role
+                  Profile & Assignment
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveTab("permissions")}
-                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                  className={`px-3.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
                     activeTab === "permissions" 
                       ? "bg-primary text-primary-foreground shadow-xs font-bold" 
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  <Lock size={12} />
+                  <Lock size={13} />
                   <span>Permissions ({allowedModules.length})</span>
                 </button>
               </div>
@@ -454,19 +477,19 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                           key={r.id}
                           type="button"
                           onClick={() => handleRoleSelect(r.id)}
-                          className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all cursor-pointer ${
+                          className={`p-3.5 rounded-2xl border text-left flex flex-col justify-between transition-all cursor-pointer ${
                             isSelected
                               ? "bg-primary/10 border-primary text-foreground shadow-xs ring-2 ring-primary/20"
                               : "bg-surface/60 border-border text-muted-foreground hover:border-border/80 hover:bg-surface"
                           }`}
                         >
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-xl">{r.icon}</span>
+                            <span className="text-2xl">{r.icon}</span>
                             {isSelected && <CheckCircle2 size={16} className="text-primary" />}
                           </div>
                           <div>
                             <div className="font-bold text-xs text-foreground">{r.label}</div>
-                            <div className="text-[10px] text-muted-foreground mt-0.5">{r.desc}</div>
+                            <div className="text-[10.5px] text-muted-foreground mt-0.5">{r.desc}</div>
                           </div>
                         </button>
                       )
@@ -475,15 +498,15 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                 </div>
 
                 {/* 2. Core Profile Details */}
-                <div className="p-4 rounded-xl bg-surface/50 border border-border/60 space-y-4">
-                  <div className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
+                <div className="p-4 sm:p-5 rounded-2xl bg-surface/50 border border-border/70 space-y-4 shadow-xs">
+                  <div className="text-xs font-black text-foreground uppercase tracking-wider flex items-center gap-2">
                     <User size={14} className="text-primary" />
                     <span>Basic Information & Credentials</span>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-foreground mb-1.5">
+                      <label className="block text-xs font-bold text-foreground mb-1.5">
                         {role === "Clients" ? "Client / Contact Person Name *" : "Full Name *"}
                       </label>
                       <input
@@ -497,7 +520,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-foreground mb-1.5 flex items-center justify-between">
+                      <label className="block text-xs font-bold text-foreground mb-1.5 flex items-center justify-between">
                         <span>Email Address (Login ID) *</span>
                       </label>
                       <input
@@ -511,7 +534,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-foreground mb-1.5 flex items-center justify-between">
+                      <label className="block text-xs font-bold text-foreground mb-1.5 flex items-center justify-between">
                         <span>Phone Number</span>
                       </label>
                       <input
@@ -524,7 +547,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-foreground mb-1.5 flex items-center justify-between">
+                      <label className="block text-xs font-bold text-foreground mb-1.5 flex items-center justify-between">
                         <span>Login Password *</span>
                         <button
                           type="button"
@@ -555,55 +578,127 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                   </div>
                 </div>
 
-                {/* 3. Organization & Role-Specific Assignment */}
-                <div className="p-4 rounded-xl bg-surface/50 border border-border/60 space-y-4">
-                  <div className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
-                    <Building size={14} className="text-primary" />
-                    <span>Company & Branch Assignment</span>
+                {/* 3. Company & Branch Assignment (Enhanced with Dedicated Branch Scope) */}
+                <div className="p-4 sm:p-5 rounded-2xl bg-surface/50 border border-border/70 space-y-4 shadow-xs">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs font-black text-foreground uppercase tracking-wider flex items-center gap-2">
+                      <Building size={14} className="text-primary" />
+                      <span>Company & Regional Branch Assignment</span>
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* Active Company Display */}
-                    <div>
-                      <label className="block text-xs font-semibold text-foreground mb-1.5">
-                        Assigned Company
-                      </label>
-                      <div className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-border text-xs font-bold text-foreground flex items-center gap-2 shadow-2xs">
-                        <span>{isTechCompany ? "💻" : "🏢"}</span>
-                        <span className="truncate">{companyDisplayName}</span>
-                        <span className="ml-auto text-[10px] px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-bold">
-                          Active Context
-                        </span>
+                  {/* Access Scope Selector: Company-Wide vs Dedicated Branch Only */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold text-foreground">
+                      User Access Scope Level *
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div
+                        onClick={() => setScopeType("company")}
+                        className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-start gap-3 ${
+                          scopeType === "company"
+                            ? "bg-primary/10 border-primary shadow-xs ring-2 ring-primary/20"
+                            : "bg-card border-border hover:border-border/80"
+                        }`}
+                      >
+                        <div className="mt-0.5 w-5 h-5 rounded-full border-2 border-primary flex items-center justify-center shrink-0">
+                          {scopeType === "company" && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
+                        </div>
+                        <div>
+                          <div className="font-bold text-xs text-foreground flex items-center gap-1.5">
+                            <Globe size={13} className="text-primary" />
+                            <span>Company-Wide Access</span>
+                          </div>
+                          <p className="text-[10.5px] text-muted-foreground mt-0.5">
+                            User can access and work across all regional branches and headquarters in this company.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div
+                        onClick={() => setScopeType("branch")}
+                        className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-start gap-3 ${
+                          scopeType === "branch"
+                            ? "bg-primary/10 border-primary shadow-xs ring-2 ring-primary/20"
+                            : "bg-card border-border hover:border-border/80"
+                        }`}
+                      >
+                        <div className="mt-0.5 w-5 h-5 rounded-full border-2 border-primary flex items-center justify-center shrink-0">
+                          {scopeType === "branch" && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
+                        </div>
+                        <div>
+                          <div className="font-bold text-xs text-foreground flex items-center gap-1.5">
+                            <MapPin size={13} className="text-amber-500" />
+                            <span>Dedicated Branch Only</span>
+                          </div>
+                          <p className="text-[10.5px] text-muted-foreground mt-0.5">
+                            User is locked strictly to a dedicated branch; they cannot access other branches or global data.
+                          </p>
+                        </div>
                       </div>
                     </div>
+                  </div>
 
-                    {/* Branch Selection */}
+                  {/* Company & Branch Pickers */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                    {/* Company Picker */}
                     <div>
-                      <label className="block text-xs font-semibold text-foreground mb-1.5 flex items-center justify-between">
-                        <span>Assigned Branch / Location</span>
-                        <span className="text-[10px] text-muted-foreground">
-                          {availableBranches.length} branch{availableBranches.length === 1 ? "" : "es"} in this company
-                        </span>
+                      <label className="block text-xs font-bold text-foreground mb-1.5">
+                        Target Company
                       </label>
                       <select
-                        value={selectedBranchId}
-                        onChange={(e) => setSelectedBranchId(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-border text-xs focus:ring-2 focus:ring-primary focus:outline-hidden font-medium"
+                        value={selectedCompanyId}
+                        onChange={(e) => {
+                          setSelectedCompanyId(e.target.value)
+                          setSelectedBranchId("")
+                        }}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-border text-xs focus:ring-2 focus:ring-primary focus:outline-hidden font-bold text-foreground shadow-2xs"
                       >
-                        <option value="">🏢 Main Headquarters / All Branches</option>
-                        {availableBranches.map((b) => (
-                          <option key={b.id} value={b.id}>
-                            📍 {b.name} {b.city ? `(${b.city})` : ""}
+                        {companies.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.id === "tech" ? "💻" : "🏢"} {getCompanyFullName(c)}
                           </option>
                         ))}
                       </select>
+                    </div>
+
+                    {/* Branch Picker */}
+                    <div>
+                      <label className="block text-xs font-bold text-foreground mb-1.5 flex items-center justify-between">
+                        <span>{scopeType === "branch" ? "Assigned Dedicated Branch *" : "Default Regional Branch (Optional)"}</span>
+                        <span className="text-[10px] text-muted-foreground font-semibold">
+                          {availableBranches.length} branch{availableBranches.length === 1 ? "" : "es"} available
+                        </span>
+                      </label>
+                      {availableBranches.length > 0 ? (
+                        <select
+                          value={selectedBranchId}
+                          onChange={(e) => setSelectedBranchId(e.target.value)}
+                          required={scopeType === "branch"}
+                          className={`w-full px-3.5 py-2.5 rounded-xl bg-card border text-xs focus:ring-2 focus:ring-primary focus:outline-hidden font-medium ${
+                            scopeType === "branch" && !selectedBranchId ? "border-amber-500/80 bg-amber-50/20 dark:bg-amber-950/20" : "border-border"
+                          }`}
+                        >
+                          <option value="">{scopeType === "branch" ? "-- Select Assigned Branch --" : "🏢 Main Headquarters / All Branches"}</option>
+                          {availableBranches.map((b) => (
+                            <option key={b.id} value={b.id}>
+                              📍 {b.name} {b.city ? `(${b.city})` : ""} {b.code ? `[${b.code}]` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div className="w-full px-3.5 py-2.5 rounded-xl bg-surface border border-dashed border-border text-xs text-muted-foreground italic flex items-center gap-1.5">
+                          <Info size={13} className="text-amber-500 shrink-0" />
+                          <span>No branches configured for this company yet. Defaults to Main HQ.</span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Role Specific: Teams (Department, Designation, Commission %) */}
                     {role === "Teams" && (
                       <>
                         <div className="sm:col-span-2">
-                          <label className="block text-xs font-semibold text-foreground mb-1.5">
+                          <label className="block text-xs font-bold text-foreground mb-1.5">
                             Department
                           </label>
                           <input
@@ -619,7 +714,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                                 key={dept}
                                 type="button"
                                 onClick={() => setDepartment(dept)}
-                                className={`text-[10px] px-2 py-1 rounded-md border transition-colors cursor-pointer ${
+                                className={`text-[10px] px-2.5 py-1 rounded-lg border transition-colors cursor-pointer font-medium ${
                                   department === dept 
                                     ? "bg-primary text-primary-foreground font-bold border-primary" 
                                     : "bg-surface hover:bg-card border-border text-muted-foreground"
@@ -632,22 +727,22 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                         </div>
 
                         <div>
-                          <label className="block text-xs font-semibold text-foreground mb-1.5">
+                          <label className="block text-xs font-bold text-foreground mb-1.5">
                             Designation / Job Title
                           </label>
                           <input
                             type="text"
                             value={designation}
                             onChange={(e) => setDesignation(e.target.value)}
-                            placeholder="e.g. Senior Software Engineer / Sales Manager"
+                            placeholder="e.g. Senior Branch Executive / Sales Manager"
                             className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-border text-xs focus:ring-2 focus:ring-primary focus:outline-hidden font-medium"
                           />
                         </div>
 
                         <div>
-                          <label className="block text-xs font-semibold text-foreground mb-1.5 flex items-center gap-1">
+                          <label className="block text-xs font-bold text-foreground mb-1.5 flex items-center gap-1">
                             <Percent size={12} className="text-amber-500" />
-                            <span>Invoice Commission % / Fixed Rate</span>
+                            <span>Invoice Commission % / Rate</span>
                           </label>
                           <input
                             type="text"
@@ -662,7 +757,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
 
                     {/* Role Specific: KYC Status */}
                     <div>
-                      <label className="block text-xs font-semibold text-foreground mb-1.5">
+                      <label className="block text-xs font-bold text-foreground mb-1.5">
                         KYC / Verification Status
                       </label>
                       <select
@@ -679,12 +774,12 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
 
                     {/* Account Status */}
                     <div>
-                      <label className="block text-xs font-semibold text-foreground mb-1.5">
+                      <label className="block text-xs font-bold text-foreground mb-1.5">
                         Account Status
                       </label>
                       <div className="flex items-center gap-3 h-10">
                         {(["Active", "Inactive", "Pending"] as UserStatus[]).map((st) => (
-                          <label key={st} className="flex items-center gap-1.5 text-xs font-medium cursor-pointer">
+                          <label key={st} className="flex items-center gap-1.5 text-xs font-semibold cursor-pointer">
                             <input
                               type="radio"
                               name="accountStatus"
@@ -704,7 +799,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
               /* PERMISSIONS TAB */
               <div className="space-y-4">
                 {/* Master Presets Bar */}
-                <div className="p-3.5 rounded-xl bg-surface/70 border border-border/80 flex flex-wrap items-center justify-between gap-2.5">
+                <div className="p-3.5 rounded-2xl bg-surface/70 border border-border/80 flex flex-wrap items-center justify-between gap-2.5">
                   <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
                     <Sparkles size={14} className="text-amber-500" />
                     <span>Quick Permission Presets:</span>
@@ -769,7 +864,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                     value={moduleSearch}
                     onChange={(e) => setModuleSearch(e.target.value)}
                     placeholder="Search permissions by module name..."
-                    className="w-full pl-9 pr-3.5 py-2 rounded-xl bg-card border border-border text-xs focus:ring-2 focus:ring-primary focus:outline-hidden font-medium"
+                    className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-card border border-border text-xs focus:ring-2 focus:ring-primary focus:outline-hidden font-medium"
                   />
                 </div>
 
@@ -788,7 +883,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                     }).length
 
                     return (
-                      <div key={cat.name} className="rounded-xl border border-border/80 bg-card overflow-hidden">
+                      <div key={cat.name} className="rounded-2xl border border-border/80 bg-card overflow-hidden">
                         {/* Category Header */}
                         <div 
                           onClick={() => setCollapsedCategories(prev => ({ ...prev, [cat.name]: !prev[cat.name] }))}
@@ -892,17 +987,17 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2.5 rounded-xl border border-border text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-surface transition-colors cursor-pointer"
+                className="px-5 py-2.5 rounded-xl border border-border text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-surface transition-colors cursor-pointer"
               >
                 Cancel
               </button>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2.5">
                 {activeTab === "profile" ? (
                   <button
                     type="button"
                     onClick={() => setActiveTab("permissions")}
-                    className="px-4 py-2.5 rounded-xl bg-surface border border-border hover:bg-surface/80 text-xs font-bold text-foreground transition-all flex items-center gap-1.5 cursor-pointer"
+                    className="px-5 py-2.5 rounded-xl bg-surface border border-border hover:bg-surface/80 text-xs font-bold text-foreground transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
                   >
                     <span>Configure Permissions</span>
                     <ChevronRight size={14} />
@@ -911,7 +1006,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                   <button
                     type="button"
                     onClick={() => setActiveTab("profile")}
-                    className="px-4 py-2.5 rounded-xl bg-surface border border-border hover:bg-surface/80 text-xs font-bold text-foreground transition-all cursor-pointer"
+                    className="px-5 py-2.5 rounded-xl bg-surface border border-border hover:bg-surface/80 text-xs font-bold text-foreground transition-all cursor-pointer shadow-xs"
                   >
                     Back to Profile
                   </button>
@@ -919,7 +1014,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
 
                 <Button
                   type="submit"
-                  className="px-6 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs shadow-md hover:shadow-lg transition-all cursor-pointer"
+                  className="px-7 py-2.5 rounded-xl bg-primary text-primary-foreground font-black text-xs shadow-md hover:shadow-lg transition-all cursor-pointer"
                 >
                   {editingUser ? "Save Changes" : "Create Account"}
                 </Button>
@@ -931,3 +1026,4 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
     </AnimatePresence>
   )
 }
+

@@ -193,7 +193,10 @@ export default function CompaniesMain() {
         fetchModuleDataFromDB<any[]>("users", [], "all").catch(() => []),
       ])
 
-      const cleanUsers = filterGlobalDeletedItems(dbUsersList || [])
+      const cleanUsers = (dbUsersList || []).filter((u: any) => 
+        !isGlobalItemDeleted(u.id, undefined, "users") && 
+        !isGlobalItemDeleted(u.email, undefined, "users")
+      )
       setAllUsers(cleanUsers)
 
       // 1. Merge Companies (strictly 2 canonical companies: tech and consultancy)
@@ -401,6 +404,10 @@ export default function CompaniesMain() {
       const bComp = b.company_id || (b as any).companyId
       return isMatchingCompany(comp, bComp)
     })
+  }
+
+  const getSubBranchesForBranch = (branchId: string | number) => {
+    return subBranches.filter(sb => String(sb.branch_id || (sb as any).branchId) === String(branchId))
   }
   const getUserCountForCompany = (companyId: string) => {
     const isConsult = String(companyId).toLowerCase().includes("consult") || companyId === "2"
