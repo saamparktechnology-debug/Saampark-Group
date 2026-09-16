@@ -370,8 +370,8 @@ export default function LoginPage() {
         parsedCompanyIds = matchedRole === "Super Admin" ? ["tech", "digital"] : [fallbackSingle]
       }
 
-      // If user is assigned to multiple companies, auto-select the first one
-      const selectedCompanyId = parsedCompanyIds[0] || "tech"
+      // If user is Super Admin, default to all companies across the group
+      const selectedCompanyId = matchedRole === "Super Admin" ? "all" : (parsedCompanyIds[0] || "tech")
 
       loginAs(matchedRole, {
         id: String(matchedAccount.id || matchedAccount.email),

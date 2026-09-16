@@ -116,11 +116,11 @@ export function Topbar() {
           const currentActive = useAuthStore.getState().activeCompanyId
           const isAllowedActive = freshCompanyIds.some(id => isMatchingCompany({ id, slug: id } as any, currentActive || ""))
           const nextActive = isSuper
-            ? (currentActive || freshCompanyIds[0] || "tech")
+            ? (currentActive || "all")
             : (isAllowedActive && currentActive ? currentActive : freshCompanyIds[0])
 
           const finalCompanyIds = isSuper
-            ? Array.from(new Set([...freshCompanyIds, currentActive || "tech", ...companies.map(c => c.id), ...companies.map(c => c.slug || "")].filter(Boolean)))
+            ? Array.from(new Set([...freshCompanyIds, currentActive || "all", ...companies.map(c => c.id), ...companies.map(c => c.slug || "")].filter(Boolean)))
             : freshCompanyIds
 
           let rawBranchIds = dbRecord.branchIds || (dbRecord as any).branch_ids || user.branchIds
@@ -170,7 +170,7 @@ export function Topbar() {
               allowedModules: freshAllowedMods,
               permissions: freshPerms,
             },
-            activeCompanyId: nextActive || "tech",
+            activeCompanyId: nextActive || (isSuper ? "all" : "tech"),
           })
         }
       } catch (err) {
