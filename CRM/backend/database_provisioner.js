@@ -22,11 +22,17 @@ try {
     } catch {}
   }
 }
+let envConfig;
+try {
+  envConfig = require('./src/config/env');
+} catch {}
+
 const fs = require('fs');
 const path = require('path');
 
 // Read .env natively if present
 const envPath = path.join(__dirname, '.env');
+let localEnv = {};
 if (fs.existsSync(envPath)) {
   const envContent = fs.readFileSync(envPath, 'utf8');
   envContent.split(/\r?\n/).forEach(line => {
@@ -36,16 +42,16 @@ if (fs.existsSync(envPath)) {
       if (idx !== -1) {
         const k = trimmed.substring(0, idx).trim();
         const v = trimmed.substring(idx + 1).trim();
-        if (!process.env[k]) process.env[k] = v;
+        localEnv[k] = v;
       }
     }
   });
 }
 
-const DB_HOST = process.env.DB_HOST || 'localhost';
-const DB_PORT = parseInt(process.env.DB_PORT || '3306', 10);
-const DB_USER = process.env.DB_USER || 'root';
-const DB_PASSWORD = process.env.DB_PASSWORD ?? '';
+const DB_HOST = envConfig?.db?.host || localEnv.DB_HOST || process.env.DB_HOST || 'localhost';
+const DB_PORT = parseInt(envConfig?.db?.port || localEnv.DB_PORT || process.env.DB_PORT || '3306', 10);
+const DB_USER = envConfig?.db?.user || localEnv.DB_USER || process.env.DB_USER || 'root';
+const DB_PASSWORD = envConfig?.db?.password ?? (localEnv.DB_PASSWORD ?? (process.env.DB_PASSWORD ?? ''));
 
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS roles (
