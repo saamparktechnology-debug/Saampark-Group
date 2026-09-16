@@ -276,10 +276,9 @@ export function getCanonicalCompanyId(val: string | number | null | undefined): 
   if (val === null || val === undefined) return ""
   const str = String(val).toLowerCase().trim()
   if (!str) return ""
-  if (str === "1" || str === "tech" || str.includes("technology")) return "tech"
+  if (str === "all") return "all"
   if (str === "2" || str === "consultancy" || str === "consult" || str.includes("consult")) return "consultancy"
-  if (str === "3" || str === "digital" || str.includes("digital")) return "digital"
-  if (str === "4" || str === "saampark-ai-solutions" || str === "ai" || str.includes("ai solutions")) return "saampark-ai-solutions"
+  if (str === "1" || str === "tech" || str.includes("technol")) return "tech"
   return str
 }
 
@@ -293,31 +292,29 @@ export function isMatchingCompany(
   if (target === "all") return true
 
   const canonTarget = getCanonicalCompanyId(target)
-  const canonCompId = getCanonicalCompanyId(comp.id)
-  const canonCompSlug = getCanonicalCompanyId(comp.slug)
-  const canonCompNum = getCanonicalCompanyId((comp as any).numeric_id)
-  const canonCompCompanyId = getCanonicalCompanyId((comp as any).company_id || (comp as any).companyId)
-  const canonCompName = getCanonicalCompanyId(comp.name)
+  
+  const compIdStr = String(comp.id || "").toLowerCase().trim()
+  const compSlugStr = String(comp.slug || "").toLowerCase().trim()
+  const compNameStr = String(comp.name || "").toLowerCase().trim()
+  const compDivStr = String(comp.division_name || "").toLowerCase().trim()
 
-  if (
-    canonTarget === canonCompId || 
-    canonTarget === canonCompSlug || 
-    canonTarget === canonCompNum || 
-    canonTarget === canonCompCompanyId || 
-    canonTarget === canonCompName
-  ) {
-    return true
+  const isCompConsultancy = (
+    compIdStr === "consultancy" || compIdStr === "2" || compIdStr.includes("consult") ||
+    compSlugStr === "consultancy" || compSlugStr === "2" || compSlugStr.includes("consult") ||
+    compNameStr.includes("consult") || compDivStr.includes("consult")
+  )
+
+  const isCompTech = !isCompConsultancy
+
+  if (canonTarget === "consultancy") {
+    return isCompConsultancy
   }
 
-  return Boolean(
-    String(comp.id || "").toLowerCase().trim() === target ||
-    String(comp.slug || "").toLowerCase().trim() === target ||
-    String((comp as any).numeric_id || "").toLowerCase().trim() === target ||
-    String((comp as any).company_id || (comp as any).companyId || "").toLowerCase().trim() === target ||
-    String(comp.name || "").toLowerCase().trim() === target ||
-    (comp.name && target && String(comp.name).toLowerCase().includes(target)) ||
-    (comp.name && target && target.includes(String(comp.name).toLowerCase()))
-  )
+  if (canonTarget === "tech" || canonTarget === "1") {
+    return isCompTech
+  }
+
+  return compIdStr === target || compSlugStr === target
 }
 
 export function isMatchingBranch(
@@ -606,10 +603,33 @@ export const useAuthStore = create<AuthState>()(
             })
           })
 
+          const techComp = map.get('tech') || DEFAULT_COMPANIES[0]
+          const consultComp = map.get('consultancy') || DEFAULT_COMPANIES[1]
+
           const combined = [
-            map.get('tech') || DEFAULT_COMPANIES[0],
-            map.get('consultancy') || DEFAULT_COMPANIES[1]
-          ].filter(Boolean) as Company[]
+            {
+              ...DEFAULT_COMPANIES[0],
+              ...techComp,
+              id: 'tech',
+              slug: 'tech',
+              numeric_id: 1,
+              brand_name: techComp.brand_name || 'SAAMPARK',
+              division_name: techComp.division_name !== undefined ? techComp.division_name : 'TECHNOLOGY',
+              subtitle: techComp.subtitle !== undefined ? techComp.subtitle : 'AND RESEARCH PRIVATE LIMITED',
+              name: getCompanyFullName({ ...DEFAULT_COMPANIES[0], ...techComp, brand_name: 'SAAMPARK', division_name: 'TECHNOLOGY' }),
+            },
+            {
+              ...DEFAULT_COMPANIES[1],
+              ...consultComp,
+              id: 'consultancy',
+              slug: 'consultancy',
+              numeric_id: 2,
+              brand_name: consultComp.brand_name || 'SAAMPARK',
+              division_name: consultComp.division_name !== undefined ? consultComp.division_name : 'CONSULTANCY SERVICE',
+              subtitle: consultComp.subtitle !== undefined ? consultComp.subtitle : 'MANAGEMENT & ADVISORY SERVICES',
+              name: getCompanyFullName({ ...DEFAULT_COMPANIES[1], ...consultComp, brand_name: 'SAAMPARK', division_name: 'CONSULTANCY SERVICE' }),
+            }
+          ] as Company[]
 
           set({ companies: combined })
           return combined

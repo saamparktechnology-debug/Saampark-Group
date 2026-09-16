@@ -224,28 +224,18 @@ export function Sidebar() {
 
   const allowedCompanies = React.useMemo(() => {
     if (!user) return []
-    let list = companies
-    if (user.role !== 'Super Admin') {
-      let rawCompIds = user.companyIds || (user as any).company_ids
-      let userCompIds: string[] = []
-      if (typeof rawCompIds === 'string') {
-        try { userCompIds = JSON.parse(rawCompIds) } catch { userCompIds = [rawCompIds] }
-      } else if (Array.isArray(rawCompIds)) {
-        userCompIds = rawCompIds
-      }
-      if (userCompIds.length === 0) {
-        userCompIds = [user.companyId || 'tech']
-      }
-      list = companies.filter(c => userCompIds.some(id => isMatchingCompany(c, id)))
+    if (user.role === 'Super Admin') return companies
+    let rawCompIds = user.companyIds || (user as any).company_ids
+    let userCompIds: string[] = []
+    if (typeof rawCompIds === 'string') {
+      try { userCompIds = JSON.parse(rawCompIds) } catch { userCompIds = [rawCompIds] }
+    } else if (Array.isArray(rawCompIds)) {
+      userCompIds = rawCompIds
     }
-
-    const seen = new Set<string>()
-    return list.filter(c => {
-      const canon = isMatchingCompany(c, 'consultancy') ? 'consultancy' : (isMatchingCompany(c, 'tech') ? 'tech' : null)
-      if (!canon || seen.has(canon)) return false
-      seen.add(canon)
-      return true
-    })
+    if (userCompIds.length === 0) {
+      userCompIds = [user.companyId || 'tech']
+    }
+    return companies.filter(c => userCompIds.some(id => isMatchingCompany(c, id)))
   }, [user, companies])
 
   const allowedBranches = React.useMemo(() => {
