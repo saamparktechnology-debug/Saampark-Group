@@ -42,20 +42,31 @@ export function CompanyBranchSettings() {
   // Filter companies visible for this user (Clients only see their own created entities)
   const isClientRole = normRole.includes("client")
   const visibleCompanies = React.useMemo(() => {
-    if (isSuperAdmin) return companies
-    if (isClientRole && user) {
-      const uId = String(user.id || "").toLowerCase().trim()
-      const uEmail = (user.email || "").toLowerCase().trim()
-      return companies.filter((c: any) => {
-        const cOwnerId = String(c.clientId || c.createdById || c.ownerId || "").toLowerCase().trim()
-        const cOwnerEmail = String(c.clientEmail || c.createdByEmail || c.ownerEmail || "").toLowerCase().trim()
-        return (uId && cOwnerId === uId) || (uEmail && cOwnerEmail === uEmail)
-      })
+    let list = companies
+    if (!isSuperAdmin) {
+      if (isClientRole && user) {
+        const uId = String(user.id || "").toLowerCase().trim()
+        const uEmail = (user.email || "").toLowerCase().trim()
+        list = companies.filter((c: any) => {
+          const cOwnerId = String(c.clientId || c.createdById || c.ownerId || "").toLowerCase().trim()
+          const cOwnerEmail = String(c.clientEmail || c.createdByEmail || c.ownerEmail || "").toLowerCase().trim()
+          return (uId && cOwnerId === uId) || (uEmail && cOwnerEmail === uEmail)
+        })
+      } else {
+        const adminCompanyIds = (user?.companyIds && user.companyIds.length > 0)
+          ? user.companyIds
+          : (user?.companyId ? [user.companyId] : ["tech"])
+        list = companies.filter((c) => adminCompanyIds.some(id => isMatchingCompany(c, id)))
+      }
     }
-    const adminCompanyIds = (user?.companyIds && user.companyIds.length > 0)
-      ? user.companyIds
-      : (user?.companyId ? [user.companyId] : ["tech"])
-    return companies.filter((c) => adminCompanyIds.some(id => isMatchingCompany(c, id)))
+
+    const seen = new Set<string>()
+    return list.filter(c => {
+      const canon = isMatchingCompany(c, 'consultancy') ? 'consultancy' : (isMatchingCompany(c, 'tech') ? 'tech' : null)
+      if (!canon || seen.has(canon)) return false
+      seen.add(canon)
+      return true
+    })
   }, [isSuperAdmin, isClientRole, companies, user])
 
   const [expandedCompanyIds, setExpandedCompanyIds] = React.useState<string[]>([])

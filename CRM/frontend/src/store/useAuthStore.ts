@@ -537,91 +537,87 @@ export const useAuthStore = create<AuthState>()(
           const map = new Map<string, Company>()
 
           const getCanonicalKey = (c: Partial<Company>) => {
-            return String(c.slug || c.id || '').toLowerCase().trim()
+            const canon = getCanonicalCompanyId(c.slug || c.id || (c as any)?.numeric_id || c.name)
+            if (canon === 'consultancy' || canon.includes('consult')) return 'consultancy'
+            return 'tech'
           }
 
           // 1. First add DEFAULT_COMPANIES as baseline
           DEFAULT_COMPANIES.forEach(c => {
-            if (!isGlobalItemDeleted(c.id, deletedIds) && !isGlobalItemDeleted(c.slug || '', deletedIds)) {
-              const key = getCanonicalKey(c)
-              map.set(key, {
-                ...c,
-                name: getCompanyFullName(c),
-              })
-            }
+            const key = getCanonicalKey(c)
+            map.set(key, {
+              ...c,
+              id: key,
+              slug: key,
+              name: getCompanyFullName(c),
+            })
           })
 
           // 2. Overlay currently cached store companies (preserves custom local fields)
           const currentStoreCompanies = get().companies || []
           currentStoreCompanies.forEach(c => {
-            if (!isGlobalItemDeleted(c.id, deletedIds) && !isGlobalItemDeleted(c.slug || '', deletedIds)) {
-              const key = getCanonicalKey(c)
-              const existing = map.get(key)
-              map.set(key, {
-                ...existing,
-                ...c,
-                brand_name: c.brand_name || existing?.brand_name || 'SAAMPARK',
-                division_name: c.division_name !== undefined ? c.division_name : (existing?.division_name || ''),
-                subtitle: c.subtitle !== undefined ? c.subtitle : (existing?.subtitle || ''),
-                name: getCompanyFullName({ ...existing, ...c }),
-              })
-            }
+            const key = getCanonicalKey(c)
+            const existing = map.get(key)
+            map.set(key, {
+              ...existing,
+              ...c,
+              id: key,
+              slug: key,
+              brand_name: c.brand_name || existing?.brand_name || 'SAAMPARK',
+              division_name: c.division_name !== undefined ? c.division_name : (existing?.division_name || ''),
+              subtitle: c.subtitle !== undefined ? c.subtitle : (existing?.subtitle || ''),
+              name: getCompanyFullName({ ...existing, ...c }),
+            })
           })
 
           // 3. Overlay DB module store (app_data table)
           if (Array.isArray(dbCompanies) && dbCompanies.length > 0) {
             dbCompanies.forEach(c => {
-              if (!isGlobalItemDeleted(c.id, deletedIds) && !isGlobalItemDeleted(c.slug || '', deletedIds)) {
-                const key = getCanonicalKey(c)
-                const existing = map.get(key)
-                map.set(key, {
-                  ...existing,
-                  ...c,
-                  logo_url: (c.logo_url && c.logo_url.trim() !== '') ? c.logo_url : (existing?.logo_url || ''),
-                  brand_name: c.brand_name || existing?.brand_name || 'SAAMPARK',
-                  division_name: c.division_name !== undefined ? c.division_name : (existing?.division_name || ''),
-                  subtitle: c.subtitle !== undefined ? c.subtitle : (existing?.subtitle || ''),
-                  name: getCompanyFullName({ ...existing, ...c }),
-                })
-              }
-            })
-          }
-
-          // 4. Overlay Live Backend API (MySQL companies table - HIGHEST PRECEDENCE for live DB values!)
-          apiList.forEach(c => {
-            if (!isGlobalItemDeleted(c.id, deletedIds) && !isGlobalItemDeleted(c.slug || '', deletedIds)) {
               const key = getCanonicalKey(c)
               const existing = map.get(key)
               map.set(key, {
                 ...existing,
                 ...c,
+                id: key,
+                slug: key,
                 logo_url: (c.logo_url && c.logo_url.trim() !== '') ? c.logo_url : (existing?.logo_url || ''),
-                brand_name: existing?.brand_name || c.brand_name || c.name,
-                division_name: existing?.division_name !== undefined ? existing.division_name : (c.division_name || ''),
-                subtitle: existing?.subtitle !== undefined ? existing.subtitle : (c.subtitle || ''),
+                brand_name: c.brand_name || existing?.brand_name || 'SAAMPARK',
+                division_name: c.division_name !== undefined ? c.division_name : (existing?.division_name || ''),
+                subtitle: c.subtitle !== undefined ? c.subtitle : (existing?.subtitle || ''),
                 name: getCompanyFullName({ ...existing, ...c }),
               })
-            }
+            })
+          }
+
+          // 4. Overlay Live Backend API (MySQL companies table)
+          apiList.forEach(c => {
+            const key = getCanonicalKey(c)
+            const existing = map.get(key)
+            map.set(key, {
+              ...existing,
+              ...c,
+              id: key,
+              slug: key,
+              logo_url: (c.logo_url && c.logo_url.trim() !== '') ? c.logo_url : (existing?.logo_url || ''),
+              brand_name: existing?.brand_name || c.brand_name || c.name,
+              division_name: existing?.division_name !== undefined ? existing.division_name : (c.division_name || ''),
+              subtitle: existing?.subtitle !== undefined ? existing.subtitle : (c.subtitle || ''),
+              name: getCompanyFullName({ ...existing, ...c }),
+            })
           })
 
-          const combined = Array.from(map.values())
-            .filter(c => isMatchingCompany(c, 'tech') || isMatchingCompany(c, 'consultancy'))
-            .map(c => ({
-              ...c,
-              name: getCompanyFullName(c),
-            }))
+          const combined = [
+            map.get('tech') || DEFAULT_COMPANIES[0],
+            map.get('consultancy') || DEFAULT_COMPANIES[1]
+          ].filter(Boolean) as Company[]
 
-          if (combined.length > 0) {
-            set({ companies: combined })
-            return combined
-          }
+          set({ companies: combined })
+          return combined
         } catch (err) {
           console.warn("fetchCompanies warning:", err)
         }
 
-        const currentFiltered = (get().companies && get().companies.length > 0)
-          ? get().companies.filter(c => isMatchingCompany(c, 'tech') || isMatchingCompany(c, 'consultancy'))
-          : DEFAULT_COMPANIES
+        const currentFiltered = DEFAULT_COMPANIES
         set({ companies: currentFiltered })
         return currentFiltered
       },
