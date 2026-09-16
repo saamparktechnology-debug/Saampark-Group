@@ -32,6 +32,8 @@ export function EditProjectModal({
   const [status, setStatus] = React.useState<ProjectStatus>("Open")
   const [selectedMemberIds, setSelectedMemberIds] = React.useState<string[]>([])
   const [memberShares, setMemberShares] = React.useState<Record<string, number>>({})
+  const [memberPayoutTypes, setMemberPayoutTypes] = React.useState<Record<string, "percentage" | "fixed">>({})
+  const [memberAmounts, setMemberAmounts] = React.useState<Record<string, number>>({})
   const [memberSearchQuery, setMemberSearchQuery] = React.useState("")
   const [teamMembers, setTeamMembers] = React.useState<any[]>([])
   const [isSubmitting, setIsSubmitting] = React.useState(false)
@@ -84,17 +86,29 @@ export function EditProjectModal({
       setLabelsList(project.labels || [])
       setStatus(project.status || "Open")
       
+      const numProjTotal = parseFloat(
+        String(project.totalAmount ?? project.baseAmount ?? project.price ?? "0").replace(/[^0-9.]/g, "")
+      ) || 0
+
       const initialShares: Record<string, number> = {}
+      const initialTypes: Record<string, "percentage" | "fixed"> = {}
+      const initialAmounts: Record<string, number> = {}
       const memberIds: string[] = []
+
       if (Array.isArray(project.members)) {
         project.members.forEach(m => {
           const mId = String(m.id)
           memberIds.push(mId)
-          initialShares[mId] = typeof m.sharePercentage === "number" ? m.sharePercentage : 15
+          const share = typeof m.sharePercentage === "number" ? m.sharePercentage : 15
+          initialShares[mId] = share
+          initialTypes[mId] = m.payoutType || "percentage"
+          initialAmounts[mId] = typeof m.payoutAmount === "number" ? m.payoutAmount : Math.round((numProjTotal * share) / 100)
         })
       }
       setSelectedMemberIds(memberIds)
       setMemberShares(initialShares)
+      setMemberPayoutTypes(initialTypes)
+      setMemberAmounts(initialAmounts)
     }
   }, [project])
 
@@ -114,9 +128,34 @@ export function EditProjectModal({
         if (memberShares[memId] === undefined) {
           setMemberShares((s) => ({ ...s, [memId]: 15 }))
         }
+        if (memberPayoutTypes[memId] === undefined) {
+          setMemberPayoutTypes((t) => ({ ...t, [memId]: "percentage" }))
+        }
+        if (memberAmounts[memId] === undefined) {
+          const defaultAmt = Math.round((numericProjectTotal * 15) / 100) || 5000
+          setMemberAmounts((a) => ({ ...a, [memId]: defaultAmt }))
+        }
         return [...prev, memId]
       }
     })
+  }
+
+  const handlePayoutTypeChange = (memId: string, type: "percentage" | "fixed") => {
+    setMemberPayoutTypes((prev) => ({ ...prev, [memId]: type }))
+    if (type === "fixed" && (!memberAmounts[memId] || memberAmounts[memId] === 0)) {
+      const share = memberShares[memId] !== undefined ? memberShares[memId] : 15
+      const computedAmt = Math.round((numericProjectTotal * share) / 100) || 5000
+      setMemberAmounts((prev) => ({ ...prev, [memId]: computedAmt }))
+    }
+  }
+
+  const handleAmountChange = (memId: string, amtVal: number) => {
+    const clamped = isNaN(amtVal) ? 0 : Math.max(0, amtVal)
+    setMemberAmounts((prev) => ({ ...prev, [memId]: clamped }))
+    if (numericProjectTotal > 0) {
+      const calcPct = Math.min(100, Math.round((clamped / numericProjectTotal) * 1000) / 10)
+      setMemberShares((prev) => ({ ...prev, [memId]: calcPct }))
+    }
   }
 
   const handleShareChange = (memId: string, shareVal: number) => {
@@ -125,6 +164,10 @@ export function EditProjectModal({
       ...prev,
       [memId]: clamped,
     }))
+    if (numericProjectTotal > 0) {
+      const calcAmt = Math.round((numericProjectTotal * clamped) / 100)
+      setMemberAmounts((prev) => ({ ...prev, [memId]: calcAmt }))
+    }
   }
 
   const handleRemoveLabel = (labelToRemove: string) => {
@@ -155,14 +198,23 @@ export function EditProjectModal({
         const found = teamMembers.find(
           (t) => String(t.id).toLowerCase() === mId.toLowerCase()
         )
+        const pType = memberPayoutTypes[mId] || "percentage"
         const sharePct = memberShares[mId] !== undefined ? Number(memberShares[mId]) : 15
+        const manualAmt = memberAmounts[mId] !== undefined ? Number(memberAmounts[mId]) : Math.round((numericProjectTotal * sharePct) / 100)
+        const finalPayoutAmt = pType === "fixed" ? manualAmt : Math.round((numericProjectTotal * sharePct) / 100)
+
         return {
           id: mId,
           name: found?.name || "Team Member",
           role: found?.role || "Developer",
           avatar: found?.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${found?.name || mId}`,
           email: found?.email || "",
-          sharePercentage: sharePct,
+          payoutType: pType,
+          payoutValue: pType === "fixed" ? manualAmt : sharePct,
+          payoutAmount: finalPayoutAmt,
+          sharePercentage: pType === "fixed" && numericProjectTotal > 0
+            ? Number(((manualAmt / numericProjectTotal) * 100).toFixed(1))
+            : sharePct,
         }
       })
 
@@ -304,24 +356,70 @@ export function EditProjectModal({
                             </div>
                           </div>
 
-                          {/* Share % Input & Computed Amount */}
+                          {/* Payout Controls: % Share vs ₹ Manual Amount */}
                           <div className="flex items-center gap-2 shrink-0">
-                            <div className="flex items-center gap-1 bg-zinc-50 dark:bg-zinc-800 px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700">
-                              <span className="text-[10px] text-zinc-500 font-semibold">Share:</span>
-                              <input
-                                type="number"
-                                min="0"
-                                max="100"
-                                value={shareVal}
-                                onChange={(e) => handleShareChange(mId, Number(e.target.value))}
-                                className="w-10 bg-transparent text-purple-600 dark:text-purple-400 font-black text-center focus:outline-none text-xs"
-                              />
-                              <span className="text-zinc-400 font-bold text-[10px]">%</span>
+                            {/* Mode Toggle Pills: % vs ₹ */}
+                            <div className="inline-flex rounded-lg p-0.5 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
+                              <button
+                                type="button"
+                                onClick={() => handlePayoutTypeChange(mId, "percentage")}
+                                className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
+                                  (memberPayoutTypes[mId] || "percentage") === "percentage"
+                                    ? "bg-purple-600 text-white shadow-xs"
+                                    : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                                }`}
+                                title="Set percentage of project"
+                              >
+                                %
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handlePayoutTypeChange(mId, "fixed")}
+                                className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
+                                  memberPayoutTypes[mId] === "fixed"
+                                    ? "bg-purple-600 text-white shadow-xs"
+                                    : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                                }`}
+                                title="Type manual fixed amount in ₹"
+                              >
+                                ₹
+                              </button>
                             </div>
+
+                            {/* Value Input */}
+                            {memberPayoutTypes[mId] === "fixed" ? (
+                              <div className="flex items-center gap-1 bg-zinc-50 dark:bg-zinc-800 px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700">
+                                <span className="text-zinc-400 font-bold text-[11px]">₹</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  placeholder="5000"
+                                  value={memberAmounts[mId] !== undefined ? memberAmounts[mId] : ""}
+                                  onChange={(e) => handleAmountChange(mId, Number(e.target.value))}
+                                  className="w-16 bg-transparent text-purple-600 dark:text-purple-400 font-bold text-left focus:outline-none text-xs"
+                                />
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1 bg-zinc-50 dark:bg-zinc-800 px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  value={shareVal}
+                                  onChange={(e) => handleShareChange(mId, Number(e.target.value))}
+                                  className="w-10 bg-transparent text-purple-600 dark:text-purple-400 font-black text-center focus:outline-none text-xs"
+                                />
+                                <span className="text-zinc-400 font-bold text-[10px]">%</span>
+                              </div>
+                            )}
 
                             {/* Payout Preview Badge */}
                             <div className="px-2 py-1 rounded-lg bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-200 font-black text-[11px] border border-purple-200 dark:border-purple-800 whitespace-nowrap">
-                              ₹{memberCalculatedAmt.toLocaleString("en-IN")}
+                              {memberPayoutTypes[mId] === "fixed" ? (
+                                <span>≈ {numericProjectTotal > 0 ? ((memberAmounts[mId] || 0) / numericProjectTotal * 100).toFixed(1) : 0}%</span>
+                              ) : (
+                                <span>₹{memberCalculatedAmt.toLocaleString("en-IN")}</span>
+                              )}
                             </div>
 
                             {/* Remove button */}

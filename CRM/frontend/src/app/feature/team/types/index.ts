@@ -1,6 +1,6 @@
 export type PayoutStatus = "Need to Pay" | "Paid" | "Partial" | "On Hold"
 export type PaymentMethod = "Bank IMPS/NEFT" | "UPI Transfer" | "Cash" | "Cheque"
-export type PayoutType = "Monthly Salary" | "Subscription Commission" | "Project Share / Milestone Payout" | "Bonus / Incentive" | "Advance" | "Custom Allowance" | "Expense Reimbursement" | "Full Settlement"
+export type PayoutType = "Monthly Salary" | "Subscription Commission" | "Project Share / Milestone Payout" | "Bonus / Incentive" | "Advance" | "Custom Allowance" | "Custom Amount" | "Expense Reimbursement" | "Full Settlement"
 
 export interface TeamMemberBankingInfo {
   memberId: string

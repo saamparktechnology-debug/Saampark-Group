@@ -23,6 +23,9 @@ import { Button } from "@/components/ui/Button"
 interface RecordPayoutModalProps {
   isOpen: boolean
   profile: TeamMemberPayoutProfile | null
+  initialAmount?: number
+  initialProjectTitle?: string
+  initialPayoutType?: PayoutType
   onClose: () => void
   onSuccess: (payout: TeamPayoutRecord) => void
 }
@@ -30,6 +33,9 @@ interface RecordPayoutModalProps {
 export function RecordPayoutModal({
   isOpen,
   profile,
+  initialAmount,
+  initialProjectTitle,
+  initialPayoutType,
   onClose,
   onSuccess,
 }: RecordPayoutModalProps) {
@@ -41,6 +47,7 @@ export function RecordPayoutModal({
   const [commissionAmount, setCommissionAmount] = React.useState<number>(0)
   const [bonus, setBonus] = React.useState<number | "">(0)
   const [deductions, setDeductions] = React.useState<number | "">(0)
+  const [customAmount, setCustomAmount] = React.useState<number | "">("")
   
   const [paymentMethod, setPaymentMethod] = React.useState<PaymentMethod>("Bank IMPS/NEFT")
   const [transactionRef, setTransactionRef] = React.useState("")
@@ -50,20 +57,33 @@ export function RecordPayoutModal({
 
   React.useEffect(() => {
     if (profile) {
-      setBaseAmount(profile.baseSalary || 25000)
-      setCommissionAmount(profile.subscriptionCommission || 0)
-      setBonus(0)
-      setDeductions(0)
+      if (initialAmount && initialAmount > 0) {
+        setCustomAmount(initialAmount)
+        setPayoutType(initialPayoutType || (initialProjectTitle ? "Project Share / Milestone Payout" : "Custom Amount"))
+        setPeriod(initialProjectTitle ? `Project: ${initialProjectTitle}` : currentPeriod)
+        setNotes(initialProjectTitle ? `Project milestone share for "${initialProjectTitle}"` : `Custom payment to ${profile.name}`)
+      } else {
+        setBaseAmount(profile.baseSalary || 25000)
+        setCommissionAmount(profile.subscriptionCommission || 0)
+        setBonus(0)
+        setDeductions(0)
+        setCustomAmount(profile.remainingNeedToPay || "")
+        setNotes(`Monthly payout for ${currentPeriod}`)
+      }
       setTransactionRef(`TXN${Date.now().toString().slice(-8)}`)
-      setNotes(`Monthly payout for ${currentPeriod}`)
     }
-  }, [profile, currentPeriod])
+  }, [profile, currentPeriod, initialAmount, initialProjectTitle, initialPayoutType])
 
   if (!isOpen || !profile) return null
 
+  const isDirectCustom = payoutType === "Custom Amount" || payoutType === "Project Share / Milestone Payout" || payoutType === "Custom Allowance"
   const bonusNum = typeof bonus === "number" ? bonus : 0
   const deductionsNum = typeof deductions === "number" ? deductions : 0
-  const netAmount = Math.max(0, baseAmount + commissionAmount + bonusNum - deductionsNum)
+  const customNum = typeof customAmount === "number" ? customAmount : 0
+
+  const netAmount = isDirectCustom 
+    ? customNum 
+    : Math.max(0, baseAmount + commissionAmount + bonusNum - deductionsNum)
 
   const b = profile.bankingInfo || {}
 
@@ -90,10 +110,12 @@ export function RecordPayoutModal({
         subbranchName: profile.subbranchName,
         period: period.trim(),
         payoutType,
-        baseAmount,
-        commissionAmount,
-        bonus: bonusNum,
-        deductions: deductionsNum,
+        baseAmount: isDirectCustom ? 0 : baseAmount,
+        commissionAmount: isDirectCustom ? 0 : commissionAmount,
+        projectAmount: payoutType === "Project Share / Milestone Payout" ? netAmount : 0,
+        projectTitle: initialProjectTitle || undefined,
+        bonus: isDirectCustom ? 0 : bonusNum,
+        deductions: isDirectCustom ? 0 : deductionsNum,
         netAmount,
         netAmountFormatted: `₹${netAmount.toLocaleString("en-IN")}`,
         paymentDate: new Date().toLocaleDateString("en-GB"),
@@ -185,6 +207,8 @@ export function RecordPayoutModal({
                   className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl font-medium focus:outline-hidden"
                 >
                   <option value="Monthly Salary">Monthly Salary + Commission</option>
+                  <option value="Custom Amount">✨ Custom Payment Amount</option>
+                  <option value="Project Share / Milestone Payout">🚀 Project Share / Milestone Payout</option>
                   <option value="Subscription Commission">Subscription Commission Only</option>
                   <option value="Bonus / Incentive">Bonus / Performance Incentive</option>
                   <option value="Advance">Salary Advance</option>
@@ -193,85 +217,122 @@ export function RecordPayoutModal({
               </div>
             </div>
 
-            {/* Earnings Calculation Breakdown */}
-            <div className="p-4 bg-zinc-50 dark:bg-zinc-800/40 rounded-2xl border border-zinc-200 dark:border-zinc-700/80 space-y-3">
-              <div className="font-bold text-zinc-800 dark:text-zinc-200 text-xs flex items-center justify-between">
-                <span>Itemized Earnings & Deductions Breakdown</span>
-                <span className="text-[10px] text-zinc-400 font-normal">Calculated in real-time</span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10.5px] text-zinc-500 font-semibold mb-1">
-                    Base Salary (₹)
+            {/* Direct Custom Amount Input (If Custom or Project Share) */}
+            {isDirectCustom ? (
+              <div className="p-4 bg-purple-50/60 dark:bg-purple-950/20 rounded-2xl border border-purple-200 dark:border-purple-800/60 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-xs text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
+                    <DollarSign size={14} className="text-purple-600 dark:text-purple-400" />
+                    <span>Custom Payout Amount (₹) *</span>
                   </label>
+                  {initialProjectTitle && (
+                    <span className="text-[10px] text-purple-700 dark:text-purple-300 font-semibold bg-purple-100 dark:bg-purple-900/60 px-2 py-0.5 rounded">
+                      {initialProjectTitle}
+                    </span>
+                  )}
+                </div>
+
+                <div className="relative flex items-center">
+                  <span className="absolute left-3.5 text-base font-black text-purple-600 dark:text-purple-400">₹</span>
                   <input
                     type="number"
-                    min="0"
-                    value={baseAmount}
-                    onChange={(e) => setBaseAmount(Number(e.target.value))}
-                    className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl font-bold"
+                    min="1"
+                    required
+                    placeholder="Enter any custom amount, e.g. 5000"
+                    value={customAmount}
+                    onChange={(e) => setCustomAmount(e.target.value === "" ? "" : Number(e.target.value))}
+                    className="w-full pl-8 pr-3 py-2 text-base font-black bg-white dark:bg-zinc-900 border border-purple-300 dark:border-purple-700 rounded-xl text-purple-900 dark:text-purple-100 focus:outline-hidden"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-[10.5px] text-zinc-500 font-semibold mb-1">
-                    Subscription Commission (₹)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={commissionAmount}
-                    onChange={(e) => setCommissionAmount(Number(e.target.value))}
-                    className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl font-bold text-indigo-600 dark:text-indigo-400"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10.5px] text-zinc-500 font-semibold mb-1">
-                    Performance Bonus (₹)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={bonus === "" ? "" : bonus}
-                    onChange={(e) => setBonus(e.target.value === "" ? "" : Number(e.target.value))}
-                    placeholder="0"
-                    className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl font-bold text-emerald-600"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10.5px] text-zinc-500 font-semibold mb-1">
-                    TDS / Deductions (₹)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={deductions === "" ? "" : deductions}
-                    onChange={(e) => setDeductions(e.target.value === "" ? "" : Number(e.target.value))}
-                    placeholder="0"
-                    className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl font-bold text-rose-600"
-                  />
+                <div className="flex items-center justify-between text-[11px] text-zinc-500 pt-1">
+                  <span>Official receipt voucher will be generated automatically upon submission.</span>
+                  <span className="font-bold text-purple-700 dark:text-purple-300">
+                    Net: ₹{netAmount.toLocaleString("en-IN")}
+                  </span>
                 </div>
               </div>
+            ) : (
+              /* Earnings Calculation Breakdown for Salary */
+              <div className="p-4 bg-zinc-50 dark:bg-zinc-800/40 rounded-2xl border border-zinc-200 dark:border-zinc-700/80 space-y-3">
+                <div className="font-bold text-zinc-800 dark:text-zinc-200 text-xs flex items-center justify-between">
+                  <span>Itemized Earnings & Deductions Breakdown</span>
+                  <span className="text-[10px] text-zinc-400 font-normal">Calculated in real-time</span>
+                </div>
 
-              {/* Net Payout Summary Card */}
-              <div className="p-3 bg-white dark:bg-zinc-900 rounded-xl border border-emerald-300 dark:border-emerald-800 flex items-center justify-between shadow-2xs">
-                <div>
-                  <div className="text-[10px] uppercase font-bold text-zinc-400">Total Net Disbursed Amount</div>
-                  <div className="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
-                    ₹{netAmount.toLocaleString("en-IN")}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10.5px] text-zinc-500 font-semibold mb-1">
+                      Base Salary (₹)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={baseAmount}
+                      onChange={(e) => setBaseAmount(Number(e.target.value))}
+                      className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10.5px] text-zinc-500 font-semibold mb-1">
+                      Subscription Commission (₹)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={commissionAmount}
+                      onChange={(e) => setCommissionAmount(Number(e.target.value))}
+                      className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl font-bold text-indigo-600 dark:text-indigo-400"
+                    />
                   </div>
                 </div>
-                <div className="text-right text-[10px] text-zinc-400">
-                  <div>Base: <strong>₹{baseAmount.toLocaleString("en-IN")}</strong></div>
-                  <div>Commission: <strong>+₹{commissionAmount.toLocaleString("en-IN")}</strong></div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10.5px] text-zinc-500 font-semibold mb-1">
+                      Performance Bonus (₹)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={bonus === "" ? "" : bonus}
+                      onChange={(e) => setBonus(e.target.value === "" ? "" : Number(e.target.value))}
+                      placeholder="0"
+                      className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl font-bold text-emerald-600"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10.5px] text-zinc-500 font-semibold mb-1">
+                      TDS / Deductions (₹)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={deductions === "" ? "" : deductions}
+                      onChange={(e) => setDeductions(e.target.value === "" ? "" : Number(e.target.value))}
+                      placeholder="0"
+                      className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl font-bold text-rose-600"
+                    />
+                  </div>
+                </div>
+
+                {/* Net Payout Summary Card */}
+                <div className="p-3 bg-white dark:bg-zinc-900 rounded-xl border border-emerald-300 dark:border-emerald-800 flex items-center justify-between shadow-2xs">
+                  <div>
+                    <div className="text-[10px] uppercase font-bold text-zinc-400">Total Net Disbursed Amount</div>
+                    <div className="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
+                      ₹{netAmount.toLocaleString("en-IN")}
+                    </div>
+                  </div>
+                  <div className="text-right text-[10px] text-zinc-400">
+                    <div>Base: <strong>₹{baseAmount.toLocaleString("en-IN")}</strong></div>
+                    <div>Commission: <strong>+₹{commissionAmount.toLocaleString("en-IN")}</strong></div>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Payment Method Selector */}
             <div className="space-y-2">

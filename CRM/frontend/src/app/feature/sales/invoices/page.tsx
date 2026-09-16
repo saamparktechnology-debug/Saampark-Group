@@ -26,7 +26,8 @@ import {
   Calculator,
   Tag,
   Pencil,
-  MapPin
+  MapPin,
+  User
 } from "lucide-react"
 import { ColumnDef } from "@tanstack/react-table"
 
@@ -53,6 +54,7 @@ import { InvoiceModal } from "./components/InvoiceModal"
 import { getClients, saveStoredClient } from "@/app/feature/clients/services/clientService"
 import { ClientItem } from "@/app/feature/clients/types"
 import { getProjects } from "@/app/feature/projects/services/projectService"
+import { UserService } from "@/services/apiServices"
 import { addPayment } from "../payments/services/paymentService"
 import { addSubscription } from "@/app/feature/subscriptions/services/subscriptionService"
 import { addOrder } from "../orders/services/orderService"
@@ -157,10 +159,24 @@ function InvoicesPageContent() {
   const [invoiceCompanyId, setInvoiceCompanyId] = React.useState<string>("tech")
   const [invoiceBranchId, setInvoiceBranchId] = React.useState<string>(activeBranchId || user?.branchId || "")
   const [invoiceSubBranchId, setInvoiceSubBranchId] = React.useState<string>("")
+  const [subBranchPayoutType, setSubBranchPayoutType] = React.useState<"percentage" | "fixed">("percentage")
+  const [subBranchShareCustomVal, setSubBranchShareCustomVal] = React.useState<number | "">("")
+
+  // Team Member / Commission Attribution for Add Modal
+  const [teamMembers, setTeamMembers] = React.useState<any[]>([])
+  const [assignedMemberId, setAssignedMemberId] = React.useState<string>("")
+  const [memberPayoutType, setMemberPayoutType] = React.useState<"percentage" | "fixed">("percentage")
+  const [memberPayoutValue, setMemberPayoutValue] = React.useState<number | "">(10)
+
   const [editInvoiceType, setEditInvoiceType] = React.useState<"gst" | "nongst">("gst")
   const [editCompanyId, setEditCompanyId] = React.useState<string>("tech")
   const [editBranchId, setEditBranchId] = React.useState<string>("")
   const [editSubBranchId, setEditSubBranchId] = React.useState<string>("")
+  const [editSubBranchPayoutType, setEditSubBranchPayoutType] = React.useState<"percentage" | "fixed">("percentage")
+  const [editSubBranchShareCustomVal, setEditSubBranchShareCustomVal] = React.useState<number | "">("")
+  const [editAssignedMemberId, setEditAssignedMemberId] = React.useState<string>("")
+  const [editMemberPayoutType, setEditMemberPayoutType] = React.useState<"percentage" | "fixed">("percentage")
+  const [editMemberPayoutValue, setEditMemberPayoutValue] = React.useState<number | "">(10)
   const [editIsNonGst, setEditIsNonGst] = React.useState(false)
 
   React.useEffect(() => {
@@ -357,6 +373,20 @@ function InvoicesPageContent() {
       setEditDiscounts([])
     }
 
+    setEditAssignedMemberId(inv.assignedMemberId || "")
+    setEditMemberPayoutType(inv.memberPayoutType || "percentage")
+    setEditMemberPayoutValue(inv.memberPayoutValue !== undefined ? inv.memberPayoutValue : (inv.memberSharePct !== undefined ? inv.memberSharePct : 10))
+    setEditSubBranchPayoutType(inv.subBranchPayoutType || "percentage")
+    setEditSubBranchShareCustomVal(inv.subBranchShareAmount !== undefined ? inv.subBranchShareAmount : (inv.subBranchSharePct !== undefined ? inv.subBranchSharePct : ""))
+
+    if (teamMembers.length === 0) {
+      UserService.getTeamMembers().then(users => {
+        if (Array.isArray(users)) {
+          setTeamMembers(users.filter((u: any) => !((u.role || "").toLowerCase().includes("client"))))
+        }
+      }).catch(() => {})
+    }
+
     setIsInvoiceModalOpen(false)
     setIsEditModalOpen(true)
   }
@@ -519,7 +549,29 @@ function InvoicesPageContent() {
       subBranchId: editSubBranchId || editingInvoice.subBranchId || undefined,
       subBranchName: (subBranches || []).find(sb => sb.id === (editSubBranchId || editingInvoice.subBranchId))?.name || editingInvoice.subBranchName || undefined,
       subBranchCode: (subBranches || []).find(sb => sb.id === (editSubBranchId || editingInvoice.subBranchId))?.code || editingInvoice.subBranchCode || undefined,
-      subBranchSharePct: (subBranches || []).find(sb => sb.id === (editSubBranchId || editingInvoice.subBranchId))?.revenueSharePct || editingInvoice.subBranchSharePct || undefined,
+      subBranchSharePct: typeof editSubBranchShareCustomVal === "number" && editSubBranchPayoutType === "percentage"
+        ? editSubBranchShareCustomVal
+        : ((subBranches || []).find(sb => sb.id === (editSubBranchId || editingInvoice.subBranchId))?.revenueSharePct || editingInvoice.subBranchSharePct || undefined),
+      subBranchPayoutType: editSubBranchPayoutType,
+      subBranchShareAmount: typeof editSubBranchShareCustomVal === "number" && editSubBranchPayoutType === "fixed"
+        ? editSubBranchShareCustomVal
+        : undefined,
+      assignedMemberId: editAssignedMemberId || undefined,
+      assignedMemberName: teamMembers.find(m => String(m.id || m._id) === String(editAssignedMemberId))?.name || (editAssignedMemberId ? editingInvoice.assignedMemberName : undefined),
+      assignedMemberRole: teamMembers.find(m => String(m.id || m._id) === String(editAssignedMemberId))?.role || (editAssignedMemberId ? editingInvoice.assignedMemberRole : undefined),
+      assignedMemberAvatar: teamMembers.find(m => String(m.id || m._id) === String(editAssignedMemberId))?.avatar || (editAssignedMemberId ? editingInvoice.assignedMemberAvatar : undefined),
+      memberPayoutType: editAssignedMemberId ? editMemberPayoutType : undefined,
+      memberPayoutValue: editAssignedMemberId && typeof editMemberPayoutValue === "number" ? editMemberPayoutValue : undefined,
+      memberPayoutAmount: editAssignedMemberId ? (
+        editMemberPayoutType === "fixed" 
+          ? (typeof editMemberPayoutValue === "number" ? editMemberPayoutValue : 0)
+          : Math.round((grandTotal * (typeof editMemberPayoutValue === "number" ? editMemberPayoutValue : 10)) / 100)
+      ) : undefined,
+      memberSharePct: editAssignedMemberId ? (
+        editMemberPayoutType === "fixed" && grandTotal > 0
+          ? Number((((typeof editMemberPayoutValue === "number" ? editMemberPayoutValue : 0) / grandTotal) * 100).toFixed(1))
+          : (typeof editMemberPayoutValue === "number" ? editMemberPayoutValue : 10)
+      ) : undefined,
     }
 
     await executeWithFeedback(async () => {
@@ -650,6 +702,13 @@ function InvoicesPageContent() {
           setProjectSelectionMode("custom")
         }
       })
+
+      UserService.getTeamMembers().then(users => {
+        if (Array.isArray(users)) {
+          const nonClients = users.filter((u: any) => !((u.role || "").toLowerCase().includes("client")))
+          setTeamMembers(nonClients)
+        }
+      }).catch(() => {})
     }
   }, [isAddModalOpen])
 
@@ -921,7 +980,29 @@ function InvoicesPageContent() {
         subBranchId: selectedSb?.id,
         subBranchName: selectedSb?.name,
         subBranchCode: selectedSb?.code,
-        subBranchSharePct: selectedSb?.revenueSharePct,
+        subBranchSharePct: typeof subBranchShareCustomVal === "number" && subBranchPayoutType === "percentage"
+          ? subBranchShareCustomVal
+          : selectedSb?.revenueSharePct,
+        subBranchPayoutType: subBranchPayoutType,
+        subBranchShareAmount: typeof subBranchShareCustomVal === "number" && subBranchPayoutType === "fixed"
+          ? subBranchShareCustomVal
+          : undefined,
+        assignedMemberId: assignedMemberId || undefined,
+        assignedMemberName: teamMembers.find(m => String(m.id || m._id) === String(assignedMemberId))?.name,
+        assignedMemberRole: teamMembers.find(m => String(m.id || m._id) === String(assignedMemberId))?.role,
+        assignedMemberAvatar: teamMembers.find(m => String(m.id || m._id) === String(assignedMemberId))?.avatar,
+        memberPayoutType: assignedMemberId ? memberPayoutType : undefined,
+        memberPayoutValue: assignedMemberId && typeof memberPayoutValue === "number" ? memberPayoutValue : undefined,
+        memberPayoutAmount: assignedMemberId ? (
+          memberPayoutType === "fixed"
+            ? (typeof memberPayoutValue === "number" ? memberPayoutValue : 0)
+            : Math.round((totalAmount * (typeof memberPayoutValue === "number" ? memberPayoutValue : 10)) / 100)
+        ) : undefined,
+        memberSharePct: assignedMemberId ? (
+          memberPayoutType === "fixed" && totalAmount > 0
+            ? Number((((typeof memberPayoutValue === "number" ? memberPayoutValue : 0) / totalAmount) * 100).toFixed(1))
+            : (typeof memberPayoutValue === "number" ? memberPayoutValue : 10)
+        ) : undefined,
         items: finalInvoiceItems,
         discountsList: finalDiscounts,
       }, targetComp)
@@ -1094,7 +1175,22 @@ function InvoicesPageContent() {
     {
       accessorKey: "project",
       header: "Project",
-      cell: ({ row }) => <div className="text-zinc-600 dark:text-zinc-400 truncate max-w-[180px] font-medium">{row.getValue("project")}</div>,
+      cell: ({ row }) => (
+        <div>
+          <div className="text-zinc-700 dark:text-zinc-300 truncate max-w-[180px] font-semibold">{row.getValue("project")}</div>
+          {row.original.assignedMemberName && (
+            <div className="mt-0.5 inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 text-[10px] font-bold border border-purple-200 dark:border-purple-800">
+              <User size={10} />
+              <span>{row.original.assignedMemberName}</span>
+              {row.original.memberPayoutType === "fixed" && row.original.memberPayoutAmount ? (
+                <span>(₹{row.original.memberPayoutAmount.toLocaleString("en-IN")})</span>
+              ) : row.original.memberSharePct ? (
+                <span>({row.original.memberSharePct}%)</span>
+              ) : null}
+            </div>
+          )}
+        </div>
+      ),
     },
     {
       accessorKey: "billDate",
@@ -1674,10 +1770,10 @@ function InvoicesPageContent() {
 
                 {/* Sub-Branch Attribution (% Share Partner) */}
                 {(subBranches || []).length > 0 && (
-                  <div className="p-3 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-xl border border-emerald-200/60 dark:border-emerald-800/40 space-y-1">
+                  <div className="p-3 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-xl border border-emerald-200/60 dark:border-emerald-800/40 space-y-2">
                     <div className="flex items-center justify-between">
                       <label className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
-                        <span>🌿 Sub-Branch Partner Attribution (% Share)</span>
+                        <span>🌿 Sub-Branch Partner Attribution (% Share or Manual ₹)</span>
                       </label>
                       <span className="text-[10px] text-muted-foreground">Optional Franchise Split</span>
                     </div>
@@ -1693,8 +1789,135 @@ function InvoicesPageContent() {
                         </option>
                       ))}
                     </select>
+
+                    {invoiceSubBranchId && (
+                      <div className="flex items-center gap-2 pt-1">
+                        <span className="text-[10.5px] font-semibold text-emerald-800 dark:text-emerald-300">Override Share:</span>
+                        <div className="inline-flex rounded-lg p-0.5 bg-white dark:bg-zinc-900 border border-emerald-300 dark:border-emerald-700">
+                          <button
+                            type="button"
+                            onClick={() => setSubBranchPayoutType("percentage")}
+                            className={`px-2 py-0.5 text-[10px] font-bold rounded ${subBranchPayoutType === "percentage" ? "bg-emerald-600 text-white" : "text-zinc-500"}`}
+                          >
+                            %
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSubBranchPayoutType("fixed")}
+                            className={`px-2 py-0.5 text-[10px] font-bold rounded ${subBranchPayoutType === "fixed" ? "bg-emerald-600 text-white" : "text-zinc-500"}`}
+                          >
+                            ₹
+                          </button>
+                        </div>
+                        <input
+                          type="number"
+                          min="0"
+                          placeholder={subBranchPayoutType === "fixed" ? "e.g. 5000" : "e.g. 25"}
+                          value={subBranchShareCustomVal}
+                          onChange={(e) => setSubBranchShareCustomVal(e.target.value === "" ? "" : Number(e.target.value))}
+                          className="w-24 px-2 py-1 text-xs font-bold bg-white dark:bg-zinc-900 border border-emerald-300 dark:border-emerald-700 rounded-lg text-foreground"
+                        />
+                        <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium">
+                          {subBranchPayoutType === "fixed" ? "Fixed ₹ payout to partner" : "% of invoice total"}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
+
+                {/* Team Member / Sales Agent Attribution */}
+                <div className="p-3 bg-purple-50/60 dark:bg-purple-950/20 rounded-xl border border-purple-200/60 dark:border-purple-800/40 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-purple-800 dark:text-purple-300 flex items-center gap-1.5">
+                      <User size={13} className="text-purple-600 dark:text-purple-400" />
+                      <span>👤 Assign Team Member / Sales Commission (Share % or Manual ₹)</span>
+                    </label>
+                    <span className="text-[10px] text-muted-foreground">Optional Attribution</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <select
+                        value={assignedMemberId}
+                        onChange={(e) => setAssignedMemberId(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-purple-300 dark:border-purple-700 rounded-lg text-xs font-semibold text-foreground focus:outline-hidden"
+                      >
+                        <option value="">🚫 No Team Member Assigned (100% Company)</option>
+                        {teamMembers.map((m: any) => (
+                          <option key={m.id || m._id} value={String(m.id || m._id)}>
+                            👤 {m.name} {m.role ? `(${m.role})` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {assignedMemberId && (
+                      <div className="flex items-center gap-2">
+                        {/* Toggle % vs ₹ */}
+                        <div className="inline-flex rounded-lg p-0.5 bg-white dark:bg-zinc-900 border border-purple-200 dark:border-purple-700 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setMemberPayoutType("percentage")}
+                            className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
+                              memberPayoutType === "percentage"
+                                ? "bg-purple-600 text-white shadow-xs"
+                                : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                            }`}
+                          >
+                            %
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setMemberPayoutType("fixed")}
+                            className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
+                              memberPayoutType === "fixed"
+                                ? "bg-purple-600 text-white shadow-xs"
+                                : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                            }`}
+                          >
+                            ₹
+                          </button>
+                        </div>
+
+                        {/* Input */}
+                        <div className="relative flex-1">
+                          {memberPayoutType === "fixed" && (
+                            <span className="absolute left-2.5 top-1.5 text-xs font-bold text-zinc-500">₹</span>
+                          )}
+                          <input
+                            type="number"
+                            min="0"
+                            placeholder={memberPayoutType === "percentage" ? "10%" : "2500"}
+                            value={memberPayoutValue}
+                            onChange={(e) => setMemberPayoutValue(e.target.value === "" ? "" : Number(e.target.value))}
+                            className={`w-full py-1 text-xs font-bold bg-white dark:bg-zinc-900 border border-purple-300 dark:border-purple-700 rounded-lg focus:outline-hidden ${
+                              memberPayoutType === "fixed" ? "pl-6 pr-2" : "pl-2.5 pr-6"
+                            }`}
+                          />
+                          {memberPayoutType === "percentage" && (
+                            <span className="absolute right-2 top-1.5 text-xs font-bold text-zinc-500">%</span>
+                          )}
+                        </div>
+
+                        {/* Live preview badge */}
+                        <div className="px-2 py-1 rounded-lg bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-200 text-[10.5px] font-bold shrink-0 border border-purple-200 dark:border-purple-800 whitespace-nowrap">
+                          {(() => {
+                            const curBase = typeof baseAmount === "number" ? baseAmount : 0
+                            const total = curBase + Math.round(curBase * (gstRate / 100))
+                            const val = typeof memberPayoutValue === "number" ? memberPayoutValue : 0
+                            if (memberPayoutType === "fixed") {
+                              const pct = total > 0 ? ((val / total) * 100).toFixed(1) : "0"
+                              return `≈ ${pct}% share`
+                            } else {
+                              const amt = Math.round((total * val) / 100)
+                              return `₹${amt.toLocaleString("en-IN")}`
+                            }
+                          })()}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
 
                 {/* ---------------- 1. CLIENT SELECTION / CUSTOM NAME ---------------- */}
                 <div className="space-y-2 p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/80">
@@ -2621,7 +2844,7 @@ function InvoicesPageContent() {
                     {/* Sub-Branch Selector in Edit */}
                     <div>
                       <label className="block text-zinc-600 dark:text-zinc-400 font-bold mb-1 flex items-center justify-between">
-                        <span>🌿 Partner Sub-Branch (% Share)</span>
+                        <span>🌿 Partner Sub-Branch (% Share or Manual ₹)</span>
                         <span className="text-[10px] text-zinc-400 font-normal">Optional</span>
                       </label>
                       <select
@@ -2638,7 +2861,132 @@ function InvoicesPageContent() {
                             </option>
                           ))}
                       </select>
+
+                      {editSubBranchId && (
+                        <div className="flex items-center gap-2 pt-1.5">
+                          <span className="text-[10.5px] font-semibold text-emerald-800 dark:text-emerald-300">Override Share:</span>
+                          <div className="inline-flex rounded-lg p-0.5 bg-white dark:bg-zinc-900 border border-emerald-300 dark:border-emerald-700">
+                            <button
+                              type="button"
+                              onClick={() => setEditSubBranchPayoutType("percentage")}
+                              className={`px-2 py-0.5 text-[10px] font-bold rounded ${editSubBranchPayoutType === "percentage" ? "bg-emerald-600 text-white" : "text-zinc-500"}`}
+                            >
+                              %
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditSubBranchPayoutType("fixed")}
+                              className={`px-2 py-0.5 text-[10px] font-bold rounded ${editSubBranchPayoutType === "fixed" ? "bg-emerald-600 text-white" : "text-zinc-500"}`}
+                            >
+                              ₹
+                            </button>
+                          </div>
+                          <input
+                            type="number"
+                            min="0"
+                            placeholder={editSubBranchPayoutType === "fixed" ? "e.g. 5000" : "e.g. 25"}
+                            value={editSubBranchShareCustomVal}
+                            onChange={(e) => setEditSubBranchShareCustomVal(e.target.value === "" ? "" : Number(e.target.value))}
+                            className="w-24 px-2 py-1 text-xs font-bold bg-white dark:bg-zinc-900 border border-emerald-300 dark:border-emerald-700 rounded-lg text-foreground"
+                          />
+                        </div>
+                      )}
                     </div>
+                  </div>
+                </div>
+
+                {/* Team Member / Sales Agent Assignment in Edit */}
+                <div className="p-3 bg-purple-50/60 dark:bg-purple-950/20 rounded-xl border border-purple-200/60 dark:border-purple-800/40 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-purple-800 dark:text-purple-300 flex items-center gap-1.5">
+                      <User size={13} className="text-purple-600 dark:text-purple-400" />
+                      <span>👤 Assign Team Member / Sales Commission (Share % or Manual ₹)</span>
+                    </label>
+                    <span className="text-[10px] text-muted-foreground">Optional Attribution</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <select
+                        value={editAssignedMemberId}
+                        onChange={(e) => setEditAssignedMemberId(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-purple-300 dark:border-purple-700 rounded-lg text-xs font-semibold text-foreground focus:outline-hidden"
+                      >
+                        <option value="">🚫 No Team Member Assigned (100% Company)</option>
+                        {teamMembers.map((m: any) => (
+                          <option key={m.id || m._id} value={String(m.id || m._id)}>
+                            👤 {m.name} {m.role ? `(${m.role})` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {editAssignedMemberId && (
+                      <div className="flex items-center gap-2">
+                        {/* Toggle % vs ₹ */}
+                        <div className="inline-flex rounded-lg p-0.5 bg-white dark:bg-zinc-900 border border-purple-200 dark:border-purple-700 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setEditMemberPayoutType("percentage")}
+                            className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
+                              editMemberPayoutType === "percentage"
+                                ? "bg-purple-600 text-white shadow-xs"
+                                : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                            }`}
+                          >
+                            %
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditMemberPayoutType("fixed")}
+                            className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
+                              editMemberPayoutType === "fixed"
+                                ? "bg-purple-600 text-white shadow-xs"
+                                : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                            }`}
+                          >
+                            ₹
+                          </button>
+                        </div>
+
+                        {/* Input */}
+                        <div className="relative flex-1">
+                          {editMemberPayoutType === "fixed" && (
+                            <span className="absolute left-2.5 top-1.5 text-xs font-bold text-zinc-500">₹</span>
+                          )}
+                          <input
+                            type="number"
+                            min="0"
+                            placeholder={editMemberPayoutType === "percentage" ? "10%" : "2500"}
+                            value={editMemberPayoutValue}
+                            onChange={(e) => setEditMemberPayoutValue(e.target.value === "" ? "" : Number(e.target.value))}
+                            className={`w-full py-1 text-xs font-bold bg-white dark:bg-zinc-900 border border-purple-300 dark:border-purple-700 rounded-lg focus:outline-hidden ${
+                              editMemberPayoutType === "fixed" ? "pl-6 pr-2" : "pl-2.5 pr-6"
+                            }`}
+                          />
+                          {editMemberPayoutType === "percentage" && (
+                            <span className="absolute right-2 top-1.5 text-xs font-bold text-zinc-500">%</span>
+                          )}
+                        </div>
+
+                        {/* Live preview badge */}
+                        <div className="px-2 py-1 rounded-lg bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-200 text-[10.5px] font-bold shrink-0 border border-purple-200 dark:border-purple-800 whitespace-nowrap">
+                          {(() => {
+                            const curBase = editServiceItems.reduce((acc, it) => acc + ((Number(it.rate) || 0) * (Number(it.qty) || 1)), 0)
+                            const curGst = editInvoiceType === "nongst" ? 0 : Math.round(curBase * 0.18)
+                            const total = curBase + curGst
+                            const val = typeof editMemberPayoutValue === "number" ? editMemberPayoutValue : 0
+                            if (editMemberPayoutType === "fixed") {
+                              const pct = total > 0 ? ((val / total) * 100).toFixed(1) : "0"
+                              return `≈ ${pct}% share`
+                            } else {
+                              const amt = Math.round((total * val) / 100)
+                              return `₹${amt.toLocaleString("en-IN")}`
+                            }
+                          })()}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 

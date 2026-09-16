@@ -59,6 +59,16 @@ export interface InvoiceItem {
   subBranchName?: string
   subBranchCode?: string
   subBranchSharePct?: number
+  subBranchPayoutType?: "percentage" | "fixed"
+  subBranchShareAmount?: number
+  assignedMemberId?: string
+  assignedMemberName?: string
+  assignedMemberRole?: string
+  assignedMemberAvatar?: string
+  memberPayoutType?: "percentage" | "fixed"
+  memberPayoutValue?: number
+  memberPayoutAmount?: number
+  memberSharePct?: number
   createdByName?: string
   createdByRole?: string
   items?: InvoiceLineItem[]

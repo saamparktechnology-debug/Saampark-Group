@@ -39,7 +39,8 @@ import {
   TeamPayrollKPIs,
   TeamMemberBankingInfo,
   ProjectUserEarningsRecord,
-  CustomPaymentAdjustment
+  CustomPaymentAdjustment,
+  PayoutType
 } from "../types"
 import { 
   getTeamPayoutProfiles, 
@@ -141,6 +142,11 @@ export default function TeamPaymentsPage() {
   const [viewingLedgerProfile, setViewingLedgerProfile] = React.useState<TeamMemberPayoutProfile | null>(null)
   const [disbursingProject, setDisbursingProject] = React.useState<ProjectUserEarningsRecord | null>(null)
   const [isAddAdjustmentOpen, setIsAddAdjustmentOpen] = React.useState(false)
+
+  // Custom Amount Payout State
+  const [customPayInitialAmount, setCustomPayInitialAmount] = React.useState<number | undefined>(undefined)
+  const [customPayProjectTitle, setCustomPayProjectTitle] = React.useState<string | undefined>(undefined)
+  const [customPayType, setCustomPayType] = React.useState<PayoutType | undefined>(undefined)
 
   const showToast = (msg: string) => {
     setToastMessage(msg)
@@ -694,7 +700,7 @@ export default function TeamPaymentsPage() {
                   <th className="py-3.5 px-3">Bank & UPI Details</th>
                   <th className="py-3.5 px-3">Base Salary</th>
                   <th className="py-3.5 px-3">Subscription Share</th>
-                  <th className="py-3.5 px-3">Project Share</th>
+                  <th className="py-3.5 px-3">Assigned Projects & Earnings</th>
                   <th className="py-3.5 px-3">Total Need To Pay</th>
                   <th className="py-3.5 px-3 text-center">Status</th>
                   <th className="py-3.5 px-4 text-right">Actions</th>
@@ -781,14 +787,79 @@ export default function TeamPaymentsPage() {
                           </div>
                         </td>
 
-                        {/* Project Share */}
-                        <td className="py-3.5 px-3 whitespace-nowrap">
-                          <div className="font-bold text-purple-600 dark:text-purple-400">
-                            +₹{p.projectEarnings.toLocaleString("en-IN")}
-                          </div>
-                          <div className="text-[10px] text-purple-500/80">
-                            {p.activeProjectsCount} Projects
-                          </div>
+                        {/* Assigned Projects & Share Earnings */}
+                        <td className="py-3.5 px-3 min-w-[230px]">
+                          {(() => {
+                            const memberProjects = projectEarnings.filter(
+                              (pe) =>
+                                pe.memberId === p.id ||
+                                (pe.memberEmail && p.email && pe.memberEmail.toLowerCase() === p.email.toLowerCase())
+                            )
+
+                            return (
+                              <div>
+                                <div className="flex items-center justify-between gap-1 mb-1.5">
+                                  <div className="font-bold text-purple-600 dark:text-purple-400">
+                                    +₹{p.projectEarnings.toLocaleString("en-IN")}
+                                  </div>
+                                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                                    {memberProjects.length} Projects
+                                  </span>
+                                </div>
+
+                                {memberProjects.length === 0 ? (
+                                  <div className="text-[10.5px] text-zinc-400 italic">No assigned projects</div>
+                                ) : (
+                                  <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                                    {memberProjects.map((proj) => (
+                                      <div
+                                        key={proj.id}
+                                        className="p-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200/70 dark:border-zinc-700/60 text-[10.5px]"
+                                      >
+                                        <div className="flex items-center justify-between gap-1">
+                                          <span
+                                            className="font-semibold text-zinc-800 dark:text-zinc-200 truncate max-w-[130px]"
+                                            title={proj.projectTitle}
+                                          >
+                                            {proj.projectTitle}
+                                          </span>
+                                          <span className="text-purple-600 dark:text-purple-400 font-bold shrink-0">
+                                            ₹{proj.memberTotalEarned.toLocaleString("en-IN")}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-[9.5px] text-zinc-500 mt-0.5">
+                                          <span>Share: {proj.memberSharePercentage}%</span>
+                                          <span>
+                                            Due:{" "}
+                                            <strong
+                                              className={
+                                                proj.memberPendingAmount > 0
+                                                  ? "text-amber-600 dark:text-amber-400 font-semibold"
+                                                  : "text-emerald-600 dark:text-emerald-400 font-normal"
+                                              }
+                                            >
+                                              ₹{proj.memberPendingAmount.toLocaleString("en-IN")}
+                                            </strong>
+                                          </span>
+                                        </div>
+                                        {canAddPayout && proj.memberPendingAmount > 0 && (
+                                          <div className="mt-1 pt-1 border-t border-zinc-200/40 dark:border-zinc-700/40 flex justify-end">
+                                            <button
+                                              type="button"
+                                              onClick={() => setDisbursingProject(proj)}
+                                              className="text-[9.5px] font-bold text-purple-600 hover:text-purple-700 dark:text-purple-400 hover:underline cursor-pointer flex items-center gap-0.5"
+                                            >
+                                              Pay Share →
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })()}
                         </td>
 
                         {/* Total Need To Pay */}
@@ -830,12 +901,35 @@ export default function TeamPaymentsPage() {
                             {canAddPayout && (
                               <button
                                 type="button"
-                                onClick={() => setPayingProfile(p)}
+                                onClick={() => {
+                                  setCustomPayInitialAmount(undefined)
+                                  setCustomPayProjectTitle(undefined)
+                                  setCustomPayType(undefined)
+                                  setPayingProfile(p)
+                                }}
                                 className="px-2.5 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] inline-flex items-center gap-1 shadow-2xs cursor-pointer transition-colors"
                                 title="Disburse salary and commission payout"
                               >
                                 <DollarSign size={12} />
                                 <span>Pay</span>
+                              </button>
+                            )}
+
+                            {/* Pay Custom Amount Button */}
+                            {canAddPayout && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setCustomPayInitialAmount(p.remainingNeedToPay > 0 ? p.remainingNeedToPay : undefined)
+                                  setCustomPayProjectTitle(undefined)
+                                  setCustomPayType("Custom Amount")
+                                  setPayingProfile(p)
+                                }}
+                                className="px-2 py-1 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-bold text-[11px] inline-flex items-center gap-1 cursor-pointer transition-colors"
+                                title="Pay custom amount and generate receipt"
+                              >
+                                <Receipt size={11} />
+                                <span>Pay Custom</span>
                               </button>
                             )}
 
@@ -1153,7 +1247,15 @@ export default function TeamPaymentsPage() {
       <RecordPayoutModal
         isOpen={Boolean(payingProfile)}
         profile={payingProfile}
-        onClose={() => setPayingProfile(null)}
+        initialAmount={customPayInitialAmount}
+        initialProjectTitle={customPayProjectTitle}
+        initialPayoutType={customPayType}
+        onClose={() => {
+          setPayingProfile(null)
+          setCustomPayInitialAmount(undefined)
+          setCustomPayProjectTitle(undefined)
+          setCustomPayType(undefined)
+        }}
         onSuccess={(payout) => {
           showToast(`🎉 Payment of ₹${payout.netAmount.toLocaleString("en-IN")} disbursed to ${payout.memberName}!`)
           loadData(false)
