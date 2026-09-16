@@ -53,7 +53,7 @@ export default function TasksMain() {
     } catch (err) {
       console.error("Error loading tasks:", err)
     } finally {
-      if (showLoading) setIsLoading(false)
+      setIsLoading(false)
     }
   }, [])
 

@@ -55,7 +55,7 @@ export default function UsersMain() {
       const list = await getUsers("all")
       setUsers(list || [])
     } finally {
-      if (showLoading) setIsLoading(false)
+      setIsLoading(false)
     }
   }, [])
 

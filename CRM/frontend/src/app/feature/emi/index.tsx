@@ -101,7 +101,7 @@ export default function EMIMain() {
       const data = await getInstallments(freshCompanyId || "tech")
       setInstallments(data || [])
     } finally {
-      if (showLoading) setIsLoading(false)
+      setIsLoading(false)
     }
   }, [])
 

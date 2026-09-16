@@ -140,7 +140,7 @@ export default function SubscriptionsMain() {
       const subData = await getSubscriptions(freshCompanyId || "tech")
       setSubscriptions(subData || [])
     } finally {
-      if (showLoading) setIsLoading(false)
+      setIsLoading(false)
     }
   }, [])
 

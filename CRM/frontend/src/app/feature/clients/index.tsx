@@ -297,7 +297,7 @@ export default function ClientsMain() {
     } catch (err) {
       console.warn("Client sync warning:", err)
     } finally {
-      if (showLoading) setIsLoading(false)
+      setIsLoading(false)
     }
   }, [])
 

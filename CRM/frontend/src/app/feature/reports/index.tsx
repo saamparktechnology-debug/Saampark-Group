@@ -9,7 +9,7 @@ import {
 } from "lucide-react"
 
 import { Button } from "@/components/ui/Button"
-import { useAuthStore, SubBranch } from "@/store/useAuthStore"
+import { useAuthStore, SubBranch, isMatchingCompany, getCanonicalCompanyId } from "@/store/useAuthStore"
 import { getUsers } from "../users/services/userService"
 import { getInvoices, InvoiceItem } from "../sales/invoices/services/invoiceService"
 import { getPayments, PaymentItem } from "../sales/payments/services/paymentService"
@@ -30,22 +30,31 @@ type InvoiceFilterType = "all" | "gst" | "non_gst" | "due" | "paid" | "partially
 type SubscriptionFilterType = "all" | "package" | "regular" | "emi" | "active" | "expiring_soon" | "past_due" | "canceled"
 
 export default function ReportsMain() {
-  const { user, branches, subBranches, fetchSubBranches, activeCompanyId, activeBranchId } = useAuthStore()
+  const { user, companies, branches, subBranches, fetchSubBranches, activeCompanyId, activeBranchId } = useAuthStore()
   
   const isSuperAdmin = user?.role === "Super Admin"
   const isAdmin = user?.role === "Admin"
   const isTeamOrBranchAdmin = !isSuperAdmin && !isAdmin
+
+  // Allowed companies for current user (Super Admin has all; Admin has assigned)
+  const allowedCompanies = React.useMemo(() => {
+    if (isSuperAdmin) return companies
+    const userCompIds = (user?.companyIds && user.companyIds.length > 0)
+      ? user.companyIds
+      : [user?.companyId || "tech"]
+    return companies.filter((c) => userCompIds.some((id) => isMatchingCompany(c, id)))
+  }, [isSuperAdmin, companies, user])
 
   // Active Company Selection
   const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>(
     activeCompanyId || (isSuperAdmin ? "all" : user?.companyId || "tech")
   )
 
-  // Active Branches available
+  // Active Branches available for the selected company
   const availableBranches = React.useMemo(() => {
     if (!branches || !Array.isArray(branches)) return []
     if (selectedCompanyId && selectedCompanyId !== "all") {
-      return branches.filter((b) => b.companyId === selectedCompanyId)
+      return branches.filter((b) => isMatchingCompany({ id: b.companyId, slug: b.companyId } as any, selectedCompanyId))
     }
     return branches
   }, [branches, selectedCompanyId])
@@ -62,17 +71,34 @@ export default function ReportsMain() {
     return "all"
   })
 
+  // Auto-reset branch to "all" if selected branch is not in the newly available branches
+  React.useEffect(() => {
+    if (selectedBranchId !== "all" && !isTeamOrBranchAdmin) {
+      const isStillAvailable = availableBranches.some(b => 
+        String(b.id).toLowerCase().trim() === selectedBranchId.toLowerCase().trim() ||
+        String(b.name).toLowerCase().trim() === selectedBranchId.toLowerCase().trim()
+      )
+      if (!isStillAvailable) {
+        setSelectedBranchId("all")
+      }
+    }
+  }, [availableBranches, selectedBranchId, isTeamOrBranchAdmin])
+
   // Sync activeCompanyId & activeBranchId from auth store if changed
   React.useEffect(() => {
-    if (activeCompanyId && isSuperAdmin && activeCompanyId !== "all") {
-      setSelectedCompanyId(activeCompanyId)
+    if (activeCompanyId) {
+      if (isSuperAdmin) {
+        setSelectedCompanyId(activeCompanyId)
+      } else if (allowedCompanies.some(c => isMatchingCompany(c, activeCompanyId))) {
+        setSelectedCompanyId(activeCompanyId)
+      }
     }
-  }, [activeCompanyId, isSuperAdmin])
+  }, [activeCompanyId, isSuperAdmin, allowedCompanies])
 
   React.useEffect(() => {
     if (activeBranchId) {
       setSelectedBranchId(activeBranchId)
-    } else if (isSuperAdmin) {
+    } else if (isSuperAdmin && !selectedBranchId) {
       setSelectedBranchId("all")
     }
   }, [activeBranchId, isSuperAdmin])
@@ -271,130 +297,137 @@ export default function ReportsMain() {
     return map
   }, [branches])
 
+  // ── Canonical Matching Helpers ──────────────────────────────────────────
+  const targetBranch = isTeamOrBranchAdmin && userAssignedBranchId ? userAssignedBranchId : selectedBranchId
+
+  const itemMatchesCompany = React.useCallback(
+    (itemCompId: string | number | null | undefined, targetCompId: string) => {
+      if (!targetCompId || targetCompId === "all") return true
+      const canonTarget = getCanonicalCompanyId(targetCompId)
+      const canonItem = getCanonicalCompanyId(itemCompId || "tech")
+      return canonItem === canonTarget
+    },
+    []
+  )
+
+  const itemMatchesBranch = React.useCallback(
+    (
+      itemBranchId: string | number | null | undefined,
+      itemBranchName: string | null | undefined,
+      targetBranchVal: string,
+      fallbackClientBranchId?: string | null,
+      fallbackClientBranchName?: string | null
+    ) => {
+      if (!targetBranchVal || targetBranchVal === "all") return true
+
+      const targetBranchObj = branches.find(
+        (b) =>
+          String(b.id).toLowerCase().trim() === String(targetBranchVal).toLowerCase().trim() ||
+          String(b.name).toLowerCase().trim() === String(targetBranchVal).toLowerCase().trim()
+      )
+      const targetIdNorm = String(targetBranchObj?.id || targetBranchVal).toLowerCase().trim()
+      const targetNameNorm = String(targetBranchObj?.name || targetBranchVal).toLowerCase().trim()
+
+      const effBranchId = String(itemBranchId || fallbackClientBranchId || "").toLowerCase().trim()
+      const effBranchName = String(itemBranchName || fallbackClientBranchName || "").toLowerCase().trim()
+
+      return (
+        (effBranchId && (effBranchId === targetIdNorm || effBranchId === targetNameNorm)) ||
+        (effBranchName && (effBranchName === targetNameNorm || effBranchName === targetIdNorm))
+      )
+    },
+    [branches]
+  )
+
   // ── Scoped Invoices Filter ────────────────────────────────────────────────
   const scopedInvoices = React.useMemo(() => {
     return invoices.filter((inv) => {
-      // 1. Company Scoping
-      if (selectedCompanyId && selectedCompanyId !== "all") {
-        if (inv.companyId && inv.companyId !== selectedCompanyId) return false
-      }
+      // 1. Strict Company Scoping
+      if (!itemMatchesCompany(inv.companyId, selectedCompanyId)) return false
 
-      // 2. Branch Scoping for Role
-      if (isTeamOrBranchAdmin && userAssignedBranchId) {
-        const invBranch = inv.branchId || (clientMap[inv.client.toLowerCase().trim()]?.branchId)
-        if (invBranch && invBranch !== userAssignedBranchId) return false
-      } else if (selectedBranchId !== "all") {
-        const invBranch = inv.branchId || (clientMap[inv.client.toLowerCase().trim()]?.branchId)
-        const invBranchName = inv.branchName || (clientMap[inv.client.toLowerCase().trim()]?.branchName)
-        const targetBranchObj = availableBranches.find((b) => b.id === selectedBranchId)
-        const targetBranchName = targetBranchObj?.name || selectedBranchId
-        
-        const isMatch =
-          invBranch === selectedBranchId ||
-          (invBranchName && invBranchName.toLowerCase() === targetBranchName.toLowerCase())
-        if (!isMatch) return false
+      // 2. Strict Branch Scoping
+      const clientInfo = clientMap[(inv.client || "").toLowerCase().trim()]
+      if (!itemMatchesBranch(inv.branchId, inv.branchName, targetBranch, clientInfo?.branchId, clientInfo?.branchName)) {
+        return false
       }
 
       return true
     })
-  }, [invoices, selectedCompanyId, selectedBranchId, isTeamOrBranchAdmin, userAssignedBranchId, clientMap, availableBranches])
+  }, [invoices, selectedCompanyId, targetBranch, itemMatchesCompany, itemMatchesBranch, clientMap])
 
   // ── Scoped Payments Filter ────────────────────────────────────────────────
   const scopedPayments = React.useMemo(() => {
     return payments.filter((p) => {
-      if (selectedCompanyId && selectedCompanyId !== "all") {
-        if (p.companyId && p.companyId !== selectedCompanyId) return false
-      }
-      if (isTeamOrBranchAdmin && userAssignedBranchId) {
-        const pBranch = p.branchId || (p as any).branch_id
-        if (pBranch && pBranch !== userAssignedBranchId) return false
-      } else if (selectedBranchId !== "all") {
-        const targetBranchObj = availableBranches.find((b) => b.id === selectedBranchId || b.name.toLowerCase() === selectedBranchId.toLowerCase())
-        const targetBranchId = String(targetBranchObj?.id || selectedBranchId).toLowerCase().trim()
-        const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
-
-        const pBranch = String(p.branchId || (p as any).branch_id || "").toLowerCase().trim()
-        const pBranchName = String(p.branchName || (p as any).branch_name || "").toLowerCase().trim()
-
-        const isMatch =
-          (pBranch && (pBranch === targetBranchId || (targetBranchName && pBranch === targetBranchName))) ||
-          (pBranchName && (pBranchName === targetBranchName || pBranchName === targetBranchId))
-
-        if (!isMatch) return false
+      if (!itemMatchesCompany(p.companyId, selectedCompanyId)) return false
+      if (!itemMatchesBranch(p.branchId || (p as any).branch_id, p.branchName || (p as any).branch_name, targetBranch)) {
+        return false
       }
       return true
     })
-  }, [payments, selectedCompanyId, selectedBranchId, isTeamOrBranchAdmin, userAssignedBranchId, availableBranches])
+  }, [payments, selectedCompanyId, targetBranch, itemMatchesCompany, itemMatchesBranch])
 
   // ── Scoped Leads Filter ───────────────────────────────────────────────────
   const scopedLeads = React.useMemo(() => {
     return leads.filter((l) => {
-      if (selectedCompanyId && selectedCompanyId !== "all") {
-        if (l.companyId && l.companyId !== selectedCompanyId) return false
-      }
-      if (isTeamOrBranchAdmin && userAssignedBranchId) {
-        if (l.branchId && l.branchId !== userAssignedBranchId) return false
-      } else if (selectedBranchId !== "all") {
-        const targetBranchObj = availableBranches.find((b) => b.id === selectedBranchId || b.name.toLowerCase() === selectedBranchId.toLowerCase())
-        const targetBranchId = String(targetBranchObj?.id || selectedBranchId).toLowerCase().trim()
-        const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
-
-        const lBranch = String(l.branchId || (l as any).assignedBranchId || (l as any).branch_id || "").toLowerCase().trim()
-        const lBranchName = String(l.branchName || (l as any).assignedBranchName || (l as any).branch_name || "").toLowerCase().trim()
-
-        const isMatch =
-          (lBranch && (lBranch === targetBranchId || (targetBranchName && lBranch === targetBranchName))) ||
-          (lBranchName && (lBranchName === targetBranchName || lBranchName === targetBranchId))
-
-        if (!isMatch) return false
+      if (!itemMatchesCompany(l.companyId, selectedCompanyId)) return false
+      const lBranchId = l.branchId || (l as any).assignedBranchId || (l as any).branch_id
+      const lBranchName = l.branchName || (l as any).assignedBranchName || (l as any).branch_name
+      if (!itemMatchesBranch(lBranchId, lBranchName, targetBranch)) {
+        return false
       }
       return true
     })
-  }, [leads, selectedCompanyId, selectedBranchId, isTeamOrBranchAdmin, userAssignedBranchId, availableBranches])
-
-  // Helper to normalize amount to Monthly Recurring Revenue (MRR)
-  const getSubscriptionMRR = (sub: Subscription): number => {
-    const rawAmt = sub.numericAmount || parseInt(String(sub.amount || "0").replace(/[^0-9]/g, "")) || 0
-    if (rawAmt <= 0) return 0
-    switch (sub.billingCycle) {
-      case "Daily": return Math.round(rawAmt * 30)
-      case "Weekly": return Math.round(rawAmt * 4.33)
-      case "Monthly": return rawAmt
-      case "Quarterly": return Math.round(rawAmt / 3)
-      case "Half-Yearly": return Math.round(rawAmt / 6)
-      case "Annually": return Math.round(rawAmt / 12)
-      case "Custom Days": return Math.round((rawAmt / (sub.customDaysCount || 30)) * 30)
-      default: return rawAmt
-    }
-  }
+  }, [leads, selectedCompanyId, targetBranch, itemMatchesCompany, itemMatchesBranch])
 
   // ── Scoped Subscriptions Filter ───────────────────────────────────────────
   const scopedSubscriptions = React.useMemo(() => {
     return subscriptions.filter((s) => {
-      if (selectedCompanyId && selectedCompanyId !== "all") {
-        const sComp = s.companyId || (s as any).company || "tech"
-        if (sComp !== selectedCompanyId) return false
-      }
-      if (isTeamOrBranchAdmin && userAssignedBranchId) {
-        const sBranch = s.branchId || (clientMap[(s.clientName || "").toLowerCase().trim()]?.branchId)
-        if (sBranch && sBranch !== userAssignedBranchId) return false
-      } else if (selectedBranchId !== "all") {
-        const targetBranchObj = availableBranches.find((b) => b.id === selectedBranchId || b.name.toLowerCase() === selectedBranchId.toLowerCase())
-        const targetBranchId = String(targetBranchObj?.id || selectedBranchId).toLowerCase().trim()
-        const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
-
-        const sBranch = String(s.branchId || (clientMap[(s.clientName || "").toLowerCase().trim()]?.branchId) || "").toLowerCase().trim()
-        const sBranchName = String(s.branchName || (clientMap[(s.clientName || "").toLowerCase().trim()]?.branchName) || "").toLowerCase().trim()
-
-        const isMatch =
-          (sBranch && (sBranch === targetBranchId || (targetBranchName && sBranch === targetBranchName))) ||
-          (sBranchName && (sBranchName === targetBranchName || sBranchName === targetBranchId))
-
-        if (!isMatch) return false
+      if (!itemMatchesCompany(s.companyId || (s as any).company, selectedCompanyId)) return false
+      const clientInfo = clientMap[(s.clientName || "").toLowerCase().trim()]
+      if (!itemMatchesBranch(s.branchId, s.branchName, targetBranch, clientInfo?.branchId, clientInfo?.branchName)) {
+        return false
       }
       return true
     })
-  }, [subscriptions, selectedCompanyId, selectedBranchId, isTeamOrBranchAdmin, userAssignedBranchId, availableBranches, clientMap])
+  }, [subscriptions, selectedCompanyId, targetBranch, itemMatchesCompany, itemMatchesBranch, clientMap])
+
+  // ── Scoped Expenses Filter ────────────────────────────────────────────────
+  const scopedExpenses = React.useMemo(() => {
+    return expenses.filter((e) => {
+      if (!itemMatchesCompany(e.companyId, selectedCompanyId)) return false
+      if (!itemMatchesBranch(e.branchId || (e as any).branch_id, e.branchName || (e as any).branch_name, targetBranch)) {
+        return false
+      }
+      return true
+    })
+  }, [expenses, selectedCompanyId, targetBranch, itemMatchesCompany, itemMatchesBranch])
+
+  // ── Scoped Users Filter ───────────────────────────────────────────────────
+  const scopedUsers = React.useMemo(() => {
+    return users
+      .filter((u) => u.role !== "Clients" && u.status !== "Inactive")
+      .filter((u) => {
+        if (selectedCompanyId && selectedCompanyId !== "all") {
+          const uCompIds = (u.companyIds && u.companyIds.length > 0)
+            ? u.companyIds.map((id: string) => getCanonicalCompanyId(id))
+            : [getCanonicalCompanyId(u.companyId || "tech")]
+          if (!uCompIds.includes(getCanonicalCompanyId(selectedCompanyId))) return false
+        }
+        if (targetBranch && targetBranch !== "all") {
+          if (!itemMatchesBranch(u.branchId, u.branchName, targetBranch)) return false
+        }
+        return true
+      })
+  }, [users, selectedCompanyId, targetBranch, itemMatchesBranch])
+
+  // ── Scoped Tasks Filter ───────────────────────────────────────────────────
+  const scopedTasks = React.useMemo(() => {
+    return tasks.filter((t) => {
+      if (!itemMatchesCompany(t.companyId, selectedCompanyId)) return false
+      if (!itemMatchesBranch(t.branchId, (t as any).branchName, targetBranch)) return false
+      return true
+    })
+  }, [tasks, selectedCompanyId, targetBranch, itemMatchesCompany, itemMatchesBranch])
 
   // Subscriptions KPIs
   const totalSubsCount = scopedSubscriptions.length
@@ -579,36 +612,53 @@ export default function ReportsMain() {
 
   // ── User Productivity Calculation ─────────────────────────────────────────
   const userProductivity = React.useMemo(() => {
-    if (!users || users.length === 0) return []
-    return users
-      .filter((u) => u.role !== "Clients" && u.status !== "Inactive")
-      .map((u) => {
-        const uName = (u.name || "").toLowerCase().trim()
-        const uEmail = (u.email || "").toLowerCase().trim()
-        const assigned = tasks.filter((t) => {
-          const a = (t.assignedTo || "").toLowerCase().trim()
-          const c = (t.collaborators || "").toLowerCase().trim()
-          return a === uName || a === uEmail || (uName && a.includes(uName)) || c.includes(uName) || c.includes(uEmail)
-        })
-        const completed = assigned.filter((t) => t.status === "Done")
-        const rate = assigned.length > 0 ? Math.round((completed.length / assigned.length) * 100) : 100
-        return {
-          name: u.name,
-          role: u.role || "Team Member",
-          department: u.department || "Operations",
-          branchName: u.branchName || branchMap[u.branchId || ""] || "-",
-          assigned: assigned.length,
-          completed: completed.length,
-          rate: `${rate}%`,
-          avgTime: "4.0 hrs",
-        }
+    if (!scopedUsers || scopedUsers.length === 0) return []
+    return scopedUsers.map((u) => {
+      const uName = (u.name || "").toLowerCase().trim()
+      const uEmail = (u.email || "").toLowerCase().trim()
+      const assigned = scopedTasks.filter((t) => {
+        const a = (t.assignedTo || "").toLowerCase().trim()
+        const c = (t.collaborators || "").toLowerCase().trim()
+        return a === uName || a === uEmail || (uName && a.includes(uName)) || c.includes(uName) || c.includes(uEmail)
       })
-  }, [users, tasks, branchMap])
+      const completed = assigned.filter((t) => t.status === "Done")
+      const rate = assigned.length > 0 ? Math.round((completed.length / assigned.length) * 100) : 100
+      return {
+        name: u.name,
+        role: u.role || "Team Member",
+        department: u.department || "Operations",
+        branchName: u.branchName || branchMap[u.branchId || ""] || "-",
+        assigned: assigned.length,
+        completed: completed.length,
+        rate: `${rate}%`,
+        avgTime: "4.0 hrs",
+      }
+    })
+  }, [scopedUsers, scopedTasks, branchMap])
 
   // ── Sub-Branch Performance & Percentage Revenue Share Calculations ─────────
+  const scopedSubBranches = React.useMemo(() => {
+    let list = subBranches || []
+    if (selectedCompanyId && selectedCompanyId !== "all") {
+      list = list.filter((sb) => {
+        const parent = (branches || []).find((b) => b.id === sb.parentBranchId)
+        const pComp = parent?.companyId || sb.companyId || "tech"
+        return itemMatchesCompany(pComp, selectedCompanyId)
+      })
+    }
+    if (targetBranch && targetBranch !== "all") {
+      list = list.filter((sb) => {
+        return (
+          String(sb.parentBranchId).toLowerCase().trim() === targetBranch.toLowerCase().trim() ||
+          String(sb.branchId || "").toLowerCase().trim() === targetBranch.toLowerCase().trim()
+        )
+      })
+    }
+    return list
+  }, [subBranches, branches, selectedCompanyId, targetBranch, itemMatchesCompany])
+
   const subBranchReportData = React.useMemo(() => {
-    const list = subBranches || []
-    return list.map((sb) => {
+    return scopedSubBranches.map((sb) => {
       const parentBranch = (branches || []).find((b) => b.id === sb.parentBranchId)
       const parentBranchName = parentBranch?.name || sb.parentBranchId || "Main Operating Branch"
 
@@ -665,7 +715,7 @@ export default function ReportsMain() {
         matchedInvoices,
       }
     })
-  }, [subBranches, branches, scopedInvoices])
+  }, [scopedSubBranches, branches, scopedInvoices])
 
   const totalSubBranchGrossVolume = subBranchReportData.reduce((sum, sb) => sum + sb.totalInvoicedGross, 0)
   const totalCompanyRetainedFromSubBranches = subBranchReportData.reduce((sum, sb) => sum + sb.companyRetainedGross, 0)
@@ -838,12 +888,24 @@ export default function ReportsMain() {
           up.avgTime,
         ]),
       ]
+    } else if (activeTab === "expenses") {
+      rows = [
+        ["Expense Ref", "Expense Title", "Project", "Category", "Paid By", "Amount (INR)", "Status", "Branch"],
+        ...scopedExpenses.map((e) => [
+          e.expenseNumber || "EXP",
+          e.title || "-",
+          e.projectName || "Overhead",
+          e.category || "General",
+          e.member || "Admin",
+          String(e.amountNum || parseInt(String(e.amount || "0").replace(/[^0-9]/g, "")) || 0),
+          e.status || "Pending",
+          e.branchName || "-",
+        ]),
+      ]
     } else {
       rows = [
         ["Employee", "Role", "Status", "Department", "Branch"],
-        ...users
-          .filter((u) => u.role !== "Clients")
-          .map((u) => [u.name, u.role, u.status || "Active", u.department || "Operations", u.branchName || "-"]),
+        ...scopedUsers.map((u) => [u.name, u.role, u.status || "Active", u.department || "Operations", u.branchName || "-"]),
       ]
     }
 
@@ -900,19 +962,32 @@ export default function ReportsMain() {
 
         {/* Global Filter Controls: Company & Branch Scope */}
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* Company Scope (Super Admin) */}
-          {isSuperAdmin && (
+          {/* Company Scope (Super Admin & multi-company Admin) */}
+          {(isSuperAdmin || allowedCompanies.length > 1) ? (
             <div className="flex items-center bg-surface border border-border rounded-xl px-2.5 py-1.5 gap-1.5 text-xs font-semibold shadow-2xs">
               <Building2 size={13} className="text-primary" />
               <select
                 value={selectedCompanyId}
-                onChange={(e) => setSelectedCompanyId(e.target.value)}
-                className="bg-transparent text-foreground focus:outline-hidden cursor-pointer"
+                onChange={(e) => {
+                  setSelectedCompanyId(e.target.value)
+                  setSelectedBranchId("all")
+                }}
+                className="bg-transparent text-foreground focus:outline-hidden cursor-pointer font-bold"
               >
-                <option value="all">🏢 All Companies</option>
-                <option value="tech">SAAMPARK Technology</option>
-                <option value="digital">SAAMPARK Digital</option>
+                {isSuperAdmin && <option value="all">🏢 All Companies (Consolidated)</option>}
+                {allowedCompanies.map((c) => (
+                  <option key={c.id || c.slug} value={c.slug || c.id}>
+                    🏢 {c.brand_name || c.name || c.division_name || "Company"}
+                  </option>
+                ))}
               </select>
+            </div>
+          ) : (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary/10 text-primary border border-primary/20 text-xs font-bold shadow-2xs">
+              <Building2 size={13} />
+              <span>
+                {companies.find((c) => isMatchingCompany(c, selectedCompanyId))?.name || "Saampark Group"}
+              </span>
             </div>
           )}
 
@@ -923,12 +998,12 @@ export default function ReportsMain() {
               <select
                 value={selectedBranchId}
                 onChange={(e) => setSelectedBranchId(e.target.value)}
-                className="bg-transparent text-foreground focus:outline-hidden cursor-pointer"
+                className="bg-transparent text-foreground focus:outline-hidden cursor-pointer font-semibold"
               >
                 <option value="all">📍 All Branches ({availableBranches.length})</option>
                 {availableBranches.map((b) => (
                   <option key={b.id} value={b.id}>
-                    {b.name} ({b.city || b.code || "Branch"})
+                    {b.name} {b.city ? `(${b.city})` : ""}
                   </option>
                 ))}
               </select>
@@ -2116,9 +2191,14 @@ export default function ReportsMain() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/40 font-medium">
-                  {users
-                    .filter((u) => u.role !== "Clients")
-                    .map((u) => (
+                  {scopedUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-8 text-center text-muted-foreground">
+                        No team members found for the selected company and branch scope.
+                      </td>
+                    </tr>
+                  ) : (
+                    scopedUsers.map((u) => (
                       <tr key={u.email} className="hover:bg-surface-hover/50 transition-colors">
                         <td className="py-3 px-4 font-bold text-foreground flex items-center gap-2">
                           <img
@@ -2133,7 +2213,8 @@ export default function ReportsMain() {
                         <td className="py-3 px-4 text-muted-foreground">{u.branchName || branchMap[u.branchId] || "-"}</td>
                         <td className="py-3 px-4 text-center font-bold text-emerald-500">{u.status || "Active"}</td>
                       </tr>
-                    ))}
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -2149,23 +2230,23 @@ export default function ReportsMain() {
               <p className="text-xs font-semibold text-muted-foreground">Total Operational Expenses</p>
               <p className="text-2xl font-black text-foreground">
                 ₹
-                {expenses
+                {scopedExpenses
                   .reduce((sum, e) => sum + (e.amountNum || parseInt((e.amount || "0").replace(/[^0-9]/g, "")) || 0), 0)
                   .toLocaleString("en-IN")}
               </p>
-              <p className="text-[11px] text-muted-foreground pt-1">{expenses.length} Recorded Expense Receipts</p>
+              <p className="text-[11px] text-muted-foreground pt-1">{scopedExpenses.length} Recorded Expense Receipts</p>
             </div>
             <div className="p-5 rounded-2xl bg-surface border border-border space-y-1 shadow-2xs">
               <p className="text-xs font-semibold text-muted-foreground">Pending Approval</p>
               <p className="text-2xl font-black text-amber-500">
-                {expenses.filter((e) => e.status === "Pending").length} Requests
+                {scopedExpenses.filter((e) => e.status === "Pending").length} Requests
               </p>
               <p className="text-[11px] text-muted-foreground pt-1">Awaiting settlement</p>
             </div>
             <div className="p-5 rounded-2xl bg-surface border border-border space-y-1 shadow-2xs">
               <p className="text-xs font-semibold text-muted-foreground">Approved Settlements</p>
               <p className="text-2xl font-black text-emerald-500">
-                {expenses.filter((e) => e.status === "Approved").length} Settled
+                {scopedExpenses.filter((e) => e.status === "Approved").length} Settled
               </p>
               <p className="text-[11px] text-muted-foreground pt-1">Verified business costs</p>
             </div>
@@ -2191,14 +2272,14 @@ export default function ReportsMain() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/40 font-medium">
-                  {expenses.length === 0 ? (
+                  {scopedExpenses.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="py-8 text-center text-muted-foreground">
-                        No expense logs recorded.
+                        No expense logs recorded for the selected scope.
                       </td>
                     </tr>
                   ) : (
-                    expenses.map((exp) => (
+                    scopedExpenses.map((exp) => (
                       <tr key={exp.id || Math.random()} className="hover:bg-surface-hover/50 transition-colors">
                         <td className="py-3 px-4 font-mono font-bold text-primary">{exp.expenseNumber || "EXP"}</td>
                         <td className="py-3 px-4 font-bold text-foreground">{exp.title}</td>

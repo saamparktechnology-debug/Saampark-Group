@@ -10,107 +10,87 @@ export function CompanySwitchLoader() {
   const [isSwitching, setIsSwitching] = React.useState(false)
   const [switchingTarget, setSwitchingTarget] = React.useState<string>("")
 
-  const hasMountedRef = React.useRef(false)
-  const prevCompanyRef = React.useRef(activeCompanyId)
-  const prevBranchRef = React.useRef(activeBranchId)
-  const debounceTimerRef = React.useRef<NodeJS.Timeout | null>(null)
-  const autoHideTimerRef = React.useRef<NodeJS.Timeout | null>(null)
-
-  const stopLoader = React.useCallback(() => {
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current)
-      debounceTimerRef.current = null
-    }
-    if (autoHideTimerRef.current) {
-      clearTimeout(autoHideTimerRef.current)
-      autoHideTimerRef.current = null
-    }
-    setIsSwitching(false)
-  }, [])
-
-  const triggerLoader = React.useCallback((targetId: string | null, targetBranchId?: string | null) => {
-    let name = "SAAMPARK GROUP"
-
-    if (targetId && targetId !== "all") {
-      const targetStr = String(targetId).toLowerCase().trim()
-      if (targetStr.includes("consult") || targetStr === "2") {
-        name = "Saampark Consultancy Service"
-      } else {
-        name = "Saampark Technology & Research"
-      }
-    }
-
-    if (targetBranchId) {
-      const matchedBr = branches.find(b => String(b.id) === String(targetBranchId))
-      if (matchedBr) {
-        name = `${name} • ${matchedBr.name}`
-      }
-    }
-
-    setSwitchingTarget(name)
-
-    // Clear any existing timers
-    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
-    if (autoHideTimerRef.current) clearTimeout(autoHideTimerRef.current)
-
-    // 200ms debounce: if data arrives immediately, the loader never appears!
-    debounceTimerRef.current = setTimeout(() => {
-      setIsSwitching(true)
-
-      // Auto-hide safety timeout so it NEVER gets stuck
-      autoHideTimerRef.current = setTimeout(() => {
-        setIsSwitching(false)
-      }, 550)
-    }, 200)
-  }, [branches])
-
+  // Strict auto-dismiss timer: whenever isSwitching becomes true, it CANNOT stay on screen > 400ms
   React.useEffect(() => {
-    hasMountedRef.current = true
+    if (!isSwitching) return
 
+    const dismissTimer = setTimeout(() => {
+      setIsSwitching(false)
+    }, 380)
+
+    const handleDataArrived = () => {
+      setIsSwitching(false)
+    }
+
+    // Dismiss immediately if user clicks, presses a key, or data finishes loading
+    window.addEventListener("saampark_data_synced", handleDataArrived)
+    window.addEventListener("saampark_data_loaded", handleDataArrived)
+    window.addEventListener("storage", handleDataArrived)
+    window.addEventListener("keydown", handleDataArrived)
+    window.addEventListener("mousedown", handleDataArrived)
+
+    return () => {
+      clearTimeout(dismissTimer)
+      window.removeEventListener("saampark_data_synced", handleDataArrived)
+      window.removeEventListener("saampark_data_loaded", handleDataArrived)
+      window.removeEventListener("storage", handleDataArrived)
+      window.removeEventListener("keydown", handleDataArrived)
+      window.removeEventListener("mousedown", handleDataArrived)
+    }
+  }, [isSwitching])
+
+  // ONLY listen to explicit switch events dispatched by user selection
+  React.useEffect(() => {
     const handleCompanySwitched = (e: any) => {
-      const target = e?.detail?.companyId !== undefined ? e.detail.companyId : (e?.detail || activeCompanyId)
-      triggerLoader(target, null)
+      const targetId = e?.detail?.companyId !== undefined ? e.detail.companyId : (e?.detail || activeCompanyId)
+      let name = "SAAMPARK GROUP"
+
+      if (targetId && targetId !== "all") {
+        const targetStr = String(targetId).toLowerCase().trim()
+        if (targetStr.includes("consult") || targetStr === "2") {
+          name = "Saampark Consultancy Service"
+        } else {
+          name = "Saampark Technology & Research"
+        }
+      }
+
+      setSwitchingTarget(name)
+      setIsSwitching(true)
     }
 
     const handleBranchSwitched = (e: any) => {
       const branchId = e?.detail?.branchId !== undefined ? e.detail.branchId : (e?.detail || activeBranchId)
-      triggerLoader(activeCompanyId, branchId)
-    }
+      let name = "SAAMPARK GROUP"
+      if (activeCompanyId && activeCompanyId !== "all") {
+        const cStr = String(activeCompanyId).toLowerCase().trim()
+        name = cStr.includes("consult") || cStr === "2"
+          ? "Saampark Consultancy Service"
+          : "Saampark Technology & Research"
+      }
 
-    const handleDataLoaded = () => {
-      stopLoader()
+      if (branchId) {
+        const matchedBr = branches.find(b => String(b.id) === String(branchId))
+        if (matchedBr) {
+          name = `${name} • ${matchedBr.name}`
+        }
+      }
+
+      setSwitchingTarget(name)
+      setIsSwitching(true)
     }
 
     if (typeof window !== "undefined") {
       window.addEventListener("saampark_company_switched", handleCompanySwitched)
       window.addEventListener("saampark_branch_switched", handleBranchSwitched)
-      window.addEventListener("saampark_data_loaded", handleDataLoaded)
     }
 
     return () => {
       if (typeof window !== "undefined") {
         window.removeEventListener("saampark_company_switched", handleCompanySwitched)
         window.removeEventListener("saampark_branch_switched", handleBranchSwitched)
-        window.removeEventListener("saampark_data_loaded", handleDataLoaded)
       }
-      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
-      if (autoHideTimerRef.current) clearTimeout(autoHideTimerRef.current)
     }
-  }, [activeCompanyId, activeBranchId, triggerLoader, stopLoader])
-
-  // Track store state changes if switched programmatically without events (skip initial mount)
-  React.useEffect(() => {
-    if (!hasMountedRef.current) return
-
-    if (prevCompanyRef.current !== undefined && prevCompanyRef.current !== activeCompanyId) {
-      triggerLoader(activeCompanyId, activeBranchId)
-      prevCompanyRef.current = activeCompanyId
-    }
-    if (prevBranchRef.current !== undefined && prevBranchRef.current !== activeBranchId) {
-      triggerLoader(activeCompanyId, activeBranchId)
-      prevBranchRef.current = activeBranchId
-    }
-  }, [activeCompanyId, activeBranchId, triggerLoader])
+  }, [activeCompanyId, activeBranchId, branches])
 
   return (
     <AnimatePresence>
@@ -119,15 +99,15 @@ export function CompanySwitchLoader() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-background/50 backdrop-blur-xs pointer-events-none"
+          transition={{ duration: 0.12 }}
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-background/40 backdrop-blur-xs pointer-events-none select-none"
         >
           <motion.div
             initial={{ scale: 0.92, opacity: 0, y: 8 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0.94, opacity: 0, y: -8 }}
+            exit={{ scale: 0.95, opacity: 0, y: -6 }}
             transition={{ type: "spring", stiffness: 450, damping: 32 }}
-            className="p-5 rounded-2xl bg-card/95 border border-border shadow-2xl flex flex-col items-center justify-center text-center max-w-xs w-full pointer-events-none"
+            className="p-5 rounded-2xl bg-card/95 border border-border/80 shadow-2xl flex flex-col items-center justify-center text-center max-w-xs w-full pointer-events-none"
           >
             <ThreeDotLoader 
               text={switchingTarget ? `Switching to ${switchingTarget}...` : "Loading workspace data..."} 

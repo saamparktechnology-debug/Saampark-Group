@@ -82,7 +82,7 @@ export default function LeadsMain() {
       } catch (err) {
         console.warn("Error loading leads:", err)
       } finally {
-        if (showLoading) setIsLoading(false)
+        setIsLoading(false)
       }
     }
     fetchFreshLeads(true)

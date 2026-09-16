@@ -174,7 +174,7 @@ export default function TeamPaymentsPage() {
     } catch (err) {
       console.error("Error loading team payments data:", err)
     } finally {
-      if (showLoading) setIsLoading(false)
+      setIsLoading(false)
     }
   }, [activeCompanyId, selectedBranchId, selectedSubBranchId])
 

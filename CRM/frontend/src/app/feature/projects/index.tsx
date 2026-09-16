@@ -59,7 +59,7 @@ export default function ProjectsMain() {
           setSelectedProject(null)
         }
       } finally {
-        if (showLoading) setIsLoading(false)
+        setIsLoading(false)
       }
     }
     fetchFreshProjects(true)

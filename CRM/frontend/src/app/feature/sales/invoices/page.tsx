@@ -607,7 +607,7 @@ function InvoicesPageContent() {
       const data = await getInvoices(targetComp)
       setInvoices(data || [])
     } finally {
-      if (showLoading) setIsLoading(false)
+      setIsLoading(false)
     }
   }, [])
 

@@ -8,11 +8,11 @@ interface ThreeDotLoaderProps {
   fullScreen?: boolean
 }
 
-export function ThreeDotLoader({ text = "Loading data...", fullScreen = true }: ThreeDotLoaderProps) {
+export function ThreeDotLoader({ text = "Loading data...", fullScreen = false }: ThreeDotLoaderProps) {
   return (
     <div
       className={`flex flex-col items-center justify-center gap-4 ${
-        fullScreen ? "fixed inset-0 z-50 bg-background/85 backdrop-blur-xs min-h-screen w-full" : "py-16 w-full"
+        fullScreen ? "fixed inset-0 z-50 bg-background/85 backdrop-blur-xs min-h-screen w-full pointer-events-none select-none" : "py-16 w-full"
       }`}
     >
       <div className="relative flex items-center justify-center">
