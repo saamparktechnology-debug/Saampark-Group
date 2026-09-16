@@ -224,50 +224,29 @@ export function getCompanyLogoUrl(company?: Partial<Company> | null): string | n
 }
 
 export function getCompanyFullName(company?: Partial<Company> | null): string {
-  if (!company) return "SAAMPARK"
+  if (!company) return "SAAMPARK GROUP"
+  const canon = getCanonicalCompanyId(company.slug || company.id || (company as any)?.numeric_id || company.name)
+  const brand = (company.brand_name || "SAAMPARK").trim()
+  
+  if (canon === "tech" || canon === "1") {
+    let div = (company.division_name || "").trim()
+    if (!div || div.toLowerCase().includes("consult")) div = "TECHNOLOGY"
+    return `${brand} ${div}`.trim()
+  }
+
+  if (canon === "consultancy" || canon === "2") {
+    let div = (company.division_name || "").trim()
+    if (!div || div.toLowerCase().includes("tech")) div = "CONSULTANCY SERVICE"
+    return `${brand} ${div}`.trim()
+  }
+
   const rawBrand = (company.brand_name || "").trim()
   const rawDivision = (company.division_name || "").trim()
-  const rawSubtitle = (company.subtitle || "").trim()
   const rawName = (company.name || "").trim()
 
-  // 1. If division is explicitly set, ALWAYS format as Brand + Division
   if (rawDivision) {
-    const brand = rawBrand || "SAAMPARK"
-    return `${brand} ${rawDivision}`
+    return `${rawBrand || "SAAMPARK"} ${rawDivision}`
   }
-
-  // 2. If subtitle is present and division is empty
-  if (rawSubtitle) {
-    const brand = rawBrand || "SAAMPARK"
-    if (rawSubtitle.toLowerCase().startsWith("and ") || rawSubtitle.toLowerCase().startsWith("& ")) {
-      return `${brand} ${rawSubtitle.replace(/^(&|and)\s+/i, "")}`
-    }
-    if (!rawSubtitle.toLowerCase().includes("private limited") && !rawSubtitle.toLowerCase().includes("pvt ltd")) {
-      return `${brand} ${rawSubtitle}`
-    }
-    const cleanSub = rawSubtitle.replace(/\s+(pvt\.?\s*ltd\.?|private\s+limited|llp|inc\.?)$/i, "").trim()
-    if (cleanSub) {
-      return `${brand} ${cleanSub}`
-    }
-  }
-
-  // 3. If explicit name has multiple words or full name beyond just "SAAMPARK"
-  if (rawName && rawName.toLowerCase() !== "saampark" && rawName.toLowerCase() !== "saampark group") {
-    return rawName
-  }
-
-  // 4. If brand is distinctive
-  if (rawBrand && rawBrand.toLowerCase() !== "saampark" && rawBrand.toLowerCase() !== "saampark group") {
-    return rawBrand
-  }
-
-  // 5. Fallback inspection based on slug / id
-  const slugOrId = String(company.slug || company.id || "").toLowerCase()
-  if (slugOrId === "tech" || slugOrId.includes("tech")) return "SAAMPARK TECHNOLOGY"
-  if (slugOrId === "digital" || slugOrId.includes("digital")) return "SAAMPARK DIGITAL MARKETING"
-  if (slugOrId.includes("consult")) return "SAAMPARK CONSULTANCY"
-  if (slugOrId.includes("print")) return "SAAMPARK PRINT SPACE"
-  if (slugOrId.includes("media")) return "SAAMPARK MEDIA"
 
   return rawName || rawBrand || "SAAMPARK"
 }
@@ -278,7 +257,7 @@ export function getCanonicalCompanyId(val: string | number | null | undefined): 
   if (!str) return ""
   if (str === "all") return "all"
   if (str === "2" || str === "consultancy" || str === "consult" || str.includes("consult")) return "consultancy"
-  if (str === "1" || str === "tech" || str.includes("technol")) return "tech"
+  if (str === "1" || str === "tech" || str.includes("tech") || str.includes("research")) return "tech"
   return str
 }
 
@@ -292,28 +271,14 @@ export function isMatchingCompany(
   if (target === "all") return true
 
   const canonTarget = getCanonicalCompanyId(target)
-  
+  const canonComp = getCanonicalCompanyId(comp.id || comp.slug || (comp as any)?.numeric_id || comp.name || comp.division_name)
+
+  if (canonTarget && canonComp) {
+    return canonTarget === canonComp
+  }
+
   const compIdStr = String(comp.id || "").toLowerCase().trim()
   const compSlugStr = String(comp.slug || "").toLowerCase().trim()
-  const compNameStr = String(comp.name || "").toLowerCase().trim()
-  const compDivStr = String(comp.division_name || "").toLowerCase().trim()
-
-  const isCompConsultancy = (
-    compIdStr === "consultancy" || compIdStr === "2" || compIdStr.includes("consult") ||
-    compSlugStr === "consultancy" || compSlugStr === "2" || compSlugStr.includes("consult") ||
-    compNameStr.includes("consult") || compDivStr.includes("consult")
-  )
-
-  const isCompTech = !isCompConsultancy
-
-  if (canonTarget === "consultancy") {
-    return isCompConsultancy
-  }
-
-  if (canonTarget === "tech" || canonTarget === "1") {
-    return isCompTech
-  }
-
   return compIdStr === target || compSlugStr === target
 }
 
@@ -369,8 +334,8 @@ export const DEFAULT_COMPANIES: Company[] = [
     division_name: 'CONSULTANCY SERVICE',
     name: 'SAAMPARK CONSULTANCY SERVICE', 
     subtitle: 'MANAGEMENT & ADVISORY SERVICES',
-    logo: '🏢', 
-    logo_url: '/saampark-logo.png',
+    logo: '💼', 
+    logo_url: '', 
     slug: 'consultancy', 
     currency: 'INR',
     currency_symbol: '₹',
@@ -564,33 +529,39 @@ export const useAuthStore = create<AuthState>()(
             })
           })
 
-          const techComp = map.get('tech') || DEFAULT_COMPANIES[0]
-          const consultComp = map.get('consultancy') || DEFAULT_COMPANIES[1]
+          const rawTech = map.get('tech') || DEFAULT_COMPANIES[0]
+          const rawConsult = map.get('consultancy') || DEFAULT_COMPANIES[1]
 
-          const combined = [
-            {
-              ...DEFAULT_COMPANIES[0],
-              ...techComp,
-              id: 'tech',
-              slug: 'tech',
-              numeric_id: 1,
-              brand_name: techComp.brand_name || 'SAAMPARK',
-              division_name: techComp.division_name !== undefined ? techComp.division_name : 'TECHNOLOGY',
-              subtitle: techComp.subtitle !== undefined ? techComp.subtitle : 'AND RESEARCH PRIVATE LIMITED',
-              name: getCompanyFullName({ ...DEFAULT_COMPANIES[0], ...techComp, brand_name: 'SAAMPARK', division_name: 'TECHNOLOGY' }),
-            },
-            {
-              ...DEFAULT_COMPANIES[1],
-              ...consultComp,
-              id: 'consultancy',
-              slug: 'consultancy',
-              numeric_id: 2,
-              brand_name: consultComp.brand_name || 'SAAMPARK',
-              division_name: consultComp.division_name !== undefined ? consultComp.division_name : 'CONSULTANCY SERVICE',
-              subtitle: consultComp.subtitle !== undefined ? consultComp.subtitle : 'MANAGEMENT & ADVISORY SERVICES',
-              name: getCompanyFullName({ ...DEFAULT_COMPANIES[1], ...consultComp, brand_name: 'SAAMPARK', division_name: 'CONSULTANCY SERVICE' }),
-            }
-          ] as Company[]
+          const sanitizedTech: Company = {
+            ...DEFAULT_COMPANIES[0],
+            ...rawTech,
+            id: 'tech',
+            slug: 'tech',
+            numeric_id: 1,
+            brand_name: 'SAAMPARK',
+            division_name: (rawTech.division_name && !rawTech.division_name.toLowerCase().includes('consult')) ? rawTech.division_name : 'TECHNOLOGY',
+            subtitle: (rawTech.subtitle && !rawTech.subtitle.toLowerCase().includes('consult')) ? rawTech.subtitle : 'AND RESEARCH PRIVATE LIMITED',
+            name: 'SAAMPARK TECHNOLOGY',
+            logo: '💻',
+            logo_url: (rawTech.logo_url && rawTech.logo_url.trim() !== '') ? rawTech.logo_url : '/saampark-logo.png',
+          }
+
+          const sanitizedConsult: Company = {
+            ...DEFAULT_COMPANIES[1],
+            ...rawConsult,
+            id: 'consultancy',
+            slug: 'consultancy',
+            numeric_id: 2,
+            brand_name: 'SAAMPARK',
+            division_name: 'CONSULTANCY SERVICE',
+            subtitle: (rawConsult.subtitle && !rawConsult.subtitle.toLowerCase().includes('research') && !rawConsult.subtitle.toLowerCase().includes('technology')) ? rawConsult.subtitle : 'MANAGEMENT & ADVISORY SERVICES',
+            name: 'SAAMPARK CONSULTANCY SERVICE',
+            logo: '💼',
+            // Consultancy starts totally fresh — never inherit technology logo
+            logo_url: (rawConsult.logo_url && rawConsult.logo_url !== '/saampark-logo.png') ? rawConsult.logo_url : '',
+          }
+
+          const combined = [sanitizedTech, sanitizedConsult] as Company[]
 
           set({ companies: combined })
           return combined

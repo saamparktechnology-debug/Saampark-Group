@@ -191,9 +191,5 @@ ON DUPLICATE KEY UPDATE name=VALUES(name), description=VALUES(description);
 
 
 INSERT INTO companies (id, name, slug, brand_name, division_name, subtitle, currency, currency_symbol, logo_url, address, phone, email, website)
-VALUES (2, 'SAAMPARK CONSULTANCY SERVICE', 'consultancy', 'SAAMPARK', 'CONSULTANCY SERVICE', 'MANAGEMENT & ADVISORY SERVICES', 'INR', '₹', '/saampark-logo.png', 'Salt Lake Sector V, Bidhannagar, Kolkata - 700091', '+91 9901518570', 'consultancy@saampark.in', 'www.saampark.in')
+VALUES (2, 'SAAMPARK CONSULTANCY SERVICE', 'consultancy', 'SAAMPARK', 'CONSULTANCY SERVICE', 'MANAGEMENT & ADVISORY SERVICES', 'INR', '₹', NULL, 'Salt Lake Sector V, Bidhannagar, Kolkata - 700091', '+91 9901518570', 'consultancy@saampark.in', 'www.saampark.in')
 ON DUPLICATE KEY UPDATE name=VALUES(name), slug=VALUES(slug), brand_name=VALUES(brand_name);
-
-INSERT INTO users (id, name, email, password, role, company_id, company_ids, department, status, is_verified)
-VALUES ('usr_super_admin', 'Supriya (Super Admin)', 'hiisupriya@gmail.com', '$2b$10$YourHashedPassOr123456', 'Super Admin', 'consultancy', '["tech", "consultancy"]', 'Executive Management', 'Active', 1)
-ON DUPLICATE KEY UPDATE name=VALUES(name), role=VALUES(role);
