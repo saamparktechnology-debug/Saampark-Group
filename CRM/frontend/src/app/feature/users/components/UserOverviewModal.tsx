@@ -87,7 +87,23 @@ export function UserOverviewModal({
       },
     }
 
-    recordUserAccount(updated)
+    await recordUserAccount(updated)
+    
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("saampark_kyc_updated", { detail: updated }))
+      window.dispatchEvent(new Event("storage"))
+    }
+
+    if (currentUser && (String(currentUser.id) === String(user.id) || currentUser.email?.toLowerCase().trim() === user.email?.toLowerCase().trim())) {
+      useAuthStore.setState({
+        user: {
+          ...currentUser,
+          kycStatus: "Verified",
+          kycData: updated.kycData,
+        }
+      })
+    }
+
     onUserUpdated?.(updated)
     setIsProcessingAction(false)
   }
@@ -108,7 +124,23 @@ export function UserOverviewModal({
       },
     }
 
-    recordUserAccount(updated)
+    await recordUserAccount(updated)
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("saampark_kyc_updated", { detail: updated }))
+      window.dispatchEvent(new Event("storage"))
+    }
+
+    if (currentUser && (String(currentUser.id) === String(user.id) || currentUser.email?.toLowerCase().trim() === user.email?.toLowerCase().trim())) {
+      useAuthStore.setState({
+        user: {
+          ...currentUser,
+          kycStatus: "Rejected",
+          kycData: updated.kycData,
+        }
+      })
+    }
+
     onUserUpdated?.(updated)
     setShowRejectInput(false)
     setIsProcessingAction(false)

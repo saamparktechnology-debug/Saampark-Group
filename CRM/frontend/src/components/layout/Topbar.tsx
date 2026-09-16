@@ -313,7 +313,7 @@ export function Topbar() {
               setShowNotifications(false)
               setShowProfileMenu(false)
             }}
-            className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-100/90 hover:bg-slate-200/90 dark:bg-zinc-800/90 dark:hover:bg-zinc-800 border border-slate-200/80 dark:border-zinc-700/80 text-xs text-slate-900 dark:text-white transition-all group cursor-pointer shadow-2xs max-w-[220px] sm:max-w-[360px]"
+            className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl box-3d text-xs text-slate-900 dark:text-white transition-all group cursor-pointer max-w-[220px] sm:max-w-[360px]"
             title="Click to switch active Company or Branch"
           >
             {isAllCompanies ? (
@@ -365,7 +365,7 @@ export function Topbar() {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 8, scale: 0.96 }}
                 transition={{ duration: 0.15 }}
-                className="absolute left-0 top-full mt-2 w-80 sm:w-96 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-2xl rounded-2xl overflow-hidden z-50 flex flex-col max-h-[82vh]"
+                className="absolute left-0 top-full mt-2 w-80 sm:w-96 modal-3d-dialog overflow-hidden z-50 flex flex-col max-h-[82vh]"
               >
                 {/* Dropdown Header */}
                 <div className="p-3.5 border-b border-slate-100 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-800/40 flex items-center justify-between">
@@ -552,13 +552,13 @@ export function Topbar() {
       <div className="flex items-center gap-2 sm:gap-3" onClick={stop}>
         {/* Search bar matching screenshot */}
         <div className="relative hidden md:block w-52 lg:w-64">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           <input
             type="text"
             placeholder="Search anything..."
             onClick={() => openModal("isGlobalSearchOpen")}
             readOnly
-            className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-100 dark:bg-zinc-800/80 border border-slate-200/80 dark:border-zinc-700 rounded-full cursor-pointer placeholder:text-slate-400 focus:outline-hidden hover:bg-slate-200/50 transition-colors"
+            className="w-full pl-8 pr-3 py-1.5 text-xs liquid-glass-input rounded-full cursor-pointer placeholder:text-slate-400 focus:outline-hidden hover:border-primary/40 transition-colors font-medium"
           />
         </div>
 
@@ -566,13 +566,11 @@ export function Topbar() {
         <button
           type="button"
           onClick={() => openModal("isGlobalSearchOpen")}
-          className="p-1.5 text-slate-500 hover:text-slate-900 dark:hover:text-white rounded-lg md:hidden"
+          className="p-1.5 text-slate-500 hover:text-slate-900 dark:hover:text-white rounded-lg md:hidden cursor-pointer"
           title="Search"
         >
           <Search size={18} />
         </button>
-
-
 
         {/* Quick Add dropdown */}
         {['Super Admin', 'Admin', 'Teams'].includes(user.role) && (
@@ -592,7 +590,7 @@ export function Topbar() {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 8, scale: 0.95 }}
                   transition={{ duration: 0.13 }}
-                  className="absolute right-0 top-full mt-2 w-48 bg-surface border border-border shadow-lg rounded-xl overflow-hidden z-50 py-1"
+                  className="absolute right-0 top-full mt-2 w-48 modal-3d-dialog overflow-hidden z-50 py-1"
                 >
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-4 pt-2 pb-1">Quick Add</p>
                   {visibleQuickAddOptions.map((opt) => (

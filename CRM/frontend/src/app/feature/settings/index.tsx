@@ -20,6 +20,7 @@ import { fetchModuleDataFromDB, saveModuleDataToDB } from "@/lib/storageSync"
 import { 
   getUsers, 
   recordUserAccount, 
+  getStoredUserAccountsAsync,
   cascadeUserAvatarChange, 
   checkUsernameAvailabilityAsync, 
   updateUserUsernameAsync 
@@ -206,6 +207,56 @@ export default function SettingsMain() {
         if (kd.accountHolderName) setKycAccountHolderName(kd.accountHolderName)
         if (kd.upiId) setKycUpiId(kd.upiId)
         if (kd.rejectionReason) setKycRejectionReason(kd.rejectionReason)
+      }
+
+      // Live DB sync: fetch fresh user account to get KYC approved by Admin in real-time
+      const syncFreshKYC = () => {
+        getStoredUserAccountsAsync().then((accounts) => {
+          const uId = String(user.id || "").toLowerCase().trim()
+          const uEmail = (user.email || "").toLowerCase().trim()
+          const fresh = accounts.find((a) => {
+            const aId = String(a.id || "").toLowerCase().trim()
+            const aEmail = (a.email || "").toLowerCase().trim()
+            return (uId && aId === uId) || (uEmail && aEmail === uEmail)
+          })
+          if (fresh) {
+            if (fresh.kycStatus) setKycStatus(fresh.kycStatus)
+            if (fresh.kycData) {
+              const kd = fresh.kycData
+              if (kd.fullName) setKycFullName(kd.fullName)
+              if (kd.docType) setKycDocType(kd.docType)
+              if (kd.docNumber) setKycDocNumber(kd.docNumber)
+              if (kd.docFrontUrl) setKycDocFrontUrl(kd.docFrontUrl)
+              if (kd.docBackUrl) setKycDocBackUrl(kd.docBackUrl)
+              if (kd.bankName) setKycBankName(kd.bankName)
+              if (kd.accountNumber) setKycAccountNumber(kd.accountNumber)
+              if (kd.ifscCode) setKycIfscCode(kd.ifscCode)
+              if (kd.accountHolderName) setKycAccountHolderName(kd.accountHolderName)
+              if (kd.upiId) setKycUpiId(kd.upiId)
+              if (kd.rejectionReason) setKycRejectionReason(kd.rejectionReason)
+            }
+            if (fresh.kycStatus && fresh.kycStatus !== user.kycStatus) {
+              useAuthStore.setState({
+                user: {
+                  ...user,
+                  kycStatus: fresh.kycStatus,
+                  kycData: fresh.kycData,
+                }
+              })
+            }
+          }
+        }).catch(() => {})
+      }
+
+      syncFreshKYC()
+
+      if (typeof window !== "undefined") {
+        window.addEventListener("saampark_kyc_updated", syncFreshKYC)
+        window.addEventListener("storage", syncFreshKYC)
+        return () => {
+          window.removeEventListener("saampark_kyc_updated", syncFreshKYC)
+          window.removeEventListener("storage", syncFreshKYC)
+        }
       }
     }
   }, [user])

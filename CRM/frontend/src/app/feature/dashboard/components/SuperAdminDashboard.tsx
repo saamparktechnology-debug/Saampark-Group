@@ -728,7 +728,7 @@ export function SuperAdminDashboard() {
           {/* ── SECTION 2: 5 METRIC KPI CARDS ROW (EXACT LAYOUT & ACCURATE DATA) ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {/* Card 1: Total Companies */}
-        <div className="bg-white dark:bg-zinc-900 p-5 rounded-2xl border border-slate-200/80 dark:border-zinc-800 shadow-xs flex flex-col justify-between">
+        <div className="card-3d p-5 rounded-2xl flex flex-col justify-between">
           <div className="flex items-start justify-between">
             <div className="p-3 rounded-2xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 border border-blue-100 dark:border-blue-900">
               <Building2 size={22} />
@@ -746,7 +746,7 @@ export function SuperAdminDashboard() {
         </div>
 
         {/* Card 2: Total Branches */}
-        <div className="bg-white dark:bg-zinc-900 p-5 rounded-2xl border border-slate-200/80 dark:border-zinc-800 shadow-xs flex flex-col justify-between">
+        <div className="card-3d p-5 rounded-2xl flex flex-col justify-between">
           <div className="flex items-start justify-between">
             <div className="p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 border border-emerald-100 dark:border-emerald-900">
               <GitBranch size={22} />
@@ -764,7 +764,7 @@ export function SuperAdminDashboard() {
         </div>
 
         {/* Card 3: Total Users */}
-        <div className="bg-white dark:bg-zinc-900 p-5 rounded-2xl border border-slate-200/80 dark:border-zinc-800 shadow-xs flex flex-col justify-between">
+        <div className="card-3d p-5 rounded-2xl flex flex-col justify-between">
           <div className="flex items-start justify-between">
             <div className="p-3 rounded-2xl bg-purple-50 dark:bg-purple-950/50 text-purple-600 border border-purple-100 dark:border-purple-900">
               <Users size={22} />
@@ -782,7 +782,7 @@ export function SuperAdminDashboard() {
         </div>
 
         {/* Card 4: Total Projects */}
-        <div className="bg-white dark:bg-zinc-900 p-5 rounded-2xl border border-slate-200/80 dark:border-zinc-800 shadow-xs flex flex-col justify-between">
+        <div className="card-3d p-5 rounded-2xl flex flex-col justify-between">
           <div className="flex items-start justify-between">
             <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 border border-amber-100 dark:border-amber-900">
               <Briefcase size={22} />
@@ -800,7 +800,7 @@ export function SuperAdminDashboard() {
         </div>
 
         {/* Card 5: Total Revenue */}
-        <div className="bg-white dark:bg-zinc-900 p-5 rounded-2xl border border-slate-200/80 dark:border-zinc-800 shadow-xs flex flex-col justify-between">
+        <div className="card-3d p-5 rounded-2xl flex flex-col justify-between">
           <div className="flex items-start justify-between">
             <div className="p-3 rounded-2xl bg-pink-50 dark:bg-pink-950/50 text-pink-600 border border-pink-100 dark:border-pink-900">
               <IndianRupee size={22} />
@@ -822,7 +822,7 @@ export function SuperAdminDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Card 1: Company Wise Overview (Donut Chart - Dynamic Companies) */}
-        <div className="bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-slate-200/80 dark:border-zinc-800 shadow-xs flex flex-col justify-between">
+        <div className="card-3d p-6 rounded-2xl flex flex-col justify-between">
           <div>
             <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-6">
               Company Wise Overview
@@ -886,7 +886,7 @@ export function SuperAdminDashboard() {
         </div>
 
         {/* Card 2: Revenue Overview (All Companies) - Smooth Area Chart */}
-        <div className="bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-slate-200/80 dark:border-zinc-800 shadow-xs flex flex-col justify-between">
+        <div className="card-3d p-6 rounded-2xl flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-bold text-slate-900 dark:text-white">

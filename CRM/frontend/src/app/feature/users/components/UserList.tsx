@@ -59,26 +59,26 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
   return (
     <div className="space-y-4">
       {/* Search and Filters Bar */}
-      <div className="glass-panel p-4 rounded-xl border border-border flex flex-col md:flex-row items-center justify-between gap-4">
+      <div className="box-3d p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="relative w-full md:w-80">
-          <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search users by name, email, or department..."
-            className="w-full pl-10 pr-4 py-2 rounded-xl bg-surface border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl liquid-glass-input text-xs font-medium focus:outline-hidden"
           />
         </div>
 
         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
           <div className="flex items-center gap-2">
-            <Filter size={16} className="text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">Role:</span>
+            <Filter size={15} className="text-muted-foreground" />
+            <span className="text-xs font-bold text-muted-foreground">Role:</span>
             <select
               value={selectedRole}
               onChange={(e) => setSelectedRole(e.target.value)}
-              className="px-3 py-1.5 rounded-lg bg-surface border border-border text-xs focus:outline-none focus:ring-2 focus:ring-primary/50"
+              className="px-3 py-2 rounded-xl liquid-glass-input text-xs font-semibold focus:outline-hidden cursor-pointer"
             >
               <option value="All">All Roles</option>
               {isSuperAdmin && <option value="Super Admin">Super Admin</option>}
@@ -89,11 +89,11 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">Status:</span>
+            <span className="text-xs font-bold text-muted-foreground">Status:</span>
             <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
-              className="px-3 py-1.5 rounded-lg bg-surface border border-border text-xs focus:outline-none focus:ring-2 focus:ring-primary/50"
+              className="px-3 py-2 rounded-xl liquid-glass-input text-xs font-semibold focus:outline-hidden cursor-pointer"
             >
               <option value="All">All Statuses</option>
               <option value="Active">Active</option>
@@ -105,7 +105,7 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
       </div>
 
       {/* Users Table */}
-      <div className="glass-panel rounded-2xl border border-border overflow-hidden shadow-sm">
+      <div className="table-3d-wrapper rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm border-collapse">
             <thead>

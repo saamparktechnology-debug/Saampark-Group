@@ -18,12 +18,12 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     const baseStyles = "relative inline-flex items-center justify-center font-medium overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
     
     const variants = {
-      primary: "bg-primary text-primary-foreground hover:bg-primary-hover shadow-soft",
-      secondary: "bg-surface hover:bg-surface-hover text-foreground border border-border shadow-soft",
-      outline: "border border-border bg-transparent hover:bg-surface-hover text-foreground",
-      danger: "bg-danger text-danger-foreground hover:bg-danger/90 shadow-soft",
+      primary: "btn-3d bg-primary text-primary-foreground hover:bg-primary-hover font-semibold",
+      secondary: "btn-3d bg-surface hover:bg-surface-hover text-foreground border border-border font-semibold",
+      outline: "border border-border bg-transparent hover:bg-surface-hover text-foreground hover:shadow-xs",
+      danger: "btn-3d bg-danger text-danger-foreground hover:bg-danger/90 font-semibold",
       ghost: "hover:bg-surface-hover text-foreground",
-      glass: "liquid-glass-pill text-foreground shadow-float hover:border-primary/40 hover:scale-[1.02] active:scale-[0.98]"
+      glass: "btn-3d liquid-glass-pill text-foreground border border-border/80"
     }
     
     const sizes = {

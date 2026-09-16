@@ -66,7 +66,7 @@ export function DataTable<TData, TValue>({
           />
         </div>
       )}
-      <div className="rounded-2xl liquid-glass border border-white/20 dark:border-white/10 overflow-hidden shadow-lg">
+      <div className="table-3d-wrapper rounded-2xl overflow-hidden">
         <div className="w-full overflow-auto">
           <table className="w-full caption-bottom text-sm">
             <thead className="[&_tr]:border-b bg-white/40 dark:bg-white/[0.03] backdrop-blur-md">
