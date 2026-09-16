@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Sidebar } from "./Sidebar"
 import { Topbar } from "./Topbar"
+import { CompanySwitchLoader } from "./CompanySwitchLoader"
 import { useUIStore } from "@/store/useUIStore"
 import { usePathname } from "next/navigation"
 
@@ -36,6 +37,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
       <Sidebar />
       <Topbar />
+      <CompanySwitchLoader />
 
       <main
         style={{ paddingLeft: leftPadding }}
