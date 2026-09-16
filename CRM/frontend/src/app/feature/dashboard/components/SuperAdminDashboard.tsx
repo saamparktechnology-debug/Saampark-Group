@@ -1473,21 +1473,21 @@ export function SuperAdminDashboard() {
           <Widget title="Team Members Overview" icon={Users}>
              <div className="grid grid-cols-2 gap-4 py-4 text-center">
                 <div className="p-3 rounded-xl bg-zinc-50/80 dark:bg-zinc-800/40 border border-border/30">
-                  <p className="text-3xl font-extrabold text-foreground">{dbUsers.length || 23}</p>
+                  <p className="text-3xl font-extrabold text-foreground">{scopedUsers.length}</p>
                   <p className="text-xs text-muted-foreground mt-1 font-medium">Total Registered</p>
                 </div>
                 <div className="p-3 rounded-xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-500/20">
-                  <p className="text-3xl font-extrabold text-emerald-500">{dbUsers.filter(u => u.status === "Active").length || 23}</p>
+                  <p className="text-3xl font-extrabold text-emerald-500">{scopedUsers.filter(u => u.status === "Active").length}</p>
                   <p className="text-xs text-muted-foreground mt-1 font-medium">Active Accounts</p>
                 </div>
              </div>
              <div className="grid grid-cols-2 gap-4 pt-3 border-t border-border/40 text-center text-xs">
                 <div>
-                  <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{dbUsers.filter(u => u.role === "Admin" || u.role === "Super Admin").length || 2}</p>
+                  <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{scopedUsers.filter(u => u.role === "Admin" || u.role === "Super Admin").length}</p>
                   <p className="text-muted-foreground mt-0.5 font-medium">Admins</p>
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{dbUsers.filter(u => u.role === "Teams" || u.role === "Team").length || 18}</p>
+                  <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{scopedUsers.filter(u => u.role === "Teams" || u.role === "Team").length}</p>
                   <p className="text-muted-foreground mt-0.5 font-medium">Staff Members</p>
                 </div>
              </div>

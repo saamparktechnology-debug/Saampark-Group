@@ -152,6 +152,7 @@ export default function CompaniesMain() {
     status: "active"
   })
 
+  const [allUsers, setAllUsers] = React.useState<any[]>([])
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false)
   const [deleteTarget, setDeleteTarget] = React.useState<{ type: "company" | "branch" | "sub_branch"; id: string } | null>(null)
   const [saving, setSaving] = React.useState(false)
@@ -182,14 +183,18 @@ export default function CompaniesMain() {
         return false
       }
 
-      const [compRes, branchRes, subBranchRes, dbComps, dbBranches, dbSubBranches] = await Promise.all([
+      const [compRes, branchRes, subBranchRes, dbComps, dbBranches, dbSubBranches, dbUsersList] = await Promise.all([
         CompanyApiService.getAll().catch(() => []),
         BranchApiService.getAll("all").catch(() => []),
         SubBranchApiService.getAll(undefined, "all").catch(() => []),
         fetchModuleDataFromDB<Company[]>("companies", [], "all").catch(() => []),
         fetchModuleDataFromDB<Branch[]>("branches", [], "all").catch(() => []),
         fetchModuleDataFromDB<SubBranch[]>("sub_branches", [], "all").catch(() => []),
+        fetchModuleDataFromDB<any[]>("users", [], "all").catch(() => []),
       ])
+
+      const cleanUsers = filterGlobalDeletedItems(dbUsersList || [])
+      setAllUsers(cleanUsers)
 
       // 1. Merge Companies (strictly 2 canonical companies: tech and consultancy)
       const getCanonKey = (c: any) => {
@@ -239,6 +244,16 @@ export default function CompaniesMain() {
       const rawTech = compMap.get("tech") || CANONICAL_COMPANIES[0]
       const rawConsult = compMap.get("consultancy") || CANONICAL_COMPANIES[1]
 
+      const techUsersCount = cleanUsers.filter(u => {
+        const cIds = u.companyIds || (u.companyId ? [u.companyId] : ["tech"])
+        return (Array.isArray(cIds) ? cIds : [cIds]).some((id: any) => String(id).toLowerCase().includes("tech") || id === "1")
+      }).length
+
+      const consultUsersCount = cleanUsers.filter(u => {
+        const cIds = u.companyIds || (u.companyId ? [u.companyId] : [])
+        return (Array.isArray(cIds) ? cIds : [cIds]).some((id: any) => String(id).toLowerCase().includes("consult") || id === "2")
+      }).length
+
       const finalCompanies: Company[] = [
         {
           ...CANONICAL_COMPANIES[0],
@@ -250,6 +265,7 @@ export default function CompaniesMain() {
           subtitle: (rawTech.subtitle && !rawTech.subtitle.toLowerCase().includes("consult")) ? rawTech.subtitle : "AND RESEARCH PRIVATE LIMITED",
           name: "SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED",
           logo_url: (rawTech.logo_url && rawTech.logo_url.trim() !== "") ? rawTech.logo_url : "/saampark-logo.png",
+          member_count: techUsersCount,
         },
         {
           ...CANONICAL_COMPANIES[1],
@@ -261,7 +277,7 @@ export default function CompaniesMain() {
           subtitle: (rawConsult.subtitle && !rawConsult.subtitle.toLowerCase().includes("research")) ? rawConsult.subtitle : "MANAGEMENT & ADVISORY SERVICES",
           name: "SAAMPARK CONSULTANCY SERVICE",
           logo_url: (rawConsult.logo_url && rawConsult.logo_url !== "/saampark-logo.png") ? rawConsult.logo_url : "",
-          member_count: 0,
+          member_count: consultUsersCount,
         },
       ]
       setCompanies(finalCompanies)
@@ -386,8 +402,19 @@ export default function CompaniesMain() {
       return isMatchingCompany(comp, bComp)
     })
   }
-  const getSubBranchesForBranch = (branchId: string) => subBranches.filter(sb => String(sb.branch_id) === String(branchId))
-  const getUserCountForCompany = (companyId: string) => getBranchesForCompany(companyId).reduce((sum, b) => sum + (b.user_count || 0), 0)
+  const getUserCountForCompany = (companyId: string) => {
+    const isConsult = String(companyId).toLowerCase().includes("consult") || companyId === "2"
+    if (isConsult) {
+      return (allUsers || []).filter(u => {
+        const cIds = u.companyIds || (u.companyId ? [u.companyId] : [])
+        return (Array.isArray(cIds) ? cIds : [cIds]).some((id: any) => String(id).toLowerCase().includes("consult") || id === "2")
+      }).length
+    }
+    return (allUsers || []).filter(u => {
+      const cIds = u.companyIds || (u.companyId ? [u.companyId] : ["tech"])
+      return (Array.isArray(cIds) ? cIds : [cIds]).some((id: any) => String(id).toLowerCase().includes("tech") || id === "1")
+    }).length
+  }
 
   const filteredCompanies = React.useMemo(() => {
     return companies.filter(c => {
