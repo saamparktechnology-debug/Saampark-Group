@@ -305,6 +305,10 @@ export default function DashboardMain() {
     return rec === 0 && due > 0 && !partiallyPaidInvoices.some(p => p.id === i.id) && !fullyPaidInvoices.some(p => p.id === i.id)
   })
 
+  // All invoices with outstanding balance due
+  const invoicesWithDue = liveInvoices.filter(i => (parseInt(String(i.due || "0").replace(/[^0-9]/g, "")) || 0) > 0)
+  const invoicesWithDueCount = invoicesWithDue.length
+
   const totalInvoicedSum = liveInvoices.reduce((sum, i) => {
     const num = i.baseAmount || parseInt(String(i.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
     return sum + num
@@ -662,9 +666,46 @@ export default function DashboardMain() {
             </div>
           }
         />
-        <KPICard icon={Grid} colorClass="bg-blue-400" value={`${activeTasksCount} Open`} label="Active Tasks" />
-        <KPICard icon={Calendar} colorClass="bg-indigo-500" value={`₹${totalInvoicedSum.toLocaleString("en-IN")}`} label="Total Invoiced" />
-        <KPICard icon={PieChart} colorClass="bg-pink-500" value={`₹${totalDueSum.toLocaleString("en-IN")}`} label="Balance Due" />
+        <KPICard 
+          icon={Grid} 
+          colorClass="bg-blue-500" 
+          value={`${activeTasksCount} Open`} 
+          label="Active Tasks" 
+          subtextNode={
+            <div className="mt-1 flex items-center justify-end">
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/60 pill-badge-3d">
+                {liveTasks.length} Total Assigned
+              </span>
+            </div>
+          }
+        />
+        <KPICard 
+          icon={Calendar} 
+          colorClass="bg-indigo-500" 
+          value={`₹${totalInvoicedSum.toLocaleString("en-IN")}`} 
+          label="Total Invoiced" 
+          subtextNode={
+            <div className="mt-1 flex items-center justify-end">
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/60 pill-badge-3d">
+                {liveInvoices.length} Invoices
+              </span>
+            </div>
+          }
+        />
+        <KPICard 
+          icon={PieChart} 
+          colorClass="bg-rose-500" 
+          value={`₹${totalDueSum.toLocaleString("en-IN")}`} 
+          label="Balance Due" 
+          subtextNode={
+            <div className="mt-1 flex items-center justify-end">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200/80 dark:border-rose-800/60 pill-badge-3d shadow-xs">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+                {invoicesWithDueCount} {invoicesWithDueCount === 1 ? "Invoice Due" : "Invoices Due"}
+              </span>
+            </div>
+          }
+        />
       </div>
 
       {/* --- ROW 2: REAL DYNAMIC OVERVIEWS --- */}
@@ -716,34 +757,61 @@ export default function DashboardMain() {
         <Widget title="Invoice & Billing Overview" icon={FileText}>
           <div className="space-y-4 pt-2">
             {[
-              { label: "Fully Paid", count: fullyPaidInvoices.length, color: "bg-emerald-500", text: "text-emerald-500", percent: liveInvoices.length > 0 ? Math.round((fullyPaidInvoices.length / liveInvoices.length) * 100) : 0, amount: `₹${fullyPaidReceivedSum.toLocaleString("en-IN")}` },
-              { label: "Partially Paid", count: partiallyPaidInvoices.length, color: "bg-amber-500", text: "text-amber-500", percent: liveInvoices.length > 0 ? Math.round((partiallyPaidInvoices.length / liveInvoices.length) * 100) : 0, amount: `₹${partialReceivedSum.toLocaleString("en-IN")}` },
-              { label: "Due / Pending", count: unpaidInvoices.length, color: "bg-rose-500", text: "text-rose-500", percent: liveInvoices.length > 0 ? Math.round((unpaidInvoices.length / liveInvoices.length) * 100) : 0, amount: `₹${totalDueSum.toLocaleString("en-IN")}` },
+              { 
+                label: "Fully Paid", 
+                count: fullyPaidInvoices.length, 
+                color: "bg-emerald-500", 
+                text: "text-emerald-600 dark:text-emerald-400", 
+                percent: totalInvoicedSum > 0 ? Math.min(100, Math.round((fullyPaidReceivedSum / totalInvoicedSum) * 100)) : 0, 
+                amount: `₹${fullyPaidReceivedSum.toLocaleString("en-IN")}` 
+              },
+              { 
+                label: "Partially Paid", 
+                count: partiallyPaidInvoices.length, 
+                color: "bg-amber-500", 
+                text: "text-amber-600 dark:text-amber-400", 
+                percent: totalInvoicedSum > 0 ? Math.min(100, Math.round((partialReceivedSum / totalInvoicedSum) * 100)) : 0, 
+                amount: `₹${partialReceivedSum.toLocaleString("en-IN")}` 
+              },
+              { 
+                label: "Outstanding Due", 
+                count: invoicesWithDueCount, 
+                color: "bg-rose-500", 
+                text: "text-rose-600 dark:text-rose-400", 
+                percent: totalInvoicedSum > 0 ? Math.min(100, Math.round((totalDueSum / totalInvoicedSum) * 100)) : 0, 
+                amount: `₹${totalDueSum.toLocaleString("en-IN")}` 
+              },
             ].map((inv, i) => (
               <div key={i} className="flex items-center text-sm">
-                <span className={`w-6 font-bold ${inv.text}`}>{inv.count}</span>
-                <span className="w-28 text-muted-foreground text-xs">{inv.label}</span>
-                <div className="flex-1 mx-3 h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                <span className={`w-7 font-black text-center text-xs py-0.5 rounded-md ${inv.text} bg-slate-100 dark:bg-zinc-800/80 border border-slate-200/80 dark:border-zinc-700/60 pill-badge-3d shrink-0`}>
+                  {inv.count}
+                </span>
+                <span className="w-28 ml-2.5 text-slate-700 dark:text-zinc-300 font-bold text-xs truncate">{inv.label}</span>
+                <div className="flex-1 mx-3 h-2 bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden bar-groove-3d">
                   <motion.div 
-                    initial={{ width: 0 }}
-                    animate={{ width: `${inv.percent}%` }}
-                    transition={{ duration: 0.8, delay: i * 0.1, ease: "easeOut" }}
-                    className={`h-full rounded-full ${inv.color}`} 
+                    initial={{ width: 0 }} 
+                    animate={{ width: `${Math.max(inv.count > 0 ? 5 : 0, inv.percent)}%` }} 
+                    transition={{ duration: 0.8, delay: i * 0.1, ease: "easeOut" }} 
+                    className={`h-full rounded-full ${inv.color} bar-fill-3d`} 
                   />
                 </div>
-                <span className="text-right text-xs text-foreground font-bold">{inv.amount}</span>
+                <span className="text-right text-xs text-slate-900 dark:text-white font-black font-mono shrink-0">{inv.amount}</span>
               </div>
             ))}
           </div>
 
           <div className="flex justify-between items-end mt-auto pt-6 border-t border-border/40 text-xs">
             <div>
-              <p className="text-muted-foreground">Total Invoiced</p>
-              <p className="font-extrabold text-sm text-foreground">₹{totalInvoicedSum.toLocaleString("en-IN")}</p>
+              <p className="text-muted-foreground font-semibold text-[11px]">Total Invoiced</p>
+              <p className="font-black text-sm text-slate-900 dark:text-white">₹{totalInvoicedSum.toLocaleString("en-IN")}</p>
+              <p className="text-[10.5px] text-slate-400 font-medium">{liveInvoices.length} Invoices Issued</p>
             </div>
             <div className="text-right">
-              <p className="text-muted-foreground">Outstanding Due</p>
-              <p className="font-extrabold text-sm text-rose-500">₹{totalDueSum.toLocaleString("en-IN")}</p>
+              <p className="text-muted-foreground font-semibold text-[11px]">Outstanding Due</p>
+              <p className="font-black text-sm text-rose-600 dark:text-rose-400">₹{totalDueSum.toLocaleString("en-IN")}</p>
+              <p className="text-[10.5px] text-rose-500 font-bold">
+                {invoicesWithDueCount} {invoicesWithDueCount === 1 ? "Invoice" : "Invoices"} with Due
+              </p>
             </div>
           </div>
         </Widget>

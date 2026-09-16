@@ -648,6 +648,12 @@ export function SuperAdminDashboard() {
     return received === 0 && due > 0 && !partialInvoices.some(p => p.id === i.id) && !paidInvoices.some(p => p.id === i.id)
   })
 
+  // Invoices with outstanding due
+  const invoicesWithDue = scopedInvoices.filter(i => parseAmt(i.due) > 0)
+  const invoicesWithDueCount = hasRealInvoices 
+    ? invoicesWithDue.length 
+    : (isBranchSelected ? 0 : (companyBaseline.dueCount + companyBaseline.partCount))
+
   const paidInvoicesCount = hasRealInvoices ? paidInvoices.length : (isBranchSelected ? 0 : companyBaseline.paidCount)
   const partialInvoicesCount = hasRealInvoices ? partialInvoices.length : (isBranchSelected ? 0 : companyBaseline.partCount)
   const dueInvoicesCount = hasRealInvoices ? dueInvoices.length : (isBranchSelected ? 0 : companyBaseline.dueCount)
@@ -1246,9 +1252,46 @@ export function SuperAdminDashboard() {
               </div>
             }
           />
-          <KPICard icon={Grid} colorClass="bg-blue-400" value={`${scopedTasks.filter(t => t.status !== "Done").length} Open`} label="Active Tasks" />
-          <KPICard icon={Calendar} colorClass="bg-indigo-500" value={formatINR(activeCompanyInvoiced)} label="Total Invoiced" />
-          <KPICard icon={PieChart} colorClass="bg-pink-500" value={formatINR(activeCompanyDue)} label="Balance Due" />
+          <KPICard 
+            icon={Grid} 
+            colorClass="bg-blue-500" 
+            value={`${scopedTasks.filter(t => t.status !== "Done").length} Open`} 
+            label="Active Tasks" 
+            subtextNode={
+              <div className="mt-1 flex items-center justify-end">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/60 pill-badge-3d">
+                  {scopedTasks.length} Total Tasks
+                </span>
+              </div>
+            }
+          />
+          <KPICard 
+            icon={Calendar} 
+            colorClass="bg-indigo-500" 
+            value={formatINR(activeCompanyInvoiced)} 
+            label="Total Invoiced" 
+            subtextNode={
+              <div className="mt-1 flex items-center justify-end">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/60 pill-badge-3d">
+                  {scopedInvoices.length || (companyBaseline.paidCount + companyBaseline.partCount + companyBaseline.dueCount)} Invoices
+                </span>
+              </div>
+            }
+          />
+          <KPICard 
+            icon={PieChart} 
+            colorClass="bg-rose-500" 
+            value={formatINR(activeCompanyDue)} 
+            label="Balance Due" 
+            subtextNode={
+              <div className="mt-1 flex items-center justify-end">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200/80 dark:border-rose-800/60 pill-badge-3d shadow-xs">
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+                  {invoicesWithDueCount} {invoicesWithDueCount === 1 ? "Invoice Due" : "Invoices Due"}
+                </span>
+              </div>
+            }
+          />
         </div>
 
         {/* Operational Overviews Row: Projects, Invoices, Revenue vs Expenses */}
@@ -1271,12 +1314,12 @@ export function SuperAdminDashboard() {
               </div>
             </div>
             <div className="mt-auto pt-6">
-              <div className="h-6 w-full rounded-full border border-emerald-500 p-0.5 relative flex items-center">
+              <div className="h-6 w-full rounded-full border border-emerald-500 p-0.5 relative flex items-center bar-groove-3d">
                 <motion.div 
                   initial={{ width: 0 }} 
                   animate={{ width: `${averageProjectProgression}%` }} 
                   transition={{ duration: 1, ease: "easeOut" }} 
-                  className="h-full bg-emerald-300/50 rounded-full" 
+                  className="h-full bg-emerald-300/50 rounded-full bar-fill-3d" 
                 />
                 <span className="absolute inset-0 flex items-center justify-center text-xs text-emerald-700 dark:text-emerald-300 font-bold z-10 pointer-events-none">
                   Average Progression: {averageProjectProgression}%
@@ -1304,51 +1347,59 @@ export function SuperAdminDashboard() {
                   label: "Fully Paid", 
                   count: paidInvoicesCount, 
                   color: "bg-emerald-500", 
-                  text: "text-emerald-500", 
-                  percent: (paidInvoicesCount + partialInvoicesCount + dueInvoicesCount) > 0 ? Math.round((paidInvoicesCount / (paidInvoicesCount + partialInvoicesCount + dueInvoicesCount)) * 100) : 0, 
+                  text: "text-emerald-600 dark:text-emerald-400", 
+                  percent: activeCompanyInvoiced > 0 ? Math.min(100, Math.round((paidInvoicesReceived / activeCompanyInvoiced) * 100)) : 0, 
                   amount: hasRealInvoices ? formatINR(paidInvoicesReceived) : formatINR(Math.round(companyBaseline.received * 0.8))
                 },
                 { 
                   label: "Partially Paid", 
                   count: partialInvoicesCount, 
                   color: "bg-amber-500", 
-                  text: "text-amber-500", 
-                  percent: (paidInvoicesCount + partialInvoicesCount + dueInvoicesCount) > 0 ? Math.round((partialInvoicesCount / (paidInvoicesCount + partialInvoicesCount + dueInvoicesCount)) * 100) : 0, 
+                  text: "text-amber-600 dark:text-amber-400", 
+                  percent: activeCompanyInvoiced > 0 ? Math.min(100, Math.round((partialInvoicesReceived / activeCompanyInvoiced) * 100)) : 0, 
                   amount: hasRealInvoices ? formatINR(partialInvoicesReceived) : formatINR(Math.round(companyBaseline.received * 0.2))
                 },
                 { 
-                  label: "Due / Pending", 
-                  count: dueInvoicesCount, 
+                  label: "Outstanding Due", 
+                  count: invoicesWithDueCount, 
                   color: "bg-rose-500", 
-                  text: "text-rose-500", 
-                  percent: (paidInvoicesCount + partialInvoicesCount + dueInvoicesCount) > 0 ? Math.round((dueInvoicesCount / (paidInvoicesCount + partialInvoicesCount + dueInvoicesCount)) * 100) : 0, 
-                  amount: hasRealInvoices ? formatINR(dueInvoicesDue + partialInvoicesDue) : formatINR(activeCompanyDue) 
+                  text: "text-rose-600 dark:text-rose-400", 
+                  percent: activeCompanyInvoiced > 0 ? Math.min(100, Math.round((activeCompanyDue / activeCompanyInvoiced) * 100)) : 0, 
+                  amount: formatINR(activeCompanyDue) 
                 },
               ].map((inv, i) => (
                 <div key={i} className="flex items-center text-sm">
-                  <span className={`w-6 font-bold ${inv.text}`}>{inv.count}</span>
-                  <span className="w-28 text-muted-foreground text-xs">{inv.label}</span>
-                  <div className="flex-1 mx-3 h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                  <span className={`w-7 font-black text-center text-xs py-0.5 rounded-md ${inv.text} bg-slate-100 dark:bg-zinc-800/80 border border-slate-200/80 dark:border-zinc-700/60 pill-badge-3d shrink-0`}>
+                    {inv.count}
+                  </span>
+                  <span className="w-28 ml-2.5 text-slate-700 dark:text-zinc-300 font-bold text-xs truncate">{inv.label}</span>
+                  <div className="flex-1 mx-3 h-2 bg-slate-100 dark:bg-zinc-800 rounded-full overflow-hidden bar-groove-3d">
                     <motion.div 
                       initial={{ width: 0 }} 
-                      animate={{ width: `${inv.percent}%` }} 
+                      animate={{ width: `${Math.max(inv.count > 0 ? 5 : 0, inv.percent)}%` }} 
                       transition={{ duration: 0.8, delay: i * 0.1, ease: "easeOut" }} 
-                      className={`h-full rounded-full ${inv.color}`} 
+                      className={`h-full rounded-full ${inv.color} bar-fill-3d`} 
                     />
                   </div>
-                  <span className="text-right text-xs text-foreground font-bold">{inv.amount}</span>
+                  <span className="text-right text-xs text-slate-900 dark:text-white font-black font-mono shrink-0">{inv.amount}</span>
                 </div>
               ))}
             </div>
 
             <div className="flex justify-between items-end mt-auto pt-6 border-t border-border/40 text-xs">
               <div>
-                <p className="text-muted-foreground">Total Invoiced</p>
-                <p className="font-extrabold text-sm text-foreground">{formatINR(activeCompanyInvoiced)}</p>
+                <p className="text-muted-foreground font-semibold text-[11px]">Total Invoiced</p>
+                <p className="font-black text-sm text-slate-900 dark:text-white">{formatINR(activeCompanyInvoiced)}</p>
+                <p className="text-[10.5px] text-slate-400 font-medium">
+                  {scopedInvoices.length || (companyBaseline.paidCount + companyBaseline.partCount + companyBaseline.dueCount)} Invoices Issued
+                </p>
               </div>
               <div className="text-right">
-                <p className="text-muted-foreground">Outstanding Due</p>
-                <p className="font-extrabold text-sm text-rose-500">{formatINR(activeCompanyDue)}</p>
+                <p className="text-muted-foreground font-semibold text-[11px]">Outstanding Due</p>
+                <p className="font-black text-sm text-rose-600 dark:text-rose-400">{formatINR(activeCompanyDue)}</p>
+                <p className="text-[10.5px] text-rose-500 font-bold">
+                  {invoicesWithDueCount} {invoicesWithDueCount === 1 ? "Invoice" : "Invoices"} with Due
+                </p>
               </div>
             </div>
           </Widget>
