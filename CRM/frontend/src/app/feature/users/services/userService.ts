@@ -177,11 +177,12 @@ export function getStoredUserAccounts(): UserItem[] {
   return DEFAULT_SYSTEM_ACCOUNTS;
 }
 
-// Helper: save user accounts to MySQL only (master 'all' company scope + sync legacy scopes)
+// Helper: save user accounts to MySQL only (master 'all' company scope + sync company scopes)
 export async function saveUserAccounts(accounts: UserItem[]): Promise<void> {
   await Promise.all([
     saveModuleDataToDB("users", accounts, "all"),
     saveModuleDataToDB("users", accounts, "tech"),
+    saveModuleDataToDB("users", accounts, "consultancy"),
     saveModuleDataToDB("users", accounts, "digital")
   ]);
   // Bust users cache so next read always fetches fresh data after a write
@@ -329,7 +330,7 @@ export async function recordUserAccountAsync(user: Partial<UserItem>, isNewRegis
 
     // ── CRITICAL FIX: also clean old/new email from company-specific scopes ──
     // getUsers() reads from "tech" and "digital" too; ghost records there cause duplicates.
-    const scopesToClean = ["tech", "digital"];
+    const scopesToClean = ["tech", "consultancy", "digital"];
     for (const scope of scopesToClean) {
       try {
         const scopeAccounts = await fetchModuleDataFromDB<UserItem[]>("users", [], scope);
@@ -921,7 +922,7 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
   }
 
   try {
-    const res = await api.get("/users");
+    const res = await api.get("/users?company_id=all&branch_id=all&sub_branch_id=all");
     const rawData = Array.isArray(res) ? res : res?.data?.users || res?.data || [];
     if (Array.isArray(rawData) && rawData.length > 0) {
       rawData.forEach((u: any) => {

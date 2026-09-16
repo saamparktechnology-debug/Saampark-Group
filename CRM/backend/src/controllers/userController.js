@@ -9,20 +9,21 @@ pool.execute('ALTER TABLE users ADD COLUMN sub_branch_id INT NULL').catch(() => 
 async function resolveRequester(req) {
   if (req.user && req.user.role_id) return req.user;
   const headerUserId = req.headers['x-user-id'];
-  if (headerUserId) {
+  const headerEmail = req.headers['x-user-email'];
+  if (headerUserId || headerEmail) {
     try {
       const [rows] = await pool.execute(
         'SELECT id, email, role_id, company_id, company_ids, branch_id, sub_branch_id FROM users WHERE (id = ? OR email = ?) AND deleted_at IS NULL',
-        [headerUserId, headerUserId]
+        [headerUserId || '', headerEmail || '']
       );
       if (rows.length > 0) return rows[0];
     } catch {}
   }
   const headerRole = req.headers['x-user-role'];
-  if (headerRole === 'Super Admin') return { role_id: 1 };
-  if (headerRole === 'Admin') return { role_id: 2 };
-  if (headerRole === 'Clients') return { role_id: 4 };
-  return { role_id: 3 }; // default Teams
+  if (headerRole === 'Super Admin') return { role_id: 1, role_name: 'Super Admin' };
+  if (headerRole === 'Admin') return { role_id: 2, role_name: 'Admin' };
+  if (headerRole === 'Clients') return { role_id: 4, role_name: 'Clients' };
+  return { role_id: 3, role_name: 'Teams' }; // default Teams
 }
 
 // Helper: Check if target company is in requester's assigned company scope
@@ -73,11 +74,11 @@ const getAllUsers = async (req, res, next) => {
         params.push(String(req.companyId || companyId), String(req.companySlug || companyId), String(req.companyId || companyId), String(req.companySlug || companyId));
       }
       if (branchId && branchId !== 'all') {
-        query += ` AND u.branch_id = ?`;
+        query += ` AND (u.branch_id = ? OR u.branch_id IS NULL OR u.branch_id = '')`;
         params.push(branchId);
       }
       if (subBranchId && subBranchId !== 'all') {
-        query += ` AND u.sub_branch_id = ?`;
+        query += ` AND (u.sub_branch_id = ? OR u.sub_branch_id IS NULL OR u.sub_branch_id = '')`;
         params.push(subBranchId);
       }
     } else if (requester.role_id === 2 && requester.branch_id) {
@@ -618,7 +619,7 @@ const createUser = async (req, res, next) => {
       console.warn('Welcome email warning:', emailErr.message);
     }
 
-    return successResponse(res, 201, `User account saved successfully${emailSent ? ' and welcome credentials email sent!' : ' (email sending queued).'}`);
+    return successResponse(res, 201, `User account saved successfully${emailSent ? ' and welcome credentials email sent!' : ' (email sending queued).'}`, { id: userId, user: newUserItem });
   } catch (error) {
     next(error);
   }

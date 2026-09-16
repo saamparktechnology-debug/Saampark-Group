@@ -339,8 +339,10 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
     e.preventDefault()
     if (!name.trim() || !email.trim()) return
 
-    const canonCompId = getCanonicalCompanyId(selectedCompanyId) || "tech"
-    const companyNameToSave = getCompanyFullName(targetCompanyObj)
+    const isAllCompanies = selectedCompanyId === "all" || role === "Super Admin"
+    const canonCompId = isAllCompanies ? "tech" : (getCanonicalCompanyId(selectedCompanyId) || "tech")
+    const companyIds = isAllCompanies ? ["tech", "consultancy"] : [canonCompId]
+    const companyNameToSave = isAllCompanies ? "SAAMPARK Group (All Companies)" : getCompanyFullName(targetCompanyObj)
 
     const effectiveBranchId = scopeType === "branch" ? (selectedBranchId || undefined) : undefined
     const matchedBranch = effectiveBranchId ? branches.find(b => String(b.id) === String(effectiveBranchId)) : undefined
@@ -352,7 +354,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
       email: email.trim().toLowerCase(),
       role,
       companyId: canonCompId,
-      companyIds: [canonCompId],
+      companyIds,
       companyName: companyNameToSave,
       branchId: effectiveBranchId,
       branchIds: effectiveBranchId ? [effectiveBranchId] : undefined,
@@ -654,6 +656,9 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                         }}
                         className="w-full px-3.5 py-2.5 rounded-xl bg-card border border-border text-xs focus:ring-2 focus:ring-primary focus:outline-hidden font-bold text-foreground shadow-2xs"
                       >
+                        {isCurrentSuperAdmin && (
+                          <option value="all">🌐 SAAMPARK Group (All Companies / Global Scope)</option>
+                        )}
                         {companies.map((c) => (
                           <option key={c.id} value={c.id}>
                             {c.id === "tech" ? "💻" : "🏢"} {getCompanyFullName(c)}

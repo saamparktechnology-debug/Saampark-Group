@@ -95,9 +95,9 @@ export default function UsersMain() {
       })
     }
 
-    const targetComp = (activeCompanyId || user?.companyId || "").toLowerCase().trim()
-    const targetBranch = activeBranchId || user?.branchId
-    const targetSubBranch = activeSubBranchId || (user as any)?.subBranchId
+    const targetComp = (activeCompanyId || (isSuperAdminLoggedIn ? "all" : user?.companyId) || "all").toLowerCase().trim()
+    const targetBranch = activeBranchId || (isSuperAdminLoggedIn ? "all" : user?.branchId)
+    const targetSubBranch = activeSubBranchId || (isSuperAdminLoggedIn ? "all" : (user as any)?.subBranchId)
 
     let filtered = users
 
@@ -111,9 +111,13 @@ export default function UsersMain() {
       const isConsultancyTarget = targetComp.includes("consult") || targetComp === "2"
 
       filtered = filtered.filter((u) => {
+        if (u.role === "Super Admin") return true
+
         const rawCompList = (u.companyIds && u.companyIds.length > 0)
           ? u.companyIds
           : (u.companyId ? [u.companyId] : ["tech"])
+
+        if (rawCompList.some(id => String(id).toLowerCase().trim() === "all")) return true
 
         const isUserInConsultancy = rawCompList.some(id => {
           const str = String(id).toLowerCase().trim()
@@ -141,10 +145,15 @@ export default function UsersMain() {
 
       filtered = filtered.filter((u) => {
         if (u.role === "Super Admin") return true
+        // Company-wide users (no dedicated branch restriction) work across all branches
+        if (!u.branchId || u.branchId === "all") return true
+
         const uBranchIds = (u.branchIds && u.branchIds.length > 0)
           ? u.branchIds.map(id => String(id).toLowerCase().trim())
           : (u.branchId ? [String(u.branchId).toLowerCase().trim()] : [])
         const uBranchName = String(u.branchName || "").toLowerCase().trim()
+
+        if (uBranchIds.includes("all")) return true
 
         return (
           uBranchIds.includes(targetBranchId) ||
@@ -163,10 +172,14 @@ export default function UsersMain() {
 
       filtered = filtered.filter((u) => {
         if (u.role === "Super Admin") return true
+        if (!u.subBranchId || u.subBranchId === "all") return true
+
         const uSubIds = (u.subBranchIds && u.subBranchIds.length > 0)
           ? u.subBranchIds.map(id => String(id).toLowerCase().trim())
           : (u.subBranchId ? [String(u.subBranchId).toLowerCase().trim()] : [])
         const uSubName = String(u.subBranchName || "").toLowerCase().trim()
+
+        if (uSubIds.includes("all")) return true
 
         return (
           uSubIds.includes(targetSubBranchId) ||
@@ -241,8 +254,8 @@ export default function UsersMain() {
           return null
         })
 
-        if (res?.data?.id || res?.id) {
-          realId = String(res?.data?.id || res?.id)
+        if (res?.data?.id || res?.data?.user?.id || res?.id) {
+          realId = String(res?.data?.id || res?.data?.user?.id || res?.id)
         }
       } else if (editingUser) {
         await api.put(`/users/${editingUser.id}`, {
@@ -291,7 +304,7 @@ export default function UsersMain() {
       } catch {}
     }
 
-    const { recordUserAccountAsync } = await import("./services/userService")
+    const { recordUserAccountAsync, saveUserAccounts } = await import("./services/userService")
     const saved = await recordUserAccountAsync(
       {
         ...userData,
@@ -394,7 +407,6 @@ export default function UsersMain() {
     }
 
     setUsers((prev) => {
-      let nextList: UserItem[] = []
       if (editingUser) {
         const filtered = prev.filter((u) => 
           String(u.id) !== String(editingUser.id) &&
@@ -410,22 +422,16 @@ export default function UsersMain() {
           previousEmails: prevEmailsList.length > 0 ? prevEmailsList : undefined,
           previousEmail: prevEmailsList.length > 0 ? prevEmailsList[prevEmailsList.length - 1] : undefined,
         }
-        nextList = [updatedItem, ...filtered]
+        return [updatedItem, ...filtered]
       } else {
-        nextList = [saved, ...prev.filter((u) => u.email.toLowerCase().trim() !== saved.email.toLowerCase().trim())]
+        return [saved, ...prev.filter((u) => u.email.toLowerCase().trim() !== saved.email.toLowerCase().trim())]
       }
-      saveModuleDataToDB("users", nextList, "all")
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("storage"))
-        window.dispatchEvent(new CustomEvent("saampark_data_synced"))
-      }
-      return nextList
     })
 
     // Immediate re-fetch from database to ensure newly created user displays cleanly
     setTimeout(() => {
       loadUsers()
-    }, 100)
+    }, 150)
   }
 
   const handleToggleStatus = async (id: string) => {

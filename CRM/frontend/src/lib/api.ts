@@ -34,7 +34,7 @@ export function setAuthToken(token: string | null) {
   }
 }
 
-export function getActiveCompanyScope(): { companyId?: string; branchId?: string } {
+export function getActiveCompanyScope(): { companyId?: string; branchId?: string; userRole?: string; userId?: string; userEmail?: string } {
   if (typeof window === 'undefined') return {}
   try {
     const raw = localStorage.getItem('saampark-auth-v3')
@@ -44,6 +44,9 @@ export function getActiveCompanyScope(): { companyId?: string; branchId?: string
       return {
         companyId: state?.activeCompanyId || state?.user?.companyId,
         branchId: state?.activeBranchId || state?.user?.branchId,
+        userRole: state?.user?.role,
+        userId: state?.user?.id ? String(state?.user?.id) : undefined,
+        userEmail: state?.user?.email,
       }
     }
   } catch {}
@@ -69,6 +72,18 @@ async function request<T = any>(endpoint: string, options: RequestInit = {}): Pr
 
   if (scope.branchId && !headers['x-branch-id']) {
     headers['x-branch-id'] = String(scope.branchId)
+  }
+
+  if (scope.userRole && !headers['x-user-role']) {
+    headers['x-user-role'] = String(scope.userRole)
+  }
+
+  if (scope.userId && !headers['x-user-id']) {
+    headers['x-user-id'] = String(scope.userId)
+  }
+
+  if (scope.userEmail && !headers['x-user-email']) {
+    headers['x-user-email'] = String(scope.userEmail)
   }
 
   const baseUrl = getBaseUrl()
