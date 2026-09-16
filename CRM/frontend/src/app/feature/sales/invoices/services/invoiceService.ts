@@ -225,10 +225,56 @@ export const addInvoice = async (invoice: Omit<InvoiceItem, "id"> & { id?: strin
 
   await Promise.all(saveTasks)
 
+  // Automatically ensure client user account exists and sync client directory
+  if (newInvoice.clientEmail) {
+    try {
+      const { recordUserAccountAsync } = await import("@/app/feature/users/services/userService")
+      recordUserAccountAsync({
+        name: newInvoice.client,
+        email: newInvoice.clientEmail,
+        role: "Clients",
+        companyId: effectiveComp,
+        companyIds: [effectiveComp],
+        branchId: newInvoice.branchId,
+        branchName: newInvoice.branchName,
+        status: "Active",
+      }, false).catch(() => {})
+    } catch {}
+
+    try {
+      const allClients = await getClients()
+      const existingClient = allClients.find(
+        c => (c.email && c.email.toLowerCase().trim() === newInvoice.clientEmail?.toLowerCase().trim()) ||
+             (c.name && c.name.toLowerCase().trim() === newInvoice.client.toLowerCase().trim())
+      )
+      if (existingClient) {
+        const invAmt = parseInt((newInvoice.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
+        const recAmt = parseInt((newInvoice.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
+        const dueAmt = parseInt((newInvoice.due || "0").replace(/[^0-9]/g, "")) || 0
+
+        const curInv = parseInt((existingClient.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
+        const curRec = parseInt((existingClient.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
+        const curDue = parseInt((existingClient.due || "0").replace(/[^0-9]/g, "")) || 0
+
+        saveStoredClient({
+          ...existingClient,
+          email: newInvoice.clientEmail,
+          companyId: existingClient.companyId || effectiveComp,
+          branchId: existingClient.branchId || newInvoice.branchId,
+          branchName: existingClient.branchName || newInvoice.branchName,
+          totalInvoiced: `₹${(curInv + invAmt).toLocaleString("en-IN")}`,
+          paymentReceived: `₹${(curRec + recAmt).toLocaleString("en-IN")}`,
+          due: `₹${(curDue + dueAmt).toLocaleString("en-IN")}`,
+        }, effectiveComp).catch(() => {})
+      }
+    } catch {}
+  }
+
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("storage"))
     window.dispatchEvent(new CustomEvent("saampark_data_synced"))
     window.dispatchEvent(new CustomEvent("saampark_invoices_updated"))
+    window.dispatchEvent(new CustomEvent("saampark_clients_updated"))
   }
 
   recordActivityLog({

@@ -550,7 +550,8 @@ function InvoicesPageContent() {
     try {
       // Read fresh from store — avoids stale closure on company switch
       const { activeCompanyId: freshCompanyId, user: freshUser } = useAuthStore.getState()
-      const targetComp = freshCompanyId || freshUser?.companyId || "tech"
+      const isClient = freshUser?.role === "Clients" || (freshUser?.role as string) === "Client"
+      const targetComp = isClient ? "all" : (freshCompanyId || freshUser?.companyId || "tech")
       const data = await getInvoices(targetComp)
       setInvoices(data || [])
     } finally {
@@ -1038,10 +1039,7 @@ function InvoicesPageContent() {
 
     let filtered = invoices
     if (isClientRole) {
-      filtered = filtered.filter((i) => {
-        if (!checkBranch(i)) return false
-        return isRecordAssignedToClient(i, user)
-      })
+      filtered = filtered.filter((i) => isRecordAssignedToClient(i, user))
     } else {
       if (userComp && userComp !== "all" && !user?.branchId) {
         filtered = filtered.filter((i) => {

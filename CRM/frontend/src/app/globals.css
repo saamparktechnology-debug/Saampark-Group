@@ -331,3 +331,60 @@ html, body, input, textarea, select, button, table, span, div, p {
   }
 }
 
+/* ========================================================
+   3D UI & MODERN ELEVATED DESIGN SYSTEM
+   ======================================================== */
+.card-3d {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.06), 0 8px 10px -6px rgba(0, 0, 0, 0.03), inset 0 1px 0 0 rgba(255, 255, 255, 0.85);
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.dark .card-3d {
+  background: #111114;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 14px 30px -8px rgba(0, 0, 0, 0.6), 0 4px 6px -2px rgba(0, 0, 0, 0.4), inset 0 1px 0 0 rgba(255, 255, 255, 0.09);
+}
+
+.card-3d:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 35px -8px rgba(0, 0, 0, 0.1), 0 10px 14px -6px rgba(0, 0, 0, 0.04), inset 0 1px 0 0 rgba(255, 255, 255, 0.95);
+}
+
+.dark .card-3d:hover {
+  box-shadow: 0 20px 42px -10px rgba(0, 0, 0, 0.8), inset 0 1px 0 0 rgba(255, 255, 255, 0.14);
+}
+
+.btn-3d {
+  position: relative;
+  box-shadow: 0 4px 10px -2px rgba(0, 0, 0, 0.15), inset 0 1px 0 0 rgba(255, 255, 255, 0.35), inset 0 -2px 0 0 rgba(0, 0, 0, 0.2);
+  transition: all 0.15s ease-in-out;
+}
+
+.btn-3d:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px -2px rgba(0, 0, 0, 0.2), inset 0 1px 0 0 rgba(255, 255, 255, 0.45), inset 0 -2px 0 0 rgba(0, 0, 0, 0.25);
+}
+
+.btn-3d:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), inset 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+}
+
+.kpi-plate-3d {
+  box-shadow: 0 8px 18px -4px rgba(0, 0, 0, 0.2), inset 0 2px 0 0 rgba(255, 255, 255, 0.4), inset 0 -2px 0 0 rgba(0, 0, 0, 0.2);
+}
+
+.liquid-glass-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.02), inset 0 1px 0 0 rgba(255, 255, 255, 0.7);
+}
+
+.dark .liquid-glass-card {
+  background: #111114;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.55), inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+}
+

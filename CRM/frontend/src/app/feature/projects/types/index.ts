@@ -8,6 +8,9 @@ export interface ProjectMember {
   avatar?: string
   email?: string
   sharePercentage?: number // Revenue share percentage against this project (e.g. 15 for 15%)
+  payoutType?: "percentage" | "fixed"
+  payoutValue?: number
+  payoutAmount?: number
 }
 
 export interface ProjectMilestone {

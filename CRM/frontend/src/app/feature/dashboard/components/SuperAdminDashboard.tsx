@@ -311,7 +311,13 @@ export function SuperAdminDashboard() {
         return isMatchingCompany({ id: invComp, slug: invComp } as any, cId)
       })
 
-      const realRev = compInvoices.reduce((s, inv) => s + parseAmt(inv.totalInvoiced || inv.paymentReceived), 0)
+      const realRev = compInvoices.reduce((s, inv) => {
+        const rec = parseAmt(inv.paymentReceived)
+        if (rec > 0) return s + rec
+        const st = String(inv.status || "").toLowerCase()
+        if (st === "fully paid" || st === "paid") return s + parseAmt(inv.totalInvoiced)
+        return s
+      }, 0)
       const realOut = compInvoices.reduce((s, inv) => s + parseAmt(inv.due), 0)
 
       let fallbackRev = 0
@@ -390,7 +396,13 @@ export function SuperAdminDashboard() {
         return isMatchingBranch({ id: invBranch, code: invBranch, name: invBranch } as any, b.id)
       })
 
-      const realRev = bInvoices.reduce((s, inv) => s + parseAmt(inv.totalInvoiced || inv.paymentReceived), 0)
+      const realRev = bInvoices.reduce((s, inv) => {
+        const rec = parseAmt(inv.paymentReceived)
+        if (rec > 0) return s + rec
+        const st = String(inv.status || "").toLowerCase()
+        if (st === "fully paid" || st === "paid") return s + parseAmt(inv.totalInvoiced)
+        return s
+      }, 0)
       const realOut = bInvoices.reduce((s, inv) => s + parseAmt(inv.due), 0)
 
       let fallbackRev = 0
@@ -593,8 +605,14 @@ export function SuperAdminDashboard() {
     return { invoiced: 0, received: 0, due: 0, expenses: 0, paidCount: 0, partCount: 0, dueCount: 0 }
   }, [activeCompanyId, isBranchSelected])
 
-  const realInvoicedSum = scopedInvoices.reduce((acc, i) => acc + parseAmt(i.totalInvoiced), 0)
-  const realReceivedSum = scopedInvoices.reduce((acc, i) => acc + parseAmt(i.paymentReceived), 0)
+  const realInvoicedSum = scopedInvoices.reduce((acc, i) => acc + parseAmt(i.totalInvoiced || i.baseAmount), 0)
+  const realReceivedSum = scopedInvoices.reduce((acc, i) => {
+    const rec = parseAmt(i.paymentReceived)
+    if (rec > 0) return acc + rec
+    const st = String(i.status || "").toLowerCase()
+    if (st === "fully paid" || st === "paid") return acc + parseAmt(i.totalInvoiced)
+    return acc
+  }, 0)
   const realDueSum = scopedInvoices.reduce((acc, i) => acc + parseAmt(i.due), 0)
   const realExpenseSum = scopedExpenses.reduce((acc, e) => acc + parseAmt(e.amount), 0)
 
@@ -606,9 +624,38 @@ export function SuperAdminDashboard() {
   const activeCompanyExpenses = scopedExpenses.length > 0 ? realExpenseSum : (isBranchSelected ? 0 : companyBaseline.expenses)
   const activeCompanyMargin = activeCompanyReceived - activeCompanyExpenses
 
-  const paidInvoicesCount = scopedInvoices.filter(i => i.status === "Fully paid").length || (isBranchSelected ? 0 : companyBaseline.paidCount)
-  const partialInvoicesCount = scopedInvoices.filter(i => i.status === "Partially paid").length || (isBranchSelected ? 0 : companyBaseline.partCount)
-  const dueInvoicesCount = scopedInvoices.filter(i => i.status === "Not paid" || i.status === "Payment Pending" || i.status === "Draft").length || (isBranchSelected ? 0 : companyBaseline.dueCount)
+  // Invoice categorization & accurate sums
+  const paidInvoices = scopedInvoices.filter(i => {
+    const s = String(i.status || "").toLowerCase().trim()
+    const received = parseAmt(i.paymentReceived)
+    const due = parseAmt(i.due)
+    return s === "fully paid" || s === "paid" || (due === 0 && received > 0)
+  })
+
+  const partialInvoices = scopedInvoices.filter(i => {
+    const s = String(i.status || "").toLowerCase().trim()
+    const received = parseAmt(i.paymentReceived)
+    const due = parseAmt(i.due)
+    if (s === "partially paid" || s === "partial" || s === "advance received") return true
+    return received > 0 && due > 0 && s !== "fully paid" && s !== "paid"
+  })
+
+  const dueInvoices = scopedInvoices.filter(i => {
+    const s = String(i.status || "").toLowerCase().trim()
+    const received = parseAmt(i.paymentReceived)
+    const due = parseAmt(i.due)
+    if (s === "not paid" || s === "payment pending" || s === "draft" || s === "unpaid" || s === "pending") return true
+    return received === 0 && due > 0 && !partialInvoices.some(p => p.id === i.id) && !paidInvoices.some(p => p.id === i.id)
+  })
+
+  const paidInvoicesCount = hasRealInvoices ? paidInvoices.length : (isBranchSelected ? 0 : companyBaseline.paidCount)
+  const partialInvoicesCount = hasRealInvoices ? partialInvoices.length : (isBranchSelected ? 0 : companyBaseline.partCount)
+  const dueInvoicesCount = hasRealInvoices ? dueInvoices.length : (isBranchSelected ? 0 : companyBaseline.dueCount)
+
+  const paidInvoicesReceived = paidInvoices.reduce((acc, i) => acc + (parseAmt(i.paymentReceived) || parseAmt(i.totalInvoiced)), 0)
+  const partialInvoicesReceived = partialInvoices.reduce((acc, i) => acc + parseAmt(i.paymentReceived), 0)
+  const partialInvoicesDue = partialInvoices.reduce((acc, i) => acc + parseAmt(i.due), 0)
+  const dueInvoicesDue = dueInvoices.reduce((acc, i) => acc + (parseAmt(i.due) || parseAmt(i.totalInvoiced)), 0)
 
   const openProjectsCount = scopedProjects.filter(p => String(p.status) === "In Progress" || String(p.status) === "Open").length
   const completedProjectsCount = scopedProjects.filter(p => String(p.status) === "Completed" || (p.progress || 0) >= 100).length
@@ -1175,10 +1222,10 @@ export function SuperAdminDashboard() {
             value={
               <button 
                 onClick={() => isClockedIn ? clockOut() : clockIn()}
-                className={`text-base font-medium px-2.5 py-1 rounded border flex items-center gap-1.5 w-fit ml-auto transition-all cursor-pointer ${
+                className={`text-xs font-bold px-3 py-1.5 rounded-xl border flex items-center gap-1.5 w-fit ml-auto transition-all cursor-pointer btn-3d ${
                   isClockedIn 
-                    ? "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100" 
-                    : "bg-pink-50 text-pink-500 border-pink-100 hover:bg-pink-100"
+                    ? "bg-emerald-500 text-white border-emerald-600 shadow-emerald-500/25" 
+                    : "bg-gradient-to-r from-pink-500 to-rose-500 text-white border-pink-600 shadow-pink-500/25"
                 }`}
               >
                 <Monitor size={14}/> 
@@ -1259,7 +1306,7 @@ export function SuperAdminDashboard() {
                   color: "bg-emerald-500", 
                   text: "text-emerald-500", 
                   percent: (paidInvoicesCount + partialInvoicesCount + dueInvoicesCount) > 0 ? Math.round((paidInvoicesCount / (paidInvoicesCount + partialInvoicesCount + dueInvoicesCount)) * 100) : 0, 
-                  amount: formatINR(activeCompanyReceived) 
+                  amount: hasRealInvoices ? formatINR(paidInvoicesReceived) : formatINR(Math.round(companyBaseline.received * 0.8))
                 },
                 { 
                   label: "Partially Paid", 
@@ -1267,7 +1314,7 @@ export function SuperAdminDashboard() {
                   color: "bg-amber-500", 
                   text: "text-amber-500", 
                   percent: (paidInvoicesCount + partialInvoicesCount + dueInvoicesCount) > 0 ? Math.round((partialInvoicesCount / (paidInvoicesCount + partialInvoicesCount + dueInvoicesCount)) * 100) : 0, 
-                  amount: formatINR(Math.round(activeCompanyDue * 0.25)) 
+                  amount: hasRealInvoices ? formatINR(partialInvoicesReceived) : formatINR(Math.round(companyBaseline.received * 0.2))
                 },
                 { 
                   label: "Due / Pending", 
@@ -1275,7 +1322,7 @@ export function SuperAdminDashboard() {
                   color: "bg-rose-500", 
                   text: "text-rose-500", 
                   percent: (paidInvoicesCount + partialInvoicesCount + dueInvoicesCount) > 0 ? Math.round((dueInvoicesCount / (paidInvoicesCount + partialInvoicesCount + dueInvoicesCount)) * 100) : 0, 
-                  amount: formatINR(activeCompanyDue) 
+                  amount: hasRealInvoices ? formatINR(dueInvoicesDue + partialInvoicesDue) : formatINR(activeCompanyDue) 
                 },
               ].map((inv, i) => (
                 <div key={i} className="flex items-center text-sm">
@@ -1337,18 +1384,117 @@ export function SuperAdminDashboard() {
           </Widget>
         </div>
 
-        {/* Real Staff Attendance & Session Monitor Table */}
+        {/* Tasks, Team Members, and Recent Orders (Placed ABOVE Attendance section) */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          
+          {/* All Tasks Overview */}
+          <Widget title="All Tasks Overview" icon={Grid}>
+            <div className="flex items-center justify-around py-4">
+               <DonutChart data={taskDonutData} size={140} strokeWidth={14} />
+               <div className="space-y-2 text-xs">
+                  <div className="flex justify-between items-center w-32">
+                    <span className="flex items-center gap-2 text-muted-foreground"><span className="w-2 h-2 rounded-full bg-yellow-500 shadow-xs"/> To do</span>
+                    <span className="font-bold text-yellow-500">{taskTodoCount}</span>
+                  </div>
+                  <div className="flex justify-between items-center w-32">
+                    <span className="flex items-center gap-2 text-muted-foreground"><span className="w-2 h-2 rounded-full bg-blue-500 shadow-xs"/> In progress</span>
+                    <span className="font-bold text-blue-500">{taskInProgressCount}</span>
+                  </div>
+                  <div className="flex justify-between items-center w-32">
+                    <span className="flex items-center gap-2 text-muted-foreground"><span className="w-2 h-2 rounded-full bg-purple-500 shadow-xs"/> Review</span>
+                    <span className="font-bold text-purple-500">{taskReviewCount}</span>
+                  </div>
+                  <div className="flex justify-between items-center w-32">
+                    <span className="flex items-center gap-2 text-muted-foreground"><span className="w-2 h-2 rounded-full bg-emerald-500 shadow-xs"/> Done</span>
+                    <span className="font-bold text-emerald-500">{taskDoneCount}</span>
+                  </div>
+               </div>
+            </div>
+            <div className="flex justify-around items-center pt-4 mt-auto border-t border-border/40 text-xs">
+               <div className="text-muted-foreground font-medium">Total Tasks: <strong className="text-foreground font-bold">{scopedTasks.length}</strong></div>
+               <Link href="/feature/tasks" className="text-blue-600 hover:text-blue-700 dark:text-blue-400 font-bold hover:underline transition-colors flex items-center gap-1">
+                 View Task Kanban →
+               </Link>
+            </div>
+          </Widget>
+
+          {/* Team Members Overview */}
+          <Widget title="Team Members Overview" icon={Users}>
+             <div className="grid grid-cols-2 gap-4 py-4 text-center">
+                <div className="p-3 rounded-xl bg-zinc-50/80 dark:bg-zinc-800/40 border border-border/30">
+                  <p className="text-3xl font-extrabold text-foreground">{dbUsers.length || 23}</p>
+                  <p className="text-xs text-muted-foreground mt-1 font-medium">Total Registered</p>
+                </div>
+                <div className="p-3 rounded-xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-500/20">
+                  <p className="text-3xl font-extrabold text-emerald-500">{dbUsers.filter(u => u.status === "Active").length || 23}</p>
+                  <p className="text-xs text-muted-foreground mt-1 font-medium">Active Accounts</p>
+                </div>
+             </div>
+             <div className="grid grid-cols-2 gap-4 pt-3 border-t border-border/40 text-center text-xs">
+                <div>
+                  <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{dbUsers.filter(u => u.role === "Admin" || u.role === "Super Admin").length || 2}</p>
+                  <p className="text-muted-foreground mt-0.5 font-medium">Admins</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{dbUsers.filter(u => u.role === "Teams" || u.role === "Team").length || 18}</p>
+                  <p className="text-muted-foreground mt-0.5 font-medium">Staff Members</p>
+                </div>
+             </div>
+             
+             <div className="mt-auto pt-3 border-t border-border/40 text-center">
+               <Link href="/feature/users" className="text-blue-600 hover:text-blue-700 dark:text-blue-400 font-bold hover:underline text-xs">
+                 Manage Users Directory →
+               </Link>
+             </div>
+          </Widget>
+
+          {/* Recent Orders & Billing */}
+          <Widget title="Recent Orders & Billing" icon={DollarSign}>
+             <div className="space-y-2.5 pt-1 text-xs">
+               {dbOrders.length === 0 ? (
+                 <p className="text-muted-foreground text-center py-6">No sales orders created yet.</p>
+               ) : (
+                 dbOrders.slice(0, 4).map((ord) => (
+                   <div key={ord.id} className="p-2.5 bg-surface border border-border/60 rounded-xl flex items-center justify-between shadow-xs hover:border-blue-300 dark:hover:border-blue-700 transition-colors">
+                     <div>
+                       <p className="font-bold text-foreground truncate max-w-[140px]">{ord.project}</p>
+                       <p className="text-[10px] text-muted-foreground font-medium">{ord.client} · {ord.orderDate}</p>
+                     </div>
+                     <div className="text-right">
+                       <p className="font-bold text-foreground">{ord.totalAmount}</p>
+                       <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shadow-xs ${
+                         ord.paymentStatus === "Paid" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                       }`}>
+                         {ord.paymentStatus}
+                       </span>
+                     </div>
+                   </div>
+                 ))
+               )}
+             </div>
+             
+             <div className="mt-auto pt-3 border-t border-border/40 text-center">
+               <Link href="/feature/sales/orders" className="text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline text-xs font-bold">
+                 View All Sales Orders →
+               </Link>
+             </div>
+          </Widget>
+        </div>
+
+        {/* Real Staff Attendance & Session Monitor Box */}
         <div className="mb-6">
           <Widget title="Company Staff Attendance & Session Monitor" icon={Users}>
-            <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/50 pb-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-muted-foreground">Filter Staff User:</span>
+            <div className="space-y-3">
+              {/* Header Filters & Stats */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/50 pb-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-semibold text-muted-foreground">Filter Staff:</span>
                   <select
                     value={selectedUserEmail}
                     onChange={(e) => setSelectedUserEmail(e.target.value)}
-                    className="px-3 py-1.5 bg-surface border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none"
+                    className="px-3 py-1.5 bg-surface border border-border/80 rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-xs"
                   >
+                    <option value="">All Company Staff ({scopedUsers.length})</option>
                     {(scopedUsers.length > 0 ? scopedUsers : (user ? [user] : [])).filter(Boolean).map((u, uIdx) => {
                       const uEmail = u?.email || ""
                       const uName = u?.name || u?.full_name || uEmail || "User"
@@ -1363,165 +1509,104 @@ export function SuperAdminDashboard() {
                 </div>
 
                 <div className="flex items-center gap-4 text-xs font-medium">
-                  <span className="flex items-center gap-1.5 text-emerald-600">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Active User: {user?.name}
+                  <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-semibold px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-500/20">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Active Session: {user?.name}
                   </span>
-                  <span className="text-muted-foreground">Company Staff: {(scopedUsers.length > 0 ? scopedUsers : (user ? [user] : [])).length}</span>
+                  <span className="text-muted-foreground font-semibold px-2 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800">
+                    Total Staff: {(scopedUsers.length > 0 ? scopedUsers : (user ? [user] : [])).length}
+                  </span>
                 </div>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-border/50 text-muted-foreground font-semibold">
-                      <th className="py-2.5 px-3">Date</th>
-                      <th className="py-2.5 px-3">User Name</th>
-                      <th className="py-2.5 px-3">Role</th>
-                      <th className="py-2.5 px-3">Login Punch Time</th>
-                      <th className="py-2.5 px-3">Logout Punch Time</th>
-                      <th className="py-2.5 px-3">Total Worked Hours</th>
-                      <th className="py-2.5 px-3">Session Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/30">
-                    {(scopedUsers.length > 0 ? scopedUsers : (user ? [user] : [])).filter(Boolean).slice(0, 10).map((u, uIdx) => {
-                      const uEmail = (u?.email || "").toLowerCase().trim()
-                      const currentEmail = (user?.email || "").toLowerCase().trim()
-                      const isActiveUser = Boolean(uEmail && currentEmail && uEmail === currentEmail)
+              {/* Scrollable Attendance Box Container */}
+              <div className="rounded-xl border border-border/60 overflow-hidden bg-surface/60 dark:bg-zinc-900/30 shadow-xs">
+                <div className="max-h-[350px] overflow-y-auto overflow-x-auto divide-y divide-border/30">
+                  <table className="w-full text-xs text-left border-collapse">
+                    <thead className="sticky top-0 bg-zinc-100/95 dark:bg-zinc-800/95 backdrop-blur-md z-10 shadow-xs">
+                      <tr className="border-b border-border/60 text-muted-foreground font-bold">
+                        <th className="py-2.5 px-3">Date</th>
+                        <th className="py-2.5 px-3">User Name</th>
+                        <th className="py-2.5 px-3">Role</th>
+                        <th className="py-2.5 px-3">Login Punch Time</th>
+                        <th className="py-2.5 px-3">Logout Punch Time</th>
+                        <th className="py-2.5 px-3">Total Worked Hours</th>
+                        <th className="py-2.5 px-3">Session Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/30">
+                      {(() => {
+                        const rawUsers = (scopedUsers.length > 0 ? scopedUsers : (user ? [user] : [])).filter(Boolean)
+                        const filtered = selectedUserEmail
+                          ? rawUsers.filter(u => (u?.email || "").toLowerCase().trim() === selectedUserEmail.toLowerCase().trim())
+                          : rawUsers
 
-                      let punchInTime = "09:00 AM"
-                      let punchOutTime = "-"
-                      let workedHours = "-"
-                      let statusBadge = <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">Offline</span>
-
-                      if (isActiveUser) {
-                        punchInTime = "Today at 09:15 AM"
-                        if (isClockedIn) {
-                          punchOutTime = "Active Session"
-                          workedHours = formatTime(secondsElapsed)
-                          statusBadge = <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">🟢 CLOCKED IN</span>
-                        } else {
-                          punchOutTime = "06:15 PM"
-                          workedHours = "08 hrs 15 mins"
-                          statusBadge = <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 font-semibold">🔵 LOGGED IN</span>
+                        if (filtered.length === 0) {
+                          return (
+                            <tr>
+                              <td colSpan={7} className="text-center py-8 text-muted-foreground">
+                                No staff records found for selected filter.
+                              </td>
+                            </tr>
+                          )
                         }
-                      } else if (u?.status === "Active") {
-                        statusBadge = <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">ACTIVE</span>
-                      }
 
-                      const displayName = u?.name || u?.full_name || u?.email || "User"
+                        return filtered.map((u, uIdx) => {
+                          const uEmail = (u?.email || "").toLowerCase().trim()
+                          const currentEmail = (user?.email || "").toLowerCase().trim()
+                          const isActiveUser = Boolean(uEmail && currentEmail && uEmail === currentEmail)
 
-                      return (
-                        <tr key={u?.email || u?.id || uIdx} className={`hover:bg-surface-hover/30 ${isActiveUser ? "bg-primary/5" : ""}`}>
-                          <td className="py-2.5 px-3 font-mono font-medium">Today</td>
-                          <td className="py-2.5 px-3 font-bold text-foreground flex items-center gap-1.5">
-                            <img src={getUserAvatar(u?.email || "", undefined, displayName)} alt={displayName} className="w-5 h-5 rounded-full border shrink-0" />
-                            <span>{displayName}</span>
-                            {isActiveUser && <span className="text-[9px] bg-primary text-primary-foreground px-1.5 py-0.2 rounded font-bold">YOU</span>}
-                          </td>
-                          <td className="py-2.5 px-3 text-muted-foreground">{u?.role || "User"}</td>
-                          <td className="py-2.5 px-3 text-emerald-600 font-mono font-bold">{punchInTime}</td>
-                          <td className="py-2.5 px-3 text-rose-600 font-mono font-bold">{punchOutTime}</td>
-                          <td className="py-2.5 px-3 font-mono font-semibold">{workedHours}</td>
-                          <td className="py-2.5 px-3">{statusBadge}</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+                          let punchInTime = "09:00 AM"
+                          let punchOutTime = "-"
+                          let workedHours = "-"
+                          let statusBadge = <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">Offline</span>
+
+                          if (isActiveUser) {
+                            punchInTime = "Today at 09:15 AM"
+                            if (isClockedIn) {
+                              punchOutTime = "Active Session"
+                              workedHours = formatTime(secondsElapsed)
+                              statusBadge = <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 shadow-xs">🟢 CLOCKED IN</span>
+                            } else {
+                              punchOutTime = "06:15 PM"
+                              workedHours = "08 hrs 15 mins"
+                              statusBadge = <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 font-semibold shadow-xs">🔵 LOGGED IN</span>
+                            }
+                          } else if (u?.status === "Active") {
+                            statusBadge = <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 shadow-xs">ACTIVE</span>
+                          }
+
+                          const displayName = u?.name || u?.full_name || u?.email || "User"
+
+                          return (
+                            <tr key={u?.email || u?.id || uIdx} className={`hover:bg-surface-hover/50 transition-colors ${isActiveUser ? "bg-blue-500/5 font-medium" : ""}`}>
+                              <td className="py-2.5 px-3 font-mono font-medium">Today</td>
+                              <td className="py-2.5 px-3 font-bold text-foreground flex items-center gap-1.5">
+                                <img src={getUserAvatar(u?.email || "", undefined, displayName)} alt={displayName} className="w-5 h-5 rounded-full border border-border/50 shrink-0 shadow-xs" />
+                                <span className="truncate max-w-[140px]">{displayName}</span>
+                                {isActiveUser && <span className="text-[9px] bg-primary text-primary-foreground px-1.5 py-0.2 rounded font-bold shadow-xs">YOU</span>}
+                              </td>
+                              <td className="py-2.5 px-3 text-muted-foreground">{u?.role || "User"}</td>
+                              <td className="py-2.5 px-3 text-emerald-600 dark:text-emerald-400 font-mono font-bold">{punchInTime}</td>
+                              <td className="py-2.5 px-3 text-rose-600 dark:text-rose-400 font-mono font-bold">{punchOutTime}</td>
+                              <td className="py-2.5 px-3 font-mono font-semibold text-foreground">{workedHours}</td>
+                              <td className="py-2.5 px-3">{statusBadge}</td>
+                            </tr>
+                          )
+                        })
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Box Footer Summary */}
+                <div className="px-4 py-2 bg-zinc-50/80 dark:bg-zinc-800/60 border-t border-border/50 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                  <span>Scroll box container to view all team attendance records</span>
+                  <Link href="/feature/attendance" className="text-blue-600 dark:text-blue-400 font-bold hover:underline">
+                    View Full Attendance & Biometric Portal →
+                  </Link>
+                </div>
               </div>
             </div>
-          </Widget>
-        </div>
-
-        {/* Tasks, Team Members, and Recent Orders */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          
-          {/* All Tasks Overview */}
-          <Widget title="All Tasks Overview" icon={Grid}>
-            <div className="flex items-center justify-around py-4">
-               <DonutChart data={taskDonutData} size={140} strokeWidth={14} />
-               <div className="space-y-2 text-xs">
-                  <div className="flex justify-between items-center w-32">
-                    <span className="flex items-center gap-2 text-muted-foreground"><span className="w-2 h-2 rounded-full bg-yellow-500"/> To do</span>
-                    <span className="font-bold text-yellow-500">{taskTodoCount}</span>
-                  </div>
-                  <div className="flex justify-between items-center w-32">
-                    <span className="flex items-center gap-2 text-muted-foreground"><span className="w-2 h-2 rounded-full bg-blue-500"/> In progress</span>
-                    <span className="font-bold text-blue-500">{taskInProgressCount}</span>
-                  </div>
-                  <div className="flex justify-between items-center w-32">
-                    <span className="flex items-center gap-2 text-muted-foreground"><span className="w-2 h-2 rounded-full bg-purple-500"/> Review</span>
-                    <span className="font-bold text-purple-500">{taskReviewCount}</span>
-                  </div>
-                  <div className="flex justify-between items-center w-32">
-                    <span className="flex items-center gap-2 text-muted-foreground"><span className="w-2 h-2 rounded-full bg-emerald-500"/> Done</span>
-                    <span className="font-bold text-emerald-500">{taskDoneCount}</span>
-                  </div>
-               </div>
-            </div>
-            <div className="flex justify-around items-center pt-4 mt-auto border-t border-border/40 text-xs">
-               <div className="text-muted-foreground">Total Tasks: <strong className="text-foreground">{scopedTasks.length}</strong></div>
-               <Link href="/feature/tasks" className="text-blue-600 hover:underline font-semibold">View Task Kanban →</Link>
-            </div>
-          </Widget>
-
-          {/* Team Members Overview */}
-          <Widget title="Team Members Overview" icon={Users}>
-             <div className="grid grid-cols-2 gap-4 py-4 text-center">
-                <div>
-                  <p className="text-3xl font-bold text-foreground">{dbUsers.length || 23}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Total Registered</p>
-                </div>
-                <div>
-                  <p className="text-3xl font-bold text-emerald-500">{dbUsers.filter(u => u.status === "Active").length || 23}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Active Accounts</p>
-                </div>
-             </div>
-             <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border/40 text-center text-xs">
-                <div>
-                  <p className="text-2xl font-bold text-purple-600">{dbUsers.filter(u => u.role === "Admin" || u.role === "Super Admin").length || 2}</p>
-                  <p className="text-muted-foreground mt-0.5">Admins</p>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-blue-600">{dbUsers.filter(u => u.role === "Teams" || u.role === "Team").length || 18}</p>
-                  <p className="text-muted-foreground mt-0.5">Staff Members</p>
-                </div>
-             </div>
-             
-             <div className="mt-auto border border-border/40 rounded-lg p-2.5 text-xs text-center">
-               <Link href="/feature/users" className="text-blue-600 hover:underline font-semibold">Manage Users Directory →</Link>
-             </div>
-          </Widget>
-
-          {/* Recent Orders & Billing */}
-          <Widget title="Recent Orders & Billing" icon={DollarSign}>
-             <div className="space-y-2.5 pt-1 text-xs">
-               {dbOrders.length === 0 ? (
-                 <p className="text-muted-foreground text-center py-6">No sales orders created yet.</p>
-               ) : (
-                 dbOrders.slice(0, 4).map((ord) => (
-                   <div key={ord.id} className="p-2.5 bg-surface border border-border rounded-xl flex items-center justify-between">
-                     <div>
-                       <p className="font-bold text-foreground truncate max-w-[140px]">{ord.project}</p>
-                       <p className="text-[10px] text-muted-foreground">{ord.client} · {ord.orderDate}</p>
-                     </div>
-                     <div className="text-right">
-                       <p className="font-bold text-foreground">{ord.totalAmount}</p>
-                       <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                         ord.paymentStatus === "Paid" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
-                       }`}>
-                         {ord.paymentStatus}
-                       </span>
-                     </div>
-                   </div>
-                 ))
-               )}
-             </div>
-             
-             <div className="mt-auto pt-3 border-t border-border/40 text-center">
-               <Link href="/feature/sales/orders" className="text-blue-600 hover:underline text-xs font-semibold">View All Sales Orders →</Link>
-             </div>
           </Widget>
         </div>
 

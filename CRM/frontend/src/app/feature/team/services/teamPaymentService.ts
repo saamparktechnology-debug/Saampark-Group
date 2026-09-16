@@ -225,8 +225,18 @@ export const getProjectWiseUserEarnings = async (
     const defaultSharePct = Math.round(30 / Math.max(1, assignedMembers.length))
 
     for (const m of assignedMembers) {
-      const sharePct = typeof m.sharePercentage === "number" ? m.sharePercentage : defaultSharePct
-      const totalEarned = Math.round((clientPaid * sharePct) / 100)
+      let sharePct = typeof m.sharePercentage === "number" ? m.sharePercentage : defaultSharePct
+      let totalEarned = 0
+
+      if (m.payoutType === "fixed" && typeof m.payoutAmount === "number") {
+        const proportion = projectTotal > 0 ? Math.min(1, clientPaid / projectTotal) : 1
+        totalEarned = Math.round(m.payoutAmount * proportion)
+        if (projectTotal > 0 && (!sharePct || sharePct === defaultSharePct)) {
+          sharePct = Number(((m.payoutAmount / projectTotal) * 100).toFixed(1))
+        }
+      } else {
+        totalEarned = Math.round((clientPaid * sharePct) / 100)
+      }
 
       // Check how much has already been disbursed to this member for this project
       const memberProjectPayouts = payouts.filter((pay: TeamPayoutRecord) => 

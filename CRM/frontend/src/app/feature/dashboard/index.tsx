@@ -282,9 +282,28 @@ export default function DashboardMain() {
     : 0
 
   // Invoice breakdown
-  const fullyPaidInvoices = liveInvoices.filter(i => i.status === "Fully paid")
-  const partiallyPaidInvoices = liveInvoices.filter(i => i.status === "Partially paid")
-  const unpaidInvoices = liveInvoices.filter(i => i.status === "Not paid" || i.status === "Payment Pending" || i.status === "Draft")
+  const fullyPaidInvoices = liveInvoices.filter(i => {
+    const s = String(i.status || "").toLowerCase().trim()
+    const rec = parseInt(String(i.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
+    const due = parseInt(String(i.due || "0").replace(/[^0-9]/g, "")) || 0
+    return s === "fully paid" || s === "paid" || (due === 0 && rec > 0)
+  })
+
+  const partiallyPaidInvoices = liveInvoices.filter(i => {
+    const s = String(i.status || "").toLowerCase().trim()
+    const rec = parseInt(String(i.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
+    const due = parseInt(String(i.due || "0").replace(/[^0-9]/g, "")) || 0
+    if (s === "partially paid" || s === "partial" || s === "advance received") return true
+    return rec > 0 && due > 0 && s !== "fully paid" && s !== "paid"
+  })
+
+  const unpaidInvoices = liveInvoices.filter(i => {
+    const s = String(i.status || "").toLowerCase().trim()
+    const rec = parseInt(String(i.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
+    const due = parseInt(String(i.due || "0").replace(/[^0-9]/g, "")) || 0
+    if (s === "not paid" || s === "payment pending" || s === "draft" || s === "unpaid" || s === "pending") return true
+    return rec === 0 && due > 0 && !partiallyPaidInvoices.some(p => p.id === i.id) && !fullyPaidInvoices.some(p => p.id === i.id)
+  })
 
   const totalInvoicedSum = liveInvoices.reduce((sum, i) => {
     const num = i.baseAmount || parseInt(String(i.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
@@ -292,8 +311,23 @@ export default function DashboardMain() {
   }, 0)
 
   const totalReceivedSum = liveInvoices.reduce((sum, i) => {
-    const num = parseInt(String(i.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
-    return sum + num
+    const rec = parseInt(String(i.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
+    if (rec > 0) return sum + rec
+    const st = String(i.status || "").toLowerCase()
+    if (st === "fully paid" || st === "paid") {
+      return sum + (i.baseAmount || parseInt(String(i.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0)
+    }
+    return sum
+  }, 0)
+
+  const fullyPaidReceivedSum = fullyPaidInvoices.reduce((sum, i) => {
+    const rec = parseInt(String(i.paymentReceived || "0").replace(/[^0-9]/g, "")) || parseInt(String(i.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
+    return sum + rec
+  }, 0)
+
+  const partialReceivedSum = partiallyPaidInvoices.reduce((sum, i) => {
+    const rec = parseInt(String(i.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
+    return sum + rec
   }, 0)
 
   const totalDueSum = liveInvoices.reduce((sum, i) => {
@@ -604,10 +638,10 @@ export default function DashboardMain() {
           value={
             <button 
               onClick={() => isClockedIn ? clockOut() : clockIn()}
-              className={`text-base font-medium px-2.5 py-1 rounded border flex items-center gap-1.5 w-fit ml-auto transition-all cursor-pointer ${
+              className={`text-xs font-bold px-3 py-1.5 rounded-xl border flex items-center gap-1.5 w-fit ml-auto transition-all cursor-pointer btn-3d ${
                 isClockedIn 
-                  ? "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100" 
-                  : "bg-pink-50 text-pink-500 border-pink-100 hover:bg-pink-100"
+                  ? "bg-emerald-500 text-white border-emerald-600 shadow-emerald-500/25" 
+                  : "bg-gradient-to-r from-pink-500 to-rose-500 text-white border-pink-600 shadow-pink-500/25"
               }`}
             >
               <Monitor size={14}/> 
@@ -682,8 +716,8 @@ export default function DashboardMain() {
         <Widget title="Invoice & Billing Overview" icon={FileText}>
           <div className="space-y-4 pt-2">
             {[
-              { label: "Fully Paid", count: fullyPaidInvoices.length, color: "bg-emerald-500", text: "text-emerald-500", percent: liveInvoices.length > 0 ? Math.round((fullyPaidInvoices.length / liveInvoices.length) * 100) : 0, amount: `₹${totalReceivedSum.toLocaleString("en-IN")}` },
-              { label: "Partially Paid", count: partiallyPaidInvoices.length, color: "bg-amber-500", text: "text-amber-500", percent: liveInvoices.length > 0 ? Math.round((partiallyPaidInvoices.length / liveInvoices.length) * 100) : 0, amount: `${partiallyPaidInvoices.length} Invoices` },
+              { label: "Fully Paid", count: fullyPaidInvoices.length, color: "bg-emerald-500", text: "text-emerald-500", percent: liveInvoices.length > 0 ? Math.round((fullyPaidInvoices.length / liveInvoices.length) * 100) : 0, amount: `₹${fullyPaidReceivedSum.toLocaleString("en-IN")}` },
+              { label: "Partially Paid", count: partiallyPaidInvoices.length, color: "bg-amber-500", text: "text-amber-500", percent: liveInvoices.length > 0 ? Math.round((partiallyPaidInvoices.length / liveInvoices.length) * 100) : 0, amount: `₹${partialReceivedSum.toLocaleString("en-IN")}` },
               { label: "Due / Pending", count: unpaidInvoices.length, color: "bg-rose-500", text: "text-rose-500", percent: liveInvoices.length > 0 ? Math.round((unpaidInvoices.length / liveInvoices.length) * 100) : 0, amount: `₹${totalDueSum.toLocaleString("en-IN")}` },
             ].map((inv, i) => (
               <div key={i} className="flex items-center text-sm">
@@ -745,94 +779,8 @@ export default function DashboardMain() {
         </Widget>
       </div>
 
-      {/* --- REAL DATA STAFF ATTENDANCE & HISTORICAL LOGIN LOG MONITOR PANEL --- */}
-      <Widget title="Company Staff Attendance & Session Monitor" icon={Users}>
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/50 pb-3">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-muted-foreground">Filter Staff User:</span>
-              <select
-                value={selectedUserEmail}
-                onChange={(e) => setSelectedUserEmail(e.target.value)}
-                className="px-3 py-1.5 bg-surface border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none"
-              >
-                {realUsers.map((u) => (
-                  <option key={u.email} value={u.email}>
-                    {u.name} ({u.role} - {u.email})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex items-center gap-4 text-xs font-medium">
-              <span className="flex items-center gap-1.5 text-emerald-600">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Active User: {user.name}
-              </span>
-              <span className="text-muted-foreground">Registered Staff: {realUsers.length}</span>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left border-collapse">
-              <thead>
-                <tr className="border-b border-border/50 text-muted-foreground font-semibold">
-                  <th className="py-2.5 px-3">Date</th>
-                  <th className="py-2.5 px-3">User Name</th>
-                  <th className="py-2.5 px-3">Role</th>
-                  <th className="py-2.5 px-3">Login Punch Time</th>
-                  <th className="py-2.5 px-3">Logout Punch Time</th>
-                  <th className="py-2.5 px-3">Total Worked Hours</th>
-                  <th className="py-2.5 px-3">Session Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/30">
-                {realUsers.map((u) => {
-                  const isActiveUser = u.email.toLowerCase() === user.email.toLowerCase()
-
-                  let punchInTime = "09:00 AM"
-                  let punchOutTime = "-"
-                  let workedHours = "-"
-                  let statusBadge = <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">Offline</span>
-
-                  if (isActiveUser) {
-                    punchInTime = "Today at 09:15 AM"
-                    if (isClockedIn) {
-                      punchOutTime = "Active Session"
-                      workedHours = formatTime(secondsElapsed)
-                      statusBadge = <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">🟢 CLOCKED IN</span>
-                    } else {
-                      punchOutTime = "06:15 PM"
-                      workedHours = "08 hrs 15 mins"
-                      statusBadge = <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 font-semibold">🔵 LOGGED IN</span>
-                    }
-                  } else if (u.status === "Active") {
-                    statusBadge = <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">ACTIVE</span>
-                  }
-
-                  return (
-                    <tr key={u.email} className={`hover:bg-surface-hover/30 ${isActiveUser ? "bg-primary/5" : ""}`}>
-                      <td className="py-2.5 px-3 font-mono font-medium">Today</td>
-                      <td className="py-2.5 px-3 font-bold text-foreground flex items-center gap-1.5">
-                        <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${u.email}`} alt={u.name} className="w-5 h-5 rounded-full border shrink-0" />
-                        <span>{u.name}</span>
-                        {isActiveUser && <span className="text-[9px] bg-primary text-primary-foreground px-1.5 py-0.2 rounded font-bold">YOU</span>}
-                      </td>
-                      <td className="py-2.5 px-3 text-muted-foreground">{u.role}</td>
-                      <td className="py-2.5 px-3 text-emerald-600 font-mono font-bold">{punchInTime}</td>
-                      <td className="py-2.5 px-3 text-rose-600 font-mono font-bold">{punchOutTime}</td>
-                      <td className="py-2.5 px-3 font-mono font-semibold">{workedHours}</td>
-                      <td className="py-2.5 px-3">{statusBadge}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </Widget>
-
-      {/* --- ROW 3: TASKS & TEAM --- */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* --- ROW 3: TASKS, TEAM & ORDERS (Placed ABOVE Attendance) --- */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         
         {/* All Tasks Overview */}
         <Widget title="All Tasks Overview" icon={Grid}>
@@ -840,54 +788,54 @@ export default function DashboardMain() {
              <DonutChart data={taskDonutData} size={140} strokeWidth={14} />
              <div className="space-y-2 text-xs">
                 <div className="flex justify-between items-center w-32">
-                  <span className="flex items-center gap-2 text-muted-foreground"><span className="w-2 h-2 rounded-full bg-yellow-500"/> To do</span>
+                  <span className="flex items-center gap-2 text-muted-foreground"><span className="w-2 h-2 rounded-full bg-yellow-500 shadow-xs"/> To do</span>
                   <span className="font-bold text-yellow-500">{taskTodoCount}</span>
                 </div>
                 <div className="flex justify-between items-center w-32">
-                  <span className="flex items-center gap-2 text-muted-foreground"><span className="w-2 h-2 rounded-full bg-blue-500"/> In progress</span>
+                  <span className="flex items-center gap-2 text-muted-foreground"><span className="w-2 h-2 rounded-full bg-blue-500 shadow-xs"/> In progress</span>
                   <span className="font-bold text-blue-500">{taskInProgressCount}</span>
                 </div>
                 <div className="flex justify-between items-center w-32">
-                  <span className="flex items-center gap-2 text-muted-foreground"><span className="w-2 h-2 rounded-full bg-purple-500"/> Review</span>
+                  <span className="flex items-center gap-2 text-muted-foreground"><span className="w-2 h-2 rounded-full bg-purple-500 shadow-xs"/> Review</span>
                   <span className="font-bold text-purple-500">{taskReviewCount}</span>
                 </div>
                 <div className="flex justify-between items-center w-32">
-                  <span className="flex items-center gap-2 text-muted-foreground"><span className="w-2 h-2 rounded-full bg-emerald-500"/> Done</span>
+                  <span className="flex items-center gap-2 text-muted-foreground"><span className="w-2 h-2 rounded-full bg-emerald-500 shadow-xs"/> Done</span>
                   <span className="font-bold text-emerald-500">{taskDoneCount}</span>
                 </div>
              </div>
           </div>
           <div className="flex justify-around items-center pt-4 mt-auto border-t border-border/40 text-xs">
-             <div className="text-muted-foreground">Total Tasks: <strong className="text-foreground">{liveTasks.length}</strong></div>
-             <a href="/feature/tasks" className="text-blue-600 hover:underline font-semibold">View Task Kanban →</a>
+             <div className="text-muted-foreground font-medium">Total Tasks: <strong className="text-foreground font-bold">{liveTasks.length}</strong></div>
+             <a href="/feature/tasks" className="text-blue-600 hover:text-blue-700 dark:text-blue-400 font-bold hover:underline">View Task Kanban →</a>
           </div>
         </Widget>
 
         {/* Team Members Overview */}
         <Widget title="Team Members Overview" icon={Users}>
            <div className="grid grid-cols-2 gap-4 py-4 text-center">
-              <div>
-                <p className="text-3xl font-bold text-foreground">{realUsers.length}</p>
-                <p className="text-xs text-muted-foreground mt-1">Company Staff</p>
+              <div className="p-3 rounded-xl bg-zinc-50/80 dark:bg-zinc-800/40 border border-border/30">
+                <p className="text-3xl font-extrabold text-foreground">{realUsers.length}</p>
+                <p className="text-xs text-muted-foreground mt-1 font-medium">Company Staff</p>
               </div>
-              <div>
-                <p className="text-3xl font-bold text-emerald-500">{realUsers.filter(u => u.status === "Active").length}</p>
-                <p className="text-xs text-muted-foreground mt-1">Active Accounts</p>
+              <div className="p-3 rounded-xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-500/20">
+                <p className="text-3xl font-extrabold text-emerald-500">{realUsers.filter(u => u.status === "Active").length}</p>
+                <p className="text-xs text-muted-foreground mt-1 font-medium">Active Accounts</p>
               </div>
            </div>
-           <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border/40 text-center text-xs">
+           <div className="grid grid-cols-2 gap-4 pt-3 border-t border-border/40 text-center text-xs">
               <div>
-                <p className="text-2xl font-bold text-purple-600">{realUsers.filter(u => u.role === "Admin" || u.role === "Super Admin").length}</p>
-                <p className="text-muted-foreground mt-0.5">Admins</p>
+                <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{realUsers.filter(u => u.role === "Admin" || u.role === "Super Admin").length}</p>
+                <p className="text-muted-foreground mt-0.5 font-medium">Admins</p>
               </div>
               <div>
-                <p className="text-2xl font-bold text-blue-600">{realUsers.filter(u => u.role === "Teams" || u.role === "Team").length}</p>
-                <p className="text-muted-foreground mt-0.5">Developers / Staff</p>
+                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{realUsers.filter(u => u.role === "Teams" || u.role === "Team").length}</p>
+                <p className="text-muted-foreground mt-0.5 font-medium">Developers / Staff</p>
               </div>
            </div>
            
-           <div className="mt-auto border border-border/40 rounded-lg p-2.5 text-xs text-center">
-             <a href="/feature/users" className="text-blue-600 hover:underline font-semibold">Manage Company Users →</a>
+           <div className="mt-auto pt-3 border-t border-border/40 text-center">
+             <a href="/feature/users" className="text-blue-600 hover:text-blue-700 dark:text-blue-400 font-bold hover:underline text-xs">Manage Company Users →</a>
            </div>
         </Widget>
 
@@ -898,15 +846,15 @@ export default function DashboardMain() {
                <p className="text-muted-foreground text-center py-6">No sales orders created yet for this company/branch.</p>
              ) : (
                liveOrders.slice(0, 4).map((ord) => (
-                 <div key={ord.id} className="p-2.5 bg-surface border border-border rounded-xl flex items-center justify-between">
+                 <div key={ord.id} className="p-2.5 bg-surface border border-border/60 rounded-xl flex items-center justify-between shadow-xs hover:border-blue-300 dark:hover:border-blue-700 transition-colors">
                    <div>
                      <p className="font-bold text-foreground truncate max-w-[140px]">{ord.project}</p>
-                     <p className="text-[10px] text-muted-foreground">{ord.client} · {ord.orderDate}</p>
+                     <p className="text-[10px] text-muted-foreground font-medium">{ord.client} · {ord.orderDate}</p>
                    </div>
                    <div className="text-right">
                      <p className="font-bold text-foreground">{ord.totalAmount}</p>
-                     <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                       ord.paymentStatus === "Paid" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+                     <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shadow-xs ${
+                       ord.paymentStatus === "Paid" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
                      }`}>
                        {ord.paymentStatus}
                      </span>
@@ -917,8 +865,127 @@ export default function DashboardMain() {
            </div>
            
            <div className="mt-auto pt-3 border-t border-border/40 text-center">
-             <a href="/feature/sales/orders" className="text-blue-600 hover:underline text-xs font-semibold">View All Sales Orders →</a>
+             <a href="/feature/sales/orders" className="text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline text-xs font-bold">View All Sales Orders →</a>
            </div>
+        </Widget>
+      </div>
+
+      {/* --- REAL DATA STAFF ATTENDANCE & HISTORICAL LOGIN LOG MONITOR PANEL (Box Container) --- */}
+      <div className="mb-6">
+        <Widget title="Company Staff Attendance & Session Monitor" icon={Users}>
+          <div className="space-y-3">
+            {/* Header Filters & Active User Info */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/50 pb-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-semibold text-muted-foreground">Filter Staff:</span>
+                <select
+                  value={selectedUserEmail}
+                  onChange={(e) => setSelectedUserEmail(e.target.value)}
+                  className="px-3 py-1.5 bg-surface border border-border/80 rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-xs"
+                >
+                  <option value="">All Registered Staff ({realUsers.length})</option>
+                  {realUsers.map((u) => (
+                    <option key={u.email} value={u.email}>
+                      {u.name} ({u.role} - {u.email})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-4 text-xs font-medium">
+                <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-semibold px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-500/20">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Active User: {user.name}
+                </span>
+                <span className="text-muted-foreground font-semibold px-2 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800">
+                  Total Staff: {realUsers.length}
+                </span>
+              </div>
+            </div>
+
+            {/* Scrollable Box Container */}
+            <div className="rounded-xl border border-border/60 overflow-hidden bg-surface/60 dark:bg-zinc-900/30 shadow-xs">
+              <div className="max-h-[350px] overflow-y-auto overflow-x-auto divide-y divide-border/30">
+                <table className="w-full text-xs text-left border-collapse">
+                  <thead className="sticky top-0 bg-zinc-100/95 dark:bg-zinc-800/95 backdrop-blur-md z-10 shadow-xs">
+                    <tr className="border-b border-border/60 text-muted-foreground font-bold">
+                      <th className="py-2.5 px-3">Date</th>
+                      <th className="py-2.5 px-3">User Name</th>
+                      <th className="py-2.5 px-3">Role</th>
+                      <th className="py-2.5 px-3">Login Punch Time</th>
+                      <th className="py-2.5 px-3">Logout Punch Time</th>
+                      <th className="py-2.5 px-3">Total Worked Hours</th>
+                      <th className="py-2.5 px-3">Session Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/30">
+                    {(() => {
+                      const filtered = selectedUserEmail
+                        ? realUsers.filter(u => u.email.toLowerCase().trim() === selectedUserEmail.toLowerCase().trim())
+                        : realUsers
+
+                      if (filtered.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan={7} className="text-center py-8 text-muted-foreground">
+                              No staff records found for selected filter.
+                            </td>
+                          </tr>
+                        )
+                      }
+
+                      return filtered.map((u) => {
+                        const isActiveUser = u.email.toLowerCase() === user.email.toLowerCase()
+
+                        let punchInTime = "09:00 AM"
+                        let punchOutTime = "-"
+                        let workedHours = "-"
+                        let statusBadge = <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">Offline</span>
+
+                        if (isActiveUser) {
+                          punchInTime = "Today at 09:15 AM"
+                          if (isClockedIn) {
+                            punchOutTime = "Active Session"
+                            workedHours = formatTime(secondsElapsed)
+                            statusBadge = <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 shadow-xs">🟢 CLOCKED IN</span>
+                          } else {
+                            punchOutTime = "06:15 PM"
+                            workedHours = "08 hrs 15 mins"
+                            statusBadge = <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 font-semibold shadow-xs">🔵 LOGGED IN</span>
+                          }
+                        } else if (u.status === "Active") {
+                          statusBadge = <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 shadow-xs">ACTIVE</span>
+                        }
+
+                        return (
+                          <tr key={u.email} className={`hover:bg-surface-hover/50 transition-colors ${isActiveUser ? "bg-blue-500/5 font-medium" : ""}`}>
+                            <td className="py-2.5 px-3 font-mono font-medium">Today</td>
+                            <td className="py-2.5 px-3 font-bold text-foreground flex items-center gap-1.5">
+                              <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${u.email}`} alt={u.name} className="w-5 h-5 rounded-full border border-border/50 shrink-0 shadow-xs" />
+                              <span className="truncate max-w-[140px]">{u.name}</span>
+                              {isActiveUser && <span className="text-[9px] bg-primary text-primary-foreground px-1.5 py-0.2 rounded font-bold shadow-xs">YOU</span>}
+                            </td>
+                            <td className="py-2.5 px-3 text-muted-foreground">{u.role}</td>
+                            <td className="py-2.5 px-3 text-emerald-600 dark:text-emerald-400 font-mono font-bold">{punchInTime}</td>
+                            <td className="py-2.5 px-3 text-rose-600 dark:text-rose-400 font-mono font-bold">{punchOutTime}</td>
+                            <td className="py-2.5 px-3 font-mono font-semibold text-foreground">{workedHours}</td>
+                            <td className="py-2.5 px-3">{statusBadge}</td>
+                          </tr>
+                        )
+                      })
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Box Footer */}
+              <div className="px-4 py-2 bg-zinc-50/80 dark:bg-zinc-800/60 border-t border-border/50 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                <span>Scroll box container to view all team attendance records</span>
+                <a href="/feature/attendance" className="text-blue-600 dark:text-blue-400 font-bold hover:underline">
+                  View Full Attendance Portal →
+                </a>
+              </div>
+            </div>
+          </div>
         </Widget>
       </div>
 

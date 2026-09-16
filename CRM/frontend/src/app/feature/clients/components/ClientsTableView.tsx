@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Search, ChevronDown, FileSpreadsheet, Printer, LayoutGrid, SlidersHorizontal, Edit3, X, Eye, ChevronLeft, ChevronRight, User, FolderPlus, MapPin, Info, Trash2 } from "lucide-react"
+import { Search, ChevronDown, FileSpreadsheet, Printer, LayoutGrid, SlidersHorizontal, Edit3, X, Eye, ChevronLeft, ChevronRight, User, FolderPlus, MapPin, Info, Trash2, Receipt } from "lucide-react"
 import { ClientItem } from "../types"
 import { formatDisplayEmail } from "../services/clientService"
 
@@ -14,7 +14,7 @@ interface ClientsTableViewProps {
   clients: ClientItem[]
   onDeleteClient: (id: string) => void
   onEditClient: (client: ClientItem) => void
-  onAddProjectClient?: (client: ClientItem) => void
+  onAddProjectClient?: (client: ClientItem, mode?: "project_and_invoice" | "invoice_only") => void
   onViewClientHistory?: (client: ClientItem) => void
 }
 
@@ -381,15 +381,26 @@ export function ClientsTableView({
                   <td className="py-3 px-3 text-right">
                     <div className="flex items-center justify-end gap-1.5">
                       {onAddProjectClient && (
-                        <button
-                          type="button"
-                          onClick={() => onAddProjectClient(client)}
-                          className="px-2 py-1 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 hover:bg-blue-100 font-semibold flex items-center gap-1 text-[11px] shadow-2xs border border-blue-200/60 dark:border-blue-800/60"
-                          title="Add Project for this client"
-                        >
-                          <FolderPlus size={13} />
-                          <span>+ Add Project</span>
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => onAddProjectClient(client, "project_and_invoice")}
+                            className="px-2 py-1 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 hover:bg-blue-100 font-semibold flex items-center gap-1 text-[11px] shadow-2xs border border-blue-200/60 dark:border-blue-800/60 cursor-pointer transition-colors"
+                            title="Create project with invoice and go directly to project workspace"
+                          >
+                            <FolderPlus size={12} />
+                            <span>+ With Project</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onAddProjectClient(client, "invoice_only")}
+                            className="px-2 py-1 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 font-semibold flex items-center gap-1 text-[11px] shadow-2xs border border-emerald-200/60 dark:border-emerald-800/60 cursor-pointer transition-colors"
+                            title="Generate only tax invoice for this client"
+                          >
+                            <Receipt size={12} />
+                            <span>+ Only Invoice</span>
+                          </button>
+                        </div>
                       )}
                       <button
                         type="button"

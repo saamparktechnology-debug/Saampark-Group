@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { motion } from "framer-motion"
-import { Tag, Upload, Plus } from "lucide-react"
+import { Tag, Upload, Plus, FolderPlus, Receipt } from "lucide-react"
 
 import { ClientTabMode, ClientItem, ContactItem, ClientLabelItem } from "./types"
 import { OverviewView } from "./components/OverviewView"
@@ -56,6 +56,7 @@ export default function ClientsMain() {
   
   const [isAddProjectModalOpen, setIsAddProjectModalOpen] = React.useState(false)
   const [selectedClientForProject, setSelectedClientForProject] = React.useState<ClientItem | null>(null)
+  const [initialCreationMode, setInitialCreationMode] = React.useState<"project_and_invoice" | "invoice_only">("project_and_invoice")
   
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = React.useState(false)
   const [selectedCreatedInvoice, setSelectedCreatedInvoice] = React.useState<any>(null)
@@ -509,6 +510,19 @@ export default function ClientsMain() {
             <span>{activeTab === "contacts" ? "Import contacts" : "Import clients"}</span>
           </button>
 
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedClientForProject(null)
+              setInitialCreationMode("project_and_invoice")
+              setIsAddProjectModalOpen(true)
+            }}
+            className="px-3.5 py-1.5 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50/80 dark:bg-blue-950/40 text-xs font-semibold text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60 flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+          >
+            <FolderPlus size={14} className="text-blue-600 dark:text-blue-400" />
+            <span>+ Invoice / Project</span>
+          </button>
+
           {canAddClient && (
             <button
               type="button"
@@ -542,8 +556,9 @@ export default function ClientsMain() {
                 setSelectedClientForEdit(client)
                 setIsAddClientModalOpen(true)
               }}
-              onAddProjectClient={(client) => {
+              onAddProjectClient={(client, mode) => {
                 setSelectedClientForProject(client)
+                setInitialCreationMode(mode || "project_and_invoice")
                 setIsAddProjectModalOpen(true)
               }}
               onViewClientHistory={(client) => {
@@ -583,6 +598,7 @@ export default function ClientsMain() {
         }}
         onAddProjectForClient={(client) => {
           setSelectedClientForProject(client)
+          setInitialCreationMode("project_and_invoice")
           setIsAddProjectModalOpen(true)
         }}
       />
@@ -591,6 +607,7 @@ export default function ClientsMain() {
       <AddClientProjectModal
         isOpen={isAddProjectModalOpen}
         client={selectedClientForProject}
+        initialMode={initialCreationMode}
         onClose={() => {
           setIsAddProjectModalOpen(false)
           setSelectedClientForProject(null)

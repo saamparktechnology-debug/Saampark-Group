@@ -8,6 +8,8 @@ import {
 } from "lucide-react"
 
 
+import { useRouter } from "next/navigation"
+
 import { ClientItem } from "../types"
 import { getUsers } from "@/app/feature/users/services/userService"
 import { addProject } from "@/app/feature/projects/services/projectService"
@@ -23,6 +25,7 @@ import { sendInvoiceDetailsEmailNotification, sendPaymentReceiptEmailNotificatio
 interface AddClientProjectModalProps {
   isOpen: boolean
   client: ClientItem | null
+  initialMode?: "project_and_invoice" | "invoice_only"
   onClose: () => void
   onProjectCreated: () => void
   onInvoiceCreated?: (invoice: any) => void
@@ -45,6 +48,16 @@ export interface FormDiscountItem {
   amount: number | ""
 }
 
+export interface AssignedMemberAllocation {
+  id: string
+  name: string
+  email?: string
+  role?: string
+  avatar?: string
+  payoutType: "percentage" | "fixed"
+  payoutValue: number | ""
+}
+
 const SERVICE_PRESETS = [
   { name: "Website Development", sac: "998313", gst: 18, unit: "Project" },
   { name: "Software Development", sac: "998314", gst: 18, unit: "Project" },
@@ -59,11 +72,42 @@ const SERVICE_PRESETS = [
 export function AddClientProjectModal({
   isOpen,
   client,
+  initialMode,
   onClose,
   onProjectCreated,
   onInvoiceCreated,
 }: AddClientProjectModalProps) {
+  const router = useRouter()
   const { user, activeCompanyId, activeBranchId, branches, subBranches, companies } = useAuthStore()
+
+  const [selectedClient, setSelectedClient] = React.useState<ClientItem | null>(client)
+  const [allAvailableClients, setAllAvailableClients] = React.useState<ClientItem[]>([])
+  const [clientSearchText, setClientSearchText] = React.useState("")
+  const [isClientSearchDropdownOpen, setIsClientSearchDropdownOpen] = React.useState(false)
+
+  const effectiveClient = selectedClient || client
+
+  const filteredSearchClients = React.useMemo(() => {
+    if (!clientSearchText.trim()) return allAvailableClients
+    const q = clientSearchText.toLowerCase().trim()
+    return allAvailableClients.filter(c => 
+      c.name.toLowerCase().includes(q) ||
+      (c.email && c.email.toLowerCase().includes(q)) ||
+      (c.phone && c.phone.includes(q)) ||
+      (c.primaryContact && c.primaryContact.toLowerCase().includes(q))
+    )
+  }, [allAvailableClients, clientSearchText])
+
+  const handleSelectClient = (c: ClientItem) => {
+    setSelectedClient(c)
+    setClientEmail(formatDisplayEmail(c.email) || "")
+    setClientPhone(c.phone || "")
+    setClientAddress(c.address || "")
+    setClientCity(c.city || "")
+    setClientState(c.state || "")
+    setClientGst(c.gstNumber || c.vatNumber || "")
+    setIsClientSearchDropdownOpen(false)
+  }
   
   const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>(activeCompanyId || user?.companyId || "tech")
   const [selectedBranchId, setSelectedBranchId] = React.useState<string>(activeBranchId || user?.branchId || "")
@@ -92,7 +136,7 @@ export function AddClientProjectModal({
     }
   }
 
-  const [creationMode, setCreationMode] = React.useState<"project_and_invoice" | "invoice_only">("project_and_invoice")
+  const [creationMode, setCreationMode] = React.useState<"project_and_invoice" | "invoice_only">(initialMode || "project_and_invoice")
   const [projectTitle, setProjectTitle] = React.useState("Website Development")
   const [category, setCategory] = React.useState("Website Development")
   const [customCategory, setCustomCategory] = React.useState("")
@@ -138,7 +182,8 @@ export function AddClientProjectModal({
     }
   }
   const [billedByAdmin, setBilledByAdmin] = React.useState(user?.name || "Admin")
-  const [assignedMembers, setAssignedMembers] = React.useState<string[]>([])
+  const [assignedAllocations, setAssignedAllocations] = React.useState<AssignedMemberAllocation[]>([])
+  const assignedMembers = React.useMemo(() => assignedAllocations.map(a => a.name), [assignedAllocations])
   const [startDate, setStartDate] = React.useState(new Date().toISOString().split("T")[0])
   const [deadline, setDeadline] = React.useState(() => {
     const d = new Date()
@@ -214,16 +259,33 @@ export function AddClientProjectModal({
   }, [teamsList, teamSearchQuery])
 
   React.useEffect(() => {
-    if (isOpen && client) {
+    if (isOpen) {
+      getClients().then((cls) => {
+        setAllAvailableClients(cls || [])
+        let currentC = client
+        if (!currentC && cls && cls.length > 0) {
+          currentC = cls[0]
+        }
+        if (currentC) {
+          setSelectedClient(currentC)
+          setClientEmail(formatDisplayEmail(currentC.email) || "")
+          setClientPhone(currentC.phone || "")
+          setClientAddress(currentC.address || "")
+          setClientCity(currentC.city || "")
+          setClientState(currentC.state || "")
+          setClientGst(currentC.gstNumber || currentC.vatNumber || "")
+        }
+      }).catch(() => {})
+
       setSelectedCompanyId(activeCompanyId || user?.companyId || "tech")
       setSelectedBranchId(activeBranchId || user?.branchId || "")
       setSelectedSubBranchId("")
-      setCreationMode("project_and_invoice")
+      setCreationMode(initialMode || "project_and_invoice")
       setProjectTitle("Website Development")
       setCategory("Website Development")
       setCustomCategory("")
       setIsCustomCategory(false)
-      setAssignedMembers([])
+      setAssignedAllocations([])
       setDescription("")
       setStartDate(new Date().toISOString().split("T")[0])
       const nextMonth = new Date()
@@ -231,6 +293,8 @@ export function AddClientProjectModal({
       setDeadline(nextMonth.toISOString().split("T")[0])
       setIsTeamDropdownOpen(false)
       setTeamSearchQuery("")
+      setIsClientSearchDropdownOpen(false)
+      setClientSearchText("")
       setServiceItems([
         {
           id: `svc_${Date.now()}`,
@@ -253,12 +317,6 @@ export function AddClientProjectModal({
       setBillingCycle("Monthly")
       setAutoCreateSubscription(true)
       setPaymentStatus("Paid")
-      setClientEmail(formatDisplayEmail(client.email) || "")
-      setClientPhone(client.phone || "")
-      setClientAddress(client.address || "")
-      setClientCity(client.city || "")
-      setClientState(client.state || "")
-      setClientGst(client.gstNumber || client.vatNumber || "")
       if (user?.name) {
         setBilledByAdmin(user.name)
       }
@@ -290,21 +348,39 @@ export function AddClientProjectModal({
         if (!billedByAdmin && admins.length > 0) {
           setBilledByAdmin(user?.name || admins[0].name)
         }
-        if (assignedMembers.length === 0 && teams.length > 0) {
-          setAssignedMembers([teams[0].name])
+        if (assignedAllocations.length === 0 && teams.length > 0) {
+          setAssignedAllocations([
+            {
+              id: String(teams[0].id),
+              name: teams[0].name,
+              email: teams[0].email || "",
+              role: teams[0].role || "Developer",
+              avatar: teams[0].avatar,
+              payoutType: "percentage",
+              payoutValue: "",
+            }
+          ])
         }
       })
     }
-
-
-  }, [isOpen, user, client])
+  }, [isOpen, user, client, initialMode])
 
   const handleModeChange = (mode: "project_and_invoice" | "invoice_only") => {
     setCreationMode(mode)
     if (mode === "invoice_only") {
-      setAssignedMembers([])
-    } else if (assignedMembers.length === 0 && teamsList.length > 0) {
-      setAssignedMembers([teamsList[0].name])
+      setAssignedAllocations([])
+    } else if (assignedAllocations.length === 0 && teamsList.length > 0) {
+      setAssignedAllocations([
+        {
+          id: String(teamsList[0].id),
+          name: teamsList[0].name,
+          email: teamsList[0].email || "",
+          role: teamsList[0].role || "Developer",
+          avatar: teamsList[0].avatar,
+          payoutType: "percentage",
+          payoutValue: "",
+        }
+      ])
     }
   }
 
@@ -429,6 +505,93 @@ export function AddClientProjectModal({
   const totalGstAmount = taxableBase > 0 ? finalItemCalculations.reduce((sum, it) => sum + it.itemGst, 0) : 0
   const totalAmount = taxableBase + totalGstAmount
 
+  // Live Team Member Payout & Margin Calculations
+  const memberPayouts = React.useMemo(() => {
+    return assignedAllocations.map((m) => {
+      const val = typeof m.payoutValue === "number" ? m.payoutValue : (Number(m.payoutValue) || 0)
+      let calculatedAmount = 0
+      let calculatedPercentage = 0
+
+      if (m.payoutType === "percentage") {
+        calculatedPercentage = val
+        calculatedAmount = totalAmount > 0 ? Math.round((totalAmount * val) / 100) : 0
+      } else {
+        calculatedAmount = val
+        calculatedPercentage = totalAmount > 0 ? Number(((val / totalAmount) * 100).toFixed(1)) : 0
+      }
+
+      return {
+        ...m,
+        calculatedAmount,
+        calculatedPercentage,
+      }
+    })
+  }, [assignedAllocations, totalAmount])
+
+  const totalTeamPayout = React.useMemo(() => {
+    return memberPayouts.reduce((acc, m) => acc + m.calculatedAmount, 0)
+  }, [memberPayouts])
+
+  const totalTeamPercentage = React.useMemo(() => {
+    return totalAmount > 0 ? Number(((totalTeamPayout / totalAmount) * 100).toFixed(1)) : 0
+  }, [totalTeamPayout, totalAmount])
+
+  const companyMargin = Math.max(0, totalAmount - totalTeamPayout)
+  const companyMarginPercentage = totalAmount > 0 ? Math.max(0, Number((100 - totalTeamPercentage).toFixed(1))) : 100
+
+  const handleToggleMember = (tm: { id: string; name: string; email?: string; role?: string; avatar?: string }) => {
+    setAssignedAllocations((prev) => {
+      const exists = prev.some((a) => a.id === String(tm.id) || a.name.toLowerCase().trim() === tm.name.toLowerCase().trim())
+      if (exists) {
+        return prev.filter((a) => a.id !== String(tm.id) && a.name.toLowerCase().trim() !== tm.name.toLowerCase().trim())
+      }
+      return [
+        ...prev,
+        {
+          id: String(tm.id),
+          name: tm.name,
+          email: tm.email || "",
+          role: tm.role || "Developer",
+          avatar: tm.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${tm.name}`,
+          payoutType: "percentage",
+          payoutValue: "",
+        },
+      ]
+    })
+  }
+
+  const handleSelectAllMembers = () => {
+    setAssignedAllocations(
+      teamsList.map((tm) => {
+        const existing = assignedAllocations.find((a) => a.id === String(tm.id) || a.name.toLowerCase().trim() === tm.name.toLowerCase().trim())
+        if (existing) return existing
+        return {
+          id: String(tm.id),
+          name: tm.name,
+          email: tm.email || "",
+          role: tm.role || "Developer",
+          avatar: tm.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${tm.name}`,
+          payoutType: "percentage",
+          payoutValue: "",
+        }
+      })
+    )
+  }
+
+  const handleClearMembers = () => {
+    setAssignedAllocations([])
+  }
+
+  const handleUpdateMemberAllocation = (idOrName: string, field: "payoutType" | "payoutValue", val: any) => {
+    setAssignedAllocations((prev) =>
+      prev.map((a) => (a.id === idOrName || a.name === idOrName ? { ...a, [field]: val } : a))
+    )
+  }
+
+  const handleRemoveMember = (idOrName: string) => {
+    setAssignedAllocations((prev) => prev.filter((a) => a.id !== idOrName && a.name !== idOrName))
+  }
+
   const numAdvance = typeof advanceAmount === "number" ? advanceAmount : 0
   const numPartInitial = typeof partInitialPayment === "number" ? partInitialPayment : 0
 
@@ -460,15 +623,12 @@ export function AddClientProjectModal({
     ? (deadline || calculated3MonthDate)
     : (deadline || "30-06-2026")
 
-  const handleToggleMember = (name: string) => {
-    setAssignedMembers(prev => 
-      prev.includes(name) ? prev.filter(m => m !== name) : [...prev, name]
-    )
-  }
-
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!client) return
+    if (!effectiveClient) {
+      alert("Please select or search for a client first.")
+      return
+    }
     if (!projectTitle.trim()) {
       alert("Please enter a project title.")
       return
@@ -525,16 +685,17 @@ export function AddClientProjectModal({
       // 1. Add Project (Only in Project & Invoice mode)
       let createdProject: any = null
       if (creationMode === "project_and_invoice") {
-        const projectMembers = assignedMembers.map(m => {
-          const matched = teamsList.find(t => t.name.toLowerCase().trim() === m.toLowerCase().trim() || String(t.id) === String(m))
-          return {
-            id: matched?.id ? String(matched.id) : `mem_${m}`,
-            name: matched?.name || m,
-            role: matched?.role || "Developer",
-            email: matched?.email || "",
-            avatar: matched?.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${matched?.name || m}`,
-          }
-        })
+        const projectMembers = memberPayouts.map(m => ({
+          id: m.id || `mem_${m.name}`,
+          name: m.name,
+          role: m.role || "Developer",
+          email: m.email || "",
+          avatar: m.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${m.name}`,
+          sharePercentage: m.calculatedPercentage,
+          payoutType: m.payoutType,
+          payoutValue: typeof m.payoutValue === "number" ? m.payoutValue : (Number(m.payoutValue) || 0),
+          payoutAmount: m.calculatedAmount,
+        }))
 
 
         const computedProjectStatus = remainingDue === 0 
@@ -578,8 +739,8 @@ export function AddClientProjectModal({
 
         createdProject = await addProject({
           title: projectTitle,
-          client: client.name,
-          clientId: client.id,
+          client: effectiveClient.name,
+          clientId: effectiveClient.id,
           projectType: "Client Project",
           price: formattedTotal,
           startDate: startDate || new Date().toISOString().split("T")[0],
@@ -611,7 +772,7 @@ export function AddClientProjectModal({
           createdById: user?.id ? String(user.id) : undefined,
           createdByEmail: user?.email,
           labels: [effectiveCategory, computedPaymentStatus, ...(paymentModel === "part" ? [`${subscriptionMonths}-Month Subscription`] : [])],
-          description: description || `Client Project for ${client.name}. ${serviceItems.map(s => s.serviceName).join(", ")}. Billed by ${billedByAdmin}.`,
+          description: description || `Client Project for ${effectiveClient.name}. ${serviceItems.map(s => s.serviceName).join(", ")}. Billed by ${billedByAdmin}.`,
           members: projectMembers,
           milestones: starterMilestones,
         }, targetCompany)
@@ -619,25 +780,30 @@ export function AddClientProjectModal({
         // Generate Tasks for assigned project team members
         if (projectMembers.length > 0) {
           try {
-            const taskItems: any[] = projectMembers.map((m: any, idx: number) => ({
-              id: `tsk_${Date.now()}_${idx}`,
-              title: `[${projectTitle}] - Milestone & Core Deliverables`,
-              description: `Task for project "${projectTitle}". Client: ${client.name}. Category: ${effectiveCategory}. Assigned to: ${m.name}.`,
-              startDate: startDate || new Date().toISOString().split("T")[0],
-              deadline: effectiveDeadline,
-              status: "In progress",
-              priority: "High",
-              assignedTo: m.name,
-              assignedToEmail: m.email || "",
-              assignedToId: m.id || "",
-              createdBy: billedByAdmin,
-              companyId: targetCompany,
-              branchId: effectiveBranchId,
-              branchName: effectiveBranchName,
-              branchCode: effectiveBranchCode,
-              projectName: projectTitle,
-              tags: [effectiveCategory, "Project Task"],
-            }))
+            const taskItems: any[] = projectMembers.map((m: any, idx: number) => {
+              const compText = m.payoutAmount > 0 
+                ? ` [Compensation: ₹${m.payoutAmount.toLocaleString("en-IN")}${m.payoutType === "percentage" ? ` (${m.payoutValue}%)` : ""}]`
+                : ""
+              return {
+                id: `tsk_${Date.now()}_${idx}`,
+                title: `[${projectTitle}] - Milestone & Core Deliverables`,
+                description: `Task for project "${projectTitle}". Client: ${effectiveClient.name}. Category: ${effectiveCategory}.${compText} Assigned to: ${m.name}.`,
+                startDate: startDate || new Date().toISOString().split("T")[0],
+                deadline: effectiveDeadline,
+                status: "In progress",
+                priority: "High",
+                assignedTo: m.name,
+                assignedToEmail: m.email || "",
+                assignedToId: m.id || "",
+                createdBy: billedByAdmin,
+                companyId: targetCompany,
+                branchId: effectiveBranchId,
+                branchName: effectiveBranchName,
+                branchCode: effectiveBranchCode,
+                projectName: projectTitle,
+                tags: [effectiveCategory, "Project Task"],
+              }
+            })
             await taskService.addTasks(taskItems, targetCompany)
           } catch (err) {
             console.warn("Could not generate tasks for project members:", err)
@@ -656,9 +822,9 @@ export function AddClientProjectModal({
       const billTime = now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })
 
       const createdInvoice = await addInvoice({
-        client: client.name,
-        clientEmail: clientEmail.trim() || client.email,
-        clientId: client.id,
+        client: effectiveClient.name,
+        clientEmail: clientEmail.trim() || effectiveClient.email,
+        clientId: effectiveClient.id,
         project: projectTitle,
         billDate: startDate || now.toISOString().split("T")[0],
         billTime: billTime,
@@ -691,9 +857,9 @@ export function AddClientProjectModal({
       // 3. Concurrently create Order and Initial Payment (if advance paid)
       const followUpTasks: Promise<any>[] = [
         addOrder({
-          client: client.name,
-          clientEmail: client.email,
-          clientId: client.id,
+          client: effectiveClient.name,
+          clientEmail: effectiveClient.email || clientEmail,
+          clientId: effectiveClient.id,
           project: projectTitle,
           orderDate: startDate || now.toISOString().split("T")[0],
           deliveryDate: effectiveDeadline,
@@ -710,8 +876,8 @@ export function AddClientProjectModal({
         followUpTasks.push(
           addPayment({
             invoiceId: invoiceId,
-            client: client.name,
-            clientEmail: client.email,
+            client: effectiveClient.name,
+            clientEmail: effectiveClient.email || clientEmail,
             project: projectTitle,
             paymentDate: startDate || now.toISOString().split("T")[0],
             paymentMethod: paymentModel === "advance" ? "Advance (Initial Deposit)" : "Initial Milestone / Part Payment",
@@ -731,11 +897,11 @@ export function AddClientProjectModal({
           remainingDue: formattedDue,
           nextDueDate: effectiveDeadline,
           paymentMethod: paymentModel === "advance" ? "Advance (Initial Deposit)" : "Initial Milestone / Part Payment",
-          recipientEmail: client.email,
+          recipientEmail: effectiveClient.email || clientEmail,
         }).catch(() => null)
       } else {
         // Non-blocking dispatch Invoice Details Email
-        sendInvoiceDetailsEmailNotification(createdInvoice, client.email).catch(() => null)
+        sendInvoiceDetailsEmailNotification(createdInvoice, effectiveClient.email || clientEmail).catch(() => null)
       }
 
       // 4. Automatically add to Installments & Subscriptions if Part Payment is selected
@@ -769,13 +935,13 @@ export function AddClientProjectModal({
           saveInstallmentRecord({
             id: `inst_proj_${currentProjId}`,
             projectId: currentProjId,
-            clientId: client.id,
+            clientId: effectiveClient.id,
             invoiceId: invoiceId,
-            clientName: client.name,
-            clientEmail: client.email || clientEmail,
-            clientPhone: client.phone || clientPhone,
-            clientCompany: client.companyName || client.name,
-            clientGst: client.gstNumber || clientGst,
+            clientName: effectiveClient.name,
+            clientEmail: effectiveClient.email || clientEmail,
+            clientPhone: effectiveClient.phone || clientPhone,
+            clientCompany: effectiveClient.companyName || effectiveClient.name,
+            clientGst: effectiveClient.gstNumber || clientGst,
             projectTitle: projectTitle,
             totalContractValue: totalAmount,
             totalAdvancePaid: effectiveAdvance,
@@ -795,11 +961,11 @@ export function AddClientProjectModal({
           }, targetCompany),
 
           addSubscription({
-            clientId: client.id,
-            clientName: client.name,
-            clientEmail: client.email || clientEmail,
-            clientPhone: client.phone || clientPhone,
-            clientCompany: client.companyName || client.name,
+            clientId: effectiveClient.id,
+            clientName: effectiveClient.name,
+            clientEmail: effectiveClient.email || clientEmail,
+            clientPhone: effectiveClient.phone || clientPhone,
+            clientCompany: effectiveClient.companyName || effectiveClient.name,
             planName: `${projectTitle} (${subscriptionMonths}-Month Part Payment / EMI)`,
             status: "Active",
             amount: `₹${perInstallment.toLocaleString("en-IN")}`,
@@ -821,7 +987,7 @@ export function AddClientProjectModal({
       // 5. Update Stored Client Record with Latest Contact Info
       try {
         const allClients = await getClients()
-        const currentStored = allClients.find(c => c.name.toLowerCase().trim() === client.name.toLowerCase().trim())
+        const currentStored = allClients.find(c => c.name.toLowerCase().trim() === effectiveClient.name.toLowerCase().trim())
         if (currentStored) {
           const currentTotal = parseInt(currentStored.totalInvoiced.replace(/[^0-9]/g, "")) || 0
           const currentPaid = parseInt(currentStored.paymentReceived.replace(/[^0-9]/g, "")) || 0
@@ -849,6 +1015,25 @@ export function AddClientProjectModal({
         console.warn("Could not sync client record:", err)
       }
 
+      // Automatically register / sync Client User Account if email is present
+      const finalEmail = clientEmail.trim() || effectiveClient.email
+      if (finalEmail) {
+        try {
+          const { recordUserAccountAsync } = await import("@/app/feature/users/services/userService")
+          recordUserAccountAsync({
+            name: effectiveClient.name,
+            email: finalEmail,
+            phone: clientPhone || effectiveClient.phone || "",
+            role: "Clients",
+            companyId: targetCompany,
+            companyIds: [targetCompany],
+            branchId: effectiveBranchId,
+            branchName: effectiveBranchName,
+            status: "Active",
+          }, false).catch(() => {})
+        } catch {}
+      }
+
       // Dispatch all update events so all sections reload
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("saampark_clients_updated"))
@@ -863,6 +1048,11 @@ export function AddClientProjectModal({
       if (onInvoiceCreated) onInvoiceCreated(createdInvoice)
       onClose()
 
+      // When "With Project" is selected, directly navigate to the Project Section
+      if (creationMode === "project_and_invoice") {
+        router.push("/feature/projects")
+      }
+
     } catch (err) {
       console.error(err)
       alert("An error occurred while creating the project and invoice.")
@@ -871,7 +1061,7 @@ export function AddClientProjectModal({
     }
   }
 
-  if (!isOpen || !client) return null
+  if (!isOpen) return null
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-start sm:items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto">
@@ -885,7 +1075,7 @@ export function AddClientProjectModal({
               <span>Multi-Service Project & Billing Setup</span>
             </h2>
             <p className="text-xs text-zinc-500">
-              Add multiple custom services, line-level charges, independent GST rates & discounts for <strong>{client.name}</strong>
+              Add multiple custom services, line-level charges, independent GST rates & discounts for <strong>{effectiveClient?.name || "Selected Client"}</strong>
             </p>
           </div>
           <button
@@ -901,36 +1091,40 @@ export function AddClientProjectModal({
         <form onSubmit={handleSave} className="p-4 sm:p-6 overflow-y-auto space-y-5 text-xs flex-1">
           
           {/* Creation Mode Toggle */}
-          <div className="p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-200 dark:border-zinc-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Layers size={16} className="text-blue-600 shrink-0" />
+          <div className="p-3.5 bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl border border-zinc-200 dark:border-zinc-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+            <div className="flex items-center gap-2.5">
+              <Layers size={18} className="text-blue-600 shrink-0" />
               <div>
-                <span className="font-bold text-zinc-800 dark:text-zinc-200 block text-xs">Creation Scope</span>
-                <span className="text-[11px] text-zinc-500">Choose whether to initialize developer project workspace or tax invoice only</span>
+                <span className="font-bold text-zinc-900 dark:text-zinc-100 block text-xs">Creation Scope</span>
+                <span className="text-[11px] text-zinc-500">
+                  {creationMode === "project_and_invoice"
+                    ? "🚀 Creates full Project Workspace with milestone tasks & invoice (Takes you directly to Project)"
+                    : "📄 Generates Tax Invoice only for Client (without creating a Project)"}
+                </span>
               </div>
             </div>
-            <div className="flex items-center gap-1.5 bg-white dark:bg-zinc-900 p-1 rounded-lg border border-zinc-200 dark:border-zinc-700 shrink-0">
+            <div className="flex items-center gap-1.5 bg-white dark:bg-zinc-900 p-1 rounded-xl border border-zinc-200 dark:border-zinc-700 shrink-0">
               <button
                 type="button"
                 onClick={() => handleModeChange("project_and_invoice")}
-                className={`px-3 py-1.5 rounded-md font-bold text-xs transition-all cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
                   creationMode === "project_and_invoice"
                     ? "bg-blue-600 text-white shadow-xs"
-                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
+                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
                 }`}
               >
-                🚀 Project & Invoice
+                <span>🚀 With Project</span>
               </button>
               <button
                 type="button"
                 onClick={() => handleModeChange("invoice_only")}
-                className={`px-3 py-1.5 rounded-md font-bold text-xs transition-all cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
                   creationMode === "invoice_only"
                     ? "bg-blue-600 text-white shadow-xs"
-                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
+                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
                 }`}
               >
-                📄 Only Invoice
+                <span>📄 Only Invoice</span>
               </button>
             </div>
           </div>
@@ -1023,29 +1217,76 @@ export function AddClientProjectModal({
             )}
           </div>
 
-          {/* ── Client Details Card (pre-filled & editable) ── */}
+          {/* ── Client Details Card (pre-filled & editable & searchable) ── */}
           <div className="p-4 rounded-2xl bg-violet-50/60 dark:bg-violet-950/20 border border-violet-200 dark:border-violet-800/60 space-y-3">
             <div className="flex items-center gap-2 border-b border-violet-200/80 dark:border-violet-800/60 pb-2">
               <UserCheck size={15} className="text-violet-600 shrink-0" />
               <span className="font-extrabold text-violet-900 dark:text-violet-200 text-xs uppercase tracking-wider">
                 Client Details
               </span>
-              <span className="ml-auto text-[10px] text-violet-500 font-medium">Pre-filled · editable</span>
+              <span className="ml-auto text-[10px] text-violet-500 font-medium">Search · select · editable</span>
             </div>
 
-            {/* Row 1: Name (read-only) + Email + Phone */}
+            {/* Row 1: Searchable Client Selector + Email + Phone */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-              <div>
-                <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1 flex items-center gap-1">
-                  <UserCheck size={12} /> Client Name
+              <div className="relative">
+                <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1 flex items-center justify-between">
+                  <span className="flex items-center gap-1"><UserCheck size={12} /> Select Client *</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsClientSearchDropdownOpen(!isClientSearchDropdownOpen)}
+                    className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold hover:underline cursor-pointer"
+                  >
+                    {isClientSearchDropdownOpen ? "Close" : "🔍 Search/Switch"}
+                  </button>
                 </label>
-                <input
-                  type="text"
-                  readOnly
-                  value={client.name}
-                  className="w-full px-3 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-400 font-semibold text-xs cursor-not-allowed"
-                />
+                <div 
+                  onClick={() => setIsClientSearchDropdownOpen(!isClientSearchDropdownOpen)}
+                  className="w-full px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-bold text-xs flex items-center justify-between cursor-pointer hover:border-blue-500"
+                >
+                  <span className="truncate">{effectiveClient?.name || "Click to Select Client..."}</span>
+                  <ChevronDown size={14} className="text-zinc-400 shrink-0" />
+                </div>
+
+                {/* Client Search Dropdown */}
+                {isClientSearchDropdownOpen && (
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-2xl z-50 overflow-hidden p-2 space-y-2">
+                    <div className="relative">
+                      <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" />
+                      <input
+                        type="text"
+                        placeholder="Search client by name, email, phone..."
+                        value={clientSearchText}
+                        onChange={(e) => setClientSearchText(e.target.value)}
+                        className="w-full pl-7 pr-3 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        autoFocus
+                      />
+                    </div>
+                    <div className="max-h-48 overflow-y-auto divide-y divide-zinc-100 dark:divide-zinc-800 text-xs">
+                      {filteredSearchClients.length === 0 ? (
+                        <div className="py-3 text-center text-zinc-400 text-xs">No clients found matching search</div>
+                      ) : (
+                        filteredSearchClients.map((c) => (
+                          <div
+                            key={c.id}
+                            onClick={() => handleSelectClient(c)}
+                            className="p-2 hover:bg-blue-50 dark:hover:bg-blue-950/40 cursor-pointer rounded-lg transition-colors flex items-center justify-between"
+                          >
+                            <div>
+                              <div className="font-bold text-zinc-900 dark:text-zinc-100">{c.name}</div>
+                              <div className="text-[10.5px] text-zinc-400">{c.email || c.phone || "No contact info"}</div>
+                            </div>
+                            <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 px-1.5 py-0.5 bg-blue-50 dark:bg-blue-900/40 rounded">
+                              Select
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
+
               <div>
                 <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1 flex items-center gap-1">
                   <Mail size={12} /> Email
@@ -1258,167 +1499,325 @@ export function AddClientProjectModal({
             </div>
           </div>
 
-          {/* Assign Team (Searchable Dropdown Menu) */}
+          {/* Assign Team & Compensation Section */}
           {creationMode === "project_and_invoice" && (
-            <div className="relative space-y-1.5" ref={teamDropdownRef}>
-              <div className="flex items-center justify-between">
-                <label className="block font-semibold text-zinc-700 dark:text-zinc-300 text-xs flex items-center gap-1.5">
-                  <Users size={14} className="text-blue-600 shrink-0" />
-                  Assign Team Members
-                </label>
-                <span className="text-[10px] text-zinc-400">
-                  {assignedMembers.length > 0 ? `${assignedMembers.length} member${assignedMembers.length > 1 ? "s" : ""} assigned` : "No members assigned"}
+            <div className="p-4 rounded-2xl bg-zinc-50/90 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-700/80 space-y-3.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <label className="block font-bold text-zinc-900 dark:text-zinc-100 text-xs flex items-center gap-1.5">
+                    <Users size={15} className="text-blue-600 shrink-0" />
+                    Assign Team Members & Compensation
+                  </label>
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                    Assign unlimited team members with custom Invoice % or Fixed Price (₹) payout.
+                  </p>
+                </div>
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 w-fit">
+                  {assignedAllocations.length} Member{assignedAllocations.length !== 1 ? "s" : ""} Assigned
                 </span>
               </div>
 
-              {/* Dropdown Trigger Button */}
-              <div
-                onClick={() => setIsTeamDropdownOpen(!isTeamDropdownOpen)}
-                className="w-full min-h-[42px] px-3 py-1.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 hover:border-blue-400 dark:hover:border-blue-500 transition-colors flex items-center justify-between gap-2 cursor-pointer"
-              >
-                <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0 py-0.5">
-                  {assignedMembers.length === 0 ? (
-                    <span className="text-zinc-400 text-xs font-normal">Click to search & assign team members...</span>
-                  ) : (
-                    assignedMembers.map((mName) => {
-                      const tm = teamsList.find(t => t.name.toLowerCase().trim() === mName.toLowerCase().trim())
-                      return (
-                        <span
-                          key={mName}
-                          className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100/80 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200 rounded-lg text-[11px] font-semibold border border-blue-200 dark:border-blue-700/60"
-                        >
-                          <img
-                            src={tm?.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${mName}`}
-                            alt={mName}
-                            className="w-4 h-4 rounded-full object-cover shrink-0"
-                          />
-                          <span className="truncate max-w-[110px]">{mName}</span>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setAssignedMembers(prev => prev.filter(n => n !== mName))
-                            }}
-                            className="hover:text-red-500 rounded-full p-0.5 transition-colors cursor-pointer"
+              {/* Searchable Dropdown Selector for Adding / Toggling Team Members */}
+              <div className="relative" ref={teamDropdownRef}>
+                <div
+                  onClick={() => setIsTeamDropdownOpen(!isTeamDropdownOpen)}
+                  className="w-full min-h-[42px] px-3 py-2 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:border-blue-400 dark:hover:border-blue-500 transition-colors flex items-center justify-between gap-2 cursor-pointer shadow-sm"
+                >
+                  <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
+                    {assignedAllocations.length === 0 ? (
+                      <span className="text-zinc-400 text-xs font-normal">
+                        Click here to search & assign team members from company roster...
+                      </span>
+                    ) : (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {assignedAllocations.map((m) => (
+                          <span
+                            key={m.id || m.name}
+                            className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-medium border border-blue-200 dark:border-blue-800"
                           >
-                            <X size={11} />
-                          </button>
+                            <img
+                              src={m.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${m.name}`}
+                              alt={m.name}
+                              className="w-4 h-4 rounded-full object-cover shrink-0"
+                            />
+                            <span className="truncate max-w-[120px] font-semibold">{m.name}</span>
+                          </span>
+                        ))}
+                        <span className="text-[11px] text-zinc-400 ml-1">
+                          + Click to select / remove members
                         </span>
-                      )
-                    })
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0 text-zinc-400">
-                  {assignedMembers.length > 0 && (
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 dark:bg-zinc-700 text-blue-600 dark:text-blue-300">
-                      {assignedMembers.length}
-                    </span>
-                  )}
-                  {isTeamDropdownOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                </div>
-              </div>
-
-              {/* Popover Dropdown with Live Search */}
-              {isTeamDropdownOpen && (
-                <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-2xl overflow-hidden p-2.5 space-y-2 animate-in fade-in slide-in-from-top-2 duration-150">
-                  {/* Search Input Box */}
-                  <div className="relative">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-                    <input
-                      type="text"
-                      autoFocus
-                      placeholder="Search team member by name, role or email..."
-                      value={teamSearchQuery}
-                      onChange={(e) => setTeamSearchQuery(e.target.value)}
-                      className="w-full pl-8 pr-7 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    />
-                    {teamSearchQuery && (
-                      <button
-                        type="button"
-                        onClick={() => setTeamSearchQuery("")}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 p-0.5 cursor-pointer"
-                      >
-                        <X size={12} />
-                      </button>
+                      </div>
                     )}
                   </div>
 
-                  {/* Header Actions */}
-                  <div className="flex items-center justify-between px-1 text-[11px] text-zinc-500">
-                    <span>
-                      {filteredTeamsList.length} member{filteredTeamsList.length !== 1 ? "s" : ""} available
-                    </span>
-                    <div className="flex items-center gap-3 font-semibold">
-                      <button
-                        type="button"
-                        onClick={() => setAssignedMembers(teamsList.map(t => t.name))}
-                        className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-                      >
-                        Select All
-                      </button>
-                      <span>•</span>
-                      <button
-                        type="button"
-                        onClick={() => setAssignedMembers([])}
-                        className="text-red-500 hover:underline cursor-pointer"
-                      >
-                        Clear
-                      </button>
-                    </div>
+                  <div className="flex items-center gap-2 shrink-0 text-zinc-400">
+                    {isTeamDropdownOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                   </div>
+                </div>
 
-                  {/* Scrollable Members List */}
-                  <div className="max-h-52 overflow-y-auto space-y-1 pr-0.5">
-                    {filteredTeamsList.length === 0 ? (
-                      <div className="py-6 text-center text-zinc-400 text-xs">
-                        {teamsList.length === 0
-                          ? "No team members found in system."
-                          : `No team member matching "${teamSearchQuery}"`}
+                {/* Popover Dropdown with Live Search */}
+                {isTeamDropdownOpen && (
+                  <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-2xl overflow-hidden p-3 space-y-2.5 animate-in fade-in slide-in-from-top-2 duration-150">
+                    {/* Search Input Box */}
+                    <div className="relative">
+                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+                      <input
+                        type="text"
+                        autoFocus
+                        placeholder="Search team member by name, role or email..."
+                        value={teamSearchQuery}
+                        onChange={(e) => setTeamSearchQuery(e.target.value)}
+                        className="w-full pl-8 pr-7 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                      {teamSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setTeamSearchQuery("")}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 p-0.5 cursor-pointer"
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Header Actions */}
+                    <div className="flex items-center justify-between px-1 text-[11px] text-zinc-500">
+                      <span>
+                        {filteredTeamsList.length} member{filteredTeamsList.length !== 1 ? "s" : ""} available
+                      </span>
+                      <div className="flex items-center gap-3 font-semibold">
+                        <button
+                          type="button"
+                          onClick={handleSelectAllMembers}
+                          className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                        >
+                          Select All
+                        </button>
+                        <span>•</span>
+                        <button
+                          type="button"
+                          onClick={handleClearMembers}
+                          className="text-red-500 hover:underline cursor-pointer"
+                        >
+                          Clear
+                        </button>
                       </div>
-                    ) : (
-                      filteredTeamsList.map((tm) => {
-                        const isSelected = assignedMembers.includes(tm.name)
-                        return (
-                          <div
-                            key={tm.id}
-                            onClick={() => {
-                              setAssignedMembers((prev) =>
-                                prev.includes(tm.name) ? prev.filter((n) => n !== tm.name) : [...prev, tm.name]
-                              )
-                            }}
-                            className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all ${
-                              isSelected
-                                ? "bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/80"
-                                : "hover:bg-zinc-50 dark:hover:bg-zinc-800/60 border border-transparent"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <img
-                                src={tm.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${tm.name}`}
-                                alt={tm.name}
-                                className="w-7 h-7 rounded-full object-cover shrink-0 bg-zinc-200"
-                              />
-                              <div className="min-w-0">
-                                <p className="font-semibold text-xs text-zinc-800 dark:text-zinc-200 truncate">
-                                  {tm.name}
-                                </p>
-                                <p className="text-[10.5px] text-zinc-400 truncate">
-                                  {tm.role || "Developer"} {tm.email ? `• ${tm.email}` : ""}
-                                </p>
+                    </div>
+
+                    {/* Scrollable Members List */}
+                    <div className="max-h-52 overflow-y-auto space-y-1 pr-0.5">
+                      {filteredTeamsList.length === 0 ? (
+                        <div className="py-6 text-center text-zinc-400 text-xs">
+                          {teamsList.length === 0
+                            ? "No team members found in system."
+                            : `No team member matching "${teamSearchQuery}"`}
+                        </div>
+                      ) : (
+                        filteredTeamsList.map((tm) => {
+                          const isSelected = assignedAllocations.some(
+                            (a) => a.id === String(tm.id) || a.name.toLowerCase().trim() === tm.name.toLowerCase().trim()
+                          )
+                          return (
+                            <div
+                              key={tm.id}
+                              onClick={() => handleToggleMember(tm)}
+                              className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all ${
+                                isSelected
+                                  ? "bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/80"
+                                  : "hover:bg-zinc-50 dark:hover:bg-zinc-800/60 border border-transparent"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <img
+                                  src={tm.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${tm.name}`}
+                                  alt={tm.name}
+                                  className="w-7 h-7 rounded-full object-cover shrink-0 bg-zinc-200"
+                                />
+                                <div className="min-w-0">
+                                  <p className="font-semibold text-xs text-zinc-800 dark:text-zinc-200 truncate">
+                                    {tm.name}
+                                  </p>
+                                  <p className="text-[10.5px] text-zinc-400 truncate">
+                                    {tm.role || "Developer"} {tm.email ? `• ${tm.email}` : ""}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div
+                                className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${
+                                  isSelected
+                                    ? "bg-blue-600 border-blue-600 text-white"
+                                    : "border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800"
+                                }`}
+                              >
+                                {isSelected && <Check size={12} className="stroke-[3]" />}
                               </div>
                             </div>
+                          )
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
 
-                            <div className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${
-                              isSelected
-                                ? "bg-blue-600 border-blue-600 text-white"
-                                : "border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800"
-                            }`}>
-                              {isSelected && <Check size={12} className="stroke-[3]" />}
+              {/* Individual Team Member Allocation Cards */}
+              {assignedAllocations.length > 0 && (
+                <div className="space-y-2 pt-1">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 px-1">
+                    Configured Team Members & Payout Rates ({assignedAllocations.length})
+                  </div>
+
+                  <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                    {memberPayouts.map((m, idx) => {
+                      return (
+                        <div
+                          key={m.id || m.name}
+                          className="p-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3"
+                        >
+                          {/* Left: Member Identity */}
+                          <div className="flex items-center gap-2.5 min-w-[170px]">
+                            <span className="w-5 h-5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-[10px] font-bold text-zinc-500 flex items-center justify-center shrink-0">
+                              #{idx + 1}
+                            </span>
+                            <img
+                              src={m.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${m.name}`}
+                              alt={m.name}
+                              className="w-8 h-8 rounded-full object-cover shrink-0 border border-zinc-200 dark:border-zinc-700"
+                            />
+                            <div className="min-w-0">
+                              <p className="font-bold text-xs text-zinc-900 dark:text-zinc-100 truncate">
+                                {m.name}
+                              </p>
+                              <span className="text-[10px] font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-1.5 py-0.2 rounded">
+                                {m.role || "Developer"}
+                              </span>
                             </div>
                           </div>
-                        )
-                      })
+
+                          {/* Middle: Payout Type Toggle & Value Input */}
+                          <div className="flex items-center gap-2 flex-wrap flex-1 justify-start md:justify-center">
+                            {/* Payout Type Selector (Pills) */}
+                            <div className="inline-flex rounded-lg p-0.5 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateMemberAllocation(m.id || m.name, "payoutType", "percentage")}
+                                className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all cursor-pointer ${
+                                  m.payoutType === "percentage"
+                                    ? "bg-blue-600 text-white shadow-sm"
+                                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+                                }`}
+                              >
+                                % Invoice Share
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateMemberAllocation(m.id || m.name, "payoutType", "fixed")}
+                                className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all cursor-pointer ${
+                                  m.payoutType === "fixed"
+                                    ? "bg-indigo-600 text-white shadow-sm"
+                                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+                                }`}
+                              >
+                                ₹ Fixed Price
+                              </button>
+                            </div>
+
+                            {/* Value Input */}
+                            <div className="relative flex items-center">
+                              {m.payoutType === "fixed" && (
+                                <span className="absolute left-2.5 text-xs font-bold text-zinc-500">₹</span>
+                              )}
+                              <input
+                                type="number"
+                                min="0"
+                                step={m.payoutType === "percentage" ? "0.5" : "1"}
+                                placeholder={m.payoutType === "percentage" ? "e.g. 15%" : "e.g. 5000"}
+                                value={m.payoutValue}
+                                onChange={(e) => {
+                                  const v = e.target.value === "" ? "" : Math.max(0, Number(e.target.value))
+                                  handleUpdateMemberAllocation(m.id || m.name, "payoutValue", v)
+                                }}
+                                className={`w-28 py-1 text-xs font-bold bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                                  m.payoutType === "fixed" ? "pl-6 pr-2" : "pl-2.5 pr-6"
+                                }`}
+                              />
+                              {m.payoutType === "percentage" && (
+                                <span className="absolute right-2 text-xs font-bold text-zinc-500">%</span>
+                              )}
+                            </div>
+
+                            {/* Live Converted Payout Badge */}
+                            <div className="px-2 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 shrink-0">
+                              {m.payoutType === "percentage" ? (
+                                <span>≈ ₹{m.calculatedAmount.toLocaleString("en-IN")} payout</span>
+                              ) : (
+                                <span>≈ {m.calculatedPercentage}% of invoice</span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Right: Delete Button */}
+                          <div className="flex items-center justify-end">
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveMember(m.id || m.name)}
+                              className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors cursor-pointer"
+                              title="Remove member"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Summary & Margin Breakdown Bar */}
+                  <div className="mt-2 p-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 shadow-sm space-y-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center text-xs">
+                      <div className="p-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/80">
+                        <p className="text-[10px] uppercase font-bold text-zinc-500 dark:text-zinc-400">Total Invoice</p>
+                        <p className="text-sm font-extrabold text-zinc-900 dark:text-zinc-100">
+                          ₹{totalAmount.toLocaleString("en-IN")}
+                        </p>
+                      </div>
+                      <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/40">
+                        <p className="text-[10px] uppercase font-bold text-blue-600 dark:text-blue-400">Total Team Payout</p>
+                        <p className="text-sm font-extrabold text-blue-700 dark:text-blue-300">
+                          ₹{totalTeamPayout.toLocaleString("en-IN")}{" "}
+                          <span className="text-[11px] font-medium">({totalTeamPercentage}%)</span>
+                        </p>
+                      </div>
+                      <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-900/40">
+                        <p className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400">Company Net Margin</p>
+                        <p className="text-sm font-extrabold text-emerald-700 dark:text-emerald-300">
+                          ₹{companyMargin.toLocaleString("en-IN")}{" "}
+                          <span className="text-[11px] font-medium">({companyMarginPercentage}%)</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Progress Bar of Allocation */}
+                    <div className="w-full bg-zinc-100 dark:bg-zinc-800 h-2 rounded-full overflow-hidden flex">
+                      <div
+                        className={`transition-all duration-300 ${
+                          totalTeamPercentage > 100 ? "bg-red-500" : "bg-blue-600"
+                        }`}
+                        style={{ width: `${Math.min(100, totalTeamPercentage)}%` }}
+                        title={`Team Share: ${totalTeamPercentage}%`}
+                      />
+                      <div
+                        className="bg-emerald-500 transition-all duration-300"
+                        style={{ width: `${Math.max(0, 100 - totalTeamPercentage)}%` }}
+                        title={`Company Margin: ${companyMarginPercentage}%`}
+                      />
+                    </div>
+
+                    {totalTeamPercentage > 100 && (
+                      <p className="text-[11px] font-bold text-red-600 dark:text-red-400 text-center">
+                        ⚠️ Note: Total team member payouts ({totalTeamPercentage}%) exceed the total invoice amount.
+                      </p>
                     )}
                   </div>
                 </div>

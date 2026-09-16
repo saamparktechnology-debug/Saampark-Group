@@ -676,29 +676,33 @@ export function Sidebar() {
                   >
                     <div
                       className={cn(
-                        "flex items-center gap-3 py-2.5 px-3 rounded-xl transition-all relative group cursor-pointer text-xs font-medium",
+                        "flex items-center gap-3 py-2.5 px-3 rounded-xl transition-all relative group cursor-pointer text-xs font-semibold",
                         isActive 
-                          ? "bg-[#1D4ED8] text-white font-bold shadow-xs" 
-                          : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+                          ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black shadow-md shadow-blue-600/30 ring-1 ring-white/20" 
+                          : "text-slate-100 hover:text-white hover:bg-slate-800/90 font-bold hover:translate-x-0.5"
                       )}
                     >
-                      <item.icon size={17} className="shrink-0" strokeWidth={isActive ? 2.5 : 2} />
+                      <item.icon 
+                        size={17} 
+                        className={cn("shrink-0 transition-colors", isActive ? "text-white drop-shadow-xs" : "text-slate-200 group-hover:text-white")} 
+                        strokeWidth={isActive ? 2.5 : 2} 
+                      />
                       
                       <div className="flex items-center justify-between w-full overflow-hidden">
-                        <span className="whitespace-nowrap overflow-hidden">
+                        <span className="whitespace-nowrap overflow-hidden text-[12.5px] tracking-wide">
                           {item.name}
                         </span>
                         <div className="flex items-center gap-1.5 ml-auto">
                           {itemBadge && (
-                            <span className="text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-xs bg-indigo-600">
+                            <span className="text-white text-[10px] font-extrabold px-1.5 py-0.5 rounded-full shadow-xs bg-indigo-500 ring-1 ring-white/20">
                               {itemBadge}
                             </span>
                           )}
                           <ChevronDown 
                             size={14} 
                             className={cn(
-                              "text-slate-400 transition-transform duration-200 shrink-0",
-                              isDropdownOpen && "rotate-180 text-white"
+                              "text-slate-300 transition-transform duration-200 shrink-0",
+                              isDropdownOpen && "rotate-180 text-white font-bold"
                             )} 
                           />
                         </div>
@@ -709,24 +713,28 @@ export function Sidebar() {
                   <Link href={item.href} onClick={handleLinkClick} className="block">
                     <div
                       className={cn(
-                        "flex items-center gap-3 py-2.5 rounded-xl transition-all relative group text-xs font-medium",
+                        "flex items-center gap-3 py-2.5 rounded-xl transition-all relative group text-xs font-semibold",
                         isSidebarCollapsed && !isMobile ? "justify-center px-0" : "px-3",
                         isActive 
-                          ? "bg-[#1D4ED8] text-white font-bold shadow-xs" 
-                          : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+                          ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black shadow-md shadow-blue-600/30 ring-1 ring-white/20" 
+                          : "text-slate-100 hover:text-white hover:bg-slate-800/90 font-bold hover:translate-x-0.5"
                       )}
                       title={isSidebarCollapsed && !isMobile ? item.name : undefined}
                     >
-                      <item.icon size={17} className="shrink-0" strokeWidth={isActive ? 2.5 : 2} />
+                      <item.icon 
+                        size={17} 
+                        className={cn("shrink-0 transition-colors", isActive ? "text-white drop-shadow-xs" : "text-slate-200 group-hover:text-white")} 
+                        strokeWidth={isActive ? 2.5 : 2} 
+                      />
                       
                       <AnimatePresence>
                         {(!isSidebarCollapsed || isMobile) && (
                           <div className="flex items-center justify-between w-full overflow-hidden">
-                            <span className="whitespace-nowrap overflow-hidden">
+                            <span className="whitespace-nowrap overflow-hidden text-[12.5px] tracking-wide">
                               {item.name}
                             </span>
                             {itemBadge && (
-                              <span className={`ml-auto text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-xs shrink-0 ${
+                              <span className={`ml-auto text-white text-[10px] font-extrabold px-1.5 py-0.5 rounded-full shadow-xs shrink-0 ring-1 ring-white/20 ${
                                 item.name === "Projects" || item.name === "Leads" ? "bg-rose-600 animate-pulse" : "bg-blue-600"
                               }`}>
                                 {itemBadge}
@@ -756,13 +764,13 @@ export function Sidebar() {
                           <Link key={sub.name} href={sub.href} onClick={handleLinkClick} className="block">
                             <div
                               className={cn(
-                                "flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors",
+                                "flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
                                 isSubActiveItem
-                                  ? "text-blue-400 bg-blue-500/15 font-semibold"
-                                  : "text-slate-400 hover:text-white hover:bg-slate-800/40"
+                                  ? "text-white bg-blue-600/35 border-l-2 border-blue-400 font-bold shadow-xs pl-2.5"
+                                  : "text-slate-200 hover:text-white hover:bg-slate-800/80 hover:translate-x-0.5"
                               )}
                             >
-                              <sub.icon size={13} className={cn("shrink-0", isSubActiveItem ? "text-blue-400" : "text-slate-500")} />
+                              <sub.icon size={13} className={cn("shrink-0 transition-colors", isSubActiveItem ? "text-blue-300" : "text-slate-300 group-hover:text-white")} />
                               <span className="truncate">{sub.name}</span>
                             </div>
                           </Link>
