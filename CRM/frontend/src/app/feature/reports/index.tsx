@@ -666,7 +666,7 @@ export default function ReportsMain() {
       list = list.filter((sb) => {
         return (
           String(sb.parentBranchId).toLowerCase().trim() === targetBranch.toLowerCase().trim() ||
-          String(sb.branchId || "").toLowerCase().trim() === targetBranch.toLowerCase().trim()
+          String((sb as any).branchId || "").toLowerCase().trim() === targetBranch.toLowerCase().trim()
         )
       })
     }
