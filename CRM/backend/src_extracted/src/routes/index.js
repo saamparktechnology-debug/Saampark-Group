@@ -1,36 +1,61 @@
 const express = require('express');
 const router = express.Router();
 
-const authRoutes = require('./authRoutes');
-const userRoutes = require('./userRoutes');
-const companyRoutes = require('./companyRoutes');
-const leadRoutes = require('./leadRoutes');
-const customerRoutes = require('./customerRoutes');
-const dealRoutes = require('./dealRoutes');
-const taskRoutes = require('./taskRoutes');
-const ticketRoutes = require('./ticketRoutes');
-const campaignRoutes = require('./campaignRoutes');
-const reportRoutes = require('./reportRoutes');
-const subscriptionRoutes = require('./subscriptionRoutes');
-const deletedRoutes = require('./deletedRoutes');
-const storeRoutes = require('./storeRoutes');
-const emailRoutes = require('./emailRoutes');
+// Existing routes
+router.use('/auth', require('./authRoutes'));
+router.use('/users', require('./userRoutes'));
+router.use('/companies', require('./companyRoutes'));
+router.use('/leads', require('./leadRoutes'));
+router.use('/customers', require('./customerRoutes'));
+router.use('/deals', require('./dealRoutes'));
+router.use('/tasks', require('./taskRoutes'));
+router.use('/tickets', require('./ticketRoutes'));
+router.use('/campaigns', require('./campaignRoutes'));
+router.use('/reports', require('./reportRoutes'));
+router.use('/subscriptions', require('./subscriptionRoutes'));
+router.use('/deleted', require('./deletedRoutes'));
+router.use('/store', require('./storeRoutes'));
+router.use('/email', require('./emailRoutes'));
 
-// Mount Sub-Routers
-router.use('/auth', authRoutes);
-router.use('/users', userRoutes);
-router.use('/companies', companyRoutes);
-router.use('/leads', leadRoutes);
-router.use('/customers', customerRoutes);
-router.use('/deals', dealRoutes);
-router.use('/tasks', taskRoutes);
-router.use('/tickets', ticketRoutes);
-router.use('/campaigns', campaignRoutes);
-router.use('/reports', reportRoutes);
-router.use('/subscriptions', subscriptionRoutes);
-router.use('/deleted', deletedRoutes);
-router.use('/store', storeRoutes);
-router.use('/email', emailRoutes);
+// NEW: Organisation Structure
+router.use('/org', require('./orgRoutes'));
+router.use('/branches', require('./branchRoutes'));
+
+// NEW: Permissions & Roles
+router.use('/access', require('./permissionRoutes'));
+
+// NEW: Vendors/Suppliers
+router.use('/vendors', require('./vendorRoutes'));
+
+// NEW: CRM Core (Enquiries, Follow-ups, Calls, Meetings, Notes, Activities)
+router.use('/crm', require('./crmCoreRoutes'));
+
+// NEW: Sales (Quotations, Estimates, Sales Orders, Payments, Credit/Debit Notes)
+router.use('/sales', require('./salesRoutes'));
+
+// NEW: Purchase
+router.use('/purchase', require('./purchaseRoutes'));
+
+// NEW: Accounts & Finance
+router.use('/accounts', require('./accountRoutes'));
+
+// NEW: Inventory
+router.use('/inventory', require('./inventoryRoutes'));
+
+// NEW: HR & Employee
+router.use('/hr', require('./hrRoutes'));
+
+// NEW: Projects (Enhanced with Milestones, Subtasks, Timesheets)
+router.use('/projects', require('./projectRoutes'));
+
+// NEW: Support (Knowledge Base, SLA, Notifications, Templates, Documents, Audit Logs)
+router.use('/support', require('./supportRoutes'));
+
+// Dashboard (Super Admin aggregation)
+router.use('/dashboard', require('./dashboardRoutes'));
+
+// NEW: Expenses
+router.use('/expenses', require('./expenseRoutes'));
 
 module.exports = router;
 

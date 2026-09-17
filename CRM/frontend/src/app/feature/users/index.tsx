@@ -108,8 +108,6 @@ export default function UsersMain() {
 
     // 1. Company Filter
     if (targetComp && targetComp !== "all") {
-      const isConsultancyTarget = targetComp.includes("consult") || targetComp === "2"
-
       filtered = filtered.filter((u) => {
         if (u.role === "Super Admin") return true
 
@@ -119,21 +117,12 @@ export default function UsersMain() {
 
         if (rawCompList.some(id => String(id).toLowerCase().trim() === "all")) return true
 
-        const isUserInConsultancy = rawCompList.some(id => {
-          const str = String(id).toLowerCase().trim()
-          return str === "consultancy" || str === "2" || str.includes("consult")
+        return rawCompList.some(id => {
+          const strId = String(id).toLowerCase().trim()
+          return strId === targetComp || 
+                 isMatchingCompany({ id: strId, slug: strId } as any, targetComp) ||
+                 (u.companyId && isMatchingCompany({ id: u.companyId, slug: u.companyId } as any, targetComp))
         })
-
-        const isUserInTech = rawCompList.some(id => {
-          const str = String(id).toLowerCase().trim()
-          return str === "tech" || str === "1" || str.includes("tech")
-        })
-
-        if (isConsultancyTarget) {
-          return isUserInConsultancy
-        } else {
-          return isUserInTech
-        }
       })
     }
 

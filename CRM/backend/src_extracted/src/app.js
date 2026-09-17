@@ -3,6 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const apiRoutes = require('./routes');
 const errorHandler = require('./middlewares/errorHandler');
+const companyScopeMiddleware = require('./middlewares/companyScopeMiddleware');
 
 const app = express();
 
@@ -23,6 +24,7 @@ app.use(cors({
 // Body Parsers
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+app.use(companyScopeMiddleware);
 
 
 // ==========================================

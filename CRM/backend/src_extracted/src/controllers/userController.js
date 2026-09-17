@@ -1,21 +1,160 @@
 const pool = require('../config/db');
 const { successResponse, errorResponse } = require('../utils/apiResponse');
 
-// Ensure avatar_url column exists in users table
-pool.execute('ALTER TABLE users ADD COLUMN avatar_url TEXT NULL').catch(() => {});
+// Ensure required columns exist in users table (auto-migrate if missing on any domain / environment)
+async function ensureUsersColumns() {
+  try {
+    await pool.execute('ALTER TABLE users ADD COLUMN avatar_url TEXT NULL').catch(() => {});
+    await pool.execute('ALTER TABLE users ADD COLUMN sub_branch_id INT NULL').catch(() => {});
+    await pool.execute('ALTER TABLE users ADD COLUMN username VARCHAR(100) NULL').catch(() => {});
+    await pool.execute('ALTER TABLE users ADD COLUMN company_ids TEXT NULL').catch(() => {});
+  } catch {}
+}
+ensureUsersColumns();
+
+// Helper: Resolve requesting user info from JWT or headers
+async function resolveRequester(req) {
+  if (req.user && req.user.role_id) return req.user;
+  const headerUserId = req.headers['x-user-id'];
+  const headerEmail = req.headers['x-user-email'];
+  if (headerUserId || headerEmail) {
+    try {
+      const [rows] = await pool.execute(
+        'SELECT id, email, role_id, company_id, company_ids, branch_id, sub_branch_id FROM users WHERE (id = ? OR email = ?) AND deleted_at IS NULL',
+        [headerUserId || '', headerEmail || '']
+      );
+      if (rows.length > 0) return rows[0];
+    } catch {}
+  }
+  const headerRole = req.headers['x-user-role'];
+  if (headerRole === 'Super Admin') return { role_id: 1, role_name: 'Super Admin' };
+  if (headerRole === 'Admin') return { role_id: 2, role_name: 'Admin' };
+  if (headerRole === 'Clients') return { role_id: 4, role_name: 'Clients' };
+  return { role_id: 3, role_name: 'Teams' }; // default Teams
+}
+
+// Helper: Check if target company is in requester's assigned company scope
+function isCompanyInScope(creator, targetComp) {
+  if (!creator || creator.role_id === 1) return true; // Super Admin can access any company
+  const targetNorm = String(targetComp || '').toLowerCase().trim();
+  let allowed = [];
+  if (creator.company_ids) {
+    try {
+      const parsed = typeof creator.company_ids === 'string' ? JSON.parse(creator.company_ids) : creator.company_ids;
+      if (Array.isArray(parsed)) allowed = parsed.map(c => String(c).toLowerCase().trim());
+    } catch {}
+  }
+  if (creator.company_id) {
+    allowed.push(String(creator.company_id).toLowerCase().trim());
+  }
+  return allowed.includes(targetNorm);
+}
 
 // ─── GET ALL USERS ────────────────────────────────────────────────────────────
 const getAllUsers = async (req, res, next) => {
   try {
-    const [users] = await pool.execute(
-      `SELECT u.id, u.full_name, u.email, u.username, u.phone, u.department, u.status, u.permissions, u.last_login, u.created_at,
-              u.company_id, u.company_ids, u.branch_id, u.avatar_url,
-              r.name as role_name, r.id as role_id
-       FROM users u
-       LEFT JOIN roles r ON u.role_id = r.id
-       WHERE u.deleted_at IS NULL
-       ORDER BY u.id DESC`
-    );
+    ensureUsersColumns().catch(() => {});
+    const requester = await resolveRequester(req);
+    const companyId = req.query.company_id || req.query.companyId || req.companySlug || req.companyId || req.headers['x-company-id'];
+    const branchId = req.query.branch_id || req.query.branchId || req.headers['x-branch-id'];
+    const subBranchId = req.query.sub_branch_id || req.query.subBranchId || req.headers['x-sub-branch-id'];
+
+    let query = `
+      SELECT u.id, u.full_name, u.email, u.username, u.phone, u.department, u.status, u.permissions, u.last_login, u.created_at,
+             u.company_id, u.company_ids, u.branch_id, u.sub_branch_id, u.avatar_url,
+             r.name as role_name, r.id as role_id,
+             b.name as branch_name, sb.name as sub_branch_name, c.name as company_name
+      FROM users u
+      LEFT JOIN roles r ON u.role_id = r.id
+      LEFT JOIN branches b ON u.branch_id = b.id
+      LEFT JOIN sub_branches sb ON u.sub_branch_id = sb.id
+      LEFT JOIN companies c ON (u.company_id = c.id OR u.company_id = c.slug)
+      WHERE u.deleted_at IS NULL
+    `;
+    const params = [];
+
+    // Role-based scoping
+    if (requester.role_id === 1) {
+      // Super Admin:
+      // Can switch between companies and branches
+      if (companyId && companyId !== 'all') {
+        query += ` AND (u.company_id = ? OR u.company_id = ? OR JSON_CONTAINS(COALESCE(u.company_ids, '[]'), JSON_QUOTE(?)) OR JSON_CONTAINS(COALESCE(u.company_ids, '[]'), JSON_QUOTE(?)))`;
+        params.push(String(req.companyId || companyId), String(req.companySlug || companyId), String(req.companyId || companyId), String(req.companySlug || companyId));
+      }
+      if (branchId && branchId !== 'all') {
+        query += ` AND (u.branch_id = ? OR u.branch_id IS NULL OR u.branch_id = '')`;
+        params.push(branchId);
+      }
+      if (subBranchId && subBranchId !== 'all') {
+        query += ` AND (u.sub_branch_id = ? OR u.sub_branch_id IS NULL OR u.sub_branch_id = '')`;
+        params.push(subBranchId);
+      }
+    } else if (requester.role_id === 2 && requester.branch_id) {
+      // Branch Admin: locked strictly to their assigned branch!
+      query += ` AND u.branch_id = ?`;
+      params.push(requester.branch_id);
+      if (subBranchId && subBranchId !== 'all') {
+        query += ` AND u.sub_branch_id = ?`;
+        params.push(subBranchId);
+      }
+    } else if (requester.role_id === 2) {
+      // Company Admin (no specific branch assigned):
+      let compList = [];
+      if (requester.company_ids) {
+        try {
+          const parsed = typeof requester.company_ids === 'string' ? JSON.parse(requester.company_ids) : requester.company_ids;
+          if (Array.isArray(parsed)) compList = parsed;
+        } catch {}
+      }
+      if (requester.company_id && !compList.includes(requester.company_id)) {
+        compList.push(requester.company_id);
+      }
+      if (compList.length === 0) compList = ['tech'];
+
+      const targetComp = (companyId && companyId !== 'all') ? companyId : null;
+      if (targetComp) {
+        query += ` AND (u.company_id = ? OR u.company_id = ? OR JSON_CONTAINS(COALESCE(u.company_ids, '[]'), JSON_QUOTE(?)) OR JSON_CONTAINS(COALESCE(u.company_ids, '[]'), JSON_QUOTE(?)))`;
+        params.push(String(req.companyId || targetComp), String(req.companySlug || targetComp), String(req.companyId || targetComp), String(req.companySlug || targetComp));
+      } else {
+        const compPlaceholders = compList.map(() => '?').join(', ');
+        query += ` AND (u.company_id IN (${compPlaceholders}))`;
+        params.push(...compList.map(String));
+      }
+
+      if (branchId && branchId !== 'all') {
+        query += ` AND u.branch_id = ?`;
+        params.push(branchId);
+      }
+      if (subBranchId && subBranchId !== 'all') {
+        query += ` AND u.sub_branch_id = ?`;
+        params.push(subBranchId);
+      }
+    } else {
+      // Teams / Clients
+      const effectiveBranch = requester.branch_id || branchId;
+      if (effectiveBranch && effectiveBranch !== 'all') {
+        query += ` AND u.branch_id = ?`;
+        params.push(effectiveBranch);
+      } else if (companyId && companyId !== 'all') {
+        query += ` AND (u.company_id = ? OR u.company_id = ?)`;
+        params.push(String(req.companyId || companyId), String(req.companySlug || companyId));
+      }
+    }
+
+    query += ` ORDER BY u.id DESC`;
+    let users = [];
+    try {
+      const [rows] = await pool.execute(query, params);
+      users = rows;
+    } catch (qErr) {
+      if (qErr.code === 'ER_BAD_FIELD_ERROR' && (qErr.message.includes('username') || qErr.sqlMessage?.includes('username'))) {
+        const fallbackQuery = query.replace('u.username,', 'NULL as username,');
+        const [rows] = await pool.execute(fallbackQuery, params);
+        users = rows;
+      } else {
+        throw qErr;
+      }
+    }
     return successResponse(res, 200, 'Users fetched successfully', users);
   } catch (error) {
     next(error);
@@ -26,14 +165,40 @@ const getAllUsers = async (req, res, next) => {
 const getUserById = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const [users] = await pool.execute(
-      `SELECT u.id, u.full_name, u.email, u.username, u.phone, u.department, u.status, u.permissions, u.company_id, u.company_ids, u.branch_id, u.avatar_url,
-              r.name as role_name, r.id as role_id
-       FROM users u
-       LEFT JOIN roles r ON u.role_id = r.id
-       WHERE (u.id = ? OR u.email = ?) AND u.deleted_at IS NULL`,
-      [id, id]
-    );
+    let users = [];
+    try {
+      const [rows] = await pool.execute(
+        `SELECT u.id, u.full_name, u.email, u.username, u.phone, u.department, u.status, u.permissions, u.company_id, u.company_ids, u.branch_id, u.sub_branch_id, u.avatar_url,
+                r.name as role_name, r.id as role_id,
+                b.name as branch_name, sb.name as sub_branch_name, c.name as company_name
+         FROM users u
+         LEFT JOIN roles r ON u.role_id = r.id
+         LEFT JOIN branches b ON u.branch_id = b.id
+         LEFT JOIN sub_branches sb ON u.sub_branch_id = sb.id
+         LEFT JOIN companies c ON (u.company_id = c.id OR u.company_id = c.slug)
+         WHERE (u.id = ? OR u.email = ?) AND u.deleted_at IS NULL`,
+        [id, id]
+      );
+      users = rows;
+    } catch (qErr) {
+      if (qErr.code === 'ER_BAD_FIELD_ERROR' && (qErr.message.includes('username') || qErr.sqlMessage?.includes('username'))) {
+        const [rows] = await pool.execute(
+          `SELECT u.id, u.full_name, u.email, NULL as username, u.phone, u.department, u.status, u.permissions, u.company_id, u.company_ids, u.branch_id, u.sub_branch_id, u.avatar_url,
+                  r.name as role_name, r.id as role_id,
+                  b.name as branch_name, sb.name as sub_branch_name, c.name as company_name
+           FROM users u
+           LEFT JOIN roles r ON u.role_id = r.id
+           LEFT JOIN branches b ON u.branch_id = b.id
+           LEFT JOIN sub_branches sb ON u.sub_branch_id = sb.id
+           LEFT JOIN companies c ON (u.company_id = c.id OR u.company_id = c.slug)
+           WHERE (u.id = ? OR u.email = ?) AND u.deleted_at IS NULL`,
+          [id, id]
+        );
+        users = rows;
+      } else {
+        throw qErr;
+      }
+    }
 
     if (users.length === 0) {
       return errorResponse(res, 404, 'User not found.');
@@ -49,7 +214,14 @@ const getUserById = async (req, res, next) => {
 const updateUser = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { full_name, name, email, username, password, phone, role_id, status, permissions, department, company_id, company_ids, companyIds, branch_id, branchId, avatar_url, avatar, avatarUrl } = req.body;
+    const { 
+      full_name, name, email, username, password, phone, role_id, status, 
+      permissions, department, company_id, company_ids, companyIds, 
+      branch_id, branchId, sub_branch_id, subBranchId,
+      avatar_url, avatar, avatarUrl 
+    } = req.body;
+
+    const requester = await resolveRequester(req);
 
     const displayName = full_name || name || null;
     const phoneVal = phone !== undefined ? (phone || null) : null;
@@ -57,6 +229,8 @@ const updateUser = async (req, res, next) => {
     const avatarVal = avatar_url || avatar || avatarUrl || null;
     const usernameVal = username !== undefined ? (username ? username.toLowerCase().trim() : null) : undefined;
     const branchIdVal = branch_id !== undefined ? (branch_id || null) : (branchId !== undefined ? (branchId || null) : undefined);
+    const subBranchIdVal = sub_branch_id !== undefined ? (sub_branch_id || null) : (subBranchId !== undefined ? (subBranchId || null) : undefined);
+    
     let roleIdVal = role_id ? parseInt(role_id, 10) : null;
     if (!roleIdVal && req.body.role) {
       const rLower = String(req.body.role).toLowerCase();
@@ -67,10 +241,24 @@ const updateUser = async (req, res, next) => {
     }
 
     // RBAC Hierarchy Enforcement:
-    // Only a Super Admin or Admin can promote/assign Super Admin (1) or Admin (2)
+    // Only a Super Admin can promote/assign Super Admin (1) or Admin (2)
     if (roleIdVal === 1 || roleIdVal === 2) {
-      if (req.user && req.user.role_id > 2) {
-        return errorResponse(res, 403, 'Only a Super Admin or Admin can assign Super Admin or Admin roles.');
+      if (requester.role_id !== 1) {
+        return errorResponse(res, 403, 'Only a Super Admin can assign Super Admin or Admin roles.');
+      }
+    }
+
+    // Company Scoping for Admin:
+    if (requester.role_id === 2 && company_id) {
+      if (!isCompanyInScope(requester, company_id)) {
+        return errorResponse(res, 403, 'Access denied: Admins cannot assign users outside their assigned company.');
+      }
+    }
+
+    // Branch Scoping for Branch Admin:
+    if (requester.role_id === 2 && requester.branch_id && branchIdVal !== undefined) {
+      if (branchIdVal && String(branchIdVal) !== String(requester.branch_id)) {
+        return errorResponse(res, 403, 'Access denied: Branch Admins can only assign users to their assigned branch.');
       }
     }
 
@@ -95,6 +283,7 @@ const updateUser = async (req, res, next) => {
     if (company_id) { setClauses.push('company_id = ?'); params.push(company_id); }
     if (compIdsStr) { setClauses.push('company_ids = ?'); params.push(compIdsStr); }
     if (branchIdVal !== undefined) { setClauses.push('branch_id = ?'); params.push(branchIdVal); }
+    if (subBranchIdVal !== undefined) { setClauses.push('sub_branch_id = ?'); params.push(subBranchIdVal); }
     if (department !== undefined) { setClauses.push('department = ?'); params.push(department || null); }
     if (avatarVal !== null) { setClauses.push('avatar_url = ?'); params.push(avatarVal); }
     if (permissions !== undefined && permissions !== null) {
@@ -116,18 +305,40 @@ const updateUser = async (req, res, next) => {
     setClauses.push('updated_at = NOW()');
     const isNumericId = !isNaN(parseInt(id, 10)) && Number(id) > 0;
     
-    if (isNumericId) {
-      params.push(id, targetEmail, oldEmailVal || id);
-      await pool.execute(
-        `UPDATE users SET ${setClauses.join(', ')} WHERE id = ? OR email = ? OR email = ?`,
-        params
-      );
-    } else {
-      params.push(targetEmail || id, oldEmailVal || id);
-      await pool.execute(
-        `UPDATE users SET ${setClauses.join(', ')} WHERE email = ? OR email = ?`,
-        params
-      );
+    try {
+      if (isNumericId) {
+        params.push(id, targetEmail, oldEmailVal || id);
+        await pool.execute(
+          `UPDATE users SET ${setClauses.join(', ')} WHERE id = ? OR email = ? OR email = ?`,
+          params
+        );
+      } else {
+        params.push(targetEmail || id, oldEmailVal || id);
+        await pool.execute(
+          `UPDATE users SET ${setClauses.join(', ')} WHERE email = ? OR email = ?`,
+          params
+        );
+      }
+    } catch (updErr) {
+      if (updErr.code === 'ER_BAD_FIELD_ERROR' && (updErr.message.includes('username') || updErr.sqlMessage?.includes('username'))) {
+        const fallbackSetClauses = setClauses.filter(c => !c.startsWith('username ='));
+        const usernameIdx = setClauses.findIndex(c => c.startsWith('username ='));
+        const fallbackParams = [...params];
+        if (usernameIdx >= 0) fallbackParams.splice(usernameIdx, 1);
+        if (isNumericId) {
+          await pool.execute(
+            `UPDATE users SET ${fallbackSetClauses.join(', ')} WHERE id = ? OR email = ? OR email = ?`,
+            fallbackParams
+          );
+        } else {
+          await pool.execute(
+            `UPDATE users SET ${fallbackSetClauses.join(', ')} WHERE email = ? OR email = ?`,
+            fallbackParams
+          );
+        }
+      } else {
+        throw updErr;
+      }
     }
 
     // Also sync updated user record & permissions into app_data JSON store
@@ -173,8 +384,10 @@ const updateUser = async (req, res, next) => {
           companyId: u.company_id || 'tech',
           companyIds: parsedCompanyIds,
           companyName: u.company_name || 'SAAMPARK Technology',
-          branchId: req.body.branch_id || req.body.branchId || undefined,
+          branchId: u.branch_id || req.body.branch_id || req.body.branchId || undefined,
           branchName: req.body.branch_name || req.body.branchName || undefined,
+          subBranchId: u.sub_branch_id || req.body.sub_branch_id || req.body.subBranchId || undefined,
+          subBranchName: req.body.sub_branch_name || req.body.subBranchName || undefined,
           avatarUrl: effectiveAvatar,
           avatar: effectiveAvatar,
           status: u.status === 'inactive' ? 'Inactive' : 'Active',
@@ -184,7 +397,6 @@ const updateUser = async (req, res, next) => {
           allowedModules: permObj?.allowedModules,
         };
 
-        // Filter out any ghost record with oldEmailVal or targetId
         const filteredUsers = currentUsers.filter((cu) => {
           const cuEmail = (cu.email || '').toLowerCase().trim();
           const cuId = String(cu.id || '').toLowerCase().trim();
@@ -240,12 +452,17 @@ const deleteUser = async (req, res, next) => {
     }
 
     // Fetch user details for deleted_items tracking
+    const idLower = String(id).toLowerCase().trim();
+    await pool.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "users")', [idLower]);
+
     const [targetUsers] = await pool.execute('SELECT id, email FROM users WHERE id = ? OR email = ?', [id, id]);
+    let emailNorm = '';
+    let dbIdStr = '';
     if (targetUsers.length > 0) {
-      const emailNorm = targetUsers[0].email.toLowerCase().trim();
-      const idStr = String(targetUsers[0].id).toLowerCase().trim();
+      emailNorm = targetUsers[0].email.toLowerCase().trim();
+      dbIdStr = String(targetUsers[0].id).toLowerCase().trim();
       await pool.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "users")', [emailNorm]);
-      await pool.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "users")', [idStr]);
+      await pool.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "users")', [dbIdStr]);
     }
 
     // Soft delete: set deleted_at and deactivate
@@ -254,16 +471,49 @@ const deleteUser = async (req, res, next) => {
       ['inactive', id, id]
     );
 
+    // Actively purge user from all app_data storage keys
+    try {
+      const [appRows] = await pool.execute(
+        'SELECT id, module_key, data_json FROM app_data WHERE module_key = "users" OR module_key LIKE "users_%"'
+      );
+      for (const row of appRows) {
+        try {
+          const parsed = JSON.parse(row.data_json);
+          if (Array.isArray(parsed)) {
+            const cleaned = parsed.filter(u => {
+              if (!u) return false;
+              const uId = u.id !== undefined && u.id !== null ? String(u.id).toLowerCase().trim() : '';
+              const uEmail = u.email ? String(u.email).toLowerCase().trim() : '';
+              if (uId === idLower || (dbIdStr && uId === dbIdStr)) return false;
+              if (emailNorm && uEmail === emailNorm) return false;
+              if (idLower && (uId === idLower || uEmail === idLower)) return false;
+              return true;
+            });
+            if (cleaned.length !== parsed.length) {
+              await pool.execute('UPDATE app_data SET data_json = ?, updated_at = NOW() WHERE id = ?', [JSON.stringify(cleaned), row.id]);
+            }
+          }
+        } catch {}
+      }
+    } catch (purgeErr) {
+      console.warn('app_data user purge warning:', purgeErr);
+    }
+
     return successResponse(res, 200, 'User removed successfully');
   } catch (error) {
     next(error);
   }
 };
 
-// ─── CREATE USER (ADMIN CREATED - BYPASSES OTP) ─────────────────────────────
+// ─── CREATE USER (ADMIN / SUPER ADMIN CREATED) ─────────────────────────────────
 const createUser = async (req, res, next) => {
   try {
-    const { full_name, name, email, username, password, phone, role_id, role, company_id, company_ids, companyIds, companyName, department, permissions } = req.body;
+    const { 
+      full_name, name, email, username, password, phone, 
+      role_id, role, company_id, company_ids, companyIds, companyName, 
+      branch_id, branchId, sub_branch_id, subBranchId,
+      department, permissions 
+    } = req.body;
     const displayName = full_name || name;
 
     if (!displayName || !email || !password) {
@@ -288,18 +538,34 @@ const createUser = async (req, res, next) => {
       else targetRoleId = 3;
     }
 
+    const requester = await resolveRequester(req);
+
     // RBAC Hierarchy Enforcement:
-    // 1. Super Admin role can ONLY be created/assigned by a Super Admin
-    if (targetRoleId === 1) {
-      if (req.user && req.user.role_id !== 1) {
-        return errorResponse(res, 403, 'Access denied: Only an existing Super Admin can create Super Admin accounts.');
-      }
-    }
-    // 2. Admin role can ONLY be created/assigned by a Super Admin
-    if (targetRoleId === 2) {
-      if (req.user && req.user.role_id !== 1) {
+    // Super Admin (1) and Admin (2) can ONLY be created by a Super Admin (1)
+    if (targetRoleId === 1 || targetRoleId === 2) {
+      if (requester.role_id !== 1) {
         return errorResponse(res, 403, 'Access denied: Only a Super Admin can create or assign Admin accounts.');
       }
+    }
+
+    // Company Scoping for Admin:
+    // Admin can ONLY create teams/clients in their assigned company
+    const targetComp = company_id || (company_ids && company_ids[0]) || (companyIds && companyIds[0]) || 'tech';
+    if (requester.role_id === 2) {
+      if (!isCompanyInScope(requester, targetComp)) {
+        return errorResponse(res, 403, 'Access denied: Admins can only add users to their assigned company.');
+      }
+    }
+
+    // Branch Scoping for Branch Admin:
+    // If Admin is a Branch Admin, user must be assigned to that branch
+    let effectiveBranchId = branch_id || branchId || null;
+    let effectiveSubBranchId = sub_branch_id || subBranchId || null;
+    if (requester.role_id === 2 && requester.branch_id) {
+      if (effectiveBranchId && String(effectiveBranchId) !== String(requester.branch_id)) {
+        return errorResponse(res, 403, 'Access denied: Branch Admins can only assign users to their assigned branch.');
+      }
+      effectiveBranchId = requester.branch_id;
     }
 
     const { hashPassword } = require('../utils/passwordHash');
@@ -319,22 +585,98 @@ const createUser = async (req, res, next) => {
     if (existing.length > 0) {
       // Update existing or reactivate soft deleted account
       userId = existing[0].id;
-      await pool.execute(
-        `UPDATE users 
-         SET full_name = ?, username = COALESCE(?, username), password_hash = ?, phone = ?, department = ?, company_id = ?, company_ids = ?, role_id = ?, permissions = ?, is_verified = 1, status = 'active', deleted_at = NULL, updated_at = NOW() 
-         WHERE id = ?`,
-        [displayName, normUsername, hashedPassword, phone || null, department || null, compVal, compIdsStr, targetRoleId, permStr, userId]
-      );
+      try {
+        await pool.execute(
+          `UPDATE users 
+           SET full_name = ?, username = COALESCE(?, username), password_hash = ?, phone = ?, department = ?, 
+               company_id = ?, company_ids = ?, branch_id = ?, sub_branch_id = ?, role_id = ?, permissions = ?, 
+               is_verified = 1, status = 'active', deleted_at = NULL, updated_at = NOW() 
+           WHERE id = ?`,
+          [displayName, normUsername, hashedPassword, phone || null, department || null, 
+           compVal, compIdsStr, effectiveBranchId || null, effectiveSubBranchId || null, targetRoleId, permStr, userId]
+        );
+      } catch (updErr) {
+        if (updErr.code === 'ER_BAD_FIELD_ERROR' && (updErr.message.includes('username') || updErr.sqlMessage?.includes('username'))) {
+          await pool.execute(
+            `UPDATE users 
+             SET full_name = ?, password_hash = ?, phone = ?, department = ?, 
+                 company_id = ?, company_ids = ?, branch_id = ?, sub_branch_id = ?, role_id = ?, permissions = ?, 
+                 is_verified = 1, status = 'active', deleted_at = NULL, updated_at = NOW() 
+             WHERE id = ?`,
+            [displayName, hashedPassword, phone || null, department || null, 
+             compVal, compIdsStr, effectiveBranchId || null, effectiveSubBranchId || null, targetRoleId, permStr, userId]
+          );
+        } else {
+          throw updErr;
+        }
+      }
       // Remove from deleted_items tracking
       await pool.execute('DELETE FROM deleted_items WHERE item_id = ? AND module_name = "users"', [normEmail]).catch(() => {});
     } else {
-      // Admin created users are marked is_verified = 1 automatically!
-      const [result] = await pool.execute(
-        'INSERT INTO users (role_id, full_name, email, username, password_hash, phone, department, company_id, company_ids, permissions, is_verified, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)',
-        [targetRoleId, displayName, normEmail, normUsername, hashedPassword, phone || null, department || null, compVal, compIdsStr, permStr, 'active']
-      );
-      userId = result.insertId;
+      try {
+        const [result] = await pool.execute(
+          `INSERT INTO users 
+           (role_id, full_name, email, username, password_hash, phone, department, company_id, company_ids, branch_id, sub_branch_id, permissions, is_verified, status) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+          [targetRoleId, displayName, normEmail, normUsername, hashedPassword, phone || null, department || null, 
+           compVal, compIdsStr, effectiveBranchId || null, effectiveSubBranchId || null, permStr, 'active']
+        );
+        userId = result.insertId;
+      } catch (insErr) {
+        if (insErr.code === 'ER_BAD_FIELD_ERROR' && (insErr.message.includes('username') || insErr.sqlMessage?.includes('username'))) {
+          const [result] = await pool.execute(
+            `INSERT INTO users 
+             (role_id, full_name, email, password_hash, phone, department, company_id, company_ids, branch_id, sub_branch_id, permissions, is_verified, status) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+            [targetRoleId, displayName, normEmail, hashedPassword, phone || null, department || null, 
+             compVal, compIdsStr, effectiveBranchId || null, effectiveSubBranchId || null, permStr, 'active']
+          );
+          userId = result.insertId;
+        } else {
+          throw insErr;
+        }
+      }
     }
+
+    // Resolve branch and sub-branch names
+    let branchName = undefined;
+    let subBranchName = undefined;
+    if (effectiveBranchId) {
+      try {
+        const [bRows] = await pool.execute('SELECT name FROM branches WHERE id = ?', [effectiveBranchId]);
+        if (bRows.length > 0) branchName = bRows[0].name;
+      } catch {}
+    }
+    if (effectiveSubBranchId) {
+      try {
+        const [sbRows] = await pool.execute('SELECT name FROM sub_branches WHERE id = ?', [effectiveSubBranchId]);
+        if (sbRows.length > 0) subBranchName = sbRows[0].name;
+      } catch {}
+    }
+
+    // Outer-scoped newUserItem so it is ALWAYS available in response
+    const newUserItem = {
+      id: String(userId),
+      name: displayName,
+      email: normEmail,
+      username: normUsername || undefined,
+      role: roleName,
+      companyId: compVal,
+      companyIds: parsedCompList,
+      companyName: companyName || (compVal === 'digital' ? 'SAAMPARK Digital Marketing' : 'SAAMPARK Technology'),
+      branchId: effectiveBranchId || undefined,
+      branchName: branchName || undefined,
+      subBranchId: effectiveSubBranchId || undefined,
+      subBranchName: subBranchName || undefined,
+      status: 'Active',
+      department: department || 'General',
+      phone: phone || '',
+      password: password || 'Password123',
+      lastLogin: 'Just created',
+      joinedDate: new Date().toISOString().split('T')[0],
+      permissions: permissions || null,
+      allowedModules: permissions?.allowedModules,
+    };
 
     // Sync newly created user to app_data JSON store for real-time cross-browser hydration
     try {
@@ -344,25 +686,6 @@ const createUser = async (req, res, next) => {
         try { currentUsers = JSON.parse(appDataRows[0].data_json) } catch {}
       }
       if (!Array.isArray(currentUsers)) currentUsers = [];
-
-      const newUserItem = {
-        id: String(userId),
-        name: displayName,
-        email: normEmail,
-        username: normUsername || undefined,
-        role: roleName,
-        companyId: compVal,
-        companyIds: parsedCompList,
-        companyName: companyName || (compVal === 'digital' ? 'SAAMPARK Digital Marketing' : 'SAAMPARK Technology'),
-        status: 'Active',
-        department: department || 'General',
-        phone: phone || '',
-        password: password || 'Password123',
-        lastLogin: 'Just created',
-        joinedDate: new Date().toISOString().split('T')[0],
-        permissions: permissions || null,
-        allowedModules: permissions?.allowedModules,
-      };
 
       const existingIdx = currentUsers.findIndex((u) => (u.email || '').toLowerCase().trim() === normEmail);
       if (existingIdx >= 0) {
@@ -392,7 +715,7 @@ const createUser = async (req, res, next) => {
       console.warn('Welcome email warning:', emailErr.message);
     }
 
-    return successResponse(res, 201, `User account saved successfully${emailSent ? ' and welcome credentials email sent!' : ' (email sending queued).'}`);
+    return successResponse(res, 201, `User account saved successfully${emailSent ? ' and welcome credentials email sent!' : ' (email sending queued).'}`, { id: userId, user: newUserItem });
   } catch (error) {
     next(error);
   }

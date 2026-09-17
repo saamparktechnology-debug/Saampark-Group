@@ -175,5 +175,36 @@ router.post('/send-general', async (req, res, next) => {
   }
 });
 
+
+// ─── GET & SAVE GLOBAL SMTP SETTINGS ──────────────────────────────────────
+router.get('/settings', async (req, res, next) => {
+  try {
+    const pool = require('../config/db');
+    const [rows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "settings"');
+    if (rows.length > 0) {
+      const data = JSON.parse(rows[0].data_json);
+      return res.status(200).json({ status: 'success', data });
+    }
+    return res.status(200).json({ status: 'success', data: null });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/settings', async (req, res, next) => {
+  try {
+    const pool = require('../config/db');
+    const payload = req.body;
+    await pool.execute(
+      `INSERT INTO app_data (module_key, data_json) VALUES ("settings", ?)
+       ON DUPLICATE KEY UPDATE data_json = VALUES(data_json), updated_at = NOW()`,
+      [JSON.stringify(payload)]
+    );
+    return res.status(200).json({ status: 'success', message: 'SMTP settings saved successfully' });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
 

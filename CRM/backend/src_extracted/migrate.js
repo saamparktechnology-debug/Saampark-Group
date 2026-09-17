@@ -16,6 +16,9 @@ async function migrate() {
       { col: 'updated_at', sql: 'ALTER TABLE users ADD COLUMN updated_at DATETIME DEFAULT NOW()' },
       { col: 'company_id', sql: 'ALTER TABLE users ADD COLUMN company_id VARCHAR(100) NULL' },
       { col: 'company_ids', sql: 'ALTER TABLE users ADD COLUMN company_ids TEXT NULL' },
+      { col: 'username', sql: 'ALTER TABLE users ADD COLUMN username VARCHAR(100) NULL' },
+      { col: 'avatar_url', sql: 'ALTER TABLE users ADD COLUMN avatar_url TEXT NULL' },
+      { col: 'sub_branch_id', sql: 'ALTER TABLE users ADD COLUMN sub_branch_id INT NULL' },
     ];
 
     for (const m of migrations) {

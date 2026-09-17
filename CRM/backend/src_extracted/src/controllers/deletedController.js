@@ -1,12 +1,18 @@
 const pool = require('../config/db');
 const { successResponse, errorResponse } = require('../utils/apiResponse');
 
-// Get all deleted item IDs across all modules
+// Get all deleted item IDs across all modules (with optional module filtering)
 const getDeletedItems = async (req, res, next) => {
   try {
-    const [rows] = await pool.execute('SELECT item_id FROM deleted_items');
-    const ids = rows.map((r) => r.item_id);
-    return successResponse(res, 200, 'Deleted items fetched successfully', ids);
+    const { moduleName } = req.query;
+    let query = 'SELECT item_id, module_name FROM deleted_items';
+    const params = [];
+    if (moduleName && moduleName !== 'all') {
+      query += ' WHERE module_name = ?';
+      params.push(moduleName);
+    }
+    const [rows] = await pool.execute(query, params);
+    return successResponse(res, 200, 'Deleted items fetched successfully', rows);
   } catch (err) {
     next(err);
   }
@@ -24,10 +30,40 @@ const markItemDeleted = async (req, res, next) => {
     }
 
     const strId = String(id).toLowerCase().trim();
+    const mod = String(moduleName || 'global').toLowerCase().trim();
     await pool.execute(
       'INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, ?)',
-      [strId, moduleName || 'global']
+      [strId, mod]
     );
+
+    // Also actively purge this item from app_data rows
+    if (mod && mod !== 'global') {
+      try {
+        const [appRows] = await pool.execute(
+          'SELECT id, module_key, data_json FROM app_data WHERE module_key = ? OR module_key LIKE ?',
+          [mod, `${mod}_%`]
+        );
+        for (const row of appRows) {
+          try {
+            const parsed = JSON.parse(row.data_json);
+            if (Array.isArray(parsed)) {
+              const cleaned = parsed.filter(item => {
+                if (!item) return false;
+                const itemIdStr = item.id !== undefined && item.id !== null ? String(item.id).toLowerCase().trim() : '';
+                const itemEmailStr = item.email ? String(item.email).toLowerCase().trim() : '';
+                return itemIdStr !== strId && itemEmailStr !== strId;
+              });
+              if (cleaned.length !== parsed.length) {
+                await pool.execute('UPDATE app_data SET data_json = ?, updated_at = NOW() WHERE id = ?', [JSON.stringify(cleaned), row.id]);
+              }
+            }
+          } catch {}
+        }
+      } catch (purgeErr) {
+        console.warn('app_data purge warning on delete:', purgeErr);
+      }
+    }
+
     return successResponse(res, 200, 'Item marked deleted successfully');
   } catch (err) {
     next(err);

@@ -4,12 +4,15 @@ const { successResponse, errorResponse } = require('../utils/apiResponse');
 // Create a new Lead
 const createLead = async (req, res, next) => {
   try {
-    const { source_id, assigned_to, first_name, last_name, email, phone, company_name, industry, lead_score } = req.body;
+    const { source_id, assigned_to, first_name, last_name, email, phone, company_name, industry, lead_score, company_id, companyId, branch_id, branchId, sub_branch_id, subBranchId } = req.body;
+    const targetComp = req.companyId || company_id || companyId || (req.headers['x-company-id'] ? parseInt(req.headers['x-company-id'], 10) : null) || 1;
+    const targetBranch = branch_id || branchId || (req.headers['x-branch-id'] ? parseInt(req.headers['x-branch-id'], 10) : null);
+    const targetSubBranch = sub_branch_id || subBranchId || (req.headers['x-sub-branch-id'] ? parseInt(req.headers['x-sub-branch-id'], 10) : null);
 
     const [result] = await pool.execute(
-      `INSERT INTO leads (source_id, assigned_to, first_name, last_name, email, phone, company_name, industry, lead_score) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [source_id || null, assigned_to || null, first_name, last_name || null, email, phone, company_name, industry, lead_score || 0]
+      `INSERT INTO leads (source_id, assigned_to, first_name, last_name, email, phone, company_name, industry, lead_score, company_id, branch_id, sub_branch_id) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [source_id || null, assigned_to || null, first_name, last_name || null, email, phone, company_name, industry, lead_score || 0, targetComp, targetBranch || null, targetSubBranch || null]
     );
 
     return successResponse(res, 201, 'Lead created successfully', { lead_id: result.insertId });
@@ -21,13 +24,34 @@ const createLead = async (req, res, next) => {
 // Get all Leads
 const getAllLeads = async (req, res, next) => {
   try {
-    const [leads] = await pool.execute(
-      `SELECT l.*, ls.source_name, u.full_name as assigned_agent_name 
-       FROM leads l 
-       LEFT JOIN lead_sources ls ON l.source_id = ls.id 
-       LEFT JOIN users u ON l.assigned_to = u.id 
-       ORDER BY l.id DESC`
-    );
+    const compId = req.companyId || (req.headers['x-company-id'] ? parseInt(req.headers['x-company-id'], 10) : null) || req.query.company_id || req.query.companyId;
+    const branchId = req.headers['x-branch-id'] || req.query.branch_id || req.query.branchId;
+    const subBranchId = req.headers['x-sub-branch-id'] || req.query.sub_branch_id;
+
+    let query = `
+      SELECT l.*, ls.source_name, u.full_name as assigned_agent_name 
+      FROM leads l 
+      LEFT JOIN lead_sources ls ON l.source_id = ls.id 
+      LEFT JOIN users u ON l.assigned_to = u.id 
+      WHERE 1=1
+    `;
+    const params = [];
+
+    if (compId && compId !== 'all') {
+      query += ' AND (l.company_id = ? OR l.company_id IS NULL)';
+      params.push(compId);
+    }
+    if (branchId && branchId !== 'all') {
+      query += ' AND (l.branch_id = ? OR l.branch_id IS NULL)';
+      params.push(branchId);
+    }
+    if (subBranchId && subBranchId !== 'all') {
+      query += ' AND (l.sub_branch_id = ? OR l.sub_branch_id IS NULL)';
+      params.push(subBranchId);
+    }
+
+    query += ' ORDER BY l.id DESC';
+    const [leads] = await pool.execute(query, params);
     return successResponse(res, 200, 'Leads fetched successfully', leads);
   } catch (error) {
     next(error);
@@ -75,39 +99,39 @@ const updateLead = async (req, res, next) => {
   }
 };
 
-// Convert Lead to Customer (Database Transaction)
-const convertLeadToCustomer = async (req, res, next) => {
-  const connection = await pool.getConnection();
+// Delete Lead
+const deleteLead = async (req, res, next) => {
   try {
     const { id } = req.params;
-
-    await connection.beginTransaction();
-
-    const [leads] = await connection.execute('SELECT * FROM leads WHERE id = ?', [id]);
-    if (leads.length === 0) {
-      await connection.rollback();
-      return errorResponse(res, 404, 'Lead not found.');
-    }
-
-    const lead = leads[0];
-
-    // Insert into customers
-    const [customerResult] = await connection.execute(
-      'INSERT INTO customers (lead_id, company_name, primary_contact_name, email, phone, industry) VALUES (?, ?, ?, ?, ?, ?)',
-      [lead.id, lead.company_name || 'N/A', `${lead.first_name} ${lead.last_name || ''}`.trim(), lead.email, lead.phone, lead.industry]
-    );
-
-    // Update lead status to 'won'
-    await connection.execute('UPDATE leads SET status = "won" WHERE id = ?', [id]);
-
-    await connection.commit();
-    return successResponse(res, 200, 'Lead successfully converted to Customer', { customer_id: customerResult.insertId });
+    await pool.execute('DELETE FROM leads WHERE id = ?', [id]);
+    return successResponse(res, 200, 'Lead deleted successfully');
   } catch (error) {
-    await connection.rollback();
     next(error);
-  } finally {
-    connection.release();
   }
 };
 
-module.exports = { createLead, getAllLeads, getLeadById, updateLead, convertLeadToCustomer };
+
+// Convert Lead to Customer
+const convertLeadToCustomer = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const [leads] = await pool.execute('SELECT * FROM leads WHERE id = ?', [id]);
+    if (leads.length === 0) return errorResponse(res, 404, 'Lead not found.');
+
+    const lead = leads[0];
+    const customerName = lead.company_name || `${lead.first_name} ${lead.last_name || ''}`.trim();
+
+    const [custResult] = await pool.execute(
+      'INSERT INTO customers (company_name, primary_contact_name, email, phone, industry, company_id, branch_id, sub_branch_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [customerName, `${lead.first_name} ${lead.last_name || ''}`.trim(), lead.email, lead.phone, lead.industry, lead.company_id || 1, lead.branch_id || null, lead.sub_branch_id || null]
+    );
+
+    await pool.execute('UPDATE leads SET status = "converted" WHERE id = ?', [id]);
+
+    return successResponse(res, 200, 'Lead converted to customer successfully', { customer_id: custResult.insertId });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { createLead, getAllLeads, getLeadById, updateLead, deleteLead, convertLeadToCustomer };

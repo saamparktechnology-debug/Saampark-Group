@@ -46,8 +46,17 @@ const requireRole = (...allowedRoleIds) => {
     if (!req.user) {
       return errorResponse(res, 401, 'Authentication required.');
     }
-    if (!allowedRoleIds.includes(req.user.role_id)) {
-      const roleName = ROLE_IDS[req.user.role_id] || 'Unknown';
+    const userRoleId = Number(req.user.role_id);
+    const userRole = String(req.user.role || req.user.role_name || ROLE_IDS[userRoleId] || '').toLowerCase();
+    
+    // Super admin role always passes super admin / role checks unless specifically restricted
+    if (userRoleId === 1 || userRole.includes('super')) {
+      return next();
+    }
+
+    const numericAllowed = allowedRoleIds.map(Number);
+    if (!numericAllowed.includes(userRoleId)) {
+      const roleName = ROLE_IDS[userRoleId] || req.user.role || 'Unknown';
       return errorResponse(res, 403, `Access denied. Your role (${roleName}) does not have permission for this action.`);
     }
     next();

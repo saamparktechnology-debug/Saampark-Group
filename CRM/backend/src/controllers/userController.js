@@ -1,9 +1,16 @@
 const pool = require('../config/db');
 const { successResponse, errorResponse } = require('../utils/apiResponse');
 
-// Ensure avatar_url column exists in users table
-pool.execute('ALTER TABLE users ADD COLUMN avatar_url TEXT NULL').catch(() => {});
-pool.execute('ALTER TABLE users ADD COLUMN sub_branch_id INT NULL').catch(() => {});
+// Ensure required columns exist in users table (auto-migrate if missing on any domain / environment)
+async function ensureUsersColumns() {
+  try {
+    await pool.execute('ALTER TABLE users ADD COLUMN avatar_url TEXT NULL').catch(() => {});
+    await pool.execute('ALTER TABLE users ADD COLUMN sub_branch_id INT NULL').catch(() => {});
+    await pool.execute('ALTER TABLE users ADD COLUMN username VARCHAR(100) NULL').catch(() => {});
+    await pool.execute('ALTER TABLE users ADD COLUMN company_ids TEXT NULL').catch(() => {});
+  } catch {}
+}
+ensureUsersColumns();
 
 // Helper: Resolve requesting user info from JWT or headers
 async function resolveRequester(req) {
@@ -46,10 +53,11 @@ function isCompanyInScope(creator, targetComp) {
 // ─── GET ALL USERS ────────────────────────────────────────────────────────────
 const getAllUsers = async (req, res, next) => {
   try {
+    ensureUsersColumns().catch(() => {});
     const requester = await resolveRequester(req);
-    const companyId = req.companySlug || req.companyId || req.headers['x-company-id'] || req.query.company_id || req.query.companyId;
-    const branchId = req.headers['x-branch-id'] || req.query.branch_id || req.query.branchId;
-    const subBranchId = req.headers['x-sub-branch-id'] || req.query.sub_branch_id || req.query.subBranchId;
+    const companyId = req.query.company_id || req.query.companyId || req.companySlug || req.companyId || req.headers['x-company-id'];
+    const branchId = req.query.branch_id || req.query.branchId || req.headers['x-branch-id'];
+    const subBranchId = req.query.sub_branch_id || req.query.subBranchId || req.headers['x-sub-branch-id'];
 
     let query = `
       SELECT u.id, u.full_name, u.email, u.username, u.phone, u.department, u.status, u.permissions, u.last_login, u.created_at,
@@ -134,7 +142,19 @@ const getAllUsers = async (req, res, next) => {
     }
 
     query += ` ORDER BY u.id DESC`;
-    const [users] = await pool.execute(query, params);
+    let users = [];
+    try {
+      const [rows] = await pool.execute(query, params);
+      users = rows;
+    } catch (qErr) {
+      if (qErr.code === 'ER_BAD_FIELD_ERROR' && (qErr.message.includes('username') || qErr.sqlMessage?.includes('username'))) {
+        const fallbackQuery = query.replace('u.username,', 'NULL as username,');
+        const [rows] = await pool.execute(fallbackQuery, params);
+        users = rows;
+      } else {
+        throw qErr;
+      }
+    }
     return successResponse(res, 200, 'Users fetched successfully', users);
   } catch (error) {
     next(error);
@@ -145,18 +165,40 @@ const getAllUsers = async (req, res, next) => {
 const getUserById = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const [users] = await pool.execute(
-      `SELECT u.id, u.full_name, u.email, u.username, u.phone, u.department, u.status, u.permissions, u.company_id, u.company_ids, u.branch_id, u.sub_branch_id, u.avatar_url,
-              r.name as role_name, r.id as role_id,
-              b.name as branch_name, sb.name as sub_branch_name, c.name as company_name
-       FROM users u
-       LEFT JOIN roles r ON u.role_id = r.id
-       LEFT JOIN branches b ON u.branch_id = b.id
-       LEFT JOIN sub_branches sb ON u.sub_branch_id = sb.id
-       LEFT JOIN companies c ON (u.company_id = c.id OR u.company_id = c.slug)
-       WHERE (u.id = ? OR u.email = ?) AND u.deleted_at IS NULL`,
-      [id, id]
-    );
+    let users = [];
+    try {
+      const [rows] = await pool.execute(
+        `SELECT u.id, u.full_name, u.email, u.username, u.phone, u.department, u.status, u.permissions, u.company_id, u.company_ids, u.branch_id, u.sub_branch_id, u.avatar_url,
+                r.name as role_name, r.id as role_id,
+                b.name as branch_name, sb.name as sub_branch_name, c.name as company_name
+         FROM users u
+         LEFT JOIN roles r ON u.role_id = r.id
+         LEFT JOIN branches b ON u.branch_id = b.id
+         LEFT JOIN sub_branches sb ON u.sub_branch_id = sb.id
+         LEFT JOIN companies c ON (u.company_id = c.id OR u.company_id = c.slug)
+         WHERE (u.id = ? OR u.email = ?) AND u.deleted_at IS NULL`,
+        [id, id]
+      );
+      users = rows;
+    } catch (qErr) {
+      if (qErr.code === 'ER_BAD_FIELD_ERROR' && (qErr.message.includes('username') || qErr.sqlMessage?.includes('username'))) {
+        const [rows] = await pool.execute(
+          `SELECT u.id, u.full_name, u.email, NULL as username, u.phone, u.department, u.status, u.permissions, u.company_id, u.company_ids, u.branch_id, u.sub_branch_id, u.avatar_url,
+                  r.name as role_name, r.id as role_id,
+                  b.name as branch_name, sb.name as sub_branch_name, c.name as company_name
+           FROM users u
+           LEFT JOIN roles r ON u.role_id = r.id
+           LEFT JOIN branches b ON u.branch_id = b.id
+           LEFT JOIN sub_branches sb ON u.sub_branch_id = sb.id
+           LEFT JOIN companies c ON (u.company_id = c.id OR u.company_id = c.slug)
+           WHERE (u.id = ? OR u.email = ?) AND u.deleted_at IS NULL`,
+          [id, id]
+        );
+        users = rows;
+      } else {
+        throw qErr;
+      }
+    }
 
     if (users.length === 0) {
       return errorResponse(res, 404, 'User not found.');
@@ -263,18 +305,40 @@ const updateUser = async (req, res, next) => {
     setClauses.push('updated_at = NOW()');
     const isNumericId = !isNaN(parseInt(id, 10)) && Number(id) > 0;
     
-    if (isNumericId) {
-      params.push(id, targetEmail, oldEmailVal || id);
-      await pool.execute(
-        `UPDATE users SET ${setClauses.join(', ')} WHERE id = ? OR email = ? OR email = ?`,
-        params
-      );
-    } else {
-      params.push(targetEmail || id, oldEmailVal || id);
-      await pool.execute(
-        `UPDATE users SET ${setClauses.join(', ')} WHERE email = ? OR email = ?`,
-        params
-      );
+    try {
+      if (isNumericId) {
+        params.push(id, targetEmail, oldEmailVal || id);
+        await pool.execute(
+          `UPDATE users SET ${setClauses.join(', ')} WHERE id = ? OR email = ? OR email = ?`,
+          params
+        );
+      } else {
+        params.push(targetEmail || id, oldEmailVal || id);
+        await pool.execute(
+          `UPDATE users SET ${setClauses.join(', ')} WHERE email = ? OR email = ?`,
+          params
+        );
+      }
+    } catch (updErr) {
+      if (updErr.code === 'ER_BAD_FIELD_ERROR' && (updErr.message.includes('username') || updErr.sqlMessage?.includes('username'))) {
+        const fallbackSetClauses = setClauses.filter(c => !c.startsWith('username ='));
+        const usernameIdx = setClauses.findIndex(c => c.startsWith('username ='));
+        const fallbackParams = [...params];
+        if (usernameIdx >= 0) fallbackParams.splice(usernameIdx, 1);
+        if (isNumericId) {
+          await pool.execute(
+            `UPDATE users SET ${fallbackSetClauses.join(', ')} WHERE id = ? OR email = ? OR email = ?`,
+            fallbackParams
+          );
+        } else {
+          await pool.execute(
+            `UPDATE users SET ${fallbackSetClauses.join(', ')} WHERE email = ? OR email = ?`,
+            fallbackParams
+          );
+        }
+      } else {
+        throw updErr;
+      }
     }
 
     // Also sync updated user record & permissions into app_data JSON store
@@ -521,26 +585,57 @@ const createUser = async (req, res, next) => {
     if (existing.length > 0) {
       // Update existing or reactivate soft deleted account
       userId = existing[0].id;
-      await pool.execute(
-        `UPDATE users 
-         SET full_name = ?, username = COALESCE(?, username), password_hash = ?, phone = ?, department = ?, 
-             company_id = ?, company_ids = ?, branch_id = ?, sub_branch_id = ?, role_id = ?, permissions = ?, 
-             is_verified = 1, status = 'active', deleted_at = NULL, updated_at = NOW() 
-         WHERE id = ?`,
-        [displayName, normUsername, hashedPassword, phone || null, department || null, 
-         compVal, compIdsStr, effectiveBranchId || null, effectiveSubBranchId || null, targetRoleId, permStr, userId]
-      );
+      try {
+        await pool.execute(
+          `UPDATE users 
+           SET full_name = ?, username = COALESCE(?, username), password_hash = ?, phone = ?, department = ?, 
+               company_id = ?, company_ids = ?, branch_id = ?, sub_branch_id = ?, role_id = ?, permissions = ?, 
+               is_verified = 1, status = 'active', deleted_at = NULL, updated_at = NOW() 
+           WHERE id = ?`,
+          [displayName, normUsername, hashedPassword, phone || null, department || null, 
+           compVal, compIdsStr, effectiveBranchId || null, effectiveSubBranchId || null, targetRoleId, permStr, userId]
+        );
+      } catch (updErr) {
+        if (updErr.code === 'ER_BAD_FIELD_ERROR' && (updErr.message.includes('username') || updErr.sqlMessage?.includes('username'))) {
+          await pool.execute(
+            `UPDATE users 
+             SET full_name = ?, password_hash = ?, phone = ?, department = ?, 
+                 company_id = ?, company_ids = ?, branch_id = ?, sub_branch_id = ?, role_id = ?, permissions = ?, 
+                 is_verified = 1, status = 'active', deleted_at = NULL, updated_at = NOW() 
+             WHERE id = ?`,
+            [displayName, hashedPassword, phone || null, department || null, 
+             compVal, compIdsStr, effectiveBranchId || null, effectiveSubBranchId || null, targetRoleId, permStr, userId]
+          );
+        } else {
+          throw updErr;
+        }
+      }
       // Remove from deleted_items tracking
       await pool.execute('DELETE FROM deleted_items WHERE item_id = ? AND module_name = "users"', [normEmail]).catch(() => {});
     } else {
-      const [result] = await pool.execute(
-        `INSERT INTO users 
-         (role_id, full_name, email, username, password_hash, phone, department, company_id, company_ids, branch_id, sub_branch_id, permissions, is_verified, status) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
-        [targetRoleId, displayName, normEmail, normUsername, hashedPassword, phone || null, department || null, 
-         compVal, compIdsStr, effectiveBranchId || null, effectiveSubBranchId || null, permStr, 'active']
-      );
-      userId = result.insertId;
+      try {
+        const [result] = await pool.execute(
+          `INSERT INTO users 
+           (role_id, full_name, email, username, password_hash, phone, department, company_id, company_ids, branch_id, sub_branch_id, permissions, is_verified, status) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+          [targetRoleId, displayName, normEmail, normUsername, hashedPassword, phone || null, department || null, 
+           compVal, compIdsStr, effectiveBranchId || null, effectiveSubBranchId || null, permStr, 'active']
+        );
+        userId = result.insertId;
+      } catch (insErr) {
+        if (insErr.code === 'ER_BAD_FIELD_ERROR' && (insErr.message.includes('username') || insErr.sqlMessage?.includes('username'))) {
+          const [result] = await pool.execute(
+            `INSERT INTO users 
+             (role_id, full_name, email, password_hash, phone, department, company_id, company_ids, branch_id, sub_branch_id, permissions, is_verified, status) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+            [targetRoleId, displayName, normEmail, hashedPassword, phone || null, department || null, 
+             compVal, compIdsStr, effectiveBranchId || null, effectiveSubBranchId || null, permStr, 'active']
+          );
+          userId = result.insertId;
+        } else {
+          throw insErr;
+        }
+      }
     }
 
     // Resolve branch and sub-branch names
@@ -559,6 +654,30 @@ const createUser = async (req, res, next) => {
       } catch {}
     }
 
+    // Outer-scoped newUserItem so it is ALWAYS available in response
+    const newUserItem = {
+      id: String(userId),
+      name: displayName,
+      email: normEmail,
+      username: normUsername || undefined,
+      role: roleName,
+      companyId: compVal,
+      companyIds: parsedCompList,
+      companyName: companyName || (compVal === 'digital' ? 'SAAMPARK Digital Marketing' : 'SAAMPARK Technology'),
+      branchId: effectiveBranchId || undefined,
+      branchName: branchName || undefined,
+      subBranchId: effectiveSubBranchId || undefined,
+      subBranchName: subBranchName || undefined,
+      status: 'Active',
+      department: department || 'General',
+      phone: phone || '',
+      password: password || 'Password123',
+      lastLogin: 'Just created',
+      joinedDate: new Date().toISOString().split('T')[0],
+      permissions: permissions || null,
+      allowedModules: permissions?.allowedModules,
+    };
+
     // Sync newly created user to app_data JSON store for real-time cross-browser hydration
     try {
       const [appDataRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "users"');
@@ -567,29 +686,6 @@ const createUser = async (req, res, next) => {
         try { currentUsers = JSON.parse(appDataRows[0].data_json) } catch {}
       }
       if (!Array.isArray(currentUsers)) currentUsers = [];
-
-      const newUserItem = {
-        id: String(userId),
-        name: displayName,
-        email: normEmail,
-        username: normUsername || undefined,
-        role: roleName,
-        companyId: compVal,
-        companyIds: parsedCompList,
-        companyName: companyName || (compVal === 'digital' ? 'SAAMPARK Digital Marketing' : 'SAAMPARK Technology'),
-        branchId: effectiveBranchId || undefined,
-        branchName: branchName || undefined,
-        subBranchId: effectiveSubBranchId || undefined,
-        subBranchName: subBranchName || undefined,
-        status: 'Active',
-        department: department || 'General',
-        phone: phone || '',
-        password: password || 'Password123',
-        lastLogin: 'Just created',
-        joinedDate: new Date().toISOString().split('T')[0],
-        permissions: permissions || null,
-        allowedModules: permissions?.allowedModules,
-      };
 
       const existingIdx = currentUsers.findIndex((u) => (u.email || '').toLowerCase().trim() === normEmail);
       if (existingIdx >= 0) {

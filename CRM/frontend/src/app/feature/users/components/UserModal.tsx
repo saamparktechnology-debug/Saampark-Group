@@ -340,8 +340,9 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
     if (!name.trim() || !email.trim()) return
 
     const isAllCompanies = selectedCompanyId === "all" || role === "Super Admin"
-    const canonCompId = isAllCompanies ? "tech" : (getCanonicalCompanyId(selectedCompanyId) || "tech")
-    const companyIds = isAllCompanies ? ["tech", "consultancy"] : [canonCompId]
+    const canonCompId = isAllCompanies ? "all" : (targetCompanyObj?.id || targetCompanyObj?.slug || selectedCompanyId || "tech")
+    const allCompIds = companies && companies.length > 0 ? companies.map(c => c.id || c.slug).filter(Boolean) as string[] : ["tech", "digital", "saampark-ai-solutions"]
+    const companyIds = isAllCompanies ? allCompIds : [canonCompId]
     const companyNameToSave = isAllCompanies ? "SAAMPARK Group (All Companies)" : getCompanyFullName(targetCompanyObj)
 
     const effectiveBranchId = scopeType === "branch" ? (selectedBranchId || undefined) : undefined

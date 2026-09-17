@@ -256,8 +256,10 @@ export function getCanonicalCompanyId(val: string | number | null | undefined): 
   const str = String(val).toLowerCase().trim()
   if (!str) return ""
   if (str === "all") return "all"
-  if (str === "2" || str === "consultancy" || str === "consult" || str.includes("consult")) return "consultancy"
+  if (str === "digital" || str.includes("digital") || str.includes("marketing")) return "digital"
+  if (str === "consultancy" || str.includes("consult")) return "consultancy"
   if (str === "1" || str === "tech" || str.includes("tech") || str.includes("research")) return "tech"
+  if (str === "saampark-ai-solutions" || str.includes("ai-solutions") || str.includes("ai")) return "saampark-ai-solutions"
   return str
 }
 
