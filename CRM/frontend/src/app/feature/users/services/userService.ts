@@ -379,6 +379,8 @@ export async function recordUserAccountAsync(user: Partial<UserItem>, isNewRegis
     }
   }
 
+  invalidateUsersCache();
+
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("storage"));
     window.dispatchEvent(new CustomEvent("saampark_data_synced"));
@@ -769,8 +771,6 @@ export async function deleteUser(id: string, email?: string): Promise<boolean> {
 }
 
 
-const HIDDEN_MASTER_EMAILS = ["supriyo.main@gmail.com"];
-
 // ── Users Cache ──────────────────────────────────────────────────────────────
 // Prevents repeated API calls on every render — only fetches fresh when
 // company/branch switches or after a write (add/edit/delete user).
@@ -928,7 +928,7 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
       rawData.forEach((u: any) => {
         const emailNorm = (u.email || "").toLowerCase().trim();
         const rawIdStr = String(u.id || "").toLowerCase().trim();
-        if (emailNorm && !HIDDEN_MASTER_EMAILS.includes(emailNorm)) {
+        if (emailNorm) {
           const existingIdx = dbUsers.findIndex((du) => 
             (rawIdStr && String(du.id).toLowerCase().trim() === rawIdStr) ||
             du.email.toLowerCase().trim() === emailNorm ||
@@ -1087,7 +1087,7 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
   const activeValidUsers = dbUsers.filter((u) => {
     const emailNorm = (u.email || "").toLowerCase().trim();
     const uId = String(u.id || "").toLowerCase().trim();
-    if (!emailNorm || HIDDEN_MASTER_EMAILS.includes(emailNorm)) return false;
+    if (!emailNorm) return false;
     if (obsoleteEmailsSet.has(emailNorm)) return false;
     if (deletedEmails.includes(emailNorm)) return false;
     if (isGlobalItemDeleted(uId, undefined, "users") || isGlobalItemDeleted(emailNorm, undefined, "users")) return false;

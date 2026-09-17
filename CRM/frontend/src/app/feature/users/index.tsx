@@ -294,7 +294,8 @@ export default function UsersMain() {
       } catch {}
     }
 
-    const { recordUserAccountAsync, saveUserAccounts } = await import("./services/userService")
+    const { recordUserAccountAsync, saveUserAccounts, invalidateUsersCache } = await import("./services/userService")
+    invalidateUsersCache()
     const saved = await recordUserAccountAsync(
       {
         ...userData,
