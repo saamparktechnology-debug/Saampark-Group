@@ -240,11 +240,40 @@ const updateUser = async (req, res, next) => {
       else roleIdVal = 3;
     }
 
+    const newEmailVal = email ? email.toLowerCase().trim() : null;
+    const oldEmailVal = (req.body.old_email || req.body.oldEmail || '').toLowerCase().trim();
+    const targetEmail = (oldEmailVal || newEmailVal || id || '').toLowerCase().trim();
+
+    // 🛡️ PRIMARY ROOT SUPER ADMIN PROTECTION:
+    // saampark.official@gmail.com must ALWAYS remain Super Admin (role_id: 1)
+    // No one can demote or change this master account's role.
+    const isNumericId = !isNaN(parseInt(id, 10)) && !String(id).startsWith('usr_');
+    let isRootSuperAccount = 
+      targetEmail === 'saampark.official@gmail.com' || 
+      newEmailVal === 'saampark.official@gmail.com' ||
+      oldEmailVal === 'saampark.official@gmail.com';
+
+    if (!isRootSuperAccount) {
+      try {
+        const [existingRows] = await pool.execute(
+          'SELECT email FROM users WHERE id = ? OR email = ?',
+          [isNumericId ? parseInt(id, 10) : 0, targetEmail]
+        );
+        if (existingRows.length > 0 && (existingRows[0].email || '').toLowerCase().trim() === 'saampark.official@gmail.com') {
+          isRootSuperAccount = true;
+        }
+      } catch {}
+    }
+
+    if (isRootSuperAccount) {
+      roleIdVal = 1; // Unconditionally keep as Super Admin
+    }
+
     // RBAC Hierarchy Enforcement:
     // Only a Super Admin can promote/assign Super Admin (1) or Admin (2)
     if (roleIdVal === 1 || roleIdVal === 2) {
-      if (requester.role_id !== 1) {
-        return errorResponse(res, 403, 'Only a Super Admin can assign Super Admin or Admin roles.');
+      if (requester.role_id !== 1 && !isRootSuperAccount) {
+        return errorResponse(res, 403, 'Access denied: Only a Super Admin can create or change a user role to Super Admin or Admin.');
       }
     }
 
@@ -261,10 +290,6 @@ const updateUser = async (req, res, next) => {
         return errorResponse(res, 403, 'Access denied: Branch Admins can only assign users to their assigned branch.');
       }
     }
-
-    const newEmailVal = email ? email.toLowerCase().trim() : null;
-    const oldEmailVal = (req.body.old_email || req.body.oldEmail || '').toLowerCase().trim();
-    const targetEmail = (oldEmailVal || newEmailVal || id || '').toLowerCase().trim();
 
     // Multi-company serialization
     const compList = company_ids || companyIds || (company_id ? [company_id] : null);
@@ -462,10 +487,16 @@ const deleteUser = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    // Prevent deleting Super Admin
-    const [users] = await pool.execute('SELECT role_id FROM users WHERE id = ?', [id]);
-    if (users.length > 0 && users[0].role_id === 1) {
-      return errorResponse(res, 403, 'Super Admin accounts cannot be deleted.');
+    // Prevent deleting Super Admin & Root Super Admin
+    const [users] = await pool.execute('SELECT role_id, email FROM users WHERE id = ? OR email = ?', [id, id]);
+    if (users.length > 0) {
+      const uEmail = (users[0].email || '').toLowerCase().trim();
+      if (uEmail === 'saampark.official@gmail.com') {
+        return errorResponse(res, 403, 'Primary Root Super Admin account cannot be deleted.');
+      }
+      if (users[0].role_id === 1) {
+        return errorResponse(res, 403, 'Super Admin accounts cannot be deleted.');
+      }
     }
 
     // Fetch user details for deleted_items tracking

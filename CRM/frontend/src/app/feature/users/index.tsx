@@ -223,7 +223,14 @@ export default function UsersMain() {
         "User": 3,
         "Clients": 4,
       }
-      const role_id = roleIdMap[userData.role || ""] || 3
+      let role_id = roleIdMap[userData.role || ""] || 3
+      const isTargetRootSuper = 
+        (userData.email && (userData.email.toLowerCase().trim() === "saampark.official@gmail.com" || userData.email.toLowerCase().trim() === "saampark.official")) ||
+        (editingUser?.email && (editingUser.email.toLowerCase().trim() === "saampark.official@gmail.com" || editingUser.email.toLowerCase().trim() === "saampark.official"))
+      if (isTargetRootSuper) {
+        role_id = 1
+        userData.role = "Super Admin"
+      }
 
       if (!editingUser && userData.email) {
         const res: any = await api.post("/users", {
@@ -482,6 +489,10 @@ export default function UsersMain() {
   const handleDeleteUser = async (id: string) => {
     const targetUser = users.find((u) => u.id === id)
     const targetEmail = targetUser?.email
+    if (targetEmail && (targetEmail.toLowerCase().trim() === "saampark.official@gmail.com" || targetEmail.toLowerCase().trim() === "saampark.official")) {
+      alert("Primary Root Super Admin account cannot be deleted.")
+      return
+    }
 
     setUsers((prev) => prev.filter((u) => u.id !== id && (!targetEmail || u.email.toLowerCase().trim() !== targetEmail.toLowerCase().trim())))
 

@@ -219,7 +219,7 @@ const login = async (req, res, next) => {
               if (matched && (matched.password === password || password === 'Password123')) {
                 // Check if user is Super Admin
                 const mRole = String(matched.role || '').toLowerCase();
-                const isSuper = mRole.includes('super') || matched.role_id === 1 || matched.email === 'hiisupriya@gmail.com';
+                const isSuper = mRole.includes('super') || matched.role_id === 1 || matched.email === 'hiisupriya@gmail.com' || matched.email === 'saampark.official@gmail.com';
                 if (!isSuper) {
                   const mComp = matched.companyId || matched.company_id || (Array.isArray(matched.companyIds) ? matched.companyIds[0] : null);
                   if (mComp) {
@@ -275,7 +275,7 @@ const login = async (req, res, next) => {
     }
 
     // Enforce Company Availability Check for non-Super Admin users
-    const isSuperAdmin = user.role_id === 1 || String(user.role_name || user.role || '').toLowerCase().includes('super') || user.email === 'hiisupriya@gmail.com';
+    const isSuperAdmin = user.role_id === 1 || String(user.role_name || user.role || '').toLowerCase().includes('super') || user.email === 'hiisupriya@gmail.com' || user.email === 'saampark.official@gmail.com';
     if (!isSuperAdmin) {
       let compTarget = user.company_id;
 

@@ -17,9 +17,31 @@ import { recordActivityLog } from "@/services/activityLogService";
 // Deleted user emails tracked in MySQL via markGlobalItemDeleted
 const DELETED_KEY = "saampark_deleted_user_emails"
 
+// Helper: Root Super Admin is permanent and immutable
+export const isRootSuperAdminEmail = (email?: string): boolean => {
+  if (!email) return false;
+  const e = email.toLowerCase().trim();
+  return e === "saampark.official@gmail.com" || e === "saampark.official";
+};
+
 // Default System User Accounts for SAAMPARK Group (used only if MySQL has no users yet)
 // Default System User Accounts for SAAMPARK Group (used only for initial DB bootstrap)
 export const DEFAULT_SYSTEM_ACCOUNTS: UserItem[] = [
+  {
+    id: "usr_root_super_admin",
+    name: "Supriya (Super Admin)",
+    email: "saampark.official@gmail.com",
+    role: "Super Admin",
+    companyId: "tech",
+    companyIds: ["tech", "digital", "consultancy"],
+    companyName: "SAAMPARK Group (All Companies)",
+    status: "Active",
+    department: "Executive Management",
+    phone: "+91 98765 43210",
+    password: "Password123",
+    lastLogin: "Active Session",
+    joinedDate: "2024-01-01",
+  },
   {
     id: "usr_super_admin_visible",
     name: "Supriya (Super Admin)",
@@ -285,7 +307,7 @@ export async function recordUserAccountAsync(user: Partial<UserItem>, isNewRegis
       name: user.name !== undefined ? user.name : (existing?.name || "User Account"),
       email: normalizedEmail,
       username: user.username !== undefined ? (user.username ? user.username.toLowerCase().trim() : undefined) : existing?.username,
-      role: user.role !== undefined ? user.role : (existing?.role || "Teams"),
+      role: isRootSuperAdminEmail(normalizedEmail) ? "Super Admin" : (user.role !== undefined ? user.role : (existing?.role || "Teams")),
       companyId: effCompId,
       companyIds: user.companyIds !== undefined ? user.companyIds : (existing?.companyIds || (effCompId ? [effCompId] : ["tech"])),
       companyName: resolvedCompName,
@@ -841,7 +863,11 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
   const mergeUserIntoMap = (u: UserItem) => {
     if (!u || !u.email) return;
     const eNorm = u.email.toLowerCase().trim();
-    // Preserve assigned role from database without hardcoded overrides
+    // 🛡️ PRIMARY ROOT SUPER ADMIN IMMUTABILITY:
+    // saampark.official@gmail.com must ALWAYS be Super Admin, no one can demote it
+    if (isRootSuperAdminEmail(eNorm)) {
+      u.role = "Super Admin";
+    }
 
     // Clean previousEmails on u so the active email is NEVER in its own history
     let currentPrev = Array.isArray(u.previousEmails)
@@ -967,13 +993,15 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
 
           // If this account was already updated with a new primary email, keep the new primary email!
           const preservedEmail = existingItem?.email || emailNorm;
+          const isRootSuper = isRootSuperAdminEmail(preservedEmail);
+          const effectiveRole: UserRole = isRootSuper ? "Super Admin" : (mappedRole || existingItem?.role || finalRole);
 
           const item: UserItem = {
             id: String(u.id || existingItem?.id || `usr_${Math.random()}`),
             name: existingItem?.name || u.full_name || u.name || u.first_name || u.email || "User Account",
             email: preservedEmail,
             username: u.username || existingItem?.username || undefined,
-            role: mappedRole || existingItem?.role || finalRole,
+            role: effectiveRole,
             companyId: u.company_id || parsedCompanyIds[0] || "tech",
             companyIds: parsedCompanyIds,
             companyName:
@@ -1017,7 +1045,7 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
               branchIds: existingItem.branchIds !== undefined ? existingItem.branchIds : item.branchIds,
               branchName: existingItem.branchName !== undefined ? existingItem.branchName : item.branchName,
               department: existingItem.department || item.department,
-              role: mappedRole || existingItem.role || item.role,
+              role: isRootSuper ? "Super Admin" : (mappedRole || existingItem.role || item.role),
               status: existingItem.status || item.status,
               phone: existingItem.phone !== undefined ? existingItem.phone : item.phone,
               password: existingItem.password || item.password || undefined,
@@ -1250,6 +1278,10 @@ export async function updateUser(idOrEmail: string, updates: Partial<UserItem>, 
 
   if (newAvatar && newAvatar !== existing.avatarUrl && newAvatar !== (existing as any).avatar) {
     cascadeUserAvatarChange(updated.name, updated.email, newAvatar).catch(() => {});
+  }
+
+  if (isRootSuperAdminEmail(existing.email) || isRootSuperAdminEmail(updated.email)) {
+    updated.role = "Super Admin";
   }
 
   // Sync to live backend /users endpoint

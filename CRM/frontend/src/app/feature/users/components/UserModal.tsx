@@ -87,7 +87,21 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
   } = usePermissionStore()
   const { companies, branches, user: currentUser, activeCompanyId, activeBranchId, fetchCompanies, fetchBranches } = useAuthStore()
   
-  const isCurrentSuperAdmin = currentUser?.role === "Super Admin"
+  const isRootSuperAdminEmail = React.useCallback((e?: string) => {
+    if (!e) return false
+    const norm = e.toLowerCase().trim()
+    return norm === "saampark.official@gmail.com" || norm === "saampark.official"
+  }, [])
+
+  const isCurrentSuperAdmin = 
+    currentUser?.role === "Super Admin" || 
+    isRootSuperAdminEmail(currentUser?.email) ||
+    String(currentUser?.role || "").toLowerCase().includes("super")
+
+  const isEditingRootSuperAdmin = Boolean(
+    (editingUser?.email && isRootSuperAdminEmail(editingUser.email)) ||
+    (email && isRootSuperAdminEmail(email))
+  )
 
   // Company Selection State (allows Super Admin to pick target company)
   const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>("tech")
@@ -244,7 +258,9 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
       setName(editingUser.name || "")
       setEmail(editingUser.email || "")
       let initRole: UserRole = editingUser.role || "Teams"
-      if (!isCurrentSuperAdmin && (initRole === "Super Admin" || initRole === "Admin")) {
+      if (isRootSuperAdminEmail(editingUser.email)) {
+        initRole = "Super Admin"
+      } else if (!isCurrentSuperAdmin && (initRole === "Super Admin" || initRole === "Admin")) {
         initRole = "Teams"
       }
       setRole(initRole)
@@ -330,6 +346,8 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
 
   // Handle Role change & apply default permission presets
   const handleRoleSelect = (newRole: UserRole) => {
+    if (isEditingRootSuperAdmin) return
+    if (!isCurrentSuperAdmin && (newRole === "Super Admin" || newRole === "Admin")) return
     setRole(newRole)
     const nextMatrix = getMatrixForRole(newRole)
     setActionMatrix(nextMatrix)
@@ -410,9 +428,8 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
   // Save handler
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!name.trim() || !email.trim()) return
-
-    const isAllCompanies = selectedCompanyId === "all" || role === "Super Admin"
+    const finalRoleToSave: UserRole = (isEditingRootSuperAdmin || isRootSuperAdminEmail(email)) ? "Super Admin" : role
+    const isAllCompanies = selectedCompanyId === "all" || finalRoleToSave === "Super Admin"
     const canonCompId = isAllCompanies ? "all" : (targetCompanyObj?.id || targetCompanyObj?.slug || selectedCompanyId || "tech")
     const allCompIds = companies && companies.length > 0 ? companies.map(c => c.id || c.slug).filter(Boolean) as string[] : ["tech", "digital", "saampark-ai-solutions"]
     const companyIds = isAllCompanies ? allCompIds : [canonCompId]
@@ -426,7 +443,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
       ...(editingUser ? { id: editingUser.id } : {}),
       name: name.trim(),
       email: email.trim().toLowerCase(),
-      role,
+      role: finalRoleToSave,
       companyId: canonCompId,
       companyIds,
       companyName: companyNameToSave,
@@ -579,19 +596,31 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                     <span>Step 1: Select Account Role *</span>
                   </label>
                   <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                    {isCurrentSuperAdmin ? "Determines security level and base permissions" : "Admins can add Team Members and Clients"}
+                    {isCurrentSuperAdmin ? "Super Admin can assign any role including Super Admin" : "Admins can add Team Members and Clients"}
                   </span>
                 </div>
+
+                {isEditingRootSuperAdmin && (
+                  <div className="p-3.5 mb-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 text-xs font-semibold flex items-center gap-2.5">
+                    <Crown size={16} className="text-amber-500 shrink-0" />
+                    <span>🛡️ Primary Root Super Admin (saampark.official) — This master account is permanently Super Admin and its role cannot be modified.</span>
+                  </div>
+                )}
 
                 <div className={`grid gap-3 ${availableRoleOptions.length === 2 ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2 sm:grid-cols-4"}`}>
                   {availableRoleOptions.map((r) => {
                     const isSelected = role === r.id
+                    const isLocked = isEditingRootSuperAdmin && r.id !== "Super Admin"
                     return (
                       <button
                         key={r.id}
                         type="button"
-                        onClick={() => handleRoleSelect(r.id)}
-                        className={`group relative p-4 rounded-2xl text-left flex flex-col justify-between transition-all duration-200 cursor-pointer border ${
+                        disabled={isLocked}
+                        onClick={() => {
+                          if (isEditingRootSuperAdmin) return
+                          handleRoleSelect(r.id)
+                        }}
+                        className={`group relative p-4 rounded-2xl text-left flex flex-col justify-between transition-all duration-200 ${isLocked ? "opacity-35 cursor-not-allowed" : "cursor-pointer"} border ${
                           isSelected
                             ? `bg-gradient-to-b ${r.glow} ${r.activeBorder} shadow-[0_10px_20px_-4px_rgba(59,130,246,0.25)] dark:shadow-[0_12px_24px_-4px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.3)] -translate-y-1 ring-2 ring-blue-500/40 dark:ring-white/20`
                             : "bg-white hover:bg-slate-50 dark:bg-[#111726]/60 dark:hover:bg-[#151c2e]/80 border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/25 shadow-xs dark:shadow-[0_4px_12px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.05)] hover:-translate-y-0.5"
