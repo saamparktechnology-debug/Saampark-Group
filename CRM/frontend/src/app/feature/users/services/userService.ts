@@ -973,7 +973,7 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
             name: existingItem?.name || u.full_name || u.name || u.first_name || u.email || "User Account",
             email: preservedEmail,
             username: u.username || existingItem?.username || undefined,
-            role: existingItem?.role || finalRole,
+            role: mappedRole || existingItem?.role || finalRole,
             companyId: u.company_id || parsedCompanyIds[0] || "tech",
             companyIds: parsedCompanyIds,
             companyName:
@@ -1017,7 +1017,7 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
               branchIds: existingItem.branchIds !== undefined ? existingItem.branchIds : item.branchIds,
               branchName: existingItem.branchName !== undefined ? existingItem.branchName : item.branchName,
               department: existingItem.department || item.department,
-              role: existingItem.role || item.role,
+              role: mappedRole || existingItem.role || item.role,
               status: existingItem.status || item.status,
               phone: existingItem.phone !== undefined ? existingItem.phone : item.phone,
               password: existingItem.password || item.password || undefined,
