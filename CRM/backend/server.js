@@ -39,6 +39,19 @@ async function checkDbConnection() {
   try {
     const connection = await pool.getConnection();
     console.log('✅ Successfully connected to MySQL Database!');
+    // Ensure critical columns in users table (auto-migrate if missing on any domain/environment)
+    try {
+      await connection.execute('ALTER TABLE users ADD COLUMN username VARCHAR(100) NULL AFTER email');
+    } catch {}
+    try {
+      await connection.execute('ALTER TABLE users ADD COLUMN avatar_url TEXT NULL');
+    } catch {}
+    try {
+      await connection.execute('ALTER TABLE users ADD COLUMN sub_branch_id INT NULL');
+    } catch {}
+    try {
+      await connection.execute('ALTER TABLE users ADD COLUMN company_ids TEXT NULL');
+    } catch {}
     connection.release();
   } catch (error) {
     console.error('⚠️ MySQL Connection warning (will retry on request):', error.message);

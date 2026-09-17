@@ -9,6 +9,17 @@ const {
   verifyOTP,
 } = require('../utils/emailService');
 
+// Ensure required columns exist in users table (auto-migrate if missing on any domain / environment)
+async function ensureUsersColumns() {
+  try {
+    await pool.execute('ALTER TABLE users ADD COLUMN username VARCHAR(100) NULL').catch(() => {});
+    await pool.execute('ALTER TABLE users ADD COLUMN avatar_url TEXT NULL').catch(() => {});
+    await pool.execute('ALTER TABLE users ADD COLUMN sub_branch_id INT NULL').catch(() => {});
+    await pool.execute('ALTER TABLE users ADD COLUMN company_ids TEXT NULL').catch(() => {});
+  } catch {}
+}
+ensureUsersColumns();
+
 // ─── REGISTER ────────────────────────────────────────────────────────────────
 const register = async (req, res, next) => {
   try {
@@ -129,23 +140,53 @@ const login = async (req, res, next) => {
       return errorResponse(res, 400, 'Email/Username and password are required.');
     }
 
-    let [users] = await pool.execute(
-      `SELECT u.*, COALESCE(r.name, 'Teams') as role_name 
-       FROM users u 
-       LEFT JOIN roles r ON u.role_id = r.id 
-       WHERE (LOWER(u.email) = ? OR LOWER(COALESCE(u.username, '')) = ?) AND u.deleted_at IS NULL`,
-      [identifier, identifier]
-    );
-
-    if (users.length === 0) {
-      // Check if user exists in database but has deleted_at set (re-created or reactivated)
-      const [softDeleted] = await pool.execute(
+    let users = [];
+    try {
+      [users] = await pool.execute(
         `SELECT u.*, COALESCE(r.name, 'Teams') as role_name 
          FROM users u 
          LEFT JOIN roles r ON u.role_id = r.id 
-         WHERE (LOWER(u.email) = ? OR LOWER(COALESCE(u.username, '')) = ?)`,
+         WHERE (LOWER(u.email) = ? OR LOWER(COALESCE(u.username, '')) = ?) AND u.deleted_at IS NULL`,
         [identifier, identifier]
       );
+    } catch (dbErr) {
+      if (dbErr.code === 'ER_BAD_FIELD_ERROR' && (dbErr.message.includes('username') || dbErr.sqlMessage?.includes('username'))) {
+        [users] = await pool.execute(
+          `SELECT u.*, COALESCE(r.name, 'Teams') as role_name 
+           FROM users u 
+           LEFT JOIN roles r ON u.role_id = r.id 
+           WHERE LOWER(u.email) = ? AND u.deleted_at IS NULL`,
+          [identifier]
+        );
+      } else {
+        throw dbErr;
+      }
+    }
+
+    if (users.length === 0) {
+      // Check if user exists in database but has deleted_at set (re-created or reactivated)
+      let softDeleted = [];
+      try {
+        [softDeleted] = await pool.execute(
+          `SELECT u.*, COALESCE(r.name, 'Teams') as role_name 
+           FROM users u 
+           LEFT JOIN roles r ON u.role_id = r.id 
+           WHERE (LOWER(u.email) = ? OR LOWER(COALESCE(u.username, '')) = ?)`,
+          [identifier, identifier]
+        );
+      } catch (dbErr) {
+        if (dbErr.code === 'ER_BAD_FIELD_ERROR' && (dbErr.message.includes('username') || dbErr.sqlMessage?.includes('username'))) {
+          [softDeleted] = await pool.execute(
+            `SELECT u.*, COALESCE(r.name, 'Teams') as role_name 
+             FROM users u 
+             LEFT JOIN roles r ON u.role_id = r.id 
+             WHERE LOWER(u.email) = ?`,
+            [identifier]
+          );
+        } else {
+          throw dbErr;
+        }
+      }
 
       if (softDeleted.length > 0) {
         const candidate = softDeleted[0];
@@ -314,10 +355,19 @@ const checkUsername = async (req, res, next) => {
     }
 
     // Check users table
-    const [existing] = await pool.execute(
-      'SELECT id, email, username FROM users WHERE LOWER(username) = ? AND deleted_at IS NULL',
-      [rawUsername]
-    );
+    let existing = [];
+    try {
+      [existing] = await pool.execute(
+        'SELECT id, email, username FROM users WHERE LOWER(username) = ? AND deleted_at IS NULL',
+        [rawUsername]
+      );
+    } catch (dbErr) {
+      if (dbErr.code === 'ER_BAD_FIELD_ERROR' && (dbErr.message.includes('username') || dbErr.sqlMessage?.includes('username'))) {
+        existing = [];
+      } else {
+        throw dbErr;
+      }
+    }
 
     if (existing.length > 0) {
       const match = existing[0];
@@ -447,10 +497,22 @@ const resetPassword = async (req, res, next) => {
 // ─── GET PROFILE ──────────────────────────────────────────────────────────────
 const getProfile = async (req, res, next) => {
   try {
-    const [users] = await pool.execute(
-      'SELECT u.id, u.full_name, u.email, u.username, u.phone, u.status, u.permissions, u.last_login, r.name as role_name FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id = ?',
-      [req.user.id]
-    );
+    let users = [];
+    try {
+      [users] = await pool.execute(
+        'SELECT u.id, u.full_name, u.email, u.username, u.phone, u.status, u.permissions, u.last_login, r.name as role_name FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id = ?',
+        [req.user.id]
+      );
+    } catch (dbErr) {
+      if (dbErr.code === 'ER_BAD_FIELD_ERROR' && (dbErr.message.includes('username') || dbErr.sqlMessage?.includes('username'))) {
+        [users] = await pool.execute(
+          'SELECT u.id, u.full_name, u.email, NULL as username, u.phone, u.status, u.permissions, u.last_login, r.name as role_name FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id = ?',
+          [req.user.id]
+        );
+      } else {
+        throw dbErr;
+      }
+    }
 
     if (users.length === 0) {
       return errorResponse(res, 404, 'User profile not found.');
