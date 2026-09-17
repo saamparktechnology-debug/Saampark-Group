@@ -85,7 +85,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
     isModuleAllowed,
     getUserModuleActions 
   } = usePermissionStore()
-  const { companies, branches, user: currentUser, activeCompanyId, fetchCompanies, fetchBranches } = useAuthStore()
+  const { companies, branches, user: currentUser, activeCompanyId, activeBranchId, fetchCompanies, fetchBranches } = useAuthStore()
   
   const isCurrentSuperAdmin = currentUser?.role === "Super Admin"
 
