@@ -66,8 +66,8 @@ const getAllUsers = async (req, res, next) => {
              b.name as branch_name, sb.name as sub_branch_name, c.name as company_name
       FROM users u
       LEFT JOIN roles r ON u.role_id = r.id
-      LEFT JOIN branches b ON u.branch_id = b.id
-      LEFT JOIN sub_branches sb ON u.sub_branch_id = sb.id
+      LEFT JOIN branches b ON (u.branch_id = b.id OR LOWER(u.branch_id) = LOWER(b.name))
+      LEFT JOIN sub_branches sb ON (u.sub_branch_id = sb.id OR LOWER(u.sub_branch_id) = LOWER(sb.name))
       LEFT JOIN companies c ON (u.company_id = c.id OR u.company_id = c.slug)
       WHERE u.deleted_at IS NULL
     `;
@@ -173,8 +173,8 @@ const getUserById = async (req, res, next) => {
                 b.name as branch_name, sb.name as sub_branch_name, c.name as company_name
          FROM users u
          LEFT JOIN roles r ON u.role_id = r.id
-         LEFT JOIN branches b ON u.branch_id = b.id
-         LEFT JOIN sub_branches sb ON u.sub_branch_id = sb.id
+         LEFT JOIN branches b ON (u.branch_id = b.id OR LOWER(u.branch_id) = LOWER(b.name))
+         LEFT JOIN sub_branches sb ON (u.sub_branch_id = sb.id OR LOWER(u.sub_branch_id) = LOWER(sb.name))
          LEFT JOIN companies c ON (u.company_id = c.id OR u.company_id = c.slug)
          WHERE (u.id = ? OR u.email = ?) AND u.deleted_at IS NULL`,
         [id, id]
@@ -188,8 +188,8 @@ const getUserById = async (req, res, next) => {
                   b.name as branch_name, sb.name as sub_branch_name, c.name as company_name
            FROM users u
            LEFT JOIN roles r ON u.role_id = r.id
-           LEFT JOIN branches b ON u.branch_id = b.id
-           LEFT JOIN sub_branches sb ON u.sub_branch_id = sb.id
+           LEFT JOIN branches b ON (u.branch_id = b.id OR LOWER(u.branch_id) = LOWER(b.name))
+           LEFT JOIN sub_branches sb ON (u.sub_branch_id = sb.id OR LOWER(u.sub_branch_id) = LOWER(sb.name))
            LEFT JOIN companies c ON (u.company_id = c.id OR u.company_id = c.slug)
            WHERE (u.id = ? OR u.email = ?) AND u.deleted_at IS NULL`,
           [id, id]
@@ -375,6 +375,23 @@ const updateUser = async (req, res, next) => {
 
         const effectiveAvatar = avatarVal || u.avatar_url || undefined;
 
+        let effBranchId = branchIdVal !== undefined ? branchIdVal : (u.branch_id || req.body.branch_id || req.body.branchId || undefined);
+        let effBranchName = req.body.branch_name || req.body.branchName;
+        if (effBranchId && !effBranchName) {
+          try {
+            const [bRows] = await pool.execute('SELECT name FROM branches WHERE id = ? OR LOWER(name) = LOWER(?)', [effBranchId, effBranchId]);
+            if (bRows.length > 0) effBranchName = bRows[0].name;
+          } catch {}
+        }
+        let effSubBranchId = subBranchIdVal !== undefined ? subBranchIdVal : (u.sub_branch_id || req.body.sub_branch_id || req.body.subBranchId || undefined);
+        let effSubBranchName = req.body.sub_branch_name || req.body.subBranchName;
+        if (effSubBranchId && !effSubBranchName) {
+          try {
+            const [sbRows] = await pool.execute('SELECT name FROM sub_branches WHERE id = ? OR LOWER(name) = LOWER(?)', [effSubBranchId, effSubBranchId]);
+            if (sbRows.length > 0) effSubBranchName = sbRows[0].name;
+          } catch {}
+        }
+
         const updatedItem = {
           id: String(u.id),
           name: u.full_name || u.email,
@@ -384,10 +401,10 @@ const updateUser = async (req, res, next) => {
           companyId: u.company_id || 'tech',
           companyIds: parsedCompanyIds,
           companyName: u.company_name || 'SAAMPARK Technology',
-          branchId: u.branch_id || req.body.branch_id || req.body.branchId || undefined,
-          branchName: req.body.branch_name || req.body.branchName || undefined,
-          subBranchId: u.sub_branch_id || req.body.sub_branch_id || req.body.subBranchId || undefined,
-          subBranchName: req.body.sub_branch_name || req.body.subBranchName || undefined,
+          branchId: effBranchId || undefined,
+          branchName: effBranchName || undefined,
+          subBranchId: effSubBranchId || undefined,
+          subBranchName: effSubBranchName || undefined,
           avatarUrl: effectiveAvatar,
           avatar: effectiveAvatar,
           status: u.status === 'inactive' ? 'Inactive' : 'Active',
@@ -639,17 +656,17 @@ const createUser = async (req, res, next) => {
     }
 
     // Resolve branch and sub-branch names
-    let branchName = undefined;
-    let subBranchName = undefined;
-    if (effectiveBranchId) {
+    let branchName = req.body.branch_name || req.body.branchName || undefined;
+    let subBranchName = req.body.sub_branch_name || req.body.subBranchName || undefined;
+    if (effectiveBranchId && !branchName) {
       try {
-        const [bRows] = await pool.execute('SELECT name FROM branches WHERE id = ?', [effectiveBranchId]);
+        const [bRows] = await pool.execute('SELECT name FROM branches WHERE id = ? OR LOWER(name) = LOWER(?)', [effectiveBranchId, effectiveBranchId]);
         if (bRows.length > 0) branchName = bRows[0].name;
       } catch {}
     }
-    if (effectiveSubBranchId) {
+    if (effectiveSubBranchId && !subBranchName) {
       try {
-        const [sbRows] = await pool.execute('SELECT name FROM sub_branches WHERE id = ?', [effectiveSubBranchId]);
+        const [sbRows] = await pool.execute('SELECT name FROM sub_branches WHERE id = ? OR LOWER(name) = LOWER(?)', [effectiveSubBranchId, effectiveSubBranchId]);
         if (sbRows.length > 0) subBranchName = sbRows[0].name;
       } catch {}
     }

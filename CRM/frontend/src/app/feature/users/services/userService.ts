@@ -841,9 +841,7 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
   const mergeUserIntoMap = (u: UserItem) => {
     if (!u || !u.email) return;
     const eNorm = u.email.toLowerCase().trim();
-    if (isSuperAdminEmail(eNorm)) {
-      u.role = "Super Admin";
-    }
+    // Preserve assigned role from database without hardcoded overrides
 
     // Clean previousEmails on u so the active email is NEVER in its own history
     let currentPrev = Array.isArray(u.previousEmails)
@@ -1231,7 +1229,9 @@ export async function updateUser(idOrEmail: string, updates: Partial<UserItem>, 
     return uEmail === norm || uId === norm;
   });
 
-  if (idx === -1) return null;
+  if (idx === -1) {
+    return recordUserAccountAsync({ ...updates, id: idOrEmail }, false);
+  }
 
   const existing = allUsers[idx];
   const newAvatar = updates.avatarUrl !== undefined ? updates.avatarUrl : (updates as any).avatar;
@@ -1241,6 +1241,9 @@ export async function updateUser(idOrEmail: string, updates: Partial<UserItem>, 
     id: existing.id,
     email: updates.email || existing.email,
     username: updates.username !== undefined ? updates.username : existing.username,
+    branchId: updates.branchId !== undefined ? (updates.branchId || undefined) : existing.branchId,
+    branchName: updates.branchName !== undefined ? (updates.branchName || undefined) : existing.branchName,
+    branchIds: updates.branchIds !== undefined ? updates.branchIds : (updates.branchId ? [updates.branchId] : existing.branchIds),
     avatarUrl: newAvatar !== undefined ? newAvatar : existing.avatarUrl,
     avatar: newAvatar !== undefined ? newAvatar : (existing as any).avatar,
   };
@@ -1259,6 +1262,16 @@ export async function updateUser(idOrEmail: string, updates: Partial<UserItem>, 
       phone: updated.phone,
       department: updated.department,
       branch_id: updated.branchId || null,
+      branch_name: updated.branchName || null,
+      branchName: updated.branchName || null,
+      sub_branch_id: updated.subBranchId || null,
+      sub_branch_name: updated.subBranchName || null,
+      role: updated.role,
+      role_id: updated.role === "Super Admin" ? 1 : updated.role === "Admin" ? 2 : updated.role === "Clients" ? 4 : 3,
+      status: updated.status,
+      permissions: updated.permissions || (updated.allowedModules ? { allowedModules: updated.allowedModules } : undefined),
+      company_id: updated.companyId,
+      company_ids: updated.companyIds,
     }).catch(() => {});
   } catch {}
 

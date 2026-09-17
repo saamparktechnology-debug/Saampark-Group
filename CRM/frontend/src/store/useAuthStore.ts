@@ -1259,6 +1259,23 @@ export const useAuthStore = create<AuthState>()(
           activeCompanyId,
           activeBranchId,
         })
+
+        // Synchronize permissions store immediately on login
+        try {
+          const { usePermissionStore } = require('./usePermissionStore')
+          if (parsedPerms && parsedPerms.actionMatrix) {
+            usePermissionStore.getState().setUserAllModuleActions(user.id, parsedPerms.actionMatrix)
+            if (user.email) {
+              usePermissionStore.getState().setUserAllModuleActions(user.email, parsedPerms.actionMatrix)
+            }
+          }
+          if (userAllowedMods) {
+            usePermissionStore.getState().setUserPermissions(user.id, userAllowedMods)
+            if (user.email) {
+              usePermissionStore.getState().setUserPermissions(user.email, userAllowedMods)
+            }
+          }
+        } catch {}
       },
 
       loginWithCredentials: async (emailOrUsername: string, password: string) => {
@@ -1333,6 +1350,23 @@ export const useAuthStore = create<AuthState>()(
               activeCompanyId: effectiveCompanyId,
               activeBranchId: initialBranchId,
             })
+
+            // Synchronize permissions store immediately on login
+            try {
+              const { usePermissionStore } = require('./usePermissionStore')
+              if (resPerms && resPerms.actionMatrix) {
+                usePermissionStore.getState().setUserAllModuleActions(userObj.id, resPerms.actionMatrix)
+                if (userObj.email) {
+                  usePermissionStore.getState().setUserAllModuleActions(userObj.email, resPerms.actionMatrix)
+                }
+              }
+              if (userAllowedMods) {
+                usePermissionStore.getState().setUserPermissions(userObj.id, userAllowedMods)
+                if (userObj.email) {
+                  usePermissionStore.getState().setUserPermissions(userObj.email, userAllowedMods)
+                }
+              }
+            } catch {}
 
             // Fetch dynamic company list on login
             get().fetchCompanies()

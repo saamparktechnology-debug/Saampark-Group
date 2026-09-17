@@ -134,11 +134,52 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
     }
   }, [companies, selectedCompanyId])
 
+  // If user selected a specific company (not "all"), lock company selector to that company
+  const isCompanyLocked = Boolean(activeCompanyId && activeCompanyId !== "all")
+
+  // Available companies for selection:
+  // If locked to a company (e.g. SAAMPARK TECHNOLOGY), strictly show only that company.
+  // If switched to "all" (All Companies / Global Scope), show all companies.
+  const availableCompanies = React.useMemo(() => {
+    if (isCompanyLocked) {
+      const filtered = companies.filter(c => isMatchingCompany(c, activeCompanyId!))
+      if (filtered.length > 0) return filtered
+      return [{
+        id: activeCompanyId!,
+        name: activeCompanyId === "tech" ? "SAAMPARK TECHNOLOGY" : activeCompanyId!,
+        brand_name: "SAAMPARK",
+        division_name: "TECHNOLOGY",
+        logo: "💻"
+      }]
+    }
+    return companies
+  }, [companies, isCompanyLocked, activeCompanyId])
+
+  // Role options strictly enforced:
+  // Super Admin can create Super Admin, Admin, Teams, Clients.
+  // Regular Admin can ONLY create Teams (Team Member) and Clients.
+  const availableRoleOptions = React.useMemo(() => {
+    if (isCurrentSuperAdmin) {
+      return [
+        { id: "Teams" as UserRole, label: "Team Member", desc: "Staff & Employee", icon: "👥", color: "blue", activeBorder: "border-blue-500/80 shadow-blue-500/25", glow: "from-blue-500/20 to-transparent" },
+        { id: "Clients" as UserRole, label: "Client Account", desc: "Portal Customer", icon: "💼", color: "amber", activeBorder: "border-amber-500/80 shadow-amber-500/25", glow: "from-amber-500/20 to-transparent" },
+        { id: "Admin" as UserRole, label: "Branch / Co. Admin", desc: "Operational Manager", icon: "🛡️", color: "indigo", activeBorder: "border-indigo-500/80 shadow-indigo-500/25", glow: "from-indigo-500/20 to-transparent" },
+        { id: "Super Admin" as UserRole, label: "Super Admin", desc: "Full Master Access", icon: "👑", color: "purple", activeBorder: "border-purple-500/80 shadow-purple-500/25", glow: "from-purple-500/20 to-transparent" },
+      ]
+    }
+    // Admin can ONLY add team members and client accounts
+    return [
+      { id: "Teams" as UserRole, label: "Team Member", desc: "Staff & Employee", icon: "👥", color: "blue", activeBorder: "border-blue-500/80 shadow-blue-500/25", glow: "from-blue-500/20 to-transparent" },
+      { id: "Clients" as UserRole, label: "Client Account", desc: "Portal Customer", icon: "💼", color: "amber", activeBorder: "border-amber-500/80 shadow-amber-500/25", glow: "from-amber-500/20 to-transparent" },
+    ]
+  }, [isCurrentSuperAdmin])
+
   // Available branches for the chosen company
   const availableBranches = React.useMemo(() => {
     if (!branches || branches.length === 0) return []
+    if (selectedCompanyId === "all") return branches
     return branches.filter((b) => isMatchingCompany(targetCompanyObj, b.companyId || (b as any).company_id))
-  }, [branches, targetCompanyObj])
+  }, [branches, targetCompanyObj, selectedCompanyId])
 
   // Helper to compute standard action matrix for a role
   const getMatrixForRole = React.useCallback((targetRole: UserRole) => {
@@ -202,14 +243,19 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
     if (editingUser) {
       setName(editingUser.name || "")
       setEmail(editingUser.email || "")
-      setRole(editingUser.role || "Teams")
+      let initRole: UserRole = editingUser.role || "Teams"
+      if (!isCurrentSuperAdmin && (initRole === "Super Admin" || initRole === "Admin")) {
+        initRole = "Teams"
+      }
+      setRole(initRole)
       
-      const initComp = editingUser.companyId || activeCompanyId || "tech"
+      const initComp = isCompanyLocked ? (availableCompanies[0]?.id || activeCompanyId!) : (editingUser.companyId || "tech")
       setSelectedCompanyId(initComp)
 
-      if (editingUser.branchId) {
+      const userBranch = editingUser.branchId || (editingUser as any).branch_id || (editingUser.branchIds && editingUser.branchIds[0])
+      if (userBranch) {
         setScopeType("branch")
-        setSelectedBranchId(editingUser.branchId)
+        setSelectedBranchId(String(userBranch))
       } else {
         setScopeType("company")
         setSelectedBranchId("")
@@ -251,10 +297,10 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
       setName("")
       setEmail("")
       setEmailError(null)
-      const defaultRole: UserRole = initialRole || "Teams"
+      const defaultRole: UserRole = (!isCurrentSuperAdmin && (initialRole === "Super Admin" || initialRole === "Admin")) ? "Teams" : (initialRole || "Teams")
       setRole(defaultRole)
       
-      const defaultComp = (activeCompanyId && activeCompanyId !== "all") ? activeCompanyId : "tech"
+      const defaultComp = isCompanyLocked ? (availableCompanies[0]?.id || activeCompanyId!) : "tech"
       setSelectedCompanyId(defaultComp)
       if (activeBranchId && activeBranchId !== "all") {
         setScopeType("branch")
@@ -280,7 +326,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
         return flags ? (flags.view || flags.add || flags.edit || flags.delete) : false
       }))
     }
-  }, [isOpen, editingUser, initialRole, activeCompanyId, activeBranchId, getMatrixForRole, fetchCompanies, fetchBranches, userActionPermissions])
+  }, [isOpen, editingUser, initialRole, isCompanyLocked, availableCompanies, activeCompanyId, activeBranchId, getMatrixForRole, fetchCompanies, fetchBranches, userActionPermissions])
 
   // Handle Role change & apply default permission presets
   const handleRoleSelect = (newRole: UserRole) => {
@@ -372,7 +418,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
     const companyIds = isAllCompanies ? allCompIds : [canonCompId]
     const companyNameToSave = isAllCompanies ? "SAAMPARK Group (All Companies)" : getCompanyFullName(targetCompanyObj)
 
-    const effectiveBranchId = selectedBranchId || (scopeType === "branch" ? (activeBranchId || undefined) : undefined)
+    const effectiveBranchId = scopeType === "branch" ? (selectedBranchId || activeBranchId || undefined) : undefined
     const matchedBranch = effectiveBranchId ? branches.find(b => String(b.id) === String(effectiveBranchId) || b.name.toLowerCase() === String(effectiveBranchId).toLowerCase()) : undefined
     const branchNameToSave = matchedBranch?.name || (effectiveBranchId ? (isNaN(Number(effectiveBranchId)) ? effectiveBranchId : `Branch (${effectiveBranchId})`) : undefined)
 
@@ -384,9 +430,9 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
       companyId: canonCompId,
       companyIds,
       companyName: companyNameToSave,
-      branchId: effectiveBranchId,
+      branchId: effectiveBranchId || undefined,
       branchIds: effectiveBranchId ? [effectiveBranchId] : undefined,
-      branchName: branchNameToSave,
+      branchName: branchNameToSave || undefined,
       department: department.trim() || (role === "Clients" ? "Client Accounts" : "General"),
       phone: phone.trim(),
       password: password.trim() || "Password123",
@@ -421,9 +467,9 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-xl overflow-y-auto" style={{ perspective: "1400px" }}>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/50 dark:bg-black/80 backdrop-blur-xl overflow-y-auto" style={{ perspective: "1400px" }}>
         {/* Subtle Ambient Background Light */}
-        <div className={`fixed -top-40 left-1/2 -translate-x-1/2 w-[700px] h-[500px] bg-gradient-to-b ${roleGlowMap[role] || roleGlowMap.Teams} blur-[120px] pointer-events-none opacity-70`} />
+        <div className={`fixed -top-40 left-1/2 -translate-x-1/2 w-[700px] h-[500px] bg-gradient-to-b ${roleGlowMap[role] || roleGlowMap.Teams} blur-[120px] pointer-events-none opacity-30 dark:opacity-70`} />
 
         {/* 3D Elevated Main Modal Container */}
         <motion.div
@@ -431,45 +477,45 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
           animate={{ opacity: 1, scale: 1, rotateX: 0, y: 0 }}
           exit={{ opacity: 0, scale: 0.94, rotateX: -6, y: 20 }}
           transition={{ type: "spring", damping: 25, stiffness: 300 }}
-          className="relative w-full max-w-4xl my-auto rounded-[32px] overflow-hidden flex flex-col max-h-[92vh] border border-white/20 dark:border-white/10 shadow-[0_30px_70px_-15px_rgba(0,0,0,0.8),0_0_0_1px_rgba(255,255,255,0.1),inset_0_1px_0_rgba(255,255,255,0.25)] bg-[#0f1422]/95 backdrop-blur-2xl text-slate-100"
+          className="relative w-full max-w-4xl my-auto rounded-[32px] overflow-hidden flex flex-col max-h-[92vh] border border-slate-200/90 dark:border-white/10 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.18),0_0_0_1px_rgba(0,0,0,0.05)] dark:shadow-[0_30px_70px_-15px_rgba(0,0,0,0.8),0_0_0_1px_rgba(255,255,255,0.1),inset_0_1px_0_rgba(255,255,255,0.25)] bg-white/95 dark:bg-[#0f1422]/95 backdrop-blur-2xl text-slate-900 dark:text-slate-100"
           style={{ transformStyle: "preserve-3d" }}
         >
           {/* Top Gloss Highlight Bevel */}
-          <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent z-30" />
+          <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-blue-500/25 dark:via-white/40 to-transparent z-30" />
 
           {/* 3D Header */}
-          <div className="relative flex flex-wrap items-center justify-between gap-4 px-6 sm:px-8 py-5 border-b border-white/10 bg-gradient-to-b from-white/[0.08] to-transparent backdrop-blur-xl sticky top-0 z-20 shadow-[0_4px_20px_rgba(0,0,0,0.3)]">
+          <div className="relative flex flex-wrap items-center justify-between gap-4 px-6 sm:px-8 py-5 border-b border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-white/[0.04] backdrop-blur-xl sticky top-0 z-20 shadow-xs dark:shadow-[0_4px_20px_rgba(0,0,0,0.3)]">
             {/* Title & Badge */}
             <div className="flex items-center gap-3.5">
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-2xl transition-all duration-300 shadow-[0_8px_16px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.3)] border ${
-                role === "Super Admin" ? "bg-gradient-to-br from-purple-500/30 to-pink-600/30 border-purple-400/40 text-purple-300 shadow-purple-900/30" :
-                role === "Admin" ? "bg-gradient-to-br from-indigo-500/30 to-blue-600/30 border-indigo-400/40 text-indigo-300 shadow-indigo-900/30" :
-                role === "Clients" ? "bg-gradient-to-br from-amber-500/30 to-orange-600/30 border-amber-400/40 text-amber-300 shadow-amber-900/30" :
-                "bg-gradient-to-br from-blue-500/30 to-cyan-600/30 border-blue-400/40 text-blue-300 shadow-blue-900/30"
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-2xl transition-all duration-300 shadow-[0_4px_12px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.6)] dark:shadow-[0_8px_16px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.3)] border ${
+                role === "Super Admin" ? "bg-purple-50 dark:bg-gradient-to-br dark:from-purple-500/30 dark:to-pink-600/30 border-purple-200 dark:border-purple-400/40 text-purple-700 dark:text-purple-300" :
+                role === "Admin" ? "bg-indigo-50 dark:bg-gradient-to-br dark:from-indigo-500/30 dark:to-blue-600/30 border-indigo-200 dark:border-indigo-400/40 text-indigo-700 dark:text-indigo-300" :
+                role === "Clients" ? "bg-amber-50 dark:bg-gradient-to-br dark:from-amber-500/30 dark:to-orange-600/30 border-amber-200 dark:border-amber-400/40 text-amber-700 dark:text-amber-300" :
+                "bg-blue-50 dark:bg-gradient-to-br dark:from-blue-500/30 dark:to-cyan-600/30 border-blue-200 dark:border-blue-400/40 text-blue-700 dark:text-blue-300"
               }`}>
                 {role === "Super Admin" ? "👑" : role === "Admin" ? "🛡️" : role === "Clients" ? "💼" : "👥"}
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-black tracking-tight text-white flex items-center gap-2 drop-shadow-sm">
+                  <h2 className="text-lg font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-2 drop-shadow-xs">
                     {editingUser ? "Edit User Account" : "Create New User"}
                   </h2>
                   <span className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold uppercase tracking-wider border shadow-xs ${
-                    role === "Super Admin" ? "bg-purple-500/20 text-purple-300 border-purple-500/40" :
-                    role === "Admin" ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/40" :
-                    role === "Clients" ? "bg-amber-500/20 text-amber-300 border-amber-500/40" :
-                    "bg-blue-500/20 text-blue-300 border-blue-500/40"
+                    role === "Super Admin" ? "bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-500/40" :
+                    role === "Admin" ? "bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-500/40" :
+                    role === "Clients" ? "bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-500/40" :
+                    "bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-500/40"
                   }`}>
                     {role}
                   </span>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-slate-400 mt-1">
-                  <span className="inline-flex items-center gap-1 font-semibold text-blue-400">
+                <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 mt-1">
+                  <span className="inline-flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400">
                     <span>{isTechCompany ? "💻" : "🏢"}</span>
                     <span>{companyDisplayName}</span>
                   </span>
                   <span>•</span>
-                  <span className="font-medium text-slate-300">
+                  <span className="font-medium text-slate-600 dark:text-slate-300">
                     {scopeType === "branch" && selectedBranchId ? "📍 Dedicated Branch Scope" : "🏢 Company-Wide Scope"}
                   </span>
                 </div>
@@ -479,14 +525,14 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
             {/* 3D Segmented Control Tab Switcher & Close */}
             <div className="flex items-center gap-3">
               {/* Tactile Sunken 3D Switcher */}
-              <div className="flex p-1.5 bg-[#090d16]/80 rounded-2xl border border-white/10 shadow-[inset_0_2px_6px_rgba(0,0,0,0.7)]">
+              <div className="flex p-1.5 bg-slate-100 dark:bg-[#090d16]/80 rounded-2xl border border-slate-200 dark:border-white/10 shadow-[inset_0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-[inset_0_2px_6px_rgba(0,0,0,0.7)]">
                 <button
                   type="button"
                   onClick={() => setActiveTab("profile")}
                   className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
                     activeTab === "profile" 
-                      ? "bg-gradient-to-b from-blue-500 to-blue-600 text-white shadow-[0_4px_14px_rgba(59,130,246,0.45),inset_0_1px_0_rgba(255,255,255,0.35)] -translate-y-0.5" 
-                      : "text-slate-400 hover:text-white hover:bg-white/[0.04]"
+                      ? "bg-gradient-to-b from-blue-600 to-blue-700 text-white shadow-[0_4px_12px_rgba(37,99,235,0.35),inset_0_1px_0_rgba(255,255,255,0.35)] -translate-y-0.5" 
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/80 dark:hover:bg-white/[0.04]"
                   }`}
                 >
                   <User size={13} />
@@ -497,8 +543,8 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                   onClick={() => setActiveTab("permissions")}
                   className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
                     activeTab === "permissions" 
-                      ? "bg-gradient-to-b from-blue-500 to-blue-600 text-white shadow-[0_4px_14px_rgba(59,130,246,0.45),inset_0_1px_0_rgba(255,255,255,0.35)] -translate-y-0.5" 
-                      : "text-slate-400 hover:text-white hover:bg-white/[0.04]"
+                      ? "bg-gradient-to-b from-blue-600 to-blue-700 text-white shadow-[0_4px_12px_rgba(37,99,235,0.35),inset_0_1px_0_rgba(255,255,255,0.35)] -translate-y-0.5" 
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/80 dark:hover:bg-white/[0.04]"
                   }`}
                 >
                   <Lock size={13} />
@@ -510,7 +556,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
               <button
                 type="button"
                 onClick={onClose}
-                className="p-2.5 rounded-2xl bg-white/[0.04] hover:bg-white/[0.1] border border-white/10 text-slate-400 hover:text-white shadow-[0_2px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] active:translate-y-0.5 transition-all cursor-pointer"
+                className="p-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.04] dark:hover:bg-white/[0.1] border border-slate-200 dark:border-white/10 text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white shadow-2xs active:translate-y-0.5 transition-all cursor-pointer"
               >
                 <X size={18} />
               </button>
@@ -526,22 +572,19 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
             <div className={activeTab === "profile" ? "space-y-6 block" : "space-y-6 hidden"}>
               
               {/* STEP 1: 3D INTERACTIVE ROLE SELECTOR */}
-              <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 shadow-[0_8px_20px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.1)]">
+              <div className="p-5 rounded-2xl bg-slate-50/80 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 shadow-xs dark:shadow-[0_8px_20px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.1)]">
                 <div className="flex items-center justify-between mb-3.5">
-                  <label className="text-xs font-black uppercase tracking-wider text-slate-200 flex items-center gap-2">
-                    <Crown size={14} className="text-amber-400" />
+                  <label className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                    <Crown size={14} className="text-amber-500" />
                     <span>Step 1: Select Account Role *</span>
                   </label>
-                  <span className="text-[11px] text-slate-400">Determines security level and base permissions</span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                    {isCurrentSuperAdmin ? "Determines security level and base permissions" : "Admins can add Team Members and Clients"}
+                  </span>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {[
-                    { id: "Teams" as UserRole, label: "Team Member", desc: "Staff & Employee", icon: "👥", color: "blue", activeBorder: "border-blue-500/80 shadow-blue-500/25", glow: "from-blue-500/20 to-transparent" },
-                    { id: "Clients" as UserRole, label: "Client Account", desc: "Portal Customer", icon: "💼", color: "amber", activeBorder: "border-amber-500/80 shadow-amber-500/25", glow: "from-amber-500/20 to-transparent" },
-                    { id: "Admin" as UserRole, label: "Branch / Co. Admin", desc: "Operational Manager", icon: "🛡️", color: "indigo", activeBorder: "border-indigo-500/80 shadow-indigo-500/25", glow: "from-indigo-500/20 to-transparent" },
-                    ...(isCurrentSuperAdmin ? [{ id: "Super Admin" as UserRole, label: "Super Admin", desc: "Full Master Access", icon: "👑", color: "purple", activeBorder: "border-purple-500/80 shadow-purple-500/25", glow: "from-purple-500/20 to-transparent" }] : []),
-                  ].map((r) => {
+                <div className={`grid gap-3 ${availableRoleOptions.length === 2 ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2 sm:grid-cols-4"}`}>
+                  {availableRoleOptions.map((r) => {
                     const isSelected = role === r.id
                     return (
                       <button
@@ -550,46 +593,45 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                         onClick={() => handleRoleSelect(r.id)}
                         className={`group relative p-4 rounded-2xl text-left flex flex-col justify-between transition-all duration-200 cursor-pointer border ${
                           isSelected
-                            ? `bg-gradient-to-b ${r.glow} ${r.activeBorder} shadow-[0_12px_24px_-4px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.3)] -translate-y-1 ring-1 ring-white/20`
-                            : "bg-[#111726]/60 hover:bg-[#151c2e]/80 border-white/10 hover:border-white/25 shadow-[0_4px_12px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.05)] hover:-translate-y-0.5"
+                            ? `bg-gradient-to-b ${r.glow} ${r.activeBorder} shadow-[0_10px_20px_-4px_rgba(59,130,246,0.25)] dark:shadow-[0_12px_24px_-4px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.3)] -translate-y-1 ring-2 ring-blue-500/40 dark:ring-white/20`
+                            : "bg-white hover:bg-slate-50 dark:bg-[#111726]/60 dark:hover:bg-[#151c2e]/80 border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/25 shadow-xs dark:shadow-[0_4px_12px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.05)] hover:-translate-y-0.5"
                         }`}
                       >
                         <div className="flex items-center justify-between mb-3">
-                          <span className="text-3xl filter drop-shadow-md group-hover:scale-110 transition-transform">
+                          <span className="text-3xl filter drop-shadow-xs group-hover:scale-110 transition-transform">
                             {r.icon}
                           </span>
                           {isSelected ? (
-                            <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white shadow-xs">
+                            <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center text-white shadow-xs">
                               <Check size={12} strokeWidth={3} />
                             </div>
                           ) : (
-                            <div className="w-5 h-5 rounded-full border border-white/20" />
+                            <div className="w-5 h-5 rounded-full border border-slate-300 dark:border-white/20" />
                           )}
                         </div>
                         <div>
-                          <div className={`font-black text-xs ${isSelected ? "text-white" : "text-slate-200"}`}>{r.label}</div>
-                          <div className="text-[10.5px] text-slate-400 mt-0.5">{r.desc}</div>
+                          <div className={`font-black text-xs ${isSelected ? "text-blue-700 dark:text-white font-black" : "text-slate-800 dark:text-slate-200"}`}>{r.label}</div>
+                          <div className="text-[10.5px] text-slate-500 dark:text-slate-400 mt-0.5">{r.desc}</div>
                         </div>
                       </button>
                     )
                   })}
                 </div>
               </div>
-
               {/* STEP 2: 3D CORE PROFILE DETAILS */}
-              <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 shadow-[0_8px_20px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.1)] space-y-4">
-                <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                  <div className="text-xs font-black uppercase tracking-wider text-slate-200 flex items-center gap-2">
-                    <User size={14} className="text-blue-400" />
+              <div className="p-5 rounded-2xl bg-slate-50/70 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 shadow-xs dark:shadow-[0_8px_20px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.1)] space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-white/10 pb-3">
+                  <div className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                    <User size={14} className="text-blue-600 dark:text-blue-400" />
                     <span>Step 2: Basic Identity & Credentials</span>
                   </div>
-                  <span className="text-[11px] text-slate-400">Credentials will be emailed automatically</span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">Credentials will be emailed automatically</span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Full Name */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
                       {role === "Clients" ? "Client / Contact Person Name *" : "Full Name *"}
                     </label>
                     <div className="relative">
@@ -600,14 +642,14 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                         onChange={(e) => setName(e.target.value)}
                         placeholder={role === "Clients" ? "e.g. Rahul Sharma" : "e.g. Supriya Adhikary"}
                         required
-                        className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-[#090d16]/90 border border-white/15 text-xs text-white placeholder-slate-500 focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3),inset_0_1px_2px_rgba(0,0,0,0.4)] shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-medium transition-all"
+                        className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-white dark:bg-[#090d16]/90 border border-slate-300 dark:border-white/15 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3)] shadow-xs dark:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-medium transition-all"
                       />
                     </div>
                   </div>
 
                   {/* Email Address */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1.5 flex items-center justify-between">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
                       <span>Email Address (Login ID) *</span>
                     </label>
                     <div className="relative">
@@ -618,14 +660,14 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="user@saampark.in"
                         required
-                        className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-[#090d16]/90 border border-white/15 text-xs text-white placeholder-slate-500 focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3),inset_0_1px_2px_rgba(0,0,0,0.4)] shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-medium transition-all"
+                        className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-white dark:bg-[#090d16]/90 border border-slate-300 dark:border-white/15 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3)] shadow-xs dark:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-medium transition-all"
                       />
                     </div>
                   </div>
 
                   {/* Phone Number */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
                       Phone Number
                     </label>
                     <div className="relative">
@@ -635,19 +677,19 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
                         placeholder="+91 98765 43210"
-                        className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-[#090d16]/90 border border-white/15 text-xs text-white placeholder-slate-500 focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3),inset_0_1px_2px_rgba(0,0,0,0.4)] shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-medium transition-all"
+                        className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-white dark:bg-[#090d16]/90 border border-slate-300 dark:border-white/15 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3)] shadow-xs dark:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-medium transition-all"
                       />
                     </div>
                   </div>
 
                   {/* Password & Generator */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1.5 flex items-center justify-between">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
                       <span>Login Password *</span>
                       <button
                         type="button"
                         onClick={generatePassword}
-                        className="text-[10px] text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                        className="text-[10px] text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-bold flex items-center gap-1 cursor-pointer transition-colors"
                       >
                         <Sparkles size={10} /> Generate Strong
                       </button>
@@ -660,12 +702,12 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="Initial account password"
                         required
-                        className="w-full pl-9 pr-10 py-2.5 rounded-xl bg-[#090d16]/90 border border-white/15 text-xs text-white placeholder-slate-500 focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3),inset_0_1px_2px_rgba(0,0,0,0.4)] shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-medium transition-all"
+                        className="w-full pl-9 pr-10 py-2.5 rounded-xl bg-white dark:bg-[#090d16]/90 border border-slate-300 dark:border-white/15 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3)] shadow-xs dark:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-medium transition-all"
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer"
                       >
                         {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                       </button>
@@ -675,18 +717,18 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
               </div>
 
               {/* STEP 3: 3D COMPANY & BRANCH SCOPE */}
-              <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 shadow-[0_8px_20px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.1)] space-y-4">
-                <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                  <div className="text-xs font-black uppercase tracking-wider text-slate-200 flex items-center gap-2">
-                    <Building size={14} className="text-blue-400" />
+              <div className="p-5 rounded-2xl bg-slate-50/70 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 shadow-xs dark:shadow-[0_8px_20px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.1)] space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-white/10 pb-3">
+                  <div className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                    <Building size={14} className="text-blue-600 dark:text-blue-400" />
                     <span>Step 3: Company & Branch Scope Isolation</span>
                   </div>
-                  <span className="text-[11px] text-slate-400">Strict regional access boundaries</span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">Strict regional access boundaries</span>
                 </div>
 
                 {/* 3D Scope Selection Tiles */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-2">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
                     Access Boundary Level *
                   </label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -694,19 +736,19 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                       onClick={() => setScopeType("company")}
                       className={`p-4 rounded-2xl border cursor-pointer transition-all duration-200 flex items-start gap-3.5 ${
                         scopeType === "company"
-                          ? "bg-gradient-to-b from-blue-500/20 to-transparent border-blue-500/80 shadow-[0_8px_20px_rgba(59,130,246,0.25),inset_0_1px_0_rgba(255,255,255,0.25)] -translate-y-0.5"
-                          : "bg-[#111726]/60 hover:bg-[#151c2e]/80 border-white/10 hover:border-white/20 shadow-[0_2px_8px_rgba(0,0,0,0.2)]"
+                          ? "bg-blue-50 dark:bg-gradient-to-b dark:from-blue-500/20 dark:to-transparent border-blue-500 shadow-sm dark:shadow-[0_8px_20px_rgba(59,130,246,0.25),inset_0_1px_0_rgba(255,255,255,0.25)] -translate-y-0.5"
+                          : "bg-white hover:bg-slate-50 dark:bg-[#111726]/60 dark:hover:bg-[#151c2e]/80 border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20 shadow-xs dark:shadow-[0_2px_8px_rgba(0,0,0,0.2)]"
                       }`}
                     >
-                      <div className="mt-0.5 w-5 h-5 rounded-full border-2 border-blue-400 flex items-center justify-center shrink-0">
-                        {scopeType === "company" && <div className="w-2.5 h-2.5 rounded-full bg-blue-400 shadow-xs" />}
+                      <div className="mt-0.5 w-5 h-5 rounded-full border-2 border-blue-500 dark:border-blue-400 flex items-center justify-center shrink-0">
+                        {scopeType === "company" && <div className="w-2.5 h-2.5 rounded-full bg-blue-600 dark:bg-blue-400 shadow-xs" />}
                       </div>
                       <div>
-                        <div className="font-black text-xs text-white flex items-center gap-1.5">
-                          <Globe size={13} className="text-blue-400" />
+                        <div className="font-black text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
+                          <Globe size={13} className="text-blue-600 dark:text-blue-400" />
                           <span>Company-Wide Scope</span>
                         </div>
-                        <p className="text-[10.5px] text-slate-400 mt-1 leading-relaxed">
+                        <p className="text-[10.5px] text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
                           User can access and collaborate across all branches and regional offices in this company.
                         </p>
                       </div>
@@ -716,19 +758,19 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                       onClick={() => setScopeType("branch")}
                       className={`p-4 rounded-2xl border cursor-pointer transition-all duration-200 flex items-start gap-3.5 ${
                         scopeType === "branch"
-                          ? "bg-gradient-to-b from-amber-500/20 to-transparent border-amber-500/80 shadow-[0_8px_20px_rgba(245,158,11,0.25),inset_0_1px_0_rgba(255,255,255,0.25)] -translate-y-0.5"
-                          : "bg-[#111726]/60 hover:bg-[#151c2e]/80 border-white/10 hover:border-white/20 shadow-[0_2px_8px_rgba(0,0,0,0.2)]"
+                          ? "bg-amber-50 dark:bg-gradient-to-b dark:from-amber-500/20 dark:to-transparent border-amber-500 shadow-sm dark:shadow-[0_8px_20px_rgba(245,158,11,0.25),inset_0_1px_0_rgba(255,255,255,0.25)] -translate-y-0.5"
+                          : "bg-white hover:bg-slate-50 dark:bg-[#111726]/60 dark:hover:bg-[#151c2e]/80 border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20 shadow-xs dark:shadow-[0_2px_8px_rgba(0,0,0,0.2)]"
                       }`}
                     >
-                      <div className="mt-0.5 w-5 h-5 rounded-full border-2 border-amber-400 flex items-center justify-center shrink-0">
-                        {scopeType === "branch" && <div className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-xs" />}
+                      <div className="mt-0.5 w-5 h-5 rounded-full border-2 border-amber-500 dark:border-amber-400 flex items-center justify-center shrink-0">
+                        {scopeType === "branch" && <div className="w-2.5 h-2.5 rounded-full bg-amber-500 dark:bg-amber-400 shadow-xs" />}
                       </div>
                       <div>
-                        <div className="font-black text-xs text-white flex items-center gap-1.5">
-                          <MapPin size={13} className="text-amber-400" />
+                        <div className="font-black text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
+                          <MapPin size={13} className="text-amber-500 dark:text-amber-400" />
                           <span>Dedicated Branch Only</span>
                         </div>
-                        <p className="text-[10.5px] text-slate-400 mt-1 leading-relaxed">
+                        <p className="text-[10.5px] text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
                           User is strictly locked to this specific regional branch; hidden from and isolated from other branches.
                         </p>
                       </div>
@@ -740,21 +782,27 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
                   {/* Company Picker */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                      Target Company *
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
+                      <span>Target Company *</span>
+                      {isCompanyLocked && (
+                        <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold flex items-center gap-1">
+                          <Lock size={10} /> Locked to active company
+                        </span>
+                      )}
                     </label>
                     <select
                       value={selectedCompanyId}
+                      disabled={isCompanyLocked}
                       onChange={(e) => {
                         setSelectedCompanyId(e.target.value)
                         setSelectedBranchId("")
                       }}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#090d16]/90 border border-white/15 text-xs text-white focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3)] shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-bold transition-all"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#090d16]/90 border border-slate-300 dark:border-white/15 text-xs text-slate-900 dark:text-white focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3)] shadow-xs dark:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-bold transition-all disabled:opacity-90 disabled:cursor-not-allowed"
                     >
-                      {isCurrentSuperAdmin && (
+                      {!isCompanyLocked && isCurrentSuperAdmin && (
                         <option value="all">🌐 SAAMPARK Group (All Companies / Global Scope)</option>
                       )}
-                      {companies.map((c) => (
+                      {availableCompanies.map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.id === "tech" ? "💻" : "🏢"} {getCompanyFullName(c)}
                         </option>
@@ -764,9 +812,9 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
 
                   {/* Branch Picker */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1.5 flex items-center justify-between">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
                       <span>{scopeType === "branch" ? "Assigned Dedicated Branch *" : "Regional Branch (Optional)"}</span>
-                      <span className="text-[10px] text-slate-400 font-semibold">
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">
                         {availableBranches.length} branch{availableBranches.length === 1 ? "" : "es"}
                       </span>
                     </label>
@@ -775,8 +823,8 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                         value={selectedBranchId}
                         onChange={(e) => setSelectedBranchId(e.target.value)}
                         required={scopeType === "branch"}
-                        className={`w-full px-3.5 py-2.5 rounded-xl bg-[#090d16]/90 border text-xs text-white focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3)] shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-medium transition-all ${
-                          scopeType === "branch" && !selectedBranchId ? "border-amber-500/80 bg-amber-950/20" : "border-white/15"
+                        className={`w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#090d16]/90 border text-xs text-slate-900 dark:text-white focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3)] shadow-xs dark:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-medium transition-all ${
+                          scopeType === "branch" && !selectedBranchId ? "border-amber-500 bg-amber-50 dark:bg-amber-950/20" : "border-slate-300 dark:border-white/15"
                         }`}
                       >
                         <option value="">{scopeType === "branch" ? "-- Select Assigned Branch --" : "🏢 Main Headquarters / All Branches"}</option>
@@ -787,8 +835,8 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                         ))}
                       </select>
                     ) : (
-                      <div className="w-full px-3.5 py-2.5 rounded-xl bg-[#090d16]/50 border border-dashed border-white/15 text-xs text-slate-400 italic flex items-center gap-1.5">
-                        <Info size={13} className="text-amber-400 shrink-0" />
+                      <div className="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-[#090d16]/50 border border-dashed border-slate-300 dark:border-white/15 text-xs text-slate-500 dark:text-slate-400 italic flex items-center gap-1.5">
+                        <Info size={13} className="text-amber-500 dark:text-amber-400 shrink-0" />
                         <span>No branches configured for this company.</span>
                       </div>
                     )}
@@ -798,7 +846,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                   {role === "Teams" && (
                     <>
                       <div className="sm:col-span-2">
-                        <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                        <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
                           Department
                         </label>
                         <input
@@ -806,7 +854,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                           value={department}
                           onChange={(e) => setDepartment(e.target.value)}
                           placeholder="e.g. Sales & Marketing, Engineering, Support"
-                          className="w-full px-3.5 py-2.5 rounded-xl bg-[#090d16]/90 border border-white/15 text-xs text-white focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3)] shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-medium mb-2 transition-all"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#090d16]/90 border border-slate-300 dark:border-white/15 text-xs text-slate-900 dark:text-white focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3)] shadow-xs dark:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-medium mb-2 transition-all"
                         />
                         <div className="flex flex-wrap gap-1.5">
                           {DEPARTMENT_SUGGESTIONS.map((dept) => (
@@ -817,7 +865,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                               className={`text-[10px] px-2.5 py-1 rounded-lg border transition-all cursor-pointer font-semibold ${
                                 department === dept 
                                   ? "bg-blue-600 text-white font-bold border-blue-400 shadow-xs" 
-                                  : "bg-white/[0.04] hover:bg-white/[0.08] border-white/10 text-slate-400 hover:text-white"
+                                  : "bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.04] dark:hover:bg-white/[0.08] border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                               }`}
                             >
                               {dept}
@@ -827,7 +875,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                       </div>
 
                       <div>
-                        <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                        <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
                           Designation / Job Title
                         </label>
                         <input
@@ -835,13 +883,13 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                           value={designation}
                           onChange={(e) => setDesignation(e.target.value)}
                           placeholder="e.g. Senior Branch Executive"
-                          className="w-full px-3.5 py-2.5 rounded-xl bg-[#090d16]/90 border border-white/15 text-xs text-white focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3)] shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-medium transition-all"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#090d16]/90 border border-slate-300 dark:border-white/15 text-xs text-slate-900 dark:text-white focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3)] shadow-xs dark:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-medium transition-all"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-xs font-bold text-slate-300 mb-1.5 flex items-center gap-1">
-                          <Percent size={12} className="text-amber-400" />
+                        <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center gap-1">
+                          <Percent size={12} className="text-amber-500 dark:text-amber-400" />
                           <span>Invoice Commission Rate</span>
                         </label>
                         <input
@@ -849,7 +897,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                           value={commissionRate}
                           onChange={(e) => setCommissionRate(e.target.value)}
                           placeholder="e.g. 5% or ₹1,500/task"
-                          className="w-full px-3.5 py-2.5 rounded-xl bg-[#090d16]/90 border border-white/15 text-xs text-white focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3)] shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-medium transition-all"
+                          className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#090d16]/90 border border-slate-300 dark:border-white/15 text-xs text-slate-900 dark:text-white focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3)] shadow-xs dark:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-medium transition-all"
                         />
                       </div>
                     </>
@@ -857,13 +905,13 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
 
                   {/* KYC Status */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
                       KYC Verification Status
                     </label>
                     <select
                       value={kycStatus}
                       onChange={(e) => setKycStatus(e.target.value as any)}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#090d16]/90 border border-white/15 text-xs text-white focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3)] shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-medium transition-all"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#090d16]/90 border border-slate-300 dark:border-white/15 text-xs text-slate-900 dark:text-white focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3)] shadow-xs dark:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-medium transition-all"
                     >
                       <option value="Pending">⏳ Pending Verification</option>
                       <option value="Processing">🔄 In Processing</option>
@@ -874,18 +922,18 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
 
                   {/* Account Status */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
                       Account Status
                     </label>
                     <div className="flex items-center gap-3 h-10">
                       {(["Active", "Inactive", "Pending"] as UserStatus[]).map((st) => (
-                        <label key={st} className="flex items-center gap-1.5 text-xs font-semibold cursor-pointer text-slate-300 hover:text-white">
+                        <label key={st} className="flex items-center gap-1.5 text-xs font-semibold cursor-pointer text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white">
                           <input
                             type="radio"
                             name="accountStatus"
                             checked={status === st}
                             onChange={() => setStatus(st)}
-                            className="text-blue-500 focus:ring-blue-500"
+                            className="text-blue-600 focus:ring-blue-500"
                           />
                           <span>{st}</span>
                         </label>
@@ -902,9 +950,9 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
             <div className={activeTab === "permissions" ? "space-y-4 block" : "space-y-4 hidden"}>
               
               {/* 3D Master Presets Bar */}
-              <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 shadow-[0_8px_20px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.1)] flex flex-wrap items-center justify-between gap-3">
-                <div className="text-xs font-black text-slate-200 flex items-center gap-1.5">
-                  <Sparkles size={14} className="text-amber-400" />
+              <div className="p-4 rounded-2xl bg-slate-50/70 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 shadow-xs dark:shadow-[0_8px_20px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.1)] flex flex-wrap items-center justify-between gap-3">
+                <div className="text-xs font-black text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                  <Sparkles size={14} className="text-amber-500" />
                   <span>3D Quick Presets:</span>
                 </div>
 
@@ -913,7 +961,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                     <button
                       type="button"
                       onClick={() => applyPreset("clientPortal")}
-                      className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold bg-gradient-to-b from-amber-500/25 to-amber-600/25 text-amber-300 border border-amber-500/40 shadow-[0_2px_8px_rgba(245,158,11,0.2),inset_0_1px_0_rgba(255,255,255,0.2)] hover:from-amber-500/35 active:translate-y-0.5 transition-all cursor-pointer"
+                      className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold bg-amber-500/15 dark:bg-gradient-to-b dark:from-amber-500/25 dark:to-amber-600/25 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-500/40 shadow-xs hover:bg-amber-500/25 active:translate-y-0.5 transition-all cursor-pointer"
                     >
                       💼 Standard Client Portal
                     </button>
@@ -922,28 +970,28 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                       <button
                         type="button"
                         onClick={() => applyPreset("salesCRM")}
-                        className="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-gradient-to-b from-blue-500/25 to-blue-600/25 text-blue-300 border border-blue-500/40 shadow-[0_2px_8px_rgba(59,130,246,0.2),inset_0_1px_0_rgba(255,255,255,0.2)] hover:from-blue-500/35 active:translate-y-0.5 transition-all cursor-pointer"
+                        className="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-blue-500/15 dark:bg-gradient-to-b dark:from-blue-500/25 dark:to-blue-600/25 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-500/40 shadow-xs hover:bg-blue-500/25 active:translate-y-0.5 transition-all cursor-pointer"
                       >
                         🎯 Sales & CRM
                       </button>
                       <button
                         type="button"
                         onClick={() => applyPreset("finance")}
-                        className="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-gradient-to-b from-emerald-500/25 to-emerald-600/25 text-emerald-300 border border-emerald-500/40 shadow-[0_2px_8px_rgba(16,185,129,0.2),inset_0_1px_0_rgba(255,255,255,0.2)] hover:from-emerald-500/35 active:translate-y-0.5 transition-all cursor-pointer"
+                        className="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-emerald-500/15 dark:bg-gradient-to-b dark:from-emerald-500/25 dark:to-emerald-600/25 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/40 shadow-xs hover:bg-emerald-500/25 active:translate-y-0.5 transition-all cursor-pointer"
                       >
                         📊 Accounts & Finance
                       </button>
                       <button
                         type="button"
                         onClick={() => applyPreset("full")}
-                        className="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-gradient-to-b from-purple-500/25 to-pink-600/25 text-purple-300 border border-purple-500/40 shadow-[0_2px_8px_rgba(168,85,247,0.2),inset_0_1px_0_rgba(255,255,255,0.2)] hover:from-purple-500/35 active:translate-y-0.5 transition-all cursor-pointer"
+                        className="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-purple-500/15 dark:bg-gradient-to-b dark:from-purple-500/25 dark:to-pink-600/25 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-500/40 shadow-xs hover:bg-purple-500/25 active:translate-y-0.5 transition-all cursor-pointer"
                       >
                         🌟 Full Master Access
                       </button>
                       <button
                         type="button"
                         onClick={() => applyPreset("viewOnly")}
-                        className="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-white/[0.04] text-slate-300 border border-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.1)] hover:bg-white/[0.08] active:translate-y-0.5 transition-all cursor-pointer"
+                        className="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-slate-100 dark:bg-white/[0.04] text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-white/10 shadow-xs hover:bg-slate-200 dark:hover:bg-white/[0.08] active:translate-y-0.5 transition-all cursor-pointer"
                       >
                         👁️ View Only All
                       </button>
@@ -952,7 +1000,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                   <button
                     type="button"
                     onClick={() => applyPreset("revoke")}
-                    className="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-gradient-to-b from-rose-500/20 to-rose-600/20 text-rose-400 border border-rose-500/30 shadow-[0_2px_8px_rgba(244,63,94,0.2),inset_0_1px_0_rgba(255,255,255,0.2)] hover:from-rose-500/30 active:translate-y-0.5 transition-all cursor-pointer"
+                    className="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-rose-500/15 dark:bg-gradient-to-b dark:from-rose-500/20 dark:to-rose-600/20 text-rose-700 dark:text-rose-400 border border-rose-300 dark:border-rose-500/30 shadow-xs hover:bg-rose-500/25 active:translate-y-0.5 transition-all cursor-pointer"
                   >
                     Revoke All
                   </button>
@@ -967,7 +1015,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                   value={moduleSearch}
                   onChange={(e) => setModuleSearch(e.target.value)}
                   placeholder="Search modules to configure..."
-                  className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-[#090d16]/90 border border-white/15 text-xs text-white placeholder-slate-500 focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3),inset_0_1px_2px_rgba(0,0,0,0.4)] shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-medium transition-all"
+                  className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-white dark:bg-[#090d16]/90 border border-slate-300 dark:border-white/15 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3)] shadow-xs dark:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-medium transition-all"
                 />
               </div>
 
@@ -986,16 +1034,16 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                   }).length
 
                   return (
-                    <div key={cat.name} className="rounded-2xl border border-white/10 bg-[#111726]/60 shadow-[0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.05)] overflow-hidden">
+                    <div key={cat.name} className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111726]/60 shadow-xs dark:shadow-[0_4px_16px_rgba(0,0,0,0.3)] overflow-hidden">
                       {/* Category Header */}
                       <div 
                         onClick={() => setCollapsedCategories(prev => ({ ...prev, [cat.name]: !prev[cat.name] }))}
-                        className="px-4 py-3 bg-white/[0.03] hover:bg-white/[0.06] flex items-center justify-between cursor-pointer transition-colors border-b border-white/5"
+                        className="px-4 py-3 bg-slate-50 hover:bg-slate-100 dark:bg-white/[0.03] dark:hover:bg-white/[0.06] flex items-center justify-between cursor-pointer transition-colors border-b border-slate-200 dark:border-white/5"
                       >
                         <div className="flex items-center gap-2.5">
-                          <span className="text-xl filter drop-shadow-sm">{cat.icon}</span>
-                          <span className="text-xs font-black text-white">{cat.name}</span>
-                          <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-blue-500/15 text-blue-400 font-extrabold border border-blue-500/30 shadow-2xs">
+                          <span className="text-xl filter drop-shadow-xs">{cat.icon}</span>
+                          <span className="text-xs font-black text-slate-900 dark:text-white">{cat.name}</span>
+                          <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-400 font-extrabold border border-blue-200 dark:border-blue-500/30 shadow-2xs">
                             {activeCountInCat} of {cat.modules.length} active
                           </span>
                         </div>
@@ -1015,7 +1063,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                                 return f && (f.view || f.add || f.edit || f.delete)
                               }))
                             }}
-                            className="text-[10.5px] px-2.5 py-1 rounded-lg font-bold text-blue-400 hover:text-white hover:bg-blue-600/30 border border-blue-500/20 transition-all cursor-pointer"
+                            className="text-[10.5px] px-2.5 py-1 rounded-lg font-bold text-blue-600 dark:text-blue-400 hover:text-white hover:bg-blue-600 border border-blue-200 dark:border-blue-500/20 transition-all cursor-pointer"
                           >
                             Toggle Suite
                           </button>
@@ -1025,7 +1073,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
 
                       {/* 3D Module Action Chips */}
                       {!isCollapsed && (
-                        <div className="p-3.5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="p-3.5 grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50/50 dark:bg-transparent">
                           {filteredModules.map((m) => {
                             const flags = actionMatrix[m] || { view: false, add: false, edit: false, delete: false }
                             const isAnyActive = flags.view || flags.add || flags.edit || flags.delete
@@ -1035,12 +1083,12 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                                 key={m}
                                 className={`p-3.5 rounded-xl border transition-all duration-200 ${
                                   isAnyActive 
-                                    ? "bg-[#141b2e]/90 border-blue-500/40 shadow-[0_4px_12px_rgba(59,130,246,0.15),inset_0_1px_0_rgba(255,255,255,0.1)]" 
-                                    : "bg-[#0c101a]/60 border-white/5 opacity-70 hover:opacity-100"
+                                    ? "bg-blue-50/60 dark:bg-[#141b2e]/90 border-blue-400/60 dark:border-blue-500/40 shadow-xs dark:shadow-[0_4px_12px_rgba(59,130,246,0.15)]" 
+                                    : "bg-white dark:bg-[#0c101a]/60 border-slate-200 dark:border-white/5 opacity-80 hover:opacity-100"
                                 }`}
                               >
                                 <div className="flex items-center justify-between mb-2.5">
-                                  <span className="text-xs font-extrabold text-white">{m}</span>
+                                  <span className="text-xs font-extrabold text-slate-900 dark:text-white">{m}</span>
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -1050,7 +1098,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                                       handleCheckboxChange(m, "edit", nextState)
                                       handleCheckboxChange(m, "delete", nextState)
                                     }}
-                                    className="text-[10px] text-blue-400 hover:text-blue-300 hover:underline font-extrabold cursor-pointer"
+                                    className="text-[10px] text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline font-extrabold cursor-pointer"
                                   >
                                     {isAnyActive ? "Clear" : "Full Access"}
                                   </button>
@@ -1067,17 +1115,17 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
 
                                     const themeClasses = {
                                       emerald: isChecked 
-                                        ? "bg-gradient-to-b from-emerald-500 to-emerald-600 text-white border-emerald-400 shadow-[0_2px_8px_rgba(16,185,129,0.35),inset_0_1px_0_rgba(255,255,255,0.35)]" 
-                                        : "bg-white/[0.04] text-slate-400 border-white/10 hover:border-white/20 hover:text-white",
+                                        ? "bg-emerald-600 dark:bg-gradient-to-b dark:from-emerald-500 dark:to-emerald-600 text-white border-emerald-500 shadow-xs" 
+                                        : "bg-slate-100 dark:bg-white/[0.04] text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/10 hover:border-slate-300 hover:text-slate-900 dark:hover:text-white",
                                       blue: isChecked 
-                                        ? "bg-gradient-to-b from-blue-500 to-blue-600 text-white border-blue-400 shadow-[0_2px_8px_rgba(59,130,246,0.35),inset_0_1px_0_rgba(255,255,255,0.35)]" 
-                                        : "bg-white/[0.04] text-slate-400 border-white/10 hover:border-white/20 hover:text-white",
+                                        ? "bg-blue-600 dark:bg-gradient-to-b dark:from-blue-500 dark:to-blue-600 text-white border-blue-500 shadow-xs" 
+                                        : "bg-slate-100 dark:bg-white/[0.04] text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/10 hover:border-slate-300 hover:text-slate-900 dark:hover:text-white",
                                       amber: isChecked 
-                                        ? "bg-gradient-to-b from-amber-500 to-amber-600 text-white border-amber-400 shadow-[0_2px_8px_rgba(245,158,11,0.35),inset_0_1px_0_rgba(255,255,255,0.35)]" 
-                                        : "bg-white/[0.04] text-slate-400 border-white/10 hover:border-white/20 hover:text-white",
+                                        ? "bg-amber-500 dark:bg-gradient-to-b dark:from-amber-500 dark:to-amber-600 text-white border-amber-400 shadow-xs" 
+                                        : "bg-slate-100 dark:bg-white/[0.04] text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/10 hover:border-slate-300 hover:text-slate-900 dark:hover:text-white",
                                       rose: isChecked 
-                                        ? "bg-gradient-to-b from-rose-500 to-rose-600 text-white border-rose-400 shadow-[0_2px_8px_rgba(244,63,94,0.35),inset_0_1px_0_rgba(255,255,255,0.35)]" 
-                                        : "bg-white/[0.04] text-slate-400 border-white/10 hover:border-white/20 hover:text-white",
+                                        ? "bg-rose-600 dark:bg-gradient-to-b dark:from-rose-500 dark:to-rose-600 text-white border-rose-500 shadow-xs" 
+                                        : "bg-slate-100 dark:bg-white/[0.04] text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/10 hover:border-slate-300 hover:text-slate-900 dark:hover:text-white",
                                     }[colorTheme]
 
                                     return (
@@ -1105,11 +1153,11 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
             </div>
 
             {/* 3D FLOATING ACTION FOOTER */}
-            <div className="flex items-center justify-between pt-5 border-t border-white/10 sticky bottom-0 bg-[#0f1422]/95 backdrop-blur-xl z-20 shadow-[0_-8px_20px_rgba(0,0,0,0.5)]">
+            <div className="flex items-center justify-between pt-5 border-t border-slate-200 dark:border-white/10 sticky bottom-0 bg-white/95 dark:bg-[#0f1422]/95 backdrop-blur-xl z-20 shadow-[0_-8px_20px_rgba(0,0,0,0.06)] dark:shadow-[0_-8px_20px_rgba(0,0,0,0.5)]">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-5 py-2.5 rounded-xl border border-white/15 bg-white/[0.04] hover:bg-white/[0.08] text-xs font-bold text-slate-300 hover:text-white shadow-[0_2px_6px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.1)] active:translate-y-0.5 transition-all cursor-pointer"
+                className="px-5 py-2.5 rounded-xl border border-slate-300 dark:border-white/15 bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.04] dark:hover:bg-white/[0.08] text-xs font-bold text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white shadow-xs active:translate-y-0.5 transition-all cursor-pointer"
               >
                 Cancel
               </button>
@@ -1119,7 +1167,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                   <button
                     type="button"
                     onClick={() => setActiveTab("permissions")}
-                    className="px-5 py-2.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] border border-white/20 text-xs font-black text-white transition-all flex items-center gap-1.5 cursor-pointer shadow-[0_4px_12px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] active:translate-y-0.5"
+                    className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.08] dark:hover:bg-white/[0.14] border border-slate-300 dark:border-white/20 text-xs font-black text-slate-800 dark:text-white transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:translate-y-0.5"
                   >
                     <span>Next: Configure Modules</span>
                     <ArrowRight size={14} />
@@ -1128,7 +1176,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                   <button
                     type="button"
                     onClick={() => setActiveTab("profile")}
-                    className="px-5 py-2.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] border border-white/20 text-xs font-black text-white transition-all cursor-pointer shadow-[0_4px_12px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.15)] active:translate-y-0.5"
+                    className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.08] dark:hover:bg-white/[0.14] border border-slate-300 dark:border-white/20 text-xs font-black text-slate-800 dark:text-white transition-all cursor-pointer shadow-xs active:translate-y-0.5"
                   >
                     Back to Profile
                   </button>
@@ -1136,7 +1184,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
 
                 <Button
                   type="submit"
-                  className="px-8 py-2.5 rounded-xl bg-gradient-to-b from-blue-500 via-indigo-600 to-blue-700 text-white font-black text-xs shadow-[0_8px_25px_rgba(59,130,246,0.5),inset_0_1px_0_rgba(255,255,255,0.4)] hover:shadow-[0_12px_30px_rgba(59,130,246,0.6)] hover:-translate-y-0.5 active:translate-y-0.5 transition-all cursor-pointer border border-blue-400/40"
+                  className="px-8 py-2.5 rounded-xl bg-gradient-to-b from-blue-600 via-indigo-600 to-blue-700 text-white font-black text-xs shadow-[0_8px_25px_rgba(59,130,246,0.4)] hover:shadow-[0_12px_30px_rgba(59,130,246,0.5)] hover:-translate-y-0.5 active:translate-y-0.5 transition-all cursor-pointer border border-blue-400/40"
                 >
                   {editingUser ? "Save User Account" : "Create Account Now"}
                 </Button>

@@ -339,15 +339,17 @@ export default function LoginPage() {
 
       const effectiveEmail = (matchedAccount.email || dbAccount?.email || (normalizedInput.includes("@") ? normalizedInput : "user@saampark.in")).toLowerCase().trim()
 
-      // ── ROLE & PORTAL AUTO-ALIGNMENT ─────────────────────────────────────────
-      if (
-        effectiveEmail === "hiisupriya@gmail.com" || 
-        effectiveEmail === "supriyo.main@gmail.com" || 
-        effectiveEmail === "saampark.official@gmail.com"
-      ) {
-        matchedRole = "Super Admin"
-      } else if (effectiveEmail === "saamparktechnologyresearch@gmail.com") {
-        matchedRole = "Admin"
+      // ── ROLE & PORTAL AUTO-ALIGNMENT (Initial fallback only if no role assigned) ──
+      if (!matchedAccount?.role) {
+        if (
+          effectiveEmail === "hiisupriya@gmail.com" || 
+          effectiveEmail === "supriyo.main@gmail.com" || 
+          effectiveEmail === "saampark.official@gmail.com"
+        ) {
+          matchedRole = "Super Admin"
+        } else if (effectiveEmail === "saamparktechnologyresearch@gmail.com") {
+          matchedRole = "Admin"
+        }
       }
 
       // ── SUCCESS ──────────────────────────────────────────────────────────────
@@ -384,6 +386,8 @@ export default function LoginPage() {
         avatar: matchedAccount.avatarUrl || (matchedAccount as any).avatar || matchedAccount.avatar_url || dbAccount?.avatarUrl || (dbAccount as any)?.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${effectiveEmail}`,
         avatarUrl: matchedAccount.avatarUrl || (matchedAccount as any).avatar || matchedAccount.avatar_url || dbAccount?.avatarUrl || (dbAccount as any)?.avatar || undefined,
         phone: matchedAccount.phone || dbAccount?.phone,
+        branchId: matchedAccount.branchId || matchedAccount.branch_id || dbAccount?.branchId || (dbAccount as any)?.branch_id || undefined,
+        branchName: matchedAccount.branchName || matchedAccount.branch_name || dbAccount?.branchName || (dbAccount as any)?.branch_name || undefined,
         allowedModules: matchedAccount.allowedModules || dbAccount?.allowedModules || (matchedAccount as any)?.permissions?.allowedModules,
         permissions: matchedAccount.permissions || dbAccount?.permissions,
       })

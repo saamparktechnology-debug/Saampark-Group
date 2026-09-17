@@ -235,6 +235,7 @@ export default function UsersMain() {
           company_id: userData.companyId || (userData.companyIds && userData.companyIds[0]) || "tech",
           company_ids: userData.companyIds || (userData.companyId ? [userData.companyId] : ["tech"]),
           branch_id: userData.branchId || null,
+          branch_name: userData.branchName || null,
           department: userData.department || "General",
           phone: userData.phone || "",
           avatar_url: userData.avatarUrl || (userData as any).avatar || undefined,
@@ -258,7 +259,10 @@ export default function UsersMain() {
           role_id,
           company_id: userData.companyId || (userData.companyIds && userData.companyIds[0]),
           company_ids: userData.companyIds,
-          branch_id: userData.branchId || null,
+          branch_id: userData.branchId !== undefined ? userData.branchId : null,
+          branch_name: userData.branchName || null,
+          branchId: userData.branchId !== undefined ? userData.branchId : null,
+          branchName: userData.branchName || null,
           department: userData.department,
           avatar_url: userData.avatarUrl || (userData as any).avatar || undefined,
           permissions: (userData as any).permissions,
@@ -409,6 +413,9 @@ export default function UsersMain() {
           ...saved,
           email: newEmail,
           role: userData.role || saved.role,
+          branchId: saved.branchId !== undefined ? saved.branchId : (userData.branchId !== undefined ? userData.branchId : editingUser.branchId),
+          branchIds: saved.branchIds || (saved.branchId ? [saved.branchId] : (userData.branchId ? [userData.branchId] : editingUser.branchIds)),
+          branchName: saved.branchName || userData.branchName || editingUser.branchName,
           permissions: (userData as any).permissions,
           previousEmails: prevEmailsList.length > 0 ? prevEmailsList : undefined,
           previousEmail: prevEmailsList.length > 0 ? prevEmailsList[prevEmailsList.length - 1] : undefined,
@@ -418,6 +425,21 @@ export default function UsersMain() {
         return [saved, ...prev.filter((u) => u.email.toLowerCase().trim() !== saved.email.toLowerCase().trim())]
       }
     })
+
+    // Immediately keep usePermissionStore in sync for this user
+    if (userData.permissions) {
+      const permObj: any = userData.permissions
+      const targetId = String(saved.id || realId || editingUser?.id)
+      const targetEmail = (userData.email || editingUser?.email || "").toLowerCase().trim()
+      if (Array.isArray(permObj.allowedModules)) {
+        usePermissionStore.getState().setUserPermissions(targetId, permObj.allowedModules)
+        if (targetEmail) usePermissionStore.getState().setUserPermissions(targetEmail, permObj.allowedModules)
+      }
+      if (permObj.actionMatrix && typeof permObj.actionMatrix === "object") {
+        usePermissionStore.getState().setUserAllModuleActions(targetId, permObj.actionMatrix)
+        if (targetEmail) usePermissionStore.getState().setUserAllModuleActions(targetEmail, permObj.actionMatrix)
+      }
+    }
 
     // Immediate re-fetch from database to ensure newly created user displays cleanly
     setTimeout(() => {
