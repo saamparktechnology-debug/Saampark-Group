@@ -106,11 +106,9 @@ export default function UsersMain() {
       filtered = filtered.filter((u) => u.role !== "Super Admin")
     }
 
-    // 1. Company Filter
+    // 1. Strict Company Filter
     if (targetComp && targetComp !== "all") {
       filtered = filtered.filter((u) => {
-        if (u.role === "Super Admin") return true
-
         const rawCompList = (u.companyIds && u.companyIds.length > 0)
           ? u.companyIds
           : (u.companyId ? [u.companyId] : ["tech"])
@@ -126,21 +124,22 @@ export default function UsersMain() {
       })
     }
 
-    // 2. Branch Filter
+    // 2. Strict Branch Filter (Show ONLY users assigned to this branch)
     if (targetBranch && targetBranch !== "all") {
       const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === targetBranch.toLowerCase())
       const targetBranchId = String(targetBranchObj?.id || targetBranch).toLowerCase().trim()
       const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
 
       filtered = filtered.filter((u) => {
-        if (u.role === "Super Admin") return true
-        // Company-wide users (no dedicated branch restriction) work across all branches
-        if (!u.branchId || u.branchId === "all") return true
-
         const uBranchIds = (u.branchIds && u.branchIds.length > 0)
           ? u.branchIds.map(id => String(id).toLowerCase().trim())
           : (u.branchId ? [String(u.branchId).toLowerCase().trim()] : [])
         const uBranchName = String(u.branchName || "").toLowerCase().trim()
+
+        // Strict separation: users with no branch assigned do not belong to this branch
+        if (uBranchIds.length === 0 && !uBranchName) {
+          return false
+        }
 
         if (uBranchIds.includes("all")) return true
 
@@ -153,20 +152,22 @@ export default function UsersMain() {
       })
     }
 
-    // 3. Sub-Branch Filter
+    // 3. Strict Sub-Branch Filter (Show ONLY users assigned to this sub-branch)
     if (targetSubBranch && targetSubBranch !== "all") {
       const targetSubBranchObj = subBranches.find(sb => sb.id === targetSubBranch || sb.name.toLowerCase() === targetSubBranch.toLowerCase())
       const targetSubBranchId = String(targetSubBranchObj?.id || targetSubBranch).toLowerCase().trim()
       const targetSubBranchName = targetSubBranchObj?.name?.toLowerCase().trim() || ""
 
       filtered = filtered.filter((u) => {
-        if (u.role === "Super Admin") return true
-        if (!u.subBranchId || u.subBranchId === "all") return true
-
         const uSubIds = (u.subBranchIds && u.subBranchIds.length > 0)
           ? u.subBranchIds.map(id => String(id).toLowerCase().trim())
           : (u.subBranchId ? [String(u.subBranchId).toLowerCase().trim()] : [])
         const uSubName = String(u.subBranchName || "").toLowerCase().trim()
+
+        // Strict separation: users with no sub-branch assigned do not belong to this sub-branch
+        if (uSubIds.length === 0 && !uSubName) {
+          return false
+        }
 
         if (uSubIds.includes("all")) return true
 

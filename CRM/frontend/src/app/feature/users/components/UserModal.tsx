@@ -234,8 +234,13 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
       
       const defaultComp = (activeCompanyId && activeCompanyId !== "all") ? activeCompanyId : "tech"
       setSelectedCompanyId(defaultComp)
-      setScopeType("company")
-      setSelectedBranchId("")
+      if (activeBranchId && activeBranchId !== "all") {
+        setScopeType("branch")
+        setSelectedBranchId(activeBranchId)
+      } else {
+        setScopeType("company")
+        setSelectedBranchId("")
+      }
 
       setDepartment("")
       setDesignation("")
@@ -345,9 +350,9 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
     const companyIds = isAllCompanies ? allCompIds : [canonCompId]
     const companyNameToSave = isAllCompanies ? "SAAMPARK Group (All Companies)" : getCompanyFullName(targetCompanyObj)
 
-    const effectiveBranchId = scopeType === "branch" ? (selectedBranchId || undefined) : undefined
-    const matchedBranch = effectiveBranchId ? branches.find(b => String(b.id) === String(effectiveBranchId)) : undefined
-    const branchNameToSave = matchedBranch?.name || (effectiveBranchId ? `Branch (${effectiveBranchId})` : undefined)
+    const effectiveBranchId = selectedBranchId || (scopeType === "branch" ? (activeBranchId || undefined) : undefined)
+    const matchedBranch = effectiveBranchId ? branches.find(b => String(b.id) === String(effectiveBranchId) || b.name.toLowerCase() === String(effectiveBranchId).toLowerCase()) : undefined
+    const branchNameToSave = matchedBranch?.name || (effectiveBranchId ? (isNaN(Number(effectiveBranchId)) ? effectiveBranchId : `Branch (${effectiveBranchId})`) : undefined)
 
     const userData: Partial<UserType> = {
       ...(editingUser ? { id: editingUser.id } : {}),

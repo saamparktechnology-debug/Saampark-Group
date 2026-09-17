@@ -82,12 +82,12 @@ const getAllUsers = async (req, res, next) => {
         params.push(String(req.companyId || companyId), String(req.companySlug || companyId), String(req.companyId || companyId), String(req.companySlug || companyId));
       }
       if (branchId && branchId !== 'all') {
-        query += ` AND (u.branch_id = ? OR u.branch_id IS NULL OR u.branch_id = '')`;
-        params.push(branchId);
+        query += ` AND (u.branch_id = ? OR b.name = ?)`;
+        params.push(branchId, branchId);
       }
       if (subBranchId && subBranchId !== 'all') {
-        query += ` AND (u.sub_branch_id = ? OR u.sub_branch_id IS NULL OR u.sub_branch_id = '')`;
-        params.push(subBranchId);
+        query += ` AND (u.sub_branch_id = ? OR sb.name = ?)`;
+        params.push(subBranchId, subBranchId);
       }
     } else if (requester.role_id === 2 && requester.branch_id) {
       // Branch Admin: locked strictly to their assigned branch!
