@@ -329,6 +329,18 @@ html, body, input, textarea, select, button, table, span, div, p {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
+
+  .a4-page {
+    page-break-after: always !important;
+    break-after: page !important;
+    min-height: 297mm !important;
+    height: 297mm !important;
+    width: 210mm !important;
+    margin: 0 !important;
+    padding: 10mm !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
 }
 
 /* ========================================================

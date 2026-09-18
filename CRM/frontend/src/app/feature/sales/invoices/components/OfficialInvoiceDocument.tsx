@@ -459,9 +459,60 @@ export function OfficialInvoiceDocument({
   const totalTableGst = isGstInvoice ? finalRenderedRows.reduce((sum, it) => sum + it.rowTax, 0) : 0
   const totalTableGross = isGstInvoice ? finalRenderedRows.reduce((sum, it) => sum + it.rowTotal, 0) : totalTableBase
 
-  const isMultiPage = finalRenderedRows.length > 5
-  const page1Items = isMultiPage ? finalRenderedRows.slice(0, 5) : finalRenderedRows
-  const page2Items = isMultiPage ? finalRenderedRows.slice(5) : []
+  // 4. Strict A4 Pagination Engine (Strictly > 3 items creates next page)
+  const ITEMS_PER_FIRST_PAGE = 3
+  const ITEMS_PER_SUBSEQUENT_PAGE = 3
+
+  const paginatedPages = React.useMemo(() => {
+    if (finalRenderedRows.length <= ITEMS_PER_FIRST_PAGE) {
+      return [{
+        pageNumber: 1,
+        items: finalRenderedRows,
+        startIndex: 0,
+        isFirstPage: true,
+        isLastPage: true,
+      }]
+    }
+
+    const pages: Array<{
+      pageNumber: number
+      items: typeof finalRenderedRows
+      startIndex: number
+      isFirstPage: boolean
+      isLastPage: boolean
+    }> = []
+
+    // Page 1: first 3 items
+    pages.push({
+      pageNumber: 1,
+      items: finalRenderedRows.slice(0, ITEMS_PER_FIRST_PAGE),
+      startIndex: 0,
+      isFirstPage: true,
+      isLastPage: false,
+    })
+
+    // Subsequent pages
+    let currentIndex = ITEMS_PER_FIRST_PAGE
+    let pageNum = 2
+
+    while (currentIndex < finalRenderedRows.length) {
+      const nextItems = finalRenderedRows.slice(currentIndex, currentIndex + ITEMS_PER_SUBSEQUENT_PAGE)
+      const isLast = (currentIndex + ITEMS_PER_SUBSEQUENT_PAGE) >= finalRenderedRows.length
+      pages.push({
+        pageNumber: pageNum,
+        items: nextItems,
+        startIndex: currentIndex,
+        isFirstPage: false,
+        isLastPage: isLast,
+      })
+      currentIndex += ITEMS_PER_SUBSEQUENT_PAGE
+      pageNum++
+    }
+
+    return pages
+  }, [finalRenderedRows])
+
+  const totalPages = paginatedPages.length
 
   const hasDue = parsedDue > 0
   const hasBankDetails = Boolean(resolvedBankName || resolvedAccountNumber)
@@ -477,8 +528,8 @@ export function OfficialInvoiceDocument({
     "SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED"
   ).trim()
 
-  const renderTopHeader = (pageNumber?: number) => (
-    <div className="flex flex-col sm:flex-row justify-between items-stretch gap-4 border-b border-zinc-200 pb-3.5">
+  const renderTopHeader = (pageNumber: number = 1, totalPgs: number = 1) => (
+    <div className="flex flex-col sm:flex-row justify-between items-stretch gap-4 border-b border-zinc-200 pb-3">
       {/* Left: Company Brand & Entity Info with Logo */}
       <div className="flex items-start gap-3.5 flex-1 min-w-0">
         {/* Top-Left Logo Card */}
@@ -506,7 +557,7 @@ export function OfficialInvoiceDocument({
             </div>
           )}
           {resolvedLogoUrl ? (
-            <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-2xl overflow-hidden shadow-2xs shrink-0 border border-zinc-200/80 bg-white flex items-center justify-center p-2.5">
+            <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden shadow-2xs shrink-0 border border-zinc-200/90 bg-white flex items-center justify-center p-2">
               <img 
                 src={resolvedLogoUrl} 
                 alt={resolvedBrandName || "Entity Logo"} 
@@ -514,20 +565,20 @@ export function OfficialInvoiceDocument({
               />
             </div>
           ) : (
-            <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-2xl overflow-hidden shadow-md shrink-0 border border-teal-900/30 bg-gradient-to-b from-[#004e59] via-[#005c68] to-[#003840] flex flex-col items-center justify-center p-2.5">
+            <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden shadow-md shrink-0 border border-teal-900/30 bg-gradient-to-b from-[#004e59] via-[#005c68] to-[#003840] flex flex-col items-center justify-center p-2">
               {/* Layered Organic Bottom Wave Curves */}
-              <svg className="absolute bottom-0 left-0 right-0 w-full h-14 pointer-events-none" viewBox="0 0 100 45" preserveAspectRatio="none">
+              <svg className="absolute bottom-0 left-0 right-0 w-full h-12 pointer-events-none" viewBox="0 0 100 45" preserveAspectRatio="none">
                 <path d="M0,28 C25,38 65,18 100,24 L100,45 L0,45 Z" fill="#008a99" fillOpacity="0.45" />
                 <path d="M0,34 C35,42 70,22 100,12 L100,45 L0,45 Z" fill="#0d9488" fillOpacity="0.7" />
                 <path d="M0,40 C30,44 75,28 100,4 L100,45 L0,45 Z" fill="#2dd4bf" fillOpacity="0.85" />
                 <path d="M55,45 C75,32 90,18 100,0 L100,45 Z" fill="#a7f3d0" fillOpacity="0.95" />
               </svg>
-              <div className="relative z-10 w-full h-full flex flex-col items-center justify-center text-center text-white pb-2">
-                <Sparkles className="w-7 h-7 mb-1 text-teal-200 drop-shadow-sm" />
-                <div className="font-black text-xs tracking-wider uppercase leading-tight font-sans">
+              <div className="relative z-10 w-full h-full flex flex-col items-center justify-center text-center text-white pb-1">
+                <Sparkles className="w-6 h-6 mb-1 text-teal-200 drop-shadow-sm" />
+                <div className="font-black text-[11px] tracking-wider uppercase leading-tight font-sans">
                   {resolvedBrandName}
                 </div>
-                <div className="text-[7.5px] font-bold text-teal-200 tracking-widest uppercase mt-0.5">
+                <div className="text-[7px] font-bold text-teal-200 tracking-widest uppercase mt-0.5">
                   {resolvedDivisionName || "TECHNOLOGY"}
                 </div>
               </div>
@@ -536,10 +587,10 @@ export function OfficialInvoiceDocument({
         </motion.div>
 
         {/* Title, Full Company Name, Subtitle, ISO Badge & Legal IDs */}
-        <div className="space-y-1.5 flex-1 min-w-0 pt-0.5">
+        <div className="space-y-1 flex-1 min-w-0 pt-0.5">
           <div>
             {/* Registered Full Corporate Name */}
-            <h1 className="text-lg sm:text-xl font-black tracking-tight leading-snug text-zinc-950 uppercase font-sans">
+            <h1 className="text-base sm:text-lg font-black tracking-tight leading-tight text-zinc-950 uppercase font-sans">
               {fullRegisteredCompanyName}
             </h1>
 
@@ -558,13 +609,13 @@ export function OfficialInvoiceDocument({
             )}
 
             {resolvedSubtitle && (
-              <h2 className="text-xs font-semibold text-zinc-600 tracking-wider mt-0.5">
+              <h2 className="text-[11px] font-semibold text-zinc-600 tracking-wider mt-0.5">
                 {resolvedSubtitle}
               </h2>
             )}
 
             {/* ISO 9001:2015 Certified Company Tagline Badge */}
-            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 border border-amber-300/90 dark:border-amber-700/80 text-amber-900 dark:text-amber-200 text-[8.5px] font-black tracking-wider uppercase shadow-2xs mt-1">
+            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 border border-amber-300/90 dark:border-amber-700/80 text-amber-900 dark:text-amber-200 text-[8px] font-black tracking-wider uppercase shadow-2xs mt-1">
               <Award size={11} className="text-amber-600 dark:text-amber-400 shrink-0" />
               <span>An ISO 9001:2015 Certified Company</span>
             </div>
@@ -572,7 +623,7 @@ export function OfficialInvoiceDocument({
 
           {/* Legal IDs: CIN, GSTIN (GST Only), PAN */}
           {hasLegalIds && (
-            <p className="text-[10px] font-semibold text-zinc-600 font-mono pt-0.5 flex items-center gap-2 flex-wrap">
+            <p className="text-[9.5px] font-semibold text-zinc-600 font-mono pt-0.5 flex items-center gap-2 flex-wrap">
               {resolvedCin && (
                 <span>CIN: <strong className="text-zinc-800 font-bold">{resolvedCin}</strong></span>
               )}
@@ -587,15 +638,15 @@ export function OfficialInvoiceDocument({
 
           {/* Address & Contact Row */}
           {(resolvedAddress || hasContactInfo) && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[9.5px] text-zinc-700 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1 text-[9px] text-zinc-700 pt-0.5">
               {resolvedAddress ? (
                 <div className="flex items-start gap-1.5">
-                  <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0 mt-0.5`}>
-                    <MapPin size={9} />
+                  <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0 mt-0.5`}>
+                    <MapPin size={8} />
                   </span>
                   <div className="leading-snug">
-                    <strong className="text-zinc-900 block text-[9.5px]">Registered Office:</strong>
-                    <span className="text-zinc-600 text-[9px]">{resolvedAddress}</span>
+                    <strong className="text-zinc-900 block text-[9px]">Registered Office:</strong>
+                    <span className="text-zinc-600 text-[8.5px]">{resolvedAddress}</span>
                   </div>
                 </div>
               ) : <div />}
@@ -605,25 +656,25 @@ export function OfficialInvoiceDocument({
                   {resolvedPhone && (
                     <p className="flex items-center gap-1.5">
                       <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
-                        <Phone size={8} />
+                        <Phone size={7.5} />
                       </span>
-                      <span className="font-mono text-zinc-800 font-semibold text-[9px]">{resolvedPhone}</span>
+                      <span className="font-mono text-zinc-800 font-semibold text-[8.5px]">{resolvedPhone}</span>
                     </p>
                   )}
                   {resolvedWebsite && (
                     <p className="flex items-center gap-1.5">
                       <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
-                        <Globe size={8} />
+                        <Globe size={7.5} />
                       </span>
-                      <span className="text-zinc-700 text-[9px]">{resolvedWebsite}</span>
+                      <span className="text-zinc-700 text-[8.5px]">{resolvedWebsite}</span>
                     </p>
                   )}
                   {resolvedEmail && (
                     <p className="flex items-center gap-1.5">
                       <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
-                        <Mail size={8} />
+                        <Mail size={7.5} />
                       </span>
-                      <span className="text-zinc-700 text-[9px]">{resolvedEmail}</span>
+                      <span className="text-zinc-700 text-[8.5px]">{resolvedEmail}</span>
                     </p>
                   )}
                 </div>
@@ -633,25 +684,25 @@ export function OfficialInvoiceDocument({
 
           {/* 3-Tier Hierarchy: Sub-Branch Billing Breakdown (Company -> Branch -> Sub-Branch) */}
           {activeSubBranch ? (
-            <div className="mt-2 p-2.5 rounded-xl bg-gradient-to-r from-zinc-50 via-slate-50 to-zinc-100/80 dark:from-zinc-900/70 dark:to-zinc-800/50 border border-zinc-200/90 dark:border-zinc-700/70 text-[9px] text-zinc-700 dark:text-zinc-300 space-y-1.5 shadow-2xs">
+            <div className="mt-1.5 p-2 rounded-xl bg-gradient-to-r from-zinc-50 via-slate-50 to-zinc-100/80 dark:from-zinc-900/70 dark:to-zinc-800/50 border border-zinc-200/90 dark:border-zinc-700/70 text-[8.5px] text-zinc-700 dark:text-zinc-300 space-y-1 shadow-2xs">
               {/* Tier 1: Parent Company */}
-              <div className="flex items-center justify-between border-b border-zinc-200/70 dark:border-zinc-700/60 pb-1 flex-wrap gap-1">
+              <div className="flex items-center justify-between border-b border-zinc-200/70 dark:border-zinc-700/60 pb-0.5 flex-wrap gap-1">
                 <span className="font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
-                  <Building2 size={12} className="text-blue-600 shrink-0" />
+                  <Building2 size={11} className="text-blue-600 shrink-0" />
                   <span>Corporate Entity: <strong>{fullRegisteredCompanyName}</strong></span>
                 </span>
                 {resolvedCin && (
-                  <span className="font-mono text-[8.5px] text-zinc-500">CIN: {resolvedCin}</span>
+                  <span className="font-mono text-[8px] text-zinc-500">CIN: {resolvedCin}</span>
                 )}
               </div>
               
               {/* Tier 2: Controlling Branch */}
-              <div className="flex items-center justify-between border-b border-zinc-200/70 dark:border-zinc-700/60 pb-1 flex-wrap gap-1">
+              <div className="flex items-center justify-between border-b border-zinc-200/70 dark:border-zinc-700/60 pb-0.5 flex-wrap gap-1">
                 <span className="font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
-                  <Landmark size={12} className="text-indigo-600 shrink-0" />
+                  <Landmark size={11} className="text-indigo-600 shrink-0" />
                   <span>Branch: <strong>{activeBranch?.name || "Main Branch"}</strong></span>
                   {activeBranch?.code && (
-                    <span className="font-mono text-[8px] px-1.5 py-0.2 rounded bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300 font-bold">
+                    <span className="font-mono text-[7.5px] px-1.5 py-0.2 rounded bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300 font-bold">
                       Code: {activeBranch.code.toUpperCase()}
                     </span>
                   )}
@@ -664,77 +715,47 @@ export function OfficialInvoiceDocument({
               {/* Tier 3: Operating Partner Sub-Branch */}
               <div className="flex items-center justify-between flex-wrap gap-1">
                 <span className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
-                  <ShieldCheck size={12} className="text-emerald-600 shrink-0" />
+                  <ShieldCheck size={11} className="text-emerald-600 shrink-0" />
                   <span>Partner Sub-Branch: <strong>{activeSubBranch.name}</strong></span>
                   {activeSubBranch.code && (
-                    <span className="font-mono text-[8px] px-1.5 py-0.2 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold">
+                    <span className="font-mono text-[7.5px] px-1.5 py-0.2 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold">
                       Code: {activeSubBranch.code.toUpperCase()}
                     </span>
                   )}
                 </span>
-                <span className="font-mono text-[8.5px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 font-extrabold border border-emerald-300 dark:border-emerald-700 flex items-center gap-1">
-                  <Sparkles size={10} className="text-emerald-600" />
+                <span className="font-mono text-[8px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 font-extrabold border border-emerald-300 dark:border-emerald-700 flex items-center gap-1">
+                  <Sparkles size={9} className="text-emerald-600" />
                   <span>{activeSubBranch.revenueSharePct}% Partner Share</span>
                 </span>
               </div>
-              {/* Sub-Branch Contact/Location details */}
-              {(activeSubBranch.address || activeSubBranch.city || (activeSubBranch as any).partnerPhone || (activeSubBranch as any).partnerEmail) && (
-                <div className="flex items-center gap-3 flex-wrap text-[8.5px] text-zinc-600 dark:text-zinc-400 pt-0.5 font-medium">
-                  {activeSubBranch.address && (
-                    <span className="flex items-center gap-1"><MapPin size={10} className="text-emerald-600" />{activeSubBranch.address}</span>
-                  )}
-                  {(activeSubBranch as any).partnerPhone && (
-                    <span className="flex items-center gap-1"><Phone size={10} className="text-emerald-600" />{(activeSubBranch as any).partnerPhone}</span>
-                  )}
-                  {(activeSubBranch as any).partnerEmail && (
-                    <span className="flex items-center gap-1"><Mail size={10} className="text-emerald-600" />{(activeSubBranch as any).partnerEmail}</span>
-                  )}
-                </div>
-              )}
             </div>
           ) : activeBranch ? (
             /* Standard Branch Section (without Sub-Branch) */
-            <div className="mt-1.5 p-2 rounded-xl bg-gradient-to-r from-zinc-50 to-zinc-100/70 dark:from-zinc-900/60 dark:to-zinc-800/40 border border-zinc-200/90 dark:border-zinc-700/60 text-[9px] text-zinc-700 dark:text-zinc-300">
+            <div className="mt-1 p-1.5 rounded-xl bg-gradient-to-r from-zinc-50 to-zinc-100/70 dark:from-zinc-900/60 dark:to-zinc-800/40 border border-zinc-200/90 dark:border-zinc-700/60 text-[8.5px] text-zinc-700 dark:text-zinc-300">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-extrabold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
-                  <Building2 size={12} className="text-blue-600 shrink-0" />
+                  <Building2 size={11} className="text-blue-600 shrink-0" />
                   <span>Branch:</span>
                   <span className="text-blue-700 dark:text-blue-400 font-black">{activeBranch.name}</span>
                 </span>
                 {activeBranch.code && (
-                  <span className="font-mono text-[8.5px] px-1.5 py-0.2 rounded-md bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300 font-bold border border-blue-200/60 dark:border-blue-800/60">
+                  <span className="font-mono text-[8px] px-1.5 py-0.2 rounded-md bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300 font-bold border border-blue-200/60 dark:border-blue-800/60">
                     Branch Code: {activeBranch.code.toUpperCase()}
                   </span>
                 )}
               </div>
-              {(activeBranch.address || activeBranch.city || activeBranch.phone || activeBranch.email) && (
-                <div className="flex items-center gap-3 flex-wrap text-[8.5px] text-zinc-600 dark:text-zinc-400 mt-1 font-medium">
-                  {activeBranch.address && (
-                    <span className="flex items-center gap-1"><MapPin size={10} className="text-blue-600" />{activeBranch.address}</span>
-                  )}
-                  {activeBranch.city && (
-                    <span>({activeBranch.city})</span>
-                  )}
-                  {activeBranch.phone && (
-                    <span className="flex items-center gap-1"><Phone size={10} className="text-blue-600" />{activeBranch.phone}</span>
-                  )}
-                  {activeBranch.email && (
-                    <span className="flex items-center gap-1"><Mail size={10} className="text-blue-600" />{activeBranch.email}</span>
-                  )}
-                </div>
-              )}
             </div>
           ) : null}
         </div>
       </div>
 
       {/* Right: Header Card with Status Badge & Dates */}
-      <div className={`w-full sm:w-56 rounded-2xl ${theme.cardHeaderGradient} text-white p-3 shadow-md shrink-0 flex flex-col self-start space-y-2.5`}>
-        <div className="flex items-center justify-between border-b border-white/20 pb-2">
-          <span className="font-black text-xs tracking-wider uppercase">
-            {theme.invoiceTypeLabel} {pageNumber ? `(P.${pageNumber}/2)` : ''}
+      <div className={`w-full sm:w-52 rounded-2xl ${theme.cardHeaderGradient} text-white p-3 shadow-md shrink-0 flex flex-col self-start space-y-2`}>
+        <div className="flex items-center justify-between border-b border-white/20 pb-1.5">
+          <span className="font-black text-[11px] tracking-wider uppercase">
+            {theme.invoiceTypeLabel} {totalPgs > 1 ? `(P.${pageNumber}/${totalPgs})` : ''}
           </span>
-          <span className={`px-2 py-0.5 rounded-full text-[9px] font-black tracking-wider uppercase ${
+          <span className={`px-2 py-0.5 rounded-full text-[8.5px] font-black tracking-wider uppercase ${
             isFullyPaid 
               ? "bg-white text-emerald-800" 
               : isPartPaid 
@@ -745,22 +766,22 @@ export function OfficialInvoiceDocument({
           </span>
         </div>
 
-        <div className="space-y-1.5 text-[10px]">
+        <div className="space-y-1.5 text-[9.5px]">
           <div>
-            <span className="text-white/80 text-[8.5px] uppercase tracking-wider font-semibold block">INVOICE NO:</span>
+            <span className="text-white/80 text-[8px] uppercase tracking-wider font-semibold block">INVOICE NO:</span>
             <strong className="font-mono text-white text-xs font-bold break-all leading-tight block">
               {invoiceNumOrId}
             </strong>
           </div>
           <div className="flex items-center gap-2 pt-0.5">
-            <span className="text-white/80 text-[8.5px] uppercase font-bold tracking-wider shrink-0 w-12">DATE:</span>
-            <strong className="text-white font-mono text-[9.5px]">
+            <span className="text-white/80 text-[8px] uppercase font-bold tracking-wider shrink-0 w-10">DATE:</span>
+            <strong className="text-white font-mono text-[9px]">
               {formatInvoiceDate(invoice.billDate)}
             </strong>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-white/80 text-[8.5px] uppercase font-bold tracking-wider shrink-0 w-12">DUE:</span>
-            <strong className="text-white font-mono text-[9.5px]">
+            <span className="text-white/80 text-[8px] uppercase font-bold tracking-wider shrink-0 w-10">DUE:</span>
+            <strong className="text-white font-mono text-[9px]">
               {hasDue ? formatInvoiceDate(invoice.dueDate) : "-"}
             </strong>
           </div>
@@ -769,25 +790,41 @@ export function OfficialInvoiceDocument({
     </div>
   )
 
+  const renderCompactSubsequentHeader = (pageNumber: number, totalPgs: number) => (
+    <div className="flex justify-between items-center border-b border-zinc-200 pb-2 mb-2">
+      <div className="flex items-center gap-2">
+        <h2 className="text-sm font-black tracking-tight text-zinc-900 uppercase">
+          {fullRegisteredCompanyName}
+        </h2>
+        <span className="text-[10px] text-zinc-500 font-mono">| Invoice: <strong>{invoiceNumOrId}</strong></span>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className={`px-2.5 py-0.5 rounded-md ${theme.primaryBg} text-white font-mono font-bold text-[9px] uppercase tracking-wider`}>
+          Page {pageNumber} of {totalPgs}
+        </span>
+      </div>
+    </div>
+  )
+
   const renderInfoCards = () => (
     <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-1">
       {/* Box 1: BILL TO (6 cols) */}
       <div className={`sm:col-span-6 p-3 rounded-2xl ${theme.lightBg} border ${theme.lightBorder} space-y-1 shadow-2xs`}>
-        <div className="flex items-center gap-1.5 text-[10.5px] font-black uppercase tracking-wider text-zinc-700">
-          <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
-            <UserCheck size={9} />
+        <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-zinc-700">
+          <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
+            <UserCheck size={8} />
           </span>
           <span>BILL TO</span>
         </div>
         <p className="font-black text-xs text-zinc-900 leading-tight">{invoice.client}</p>
-        <p className="text-[10px] text-zinc-600 leading-tight">
+        <p className="text-[9.5px] text-zinc-600 leading-tight">
           <strong>Address:</strong> {clientDetails?.address || (invoice.clientEmail ? `${clientDetails?.address || 'Corporate Center'}` : 'Head Office')}
         </p>
-        <p className="text-[10px] text-zinc-600">
+        <p className="text-[9.5px] text-zinc-600">
           <strong>Location:</strong> {clientDetails?.city || clientDetails?.state || (activeCompany?.city ? `${activeCompany.city}, ${activeCompany?.state || ''}` : activeCompany?.state || 'West Bengal')}
         </p>
         {isGstInvoice && clientDetails?.gstNumber && (
-          <p className="text-[9.5px] font-mono font-bold text-zinc-800">
+          <p className="text-[9px] font-mono font-bold text-zinc-800">
             <strong>Client GSTIN:</strong> {clientDetails.gstNumber}
           </p>
         )}
@@ -796,21 +833,21 @@ export function OfficialInvoiceDocument({
       {/* Box 2: SERVICE / ENGAGEMENT DETAILS (6 cols) with embedded Official Verification QR beside it */}
       <div className={`sm:col-span-6 p-3 rounded-2xl ${theme.lightBg} border ${theme.lightBorder} shadow-2xs flex items-center justify-between gap-2.5`}>
         <div className="space-y-1 flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 text-[10.5px] font-black uppercase tracking-wider text-zinc-700">
-            <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
-              <Briefcase size={9} />
+          <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-zinc-700">
+            <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
+              <Briefcase size={8} />
             </span>
             <span>PROJECT / SERVICE SCOPE</span>
           </div>
           <p className="font-bold text-xs text-zinc-900 truncate">{invoice.project || "Enterprise Solutions"}</p>
-          <p className="text-[10px] text-zinc-600 font-mono">
+          <p className="text-[9.5px] text-zinc-600 font-mono">
             <strong>Billing Scheme:</strong> {isGstInvoice ? 'GST Tax Invoice' : 'Non-GST Direct Invoice'}
           </p>
-          <p className="text-[10px] text-zinc-600 truncate">
+          <p className="text-[9.5px] text-zinc-600 truncate">
             <strong>Company:</strong> {fullRegisteredCompanyName}
           </p>
           {(activeBranch || activeSubBranch) && (
-            <p className="text-[10px] text-zinc-700 font-semibold truncate">
+            <p className="text-[9.5px] text-zinc-700 font-semibold truncate">
               <strong>Branch:</strong> {activeSubBranch ? activeSubBranch.name : activeBranch?.name} {((activeBranch?.code || activeSubBranch?.code)) ? `(Code: ${(activeBranch?.code || activeSubBranch?.code || '').toUpperCase()})` : ''}
             </p>
           )}
@@ -828,11 +865,11 @@ export function OfficialInvoiceDocument({
             <img 
               src={invoiceVerificationQrUrl} 
               alt={`QR ${invoiceNumOrId}`} 
-              className="w-14 h-14 bg-white object-contain group-hover:scale-105 transition-transform" 
+              className="w-13 h-13 bg-white object-contain group-hover:scale-105 transition-transform" 
               style={{ imageRendering: 'pixelated' }}
             />
           </a>
-          <span className="text-[7.5px] font-mono font-bold text-zinc-700 mt-0.5 block uppercase tracking-tight">
+          <span className="text-[7px] font-mono font-bold text-zinc-700 mt-0.5 block uppercase tracking-tight">
             Scan & Verify
           </span>
         </div>
@@ -840,109 +877,117 @@ export function OfficialInvoiceDocument({
     </div>
   )
 
-  const renderTable = (itemsToRender: any[], startIndex: number, showSubtotal: boolean) => (
-    <div className="rounded-2xl border border-zinc-200 overflow-hidden shadow-2xs mt-1">
-      <table className="w-full text-left text-xs border-collapse">
-        <thead>
-          <tr className={`${theme.tableHeaderBg} text-[10px] uppercase font-black tracking-wider`}>
-            <th className="py-2.5 px-3 w-10 text-center">#</th>
-            <th className="py-2.5 px-3">Service / Product Description</th>
-            <th className="py-2.5 px-2.5 w-14 text-center">Qty</th>
-            <th className="py-2.5 px-2.5 w-16 text-center">Unit</th>
-            <th className="py-2.5 px-3 w-28 text-right">Unit Rate</th>
-            <th className="py-2.5 px-3 w-24 text-right">{isGstInvoice ? "GST Rate / Amt" : "Taxes"}</th>
-            <th className="py-2.5 px-3 w-28 text-right">Amount (INR)</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-zinc-200 text-[11px] text-zinc-800 bg-white">
-          {itemsToRender.map((item, idx) => (
-            <tr key={item.id || idx} className="hover:bg-zinc-50/80 transition-colors">
-              <td className="py-2.5 px-3 text-center font-mono font-bold text-zinc-500">
-                {startIndex + idx + 1}
-              </td>
-              <td className="py-2.5 px-3 font-semibold text-zinc-900">
-                <div>{item.serviceName}</div>
-                {item.itemCharges > 0 && (
-                  <div className="text-[9.5px] text-zinc-500 font-normal">
-                    + Platform Setup: ₹{item.itemCharges.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                  </div>
-                )}
-              </td>
-              <td className="py-2.5 px-2.5 text-center font-mono">{item.itemQty}</td>
-              <td className="py-2.5 px-2.5 text-center text-zinc-500">{item.unit || "Unit"}</td>
-              <td className="py-2.5 px-3 text-right font-mono">
-                ₹{item.itemRate.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-              </td>
-              <td className="py-2.5 px-3 text-right font-mono text-zinc-600">
-                {isGstInvoice ? (
-                  <div>
-                    <span className="font-bold">{item.gstRate || gstRate}%</span>
-                    <span className="text-[9.5px] text-zinc-500 block">
-                      (₹{item.rowTax.toLocaleString("en-IN", { minimumFractionDigits: 2 })})
-                    </span>
-                  </div>
-                ) : (
-                  <span className="font-mono text-zinc-400">₹0.00</span>
-                )}
-              </td>
-              <td className="py-2.5 px-3 text-right font-mono font-black text-zinc-900">
-                ₹{item.rowTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-        {showSubtotal && (
-          <tfoot>
-            <tr className={`${theme.tableSubtotalBg} font-bold text-[10.5px] border-t border-zinc-200`}>
-              <td colSpan={2} className="py-2 px-3 uppercase tracking-wider">
-                SUBTOTAL SERVICES & BASE AMOUNT
-              </td>
-              <td className="py-2 px-2.5 text-center font-mono">{totalTableQty}</td>
-              <td className="py-2 px-2.5 text-center">Items</td>
-              <td className="py-2 px-3 text-right font-mono">
-                ₹{totalTableBase.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-              </td>
-              <td className="py-2 px-3 text-right font-mono">
-                ₹{totalTableGst.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-              </td>
-              <td className="py-2 px-3 text-right font-mono font-black">
-                ₹{totalTableGross.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-              </td>
-            </tr>
-          </tfoot>
-        )}
-      </table>
-    </div>
-  )
+  const renderTable = (itemsToRender: any[], startIndex: number, showSubtotal: boolean) => {
+    const pageSubtotalQty = itemsToRender.reduce((sum, it) => sum + it.itemQty, 0)
+    const pageSubtotalBase = itemsToRender.reduce((sum, it) => sum + (it.itemRate * it.itemQty) + it.itemCharges, 0)
+    const pageSubtotalGst = isGstInvoice ? itemsToRender.reduce((sum, it) => sum + it.rowTax, 0) : 0
+    const pageSubtotalGross = isGstInvoice ? itemsToRender.reduce((sum, it) => sum + it.rowTotal, 0) : pageSubtotalBase
 
-  const renderFinancialsAndFooter = () => (
-    <>
+    return (
+      <div className="rounded-2xl border border-zinc-200 overflow-hidden shadow-2xs mt-1">
+        <table className="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr className={`${theme.tableHeaderBg} text-[9.5px] uppercase font-black tracking-wider`}>
+              <th className="py-2 px-3 w-10 text-center">#</th>
+              <th className="py-2 px-3">Service / Product Description</th>
+              <th className="py-2 px-2 w-12 text-center">Qty</th>
+              <th className="py-2 px-2 w-14 text-center">Unit</th>
+              <th className="py-2 px-3 w-24 text-right">Unit Rate</th>
+              <th className="py-2 px-3 w-24 text-right">{isGstInvoice ? "GST Rate / Amt" : "Taxes"}</th>
+              <th className="py-2 px-3 w-28 text-right">Amount (INR)</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-200 text-[10.5px] text-zinc-800 bg-white">
+            {itemsToRender.map((item, idx) => (
+              <tr key={item.id || idx} className="hover:bg-zinc-50/80 transition-colors">
+                <td className="py-2 px-3 text-center font-mono font-bold text-zinc-500">
+                  {startIndex + idx + 1}
+                </td>
+                <td className="py-2 px-3 font-semibold text-zinc-900">
+                  <div>{item.serviceName}</div>
+                  {item.itemCharges > 0 && (
+                    <div className="text-[9px] text-zinc-500 font-normal">
+                      + Platform Setup: ₹{item.itemCharges.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                    </div>
+                  )}
+                </td>
+                <td className="py-2 px-2 text-center font-mono">{item.itemQty}</td>
+                <td className="py-2 px-2 text-center text-zinc-500">{item.unit || "Unit"}</td>
+                <td className="py-2 px-3 text-right font-mono">
+                  ₹{item.itemRate.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                </td>
+                <td className="py-2 px-3 text-right font-mono text-zinc-600">
+                  {isGstInvoice ? (
+                    <div>
+                      <span className="font-bold">{item.gstRate || gstRate}%</span>
+                      <span className="text-[8.5px] text-zinc-500 block">
+                        (₹{item.rowTax.toLocaleString("en-IN", { minimumFractionDigits: 2 })})
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="font-mono text-zinc-400">₹0.00</span>
+                  )}
+                </td>
+                <td className="py-2 px-3 text-right font-mono font-black text-zinc-900">
+                  ₹{item.rowTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          {showSubtotal && (
+            <tfoot>
+              <tr className={`${theme.tableSubtotalBg} font-bold text-[10px] border-t border-zinc-200`}>
+                <td colSpan={2} className="py-1.5 px-3 uppercase tracking-wider">
+                  SUBTOTAL SERVICES & BASE AMOUNT
+                </td>
+                <td className="py-1.5 px-2 text-center font-mono">{pageSubtotalQty}</td>
+                <td className="py-1.5 px-2 text-center">Items</td>
+                <td className="py-1.5 px-3 text-right font-mono">
+                  ₹{pageSubtotalBase.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                </td>
+                <td className="py-1.5 px-3 text-right font-mono">
+                  ₹{pageSubtotalGst.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                </td>
+                <td className="py-1.5 px-3 text-right font-mono font-black">
+                  ₹{pageSubtotalGross.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                </td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+    )
+  }
+
+  const renderFinancialsAndFooter = (pageNumber: number = 1, totalPgs: number = 1) => (
+    <div className="space-y-2 mt-1">
       {/* TOTAL AMOUNT IN WORDS + TERMS & CONDITIONS (LEFT) & FINANCIAL BREAKDOWN (RIGHT) */}
-      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5 pt-1">
+      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
         {/* Left 6 Columns: Amount in Words & Terms */}
         <div className="sm:col-span-6 space-y-2">
           <div className={`p-2.5 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-0.5 shadow-2xs`}>
-            <span className="font-black text-[9.5px] uppercase tracking-wider text-zinc-600 flex items-center gap-1.5">
-              <FileText size={12} className={theme.primaryText} />
+            <span className="font-black text-[9px] uppercase tracking-wider text-zinc-600 flex items-center gap-1.5">
+              <FileText size={11} className={theme.primaryText} />
               <span>TOTAL AMOUNT IN WORDS</span>
             </span>
-            <p className="font-bold text-zinc-900 italic text-[10.5px] leading-tight">
+            <p className="font-bold text-zinc-900 italic text-[10px] leading-tight">
               {numberToIndianWords(totalVal)}
             </p>
           </div>
 
           {/* Terms & Conditions */}
-          <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200 space-y-1 shadow-2xs">
-            <span className="font-black text-[10px] uppercase tracking-wider text-zinc-700 block border-b border-zinc-200 pb-1">
+          <div className="p-2.5 rounded-xl bg-zinc-50 border border-zinc-200 space-y-1 shadow-2xs">
+            <span className="font-black text-[9.5px] uppercase tracking-wider text-zinc-700 block border-b border-zinc-200 pb-0.5">
               TERMS & CONDITIONS
             </span>
-            <ul className="space-y-1 text-[9px] text-zinc-700 font-medium leading-tight whitespace-pre-line">
+            <ul className="space-y-0.5 text-[8.5px] text-zinc-700 font-medium leading-tight whitespace-pre-line">
               {(activeCompany?.terms_conditions || "1. All payments must be made in favor of the company indicated above.\n2. Please quote Invoice Number in all remittance references.\n3. Goods / Services once rendered are subject to standard enterprise terms.\n4. Interest @ 18% p.a. applies on unpaid balances beyond the due date.")
                 .split("\n")
                 .filter(Boolean)
+                .slice(0, 4)
                 .map((line, idx) => (
                   <li key={idx} className="flex items-start gap-1.5">
-                    <Check size={11} className={`${theme.primaryText} font-bold shrink-0 mt-0.5`} />
+                    <Check size={10} className={`${theme.primaryText} font-bold shrink-0 mt-0.5`} />
                     <span>{line}</span>
                   </li>
                 ))}
@@ -951,8 +996,8 @@ export function OfficialInvoiceDocument({
         </div>
 
         {/* Right 6 Columns: Financial Computation Matrix */}
-        <div className="sm:col-span-6 space-y-1 text-[10.5px]">
-          <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200 space-y-0.5 text-zinc-700 shadow-2xs">
+        <div className="sm:col-span-6 space-y-1 text-[10px]">
+          <div className="p-2.5 rounded-xl bg-zinc-50 border border-zinc-200 space-y-0.5 text-zinc-700 shadow-2xs">
             <div className="flex justify-between py-0.5">
               <span>Total Services Value</span>
               <span className="font-mono font-semibold">₹{baseNum.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
@@ -978,7 +1023,7 @@ export function OfficialInvoiceDocument({
               </div>
             ) : null}
 
-            <div className="flex justify-between py-1 border-t border-zinc-200 font-bold text-zinc-900">
+            <div className="flex justify-between py-0.5 border-t border-zinc-200 font-bold text-zinc-900">
               <span>Taxable Base Amount</span>
               <span className="font-mono">₹{taxableBase.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
             </div>
@@ -996,9 +1041,9 @@ export function OfficialInvoiceDocument({
               </>
             )}
 
-            <div className={`flex justify-between p-2 rounded-lg ${theme.grandTotalBg} font-black text-xs tracking-wide my-1 shadow-xs`}>
+            <div className={`flex justify-between p-1.5 rounded-lg ${theme.grandTotalBg} font-black text-[11px] tracking-wide my-1 shadow-xs`}>
               <span>GRAND TOTAL (NET PAYABLE)</span>
-              <span className="font-mono text-sm">₹{totalVal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+              <span className="font-mono text-xs">₹{totalVal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
             </div>
 
             <div className="flex justify-between py-0.5 text-emerald-700 font-bold">
@@ -1006,12 +1051,12 @@ export function OfficialInvoiceDocument({
               <span className="font-mono">₹{parsedReceived.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
             </div>
 
-            <div className="flex justify-between py-1 border-t border-zinc-200 font-black text-[11px] text-rose-600">
+            <div className="flex justify-between py-0.5 border-t border-zinc-200 font-black text-[10px] text-rose-600">
               <span>Current Balance (Total Due)</span>
               <span className="font-mono">₹{parsedDue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
             </div>
 
-            <div className="flex justify-between pt-0.5 text-[9.5px] text-zinc-500">
+            <div className="flex justify-between pt-0.5 text-[9px] text-zinc-500">
               <span>Next Due Date</span>
               <span className="font-mono font-bold text-zinc-800">{hasDue ? formatInvoiceDate(invoice.dueDate) : "-"}</span>
             </div>
@@ -1021,31 +1066,31 @@ export function OfficialInvoiceDocument({
 
       {/* PAYMENT & BANK TRANSFER DETAILS */}
       {(hasUpiDetails || hasBankDetails) && (
-        <div className={`grid grid-cols-1 ${hasUpiDetails && hasBankDetails ? 'sm:grid-cols-2' : 'sm:grid-cols-1'} gap-3 pt-1`}>
+        <div className={`grid grid-cols-1 ${hasUpiDetails && hasBankDetails ? 'sm:grid-cols-2' : 'sm:grid-cols-1'} gap-2.5 pt-0.5`}>
           {hasUpiDetails && (
-            <div className={`p-2.5 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-1 shadow-2xs`}>
+            <div className={`p-2 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-1 shadow-2xs`}>
               <div className="flex items-center justify-between">
-                <span className="font-black text-[10px] uppercase tracking-wider text-zinc-800 flex items-center gap-1.5">
-                  <QrCode size={12} className={theme.primaryText} />
+                <span className="font-black text-[9.5px] uppercase tracking-wider text-zinc-800 flex items-center gap-1.5">
+                  <QrCode size={11} className={theme.primaryText} />
                   <span>UPI & DIGITAL PAYMENT</span>
                 </span>
-                <span className="text-[8.5px] font-bold text-emerald-700">Instant Settlement</span>
+                <span className="text-[8px] font-bold text-emerald-700">Instant Settlement</span>
               </div>
 
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2">
                 {customPaymentQrUrl && (
                   <div className="shrink-0 text-center space-y-0.5">
                     <img 
                       src={customPaymentQrUrl} 
                       alt="UPI Payment QR Code" 
-                      className="w-16 h-16 bg-white p-1 border border-zinc-300 shadow-xs object-contain" 
+                      className="w-14 h-14 bg-white p-0.5 border border-zinc-300 shadow-xs object-contain" 
                       style={{ imageRendering: 'pixelated' }}
                     />
-                    <span className="text-[7px] font-black text-zinc-600 block uppercase">SCAN TO PAY</span>
+                    <span className="text-[6.5px] font-black text-zinc-600 block uppercase">SCAN TO PAY</span>
                   </div>
                 )}
                 
-                <div className="space-y-0.5 text-[9px] flex-1 min-w-0">
+                <div className="space-y-0.5 text-[8.5px] flex-1 min-w-0">
                   {resolvedUpiId && (
                     <div className="flex justify-between">
                       <span className="text-zinc-600">UPI ID:</span>
@@ -1058,11 +1103,11 @@ export function OfficialInvoiceDocument({
                       <strong className="text-zinc-900 font-bold truncate max-w-[130px]">{resolvedAccountHolder}</strong>
                     </div>
                   )}
-                  <div className="flex items-center gap-1 flex-wrap pt-0.5 font-bold text-zinc-600 text-[8px]">
-                    <span className="px-1.5 py-0.2 rounded bg-white border border-zinc-200">GPay</span>
-                    <span className="px-1.5 py-0.2 rounded bg-white border border-zinc-200">PhonePe</span>
-                    <span className="px-1.5 py-0.2 rounded bg-white border border-zinc-200">Paytm</span>
-                    <span className="px-1.5 py-0.2 rounded bg-white border border-zinc-200">BHIM UPI</span>
+                  <div className="flex items-center gap-1 flex-wrap pt-0.5 font-bold text-zinc-600 text-[7.5px]">
+                    <span className="px-1 py-0.2 rounded bg-white border border-zinc-200">GPay</span>
+                    <span className="px-1 py-0.2 rounded bg-white border border-zinc-200">PhonePe</span>
+                    <span className="px-1 py-0.2 rounded bg-white border border-zinc-200">Paytm</span>
+                    <span className="px-1 py-0.2 rounded bg-white border border-zinc-200">BHIM</span>
                   </div>
                 </div>
               </div>
@@ -1070,12 +1115,12 @@ export function OfficialInvoiceDocument({
           )}
 
           {hasBankDetails && (
-            <div className={`p-2.5 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-0.5 shadow-2xs`}>
-              <span className="font-black text-[10px] uppercase tracking-wider text-zinc-800 flex items-center gap-1.5">
-                <Landmark size={12} className={theme.primaryText} />
+            <div className={`p-2 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-0.5 shadow-2xs`}>
+              <span className="font-black text-[9.5px] uppercase tracking-wider text-zinc-800 flex items-center gap-1.5">
+                <Landmark size={11} className={theme.primaryText} />
                 <span>BANK DETAILS</span>
               </span>
-              <div className="space-y-0.5 text-[9px] text-zinc-700">
+              <div className="space-y-0.5 text-[8.5px] text-zinc-700">
                 {resolvedBankName && (
                   <div className="flex justify-between">
                     <span>Bank Name:</span>
@@ -1107,13 +1152,13 @@ export function OfficialInvoiceDocument({
       )}
 
       {/* SIGNATURES & OFFICIAL SEAL ROW */}
-      <div className="flex flex-row justify-between items-center gap-3 pt-2 border-t border-zinc-200">
+      <div className="flex flex-row justify-between items-center gap-3 pt-1.5 border-t border-zinc-200">
         <div className="text-center space-y-0.5">
-          <div className="h-14 flex items-end justify-center">
+          <div className="h-12 flex items-end justify-center">
             {/* Blank signature space */}
           </div>
-          <div className="w-36 border-t border-zinc-400 pt-0.5">
-            <p className="text-[8px] font-black uppercase text-zinc-600">CUSTOMER SIGNATURE</p>
+          <div className="w-32 border-t border-zinc-400 pt-0.5">
+            <p className="text-[7.5px] font-black uppercase text-zinc-600">CUSTOMER SIGNATURE</p>
           </div>
         </div>
 
@@ -1141,23 +1186,23 @@ export function OfficialInvoiceDocument({
             </div>
           )}
           <div className="text-center space-y-0.5">
-            <div className="h-14 flex items-end justify-center">
+            <div className="h-12 flex items-end justify-center">
               {resolvedSignatureUrl ? (
                 <img 
                   src={resolvedSignatureUrl} 
                   alt="Authorized Signature / Stamp" 
-                  className="max-h-14 max-w-[150px] object-contain drop-shadow-xs pointer-events-none select-none" 
+                  className="max-h-12 max-w-[140px] object-contain drop-shadow-xs pointer-events-none select-none" 
                 />
               ) : null}
             </div>
-            <div className="w-36 border-t border-zinc-400 pt-0.5">
+            <div className="w-32 border-t border-zinc-400 pt-0.5">
               {resolvedSignatoryName ? (
-                <p className="text-[8px] font-black uppercase text-zinc-700 font-bold">
+                <p className="text-[7.5px] font-black uppercase text-zinc-700 font-bold">
                   {resolvedSignatoryName}
                 </p>
               ) : null}
               {resolvedSignatoryDesignation ? (
-                <p className="text-[7.5px] text-zinc-500 font-medium">
+                <p className="text-[7px] text-zinc-500 font-medium">
                   {resolvedSignatoryDesignation}
                 </p>
               ) : null}
@@ -1165,98 +1210,130 @@ export function OfficialInvoiceDocument({
           </div>
 
           {resolvedStampUrl ? (
-            <div className="w-14 h-14 flex items-center justify-center p-0.5 shadow-2xs shrink-0 select-none">
-              <img src={resolvedStampUrl} alt="Official Seal" className="max-h-14 max-w-14 object-contain pointer-events-none select-none" />
+            <div className="w-12 h-12 flex items-center justify-center p-0.5 shadow-2xs shrink-0 select-none">
+              <img src={resolvedStampUrl} alt="Official Seal" className="max-h-12 max-w-12 object-contain pointer-events-none select-none" />
             </div>
           ) : null}
         </motion.div>
       </div>
 
-      {/* BOTTOM BANNER */}
-      <div className={`rounded-xl ${theme.headerGradient} text-white p-1.5 text-[8.5px] font-medium flex flex-wrap items-center justify-between gap-1 shadow-xs`}>
+      {/* BOTTOM BANNER WITH PAGE NUMBER */}
+      <div className={`rounded-xl ${theme.headerGradient} text-white p-1.5 text-[8px] font-medium flex flex-wrap items-center justify-between gap-1 shadow-xs`}>
         <p className="flex items-center gap-1">
-          <MapPin size={10} />
+          <MapPin size={9} />
           <span>{resolvedAddress || fullRegisteredCompanyName}</span>
         </p>
-        <p>
-          {resolvedEmail ? `Support: ${resolvedEmail}` : ""} {resolvedPhone ? `| Tel: ${resolvedPhone}` : ""}
-        </p>
+        <div className="flex items-center gap-2">
+          <span>{resolvedEmail ? `Support: ${resolvedEmail}` : ""} {resolvedPhone ? `| Tel: ${resolvedPhone}` : ""}</span>
+          <span className="font-mono font-bold bg-black/20 px-1.5 py-0.2 rounded text-[7.5px]">
+            Page {pageNumber} of {totalPgs}
+          </span>
+        </div>
       </div>
-    </>
+    </div>
+  )
+
+  const renderPageFooterOnly = (pageNumber: number, totalPgs: number) => (
+    <div className="mt-4 pt-2 border-t border-zinc-200">
+      <div className="flex justify-between items-center bg-zinc-50 p-2 rounded-xl border border-zinc-200 text-[8.5px] text-zinc-600">
+        <span>Continued to Next Page...</span>
+        <span className="font-mono font-bold text-zinc-800">Page {pageNumber} of {totalPgs}</span>
+      </div>
+      <div className={`rounded-xl ${theme.headerGradient} text-white p-1.5 text-[8px] font-medium flex flex-wrap items-center justify-between gap-1 shadow-xs mt-2`}>
+        <p className="flex items-center gap-1">
+          <MapPin size={9} />
+          <span>{resolvedAddress || fullRegisteredCompanyName}</span>
+        </p>
+        <span className="font-mono font-bold bg-black/20 px-1.5 py-0.2 rounded text-[7.5px]">
+          Page {pageNumber} of {totalPgs}
+        </span>
+      </div>
+    </div>
   )
 
   return (
-    <div id="printable-invoice" className="bg-white text-zinc-900 font-sans p-4 sm:p-5 text-xs shadow-xl border border-zinc-200 rounded-2xl w-full max-w-[840px] mx-auto print:p-0 print:border-none print:shadow-none print:w-full print:max-w-none relative overflow-hidden">
-      {/* Draggable Custom Text Stamps / Badges Overlay */}
-      {customStamps && customStamps.map(stamp => (
-        <motion.div
-          key={stamp.id}
-          drag={interactive}
-          dragMomentum={false}
-          dragElastic={0}
-          whileDrag={{ scale: 1.05, zIndex: 60 }}
-          animate={{ x: stamp.x, y: stamp.y }}
-          onDragEnd={(_, info) => {
-            if (onCustomStampMove) {
-              onCustomStampMove(stamp.id, {
-                x: stamp.x + info.offset.x,
-                y: stamp.y + info.offset.y,
-              })
-            }
-          }}
-          className={`absolute z-30 px-3 py-1 rounded-lg border-2 font-black uppercase tracking-wider select-none shadow-md flex items-center gap-1.5 ${
-            interactive ? "cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-emerald-400 group" : ""
-          }`}
+    <div id="printable-invoice" className="w-full flex flex-col items-center gap-8 py-2 print:p-0 print:gap-0 print:m-0">
+      {paginatedPages.map((pg) => (
+        <div
+          key={`invoice-page-${pg.pageNumber}`}
+          className="a4-page bg-white text-zinc-900 font-sans p-6 sm:p-7 text-xs shadow-2xl border border-zinc-200/90 rounded-2xl w-full max-w-[794px] min-h-[1080px] mx-auto relative flex flex-col justify-between overflow-hidden print:w-[210mm] print:h-[297mm] print:min-h-[297mm] print:max-h-[297mm] print:p-[12mm] print:m-0 print:shadow-none print:border-none print:rounded-none page-break-after"
           style={{
-            borderColor: stamp.color || "#0d9488",
-            color: stamp.color || "#0d9488",
-            backgroundColor: "rgba(255, 255, 255, 0.95)",
-            fontSize: `${stamp.fontSize || 11}px`,
-            left: "40%",
-            top: "20%",
+            aspectRatio: "210 / 297",
           }}
         >
-          {interactive && (
-            <span className="text-[9px] opacity-60 pointer-events-none">✥</span>
-          )}
-          <span>{stamp.text}</span>
-          {interactive && onRemoveCustomStamp && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                onRemoveCustomStamp(stamp.id)
+          {/* Draggable Custom Text Stamps / Badges Overlay (on page 1) */}
+          {pg.isFirstPage && customStamps && customStamps.map(stamp => (
+            <motion.div
+              key={stamp.id}
+              drag={interactive}
+              dragMomentum={false}
+              dragElastic={0}
+              whileDrag={{ scale: 1.05, zIndex: 60 }}
+              animate={{ x: stamp.x, y: stamp.y }}
+              onDragEnd={(_, info) => {
+                if (onCustomStampMove) {
+                  onCustomStampMove(stamp.id, {
+                    x: stamp.x + info.offset.x,
+                    y: stamp.y + info.offset.y,
+                  })
+                }
               }}
-              className="w-3.5 h-3.5 rounded-full bg-rose-500 text-white flex items-center justify-center text-[8px] hover:bg-rose-700 cursor-pointer ml-1"
-              title="Remove Stamp"
+              className={`absolute z-30 px-3 py-1 rounded-lg border-2 font-black uppercase tracking-wider select-none shadow-md flex items-center gap-1.5 ${
+                interactive ? "cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-emerald-400 group" : ""
+              }`}
+              style={{
+                borderColor: stamp.color || "#0d9488",
+                color: stamp.color || "#0d9488",
+                backgroundColor: "rgba(255, 255, 255, 0.95)",
+                fontSize: `${stamp.fontSize || 11}px`,
+                left: "40%",
+                top: "20%",
+              }}
             >
-              ✕
-            </button>
-          )}
-        </motion.div>
-      ))}
+              {interactive && (
+                <span className="text-[9px] opacity-60 pointer-events-none">✥</span>
+              )}
+              <span>{stamp.text}</span>
+              {interactive && onRemoveCustomStamp && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onRemoveCustomStamp(stamp.id)
+                  }}
+                  className="w-3.5 h-3.5 rounded-full bg-rose-500 text-white flex items-center justify-center text-[8px] hover:bg-rose-700 cursor-pointer ml-1"
+                  title="Remove Stamp"
+                >
+                  ✕
+                </button>
+              )}
+            </motion.div>
+          ))}
 
-      {!isMultiPage ? (
-        <div className="space-y-2.5">
-          {renderTopHeader()}
-          {renderInfoCards()}
-          {renderTable(page1Items, 0, true)}
-          {renderFinancialsAndFooter()}
-        </div>
-      ) : (
-        <div className="space-y-6">
-          <div className="space-y-2.5 page-break-after">
-            {renderTopHeader(1)}
-            {renderInfoCards()}
-            {renderTable(page1Items, 0, false)}
+          {/* PAGE CONTENT */}
+          <div className="space-y-2 flex-1">
+            {pg.isFirstPage ? (
+              <>
+                {renderTopHeader(pg.pageNumber, totalPages)}
+                {renderInfoCards()}
+                {renderTable(pg.items, pg.startIndex, pg.isLastPage)}
+              </>
+            ) : (
+              <>
+                {renderCompactSubsequentHeader(pg.pageNumber, totalPages)}
+                {renderTable(pg.items, pg.startIndex, pg.isLastPage)}
+              </>
+            )}
           </div>
-          <div className="space-y-2.5 pt-4">
-            {renderTopHeader(2)}
-            {renderTable(page2Items, 5, true)}
-            {renderFinancialsAndFooter()}
-          </div>
+
+          {/* BOTTOM SECTION */}
+          {pg.isLastPage ? (
+            renderFinancialsAndFooter(pg.pageNumber, totalPages)
+          ) : (
+            renderPageFooterOnly(pg.pageNumber, totalPages)
+          )}
         </div>
-      )}
+      ))}
     </div>
   )
 }
