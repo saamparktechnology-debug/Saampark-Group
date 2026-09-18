@@ -10,7 +10,7 @@ import {
 import { useAuthStore, getCompanyFullName, getCompanyLogoUrl } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { QuotationService } from "@/services/salesService"
-import { getClients } from "@/app/feature/clients/services/clientService"
+import { getClients, saveStoredClient } from "@/app/feature/clients/services/clientService"
 import { addInvoice } from "@/app/feature/sales/invoices/services/invoiceService"
 import { createNotification } from "@/services/notificationService"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
@@ -42,6 +42,10 @@ export default function QuotationsMain() {
   const [sendEmail, setSendEmail] = React.useState("")
   const [sendMessage, setSendMessage] = React.useState("")
   const [isSending, setIsSending] = React.useState(false)
+
+  // Estimate Studio from Quotation
+  const [isEstimateStudioOpen, setIsEstimateStudioOpen] = React.useState(false)
+  const [estimateInitialData, setEstimateInitialData] = React.useState<any>(null)
 
   // Form state
   const [recipientMode, setRecipientMode] = React.useState<"client" | "custom">("client")
@@ -321,16 +325,91 @@ export default function QuotationsMain() {
     })
   }
 
-  const handleSendQuotation = async () => {
-    if (!sendingItem || !sendEmail.trim()) return
-    setIsSending(true)
-    try {
-      await new Promise(res => setTimeout(res, 1200))
-      alert(`Official Quotation ${sendingItem.number} dispatched successfully to ${sendEmail}`)
-      setSendingItem(null)
-    } finally {
-      setIsSending(false)
-    }
+  const handleConvertToClient = async (quotation: QuotationData) => {
+    await executeWithFeedback(async () => {
+      const existingClients = await getClients("all").catch(() => [])
+      const custEmailNorm = (quotation.customerEmail || "").toLowerCase().trim()
+      const custNameNorm = (quotation.customer || "").toLowerCase().trim()
+      
+      let matchedClient = existingClients.find(c => 
+        (custEmailNorm && (c.email || "").toLowerCase().trim() === custEmailNorm) ||
+        (custNameNorm && (c.name || "").toLowerCase().trim() === custNameNorm)
+      )
+
+      if (!matchedClient) {
+        await saveStoredClient({
+          id: `cli_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          name: quotation.customer,
+          email: quotation.customerEmail || "",
+          phone: quotation.customerPhone || "",
+          address: quotation.customerAddress || "",
+          city: "",
+          state: "",
+          gstNumber: quotation.clientGstin || "",
+          primaryContact: quotation.customer,
+          group: "VIP",
+          label: "Quotation Convert",
+          labelColor: "#10b981",
+          projectsCount: 0,
+          totalInvoiced: "₹0",
+          paymentReceived: "₹0",
+          due: "₹0",
+          type: "Organization",
+          owner: user?.name || "Admin",
+          createdAt: Date.now(),
+          companyId: quotation.companyId || activeCompanyId || "tech",
+          companyName: activeCompany?.brand_name || activeCompany?.name || "SAAMPARK",
+          branchId: quotation.branchId,
+          branchName: quotation.branchName,
+        }, quotation.companyId || activeCompanyId || "tech")
+      }
+
+      // Update quotation status to "Accepted"
+      const updated = { ...quotation, status: "Accepted" }
+      await QuotationService.update(quotation.id, updated).catch(() => {})
+      setQuotations(prev => prev.map(q => q.id === quotation.id ? updated : q))
+      
+      // Dispatch sync events
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("saampark_clients_updated"))
+        window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+      }
+      loadData()
+    }, {
+      actionType: "process",
+      loadingTitle: "Converting to Client...",
+      loadingMsg: `Adding ${quotation.customer} to official CRM Clients database...`,
+      successTitle: "Client Registered Successfully!",
+      successMsg: `${quotation.customer} is now a registered CRM client. You can now send Estimates, Invoices, and Projects to them.`,
+    })
+  }
+
+  const handleCreateEstimateFromQuote = (quotation: QuotationData) => {
+    setEstimateInitialData({
+      customer: quotation.customer,
+      clientName: quotation.customer,
+      clientEmail: quotation.customerEmail,
+      clientPhone: quotation.customerPhone,
+      clientAddress: quotation.customerAddress,
+      clientGst: quotation.clientGstin,
+      projectTitle: `Estimate for ${quotation.customer} (${quotation.number})`,
+      companyId: quotation.companyId || activeCompanyId || "tech",
+      branchId: quotation.branchId,
+      items: (quotation.items || []).map(it => ({
+        id: `est_it_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        serviceName: it.name,
+        sacCode: it.sac || "998313",
+        qty: it.quantity || 1,
+        unit: "Project",
+        rate: it.unitPrice || 0,
+        gstRate: 18,
+        gstAmount: Math.round(((it.unitPrice || 0) * (it.quantity || 1)) * 0.18),
+        totalAmount: Math.round(((it.unitPrice || 0) * (it.quantity || 1)) * 1.18),
+      })),
+      notes: quotation.notes || "Commercial estimate prepared for project execution.",
+      terms: quotation.terms || "1. Estimate valid for 30 calendar days.\n2. Scope changes subject to re-estimation.",
+    })
+    setIsEstimateStudioOpen(true)
   }
 
   const totalPipeline = quotations.reduce((acc, q) => acc + (q.total || 0), 0)
@@ -556,10 +635,24 @@ export default function QuotationsMain() {
                       <div className="flex items-center justify-center gap-1.5">
                         <button 
                           onClick={() => setViewingItem(q)}
-                          className="p-1 hover:text-emerald-600 transition-colors" 
+                          className="p-1 hover:text-emerald-600 transition-colors cursor-pointer" 
                           title="View PDF Document"
                         >
                           <Eye size={14} />
+                        </button>
+                        <button 
+                          onClick={() => handleConvertToClient(q)}
+                          className="p-1 hover:text-emerald-600 transition-colors cursor-pointer" 
+                          title="Convert / Move to CRM Client"
+                        >
+                          <UserCheck size={14} className="text-emerald-600" />
+                        </button>
+                        <button 
+                          onClick={() => handleCreateEstimateFromQuote(q)}
+                          className="p-1 hover:text-blue-600 transition-colors cursor-pointer" 
+                          title="Generate Estimate from Quotation"
+                        >
+                          <Sparkles size={14} className="text-blue-600" />
                         </button>
                         <button 
                           onClick={() => {
@@ -567,7 +660,7 @@ export default function QuotationsMain() {
                             setSendEmail(q.customerEmail || "")
                             setSendMessage(`Dear ${q.customer},\n\nPlease find attached our commercial quotation ${q.number} totaling ₹${(q.total || 0).toLocaleString("en-IN")}.\n\nBest regards,\n${user?.name || "SAAMPARK Group"}`)
                           }}
-                          className="p-1 hover:text-blue-600 transition-colors" 
+                          className="p-1 hover:text-blue-600 transition-colors cursor-pointer" 
                           title="Email Quotation"
                         >
                           <Send size={14} />
@@ -575,7 +668,7 @@ export default function QuotationsMain() {
                         {canEdit && (
                           <button 
                             onClick={() => openEditModal(q)} 
-                            className="p-1 hover:text-amber-600 transition-colors" 
+                            className="p-1 hover:text-amber-600 transition-colors cursor-pointer" 
                             title="Edit"
                           >
                             <Edit size={14} />
@@ -584,7 +677,7 @@ export default function QuotationsMain() {
                         {canDelete && (
                           <button 
                             onClick={() => setDeleteConfirm(q)} 
-                            className="p-1 hover:text-rose-600 transition-colors" 
+                            className="p-1 hover:text-rose-600 transition-colors cursor-pointer" 
                             title="Delete"
                           >
                             <Trash2 size={14} />
@@ -607,6 +700,8 @@ export default function QuotationsMain() {
             <OfficialQuotationDocument 
               quotation={viewingItem}
               onClose={() => setViewingItem(null)}
+              onConvertToClient={() => handleConvertToClient(viewingItem)}
+              onSendEstimate={() => handleCreateEstimateFromQuote(viewingItem)}
               onSendEmail={() => {
                 const target = viewingItem
                 setViewingItem(null)
@@ -633,6 +728,21 @@ export default function QuotationsMain() {
           setIsModalOpen(false)
           setEditingItem(null)
           loadData()
+        }}
+      />
+
+      {/* ── INTERACTIVE SPLIT-SCREEN DOCUMENT STUDIO (ESTIMATE FROM QUOTE) ── */}
+      <DocumentStudioModal
+        isOpen={isEstimateStudioOpen}
+        mode="estimate"
+        initialData={estimateInitialData}
+        onClose={() => {
+          setIsEstimateStudioOpen(false)
+          setEstimateInitialData(null)
+        }}
+        onSaveSuccess={() => {
+          setIsEstimateStudioOpen(false)
+          setEstimateInitialData(null)
         }}
       />
 

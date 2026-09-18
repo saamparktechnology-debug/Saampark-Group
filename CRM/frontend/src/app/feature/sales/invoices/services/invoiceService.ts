@@ -57,6 +57,7 @@ export interface InvoiceItem {
   notes?: string
   terms?: string
   billDate: string
+  invoiceDate?: string
   billTime?: string
   createdAt?: number | string
   dueDate: string
@@ -106,14 +107,39 @@ export interface InvoiceItem {
 
 export const INITIAL_INVOICES: InvoiceItem[] = []
 
+export const parseInvoiceDate = (val: any): Date => {
+  if (!val) return new Date()
+  if (val instanceof Date && !isNaN(val.getTime())) return val
+  if (typeof val === "number") return new Date(val)
+  if (typeof val === "string") {
+    const s = val.trim()
+    // YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+      const parts = s.split("-")
+      const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2].slice(0, 2)))
+      if (!isNaN(d.getTime())) return d
+    }
+    // DD/MM/YYYY or DD-MM-YYYY
+    if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}/.test(s)) {
+      const parts = s.split(/[\/\-]/)
+      const d = new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]))
+      if (!isNaN(d.getTime())) return d
+    }
+    const d = new Date(s)
+    if (!isNaN(d.getTime())) return d
+  }
+  return new Date()
+}
+
 export const generateInvoiceNumber = (
   existingInvoices: InvoiceItem[] = [], 
-  dateObj: Date = new Date(),
+  dateObj: Date | string = new Date(),
   isNonGst: boolean = false
 ): string => {
-  const d = String(dateObj.getDate()).padStart(2, "0")
-  const m = String(dateObj.getMonth() + 1).padStart(2, "0")
-  const y = String(dateObj.getFullYear())
+  const parsedDate = typeof dateObj === "string" ? parseInvoiceDate(dateObj) : (isNaN(dateObj.getTime()) ? new Date() : dateObj)
+  const d = String(parsedDate.getDate()).padStart(2, "0")
+  const m = String(parsedDate.getMonth() + 1).padStart(2, "0")
+  const y = String(parsedDate.getFullYear())
   const prefix = isNonGst ? `NGINV-${d}${m}${y}-` : `INV-${d}${m}${y}-`
 
   const deletedIds = getLocalDeletedIds()
@@ -228,8 +254,8 @@ export const addInvoice = async (invoice: Omit<InvoiceItem, "id"> & { id?: strin
       (typeof invoice.gstRate === "number" && invoice.gstRate > 0) ||
       (typeof invoice.gstAmount === "number" && invoice.gstAmount > 0)
     )
-    const billDateObj = invoice.billDate ? new Date(invoice.billDate) : new Date()
-    nextId = generateInvoiceNumber(currentAll, isNaN(billDateObj.getTime()) ? new Date() : billDateObj, !isGst)
+    const billDateObj = parseInvoiceDate(invoice.billDate || invoice.invoiceDate)
+    nextId = generateInvoiceNumber(currentAll, billDateObj, !isGst)
   }
 
   let activeBranch: string | undefined = undefined

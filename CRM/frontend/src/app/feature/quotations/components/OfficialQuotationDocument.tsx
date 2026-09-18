@@ -4,7 +4,7 @@ import * as React from "react"
 import { 
   Printer, Send, X, Building2, MapPin, Phone, Mail, Globe, 
   Shield, Calendar, Calculator, CheckCircle2, Clock, Landmark, 
-  Stamp, FileCheck, ArrowRight, QrCode, FileText
+  Stamp, FileCheck, ArrowRight, QrCode, FileText, UserCheck, Sparkles
 } from "lucide-react"
 import { useAuthStore, Company, Branch, DEFAULT_COMPANIES, getCompanyLogoUrl } from "@/store/useAuthStore"
 
@@ -50,6 +50,8 @@ interface OfficialQuotationDocumentProps {
   onClose?: () => void
   onSendEmail?: () => void
   onConvertToInvoice?: () => void
+  onConvertToClient?: () => void
+  onSendEstimate?: () => void
 }
 
 export function formatQuotationDate(rawDate?: string | number | Date | null): string {
@@ -116,6 +118,8 @@ export function OfficialQuotationDocument({
   onClose,
   onSendEmail,
   onConvertToInvoice,
+  onConvertToClient,
+  onSendEstimate,
 }: OfficialQuotationDocumentProps) {
   const { 
     companies, 
@@ -332,11 +336,35 @@ export function OfficialQuotationDocument({
             <span>Print / PDF</span>
           </button>
 
+          {onConvertToClient && (
+            <button
+              type="button"
+              onClick={onConvertToClient}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-all cursor-pointer"
+              title="Save this prospect as an official CRM Client"
+            >
+              <UserCheck size={13} />
+              <span>Move to Client</span>
+            </button>
+          )}
+
+          {onSendEstimate && (
+            <button
+              type="button"
+              onClick={onSendEstimate}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-all cursor-pointer"
+              title="Generate a commercial Estimate from this Quotation"
+            >
+              <Sparkles size={13} />
+              <span>Create Estimate</span>
+            </button>
+          )}
+
           {onSendEmail && (
             <button
               type="button"
               onClick={onSendEmail}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-all cursor-pointer"
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-zinc-100 bg-zinc-700 hover:bg-zinc-600 rounded-lg shadow-sm transition-all cursor-pointer"
             >
               <Send size={13} />
               <span>Send to Client</span>

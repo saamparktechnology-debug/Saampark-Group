@@ -15,6 +15,7 @@ interface OfficialEstimateDocumentProps {
   onAccept?: () => void
   onDecline?: () => void
   onConvert?: () => void
+  onConvertToClient?: () => void
   isClientRole?: boolean
 }
 
@@ -83,6 +84,7 @@ export function OfficialEstimateDocument({
   onAccept,
   onDecline,
   onConvert,
+  onConvertToClient,
   isClientRole = false,
 }: OfficialEstimateDocumentProps) {
   const { 
@@ -304,31 +306,41 @@ export function OfficialEstimateDocument({
             <span>Print / PDF</span>
           </button>
 
-          {isClientRole && estimate.status === "Sent" && (
-            <>
-              {onDecline && (
-                <button
-                  type="button"
-                  onClick={onDecline}
-                  className="px-3 py-1.5 text-xs font-semibold text-rose-300 bg-rose-950/60 hover:bg-rose-900/60 border border-rose-800 rounded-lg transition-colors cursor-pointer"
-                >
-                  Decline
-                </button>
-              )}
-              {onAccept && (
-                <button
-                  type="button"
-                  onClick={onAccept}
-                  className="flex items-center gap-1 px-3.5 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-all cursor-pointer"
-                >
-                  <Check size={13} />
-                  <span>Accept Estimate</span>
-                </button>
-              )}
-            </>
+          {onConvertToClient && (
+            <button
+              type="button"
+              onClick={onConvertToClient}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-all cursor-pointer"
+              title="Save customer as an official CRM Client"
+            >
+              <Building2 size={13} />
+              <span>Move to Client</span>
+            </button>
           )}
 
-          {!isClientRole && estimate.status === "Accepted" && onConvert && (
+          {estimate.status !== "Accepted" && onAccept && (
+            <button
+              type="button"
+              onClick={onAccept}
+              className="flex items-center gap-1 px-3.5 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-all cursor-pointer"
+              title="Accept Estimate"
+            >
+              <Check size={13} />
+              <span>{isClientRole ? "Accept Estimate" : "Mark Accepted"}</span>
+            </button>
+          )}
+
+          {estimate.status !== "Declined" && estimate.status !== "Accepted" && onDecline && (
+            <button
+              type="button"
+              onClick={onDecline}
+              className="px-3 py-1.5 text-xs font-semibold text-rose-300 bg-rose-950/60 hover:bg-rose-900/60 border border-rose-800 rounded-lg transition-colors cursor-pointer"
+            >
+              Decline
+            </button>
+          )}
+
+          {estimate.status === "Accepted" && onConvert && (
             <button
               type="button"
               onClick={onConvert}

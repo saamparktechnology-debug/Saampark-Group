@@ -5,12 +5,12 @@ import { motion, AnimatePresence } from "framer-motion"
 import { 
   FileText, Plus, Search, Filter, Trash2, Eye, CheckCircle2, 
   XCircle, Clock, Send, Printer, Download, ArrowRight,
-  Calculator, Building2, User, Calendar, Check, X, AlertCircle, RefreshCw
+  Calculator, Building2, User, UserCheck, Calendar, Check, X, AlertCircle, RefreshCw
 } from "lucide-react"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { getEstimates, addEstimate, updateEstimateStatus, deleteEstimate, EstimateItem, EstimateServiceItem, EstimateStatus } from "./services/estimateService"
-import { getClients } from "@/app/feature/clients/services/clientService"
+import { getClients, saveStoredClient } from "@/app/feature/clients/services/clientService"
 import { addProject } from "@/app/feature/projects/services/projectService"
 import { addInvoice } from "@/app/feature/sales/invoices/services/invoiceService"
 import { addOrder } from "@/app/feature/sales/orders/services/orderService"
@@ -240,6 +240,64 @@ export default function EstimatesPage() {
     setRevisionNote("")
     setIsDetailModalOpen(false)
     loadData()
+  }
+
+  // Convert Prospect to CRM Client
+  const handleConvertToClient = async (est: EstimateItem) => {
+    await executeWithFeedback(async () => {
+      const existingClients = await getClients("all").catch(() => [])
+      const custEmailNorm = (est.clientEmail || "").toLowerCase().trim()
+      const custNameNorm = (est.client || "").toLowerCase().trim()
+      
+      let matchedClient = existingClients.find(c => 
+        (custEmailNorm && (c.email || "").toLowerCase().trim() === custEmailNorm) ||
+        (custNameNorm && (c.name || "").toLowerCase().trim() === custNameNorm)
+      )
+
+      if (!matchedClient) {
+        await saveStoredClient({
+          id: `cli_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          name: est.client,
+          email: est.clientEmail || "",
+          phone: (est as any).clientPhone || (est as any).phone || "",
+          address: (est as any).clientAddress || (est as any).address || "",
+          city: "",
+          state: "",
+          gstNumber: (est as any).clientGstin || (est as any).gstin || "",
+          primaryContact: est.client,
+          group: "VIP",
+          label: "Estimate Convert",
+          labelColor: "#10b981",
+          projectsCount: 0,
+          totalInvoiced: "₹0",
+          paymentReceived: "₹0",
+          due: "₹0",
+          type: "Organization",
+          owner: user?.name || "Admin",
+          createdAt: Date.now(),
+          companyId: est.companyId || activeCompanyId || "tech",
+          companyName: (est as any).companyName || "SAAMPARK",
+          branchId: est.branchId,
+          branchName: est.branchName,
+        }, est.companyId || activeCompanyId || "tech")
+      }
+
+      // Update estimate status to "Accepted"
+      await updateEstimateStatus(est.id, "Accepted")
+      
+      // Dispatch sync events
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("saampark_clients_updated"))
+        window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+      }
+      loadData()
+    }, {
+      actionType: "process",
+      loadingTitle: "Converting to Client...",
+      loadingMsg: `Adding ${est.client} to official CRM Clients database...`,
+      successTitle: "Client Registered Successfully!",
+      successMsg: `${est.client} is now a registered CRM client. You can now send Invoices, Estimates, and Projects.`,
+    })
   }
 
   // Convert to Project & Invoice
@@ -622,6 +680,18 @@ export default function EstimatesPage() {
                             </>
                           )}
 
+                          {/* Admin: Convert / Move to CRM Client */}
+                          {!isClientRole && (
+                            <button
+                              type="button"
+                              onClick={() => handleConvertToClient(est)}
+                              className="p-1 hover:text-emerald-600 transition-colors cursor-pointer"
+                              title="Convert / Move to CRM Client"
+                            >
+                              <UserCheck size={14} className="text-emerald-600" />
+                            </button>
+                          )}
+
                           {/* Admin: Convert to Project/Invoice when Accepted */}
                           {!isClientRole && est.status === "Accepted" && (
                             <button
@@ -677,6 +747,7 @@ export default function EstimatesPage() {
               onClose={() => setIsDetailModalOpen(false)}
               onAccept={() => handleClientAccept(selectedEstimate)}
               onDecline={() => handleClientDecline(selectedEstimate)}
+              onConvertToClient={() => handleConvertToClient(selectedEstimate)}
               onConvert={() => {
                 setIsDetailModalOpen(false)
                 handleConvertToProject(selectedEstimate)

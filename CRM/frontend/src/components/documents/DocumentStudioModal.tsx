@@ -182,8 +182,28 @@ export function DocumentStudioModal({
 
   // 3. Document Identification
   const [docNumber, setDocNumber] = React.useState("")
-  const [issueDate, setIssueDate] = React.useState(new Date().toISOString().split("T")[0])
+  const [issueDate, setIssueDate] = React.useState<string>(() => {
+    if (initialData?.invoiceDate) {
+      const s = String(initialData.invoiceDate).trim()
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10)
+      const dmy = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/)
+      if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}`
+    }
+    if (initialData?.billDate) {
+      const s = String(initialData.billDate).trim()
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10)
+      const dmy = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/)
+      if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}`
+    }
+    return new Date().toISOString().split("T")[0]
+  })
   const [dueDate, setDueDate] = React.useState(() => {
+    if (initialData?.dueDate) {
+      const s = String(initialData.dueDate).trim()
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10)
+      const dmy = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/)
+      if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}`
+    }
     const d = new Date()
     d.setDate(d.getDate() + 15)
     return d.toISOString().split("T")[0]
@@ -309,9 +329,11 @@ export function DocumentStudioModal({
   }, [activeCompany, docScheme])
 
   // Generate document number
-  const generateDocNumber = (scheme: "gst" | "nongst") => {
-    const d = new Date()
-    const datePart = `${String(d.getDate()).padStart(2, "0")}${String(d.getMonth() + 1).padStart(2, "0")}${d.getFullYear()}`
+  const generateDocNumber = (scheme: "gst" | "nongst", targetDate?: string) => {
+    const rawD = targetDate || issueDate
+    const d = rawD ? new Date(rawD) : new Date()
+    const validD = isNaN(d.getTime()) ? new Date() : d
+    const datePart = `${String(validD.getDate()).padStart(2, "0")}${String(validD.getMonth() + 1).padStart(2, "0")}${validD.getFullYear()}`
     const randPart = Math.floor(1000 + Math.random() * 9000)
     
     let prefix = "INV"
@@ -646,6 +668,25 @@ export function DocumentStudioModal({
           </div>
 
           <div className="flex items-center gap-2.5">
+            {/* Quick Document Date Selector in Header */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-700">
+              <Calendar size={13} className="text-teal-600 shrink-0" />
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] font-bold text-zinc-500 hidden sm:inline">Date:</span>
+                <input
+                  type="date"
+                  value={issueDate}
+                  onChange={(e) => {
+                    const newD = e.target.value
+                    setIssueDate(newD)
+                    generateDocNumber(docScheme, newD)
+                  }}
+                  title="Document Issue Date (Default: Today. Click to select past or future date)"
+                  className="bg-transparent text-xs font-bold text-zinc-800 dark:text-zinc-200 focus:outline-none cursor-pointer"
+                />
+              </div>
+            </div>
+
             {/* GST vs Non-GST Selector in Top Header */}
             <div className="flex p-0.5 bg-zinc-100 dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-700">
               <button
@@ -1194,10 +1235,15 @@ export function DocumentStudioModal({
 
                   {/* Document Metadata (Number, Dates, Project) */}
                   <div className="p-3.5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-3">
-                    <span className="font-extrabold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5 border-b border-zinc-200 dark:border-zinc-700/60 pb-2">
-                      <Receipt size={14} className="text-teal-600" />
-                      <span>Document Number & Dates</span>
-                    </span>
+                    <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-700/60 pb-2">
+                      <span className="font-extrabold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                        <Receipt size={14} className="text-teal-600" />
+                        <span>Document Number & Dates</span>
+                      </span>
+                      <span className="text-[10.5px] font-semibold text-teal-600 dark:text-teal-400">
+                        ⚡ Supports Past (Backdated) & Future Dates
+                      </span>
+                    </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                       <div>
@@ -1205,13 +1251,105 @@ export function DocumentStudioModal({
                         <Input value={docNumber} onChange={e => setDocNumber(e.target.value)} className="font-mono font-bold" />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-bold text-zinc-600 mb-0.5">Issue Date</label>
-                        <Input type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)} />
+                        <div className="flex items-center justify-between mb-0.5">
+                          <label className="block text-[10px] font-bold text-zinc-600">Issue Date *</label>
+                          <span className="text-[9px] text-zinc-400 font-medium">Default: Today</span>
+                        </div>
+                        <Input 
+                          type="date" 
+                          value={issueDate} 
+                          onChange={e => {
+                            const val = e.target.value
+                            setIssueDate(val)
+                            generateDocNumber(docScheme, val)
+                          }} 
+                          className="font-medium"
+                        />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-bold text-zinc-600 mb-0.5">Due Date / Valid Till</label>
-                        <Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
+                        <div className="flex items-center justify-between mb-0.5">
+                          <label className="block text-[10px] font-bold text-zinc-600">Due Date / Valid Till</label>
+                          <span className="text-[9px] text-zinc-400 font-medium">+15 Days Default</span>
+                        </div>
+                        <Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="font-medium" />
                       </div>
+
+                      {/* Quick Date Shortcut Pills */}
+                      <div className="sm:col-span-3 flex flex-wrap items-center gap-1.5 pt-0.5">
+                        <span className="text-[9.5px] font-bold text-zinc-400 mr-1">Quick Date:</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const today = new Date().toISOString().split("T")[0]
+                            setIssueDate(today)
+                            generateDocNumber(docScheme, today)
+                          }}
+                          className="px-2 py-0.5 rounded-md bg-teal-50 hover:bg-teal-100 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300 border border-teal-200/80 text-[10px] font-semibold cursor-pointer"
+                        >
+                          📅 Today
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const y = new Date()
+                            y.setDate(y.getDate() - 1)
+                            const yStr = y.toISOString().split("T")[0]
+                            setIssueDate(yStr)
+                            generateDocNumber(docScheme, yStr)
+                          }}
+                          className="px-2 py-0.5 rounded-md bg-zinc-100 hover:bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 border border-zinc-200 text-[10px] font-semibold cursor-pointer"
+                        >
+                          ⏮️ Yesterday
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const d = new Date()
+                            d.setDate(1)
+                            const dStr = d.toISOString().split("T")[0]
+                            setIssueDate(dStr)
+                            generateDocNumber(docScheme, dStr)
+                          }}
+                          className="px-2 py-0.5 rounded-md bg-zinc-100 hover:bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 border border-zinc-200 text-[10px] font-semibold cursor-pointer"
+                        >
+                          ⏪ 1st of Month
+                        </button>
+                        <span className="text-zinc-300 dark:text-zinc-700">|</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const d = new Date(issueDate ? new Date(issueDate) : new Date())
+                            d.setDate(d.getDate() + 7)
+                            setDueDate(d.toISOString().split("T")[0])
+                          }}
+                          className="px-2 py-0.5 rounded-md bg-zinc-100 hover:bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 border border-zinc-200 text-[10px] font-semibold cursor-pointer"
+                        >
+                          Due +7d
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const d = new Date(issueDate ? new Date(issueDate) : new Date())
+                            d.setDate(d.getDate() + 15)
+                            setDueDate(d.toISOString().split("T")[0])
+                          }}
+                          className="px-2 py-0.5 rounded-md bg-zinc-100 hover:bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 border border-zinc-200 text-[10px] font-semibold cursor-pointer"
+                        >
+                          Due +15d
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const d = new Date(issueDate ? new Date(issueDate) : new Date())
+                            d.setDate(d.getDate() + 30)
+                            setDueDate(d.toISOString().split("T")[0])
+                          }}
+                          className="px-2 py-0.5 rounded-md bg-zinc-100 hover:bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 border border-zinc-200 text-[10px] font-semibold cursor-pointer"
+                        >
+                          Due +30d
+                        </button>
+                      </div>
+
                       <div className="sm:col-span-3">
                         <label className="block text-[10px] font-bold text-zinc-600 mb-0.5">Project / Subject Reference</label>
                         <Input value={projectTitle} onChange={e => setProjectTitle(e.target.value)} placeholder="e.g. Enterprise Cloud ERP Development" />

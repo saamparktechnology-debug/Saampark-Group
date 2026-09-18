@@ -153,6 +153,7 @@ export function ProjectDetailView({
   const [isLoadingInvoices, setIsLoadingInvoices] = React.useState(false)
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = React.useState(false)
   const [invAmount, setInvAmount] = React.useState("")
+  const [invDate, setInvDate] = React.useState(new Date().toISOString().split("T")[0])
   const [invDueDate, setInvDueDate] = React.useState(selectedProject.deadline || "")
   const [invDescription, setInvDescription] = React.useState("")
   const [invGstRate, setInvGstRate] = React.useState(18)
@@ -262,6 +263,7 @@ export function ProjectDetailView({
       ? String(selectedProject.dueAmount)
       : selectedProject.price.replace(/[^0-9]/g, "")
     setInvAmount(rawDue || "10000")
+    setInvDate(new Date().toISOString().split("T")[0])
     setInvDueDate(selectedProject.deadline || "")
     setInvDescription(`Milestone Deliverable / Project Billing for "${selectedProject.title}"`)
     setInvGstRate(18)
@@ -279,7 +281,7 @@ export function ProjectDetailView({
     try {
       const comp = selectedProject.companyId || "tech"
       const allInvs = await getInvoices(comp)
-      const invId = generateInvoiceNumber(allInvs, new Date())
+      const invId = generateInvoiceNumber(allInvs, invDate || new Date(), invGstRate === 0)
       const gstAmt = (amtNum * invGstRate) / 100
       const totalAmt = amtNum + gstAmt
 
@@ -287,8 +289,9 @@ export function ProjectDetailView({
         id: invId,
         client: selectedProject.client,
         project: selectedProject.title,
-        billDate: new Date().toLocaleDateString("en-GB"),
-        dueDate: invDueDate || selectedProject.deadline || new Date().toLocaleDateString("en-GB"),
+        billDate: invDate || new Date().toISOString().split("T")[0],
+        invoiceDate: invDate || new Date().toISOString().split("T")[0],
+        dueDate: invDueDate || selectedProject.deadline || new Date().toISOString().split("T")[0],
         baseAmount: amtNum,
         gstRate: invGstRate,
         gstAmount: gstAmt,
@@ -1692,14 +1695,49 @@ export function ProjectDetailView({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-zinc-500 font-medium">Invoice Date *</label>
+                    <span className="text-[10px] text-emerald-600 font-bold">Today</span>
+                  </div>
+                  <input
+                    type="date"
+                    value={invDate}
+                    onChange={(e) => setInvDate(e.target.value)}
+                    title="Invoice Date (Default: Today. Select any past or future date)"
+                    className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 text-xs font-bold"
+                  />
+                  <div className="flex items-center gap-1 mt-1">
+                    <button
+                      type="button"
+                      onClick={() => setInvDate(new Date().toISOString().split("T")[0])}
+                      className="text-[9px] font-bold text-emerald-600 hover:underline cursor-pointer"
+                    >
+                      Today
+                    </button>
+                    <span className="text-zinc-300">|</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const y = new Date()
+                        y.setDate(y.getDate() - 1)
+                        setInvDate(y.toISOString().split("T")[0])
+                      }}
+                      className="text-[9px] font-bold text-zinc-500 hover:underline cursor-pointer"
+                    >
+                      Yesterday
+                    </button>
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-zinc-500 font-medium mb-1">Due Date</label>
                   <input
                     type="date"
                     value={invDueDate}
                     onChange={(e) => setInvDueDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200"
+                    className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 text-xs font-medium"
                   />
                 </div>
 
@@ -1708,7 +1746,7 @@ export function ProjectDetailView({
                   <select
                     value={invStatus}
                     onChange={(e) => setInvStatus(e.target.value as InvoiceStatus)}
-                    className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-bold"
+                    className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-bold text-xs"
                   >
                     <option value="Payment Pending">Payment Pending</option>
                     <option value="Draft">Draft</option>

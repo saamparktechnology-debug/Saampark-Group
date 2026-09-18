@@ -1475,27 +1475,91 @@ export function AddClientProjectModal({
             </div>
 
             <div>
-              <label className="block font-semibold text-zinc-700 dark:text-zinc-300 mb-1 flex items-center gap-1">
-                <Calendar size={13} /> Start Date
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1">
+                  <Calendar size={13} className="text-blue-600" />
+                  <span>{creationMode === "invoice_only" ? "Invoice Date *" : "Invoice Date / Start Date *"}</span>
+                </label>
+                <span className="text-[10px] text-blue-600 dark:text-blue-400 font-medium">Default: Today</span>
+              </div>
               <input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full px-3 py-1.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-medium"
+                title="Invoice Date (Default: Today. Select any past or future date)"
+                className="w-full px-3 py-1.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-medium text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
+              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setStartDate(new Date().toISOString().split("T")[0])}
+                  className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/60 hover:bg-blue-100 cursor-pointer"
+                >
+                  📅 Today
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const y = new Date()
+                    y.setDate(y.getDate() - 1)
+                    setStartDate(y.toISOString().split("T")[0])
+                  }}
+                  className="px-2 py-0.5 rounded text-[10px] font-semibold bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 border border-zinc-200 hover:bg-zinc-200 cursor-pointer"
+                >
+                  ⏮️ Yesterday
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const d = new Date()
+                    d.setDate(1)
+                    setStartDate(d.toISOString().split("T")[0])
+                  }}
+                  className="px-2 py-0.5 rounded text-[10px] font-semibold bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 border border-zinc-200 hover:bg-zinc-200 cursor-pointer"
+                >
+                  ⏪ 1st of Month
+                </button>
+              </div>
             </div>
 
             <div>
-              <label className="block font-semibold text-zinc-700 dark:text-zinc-300 mb-1 flex items-center gap-1">
-                <Calendar size={13} /> Due / Delivery Date
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1">
+                  <Calendar size={13} className="text-blue-600" />
+                  <span>Due / Delivery Date</span>
+                </label>
+                <span className="text-[10px] text-zinc-400 font-medium">+30 Days Default</span>
+              </div>
               <input
                 type="date"
                 value={deadline}
                 onChange={(e) => setDeadline(e.target.value)}
-                className="w-full px-3 py-1.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-medium"
+                className="w-full px-3 py-1.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-medium text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
+              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const d = new Date(startDate ? new Date(startDate) : new Date())
+                    d.setDate(d.getDate() + 15)
+                    setDeadline(d.toISOString().split("T")[0])
+                  }}
+                  className="px-2 py-0.5 rounded text-[10px] font-semibold bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 border border-zinc-200 hover:bg-zinc-200 cursor-pointer"
+                >
+                  Due +15d
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const d = new Date(startDate ? new Date(startDate) : new Date())
+                    d.setDate(d.getDate() + 30)
+                    setDeadline(d.toISOString().split("T")[0])
+                  }}
+                  className="px-2 py-0.5 rounded text-[10px] font-semibold bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 border border-zinc-200 hover:bg-zinc-200 cursor-pointer"
+                >
+                  Due +30d
+                </button>
+              </div>
             </div>
           </div>
 
