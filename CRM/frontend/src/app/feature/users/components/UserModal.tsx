@@ -98,11 +98,6 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
     isRootSuperAdminEmail(currentUser?.email) ||
     String(currentUser?.role || "").toLowerCase().includes("super")
 
-  const isEditingRootSuperAdmin = Boolean(
-    (editingUser?.email && isRootSuperAdminEmail(editingUser.email)) ||
-    (email && isRootSuperAdminEmail(email))
-  )
-
   // Company Selection State (allows Super Admin to pick target company)
   const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>("tech")
   // Access Scope Type: "company" (Entire company) or "branch" (Dedicated branch only)
@@ -112,6 +107,11 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
   const [name, setName] = React.useState("")
   const [email, setEmail] = React.useState("")
   const [emailError, setEmailError] = React.useState<string | null>(null)
+
+  const isEditingRootSuperAdmin = Boolean(
+    (editingUser?.email && isRootSuperAdminEmail(editingUser.email)) ||
+    (email && isRootSuperAdminEmail(email))
+  )
   const [role, setRole] = React.useState<UserRole>("Teams")
   const [selectedBranchId, setSelectedBranchId] = React.useState<string>("")
   const [department, setDepartment] = React.useState("")
