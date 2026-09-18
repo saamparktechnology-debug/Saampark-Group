@@ -113,6 +113,7 @@ export default function CompaniesMain() {
   const [showCompanyModal, setShowCompanyModal] = React.useState(false)
   const [editingCompany, setEditingCompany] = React.useState<Company | null>(null)
   const [companyTab, setCompanyTab] = React.useState<"identity" | "tax" | "signatory" | "contact" | "bank">("identity")
+  const [companyBankSubTab, setCompanyBankSubTab] = React.useState<"gst" | "nongst">("gst")
   const [companyForm, setCompanyForm] = React.useState({
     name: "", brand_name: "", division_name: "", subtitle: "", slug: "", 
     industry: "Technology", currency: "INR", logo_url: "",
@@ -120,6 +121,8 @@ export default function CompaniesMain() {
     signatory_name: "", signatory_designation: "", signature_image_url: "", stamp_image_url: "",
     address: "", city: "", state: "", zip: "", country: "India", phone: "", email: "", website: "",
     bank_name: "", account_holder: "", account_number: "", ifsc_code: "", bank_branch: "", upi_id: "", payment_qr_url: "",
+    gst_bank_name: "", gst_account_holder: "", gst_account_number: "", gst_ifsc_code: "", gst_bank_branch: "", gst_upi_id: "", gst_payment_qr_url: "",
+    nongst_bank_name: "", nongst_account_holder: "", nongst_account_number: "", nongst_ifsc_code: "", nongst_bank_branch: "", nongst_upi_id: "", nongst_payment_qr_url: "",
     status: "active"
   })
 
@@ -435,6 +438,7 @@ export default function CompaniesMain() {
   const openAddCompany = () => {
     setEditingCompany(null)
     setCompanyTab("identity")
+    setCompanyBankSubTab("gst")
     setCompanyForm({
       name: "", brand_name: "SAAMPARK", division_name: "", subtitle: "", slug: "",
       industry: "Technology", currency: "INR", logo_url: "",
@@ -442,6 +446,8 @@ export default function CompaniesMain() {
       signatory_name: "Authorized Signatory", signatory_designation: "Managing Director", signature_image_url: "", stamp_image_url: "",
       address: "", city: "Kolkata", state: "West Bengal", zip: "", country: "India", phone: "", email: "", website: "",
       bank_name: "", account_holder: "", account_number: "", ifsc_code: "", bank_branch: "", upi_id: "", payment_qr_url: "",
+      gst_bank_name: "", gst_account_holder: "", gst_account_number: "", gst_ifsc_code: "", gst_bank_branch: "", gst_upi_id: "", gst_payment_qr_url: "",
+      nongst_bank_name: "", nongst_account_holder: "", nongst_account_number: "", nongst_ifsc_code: "", nongst_bank_branch: "", nongst_upi_id: "", nongst_payment_qr_url: "",
       status: "active"
     })
     setShowCompanyModal(true)
@@ -450,13 +456,34 @@ export default function CompaniesMain() {
   const openEditCompany = (c: any) => {
     setEditingCompany(c)
     setCompanyTab("identity")
+    setCompanyBankSubTab("gst")
     setCompanyForm({
       name: c.name || "", brand_name: c.brand_name || "", division_name: c.division_name || "", subtitle: c.subtitle || "", slug: c.slug || "",
       industry: c.industry || "Technology", currency: c.currency || "INR", logo_url: c.logo_url || "",
       gstin: c.gstin || "", pan: c.pan || "", cin: c.cin || "", msme_reg: c.msme_reg || "",
       signatory_name: c.signatory_name || "Authorized Signatory", signatory_designation: c.signatory_designation || "Managing Director", signature_image_url: c.signature_image_url || "", stamp_image_url: c.stamp_image_url || "",
       address: c.address || "", city: c.city || "", state: c.state || "", zip: c.zip || "", country: c.country || "India", phone: c.phone || "", email: c.email || "", website: c.website || "",
-      bank_name: c.bank_name || "", account_holder: c.account_holder || "", account_number: c.account_number || "", ifsc_code: c.ifsc_code || "", bank_branch: c.bank_branch || "", upi_id: c.upi_id || "", payment_qr_url: c.payment_qr_url || "",
+      bank_name: c.bank_name || c.gst_bank_name || "",
+      account_holder: c.account_holder || c.gst_account_holder || "",
+      account_number: c.account_number || c.gst_account_number || "",
+      ifsc_code: c.ifsc_code || c.gst_ifsc_code || "",
+      bank_branch: c.bank_branch || c.gst_bank_branch || "",
+      upi_id: c.upi_id || c.gst_upi_id || "",
+      payment_qr_url: c.payment_qr_url || c.gst_payment_qr_url || "",
+      gst_bank_name: c.gst_bank_name || c.bank_name || "",
+      gst_account_holder: c.gst_account_holder || c.account_holder || "",
+      gst_account_number: c.gst_account_number || c.account_number || "",
+      gst_ifsc_code: c.gst_ifsc_code || c.ifsc_code || "",
+      gst_bank_branch: c.gst_bank_branch || c.bank_branch || "",
+      gst_upi_id: c.gst_upi_id || c.upi_id || "",
+      gst_payment_qr_url: c.gst_payment_qr_url || c.payment_qr_url || "",
+      nongst_bank_name: c.nongst_bank_name || "",
+      nongst_account_holder: c.nongst_account_holder || "",
+      nongst_account_number: c.nongst_account_number || "",
+      nongst_ifsc_code: c.nongst_ifsc_code || "",
+      nongst_bank_branch: c.nongst_bank_branch || "",
+      nongst_upi_id: c.nongst_upi_id || "",
+      nongst_payment_qr_url: c.nongst_payment_qr_url || "",
       status: c.status || "active"
     })
     setShowCompanyModal(true)
@@ -1148,27 +1175,128 @@ export default function CompaniesMain() {
                   </div>
                 )}
 
-                {/* TAB 5: BANK & UPI */}
+                {/* TAB 5: BANK & UPI (DUAL GST vs NON-GST OPTIONS) */}
                 {companyTab === "bank" && (
                   <div className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div><label className="block font-semibold mb-1">Bank Name</label><Input placeholder="e.g. HDFC Bank Ltd" value={companyForm.bank_name} onChange={e => setCompanyForm({ ...companyForm, bank_name: e.target.value })} /></div>
-                      <div><label className="block font-semibold mb-1">Account Holder Name</label><Input placeholder="e.g. SAAMPARK TECHNOLOGY PVT LTD" value={companyForm.account_holder} onChange={e => setCompanyForm({ ...companyForm, account_holder: e.target.value })} /></div>
-                      <div><label className="block font-semibold mb-1">Account Number</label><Input placeholder="e.g. 50200012345678" value={companyForm.account_number} onChange={e => setCompanyForm({ ...companyForm, account_number: e.target.value })} className="font-mono" /></div>
-                      <div><label className="block font-semibold mb-1">IFSC Code</label><Input placeholder="e.g. HDFC0001234" value={companyForm.ifsc_code} onChange={e => setCompanyForm({ ...companyForm, ifsc_code: e.target.value.toUpperCase() })} className="font-mono" /></div>
-                      <div><label className="block font-semibold mb-1">Bank Branch</label><Input placeholder="e.g. Sector V Kolkata Branch" value={companyForm.bank_branch} onChange={e => setCompanyForm({ ...companyForm, bank_branch: e.target.value })} /></div>
-                      <div><label className="block font-semibold mb-1">UPI ID for Direct Transfers</label><Input placeholder="e.g. saampark@hdfcbank" value={companyForm.upi_id} onChange={e => setCompanyForm({ ...companyForm, upi_id: e.target.value })} className="font-mono" /></div>
+                    {/* Sub-Tab Selector: GST Bills vs Non-GST Bills */}
+                    <div className="flex p-1 bg-muted/60 dark:bg-zinc-800/80 rounded-xl border border-border">
+                      <button
+                        type="button"
+                        onClick={() => setCompanyBankSubTab("gst")}
+                        className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                          companyBankSubTab === "gst"
+                            ? "bg-teal-600 text-white shadow-sm"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <span>🏢 GST Bills Bank & QR</span>
+                        <span className="text-[10px] opacity-80 font-normal">(For 18% Tax Invoices)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCompanyBankSubTab("nongst")}
+                        className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                          companyBankSubTab === "nongst"
+                            ? "bg-blue-600 text-white shadow-sm"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <span>📄 Non-GST Bills Bank & QR</span>
+                        <span className="text-[10px] opacity-80 font-normal">(For 0% / Non-GST Invoices)</span>
+                      </button>
                     </div>
 
-                    <div className="p-3.5 rounded-xl border border-border bg-muted/20 mt-3">
-                      <ImageUploadField
-                        label="UPI Scanner / Payment QR Code"
-                        value={companyForm.payment_qr_url}
-                        onChange={url => setCompanyForm({ ...companyForm, payment_qr_url: url })}
-                        uploadNamePrefix="company_upi_qr"
-                        helperText="Uploaded to ImgBB. Displayed in the UPI & Digital Payment section of Invoices for instant scan-to-pay."
-                      />
-                    </div>
+                    {companyBankSubTab === "gst" ? (
+                      <div className="p-4 rounded-2xl border border-teal-500/20 bg-teal-50/30 dark:bg-teal-950/10 space-y-4">
+                        <div className="flex items-center justify-between border-b border-teal-500/10 pb-2">
+                          <span className="text-xs font-bold text-teal-800 dark:text-teal-300 flex items-center gap-1.5">
+                            🏢 Bank & UPI Details for GST Invoices
+                          </span>
+                          <span className="text-[10px] text-teal-600 dark:text-teal-400 font-semibold">Auto-linked to GST Tax Invoices</span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-semibold mb-1">Bank Name</label>
+                            <Input placeholder="e.g. HDFC Bank Ltd" value={companyForm.gst_bank_name || companyForm.bank_name} onChange={e => setCompanyForm({ ...companyForm, gst_bank_name: e.target.value, bank_name: e.target.value })} />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold mb-1">Account Holder Name</label>
+                            <Input placeholder="e.g. SAAMPARK TECHNOLOGY PVT LTD" value={companyForm.gst_account_holder || companyForm.account_holder} onChange={e => setCompanyForm({ ...companyForm, gst_account_holder: e.target.value, account_holder: e.target.value })} />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold mb-1">Account Number</label>
+                            <Input placeholder="e.g. 50200012345678" value={companyForm.gst_account_number || companyForm.account_number} onChange={e => setCompanyForm({ ...companyForm, gst_account_number: e.target.value, account_number: e.target.value })} className="font-mono" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold mb-1">IFSC Code</label>
+                            <Input placeholder="e.g. HDFC0001234" value={companyForm.gst_ifsc_code || companyForm.ifsc_code} onChange={e => setCompanyForm({ ...companyForm, gst_ifsc_code: e.target.value.toUpperCase(), ifsc_code: e.target.value.toUpperCase() })} className="font-mono" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold mb-1">Bank Branch</label>
+                            <Input placeholder="e.g. Sector V Kolkata Branch" value={companyForm.gst_bank_branch || companyForm.bank_branch} onChange={e => setCompanyForm({ ...companyForm, gst_bank_branch: e.target.value, bank_branch: e.target.value })} />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold mb-1">UPI ID for Direct Transfers</label>
+                            <Input placeholder="e.g. saampark@hdfcbank" value={companyForm.gst_upi_id || companyForm.upi_id} onChange={e => setCompanyForm({ ...companyForm, gst_upi_id: e.target.value, upi_id: e.target.value })} className="font-mono" />
+                          </div>
+                        </div>
+
+                        <div className="p-3.5 rounded-xl border border-teal-500/20 bg-white/60 dark:bg-zinc-900/60 mt-2">
+                          <ImageUploadField
+                            label="GST Payment Scanner / UPI QR Code"
+                            value={companyForm.gst_payment_qr_url || companyForm.payment_qr_url}
+                            onChange={url => setCompanyForm({ ...companyForm, gst_payment_qr_url: url, payment_qr_url: url })}
+                            uploadNamePrefix="company_gst_qr"
+                            helperText="Displayed on all official GST Tax Invoices for instant scan-to-pay."
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-4 rounded-2xl border border-blue-500/20 bg-blue-50/30 dark:bg-blue-950/10 space-y-4">
+                        <div className="flex items-center justify-between border-b border-blue-500/10 pb-2">
+                          <span className="text-xs font-bold text-blue-800 dark:text-blue-300 flex items-center gap-1.5">
+                            📄 Bank & UPI Details for Non-GST Invoices
+                          </span>
+                          <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold">Auto-linked to Non-GST 0% Invoices</span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-semibold mb-1">Bank Name</label>
+                            <Input placeholder="e.g. ICICI Bank / Kotak Bank" value={companyForm.nongst_bank_name} onChange={e => setCompanyForm({ ...companyForm, nongst_bank_name: e.target.value })} />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold mb-1">Account Holder Name</label>
+                            <Input placeholder="e.g. SAAMPARK ENTERPRISES" value={companyForm.nongst_account_holder} onChange={e => setCompanyForm({ ...companyForm, nongst_account_holder: e.target.value })} />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold mb-1">Account Number</label>
+                            <Input placeholder="e.g. 1029384756" value={companyForm.nongst_account_number} onChange={e => setCompanyForm({ ...companyForm, nongst_account_number: e.target.value })} className="font-mono" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold mb-1">IFSC Code</label>
+                            <Input placeholder="e.g. ICIC0001234" value={companyForm.nongst_ifsc_code} onChange={e => setCompanyForm({ ...companyForm, nongst_ifsc_code: e.target.value.toUpperCase() })} className="font-mono" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold mb-1">Bank Branch</label>
+                            <Input placeholder="e.g. Salt Lake Branch" value={companyForm.nongst_bank_branch} onChange={e => setCompanyForm({ ...companyForm, nongst_bank_branch: e.target.value })} />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold mb-1">UPI ID for Non-GST Transfers</label>
+                            <Input placeholder="e.g. saamparkpay@icici" value={companyForm.nongst_upi_id} onChange={e => setCompanyForm({ ...companyForm, nongst_upi_id: e.target.value })} className="font-mono" />
+                          </div>
+                        </div>
+
+                        <div className="p-3.5 rounded-xl border border-blue-500/20 bg-white/60 dark:bg-zinc-900/60 mt-2">
+                          <ImageUploadField
+                            label="Non-GST Payment Scanner / UPI QR Code"
+                            value={companyForm.nongst_payment_qr_url}
+                            onChange={url => setCompanyForm({ ...companyForm, nongst_payment_qr_url: url })}
+                            uploadNamePrefix="company_nongst_qr"
+                            helperText="Displayed on all 0% / Non-GST Invoices and Estimates for instant scan-to-pay."
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

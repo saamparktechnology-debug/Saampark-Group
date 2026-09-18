@@ -34,8 +34,17 @@ export interface InvoiceItem {
   id: string
   client: string
   clientEmail?: string
+  clientPhone?: string
+  clientAddress?: string
+  clientCity?: string
+  clientState?: string
+  clientGstin?: string
   clientId?: string
   project: string
+  invoiceType?: "gst" | "nongst"
+  companyName?: string
+  notes?: string
+  terms?: string
   billDate: string
   billTime?: string
   createdAt?: number | string
@@ -73,6 +82,14 @@ export interface InvoiceItem {
   createdByRole?: string
   items?: InvoiceLineItem[]
   discountsList?: AppliedDiscount[]
+  companyDetails?: any
+  overrideBankDetails?: any
+  overrideLogoUrl?: string
+  overrideSignatureUrl?: string
+  overrideStampUrl?: string
+  logoPosition?: { x: number; y: number }
+  signaturePosition?: { x: number; y: number }
+  customStamps?: any[]
 }
 
 export const INITIAL_INVOICES: InvoiceItem[] = []

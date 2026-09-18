@@ -13,6 +13,7 @@ import { ManageClientLabelsModal } from "./components/ManageClientLabelsModal"
 import { AddClientProjectModal } from "./components/AddClientProjectModal"
 import { ClientHistoryModal } from "./components/ClientHistoryModal"
 import { InvoiceModal } from "@/app/feature/sales/invoices/components/InvoiceModal"
+import { DocumentStudioModal } from "@/components/documents/DocumentStudioModal"
 import {
   getClients,
   saveStoredClient,
@@ -60,6 +61,9 @@ export default function ClientsMain() {
   
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = React.useState(false)
   const [selectedCreatedInvoice, setSelectedCreatedInvoice] = React.useState<any>(null)
+
+  const [isStudioOpen, setIsStudioOpen] = React.useState(false)
+  const [studioClient, setStudioClient] = React.useState<ClientItem | null>(null)
 
   const [isHistoryModalOpen, setIsHistoryModalOpen] = React.useState(false)
   const [selectedClientForHistory, setSelectedClientForHistory] = React.useState<ClientItem | null>(null)
@@ -513,6 +517,19 @@ export default function ClientsMain() {
           <button
             type="button"
             onClick={() => {
+              setStudioClient(null)
+              setIsStudioOpen(true)
+            }}
+            className="px-3.5 py-1.5 rounded-lg border border-teal-200 dark:border-teal-800 bg-teal-50/80 dark:bg-teal-950/40 text-xs font-semibold text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/60 flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+            title="Open Interactive Split-Screen Invoice Studio"
+          >
+            <Receipt size={14} className="text-teal-600 dark:text-teal-400" />
+            <span>🎨 Live Studio Invoice</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
               setSelectedClientForProject(null)
               setInitialCreationMode("project_and_invoice")
               setIsAddProjectModalOpen(true)
@@ -560,6 +577,10 @@ export default function ClientsMain() {
                 setSelectedClientForProject(client)
                 setInitialCreationMode(mode || "project_and_invoice")
                 setIsAddProjectModalOpen(true)
+              }}
+              onOpenStudioInvoice={(client) => {
+                setStudioClient(client)
+                setIsStudioOpen(true)
               }}
               onViewClientHistory={(client) => {
                 setSelectedClientForHistory(client)
@@ -626,6 +647,24 @@ export default function ClientsMain() {
         onClose={() => {
           setIsInvoiceModalOpen(false)
           setSelectedCreatedInvoice(null)
+        }}
+      />
+
+      {/* Interactive Split-Screen Live Document Studio */}
+      <DocumentStudioModal
+        isOpen={isStudioOpen}
+        mode="invoice"
+        prefilledClient={studioClient}
+        onClose={() => {
+          setIsStudioOpen(false)
+          setStudioClient(null)
+        }}
+        onSaveSuccess={(inv) => {
+          setIsStudioOpen(false)
+          setStudioClient(null)
+          setSelectedCreatedInvoice(inv)
+          setIsInvoiceModalOpen(true)
+          loadClientData()
         }}
       />
 

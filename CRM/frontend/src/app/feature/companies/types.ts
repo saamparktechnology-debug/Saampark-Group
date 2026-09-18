@@ -26,6 +26,20 @@ export interface Company {
   bank_branch?: string
   upi_id?: string
   payment_qr_url?: string
+  gst_bank_name?: string
+  gst_account_holder?: string
+  gst_account_number?: string
+  gst_ifsc_code?: string
+  gst_bank_branch?: string
+  gst_upi_id?: string
+  gst_payment_qr_url?: string
+  nongst_bank_name?: string
+  nongst_account_holder?: string
+  nongst_account_number?: string
+  nongst_ifsc_code?: string
+  nongst_bank_branch?: string
+  nongst_upi_id?: string
+  nongst_payment_qr_url?: string
   signatory_name?: string
   signatory_designation?: string
   signature_image_url?: string
@@ -66,8 +80,23 @@ export interface Branch {
   account_holder?: string
   account_number?: string
   ifsc_code?: string
+  bank_branch?: string
   upi_id?: string
   payment_qr_url?: string
+  gst_bank_name?: string
+  gst_account_holder?: string
+  gst_account_number?: string
+  gst_ifsc_code?: string
+  gst_bank_branch?: string
+  gst_upi_id?: string
+  gst_payment_qr_url?: string
+  nongst_bank_name?: string
+  nongst_account_holder?: string
+  nongst_account_number?: string
+  nongst_ifsc_code?: string
+  nongst_bank_branch?: string
+  nongst_upi_id?: string
+  nongst_payment_qr_url?: string
 }
 
 export interface SubBranch {
@@ -97,6 +126,20 @@ export interface SubBranch {
   signature_image_url?: string
   stamp_image_url?: string
   payment_qr_url?: string
+  gst_bank_name?: string
+  gst_account_holder?: string
+  gst_account_number?: string
+  gst_ifsc_code?: string
+  gst_bank_branch?: string
+  gst_upi_id?: string
+  gst_payment_qr_url?: string
+  nongst_bank_name?: string
+  nongst_account_holder?: string
+  nongst_account_number?: string
+  nongst_ifsc_code?: string
+  nongst_bank_branch?: string
+  nongst_upi_id?: string
+  nongst_payment_qr_url?: string
   signatory_name?: string
   signatory_designation?: string
 }

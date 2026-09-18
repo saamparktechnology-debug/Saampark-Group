@@ -49,7 +49,7 @@ export interface Branch {
   managerName?: string
   managerPhone?: string
   managerEmail?: string
-  // 5. Bank & UPI Pay
+  // 5. Bank & UPI Pay (Legacy / Fallback)
   upi_id?: string
   account_holder?: string
   bank_name?: string
@@ -64,6 +64,21 @@ export interface Branch {
     ifscCode?: string
     upiId?: string
   }
+  // Dual GST & Non-GST Banking & QR Profiles
+  gst_bank_name?: string
+  gst_account_holder?: string
+  gst_account_number?: string
+  gst_ifsc_code?: string
+  gst_bank_branch?: string
+  gst_upi_id?: string
+  gst_payment_qr_url?: string
+  nongst_bank_name?: string
+  nongst_account_holder?: string
+  nongst_account_number?: string
+  nongst_ifsc_code?: string
+  nongst_bank_branch?: string
+  nongst_upi_id?: string
+  nongst_payment_qr_url?: string
   terms_conditions?: string
   invoice_notes?: string
   status: 'Active' | 'Inactive'
@@ -120,6 +135,20 @@ export interface SubBranch {
     ifscCode?: string
     upiId?: string
   }
+  gst_bank_name?: string
+  gst_account_holder?: string
+  gst_account_number?: string
+  gst_ifsc_code?: string
+  gst_bank_branch?: string
+  gst_upi_id?: string
+  gst_payment_qr_url?: string
+  nongst_bank_name?: string
+  nongst_account_holder?: string
+  nongst_account_number?: string
+  nongst_ifsc_code?: string
+  nongst_bank_branch?: string
+  nongst_upi_id?: string
+  nongst_payment_qr_url?: string
   terms_conditions?: string
   invoice_notes?: string
   status: 'Active' | 'Inactive'
@@ -151,7 +180,7 @@ export interface Company {
   phone?: string
   email?: string
   website?: string
-  // Bank & Payment Gateway Details
+  // Bank & Payment Gateway Details (Legacy / Fallback)
   upi_id?: string
   account_holder?: string
   bank_name?: string
@@ -160,6 +189,21 @@ export interface Company {
   bank_branch?: string
   swift_code?: string
   payment_qr_url?: string
+  // Dual GST & Non-GST Banking & QR Profiles
+  gst_bank_name?: string
+  gst_account_holder?: string
+  gst_account_number?: string
+  gst_ifsc_code?: string
+  gst_bank_branch?: string
+  gst_upi_id?: string
+  gst_payment_qr_url?: string
+  nongst_bank_name?: string
+  nongst_account_holder?: string
+  nongst_account_number?: string
+  nongst_ifsc_code?: string
+  nongst_bank_branch?: string
+  nongst_upi_id?: string
+  nongst_payment_qr_url?: string
   // Invoice Customization
   terms_conditions?: string
   invoice_notes?: string

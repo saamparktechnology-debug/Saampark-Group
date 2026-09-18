@@ -1,17 +1,47 @@
 "use client"
 
 import * as React from "react"
+import { motion } from "framer-motion"
 import { MapPin } from "lucide-react"
 import { InvoiceItem, InvoiceLineItem } from "../services/invoiceService"
 import { CompanyPaymentSettings } from "@/app/feature/settings/services/companyPaymentService"
 import { ClientItem } from "@/app/feature/clients/types"
 import { useAuthStore, Company, Branch, DEFAULT_COMPANIES, getCompanyLogoUrl } from "@/store/useAuthStore"
 
+export interface CustomTextStamp {
+  id: string
+  text: string
+  color: string
+  fontSize?: number
+  x: number
+  y: number
+}
+
 interface OfficialInvoiceDocumentProps {
   invoice: InvoiceItem
   clientDetails?: ClientItem | null
   companyDetails?: Company | null
   paySettings?: CompanyPaymentSettings
+  interactive?: boolean
+  logoPosition?: { x: number; y: number }
+  onLogoPositionChange?: (pos: { x: number; y: number }) => void
+  signaturePosition?: { x: number; y: number }
+  onSignaturePositionChange?: (pos: { x: number; y: number }) => void
+  customStamps?: CustomTextStamp[]
+  onCustomStampMove?: (id: string, pos: { x: number; y: number }) => void
+  onRemoveCustomStamp?: (id: string) => void
+  overrideLogoUrl?: string
+  overrideSignatureUrl?: string
+  overrideStampUrl?: string
+  overrideBankDetails?: {
+    bankName?: string
+    accountHolder?: string
+    accountNumber?: string
+    ifscCode?: string
+    bankBranch?: string
+    upiId?: string
+    paymentQrUrl?: string
+  }
 }
 
 export function formatInvoiceDate(rawDate?: string | number | Date | null): string {
@@ -80,6 +110,18 @@ export function OfficialInvoiceDocument({
   clientDetails,
   companyDetails,
   paySettings,
+  interactive = false,
+  logoPosition = { x: 0, y: 0 },
+  onLogoPositionChange,
+  signaturePosition = { x: 0, y: 0 },
+  onSignaturePositionChange,
+  customStamps = [],
+  onCustomStampMove,
+  onRemoveCustomStamp,
+  overrideLogoUrl,
+  overrideSignatureUrl,
+  overrideStampUrl,
+  overrideBankDetails,
 }: OfficialInvoiceDocumentProps) {
   const { 
     companies, 
@@ -174,7 +216,6 @@ export function OfficialInvoiceDocument({
   }, [invoice.subBranchId, invoice.subBranchName, (invoice as any).sub_branch_id, (invoice as any).sub_branch_name, subBranches])
 
   // ── Unified Entity Resolution (Specific Issuing Entity Priority) ──
-  // If issued by SubBranch: use SubBranch details; if Branch: use Branch details; else: Company details.
   const isSubBranchIssued = Boolean(activeSubBranch)
   const isBranchIssued = Boolean(activeBranch) && !isSubBranchIssued
 
@@ -185,82 +226,20 @@ export function OfficialInvoiceDocument({
       ? activeBranch.division_name.trim() 
       : (activeCompany?.division_name?.trim() || ""))
   const resolvedSubtitle = activeSubBranch?.subtitle || activeBranch?.subtitle || activeCompany?.subtitle || ""
-  const resolvedLogoUrl = activeSubBranch?.logo_url || activeBranch?.logo_url || getCompanyLogoUrl(activeCompany) || activeCompany?.logo_url || ""
+  const resolvedLogoUrl = overrideLogoUrl || activeSubBranch?.logo_url || activeBranch?.logo_url || getCompanyLogoUrl(activeCompany) || activeCompany?.logo_url || ""
 
-  // Specific Entity Legal IDs (Strict: if empty on this entity, do NOT fallback to dummy/random values)
+  // Specific Entity Legal IDs
   const resolvedCin = (isSubBranchIssued ? activeSubBranch?.cin : isBranchIssued ? activeBranch?.cin : activeCompany?.cin)?.trim() || ""
   const resolvedGstin = (isSubBranchIssued ? activeSubBranch?.gstin : isBranchIssued ? activeBranch?.gstin : activeCompany?.gstin)?.trim() || ""
   const resolvedPan = (isSubBranchIssued ? activeSubBranch?.pan : isBranchIssued ? activeBranch?.pan : activeCompany?.pan)?.trim() || ""
 
-  // Address & Contact Information (Strict to issuing entity)
+  // Address & Contact Information
   const resolvedAddress = (isSubBranchIssued ? activeSubBranch?.address : isBranchIssued ? activeBranch?.address : activeCompany?.address)?.trim() || ""
   const resolvedPhone = (isSubBranchIssued ? (activeSubBranch?.phone || (activeSubBranch as any)?.partnerPhone) : isBranchIssued ? activeBranch?.phone : activeCompany?.phone)?.trim() || ""
   const resolvedEmail = (isSubBranchIssued ? (activeSubBranch?.email || (activeSubBranch as any)?.partnerEmail) : isBranchIssued ? activeBranch?.email : activeCompany?.email)?.trim() || ""
   const resolvedWebsite = (isSubBranchIssued ? activeSubBranch?.website : isBranchIssued ? activeBranch?.website : activeCompany?.website)?.trim() || ""
 
-  // Bank & UPI details resolved specifically for issuing entity
-  const resolvedUpiId = (isSubBranchIssued 
-    ? (activeSubBranch?.upi_id || (activeSubBranch as any)?.bankDetails?.upiId) 
-    : isBranchIssued 
-    ? activeBranch?.upi_id 
-    : (activeCompany?.upi_id || paySettings?.upiId))?.trim() || ""
-
-  const resolvedAccountHolder = (isSubBranchIssued 
-    ? (activeSubBranch?.account_holder || (activeSubBranch as any)?.bankDetails?.accountHolder) 
-    : isBranchIssued 
-    ? activeBranch?.account_holder 
-    : (activeCompany?.account_holder || paySettings?.accountHolderName))?.trim() || ""
-
-  const resolvedBankName = (isSubBranchIssued 
-    ? (activeSubBranch?.bank_name || (activeSubBranch as any)?.bankDetails?.bankName) 
-    : isBranchIssued 
-    ? activeBranch?.bank_name 
-    : (activeCompany?.bank_name || paySettings?.bankName))?.trim() || ""
-
-  const resolvedAccountNumber = (isSubBranchIssued 
-    ? (activeSubBranch?.account_number || (activeSubBranch as any)?.bankDetails?.accountNumber) 
-    : isBranchIssued 
-    ? activeBranch?.account_number 
-    : (activeCompany?.account_number || paySettings?.accountNumber))?.trim() || ""
-
-  const resolvedIfscCode = (isSubBranchIssued 
-    ? (activeSubBranch?.ifsc_code || (activeSubBranch as any)?.bankDetails?.ifscCode) 
-    : isBranchIssued 
-    ? activeBranch?.ifsc_code 
-    : (activeCompany?.ifsc_code || paySettings?.ifscCode))?.trim() || ""
-
-  const resolvedBankBranch = (isSubBranchIssued 
-    ? activeSubBranch?.bank_branch 
-    : isBranchIssued 
-    ? activeBranch?.bank_branch 
-    : (activeCompany?.bank_branch || paySettings?.branch))?.trim() || ""
-
-  // Signatory & Stamp URLs (Strict to issuing entity)
-  const resolvedSignatureUrl = (isSubBranchIssued 
-    ? activeSubBranch?.signature_image_url 
-    : isBranchIssued 
-    ? activeBranch?.signature_image_url 
-    : (activeCompany?.signature_image_url || (activeCompany as any)?.signatureImageUrl || (activeCompany as any)?.signature_url))?.trim() || ""
-
-  const resolvedStampUrl = (isSubBranchIssued 
-    ? activeSubBranch?.stamp_image_url 
-    : isBranchIssued 
-    ? activeBranch?.stamp_image_url 
-    : activeCompany?.stamp_image_url)?.trim() || ""
-
-  const resolvedSignatoryName = (isSubBranchIssued 
-    ? activeSubBranch?.signatory_name 
-    : isBranchIssued 
-    ? activeBranch?.signatory_name 
-    : activeCompany?.signatory_name)?.trim() || ""
-
-  const resolvedSignatoryDesignation = (isSubBranchIssued 
-    ? activeSubBranch?.signatory_designation 
-    : isBranchIssued 
-    ? activeBranch?.signatory_designation 
-    : activeCompany?.signatory_designation)?.trim() || ""
-
-  // 2. Determine if GST (>0%) or Non-GST / 0% GST Bill
+  // 2. Determine if GST (>0%) or Non-GST / 0% GST Bill (Done early for Bank profile binding)
   const isExplicitNonGst = 
     invoice.id?.toUpperCase().startsWith("NGINV") || 
     (invoice as any).invoiceType === "nongst" || 
@@ -277,6 +256,68 @@ export function OfficialInvoiceDocument({
     (typeof invoice.gstRate === "number" && invoice.gstRate > 0) ||
     (typeof invoice.gstAmount === "number" && invoice.gstAmount > 0)
   )
+
+  // Bank & UPI details resolved specifically for issuing entity and GST vs Non-GST
+  const resolvedUpiId = overrideBankDetails?.upiId || (isSubBranchIssued 
+    ? (activeSubBranch?.upi_id || (activeSubBranch as any)?.bankDetails?.upiId) 
+    : isBranchIssued 
+    ? activeBranch?.upi_id 
+    : (isGstInvoice ? (activeCompany?.gst_upi_id || activeCompany?.upi_id) : (activeCompany?.nongst_upi_id || activeCompany?.upi_id)) || paySettings?.upiId)?.trim() || ""
+
+  const resolvedAccountHolder = overrideBankDetails?.accountHolder || (isSubBranchIssued 
+    ? (activeSubBranch?.account_holder || (activeSubBranch as any)?.bankDetails?.accountHolder) 
+    : isBranchIssued 
+    ? activeBranch?.account_holder 
+    : (isGstInvoice ? (activeCompany?.gst_account_holder || activeCompany?.account_holder) : (activeCompany?.nongst_account_holder || activeCompany?.account_holder)) || paySettings?.accountHolderName)?.trim() || ""
+
+  const resolvedBankName = overrideBankDetails?.bankName || (isSubBranchIssued 
+    ? (activeSubBranch?.bank_name || (activeSubBranch as any)?.bankDetails?.bankName) 
+    : isBranchIssued 
+    ? activeBranch?.bank_name 
+    : (isGstInvoice ? (activeCompany?.gst_bank_name || activeCompany?.bank_name) : (activeCompany?.nongst_bank_name || activeCompany?.bank_name)) || paySettings?.bankName)?.trim() || ""
+
+  const resolvedAccountNumber = overrideBankDetails?.accountNumber || (isSubBranchIssued 
+    ? (activeSubBranch?.account_number || (activeSubBranch as any)?.bankDetails?.accountNumber) 
+    : isBranchIssued 
+    ? activeBranch?.account_number 
+    : (isGstInvoice ? (activeCompany?.gst_account_number || activeCompany?.account_number) : (activeCompany?.nongst_account_number || activeCompany?.account_number)) || paySettings?.accountNumber)?.trim() || ""
+
+  const resolvedIfscCode = overrideBankDetails?.ifscCode || (isSubBranchIssued 
+    ? (activeSubBranch?.ifsc_code || (activeSubBranch as any)?.bankDetails?.ifscCode) 
+    : isBranchIssued 
+    ? activeBranch?.ifsc_code 
+    : (isGstInvoice ? (activeCompany?.gst_ifsc_code || activeCompany?.ifsc_code) : (activeCompany?.nongst_ifsc_code || activeCompany?.ifsc_code)) || paySettings?.ifscCode)?.trim() || ""
+
+  const resolvedBankBranch = overrideBankDetails?.bankBranch || (isSubBranchIssued 
+    ? activeSubBranch?.bank_branch 
+    : isBranchIssued 
+    ? activeBranch?.bank_branch 
+    : (isGstInvoice ? (activeCompany?.gst_bank_branch || activeCompany?.bank_branch) : (activeCompany?.nongst_bank_branch || activeCompany?.bank_branch)) || paySettings?.branch)?.trim() || ""
+
+  // Signatory & Stamp URLs (Strict to issuing entity with overrides)
+  const resolvedSignatureUrl = overrideSignatureUrl || (isSubBranchIssued 
+    ? activeSubBranch?.signature_image_url 
+    : isBranchIssued 
+    ? activeBranch?.signature_image_url 
+    : (activeCompany?.signature_image_url || (activeCompany as any)?.signatureImageUrl || (activeCompany as any)?.signature_url))?.trim() || ""
+
+  const resolvedStampUrl = overrideStampUrl || (isSubBranchIssued 
+    ? activeSubBranch?.stamp_image_url 
+    : isBranchIssued 
+    ? activeBranch?.stamp_image_url 
+    : activeCompany?.stamp_image_url)?.trim() || ""
+
+  const resolvedSignatoryName = (isSubBranchIssued 
+    ? activeSubBranch?.signatory_name 
+    : isBranchIssued 
+    ? activeBranch?.signatory_name 
+    : activeCompany?.signatory_name)?.trim() || ""
+
+  const resolvedSignatoryDesignation = (isSubBranchIssued 
+    ? activeSubBranch?.signatory_designation 
+    : isBranchIssued 
+    ? activeBranch?.signatory_designation 
+    : activeCompany?.signatory_designation)?.trim() || ""
 
   // Theme configuration based on GST (Teal theme) vs Non-GST (Light Blue theme)
   const theme = isGstInvoice
@@ -423,34 +464,56 @@ export function OfficialInvoiceDocument({
       {/* Left: Company Brand & Entity Info with Logo */}
       <div className="flex items-start gap-3.5 flex-1 min-w-0">
         {/* Top-Left Logo Card */}
-        {resolvedLogoUrl ? (
-          <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-2xl overflow-hidden shadow-2xs shrink-0 border border-zinc-200/80 bg-white flex items-center justify-center p-2.5">
-            <img 
-              src={resolvedLogoUrl} 
-              alt={resolvedBrandName || "Entity Logo"} 
-              className="max-w-full max-h-full object-contain" 
-            />
-          </div>
-        ) : (
-          <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-2xl overflow-hidden shadow-md shrink-0 border border-teal-900/30 bg-gradient-to-b from-[#004e59] via-[#005c68] to-[#003840] flex flex-col items-center justify-center p-2.5">
-            {/* Layered Organic Bottom Wave Curves */}
-            <svg className="absolute bottom-0 left-0 right-0 w-full h-14 pointer-events-none" viewBox="0 0 100 45" preserveAspectRatio="none">
-              <path d="M0,28 C25,38 65,18 100,24 L100,45 L0,45 Z" fill="#008a99" fillOpacity="0.45" />
-              <path d="M0,34 C35,42 70,22 100,12 L100,45 L0,45 Z" fill="#0d9488" fillOpacity="0.7" />
-              <path d="M0,40 C30,44 75,28 100,4 L100,45 L0,45 Z" fill="#2dd4bf" fillOpacity="0.85" />
-              <path d="M55,45 C75,32 90,18 100,0 L100,45 Z" fill="#a7f3d0" fillOpacity="0.95" />
-            </svg>
-            <div className="relative z-10 w-full h-full flex flex-col items-center justify-center text-center text-white pb-2">
-              <div className="text-3xl mb-1 drop-shadow-sm">🚀</div>
-              <div className="font-black text-xs tracking-wider uppercase leading-tight font-sans">
-                {resolvedBrandName}
-              </div>
-              <div className="text-[7.5px] font-bold text-teal-200 tracking-widest uppercase mt-0.5">
-                {resolvedDivisionName || "TECHNOLOGY"}
+        <motion.div
+          drag={interactive}
+          dragMomentum={false}
+          animate={{ x: logoPosition?.x || 0, y: logoPosition?.y || 0 }}
+          onDragEnd={(_, info) => {
+            if (onLogoPositionChange) {
+              onLogoPositionChange({
+                x: (logoPosition?.x || 0) + info.offset.x,
+                y: (logoPosition?.y || 0) + info.offset.y,
+              })
+            }
+          }}
+          className={`relative shrink-0 select-none ${
+            interactive ? "cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-blue-500 rounded-2xl group transition-shadow z-20" : ""
+          }`}
+        >
+          {interactive && (
+            <div className="absolute -top-2 -left-2 bg-blue-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xs z-30">
+              ✥ Drag Logo
+            </div>
+          )}
+          {resolvedLogoUrl ? (
+            <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-2xl overflow-hidden shadow-2xs shrink-0 border border-zinc-200/80 bg-white flex items-center justify-center p-2.5">
+              <img 
+                src={resolvedLogoUrl} 
+                alt={resolvedBrandName || "Entity Logo"} 
+                className="max-w-full max-h-full object-contain pointer-events-none select-none" 
+              />
+            </div>
+          ) : (
+            <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-2xl overflow-hidden shadow-md shrink-0 border border-teal-900/30 bg-gradient-to-b from-[#004e59] via-[#005c68] to-[#003840] flex flex-col items-center justify-center p-2.5">
+              {/* Layered Organic Bottom Wave Curves */}
+              <svg className="absolute bottom-0 left-0 right-0 w-full h-14 pointer-events-none" viewBox="0 0 100 45" preserveAspectRatio="none">
+                <path d="M0,28 C25,38 65,18 100,24 L100,45 L0,45 Z" fill="#008a99" fillOpacity="0.45" />
+                <path d="M0,34 C35,42 70,22 100,12 L100,45 L0,45 Z" fill="#0d9488" fillOpacity="0.7" />
+                <path d="M0,40 C30,44 75,28 100,4 L100,45 L0,45 Z" fill="#2dd4bf" fillOpacity="0.85" />
+                <path d="M55,45 C75,32 90,18 100,0 L100,45 Z" fill="#a7f3d0" fillOpacity="0.95" />
+              </svg>
+              <div className="relative z-10 w-full h-full flex flex-col items-center justify-center text-center text-white pb-2">
+                <div className="text-3xl mb-1 drop-shadow-sm">🚀</div>
+                <div className="font-black text-xs tracking-wider uppercase leading-tight font-sans">
+                  {resolvedBrandName}
+                </div>
+                <div className="text-[7.5px] font-bold text-teal-200 tracking-widest uppercase mt-0.5">
+                  {resolvedDivisionName || "TECHNOLOGY"}
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </motion.div>
 
         {/* Title, Subtitle, Legal IDs & Registered Office Coordinates */}
         <div className="space-y-1 flex-1 min-w-0 pt-0.5">
@@ -942,14 +1005,34 @@ export function OfficialInvoiceDocument({
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <motion.div
+          drag={interactive}
+          dragMomentum={false}
+          animate={{ x: signaturePosition?.x || 0, y: signaturePosition?.y || 0 }}
+          onDragEnd={(_, info) => {
+            if (onSignaturePositionChange) {
+              onSignaturePositionChange({
+                x: (signaturePosition?.x || 0) + info.offset.x,
+                y: (signaturePosition?.y || 0) + info.offset.y,
+              })
+            }
+          }}
+          className={`flex items-center gap-3 relative select-none ${
+            interactive ? "cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-blue-500 rounded-xl group transition-shadow p-1 z-20" : ""
+          }`}
+        >
+          {interactive && (
+            <div className="absolute -top-2 -right-2 bg-blue-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xs z-30">
+              ✥ Drag Signature
+            </div>
+          )}
           <div className="text-center space-y-0.5">
             <div className="h-14 flex items-end justify-center">
               {resolvedSignatureUrl ? (
                 <img 
                   src={resolvedSignatureUrl} 
                   alt="Authorized Signature / Stamp" 
-                  className="max-h-14 max-w-[150px] object-contain drop-shadow-xs" 
+                  className="max-h-14 max-w-[150px] object-contain drop-shadow-xs pointer-events-none select-none" 
                 />
               ) : null}
             </div>
@@ -969,10 +1052,10 @@ export function OfficialInvoiceDocument({
 
           {resolvedStampUrl ? (
             <div className="w-14 h-14 flex items-center justify-center p-0.5 shadow-2xs shrink-0 select-none">
-              <img src={resolvedStampUrl} alt="Official Seal" className="max-h-14 max-w-14 object-contain" />
+              <img src={resolvedStampUrl} alt="Official Seal" className="max-h-14 max-w-14 object-contain pointer-events-none select-none" />
             </div>
           ) : null}
-        </div>
+        </motion.div>
       </div>
 
       {/* BOTTOM BANNER */}
@@ -989,7 +1072,54 @@ export function OfficialInvoiceDocument({
   )
 
   return (
-    <div id="printable-invoice" className="bg-white text-zinc-900 font-sans p-4 sm:p-5 text-xs shadow-xl border border-zinc-200 rounded-2xl w-full max-w-[840px] mx-auto print:p-0 print:border-none print:shadow-none print:w-full print:max-w-none">
+    <div id="printable-invoice" className="bg-white text-zinc-900 font-sans p-4 sm:p-5 text-xs shadow-xl border border-zinc-200 rounded-2xl w-full max-w-[840px] mx-auto print:p-0 print:border-none print:shadow-none print:w-full print:max-w-none relative overflow-hidden">
+      {/* Draggable Custom Text Stamps / Badges Overlay */}
+      {customStamps && customStamps.map(stamp => (
+        <motion.div
+          key={stamp.id}
+          drag={interactive}
+          dragMomentum={false}
+          animate={{ x: stamp.x, y: stamp.y }}
+          onDragEnd={(_, info) => {
+            if (onCustomStampMove) {
+              onCustomStampMove(stamp.id, {
+                x: stamp.x + info.offset.x,
+                y: stamp.y + info.offset.y,
+              })
+            }
+          }}
+          className={`absolute z-30 px-3 py-1 rounded-lg border-2 font-black uppercase tracking-wider select-none shadow-md flex items-center gap-1.5 ${
+            interactive ? "cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-emerald-400 group" : ""
+          }`}
+          style={{
+            borderColor: stamp.color || "#0d9488",
+            color: stamp.color || "#0d9488",
+            backgroundColor: "rgba(255, 255, 255, 0.95)",
+            fontSize: `${stamp.fontSize || 11}px`,
+            left: "40%",
+            top: "20%",
+          }}
+        >
+          {interactive && (
+            <span className="text-[9px] opacity-60 pointer-events-none">✥</span>
+          )}
+          <span>{stamp.text}</span>
+          {interactive && onRemoveCustomStamp && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onRemoveCustomStamp(stamp.id)
+              }}
+              className="w-3.5 h-3.5 rounded-full bg-rose-500 text-white flex items-center justify-center text-[8px] hover:bg-rose-700 cursor-pointer ml-1"
+              title="Remove Stamp"
+            >
+              ✕
+            </button>
+          )}
+        </motion.div>
+      ))}
+
       {!isMultiPage ? (
         <div className="space-y-2.5">
           {renderTopHeader()}

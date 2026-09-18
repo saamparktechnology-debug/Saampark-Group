@@ -15,6 +15,7 @@ interface ClientsTableViewProps {
   onDeleteClient: (id: string) => void
   onEditClient: (client: ClientItem) => void
   onAddProjectClient?: (client: ClientItem, mode?: "project_and_invoice" | "invoice_only") => void
+  onOpenStudioInvoice?: (client: ClientItem) => void
   onViewClientHistory?: (client: ClientItem) => void
 }
 
@@ -23,6 +24,7 @@ export function ClientsTableView({
   onDeleteClient,
   onEditClient,
   onAddProjectClient,
+  onOpenStudioInvoice,
   onViewClientHistory,
 }: ClientsTableViewProps) {
   const { user } = useAuthStore()
@@ -393,12 +395,18 @@ export function ClientsTableView({
                           </button>
                           <button
                             type="button"
-                            onClick={() => onAddProjectClient(client, "invoice_only")}
+                            onClick={() => {
+                              if (onOpenStudioInvoice) {
+                                onOpenStudioInvoice(client)
+                              } else {
+                                onAddProjectClient(client, "invoice_only")
+                              }
+                            }}
                             className="px-2 py-1 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 font-semibold flex items-center gap-1 text-[11px] shadow-2xs border border-emerald-200/60 dark:border-emerald-800/60 cursor-pointer transition-colors"
-                            title="Generate only tax invoice for this client"
+                            title="Generate invoice for this client in Live Split Document Studio"
                           >
                             <Receipt size={12} />
-                            <span>+ Only Invoice</span>
+                            <span>+ Studio Invoice</span>
                           </button>
                         </div>
                       )}

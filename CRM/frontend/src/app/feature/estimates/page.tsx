@@ -18,6 +18,7 @@ import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 import { executeWithFeedback, useActionFeedbackStore } from "@/store/useActionFeedbackStore"
 import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
 import { OfficialEstimateDocument } from "./components/OfficialEstimateDocument"
+import { DocumentStudioModal } from "@/components/documents/DocumentStudioModal"
 
 export default function EstimatesPage() {
   const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
@@ -686,198 +687,16 @@ export default function EstimatesPage() {
         )}
       </AnimatePresence>
 
-      {/* ---------------- CREATE ESTIMATE MODAL ---------------- */}
-      <AnimatePresence>
-        {isCreateModalOpen && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden my-8"
-            >
-              <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800">
-                <h3 className="font-bold text-sm text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                  <Calculator size={18} className="text-blue-600" />
-                  <span>Create Itemized Service Estimate</span>
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setIsCreateModalOpen(false)}
-                  className="p-1 text-zinc-400 hover:text-zinc-600 rounded-lg"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-
-              <form onSubmit={handleCreateEstimate} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto text-xs">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Estimate Title / Scope *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. E-Commerce Web Portal & Mobile App"
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Target Client *</label>
-                    <select
-                      value={client}
-                      onChange={(e) => {
-                        setClient(e.target.value)
-                        const c = availableClients.find(item => item.name === e.target.value)
-                        if (c) setClientEmail(c.email)
-                      }}
-                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-blue-500"
-                    >
-                      {availableClients.map(c => (
-                        <option key={c.name} value={c.name}>{c.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Client Email</label>
-                    <input
-                      type="email"
-                      value={clientEmail}
-                      onChange={(e) => setClientEmail(e.target.value)}
-                      placeholder="client@company.com"
-                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg focus:outline-hidden"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Valid Until (Deadline)</label>
-                    <input
-                      type="date"
-                      value={validUntil}
-                      onChange={(e) => setValidUntil(e.target.value)}
-                      className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg focus:outline-hidden"
-                    />
-                  </div>
-                </div>
-
-                {/* Service Line Items Editor */}
-                <div className="pt-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-zinc-700 dark:text-zinc-300 font-bold uppercase tracking-wider text-[11px]">
-                      Services & Pricing Breakdown
-                    </label>
-                    <button
-                      type="button"
-                      onClick={handleAddServiceRow}
-                      className="text-blue-600 text-xs font-semibold hover:underline flex items-center gap-1"
-                    >
-                      <Plus size={12} />
-                      <span>Add Service Row</span>
-                    </button>
-                  </div>
-
-                  <div className="space-y-2">
-                    {services.map((s, idx) => (
-                      <div key={s.id || idx} className="grid grid-cols-12 gap-2 p-2 bg-zinc-50 dark:bg-zinc-800/60 rounded-lg items-center">
-                        <div className="col-span-4">
-                          <input
-                            type="text"
-                            required
-                            placeholder="Service Name"
-                            value={s.name}
-                            onChange={(e) => handleUpdateServiceRow(s.id, "name", e.target.value)}
-                            className="w-full px-2 py-1 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded text-xs"
-                          />
-                        </div>
-                        <div className="col-span-3">
-                          <input
-                            type="text"
-                            placeholder="Description / Scope"
-                            value={s.description || ""}
-                            onChange={(e) => handleUpdateServiceRow(s.id, "description", e.target.value)}
-                            className="w-full px-2 py-1 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded text-xs"
-                          />
-                        </div>
-                        <div className="col-span-2">
-                          <input
-                            type="number"
-                            min="1"
-                            placeholder="Qty"
-                            value={s.quantity}
-                            onChange={(e) => handleUpdateServiceRow(s.id, "quantity", e.target.value)}
-                            className="w-full px-2 py-1 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded text-xs text-center"
-                          />
-                        </div>
-                        <div className="col-span-2">
-                          <input
-                            type="number"
-                            placeholder="Rate (₹)"
-                            value={s.unitPrice}
-                            onChange={(e) => handleUpdateServiceRow(s.id, "unitPrice", e.target.value)}
-                            className="w-full px-2 py-1 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded text-xs text-right font-mono"
-                          />
-                        </div>
-                        <div className="col-span-1 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveServiceRow(s.id)}
-                            className="text-zinc-400 hover:text-rose-600 p-1"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Totals Preview */}
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-800 rounded-lg flex justify-end">
-                  <div className="w-56 space-y-1 text-right text-xs">
-                    <div>Subtotal: <span className="font-semibold font-mono">₹{subtotal.toLocaleString("en-IN")}</span></div>
-                    <div>GST (18%): <span className="font-semibold font-mono">₹{gstAmount.toLocaleString("en-IN")}</span></div>
-                    <div className="text-sm font-bold text-blue-600 pt-1 border-t border-zinc-200 dark:border-zinc-700">
-                      Total: {formattedGrandTotal}
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Terms & Delivery Notes</label>
-                  <textarea
-                    rows={2}
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Milestones, payment terms, warranties..."
-                    className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg focus:outline-hidden"
-                  />
-                </div>
-
-                <div className="flex justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
-                  <button
-                    type="button"
-                    onClick={() => setIsCreateModalOpen(false)}
-                    className="px-3 py-1.5 text-xs text-zinc-600 hover:bg-zinc-100 rounded-lg font-semibold"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm flex items-center gap-1"
-                  >
-                    <Send size={13} />
-                    <span>Send Estimate to Client</span>
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {/* ── INTERACTIVE SPLIT-SCREEN DOCUMENT STUDIO (ESTIMATE) ────────── */}
+      <DocumentStudioModal
+        isOpen={isCreateModalOpen}
+        mode="estimate"
+        onClose={() => setIsCreateModalOpen(false)}
+        onSaveSuccess={() => {
+          setIsCreateModalOpen(false)
+          loadData()
+        }}
+      />
 
       {/* ---------------- REVISION MODAL ---------------- */}
       <AnimatePresence>

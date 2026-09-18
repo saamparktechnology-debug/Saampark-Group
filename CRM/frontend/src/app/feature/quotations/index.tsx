@@ -16,6 +16,7 @@ import { createNotification } from "@/services/notificationService"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 import { OfficialQuotationDocument, QuotationData, QuotationLineItem } from "./components/OfficialQuotationDocument"
+import { DocumentStudioModal } from "@/components/documents/DocumentStudioModal"
 
 export default function QuotationsMain() {
   const { user, activeCompanyId, activeBranchId, branches, companies } = useAuthStore()
@@ -619,130 +620,21 @@ export default function QuotationsMain() {
         )}
       </AnimatePresence>
 
-      {/* CREATE / EDIT MODAL */}
-      <AnimatePresence>
-        {isModalOpen && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden my-8 text-xs">
-              <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/40">
-                <div className="flex items-center gap-2 font-bold text-sm text-zinc-900 dark:text-zinc-100">
-                  <Calculator size={16} className="text-emerald-600" />
-                  <span>{editingItem ? "Edit Quotation" : "Create New Quotation"}</span>
-                </div>
-                <button onClick={() => setIsModalOpen(false)} className="p-1 text-zinc-400 hover:text-zinc-600 rounded-lg"><X size={16} /></button>
-              </div>
-
-              <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Quote #</label>
-                    <input type="text" required value={form.number} onChange={e => setForm({ ...form, number: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 font-mono font-bold" />
-                  </div>
-
-                  <div>
-                    <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Quote Date</label>
-                    <input type="date" required value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800" />
-                  </div>
-
-                  <div>
-                    <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Valid Till</label>
-                    <input type="date" value={form.validTill} onChange={e => setForm({ ...form, validTill: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800" />
-                  </div>
-                </div>
-
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-800/40 rounded-xl space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-zinc-700 dark:text-zinc-300">Recipient Client Details</span>
-                    <div className="flex items-center gap-2 text-[11px]">
-                      <button type="button" onClick={() => setRecipientMode("client")} className={`px-2 py-0.5 rounded ${recipientMode === "client" ? "bg-emerald-600 text-white font-bold" : "text-zinc-500"}`}>Select Existing Client</button>
-                      <button type="button" onClick={() => setRecipientMode("custom")} className={`px-2 py-0.5 rounded ${recipientMode === "custom" ? "bg-emerald-600 text-white font-bold" : "text-zinc-500"}`}>Custom Recipient</button>
-                    </div>
-                  </div>
-
-                  {recipientMode === "client" ? (
-                    <div>
-                      <select 
-                        value={selectedClientId} 
-                        onChange={e => handleClientSelect(e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 font-medium"
-                      >
-                        <option value="">-- Choose Registered Client --</option>
-                        {clients.map(c => (
-                          <option key={c.id} value={c.id}>{c.company_name || c.name} {c.email ? `(${c.email})` : ''}</option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[11px] text-zinc-500 mb-0.5">Customer Name / Company *</label>
-                        <input type="text" required placeholder="e.g. Acme Corp" value={form.customer} onChange={e => setForm({ ...form, customer: e.target.value })} className="w-full px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900" />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] text-zinc-500 mb-0.5">Client Email</label>
-                        <input type="email" placeholder="client@company.com" value={form.customerEmail} onChange={e => setForm({ ...form, customerEmail: e.target.value })} className="w-full px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 font-mono" />
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* ITEMS */}
-                <div className="pt-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider text-[11px]">Itemized Scope &amp; Pricing</span>
-                    <button type="button" onClick={addItem} className="text-emerald-600 text-xs font-semibold hover:underline flex items-center gap-1">+ Add Item Row</button>
-                  </div>
-
-                  <div className="space-y-2">
-                    {items.map((item, idx) => (
-                      <div key={item.id} className="grid grid-cols-12 gap-2 p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 items-center">
-                        <div className="col-span-4">
-                          <input type="text" required placeholder="Item / Service Name" value={item.name} onChange={e => handleItemChange(item.id, "name", e.target.value)} className="w-full px-2 py-1 rounded bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 font-semibold" />
-                        </div>
-                        <div className="col-span-3">
-                          <input type="text" placeholder="SAC Code" value={item.sac || ""} onChange={e => handleItemChange(item.id, "sac", e.target.value)} className="w-full px-2 py-1 rounded bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 font-mono text-[11px]" />
-                        </div>
-                        <div className="col-span-2">
-                          <input type="number" min="1" placeholder="Qty" value={item.quantity} onChange={e => handleItemChange(item.id, "quantity", e.target.value)} className="w-full px-2 py-1 rounded bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-center font-mono" />
-                        </div>
-                        <div className="col-span-2">
-                          <input type="number" placeholder="Rate (₹)" value={item.unitPrice} onChange={e => handleItemChange(item.id, "unitPrice", e.target.value)} className="w-full px-2 py-1 rounded bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-right font-mono" />
-                        </div>
-                        <div className="col-span-1 text-center">
-                          <button type="button" onClick={() => removeItem(item.id)} className="text-zinc-400 hover:text-rose-600 p-1"><Trash2 size={13} /></button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* TOTALS */}
-                <div className="flex justify-end p-3 bg-zinc-50 dark:bg-zinc-800/40 rounded-xl">
-                  <div className="w-56 space-y-1 text-right text-xs">
-                    <div className="flex justify-between"><span>Subtotal:</span><span className="font-mono font-semibold">₹{subtotal.toLocaleString("en-IN")}</span></div>
-                    <div className="flex justify-between"><span>GST (18%):</span><span className="font-mono font-semibold">₹{tax.toLocaleString("en-IN")}</span></div>
-                    <div className="flex justify-between pt-1 border-t border-zinc-300 font-bold text-sm text-emerald-600 dark:text-emerald-400">
-                      <span>Total Quote:</span><span>₹{grandTotal.toLocaleString("en-IN")}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Terms &amp; Conditions</label>
-                  <textarea rows={3} value={form.terms} onChange={e => setForm({ ...form, terms: e.target.value })} className="w-full p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800" />
-                </div>
-
-                <div className="flex justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
-                  <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-zinc-600 hover:bg-zinc-100 rounded-xl font-semibold">Cancel</button>
-                  <button type="submit" className="px-5 py-2 font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md">
-                    {editingItem ? "Update Quotation" : "Create Quotation"}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {/* ── INTERACTIVE SPLIT-SCREEN DOCUMENT STUDIO (QUOTATION) ────────── */}
+      <DocumentStudioModal
+        isOpen={isModalOpen}
+        mode="quotation"
+        initialData={editingItem}
+        onClose={() => {
+          setIsModalOpen(false)
+          setEditingItem(null)
+        }}
+        onSaveSuccess={() => {
+          setIsModalOpen(false)
+          setEditingItem(null)
+          loadData()
+        }}
+      />
 
       {/* DELETE CONFIRM */}
       <AnimatePresence>
