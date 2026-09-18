@@ -129,6 +129,7 @@ export function CompanyBranchSettings() {
   const [companySignatoryName, setCompanySignatoryName] = React.useState("")
   const [companySignatoryDesignation, setCompanySignatoryDesignation] = React.useState("")
   const [companySignatureImageUrl, setCompanySignatureImageUrl] = React.useState("")
+  const [companyStampImageUrl, setCompanyStampImageUrl] = React.useState("")
 
   // SMTP & Email Dispatch Configurations (Per Company)
   const [companySmtpPreset, setCompanySmtpPreset] = React.useState<"gmail" | "zoho" | "outlook" | "custom">("gmail")
@@ -255,6 +256,7 @@ export function CompanyBranchSettings() {
   const [subBranchTermsConditions, setSubBranchTermsConditions] = React.useState("")
 
   // 5. Signature & Stamp
+  const [subBranchLogoUrl, setSubBranchLogoUrl] = React.useState("")
   const [subBranchSignatoryName, setSubBranchSignatoryName] = React.useState("")
   const [subBranchSignatoryDesignation, setSubBranchSignatoryDesignation] = React.useState("")
   const [subBranchSignatureImageUrl, setSubBranchSignatureImageUrl] = React.useState("")
@@ -263,12 +265,14 @@ export function CompanyBranchSettings() {
   // Refs for file uploads
   const logoFileInputRef = React.useRef<HTMLInputElement>(null)
   const signatureFileInputRef = React.useRef<HTMLInputElement>(null)
+  const companyStampInputRef = React.useRef<HTMLInputElement>(null)
   const qrFileInputRef = React.useRef<HTMLInputElement>(null)
 
   const branchSignatureInputRef = React.useRef<HTMLInputElement>(null)
   const branchStampInputRef = React.useRef<HTMLInputElement>(null)
   const branchQrInputRef = React.useRef<HTMLInputElement>(null)
 
+  const subBranchLogoInputRef = React.useRef<HTMLInputElement>(null)
   const subBranchSignatureInputRef = React.useRef<HTMLInputElement>(null)
   const subBranchStampInputRef = React.useRef<HTMLInputElement>(null)
   const subBranchQrInputRef = React.useRef<HTMLInputElement>(null)
@@ -329,6 +333,27 @@ export function CompanyBranchSettings() {
         setCompanySignatureImageUrl(res.url)
       } else {
         alert("Failed to upload signature to ImgBB cloud.")
+      }
+    } catch (err: any) {
+      alert("Upload error: " + err.message)
+    }
+  }
+
+  // Handle Company Stamp / Seal Upload with ImgBB
+  const handleCompanyStampUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Company stamp image size should not exceed 10MB.")
+      return
+    }
+    try {
+      const { uploadToImgBB } = await import("@/lib/imgbbUpload")
+      const res = await uploadToImgBB(file, "company_stamp", 800)
+      if (res && res.success && res.url) {
+        setCompanyStampImageUrl(res.url)
+      } else {
+        alert("Failed to upload company stamp to ImgBB cloud.")
       }
     } catch (err: any) {
       alert("Upload error: " + err.message)
@@ -399,6 +424,7 @@ export function CompanyBranchSettings() {
     setCompanySignatoryName("Authorized Signatory")
     setCompanySignatoryDesignation("Managing Director")
     setCompanySignatureImageUrl("")
+    setCompanyStampImageUrl("")
     setCompanySmtpPreset("gmail")
     setCompanySmtpHost("smtp.gmail.com")
     setCompanySmtpPort("587")
@@ -447,6 +473,7 @@ export function CompanyBranchSettings() {
     setCompanySignatoryName(company.signatory_name || "Authorized Signatory")
     setCompanySignatoryDesignation(company.signatory_designation || "")
     setCompanySignatureImageUrl(company.signature_image_url || "")
+    setCompanyStampImageUrl(company.stamp_image_url || "")
 
     // Load Company SMTP
     const host = company.smtp_host || "smtp.gmail.com"
@@ -515,6 +542,7 @@ export function CompanyBranchSettings() {
       signatory_name: companySignatoryName.trim(),
       signatory_designation: companySignatoryDesignation.trim(),
       signature_image_url: companySignatureImageUrl.trim(),
+      stamp_image_url: companyStampImageUrl.trim(),
       smtp_host: companySmtpHost.trim() || "smtp.gmail.com",
       smtp_port: companySmtpPort.trim() || "587",
       smtp_secure: companySmtpSecure,
@@ -678,6 +706,18 @@ export function CompanyBranchSettings() {
   }
 
   // Sub-Branch Upload Handlers
+  const handleSubBranchLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 10 * 1024 * 1024) { alert("Partner logo image size should not exceed 10MB."); return; }
+    try {
+      const { uploadToImgBB } = await import("@/lib/imgbbUpload")
+      const res = await uploadToImgBB(file, "subbranch_logo", 800)
+      if (res && res.success && res.url) setSubBranchLogoUrl(res.url)
+      else alert("Failed to upload partner logo to ImgBB.")
+    } catch (err: any) { alert("Upload error: " + err.message) }
+  }
+
   const handleSubBranchSignatureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -892,6 +932,7 @@ export function CompanyBranchSettings() {
     setSubBranchBrandName("")
     setSubBranchDivisionName("")
     setSubBranchSubtitle("")
+    setSubBranchLogoUrl("")
     setSubBranchPartnerName("")
     setSubBranchPartnerPhone("")
     setSubBranchPartnerEmail("")
@@ -935,6 +976,7 @@ export function CompanyBranchSettings() {
     setSubBranchBrandName(sb.brand_name || "")
     setSubBranchDivisionName(sb.division_name || "")
     setSubBranchSubtitle(sb.subtitle || "")
+    setSubBranchLogoUrl(sb.logo_url || "")
     setSubBranchPartnerName(sb.partnerName || "")
     setSubBranchPartnerPhone(sb.partnerPhone || "")
     setSubBranchPartnerEmail(sb.partnerEmail || "")
@@ -983,6 +1025,7 @@ export function CompanyBranchSettings() {
       brand_name: subBranchBrandName.trim(),
       division_name: subBranchDivisionName.trim(),
       subtitle: subBranchSubtitle.trim(),
+      logo_url: subBranchLogoUrl.trim(),
       partnerName: subBranchPartnerName.trim(),
       partnerPhone: subBranchPartnerPhone.trim(),
       partnerEmail: subBranchPartnerEmail.trim(),
@@ -1665,49 +1708,71 @@ export function CompanyBranchSettings() {
                 {/* TAB 2: SIGNATURE & STAMP UPLOAD */}
                 {companyModalTab === "invoice" && (
                   <div className="space-y-4">
-                    {/* Live Signature Preview Card */}
+                    {/* Live Signature & Stamp Preview Card */}
                     <div className="p-4 rounded-2xl bg-surface border border-border space-y-2">
                       <span className="text-[10.5px] font-bold text-primary uppercase tracking-wider block">
-                        Official Authorized Signature Preview:
+                        Official Company Signature & Stamp Preview:
                       </span>
-                      <div className="flex items-center justify-between border-t border-border/60 pt-3">
-                        <div className="text-center space-y-1">
-                          <div className="h-12 flex items-end justify-center">
-                            {companySignatureImageUrl ? (
-                              <img 
-                                src={companySignatureImageUrl} 
-                                alt="Signature" 
-                                className="max-h-12 max-w-[150px] object-contain drop-shadow-sm" 
-                              />
-                            ) : (
-                              <span className="font-serif italic text-zinc-400 text-xs">
-                                No Signature Uploaded (Blank)
-                              </span>
-                            )}
-                          </div>
-                          <div className="w-40 border-t border-zinc-400 pt-0.5">
-                            <p className="text-[8.5px] font-black uppercase text-zinc-800">
-                              {companySignatoryName || "AUTHORISED SIGNATORY"}
-                            </p>
-                            {companySignatoryDesignation && (
-                              <p className="text-[8px] text-zinc-500 font-medium">
-                                {companySignatoryDesignation}
+                      <div className="flex items-center justify-between border-t border-border/60 pt-3 gap-4 flex-wrap">
+                        <div className="flex items-center gap-6">
+                          {/* Signature Line */}
+                          <div className="text-center space-y-1">
+                            <div className="h-12 flex items-end justify-center">
+                              {companySignatureImageUrl ? (
+                                <img 
+                                  src={companySignatureImageUrl} 
+                                  alt="Signature" 
+                                  className="max-h-12 max-w-[150px] object-contain drop-shadow-sm" 
+                                />
+                              ) : (
+                                <span className="font-serif italic text-zinc-400 text-xs">
+                                  No Signature Uploaded
+                                </span>
+                              )}
+                            </div>
+                            <div className="w-40 border-t border-zinc-400 pt-0.5">
+                              <p className="text-[8.5px] font-black uppercase text-zinc-800">
+                                {companySignatoryName || "AUTHORISED SIGNATORY"}
                               </p>
-                            )}
+                              {companySignatoryDesignation && (
+                                <p className="text-[8px] text-zinc-500 font-medium">
+                                  {companySignatoryDesignation}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Stamp Preview */}
+                          <div className="text-center space-y-1 border-l border-border/60 pl-6">
+                            <div className="h-12 flex items-center justify-center">
+                              {companyStampImageUrl ? (
+                                <img 
+                                  src={companyStampImageUrl} 
+                                  alt="Seal" 
+                                  className="max-h-12 max-w-[80px] object-contain drop-shadow-sm" 
+                                />
+                              ) : (
+                                <span className="font-serif italic text-zinc-400 text-xs">
+                                  No Seal Uploaded
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[8px] text-zinc-400 uppercase font-semibold">Official Seal</p>
                           </div>
                         </div>
 
-                        <div className="text-[11px] text-muted-foreground max-w-[280px]">
-                          <p>Upload a clean transparent PNG or JPG of the company stamp / director signature. It will be printed directly above the Authorised Signatory line on all generated invoices.</p>
+                        <div className="text-[11px] text-muted-foreground max-w-[260px]">
+                          <p>Configured at Company level. Automatically stamped on all official invoices, quotations, and corporate documents.</p>
                         </div>
                       </div>
                     </div>
 
-                    {/* Signature File Upload Form */}
-                    <div className="p-3.5 rounded-2xl bg-surface-hover/50 border border-border space-y-3">
-                      <div>
-                        <label className="block font-bold text-foreground mb-1">
-                          Upload Company Stamp / Signature Image
+                    {/* Signature & Stamp Upload Row */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {/* Signature Upload */}
+                      <div className="p-3.5 rounded-2xl bg-surface-hover/50 border border-border space-y-2">
+                        <label className="block font-bold text-foreground text-xs">
+                          Company Authorized Signature
                         </label>
                         <input 
                           type="file" 
@@ -1720,40 +1785,74 @@ export function CompanyBranchSettings() {
                           <button
                             type="button"
                             onClick={() => signatureFileInputRef.current?.click()}
-                            className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md shadow-amber-600/20"
+                            className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
                           >
-                            <UploadCloud size={14} />
-                            <span>Upload Signature File</span>
+                            <UploadCloud size={13} />
+                            <span>Upload Signature</span>
                           </button>
                           {companySignatureImageUrl && (
                             <button
                               type="button"
                               onClick={() => setCompanySignatureImageUrl("")}
-                              className="px-3 py-2 rounded-xl border border-border text-rose-600 hover:bg-rose-50 font-semibold text-xs cursor-pointer"
+                              className="px-2.5 py-1.5 rounded-xl border border-border text-rose-600 hover:bg-rose-50 font-semibold text-xs cursor-pointer"
                             >
-                              Remove Signature
+                              Clear
                             </button>
                           )}
                         </div>
-                      </div>
-
-                      <div>
-                        <label className="block font-semibold text-foreground mb-1">
-                          Or Direct Image URL
-                        </label>
                         <input
                           type="text"
                           value={companySignatureImageUrl}
                           onChange={(e) => setCompanySignatureImageUrl(e.target.value)}
-                          placeholder="https://... (Direct image link to signature)"
-                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden"
+                          placeholder="Or paste direct image link..."
+                          className="w-full px-3 py-1.5 rounded-lg bg-surface border border-border text-[11px] font-mono focus:outline-hidden"
+                        />
+                      </div>
+
+                      {/* Stamp Upload */}
+                      <div className="p-3.5 rounded-2xl bg-surface-hover/50 border border-border space-y-2">
+                        <label className="block font-bold text-foreground text-xs">
+                          Company Official Stamp / Seal
+                        </label>
+                        <input 
+                          type="file" 
+                          ref={companyStampInputRef}
+                          accept="image/*"
+                          onChange={handleCompanyStampUpload}
+                          className="hidden" 
+                        />
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => companyStampInputRef.current?.click()}
+                            className="px-3 py-1.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                          >
+                            <UploadCloud size={13} />
+                            <span>Upload Seal / Stamp</span>
+                          </button>
+                          {companyStampImageUrl && (
+                            <button
+                              type="button"
+                              onClick={() => setCompanyStampImageUrl("")}
+                              className="px-2.5 py-1.5 rounded-xl border border-border text-rose-600 hover:bg-rose-50 font-semibold text-xs cursor-pointer"
+                            >
+                              Clear
+                            </button>
+                          )}
+                        </div>
+                        <input
+                          type="text"
+                          value={companyStampImageUrl}
+                          onChange={(e) => setCompanyStampImageUrl(e.target.value)}
+                          placeholder="Or paste direct image link..."
+                          className="w-full px-3 py-1.5 rounded-lg bg-surface border border-border text-[11px] font-mono focus:outline-hidden"
                         />
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block font-bold text-foreground mb-1">Authorized Signatory Name / Title</label>
+                        <label className="block font-bold text-foreground mb-1">Company Signatory Name / Title</label>
                         <input
                           type="text"
                           value={companySignatoryName}
@@ -1769,7 +1868,7 @@ export function CompanyBranchSettings() {
                           type="text"
                           value={companySignatoryDesignation}
                           onChange={(e) => setCompanySignatoryDesignation(e.target.value)}
-                          placeholder="e.g. Managing Director / Partner"
+                          placeholder="e.g. Managing Director / CEO"
                           className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
                         />
                       </div>
@@ -3286,6 +3385,46 @@ export function CompanyBranchSettings() {
                           <option value="Regional Associate">Regional Associate</option>
                         </select>
                       </div>
+                    </div>
+
+                    {/* Sub-Branch Partner Logo Upload */}
+                    <div className="p-3.5 rounded-2xl bg-surface-hover/50 border border-border space-y-2">
+                      <label className="block font-bold text-foreground text-xs">
+                        Sub-Branch Partner Logo / Brand Mark
+                      </label>
+                      <input 
+                        type="file" 
+                        ref={subBranchLogoInputRef}
+                        accept="image/*"
+                        onChange={handleSubBranchLogoUpload}
+                        className="hidden" 
+                      />
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => subBranchLogoInputRef.current?.click()}
+                          className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                        >
+                          <UploadCloud size={13} />
+                          <span>Upload Partner Logo</span>
+                        </button>
+                        {subBranchLogoUrl && (
+                          <button
+                            type="button"
+                            onClick={() => setSubBranchLogoUrl("")}
+                            className="px-2.5 py-1.5 rounded-xl border border-border text-rose-600 hover:bg-rose-50 font-semibold text-xs cursor-pointer"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        value={subBranchLogoUrl}
+                        onChange={(e) => setSubBranchLogoUrl(e.target.value)}
+                        placeholder="Or paste direct image URL (e.g. https://...)"
+                        className="w-full px-3 py-1.5 rounded-lg bg-surface border border-border text-[11px] font-mono focus:outline-hidden"
+                      />
                     </div>
                   </div>
                 )}
