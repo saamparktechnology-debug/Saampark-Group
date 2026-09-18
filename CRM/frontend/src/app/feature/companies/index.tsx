@@ -144,7 +144,7 @@ export default function CompaniesMain() {
   const [editingSubBranch, setEditingSubBranch] = React.useState<SubBranch | null>(null)
   const [subBranchBranchId, setSubBranchBranchId] = React.useState("")
   const [subBranchCompanyId, setSubBranchCompanyId] = React.useState("")
-  const [subBranchTab, setSubBranchTab] = React.useState<"partner" | "location" | "bank">("partner")
+  const [subBranchTab, setSubBranchTab] = React.useState<"partner" | "branding" | "location" | "bank">("partner")
   const [subBranchForm, setSubBranchForm] = React.useState({
     name: "", code: "", partner_name: "", partner_phone: "", partner_email: "",
     revenue_share_pct: 0, partner_type: "Individual",
@@ -1048,36 +1048,6 @@ export default function CompaniesMain() {
                         </select>
                       </div>
                     </div>
-                    <div className="p-3.5 rounded-xl border border-border bg-muted/20">
-                      <ImageUploadField
-                        label="Sub-Branch Partner Logo"
-                        value={subBranchForm.logo_url}
-                        onChange={url => setSubBranchForm({ ...subBranchForm, logo_url: url })}
-                        uploadNamePrefix="subbranch_logo"
-                        helperText="Uploaded to ImgBB. Displayed on top-left of invoices issued by this Partner."
-                      />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="p-3.5 rounded-xl border border-border bg-muted/20">
-                        <ImageUploadField
-                          label="Partner Authorized Signature"
-                          value={subBranchForm.signature_image_url}
-                          onChange={url => setSubBranchForm({ ...subBranchForm, signature_image_url: url })}
-                          uploadNamePrefix="subbranch_signature"
-                          aspectRatio="signature"
-                          helperText="Uploaded to ImgBB. Partner signature for invoices."
-                        />
-                      </div>
-                      <div className="p-3.5 rounded-xl border border-border bg-muted/20">
-                        <ImageUploadField
-                          label="Partner Official Stamp / Seal"
-                          value={subBranchForm.stamp_image_url}
-                          onChange={url => setSubBranchForm({ ...subBranchForm, stamp_image_url: url })}
-                          uploadNamePrefix="subbranch_stamp"
-                          helperText="Uploaded to ImgBB. Stamp/seal for this Sub-Branch."
-                        />
-                      </div>
-                    </div>
 
                     {/* Company Logo Upload with ImgBB */}
                     <div className="p-4 rounded-xl border border-border bg-muted/20">
@@ -1445,10 +1415,11 @@ export default function CompaniesMain() {
                 <Button variant="ghost" size="sm" onClick={() => setShowSubBranchModal(false)}><X className="h-4 w-4" /></Button>
               </div>
 
-              <div className="grid grid-cols-3 border-b border-border bg-muted/40 font-bold text-center shrink-0">
+              <div className="grid grid-cols-4 border-b border-border bg-muted/40 font-bold text-center shrink-0">
                 <button type="button" onClick={() => setSubBranchTab("partner")} className={`py-2.5 border-b-2 ${subBranchTab === "partner" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>1. Partner & % Share</button>
-                <button type="button" onClick={() => setSubBranchTab("location")} className={`py-2.5 border-b-2 ${subBranchTab === "location" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>2. Address & Contacts</button>
-                <button type="button" onClick={() => setSubBranchTab("bank")} className={`py-2.5 border-b-2 ${subBranchTab === "bank" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>3. Bank & Payouts</button>
+                <button type="button" onClick={() => setSubBranchTab("branding")} className={`py-2.5 border-b-2 ${subBranchTab === "branding" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>2. Logo, Stamp & Sign</button>
+                <button type="button" onClick={() => setSubBranchTab("location")} className={`py-2.5 border-b-2 ${subBranchTab === "location" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>3. Address & Contacts</button>
+                <button type="button" onClick={() => setSubBranchTab("bank")} className={`py-2.5 border-b-2 ${subBranchTab === "bank" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>4. Bank & Payouts</button>
               </div>
 
               <div className="p-6 space-y-4 overflow-y-auto flex-1">
@@ -1463,6 +1434,17 @@ export default function CompaniesMain() {
                         <select value={subBranchForm.partner_type} onChange={e => setSubBranchForm({ ...subBranchForm, partner_type: e.target.value })} className="w-full px-3 py-2 rounded-md border border-border bg-surface text-foreground text-xs">
                           {PARTNER_TYPES.map(pt => <option key={pt} value={pt}>{pt}</option>)}
                         </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block font-semibold mb-1">Sub-Branch GSTIN</label>
+                        <Input placeholder="e.g. 19ABCDE1234F1Z5" value={subBranchForm.gstin} onChange={e => setSubBranchForm({ ...subBranchForm, gstin: e.target.value.toUpperCase() })} className="font-mono" />
+                      </div>
+                      <div>
+                        <label className="block font-semibold mb-1">Partner PAN</label>
+                        <Input placeholder="e.g. ABCDE1234F" value={subBranchForm.pan} onChange={e => setSubBranchForm({ ...subBranchForm, pan: e.target.value.toUpperCase() })} className="font-mono" />
                       </div>
                     </div>
 
@@ -1481,6 +1463,68 @@ export default function CompaniesMain() {
                         className="w-full cursor-pointer accent-indigo-600"
                       />
                       <p className="text-[10px] text-muted-foreground">Earnings will automatically calculate: {subBranchForm.revenue_share_pct}% to Sub-Branch Partner, {100 - subBranchForm.revenue_share_pct}% to Headquarters.</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 2: LOGO, STAMP & SIGNATURE FOR SUB-BRANCH */}
+                {subBranchTab === "branding" && (
+                  <div className="space-y-4">
+                    {/* Sub-Branch Partner Logo */}
+                    <div className="p-3.5 rounded-xl border border-border bg-muted/20">
+                      <ImageUploadField
+                        label="Sub-Branch Partner Logo"
+                        value={subBranchForm.logo_url}
+                        onChange={url => setSubBranchForm({ ...subBranchForm, logo_url: url })}
+                        uploadNamePrefix="subbranch_logo"
+                        helperText="Uploaded to ImgBB. Displayed on top-left of invoices & estimates issued by this Sub-Branch."
+                      />
+                    </div>
+
+                    {/* Signatory Info */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block font-semibold mb-1">Partner Signatory Name</label>
+                        <Input placeholder="e.g. Partner Manager" value={subBranchForm.signatory_name} onChange={e => setSubBranchForm({ ...subBranchForm, signatory_name: e.target.value })} />
+                      </div>
+                      <div>
+                        <label className="block font-semibold mb-1">Partner Designation</label>
+                        <Input placeholder="e.g. Franchise Head / Branch Associate" value={subBranchForm.signatory_designation} onChange={e => setSubBranchForm({ ...subBranchForm, signatory_designation: e.target.value })} />
+                      </div>
+                    </div>
+
+                    {/* Signature & Stamp */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="p-3.5 rounded-xl border border-border bg-muted/20">
+                        <ImageUploadField
+                          label="Partner Authorized Signature"
+                          value={subBranchForm.signature_image_url}
+                          onChange={url => setSubBranchForm({ ...subBranchForm, signature_image_url: url })}
+                          uploadNamePrefix="subbranch_signature"
+                          aspectRatio="signature"
+                          helperText="Uploaded to ImgBB. Digital signature for this Sub-Branch."
+                        />
+                      </div>
+                      <div className="p-3.5 rounded-xl border border-border bg-muted/20">
+                        <ImageUploadField
+                          label="Partner Official Stamp / Seal"
+                          value={subBranchForm.stamp_image_url}
+                          onChange={url => setSubBranchForm({ ...subBranchForm, stamp_image_url: url })}
+                          uploadNamePrefix="subbranch_stamp"
+                          helperText="Uploaded to ImgBB. Stamp/seal for this Sub-Branch."
+                        />
+                      </div>
+                    </div>
+
+                    {/* Payment QR */}
+                    <div className="p-3.5 rounded-xl border border-border bg-muted/20">
+                      <ImageUploadField
+                        label="Partner UPI Payment Scanner / QR Code"
+                        value={subBranchForm.payment_qr_url}
+                        onChange={url => setSubBranchForm({ ...subBranchForm, payment_qr_url: url })}
+                        uploadNamePrefix="subbranch_upi_qr"
+                        helperText="Uploaded to ImgBB. Scan-to-pay QR code displayed on documents issued by this Sub-Branch."
+                      />
                     </div>
                   </div>
                 )}
