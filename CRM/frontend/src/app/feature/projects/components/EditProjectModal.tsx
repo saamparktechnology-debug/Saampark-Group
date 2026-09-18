@@ -53,10 +53,12 @@ export function EditProjectModal({
         for (const u of combined) {
           if (!u) continue
           const role = (u.role || u.role_name || "").toLowerCase().trim()
+          const email = String(u.email || "").toLowerCase().trim()
           const isClient = role.includes("client")
+          const isAdmin = role.includes("admin") || role.includes("super") || email.includes("superadmin") || email === "saampark.official@gmail.com"
           const isInactive = u.status === "Inactive"
           const uId = String(u.id || u._id || u.email)
-          if (!isClient && !isInactive && !unique.has(uId.toLowerCase())) {
+          if (!isClient && !isAdmin && !isInactive && !unique.has(uId.toLowerCase())) {
             unique.set(uId.toLowerCase(), {
               id: uId,
               name: u.name || u.full_name || "Team Member",

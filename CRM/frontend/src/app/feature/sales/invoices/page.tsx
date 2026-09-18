@@ -383,8 +383,12 @@ function InvoicesPageContent() {
     if (teamMembers.length === 0) {
       UserService.getTeamMembers().then(users => {
         if (Array.isArray(users)) {
-          const nonClients = users.filter((u: any) => !((u.role || u.role_name || "").toLowerCase().includes("client")))
-          setTeamMembers(nonClients.map((u: any) => ({
+          const nonAdmins = users.filter((u: any) => {
+            const r = (u.role || u.role_name || "").toLowerCase().trim()
+            const e = String(u.email || "").toLowerCase().trim()
+            return !r.includes("client") && !r.includes("admin") && !r.includes("super") && !e.includes("superadmin") && e !== "saampark.official@gmail.com"
+          })
+          setTeamMembers(nonAdmins.map((u: any) => ({
             ...u,
             name: u.name || u.full_name || u.fullName || u.username || u.email || "Team Member",
             role: u.role || u.role_name || u.roleName || "Teams"
@@ -711,8 +715,12 @@ function InvoicesPageContent() {
 
       UserService.getTeamMembers().then(users => {
         if (Array.isArray(users)) {
-          const nonClients = users.filter((u: any) => !((u.role || u.role_name || "").toLowerCase().includes("client")))
-          setTeamMembers(nonClients.map((u: any) => ({
+          const nonAdmins = users.filter((u: any) => {
+            const r = (u.role || u.role_name || "").toLowerCase().trim()
+            const e = String(u.email || "").toLowerCase().trim()
+            return !r.includes("client") && !r.includes("admin") && !r.includes("super") && !e.includes("superadmin") && e !== "saampark.official@gmail.com"
+          })
+          setTeamMembers(nonAdmins.map((u: any) => ({
             ...u,
             name: u.name || u.full_name || u.fullName || u.username || u.email || "Team Member",
             role: u.role || u.role_name || u.roleName || "Teams"

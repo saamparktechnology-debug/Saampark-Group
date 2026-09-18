@@ -17,6 +17,7 @@ import {
   InvoiceItem, 
   InvoiceLineItem, 
   AppliedDiscount,
+  AssignedMemberAttribution,
   addInvoice, 
   updateInvoice, 
   generateInvoiceNumber 
@@ -108,17 +109,61 @@ export function DocumentStudioModal({
     return subBranches.filter(sb => String((sb as any).branch_id || (sb as any).branchId) === String(branchId))
   }, [subBranches, branchId])
 
-  // Team Member Attribution State
+  // Multiple Team Member Attribution State
   const [availableTeamMembers, setAvailableTeamMembers] = React.useState<any[]>([])
-  const [assignedMemberId, setAssignedMemberId] = React.useState<string>(initialData?.assignedMemberId || "")
-  const [assignedMemberName, setAssignedMemberName] = React.useState<string>(initialData?.assignedMemberName || "")
-  const [assignedMemberRole, setAssignedMemberRole] = React.useState<string>(initialData?.assignedMemberRole || "")
-  const [memberPayoutType, setMemberPayoutType] = React.useState<"percentage" | "fixed">(initialData?.memberPayoutType || "percentage")
-  const [memberPayoutValue, setMemberPayoutValue] = React.useState<number | "">(
-    initialData?.memberPayoutValue !== undefined 
-      ? initialData.memberPayoutValue 
-      : (initialData?.memberSharePct !== undefined ? initialData.memberSharePct : 50)
-  )
+  const [assignedMembers, setAssignedMembers] = React.useState<AssignedMemberAttribution[]>(() => {
+    if (initialData?.assignedMembers && Array.isArray(initialData.assignedMembers) && initialData.assignedMembers.length > 0) {
+      return initialData.assignedMembers
+    }
+    if (initialData?.assignedMemberId) {
+      return [{
+        memberId: initialData.assignedMemberId,
+        memberName: initialData.assignedMemberName || "Team Member",
+        memberRole: initialData.assignedMemberRole || "Team Member",
+        memberAvatar: initialData.assignedMemberAvatar,
+        payoutType: initialData.memberPayoutType || "percentage",
+        payoutValue: initialData.memberPayoutValue !== undefined ? initialData.memberPayoutValue : (initialData.memberSharePct !== undefined ? initialData.memberSharePct : 50),
+      }]
+    }
+    return []
+  })
+
+  const handleAddAssignedMember = () => {
+    const unassigned = availableTeamMembers.find(m => !assignedMembers.some(am => String(am.memberId) === String(m.id))) || availableTeamMembers[0]
+    if (!unassigned) return
+    setAssignedMembers(prev => [
+      ...prev,
+      {
+        memberId: String(unassigned.id),
+        memberName: unassigned.name,
+        memberRole: unassigned.role,
+        memberAvatar: unassigned.avatar,
+        payoutType: "percentage",
+        payoutValue: prev.length === 0 ? 50 : 25,
+      }
+    ])
+  }
+
+  const handleUpdateAssignedMember = (index: number, field: keyof AssignedMemberAttribution, value: any) => {
+    setAssignedMembers(prev => prev.map((m, idx) => {
+      if (idx !== index) return m
+      if (field === "memberId") {
+        const matched = availableTeamMembers.find(tm => String(tm.id) === String(value))
+        return {
+          ...m,
+          memberId: String(value),
+          memberName: matched?.name || m.memberName,
+          memberRole: matched?.role || m.memberRole,
+          memberAvatar: matched?.avatar || m.memberAvatar,
+        }
+      }
+      return { ...m, [field]: value }
+    }))
+  }
+
+  const handleRemoveAssignedMember = (index: number) => {
+    setAssignedMembers(prev => prev.filter((_, idx) => idx !== index))
+  }
 
   // 2. Client Setup
   const [allClients, setAllClients] = React.useState<ClientItem[]>([])
@@ -428,21 +473,21 @@ export function DocumentStudioModal({
       setupCharge: numSetupCharge,
       items: items,
       notes: notes,
-      terms: terms,
-      assignedMemberId: assignedMemberId || undefined,
-      assignedMemberName: assignedMemberName || undefined,
-      assignedMemberRole: assignedMemberRole || undefined,
-      memberPayoutType: memberPayoutType,
-      memberPayoutValue: typeof memberPayoutValue === "number" ? memberPayoutValue : undefined,
-      memberSharePct: memberPayoutType === "percentage" ? (typeof memberPayoutValue === "number" ? memberPayoutValue : 50) : undefined,
-      memberPayoutAmount: memberPayoutType === "fixed" ? (typeof memberPayoutValue === "number" ? memberPayoutValue : undefined) : undefined,
+      assignedMembers: assignedMembers.length > 0 ? assignedMembers : undefined,
+      assignedMemberId: assignedMembers.length > 0 ? assignedMembers[0].memberId : undefined,
+      assignedMemberName: assignedMembers.length > 0 ? assignedMembers[0].memberName : undefined,
+      assignedMemberRole: assignedMembers.length > 0 ? assignedMembers[0].memberRole : undefined,
+      memberPayoutType: assignedMembers.length > 0 ? assignedMembers[0].payoutType : undefined,
+      memberPayoutValue: assignedMembers.length > 0 ? assignedMembers[0].payoutValue : undefined,
+      memberSharePct: assignedMembers.length > 0 && assignedMembers[0].payoutType === "percentage" ? assignedMembers[0].payoutValue : undefined,
+      memberPayoutAmount: assignedMembers.length > 0 && assignedMembers[0].payoutType === "fixed" ? assignedMembers[0].payoutValue : undefined,
     }
   }, [
     docNumber, clientName, selectedClient, clientEmail, clientPhone, clientAddress,
     clientCity, clientState, clientGst, projectTitle, issueDate, dueDate, grandTotal,
     docScheme, companyId, activeCompany, branchId, subBranchId, branches, subBranches,
     taxableBase, calculatedGst, calculatedDiscount, numSetupCharge, items, notes, terms,
-    assignedMemberId, assignedMemberName, assignedMemberRole, memberPayoutType, memberPayoutValue
+    assignedMembers
   ])
 
   // Save Document handler
@@ -468,13 +513,14 @@ export function DocumentStudioModal({
         clientState: clientState || selectedClient?.state,
         clientGstin: clientGst || selectedClient?.gstNumber,
         companyDetails: activeCompany,
-        assignedMemberId: assignedMemberId || undefined,
-        assignedMemberName: assignedMemberName || undefined,
-        assignedMemberRole: assignedMemberRole || undefined,
-        memberPayoutType: memberPayoutType,
-        memberPayoutValue: typeof memberPayoutValue === "number" ? memberPayoutValue : undefined,
-        memberSharePct: memberPayoutType === "percentage" ? (typeof memberPayoutValue === "number" ? memberPayoutValue : 50) : undefined,
-        memberPayoutAmount: memberPayoutType === "fixed" ? (typeof memberPayoutValue === "number" ? memberPayoutValue : undefined) : undefined,
+        assignedMembers: assignedMembers.length > 0 ? assignedMembers : undefined,
+        assignedMemberId: assignedMembers.length > 0 ? assignedMembers[0].memberId : undefined,
+        assignedMemberName: assignedMembers.length > 0 ? assignedMembers[0].memberName : undefined,
+        assignedMemberRole: assignedMembers.length > 0 ? assignedMembers[0].memberRole : undefined,
+        memberPayoutType: assignedMembers.length > 0 ? assignedMembers[0].payoutType : undefined,
+        memberPayoutValue: assignedMembers.length > 0 ? assignedMembers[0].payoutValue : undefined,
+        memberSharePct: assignedMembers.length > 0 && assignedMembers[0].payoutType === "percentage" ? assignedMembers[0].payoutValue : undefined,
+        memberPayoutAmount: assignedMembers.length > 0 && assignedMembers[0].payoutType === "fixed" ? assignedMembers[0].payoutValue : undefined,
         overrideBankDetails: {
           bankName: bankNameOverride,
           accountHolder: accountHolderOverride,
@@ -781,99 +827,147 @@ export function DocumentStudioModal({
                     )}
                   </div>
 
-                  {/* Team Member Attribution & Commission (Optional) */}
+                  {/* Team Member Attribution & Commission (Multiple Members Support) */}
                   <div className="p-3.5 rounded-2xl border border-indigo-200/80 dark:border-indigo-900/40 bg-indigo-50/30 dark:bg-indigo-950/20 space-y-3">
                     <div className="flex items-center justify-between border-b border-indigo-200/60 dark:border-indigo-800/40 pb-2">
-                      <span className="font-extrabold text-indigo-900 dark:text-indigo-200 flex items-center gap-1.5 text-xs">
+                      <div className="flex items-center gap-1.5">
                         <Users size={14} className="text-indigo-600 dark:text-indigo-400" />
-                        <span>Team Member Attribution (Optional)</span>
-                      </span>
+                        <span className="font-extrabold text-indigo-900 dark:text-indigo-200 text-xs">
+                          Team Member Attribution ({assignedMembers.length})
+                        </span>
+                      </div>
                       <span className="text-[10px] text-indigo-700 dark:text-indigo-400 font-semibold">
-                        Auto-links payments to Team Payroll
+                        Auto-links part & full payments to Team Payroll
                       </span>
                     </div>
 
-                    <div className="space-y-2.5">
-                      <div>
-                        <label className="block text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
-                          Assign Team Member
-                        </label>
-                        <select
-                          value={assignedMemberId}
-                          onChange={(e) => {
-                            const val = e.target.value
-                            setAssignedMemberId(val)
-                            const matched = availableTeamMembers.find(m => String(m.id) === String(val))
-                            if (matched) {
-                              setAssignedMemberName(matched.name)
-                              setAssignedMemberRole(matched.role)
-                            } else {
-                              setAssignedMemberName("")
-                              setAssignedMemberRole("")
-                            }
-                          }}
-                          className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-xs font-bold text-zinc-900 dark:text-zinc-100"
+                    {assignedMembers.length === 0 ? (
+                      <div className="text-center py-2 space-y-2">
+                        <p className="text-[11px] text-zinc-500">
+                          No team members assigned. 100% of revenue goes directly to company.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleAddAssignedMember}
+                          className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs cursor-pointer transition-all inline-flex items-center gap-1.5"
                         >
-                          <option value="">None / Direct Company Revenue</option>
-                          {availableTeamMembers.map(m => (
-                            <option key={m.id} value={m.id}>
-                              {m.name} ({m.role || "Team"})
-                            </option>
-                          ))}
-                        </select>
+                          <Plus size={13} /> Assign Team Member & Set Share
+                        </button>
                       </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {assignedMembers.map((m, idx) => {
+                          const isPct = m.payoutType === "percentage"
+                          const sampleVal = isPct 
+                            ? Math.round((1000 * (Number(m.payoutValue) || 0)) / 100)
+                            : (grandTotal > 0 ? Math.round((Number(m.payoutValue) || 0) * (1000 / grandTotal)) : (Number(m.payoutValue) || 0))
 
-                      {assignedMemberId && (
-                        <div className="p-2.5 rounded-xl bg-white dark:bg-zinc-900/80 border border-indigo-100 dark:border-indigo-900/40 grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
-                              Commission Type
-                            </label>
-                            <div className="flex rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden text-[11px] font-bold">
-                              <button
-                                type="button"
-                                onClick={() => setMemberPayoutType("percentage")}
-                                className={`flex-1 py-1 text-center transition-all cursor-pointer ${
-                                  memberPayoutType === "percentage"
-                                    ? "bg-indigo-600 text-white"
-                                    : "bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
-                                }`}
-                              >
-                                % Percent
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setMemberPayoutType("fixed")}
-                                className={`flex-1 py-1 text-center transition-all cursor-pointer ${
-                                  memberPayoutType === "fixed"
-                                    ? "bg-indigo-600 text-white"
-                                    : "bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
-                                }`}
-                              >
-                                ₹ Fixed
-                              </button>
+                          return (
+                            <div 
+                              key={idx} 
+                              className="p-3 rounded-xl bg-white dark:bg-zinc-900 border border-indigo-100 dark:border-indigo-900/40 space-y-2.5 shadow-2xs"
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-[11px] text-indigo-950 dark:text-indigo-200 flex items-center gap-1">
+                                  <span>👤 Member #{idx + 1}:</span>
+                                  <strong className="text-zinc-900 dark:text-zinc-100">{m.memberName}</strong>
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveAssignedMember(idx)}
+                                  className="text-rose-500 hover:text-rose-700 text-[10px] font-bold flex items-center gap-0.5 cursor-pointer"
+                                >
+                                  <Trash2 size={11} /> Remove
+                                </button>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                                <div className="sm:col-span-6">
+                                  <label className="block text-[9.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">
+                                    Team Member (Staff Only)
+                                  </label>
+                                  <select
+                                    value={m.memberId}
+                                    onChange={(e) => handleUpdateAssignedMember(idx, "memberId", e.target.value)}
+                                    className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs font-bold text-zinc-900 dark:text-zinc-100"
+                                  >
+                                    {availableTeamMembers.map(tm => (
+                                      <option key={tm.id} value={tm.id}>
+                                        {tm.name} ({tm.role || "Team"})
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                <div className="sm:col-span-3">
+                                  <label className="block text-[9.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">
+                                    Type
+                                  </label>
+                                  <div className="flex rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden text-[10.5px] font-bold h-8">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateAssignedMember(idx, "payoutType", "percentage")}
+                                      className={`flex-1 py-1 text-center transition-all cursor-pointer ${
+                                        m.payoutType === "percentage"
+                                          ? "bg-indigo-600 text-white"
+                                          : "bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
+                                      }`}
+                                    >
+                                      %
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateAssignedMember(idx, "payoutType", "fixed")}
+                                      className={`flex-1 py-1 text-center transition-all cursor-pointer ${
+                                        m.payoutType === "fixed"
+                                          ? "bg-indigo-600 text-white"
+                                          : "bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
+                                      }`}
+                                    >
+                                      ₹
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <div className="sm:col-span-3">
+                                  <label className="block text-[9.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">
+                                    {isPct ? "Share (%)" : "Amount (₹)"}
+                                  </label>
+                                  <Input
+                                    type="number"
+                                    value={m.payoutValue}
+                                    onChange={(e) => handleUpdateAssignedMember(idx, "payoutValue", e.target.value === "" ? "" : Number(e.target.value))}
+                                    placeholder={isPct ? "50" : "1000"}
+                                    className="text-xs h-8 font-bold font-mono"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="text-[9.5px] text-indigo-700 dark:text-indigo-300 font-medium bg-indigo-50/60 dark:bg-indigo-950/40 p-1.5 rounded-lg flex items-center justify-between">
+                                <span>💡 If client pays ₹1,000 part payment:</span>
+                                <strong className="font-mono font-bold">₹{sampleVal.toLocaleString("en-IN")} credited to payroll</strong>
+                              </div>
                             </div>
-                          </div>
+                          )
+                        })}
 
-                          <div>
-                            <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
-                              {memberPayoutType === "percentage" ? "Share Percentage (%)" : "Payout Amount (₹)"}
-                            </label>
-                            <Input
-                              type="number"
-                              value={memberPayoutValue}
-                              onChange={(e) => setMemberPayoutValue(e.target.value === "" ? "" : Number(e.target.value))}
-                              placeholder={memberPayoutType === "percentage" ? "e.g. 50" : "e.g. 1000"}
-                              className="text-xs h-8"
-                            />
-                          </div>
+                        <div className="flex items-center justify-between pt-1">
+                          {availableTeamMembers.length > assignedMembers.length ? (
+                            <button
+                              type="button"
+                              onClick={handleAddAssignedMember}
+                              className="text-xs font-bold text-indigo-700 hover:text-indigo-900 dark:text-indigo-400 flex items-center gap-1 cursor-pointer"
+                            >
+                              <Plus size={13} /> + Add Another Team Member
+                            </button>
+                          ) : <div />}
 
-                          <div className="col-span-2 text-[10px] text-indigo-700 dark:text-indigo-300 font-medium">
-                            ℹ️ When client makes partial payment (e.g. ₹1,000), {memberPayoutType === "percentage" ? `${memberPayoutValue || 50}% (₹${Math.round((1000 * (Number(memberPayoutValue) || 50)) / 100)})` : `proportional share`} will be reflected in payroll. When full payment is completed, full share is added.
+                          <div className="text-[10px] text-zinc-500 font-semibold">
+                            Total Assigned: <strong className="text-indigo-900 dark:text-indigo-200">{assignedMembers.reduce((sum, am) => sum + (am.payoutType === "percentage" ? (Number(am.payoutValue) || 0) : 0), 0)}%</strong>
                           </div>
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Dual Bank & QR Settings */}

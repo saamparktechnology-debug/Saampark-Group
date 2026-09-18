@@ -89,11 +89,21 @@ export const AuthService = {
 
 export const UserService = {
   getTeamMembers: async () => {
+    const isTeamMemberOnly = (u: any) => {
+      if (!u) return false
+      const r = String(u.role || u.role_name || u.roleName || "").toLowerCase().trim()
+      const email = String(u.email || "").toLowerCase().trim()
+      const username = String(u.username || "").toLowerCase().trim()
+      if (r.includes("super") || r.includes("admin") || r.includes("client")) return false
+      if (email.includes("superadmin") || email === "saampark.official@gmail.com" || username === "superadmin") return false
+      return true
+    }
+
     try {
       const { getStoredUserAccountsAsync } = await import("@/app/feature/users/services/userService")
       const localUsers = await getStoredUserAccountsAsync()
       if (Array.isArray(localUsers) && localUsers.length > 0) {
-        return localUsers.map((u: any) => ({
+        return localUsers.filter(isTeamMemberOnly).map((u: any) => ({
           ...u,
           name: u.name || u.full_name || u.fullName || u.username || u.email || "Team Member",
           role: u.role || u.role_name || u.roleName || "Teams"
@@ -102,7 +112,7 @@ export const UserService = {
     } catch {}
     const res = await api.get('/users')
     const raw = unpackArray(res, 'users')
-    return (raw || []).map((u: any) => ({
+    return (raw || []).filter(isTeamMemberOnly).map((u: any) => ({
       ...u,
       name: u.name || u.full_name || u.fullName || u.username || u.email || "Team Member",
       role: u.role || u.role_name || u.roleName || "Teams"

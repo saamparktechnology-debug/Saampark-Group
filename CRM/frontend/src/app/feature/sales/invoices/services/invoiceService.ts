@@ -30,6 +30,17 @@ export interface AppliedDiscount {
   amount: number
 }
 
+export interface AssignedMemberAttribution {
+  memberId: string
+  memberName: string
+  memberRole?: string
+  memberAvatar?: string
+  payoutType: "percentage" | "fixed"
+  payoutValue: number
+  sharePct?: number
+  payoutAmount?: number
+}
+
 export interface InvoiceItem {
   id: string
   client: string
@@ -70,6 +81,7 @@ export interface InvoiceItem {
   subBranchSharePct?: number
   subBranchPayoutType?: "percentage" | "fixed"
   subBranchShareAmount?: number
+  assignedMembers?: AssignedMemberAttribution[]
   assignedMemberId?: string
   assignedMemberName?: string
   assignedMemberRole?: string
