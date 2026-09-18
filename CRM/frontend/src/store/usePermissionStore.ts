@@ -507,6 +507,24 @@ export const usePermissionStore = create<PermissionState>()(
         const normId = userIdStr.toLowerCase().trim()
         const uAny = user as any
 
+        const ALIAS_MAP: Record<string, string> = {
+          'sales': 'Invoices',
+          'store': 'Services & Store',
+          'packages & retainers': 'Subscriptions',
+          'emi milestone plans': 'EMI',
+          'team members': 'Teams',
+          'payments & payroll': 'Payroll',
+          'leave management': 'Leave',
+          'attendance & timecards': 'Attendance',
+          'knowledge base': 'Knowledge base',
+          'documents': 'Files',
+          'crm': 'Leads',
+          'organisation': 'Companies',
+          'hr & employees': 'Teams',
+          'support': 'Tickets'
+        }
+        const resolvedName = (ALIAS_MAP[mKey] || mKey).toLowerCase().trim()
+
         // 1. FIRST PRIORITY: User custom action matrix (exact source of truth)
         let userMatrix = state.userActionPermissions[userIdStr] || 
           (emailStr ? state.userActionPermissions[emailStr] : undefined) ||
@@ -523,12 +541,15 @@ export const usePermissionStore = create<PermissionState>()(
         }
 
         if (userMatrix && typeof userMatrix === 'object' && Object.keys(userMatrix).length > 0) {
-          const matchedKey = Object.keys(userMatrix).find(k => k.toLowerCase().trim() === mKey)
+          const matchedKey = Object.keys(userMatrix).find(k => {
+            const kNorm = k.toLowerCase().trim()
+            return kNorm === mKey || kNorm === resolvedName || (ALIAS_MAP[kNorm] && ALIAS_MAP[kNorm].toLowerCase().trim() === mKey)
+          })
           if (matchedKey && userMatrix[matchedKey]) {
             const flags = userMatrix[matchedKey]
-            return Boolean(flags.view || flags.add || flags.edit || flags.delete)
+            return Boolean(flags.view)
           }
-          // Explicit custom matrix configured: if unlisted or all false, disallow
+          // Explicit custom matrix configured: if unlisted or view false, disallow
           return false
         }
 
@@ -560,22 +581,31 @@ export const usePermissionStore = create<PermissionState>()(
         }
 
         if (hasCustomOverride && userAllowed && Array.isArray(userAllowed)) {
-          return userAllowed.some(m => m.toLowerCase().trim() === mKey)
+          return userAllowed.some(m => {
+            const mNorm = m.toLowerCase().trim()
+            return mNorm === mKey || mNorm === resolvedName || (ALIAS_MAP[mNorm] && ALIAS_MAP[mNorm].toLowerCase().trim() === mKey)
+          })
         }
 
         // 3. THIRD PRIORITY: Fallback to role action matrix
         const roleMatrix = state.roleActionPermissions[normRole] || (DEFAULT_ROLE_ACTION_PERMISSIONS as any)[normRole]
         if (roleMatrix && typeof roleMatrix === 'object') {
-          const matchedKey = Object.keys(roleMatrix).find(k => k.toLowerCase().trim() === mKey)
+          const matchedKey = Object.keys(roleMatrix).find(k => {
+            const kNorm = k.toLowerCase().trim()
+            return kNorm === mKey || kNorm === resolvedName || (ALIAS_MAP[kNorm] && ALIAS_MAP[kNorm].toLowerCase().trim() === mKey)
+          })
           if (matchedKey && roleMatrix[matchedKey]) {
             const flags = roleMatrix[matchedKey]
-            return Boolean(flags.view || flags.add || flags.edit || flags.delete)
+            return Boolean(flags.view)
           }
         }
 
         // 4. Fallback to role permissions list
         const roleMods = state.rolePermissions[normRole] || DEFAULT_ROLE_PERMISSIONS[normRole] || []
-        return roleMods.some(m => m.toLowerCase().trim() === mKey)
+        return roleMods.some(m => {
+          const mNorm = m.toLowerCase().trim()
+          return mNorm === mKey || mNorm === resolvedName || (ALIAS_MAP[mNorm] && ALIAS_MAP[mNorm].toLowerCase().trim() === mKey)
+        })
       },
 
       getModulesForUser: (user: User | null) => {
