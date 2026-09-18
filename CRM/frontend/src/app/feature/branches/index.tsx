@@ -14,6 +14,7 @@ import { usePermissionStore } from "@/store/usePermissionStore"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
 import { ImageUploadField } from "@/components/ui/ImageUploadField"
 import { BranchApiService, SubBranchApiService } from "@/app/feature/companies/services/companyService"
+import { OfficialInvoiceDocument } from "@/app/feature/sales/invoices/components/OfficialInvoiceDocument"
 
 type Tab = "branches" | "sub-branches"
 type BranchModalTab = "basic" | "address" | "tax" | "bank" | "signatory"
@@ -46,6 +47,7 @@ export default function BranchesMain() {
   const [activeTab, setActiveTab] = React.useState<Tab>("branches")
   const [searchQuery, setSearchQuery] = React.useState("")
   const [selectedCompanyFilter, setSelectedCompanyFilter] = React.useState<string>("all")
+  const [selectedParentBranchFilter, setSelectedParentBranchFilter] = React.useState<string>("all")
 
   // Modals
   const [isBranchModalOpen, setIsBranchModalOpen] = React.useState(false)
@@ -185,9 +187,10 @@ export default function BranchesMain() {
         (sb.partnerType || "").toLowerCase().includes(searchQuery.toLowerCase())
 
       const matchesCompany = selectedCompanyFilter === "all" || isMatchingCompany({ id: sb.companyId || (sb as any).company_id, slug: sb.companyId } as any, selectedCompanyFilter)
-      return matchesSearch && matchesCompany
+      const matchesParentBranch = selectedParentBranchFilter === "all" || String(sb.parentBranchId) === String(selectedParentBranchFilter)
+      return matchesSearch && matchesCompany && matchesParentBranch
     })
-  }, [subBranches, searchQuery, selectedCompanyFilter])
+  }, [subBranches, searchQuery, selectedCompanyFilter, selectedParentBranchFilter])
 
   // ── OPEN BRANCH MODALS ─────────────────────────────────────────────
   const openAddBranch = () => {
@@ -568,19 +571,37 @@ export default function BranchesMain() {
           </button>
         </div>
 
-        {/* Company Quick Filter */}
-        <div className="hidden sm:flex items-center gap-2 text-xs">
-          <span className="text-zinc-400 font-medium">Company:</span>
-          <select 
-            value={selectedCompanyFilter}
-            onChange={(e) => setSelectedCompanyFilter(e.target.value)}
-            className="px-2.5 py-1 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 focus:outline-none"
-          >
-            <option value="all">All Companies ({companies.length})</option>
-            {companies.map(c => (
-              <option key={c.id} value={c.id}>{c.brand_name || c.name}</option>
-            ))}
-          </select>
+        {/* Company & Parent Branch Quick Filters */}
+        <div className="hidden sm:flex items-center gap-3 text-xs">
+          <div className="flex items-center gap-1.5">
+            <span className="text-zinc-400 font-medium">Company:</span>
+            <select 
+              value={selectedCompanyFilter}
+              onChange={(e) => setSelectedCompanyFilter(e.target.value)}
+              className="px-2.5 py-1 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 focus:outline-none"
+            >
+              <option value="all">All Companies ({companies.length})</option>
+              {companies.map(c => (
+                <option key={c.id} value={c.id}>{c.brand_name || c.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {activeTab === "sub-branches" && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-zinc-400 font-medium">Under Branch:</span>
+              <select 
+                value={selectedParentBranchFilter}
+                onChange={(e) => setSelectedParentBranchFilter(e.target.value)}
+                className="px-2.5 py-1 text-xs rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 font-medium focus:outline-none"
+              >
+                <option value="all">All Parent Branches ({branches.length})</option>
+                {branches.map(b => (
+                  <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       </div>
 
@@ -608,9 +629,10 @@ export default function BranchesMain() {
           <table className="w-full text-left text-xs">
             <thead className="bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-200 dark:border-zinc-800 text-zinc-500 uppercase font-semibold text-[11px] tracking-wider">
               <tr>
-                <th className="py-3 px-4">Branch Identity</th>
+                <th className="py-3 px-4">{activeTab === "branches" ? "Branch Identity" : "Sub-Branch / Hub"}</th>
                 <th className="py-3 px-4">Code</th>
                 <th className="py-3 px-4">Company</th>
+                {activeTab === "sub-branches" && <th className="py-3 px-4">Parent Branch</th>}
                 <th className="py-3 px-4">Location</th>
                 <th className="py-3 px-4">Tax / GSTIN</th>
                 <th className="py-3 px-4">{activeTab === "branches" ? "Manager" : "Partner / Share"}</th>
@@ -622,7 +644,7 @@ export default function BranchesMain() {
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/80 text-zinc-700 dark:text-zinc-300">
               {(activeTab === "branches" ? filteredBranches : filteredSubBranches).length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-zinc-400">
+                  <td colSpan={activeTab === "sub-branches" ? 10 : 9} className="py-12 text-center text-zinc-400">
                     <Building2 className="h-8 w-8 mx-auto mb-2 opacity-30" />
                     <p className="font-semibold">No records found matching your filter.</p>
                   </td>
@@ -635,6 +657,7 @@ export default function BranchesMain() {
                   const hasSignature = !!(item as any).signature_image_url
                   const hasStamp = !!(item as any).stamp_image_url
                   const logoUrl = (item as any).logo_url
+                  const parentBranch = activeTab === "sub-branches" ? branches.find(b => b.id === (item as SubBranch).parentBranchId) : null
 
                   return (
                     <tr key={item.id} className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/50 transition-colors">
@@ -677,6 +700,22 @@ export default function BranchesMain() {
                           {compName}
                         </span>
                       </td>
+
+                      {/* Parent Branch for Sub-Branches */}
+                      {activeTab === "sub-branches" && (
+                        <td className="py-3 px-4">
+                          {parentBranch ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-semibold text-zinc-800 dark:text-zinc-200">{parentBranch.name}</span>
+                              <span className="font-mono text-[10px] text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.2 rounded border border-blue-200/40">
+                                {parentBranch.code}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-zinc-400 italic text-[10px]">Unassigned</span>
+                          )}
+                        </td>
+                      )}
 
                       {/* Location */}
                       <td className="py-3 px-4">
@@ -795,15 +834,15 @@ export default function BranchesMain() {
         </div>
       </div>
 
-      {/* ── UPGRADED 5-TAB BRANCH MODAL ─────────────────────────────── */}
+      {/* ── UPGRADED 5-TAB BRANCH MODAL WITH LIVE INVOICE PREVIEW ─── */}
       <AnimatePresence>
         {isBranchModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto">
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }} 
               animate={{ opacity: 1, scale: 1 }} 
               exit={{ opacity: 0, scale: 0.95 }} 
-              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden text-xs"
+              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl w-full max-w-6xl xl:max-w-7xl max-h-[92vh] flex flex-col overflow-hidden text-xs"
             >
               {/* Modal Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 shrink-0">
@@ -816,7 +855,7 @@ export default function BranchesMain() {
                       {editingBranch ? `Edit Branch: ${editingBranch.name}` : "Add Operational Branch"}
                     </h3>
                     <p className="text-[11px] text-zinc-400">
-                      All GSTIN, PAN, Bank &amp; Signatory details configured here apply to invoices generated for this branch
+                      Configure branch legal, GSTIN, banking, and signatory settings with real-time live invoice preview
                     </p>
                   </div>
                 </div>
@@ -829,549 +868,643 @@ export default function BranchesMain() {
                 </button>
               </div>
 
-              {/* 5 Tab Navigation Header */}
-              <div className="grid grid-cols-5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/40 font-semibold text-center shrink-0">
-                <button 
-                  type="button" 
-                  onClick={() => setBranchTab("basic")} 
-                  className={`py-3 px-2 border-b-2 transition-colors flex items-center justify-center gap-1.5 ${
-                    branchTab === "basic" 
-                      ? "border-blue-600 text-blue-600 bg-white dark:bg-zinc-900 font-bold" 
-                      : "border-transparent text-zinc-500 hover:text-zinc-800"
-                  }`}
-                >
-                  <Building size={13} />
-                  <span className="hidden sm:inline">1. Basic &amp; Brand</span>
-                  <span className="sm:hidden">1. Info</span>
-                </button>
-
-                <button 
-                  type="button" 
-                  onClick={() => setBranchTab("address")} 
-                  className={`py-3 px-2 border-b-2 transition-colors flex items-center justify-center gap-1.5 ${
-                    branchTab === "address" 
-                      ? "border-blue-600 text-blue-600 bg-white dark:bg-zinc-900 font-bold" 
-                      : "border-transparent text-zinc-500 hover:text-zinc-800"
-                  }`}
-                >
-                  <MapPin size={13} />
-                  <span className="hidden sm:inline">2. Address &amp; Contact</span>
-                  <span className="sm:hidden">2. Location</span>
-                </button>
-
-                <button 
-                  type="button" 
-                  onClick={() => setBranchTab("tax")} 
-                  className={`py-3 px-2 border-b-2 transition-colors flex items-center justify-center gap-1.5 ${
-                    branchTab === "tax" 
-                      ? "border-blue-600 text-blue-600 bg-white dark:bg-zinc-900 font-bold" 
-                      : "border-transparent text-zinc-500 hover:text-zinc-800"
-                  }`}
-                >
-                  <Shield size={13} />
-                  <span className="hidden sm:inline">3. Tax &amp; Legal</span>
-                  <span className="sm:hidden">3. Tax</span>
-                </button>
-
-                <button 
-                  type="button" 
-                  onClick={() => setBranchTab("bank")} 
-                  className={`py-3 px-2 border-b-2 transition-colors flex items-center justify-center gap-1.5 ${
-                    branchTab === "bank" 
-                      ? "border-blue-600 text-blue-600 bg-white dark:bg-zinc-900 font-bold" 
-                      : "border-transparent text-zinc-500 hover:text-zinc-800"
-                  }`}
-                >
-                  <Landmark size={13} />
-                  <span className="hidden sm:inline">4. Bank &amp; UPI QR</span>
-                  <span className="sm:hidden">4. Bank</span>
-                </button>
-
-                <button 
-                  type="button" 
-                  onClick={() => setBranchTab("signatory")} 
-                  className={`py-3 px-2 border-b-2 transition-colors flex items-center justify-center gap-1.5 ${
-                    branchTab === "signatory" 
-                      ? "border-blue-600 text-blue-600 bg-white dark:bg-zinc-900 font-bold" 
-                      : "border-transparent text-zinc-500 hover:text-zinc-800"
-                  }`}
-                >
-                  <Stamp size={13} />
-                  <span className="hidden sm:inline">5. Signatory &amp; Stamp</span>
-                  <span className="sm:hidden">5. Stamp</span>
-                </button>
-              </div>
-
-              {/* Form Content */}
-              <form onSubmit={handleSaveBranch} className="flex flex-col flex-1 overflow-hidden">
-                <div className="p-6 space-y-4 overflow-y-auto flex-1 max-h-[65vh]">
-                  
-                  {/* ── TAB 1: BASIC & BRAND ── */}
-                  {branchTab === "basic" && (
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Company *</label>
-                          <select 
-                            required 
-                            value={branchCompanyId} 
-                            onChange={(e) => setBranchCompanyId(e.target.value)}
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-medium"
-                          >
-                            {companies.map(c => (
-                              <option key={c.id} value={c.id}>{c.brand_name || c.name}</option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Branch Name *</label>
-                          <input 
-                            type="text" 
-                            required 
-                            placeholder="e.g. Kolkata Salt Lake Branch" 
-                            value={branchForm.name} 
-                            onChange={(e) => setBranchForm({ ...branchForm, name: e.target.value })} 
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg focus:ring-1 focus:ring-blue-500" 
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Branch Code *</label>
-                          <input 
-                            type="text" 
-                            required 
-                            placeholder="e.g. BR-KOL-01" 
-                            value={branchForm.code} 
-                            onChange={(e) => setBranchForm({ ...branchForm, code: e.target.value })} 
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono uppercase" 
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Status</label>
-                          <select 
-                            value={branchForm.status} 
-                            onChange={(e) => setBranchForm({ ...branchForm, status: e.target.value as any })}
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-medium"
-                          >
-                            <option value="Active">Active</option>
-                            <option value="Inactive">Inactive</option>
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Brand Name</label>
-                          <input 
-                            type="text" 
-                            placeholder="e.g. SAAMPARK" 
-                            value={branchForm.brand_name} 
-                            onChange={(e) => setBranchForm({ ...branchForm, brand_name: e.target.value })} 
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Division Name</label>
-                          <input 
-                            type="text" 
-                            placeholder="e.g. Technology &amp; Software" 
-                            value={branchForm.division_name} 
-                            onChange={(e) => setBranchForm({ ...branchForm, division_name: e.target.value })} 
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
-                          />
-                        </div>
-
-                        <div className="sm:col-span-2">
-                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Subtitle / Operations Tagline</label>
-                          <input 
-                            type="text" 
-                            placeholder="e.g. Eastern Regional Operations &amp; R&amp;D Center" 
-                            value={branchForm.subtitle} 
-                            onChange={(e) => setBranchForm({ ...branchForm, subtitle: e.target.value })} 
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Branch Manager Name</label>
-                          <input 
-                            type="text" 
-                            placeholder="e.g. Amit Sen" 
-                            value={branchForm.managerName} 
-                            onChange={(e) => setBranchForm({ ...branchForm, managerName: e.target.value })} 
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Manager Phone</label>
-                          <input 
-                            type="text" 
-                            placeholder="+91 98765 43210" 
-                            value={branchForm.managerPhone} 
-                            onChange={(e) => setBranchForm({ ...branchForm, managerPhone: e.target.value })} 
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
-                          />
-                        </div>
-                      </div>
-
-                      {/* Branch Logo Upload */}
-                      <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
-                        <ImageUploadField 
-                          label="Branch Logo (Overrides Company Logo on Branch Invoices)"
-                          value={branchForm.logo_url}
-                          onChange={(url) => setBranchForm({ ...branchForm, logo_url: url })}
-                          uploadNamePrefix="branch_logo"
-                          helperText="Uploaded to ImgBB storage. Used on official invoices, quotations, and letters issued by this branch."
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* ── TAB 2: ADDRESS & CONTACT ── */}
-                  {branchTab === "address" && (
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Street Address</label>
-                        <input 
-                          type="text" 
-                          placeholder="e.g. Tower 3, 5th Floor, Salt Lake Sector V" 
-                          value={branchForm.address} 
-                          onChange={(e) => setBranchForm({ ...branchForm, address: e.target.value })} 
-                          className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        <div>
-                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">City</label>
-                          <input 
-                            type="text" 
-                            value={branchForm.city} 
-                            onChange={(e) => setBranchForm({ ...branchForm, city: e.target.value })} 
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">State</label>
-                          <input 
-                            type="text" 
-                            value={branchForm.state} 
-                            onChange={(e) => setBranchForm({ ...branchForm, state: e.target.value })} 
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">ZIP / PIN</label>
-                          <input 
-                            type="text" 
-                            value={branchForm.zip} 
-                            onChange={(e) => setBranchForm({ ...branchForm, zip: e.target.value })} 
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Country</label>
-                          <input 
-                            type="text" 
-                            value={branchForm.country} 
-                            onChange={(e) => setBranchForm({ ...branchForm, country: e.target.value })} 
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div>
-                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Branch Official Phone</label>
-                          <input 
-                            type="text" 
-                            placeholder="+91 33 2345 6789" 
-                            value={branchForm.phone} 
-                            onChange={(e) => setBranchForm({ ...branchForm, phone: e.target.value })} 
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Branch Official Email</label>
-                          <input 
-                            type="email" 
-                            placeholder="kolkata@saampark.com" 
-                            value={branchForm.email} 
-                            onChange={(e) => setBranchForm({ ...branchForm, email: e.target.value })} 
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Website URL</label>
-                          <input 
-                            type="text" 
-                            placeholder="https://saampark.com" 
-                            value={branchForm.website} 
-                            onChange={(e) => setBranchForm({ ...branchForm, website: e.target.value })} 
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* ── TAB 3: TAX & LEGAL IDS ── */}
-                  {branchTab === "tax" && (
-                    <div className="space-y-4">
-                      <div className="p-3 bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-xl flex items-start gap-2.5 text-blue-800 dark:text-blue-300">
-                        <Info size={16} className="shrink-0 mt-0.5" />
-                        <p className="text-[11px] leading-relaxed">
-                          If this branch has a state-specific GST registration (GSTIN), provide it below. The tax engine automatically selects this GSTIN on invoices generated from this location.
-                        </p>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Branch GSTIN (15 Digits)</label>
-                          <input 
-                            type="text" 
-                            placeholder="e.g. 19AAECS1234F1Z5" 
-                            value={branchForm.gstin} 
-                            onChange={(e) => setBranchForm({ ...branchForm, gstin: e.target.value.toUpperCase() })} 
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono uppercase" 
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Branch PAN (10 Digits)</label>
-                          <input 
-                            type="text" 
-                            placeholder="e.g. AAECS1234F" 
-                            value={branchForm.pan} 
-                            onChange={(e) => setBranchForm({ ...branchForm, pan: e.target.value.toUpperCase() })} 
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono uppercase" 
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">CIN (Corporate Identification)</label>
-                          <input 
-                            type="text" 
-                            placeholder="e.g. U72200WB2020PTC123456" 
-                            value={branchForm.cin} 
-                            onChange={(e) => setBranchForm({ ...branchForm, cin: e.target.value.toUpperCase() })} 
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono uppercase" 
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">MSME Registration No.</label>
-                          <input 
-                            type="text" 
-                            placeholder="e.g. UDYAM-WB-01-0012345" 
-                            value={branchForm.msme_reg} 
-                            onChange={(e) => setBranchForm({ ...branchForm, msme_reg: e.target.value.toUpperCase() })} 
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono uppercase" 
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* ── TAB 4: BANK & UPI QR ── */}
-                  {branchTab === "bank" && (
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Bank Name</label>
-                          <input 
-                            type="text" 
-                            placeholder="e.g. HDFC Bank Ltd" 
-                            value={branchForm.bank_name} 
-                            onChange={(e) => setBranchForm({ ...branchForm, bank_name: e.target.value })} 
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Account Holder Name</label>
-                          <input 
-                            type="text" 
-                            placeholder="e.g. SAAMPARK Technology Pvt Ltd" 
-                            value={branchForm.account_holder} 
-                            onChange={(e) => setBranchForm({ ...branchForm, account_holder: e.target.value })} 
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Account Number</label>
-                          <input 
-                            type="text" 
-                            placeholder="e.g. 50200012345678" 
-                            value={branchForm.account_number} 
-                            onChange={(e) => setBranchForm({ ...branchForm, account_number: e.target.value })} 
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono" 
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">IFSC Code</label>
-                          <input 
-                            type="text" 
-                            placeholder="e.g. HDFC0001234" 
-                            value={branchForm.ifsc_code} 
-                            onChange={(e) => setBranchForm({ ...branchForm, ifsc_code: e.target.value.toUpperCase() })} 
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono uppercase" 
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Bank Branch / Sol ID</label>
-                          <input 
-                            type="text" 
-                            placeholder="e.g. Sector V Salt Lake Branch" 
-                            value={branchForm.bank_branch} 
-                            onChange={(e) => setBranchForm({ ...branchForm, bank_branch: e.target.value })} 
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">UPI ID / VPA</label>
-                          <input 
-                            type="text" 
-                            placeholder="e.g. saampark@hdfcbank" 
-                            value={branchForm.upi_id} 
-                            onChange={(e) => setBranchForm({ ...branchForm, upi_id: e.target.value })} 
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono" 
-                          />
-                        </div>
-                      </div>
-
-                      {/* Payment QR Code Upload */}
-                      <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
-                        <ImageUploadField 
-                          label="Branch Payment QR Code / UPI Scanner"
-                          value={branchForm.payment_qr_url}
-                          onChange={(url) => setBranchForm({ ...branchForm, payment_qr_url: url })}
-                          uploadNamePrefix="branch_upi_qr"
-                          helperText="Uploaded to ImgBB. Displayed on invoices generated from this branch for instant client scanning and payments."
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* ── TAB 5: SIGNATORY & STAMP ── */}
-                  {branchTab === "signatory" && (
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Authorized Signatory Name</label>
-                          <input 
-                            type="text" 
-                            placeholder="e.g. Amit Sen" 
-                            value={branchForm.signatory_name} 
-                            onChange={(e) => setBranchForm({ ...branchForm, signatory_name: e.target.value })} 
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Signatory Designation</label>
-                          <input 
-                            type="text" 
-                            placeholder="e.g. Branch Manager" 
-                            value={branchForm.signatory_designation} 
-                            onChange={(e) => setBranchForm({ ...branchForm, signatory_designation: e.target.value })} 
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
-                          <ImageUploadField 
-                            label="Branch Authorized Signature"
-                            value={branchForm.signature_image_url}
-                            onChange={(url) => setBranchForm({ ...branchForm, signature_image_url: url })}
-                            uploadNamePrefix="branch_sig"
-                            aspectRatio="signature"
-                            helperText="Uploaded to ImgBB. Displayed on official branch invoices."
-                          />
-                        </div>
-
-                        <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
-                          <ImageUploadField 
-                            label="Branch Official Stamp / Seal"
-                            value={branchForm.stamp_image_url}
-                            onChange={(url) => setBranchForm({ ...branchForm, stamp_image_url: url })}
-                            uploadNamePrefix="branch_stamp"
-                            helperText="Uploaded to ImgBB. Round branch seal affixed to invoices and proposals."
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Invoice Terms &amp; Conditions</label>
-                        <textarea 
-                          rows={3}
-                          placeholder="Standard terms and conditions printed on invoices..."
-                          value={branchForm.terms_conditions}
-                          onChange={(e) => setBranchForm({ ...branchForm, terms_conditions: e.target.value })}
-                          className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg resize-none"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Invoice Notes / Remarks</label>
-                        <textarea 
-                          rows={2}
-                          placeholder="Default notes displayed at the bottom of invoice..."
-                          value={branchForm.invoice_notes}
-                          onChange={(e) => setBranchForm({ ...branchForm, invoice_notes: e.target.value })}
-                          className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg resize-none"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Footer Buttons */}
-                <div className="flex items-center justify-between px-6 py-4 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/40 shrink-0">
-                  <div className="text-zinc-400 text-[11px]">
-                    Step {branchTab === "basic" ? "1" : branchTab === "address" ? "2" : branchTab === "tax" ? "3" : branchTab === "bank" ? "4" : "5"} of 5
-                  </div>
-                  <div className="flex items-center gap-2">
+              {/* 2-Column Split: Form on Left, Live Preview on Right */}
+              <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
+                {/* Left Side: Form Tabs */}
+                <div className="w-full lg:w-[54%] flex flex-col border-r border-zinc-200 dark:border-zinc-800 overflow-hidden">
+                  {/* 5 Tab Navigation Header */}
+                  <div className="grid grid-cols-5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/40 font-semibold text-center shrink-0">
                     <button 
                       type="button" 
-                      onClick={() => setIsBranchModalOpen(false)} 
-                      className="px-4 py-2 text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl"
+                      onClick={() => setBranchTab("basic")} 
+                      className={`py-3 px-2 border-b-2 transition-colors flex items-center justify-center gap-1.5 ${
+                        branchTab === "basic" 
+                          ? "border-blue-600 text-blue-600 bg-white dark:bg-zinc-900 font-bold" 
+                          : "border-transparent text-zinc-500 hover:text-zinc-800"
+                      }`}
                     >
-                      Cancel
+                      <Building size={13} />
+                      <span className="hidden sm:inline">1. Basic</span>
+                      <span className="sm:hidden">1. Info</span>
                     </button>
+
                     <button 
-                      type="submit" 
-                      disabled={isSaving || !branchForm.name.trim()}
-                      className="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-xl shadow-md transition-all flex items-center gap-1.5"
+                      type="button" 
+                      onClick={() => setBranchTab("address")} 
+                      className={`py-3 px-2 border-b-2 transition-colors flex items-center justify-center gap-1.5 ${
+                        branchTab === "address" 
+                          ? "border-blue-600 text-blue-600 bg-white dark:bg-zinc-900 font-bold" 
+                          : "border-transparent text-zinc-500 hover:text-zinc-800"
+                      }`}
                     >
-                      {isSaving ? "Saving..." : (editingBranch ? "Update Branch" : "Create Branch")}
+                      <MapPin size={13} />
+                      <span className="hidden sm:inline">2. Address</span>
+                      <span className="sm:hidden">2. Loc</span>
+                    </button>
+
+                    <button 
+                      type="button" 
+                      onClick={() => setBranchTab("tax")} 
+                      className={`py-3 px-2 border-b-2 transition-colors flex items-center justify-center gap-1.5 ${
+                        branchTab === "tax" 
+                          ? "border-blue-600 text-blue-600 bg-white dark:bg-zinc-900 font-bold" 
+                          : "border-transparent text-zinc-500 hover:text-zinc-800"
+                      }`}
+                    >
+                      <Shield size={13} />
+                      <span className="hidden sm:inline">3. Tax</span>
+                      <span className="sm:hidden">3. Tax</span>
+                    </button>
+
+                    <button 
+                      type="button" 
+                      onClick={() => setBranchTab("bank")} 
+                      className={`py-3 px-2 border-b-2 transition-colors flex items-center justify-center gap-1.5 ${
+                        branchTab === "bank" 
+                          ? "border-blue-600 text-blue-600 bg-white dark:bg-zinc-900 font-bold" 
+                          : "border-transparent text-zinc-500 hover:text-zinc-800"
+                      }`}
+                    >
+                      <Landmark size={13} />
+                      <span className="hidden sm:inline">4. Bank</span>
+                      <span className="sm:hidden">4. Bank</span>
+                    </button>
+
+                    <button 
+                      type="button" 
+                      onClick={() => setBranchTab("signatory")} 
+                      className={`py-3 px-2 border-b-2 transition-colors flex items-center justify-center gap-1.5 ${
+                        branchTab === "signatory" 
+                          ? "border-blue-600 text-blue-600 bg-white dark:bg-zinc-900 font-bold" 
+                          : "border-transparent text-zinc-500 hover:text-zinc-800"
+                      }`}
+                    >
+                      <Stamp size={13} />
+                      <span className="hidden sm:inline">5. Stamp</span>
+                      <span className="sm:hidden">5. Seal</span>
                     </button>
                   </div>
+
+                  {/* Form Content */}
+                  <form onSubmit={handleSaveBranch} id="branchFormSubmit" className="flex flex-col flex-1 overflow-hidden">
+                    <div className="p-5 space-y-4 overflow-y-auto flex-1 max-h-[60vh]">
+                      
+                      {/* ── TAB 1: BASIC & BRAND ── */}
+                      {branchTab === "basic" && (
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                            <div>
+                              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Company *</label>
+                              <select 
+                                required 
+                                value={branchCompanyId} 
+                                onChange={(e) => setBranchCompanyId(e.target.value)}
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-medium"
+                              >
+                                {companies.map(c => (
+                                  <option key={c.id} value={c.id}>{c.brand_name || c.name}</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Branch Name *</label>
+                              <input 
+                                type="text" 
+                                required 
+                                placeholder="e.g. Kolkata Salt Lake Branch" 
+                                value={branchForm.name} 
+                                onChange={(e) => setBranchForm({ ...branchForm, name: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg focus:ring-1 focus:ring-blue-500 font-medium" 
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Branch Code *</label>
+                              <input 
+                                type="text" 
+                                required 
+                                placeholder="e.g. BR-KOL-01" 
+                                value={branchForm.code} 
+                                onChange={(e) => setBranchForm({ ...branchForm, code: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono uppercase" 
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Status</label>
+                              <select 
+                                value={branchForm.status} 
+                                onChange={(e) => setBranchForm({ ...branchForm, status: e.target.value as any })}
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-medium"
+                              >
+                                <option value="Active">Active</option>
+                                <option value="Inactive">Inactive</option>
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Brand Name</label>
+                              <input 
+                                type="text" 
+                                placeholder="e.g. SAAMPARK" 
+                                value={branchForm.brand_name} 
+                                onChange={(e) => setBranchForm({ ...branchForm, brand_name: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Division Name</label>
+                              <input 
+                                type="text" 
+                                placeholder="e.g. Technology & Software" 
+                                value={branchForm.division_name} 
+                                onChange={(e) => setBranchForm({ ...branchForm, division_name: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
+                              />
+                            </div>
+
+                            <div className="sm:col-span-2">
+                              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Subtitle / Operations Tagline</label>
+                              <input 
+                                type="text" 
+                                placeholder="e.g. Eastern Regional Operations & R&D Center" 
+                                value={branchForm.subtitle} 
+                                onChange={(e) => setBranchForm({ ...branchForm, subtitle: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Branch Manager Name</label>
+                              <input 
+                                type="text" 
+                                placeholder="e.g. Amit Sen" 
+                                value={branchForm.managerName} 
+                                onChange={(e) => setBranchForm({ ...branchForm, managerName: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Manager Phone</label>
+                              <input 
+                                type="text" 
+                                placeholder="+91 98765 43210" 
+                                value={branchForm.managerPhone} 
+                                onChange={(e) => setBranchForm({ ...branchForm, managerPhone: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
+                              />
+                            </div>
+                          </div>
+
+                          {/* Branch Logo Upload */}
+                          <div className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
+                            <ImageUploadField 
+                              label="Branch Logo (Overrides Company Logo on Branch Invoices)"
+                              value={branchForm.logo_url}
+                              onChange={(url) => setBranchForm({ ...branchForm, logo_url: url })}
+                              uploadNamePrefix="branch_logo"
+                              helperText="Uploaded to ImgBB storage. Used on official invoices, quotations, and letters issued by this branch."
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ── TAB 2: ADDRESS & CONTACT ── */}
+                      {branchTab === "address" && (
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Street Address</label>
+                            <input 
+                              type="text" 
+                              placeholder="e.g. Tower 3, 5th Floor, Salt Lake Sector V" 
+                              value={branchForm.address} 
+                              onChange={(e) => setBranchForm({ ...branchForm, address: e.target.value })} 
+                              className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div>
+                              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">City</label>
+                              <input 
+                                type="text" 
+                                value={branchForm.city} 
+                                onChange={(e) => setBranchForm({ ...branchForm, city: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">State</label>
+                              <input 
+                                type="text" 
+                                value={branchForm.state} 
+                                onChange={(e) => setBranchForm({ ...branchForm, state: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">ZIP / PIN</label>
+                              <input 
+                                type="text" 
+                                value={branchForm.zip} 
+                                onChange={(e) => setBranchForm({ ...branchForm, zip: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Country</label>
+                              <input 
+                                type="text" 
+                                value={branchForm.country} 
+                                onChange={(e) => setBranchForm({ ...branchForm, country: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Branch Official Phone</label>
+                              <input 
+                                type="text" 
+                                placeholder="+91 33 2345 6789" 
+                                value={branchForm.phone} 
+                                onChange={(e) => setBranchForm({ ...branchForm, phone: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Branch Official Email</label>
+                              <input 
+                                type="email" 
+                                placeholder="kolkata@saampark.com" 
+                                value={branchForm.email} 
+                                onChange={(e) => setBranchForm({ ...branchForm, email: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Website URL</label>
+                              <input 
+                                type="text" 
+                                placeholder="https://saampark.com" 
+                                value={branchForm.website} 
+                                onChange={(e) => setBranchForm({ ...branchForm, website: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ── TAB 3: TAX & LEGAL IDS ── */}
+                      {branchTab === "tax" && (
+                        <div className="space-y-4">
+                          <div className="p-3 bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-xl flex items-start gap-2.5 text-blue-800 dark:text-blue-300">
+                            <Info size={16} className="shrink-0 mt-0.5" />
+                            <p className="text-[11px] leading-relaxed">
+                              If this branch has a state-specific GST registration (GSTIN), provide it below. The tax engine automatically selects this GSTIN on invoices generated from this location.
+                            </p>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Branch GSTIN (15 Digits)</label>
+                              <input 
+                                type="text" 
+                                placeholder="e.g. 19AAECS1234F1Z5" 
+                                value={branchForm.gstin} 
+                                onChange={(e) => setBranchForm({ ...branchForm, gstin: e.target.value.toUpperCase() })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono uppercase" 
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Branch PAN (10 Digits)</label>
+                              <input 
+                                type="text" 
+                                placeholder="e.g. AAECS1234F" 
+                                value={branchForm.pan} 
+                                onChange={(e) => setBranchForm({ ...branchForm, pan: e.target.value.toUpperCase() })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono uppercase" 
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">CIN (Corporate Identification)</label>
+                              <input 
+                                type="text" 
+                                placeholder="e.g. U72200WB2020PTC123456" 
+                                value={branchForm.cin} 
+                                onChange={(e) => setBranchForm({ ...branchForm, cin: e.target.value.toUpperCase() })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono uppercase" 
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">MSME Registration No.</label>
+                              <input 
+                                type="text" 
+                                placeholder="e.g. UDYAM-WB-01-0012345" 
+                                value={branchForm.msme_reg} 
+                                onChange={(e) => setBranchForm({ ...branchForm, msme_reg: e.target.value.toUpperCase() })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono uppercase" 
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ── TAB 4: BANK & UPI QR ── */}
+                      {branchTab === "bank" && (
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Bank Name</label>
+                              <input 
+                                type="text" 
+                                placeholder="e.g. HDFC Bank Ltd" 
+                                value={branchForm.bank_name} 
+                                onChange={(e) => setBranchForm({ ...branchForm, bank_name: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Account Holder Name</label>
+                              <input 
+                                type="text" 
+                                placeholder="e.g. SAAMPARK Technology Pvt Ltd" 
+                                value={branchForm.account_holder} 
+                                onChange={(e) => setBranchForm({ ...branchForm, account_holder: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Account Number</label>
+                              <input 
+                                type="text" 
+                                placeholder="e.g. 50200012345678" 
+                                value={branchForm.account_number} 
+                                onChange={(e) => setBranchForm({ ...branchForm, account_number: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono" 
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">IFSC Code</label>
+                              <input 
+                                type="text" 
+                                placeholder="e.g. HDFC0001234" 
+                                value={branchForm.ifsc_code} 
+                                onChange={(e) => setBranchForm({ ...branchForm, ifsc_code: e.target.value.toUpperCase() })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono uppercase" 
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Bank Branch / Sol ID</label>
+                              <input 
+                                type="text" 
+                                placeholder="e.g. Sector V Salt Lake Branch" 
+                                value={branchForm.bank_branch} 
+                                onChange={(e) => setBranchForm({ ...branchForm, bank_branch: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">UPI ID / VPA</label>
+                              <input 
+                                type="text" 
+                                placeholder="e.g. saampark@hdfcbank" 
+                                value={branchForm.upi_id} 
+                                onChange={(e) => setBranchForm({ ...branchForm, upi_id: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono" 
+                              />
+                            </div>
+                          </div>
+
+                          {/* Payment QR Code Upload */}
+                          <div className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
+                            <ImageUploadField 
+                              label="Branch Payment QR Code / UPI Scanner"
+                              value={branchForm.payment_qr_url}
+                              onChange={(url) => setBranchForm({ ...branchForm, payment_qr_url: url })}
+                              uploadNamePrefix="branch_upi_qr"
+                              helperText="Uploaded to ImgBB. Displayed on invoices generated from this branch for instant client scanning and payments."
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ── TAB 5: SIGNATORY & STAMP ── */}
+                      {branchTab === "signatory" && (
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Authorized Signatory Name</label>
+                              <input 
+                                type="text" 
+                                placeholder="e.g. Amit Sen" 
+                                value={branchForm.signatory_name} 
+                                onChange={(e) => setBranchForm({ ...branchForm, signatory_name: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Signatory Designation</label>
+                              <input 
+                                type="text" 
+                                placeholder="e.g. Branch Manager" 
+                                value={branchForm.signatory_designation} 
+                                onChange={(e) => setBranchForm({ ...branchForm, signatory_designation: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
+                              <ImageUploadField 
+                                label="Branch Authorized Signature"
+                                value={branchForm.signature_image_url}
+                                onChange={(url) => setBranchForm({ ...branchForm, signature_image_url: url })}
+                                uploadNamePrefix="branch_sig"
+                                aspectRatio="signature"
+                                helperText="Uploaded to ImgBB. Displayed on official branch invoices."
+                              />
+                            </div>
+
+                            <div className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
+                              <ImageUploadField 
+                                label="Branch Official Stamp / Seal"
+                                value={branchForm.stamp_image_url}
+                                onChange={(url) => setBranchForm({ ...branchForm, stamp_image_url: url })}
+                                uploadNamePrefix="branch_stamp"
+                                helperText="Uploaded to ImgBB. Round branch seal affixed to invoices and proposals."
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Invoice Terms &amp; Conditions</label>
+                            <textarea 
+                              rows={2}
+                              placeholder="Standard terms and conditions printed on invoices..."
+                              value={branchForm.terms_conditions}
+                              onChange={(e) => setBranchForm({ ...branchForm, terms_conditions: e.target.value })}
+                              className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg resize-none"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Invoice Notes / Remarks</label>
+                            <textarea 
+                              rows={2}
+                              placeholder="Default notes displayed at the bottom of invoice..."
+                              value={branchForm.invoice_notes}
+                              onChange={(e) => setBranchForm({ ...branchForm, invoice_notes: e.target.value })}
+                              className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg resize-none"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </form>
                 </div>
-              </form>
+
+                {/* Right Side: Real-Time Branch Invoice Preview */}
+                <div className="w-full lg:w-[46%] bg-zinc-100/80 dark:bg-zinc-950 p-4 flex flex-col overflow-y-auto border-t lg:border-t-0 border-zinc-200 dark:border-zinc-800">
+                  <div className="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
+                      <span className="font-bold text-xs text-zinc-900 dark:text-zinc-100">Branch Invoice Output</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-zinc-500 bg-white dark:bg-zinc-900 px-2 py-0.5 rounded border border-zinc-200 dark:border-zinc-800">
+                      {branchForm.name ? (branchForm.code || "Live Preview") : "Branch Preview"}
+                    </span>
+                  </div>
+
+                  <div className="py-3 flex-1 flex items-start justify-center overflow-x-hidden">
+                    <div className="w-full max-w-[650px] transform origin-top scale-[0.72] sm:scale-[0.8] lg:scale-[0.82] transition-transform shadow-xl rounded-2xl">
+                      <OfficialInvoiceDocument
+                        invoice={{
+                          id: "INV-BR-LIVE",
+                          client: "Global Enterprises Corp",
+                          clientEmail: "accounts@globalent.com",
+                          project: "Regional Infrastructure & Engineering Services",
+                          billDate: new Date().toLocaleDateString("en-GB"),
+                          dueDate: new Date(Date.now() + 15 * 86400000).toLocaleDateString("en-GB"),
+                          baseAmount: 35000,
+                          setupCharge: 0,
+                          discount: 0,
+                          gstRate: 18,
+                          gstAmount: 6300,
+                          totalInvoiced: "₹41,300",
+                          paymentReceived: "₹41,300",
+                          due: "₹0",
+                          status: "Fully paid",
+                          companyId: branchCompanyId || "tech",
+                          branchId: editingBranch?.id || "live-branch",
+                          branchName: branchForm.name || "Regional Operations Branch",
+                          items: [
+                            {
+                              id: "br_it1",
+                              serviceName: "Branch Technical Deployment & Operations",
+                              sacCode: "998313",
+                              qty: 1,
+                              unit: "Job",
+                              rate: 35000,
+                              gstRate: 18,
+                              gstAmount: 6300,
+                              totalAmount: 41300,
+                            }
+                          ]
+                        }}
+                        companyDetails={companies.find(c => c.id === branchCompanyId) || companies[0]}
+                        activeBranch={{
+                          id: editingBranch?.id || "live-branch",
+                          name: branchForm.name || "Regional Operations Branch",
+                          code: branchForm.code || "BR-01",
+                          companyId: branchCompanyId,
+                          brand_name: branchForm.brand_name || "SAAMPARK",
+                          division_name: branchForm.division_name || "Operations",
+                          subtitle: branchForm.subtitle,
+                          logo_url: branchForm.logo_url,
+                          address: branchForm.address || "Tech Zone, Sector V",
+                          city: branchForm.city || "Kolkata",
+                          state: branchForm.state || "West Bengal",
+                          country: branchForm.country || "India",
+                          phone: branchForm.phone || "+91 33 2345 6789",
+                          email: branchForm.email || "branch@saampark.com",
+                          website: branchForm.website,
+                          gstin: branchForm.gstin,
+                          pan: branchForm.pan,
+                          cin: branchForm.cin,
+                          bank_name: branchForm.bank_name,
+                          account_holder: branchForm.account_holder,
+                          account_number: branchForm.account_number,
+                          ifsc_code: branchForm.ifsc_code,
+                          upi_id: branchForm.upi_id,
+                          payment_qr_url: branchForm.payment_qr_url,
+                          signatory_name: branchForm.signatory_name,
+                          signatory_designation: branchForm.signatory_designation,
+                          signature_image_url: branchForm.signature_image_url,
+                          stamp_image_url: branchForm.stamp_image_url,
+                          terms_conditions: branchForm.terms_conditions,
+                          invoice_notes: branchForm.invoice_notes,
+                        } as any}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer Buttons */}
+              <div className="flex items-center justify-between px-6 py-3.5 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/40 shrink-0">
+                <div className="text-zinc-400 text-[11px]">
+                  Step {branchTab === "basic" ? "1" : branchTab === "address" ? "2" : branchTab === "tax" ? "3" : branchTab === "bank" ? "4" : "5"} of 5
+                </div>
+                <div className="flex items-center gap-2">
+                  <button 
+                    type="button" 
+                    onClick={() => setIsBranchModalOpen(false)} 
+                    className="px-4 py-2 text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit" 
+                    form="branchFormSubmit"
+                    disabled={isSaving || !branchForm.name.trim()}
+                    className="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-xl shadow-md transition-all flex items-center gap-1.5"
+                  >
+                    {isSaving ? "Saving..." : (editingBranch ? "Update Branch" : "Create Branch")}
+                  </button>
+                </div>
+              </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
-      {/* ── UPGRADED SUB-BRANCH / PARTNER MODAL ───────────────────────── */}
+      {/* ── UPGRADED SUB-BRANCH / PARTNER MODAL WITH 3-TIER LIVE PREVIEW ── */}
       <AnimatePresence>
         {isSubBranchModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto">
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }} 
               animate={{ opacity: 1, scale: 1 }} 
               exit={{ opacity: 0, scale: 0.95 }} 
-              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden text-xs"
+              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl w-full max-w-6xl xl:max-w-7xl max-h-[92vh] flex flex-col overflow-hidden text-xs"
             >
+              {/* Modal Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 shrink-0">
                 <div className="flex items-center gap-2.5">
                   <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400">
@@ -1382,7 +1515,7 @@ export default function BranchesMain() {
                       {editingSubBranch ? `Edit Sub-Branch: ${editingSubBranch.name}` : "Add Sub-Branch / Franchise Partner"}
                     </h3>
                     <p className="text-[11px] text-zinc-400">
-                      Satellite office with percentage-based revenue sharing and compliance
+                      Satellite office with percentage-based revenue sharing, parent branch linking &amp; 3-tier invoice hierarchy preview
                     </p>
                   </div>
                 </div>
@@ -1395,254 +1528,351 @@ export default function BranchesMain() {
                 </button>
               </div>
 
-              {/* Tab navigation */}
-              <div className="grid grid-cols-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/40 font-semibold text-center shrink-0">
-                <button type="button" onClick={() => setSubBranchTab("basic")} className={`py-2.5 border-b-2 ${subBranchTab === "basic" ? "border-emerald-600 text-emerald-600 font-bold bg-white dark:bg-zinc-900" : "border-transparent text-zinc-500"}`}>1. Partner Info</button>
-                <button type="button" onClick={() => setSubBranchTab("address")} className={`py-2.5 border-b-2 ${subBranchTab === "address" ? "border-emerald-600 text-emerald-600 font-bold bg-white dark:bg-zinc-900" : "border-transparent text-zinc-500"}`}>2. Location</button>
-                <button type="button" onClick={() => setSubBranchTab("tax_bank")} className={`py-2.5 border-b-2 ${subBranchTab === "tax_bank" ? "border-emerald-600 text-emerald-600 font-bold bg-white dark:bg-zinc-900" : "border-transparent text-zinc-500"}`}>3. Tax &amp; Bank</button>
-                <button type="button" onClick={() => setSubBranchTab("signatory")} className={`py-2.5 border-b-2 ${subBranchTab === "signatory" ? "border-emerald-600 text-emerald-600 font-bold bg-white dark:bg-zinc-900" : "border-transparent text-zinc-500"}`}>4. Signatory</button>
-              </div>
+              {/* 2-Column Split: Form on Left, Live 3-Tier Invoice Preview on Right */}
+              <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
+                {/* Left Side: Form */}
+                <div className="w-full lg:w-[54%] flex flex-col border-r border-zinc-200 dark:border-zinc-800 overflow-hidden">
+                  {/* Tab navigation */}
+                  <div className="grid grid-cols-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/40 font-semibold text-center shrink-0">
+                    <button type="button" onClick={() => setSubBranchTab("basic")} className={`py-3 border-b-2 ${subBranchTab === "basic" ? "border-emerald-600 text-emerald-600 font-bold bg-white dark:bg-zinc-900" : "border-transparent text-zinc-500"}`}>1. Partner Info</button>
+                    <button type="button" onClick={() => setSubBranchTab("address")} className={`py-3 border-b-2 ${subBranchTab === "address" ? "border-emerald-600 text-emerald-600 font-bold bg-white dark:bg-zinc-900" : "border-transparent text-zinc-500"}`}>2. Location</button>
+                    <button type="button" onClick={() => setSubBranchTab("tax_bank")} className={`py-3 border-b-2 ${subBranchTab === "tax_bank" ? "border-emerald-600 text-emerald-600 font-bold bg-white dark:bg-zinc-900" : "border-transparent text-zinc-500"}`}>3. Tax &amp; Bank</button>
+                    <button type="button" onClick={() => setSubBranchTab("signatory")} className={`py-3 border-b-2 ${subBranchTab === "signatory" ? "border-emerald-600 text-emerald-600 font-bold bg-white dark:bg-zinc-900" : "border-transparent text-zinc-500"}`}>4. Signatory</button>
+                  </div>
 
-              <form onSubmit={handleSaveSubBranch} className="flex flex-col flex-1 overflow-hidden">
-                <div className="p-6 space-y-4 overflow-y-auto flex-1 max-h-[65vh]">
-                  {subBranchTab === "basic" && (
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block font-semibold mb-1">Company *</label>
-                          <select 
-                            required 
-                            value={subBranchCompanyId} 
-                            onChange={(e) => setSubBranchCompanyId(e.target.value)}
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg"
-                          >
-                            {companies.map(c => (
-                              <option key={c.id} value={c.id}>{c.brand_name || c.name}</option>
-                            ))}
-                          </select>
+                  <form onSubmit={handleSaveSubBranch} id="subBranchFormSubmit" className="flex flex-col flex-1 overflow-hidden">
+                    <div className="p-5 space-y-4 overflow-y-auto flex-1 max-h-[60vh]">
+                      {subBranchTab === "basic" && (
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                            <div>
+                              <label className="block font-semibold mb-1">Company *</label>
+                              <select 
+                                required 
+                                value={subBranchCompanyId} 
+                                onChange={(e) => setSubBranchCompanyId(e.target.value)}
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg"
+                              >
+                                {companies.map(c => (
+                                  <option key={c.id} value={c.id}>{c.brand_name || c.name}</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block font-semibold mb-1">Parent Branch *</label>
+                              <select 
+                                required 
+                                value={subBranchParentBranchId} 
+                                onChange={(e) => setSubBranchParentBranchId(e.target.value)}
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg"
+                              >
+                                <option value="">Select Branch</option>
+                                {branches.map(b => (
+                                  <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block font-semibold mb-1">Sub-Branch Name *</label>
+                              <input 
+                                type="text" 
+                                required 
+                                placeholder="e.g. Salt Lake Satellite Hub" 
+                                value={subBranchForm.name} 
+                                onChange={(e) => setSubBranchForm({ ...subBranchForm, name: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-medium" 
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block font-semibold mb-1">Code</label>
+                              <input 
+                                type="text" 
+                                value={subBranchForm.code} 
+                                onChange={(e) => setSubBranchForm({ ...subBranchForm, code: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono uppercase" 
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block font-semibold mb-1">Partner Type</label>
+                              <select 
+                                value={subBranchForm.partnerType} 
+                                onChange={(e) => setSubBranchForm({ ...subBranchForm, partnerType: e.target.value as any })}
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg"
+                              >
+                                <option value="Franchise Partner">Franchise Partner</option>
+                                <option value="Agency Partner">Agency Partner</option>
+                                <option value="Satellite Office">Satellite Office</option>
+                                <option value="Regional Associate">Regional Associate</option>
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block font-semibold mb-1">Revenue Share (%)</label>
+                              <input 
+                                type="number" 
+                                min={0} 
+                                max={100} 
+                                value={subBranchForm.revenueSharePct} 
+                                onChange={(e) => setSubBranchForm({ ...subBranchForm, revenueSharePct: Number(e.target.value) })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-bold text-emerald-600" 
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block font-semibold mb-1">Partner Name</label>
+                              <input 
+                                type="text" 
+                                placeholder="e.g. Ramesh Babu" 
+                                value={subBranchForm.partnerName} 
+                                onChange={(e) => setSubBranchForm({ ...subBranchForm, partnerName: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block font-semibold mb-1">Partner Phone</label>
+                              <input 
+                                type="text" 
+                                placeholder="+91 98765 43210" 
+                                value={subBranchForm.partnerPhone} 
+                                onChange={(e) => setSubBranchForm({ ...subBranchForm, partnerPhone: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
+                              />
+                            </div>
+                          </div>
+
+                          <div className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
+                            <ImageUploadField 
+                              label="Sub-Branch / Partner Logo"
+                              value={subBranchForm.logo_url}
+                              onChange={(url) => setSubBranchForm({ ...subBranchForm, logo_url: url })}
+                              uploadNamePrefix="sub_branch_logo"
+                            />
+                          </div>
                         </div>
+                      )}
 
-                        <div>
-                          <label className="block font-semibold mb-1">Parent Branch *</label>
-                          <select 
-                            required 
-                            value={subBranchParentBranchId} 
-                            onChange={(e) => setSubBranchParentBranchId(e.target.value)}
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg"
-                          >
-                            <option value="">Select Branch</option>
-                            {branches.map(b => (
-                              <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
-                            ))}
-                          </select>
+                      {subBranchTab === "address" && (
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block font-semibold mb-1">Street Address</label>
+                            <input 
+                              type="text" 
+                              value={subBranchForm.address} 
+                              onChange={(e) => setSubBranchForm({ ...subBranchForm, address: e.target.value })} 
+                              className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
+                            />
+                          </div>
+                          <div className="grid grid-cols-3 gap-3">
+                            <div>
+                              <label className="block font-semibold mb-1">City</label>
+                              <input type="text" value={subBranchForm.city} onChange={(e) => setSubBranchForm({ ...subBranchForm, city: e.target.value })} className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" />
+                            </div>
+                            <div>
+                              <label className="block font-semibold mb-1">State</label>
+                              <input type="text" value={subBranchForm.state} onChange={(e) => setSubBranchForm({ ...subBranchForm, state: e.target.value })} className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" />
+                            </div>
+                            <div>
+                              <label className="block font-semibold mb-1">Country</label>
+                              <input type="text" value={subBranchForm.country} onChange={(e) => setSubBranchForm({ ...subBranchForm, country: e.target.value })} className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block font-semibold mb-1">Phone</label>
+                              <input type="text" value={subBranchForm.phone} onChange={(e) => setSubBranchForm({ ...subBranchForm, phone: e.target.value })} className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" />
+                            </div>
+                            <div>
+                              <label className="block font-semibold mb-1">Email</label>
+                              <input type="email" value={subBranchForm.email} onChange={(e) => setSubBranchForm({ ...subBranchForm, email: e.target.value })} className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" />
+                            </div>
+                          </div>
                         </div>
+                      )}
 
-                        <div>
-                          <label className="block font-semibold mb-1">Sub-Branch Name *</label>
-                          <input 
-                            type="text" 
-                            required 
-                            placeholder="e.g. Salt Lake Satellite Hub" 
-                            value={subBranchForm.name} 
-                            onChange={(e) => setSubBranchForm({ ...subBranchForm, name: e.target.value })} 
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
-                          />
+                      {subBranchTab === "tax_bank" && (
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block font-semibold mb-1">GSTIN</label>
+                              <input type="text" placeholder="GSTIN" value={subBranchForm.gstin} onChange={(e) => setSubBranchForm({ ...subBranchForm, gstin: e.target.value.toUpperCase() })} className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono uppercase" />
+                            </div>
+                            <div>
+                              <label className="block font-semibold mb-1">PAN</label>
+                              <input type="text" placeholder="PAN" value={subBranchForm.pan} onChange={(e) => setSubBranchForm({ ...subBranchForm, pan: e.target.value.toUpperCase() })} className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono uppercase" />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block font-semibold mb-1">Bank Name</label>
+                              <input type="text" value={subBranchForm.bank_name} onChange={(e) => setSubBranchForm({ ...subBranchForm, bank_name: e.target.value })} className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" />
+                            </div>
+                            <div>
+                              <label className="block font-semibold mb-1">Account Holder</label>
+                              <input type="text" value={subBranchForm.account_holder} onChange={(e) => setSubBranchForm({ ...subBranchForm, account_holder: e.target.value })} className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" />
+                            </div>
+                            <div>
+                              <label className="block font-semibold mb-1">Account Number</label>
+                              <input type="text" value={subBranchForm.account_number} onChange={(e) => setSubBranchForm({ ...subBranchForm, account_number: e.target.value })} className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono" />
+                            </div>
+                            <div>
+                              <label className="block font-semibold mb-1">IFSC Code</label>
+                              <input type="text" value={subBranchForm.ifsc_code} onChange={(e) => setSubBranchForm({ ...subBranchForm, ifsc_code: e.target.value.toUpperCase() })} className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono uppercase" />
+                            </div>
+                          </div>
+
+                          <div className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
+                            <ImageUploadField 
+                              label="Partner UPI Payment QR Code"
+                              value={subBranchForm.payment_qr_url}
+                              onChange={(url) => setSubBranchForm({ ...subBranchForm, payment_qr_url: url })}
+                              uploadNamePrefix="sb_upi_qr"
+                            />
+                          </div>
                         </div>
+                      )}
 
-                        <div>
-                          <label className="block font-semibold mb-1">Code</label>
-                          <input 
-                            type="text" 
-                            value={subBranchForm.code} 
-                            onChange={(e) => setSubBranchForm({ ...subBranchForm, code: e.target.value })} 
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono uppercase" 
-                          />
+                      {subBranchTab === "signatory" && (
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block font-semibold mb-1">Signatory Name</label>
+                              <input type="text" value={subBranchForm.signatory_name} onChange={(e) => setSubBranchForm({ ...subBranchForm, signatory_name: e.target.value })} className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" />
+                            </div>
+                            <div>
+                              <label className="block font-semibold mb-1">Designation</label>
+                              <input type="text" value={subBranchForm.signatory_designation} onChange={(e) => setSubBranchForm({ ...subBranchForm, signatory_designation: e.target.value })} className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
+                              <ImageUploadField 
+                                label="Signature Image"
+                                value={subBranchForm.signature_image_url}
+                                onChange={(url) => setSubBranchForm({ ...subBranchForm, signature_image_url: url })}
+                                aspectRatio="signature"
+                                uploadNamePrefix="sb_sig"
+                              />
+                            </div>
+                            <div className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
+                              <ImageUploadField 
+                                label="Stamp / Seal Image"
+                                value={subBranchForm.stamp_image_url}
+                                onChange={(url) => setSubBranchForm({ ...subBranchForm, stamp_image_url: url })}
+                                uploadNamePrefix="sb_stamp"
+                              />
+                            </div>
+                          </div>
                         </div>
-
-                        <div>
-                          <label className="block font-semibold mb-1">Partner Type</label>
-                          <select 
-                            value={subBranchForm.partnerType} 
-                            onChange={(e) => setSubBranchForm({ ...subBranchForm, partnerType: e.target.value as any })}
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg"
-                          >
-                            <option value="Franchise Partner">Franchise Partner</option>
-                            <option value="Agency Partner">Agency Partner</option>
-                            <option value="Satellite Office">Satellite Office</option>
-                            <option value="Regional Associate">Regional Associate</option>
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="block font-semibold mb-1">Revenue Share (%)</label>
-                          <input 
-                            type="number" 
-                            min={0} 
-                            max={100} 
-                            value={subBranchForm.revenueSharePct} 
-                            onChange={(e) => setSubBranchForm({ ...subBranchForm, revenueSharePct: Number(e.target.value) })} 
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-bold" 
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block font-semibold mb-1">Partner Name</label>
-                          <input 
-                            type="text" 
-                            placeholder="e.g. Ramesh Babu" 
-                            value={subBranchForm.partnerName} 
-                            onChange={(e) => setSubBranchForm({ ...subBranchForm, partnerName: e.target.value })} 
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block font-semibold mb-1">Partner Phone</label>
-                          <input 
-                            type="text" 
-                            placeholder="+91 98765 43210" 
-                            value={subBranchForm.partnerPhone} 
-                            onChange={(e) => setSubBranchForm({ ...subBranchForm, partnerPhone: e.target.value })} 
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
-                          />
-                        </div>
-                      </div>
-
-                      <div className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
-                        <ImageUploadField 
-                          label="Sub-Branch / Partner Logo"
-                          value={subBranchForm.logo_url}
-                          onChange={(url) => setSubBranchForm({ ...subBranchForm, logo_url: url })}
-                          uploadNamePrefix="sub_branch_logo"
-                        />
-                      </div>
+                      )}
                     </div>
-                  )}
-
-                  {subBranchTab === "address" && (
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block font-semibold mb-1">Street Address</label>
-                        <input 
-                          type="text" 
-                          value={subBranchForm.address} 
-                          onChange={(e) => setSubBranchForm({ ...subBranchForm, address: e.target.value })} 
-                          className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
-                        />
-                      </div>
-                      <div className="grid grid-cols-3 gap-3">
-                        <div>
-                          <label className="block font-semibold mb-1">City</label>
-                          <input type="text" value={subBranchForm.city} onChange={(e) => setSubBranchForm({ ...subBranchForm, city: e.target.value })} className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" />
-                        </div>
-                        <div>
-                          <label className="block font-semibold mb-1">State</label>
-                          <input type="text" value={subBranchForm.state} onChange={(e) => setSubBranchForm({ ...subBranchForm, state: e.target.value })} className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" />
-                        </div>
-                        <div>
-                          <label className="block font-semibold mb-1">Country</label>
-                          <input type="text" value={subBranchForm.country} onChange={(e) => setSubBranchForm({ ...subBranchForm, country: e.target.value })} className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" />
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block font-semibold mb-1">Phone</label>
-                          <input type="text" value={subBranchForm.phone} onChange={(e) => setSubBranchForm({ ...subBranchForm, phone: e.target.value })} className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" />
-                        </div>
-                        <div>
-                          <label className="block font-semibold mb-1">Email</label>
-                          <input type="email" value={subBranchForm.email} onChange={(e) => setSubBranchForm({ ...subBranchForm, email: e.target.value })} className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {subBranchTab === "tax_bank" && (
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block font-semibold mb-1">GSTIN</label>
-                          <input type="text" placeholder="GSTIN" value={subBranchForm.gstin} onChange={(e) => setSubBranchForm({ ...subBranchForm, gstin: e.target.value.toUpperCase() })} className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono uppercase" />
-                        </div>
-                        <div>
-                          <label className="block font-semibold mb-1">PAN</label>
-                          <input type="text" placeholder="PAN" value={subBranchForm.pan} onChange={(e) => setSubBranchForm({ ...subBranchForm, pan: e.target.value.toUpperCase() })} className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono uppercase" />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block font-semibold mb-1">Bank Name</label>
-                          <input type="text" value={subBranchForm.bank_name} onChange={(e) => setSubBranchForm({ ...subBranchForm, bank_name: e.target.value })} className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" />
-                        </div>
-                        <div>
-                          <label className="block font-semibold mb-1">Account Holder</label>
-                          <input type="text" value={subBranchForm.account_holder} onChange={(e) => setSubBranchForm({ ...subBranchForm, account_holder: e.target.value })} className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" />
-                        </div>
-                        <div>
-                          <label className="block font-semibold mb-1">Account Number</label>
-                          <input type="text" value={subBranchForm.account_number} onChange={(e) => setSubBranchForm({ ...subBranchForm, account_number: e.target.value })} className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono" />
-                        </div>
-                        <div>
-                          <label className="block font-semibold mb-1">IFSC Code</label>
-                          <input type="text" value={subBranchForm.ifsc_code} onChange={(e) => setSubBranchForm({ ...subBranchForm, ifsc_code: e.target.value.toUpperCase() })} className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono uppercase" />
-                        </div>
-                      </div>
-
-                      <div className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
-                        <ImageUploadField 
-                          label="Partner UPI Payment QR Code"
-                          value={subBranchForm.payment_qr_url}
-                          onChange={(url) => setSubBranchForm({ ...subBranchForm, payment_qr_url: url })}
-                          uploadNamePrefix="sb_upi_qr"
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {subBranchTab === "signatory" && (
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block font-semibold mb-1">Signatory Name</label>
-                          <input type="text" value={subBranchForm.signatory_name} onChange={(e) => setSubBranchForm({ ...subBranchForm, signatory_name: e.target.value })} className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" />
-                        </div>
-                        <div>
-                          <label className="block font-semibold mb-1">Designation</label>
-                          <input type="text" value={subBranchForm.signatory_designation} onChange={(e) => setSubBranchForm({ ...subBranchForm, signatory_designation: e.target.value })} className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
-                          <ImageUploadField 
-                            label="Signature Image"
-                            value={subBranchForm.signature_image_url}
-                            onChange={(url) => setSubBranchForm({ ...subBranchForm, signature_image_url: url })}
-                            aspectRatio="signature"
-                            uploadNamePrefix="sb_sig"
-                          />
-                        </div>
-                        <div className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
-                          <ImageUploadField 
-                            label="Stamp / Seal Image"
-                            value={subBranchForm.stamp_image_url}
-                            onChange={(url) => setSubBranchForm({ ...subBranchForm, stamp_image_url: url })}
-                            uploadNamePrefix="sb_stamp"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  </form>
                 </div>
 
-                <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/40 shrink-0">
+                {/* Right Side: Real-Time 3-Tier Sub-Branch Invoice Preview */}
+                <div className="w-full lg:w-[46%] bg-zinc-100/80 dark:bg-zinc-950 p-4 flex flex-col overflow-y-auto border-t lg:border-t-0 border-zinc-200 dark:border-zinc-800">
+                  <div className="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="font-bold text-xs text-zinc-900 dark:text-zinc-100">3-Tier Hierarchy Invoice Output</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950 px-2 py-0.5 rounded border border-emerald-300">
+                      {subBranchForm.revenueSharePct}% Partner Share
+                    </span>
+                  </div>
+
+                  <div className="py-3 flex-1 flex items-start justify-center overflow-x-hidden">
+                    <div className="w-full max-w-[650px] transform origin-top scale-[0.72] sm:scale-[0.8] lg:scale-[0.82] transition-transform shadow-xl rounded-2xl">
+                      <OfficialInvoiceDocument
+                        invoice={{
+                          id: "INV-SB-LIVE",
+                          client: "Zenith Retail Network",
+                          clientEmail: "zenith@retail.com",
+                          project: "Sub-Branch Operations & Local Delivery",
+                          billDate: new Date().toLocaleDateString("en-GB"),
+                          dueDate: new Date(Date.now() + 15 * 86400000).toLocaleDateString("en-GB"),
+                          baseAmount: 25000,
+                          setupCharge: 0,
+                          discount: 0,
+                          gstRate: 18,
+                          gstAmount: 4500,
+                          totalInvoiced: "₹29,500",
+                          paymentReceived: "₹29,500",
+                          due: "₹0",
+                          status: "Fully paid",
+                          companyId: subBranchCompanyId || "tech",
+                          branchId: subBranchParentBranchId || "parent-br",
+                          subBranchId: editingSubBranch?.id || "live-sub-branch",
+                          subBranchName: subBranchForm.name || "Partner Sub-Branch Hub",
+                          items: [
+                            {
+                              id: "sb_it1",
+                              serviceName: "Sub-Branch Partner Operations & Service",
+                              sacCode: "998311",
+                              qty: 1,
+                              unit: "Job",
+                              rate: 25000,
+                              gstRate: 18,
+                              gstAmount: 4500,
+                              totalAmount: 29500,
+                            }
+                          ]
+                        }}
+                        companyDetails={companies.find(c => c.id === subBranchCompanyId) || companies[0]}
+                        activeBranch={branches.find(b => b.id === subBranchParentBranchId) || branches[0]}
+                        activeSubBranch={{
+                          id: editingSubBranch?.id || "live-sub-branch",
+                          name: subBranchForm.name || "Partner Sub-Branch Hub",
+                          code: subBranchForm.code || "SB-01",
+                          companyId: subBranchCompanyId,
+                          parentBranchId: subBranchParentBranchId,
+                          partnerName: subBranchForm.partnerName || "Franchise Partner",
+                          partnerPhone: subBranchForm.partnerPhone,
+                          partnerType: subBranchForm.partnerType,
+                          revenueSharePct: subBranchForm.revenueSharePct,
+                          address: subBranchForm.address || "Local City Point",
+                          city: subBranchForm.city || "Kolkata",
+                          state: subBranchForm.state || "West Bengal",
+                          country: subBranchForm.country || "India",
+                          phone: subBranchForm.phone || "+91 98765 43210",
+                          email: subBranchForm.email,
+                          gstin: subBranchForm.gstin,
+                          pan: subBranchForm.pan,
+                          bank_name: subBranchForm.bank_name,
+                          account_holder: subBranchForm.account_holder,
+                          account_number: subBranchForm.account_number,
+                          ifsc_code: subBranchForm.ifsc_code,
+                          upi_id: subBranchForm.upi_id,
+                          payment_qr_url: subBranchForm.payment_qr_url,
+                          signatory_name: subBranchForm.signatory_name,
+                          signatory_designation: subBranchForm.signatory_designation,
+                          signature_image_url: subBranchForm.signature_image_url,
+                          stamp_image_url: subBranchForm.stamp_image_url,
+                        } as any}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-between px-6 py-3.5 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/40 shrink-0">
+                <div className="text-zinc-400 text-[11px]">
+                  Step {subBranchTab === "basic" ? "1" : subBranchTab === "address" ? "2" : subBranchTab === "tax_bank" ? "3" : "4"} of 4
+                </div>
+                <div className="flex items-center gap-2">
                   <button type="button" onClick={() => setIsSubBranchModalOpen(false)} className="px-4 py-2 text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 rounded-xl">Cancel</button>
-                  <button type="submit" disabled={isSaving || !subBranchForm.name.trim()} className="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md">
+                  <button type="submit" form="subBranchFormSubmit" disabled={isSaving || !subBranchForm.name.trim()} className="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md">
                     {isSaving ? "Saving..." : (editingSubBranch ? "Update Sub-Branch" : "Create Sub-Branch")}
                   </button>
                 </div>
-              </form>
+              </div>
             </motion.div>
           </div>
         )}

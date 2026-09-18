@@ -333,10 +333,10 @@ const updateUser = async (req, res, next) => {
     }
 
     setClauses.push('updated_at = NOW()');
-    const isNumericId = !isNaN(parseInt(id, 10)) && Number(id) > 0;
+    const isNumericTargetId = !isNaN(parseInt(id, 10)) && Number(id) > 0;
     
     try {
-      if (isNumericId) {
+      if (isNumericTargetId) {
         params.push(id, targetEmail, oldEmailVal || id);
         await pool.execute(
           `UPDATE users SET ${setClauses.join(', ')} WHERE id = ? OR email = ? OR email = ?`,
@@ -355,7 +355,7 @@ const updateUser = async (req, res, next) => {
         const usernameIdx = setClauses.findIndex(c => c.startsWith('username ='));
         const fallbackParams = [...params];
         if (usernameIdx >= 0) fallbackParams.splice(usernameIdx, 1);
-        if (isNumericId) {
+        if (isNumericTargetId) {
           await pool.execute(
             `UPDATE users SET ${fallbackSetClauses.join(', ')} WHERE id = ? OR email = ? OR email = ?`,
             fallbackParams

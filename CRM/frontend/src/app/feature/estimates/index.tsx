@@ -12,6 +12,7 @@ import { EstimateService } from "@/services/salesService"
 import { getClients } from "@/app/feature/clients/services/clientService"
 import { createNotification } from "@/services/notificationService"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
+import { DocumentStudioModal } from "@/components/documents/DocumentStudioModal"
 
 interface LineItem { 
   id: string
@@ -58,6 +59,7 @@ export default function EstimatesMain() {
 
   // Modals
   const [isModalOpen, setIsModalOpen] = React.useState(false)
+  const [isStudioOpen, setIsStudioOpen] = React.useState(false)
   const [editingItem, setEditingItem] = React.useState<Estimate | null>(null)
   const [deleteConfirm, setDeleteConfirm] = React.useState<Estimate | null>(null)
   const [viewingItem, setViewingItem] = React.useState<Estimate | null>(null)
@@ -277,10 +279,15 @@ export default function EstimatesMain() {
           <p className="text-xs text-zinc-500 mt-1">Create, email, print, and track commercial cost estimates for registered clients and custom recipients</p>
         </div>
         {canAdd && (
-          <button onClick={openAddModal} className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-md shadow-blue-600/20 cursor-pointer">
-            <Plus size={15} />
-            <span>Create Estimate</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => { setEditingItem(null); setIsStudioOpen(true) }} 
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-md shadow-blue-600/20 cursor-pointer"
+            >
+              <Plus size={15} />
+              <span>Create Estimate</span>
+            </button>
+          </div>
         )}
       </div>
 
@@ -717,13 +724,29 @@ export default function EstimatesMain() {
               <h3 className="font-bold text-sm">Delete Estimate</h3>
               <p className="text-xs text-zinc-500">Are you sure you want to delete estimate <strong>{deleteConfirm.number}</strong>?</p>
               <div className="flex justify-end gap-2">
-                <button onClick={() => setDeleteConfirm(null)} className="px-3 py-1.5 text-xs text-zinc-500 font-semibold">Cancel</button>
-                <button onClick={handleDelete} className="px-4 py-1.5 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-lg">Delete</button>
+                <button onClick={() => setDeleteConfirm(null)} className="px-3 py-1.5 text-xs text-zinc-500 font-semibold cursor-pointer">Cancel</button>
+                <button onClick={handleDelete} className="px-4 py-1.5 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-lg cursor-pointer">Delete</button>
               </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
+
+      {/* INTERACTIVE SPLIT-SCREEN DOCUMENT STUDIO (ESTIMATE) */}
+      <DocumentStudioModal
+        isOpen={isStudioOpen}
+        mode="estimate"
+        initialData={editingItem}
+        onClose={() => {
+          setIsStudioOpen(false)
+          setEditingItem(null)
+        }}
+        onSaveSuccess={() => {
+          setIsStudioOpen(false)
+          setEditingItem(null)
+          loadData()
+        }}
+      />
     </motion.div>
   )
 }

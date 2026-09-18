@@ -2,11 +2,15 @@
 
 import * as React from "react"
 import { motion } from "framer-motion"
-import { MapPin } from "lucide-react"
+import { 
+  MapPin, Phone, Mail, Globe, Building2, Landmark, ShieldCheck, 
+  Award, Sparkles, UserCheck, Briefcase, FileText, QrCode, CreditCard, 
+  CheckCircle2, Layers, Check
+} from "lucide-react"
 import { InvoiceItem, InvoiceLineItem } from "../services/invoiceService"
 import { CompanyPaymentSettings } from "@/app/feature/settings/services/companyPaymentService"
 import { ClientItem } from "@/app/feature/clients/types"
-import { useAuthStore, Company, Branch, DEFAULT_COMPANIES, getCompanyLogoUrl } from "@/store/useAuthStore"
+import { useAuthStore, Company, Branch, SubBranch, DEFAULT_COMPANIES, getCompanyLogoUrl } from "@/store/useAuthStore"
 
 export interface CustomTextStamp {
   id: string
@@ -42,6 +46,8 @@ interface OfficialInvoiceDocumentProps {
     upiId?: string
     paymentQrUrl?: string
   }
+  activeBranch?: Branch | any | null
+  activeSubBranch?: SubBranch | any | null
 }
 
 export function formatInvoiceDate(rawDate?: string | number | Date | null): string {
@@ -122,6 +128,8 @@ export function OfficialInvoiceDocument({
   overrideSignatureUrl,
   overrideStampUrl,
   overrideBankDetails,
+  activeBranch: propActiveBranch,
+  activeSubBranch: propActiveSubBranch,
 }: OfficialInvoiceDocumentProps) {
   const { 
     companies, 
@@ -169,6 +177,7 @@ export function OfficialInvoiceDocument({
 
   // Resolve Issuing Branch / Sub-Branch Details
   const activeBranch: Branch | null = React.useMemo(() => {
+    if (propActiveBranch) return propActiveBranch
     const targetBranchId = String(invoice.branchId || (invoice as any).branch_id || "").toLowerCase().trim()
     const targetBranchName = String(invoice.branchName || (invoice as any).branch_name || "").toLowerCase().trim()
 
@@ -198,9 +207,10 @@ export function OfficialInvoiceDocument({
       } as Branch
     }
     return null
-  }, [invoice.branchId, invoice.branchName, (invoice as any).branch_id, (invoice as any).branch_name, (invoice as any).branchCode, branches])
+  }, [propActiveBranch, invoice.branchId, invoice.branchName, (invoice as any).branch_id, (invoice as any).branch_name, (invoice as any).branchCode, branches])
 
   const activeSubBranch = React.useMemo(() => {
+    if (propActiveSubBranch) return propActiveSubBranch
     const targetSbId = String(invoice.subBranchId || (invoice as any).sub_branch_id || "").toLowerCase().trim()
     const targetSbName = String(invoice.subBranchName || (invoice as any).sub_branch_name || "").toLowerCase().trim()
 
@@ -213,7 +223,7 @@ export function OfficialInvoiceDocument({
       return (targetSbId && (sbId === targetSbId || sbCode === targetSbId)) ||
              (targetSbName && (sbName === targetSbName || sbCode === targetSbName))
     }) || null
-  }, [invoice.subBranchId, invoice.subBranchName, (invoice as any).sub_branch_id, (invoice as any).sub_branch_name, subBranches])
+  }, [propActiveSubBranch, invoice.subBranchId, invoice.subBranchName, (invoice as any).sub_branch_id, (invoice as any).sub_branch_name, subBranches])
 
   // ── Unified Entity Resolution (Specific Issuing Entity Priority) ──
   const isSubBranchIssued = Boolean(activeSubBranch)
@@ -459,8 +469,16 @@ export function OfficialInvoiceDocument({
   const hasContactInfo = Boolean(resolvedPhone || resolvedWebsite || resolvedEmail)
   const hasLegalIds = Boolean(resolvedCin || (isGstInvoice && resolvedGstin) || resolvedPan)
 
+  // Full official company name resolution
+  const fullRegisteredCompanyName = (
+    companyDetails?.name || 
+    activeCompany?.name || 
+    `${resolvedBrandName} ${resolvedDivisionName}`.trim() || 
+    "SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED"
+  ).trim()
+
   const renderTopHeader = (pageNumber?: number) => (
-    <div className="flex flex-col sm:flex-row justify-between items-stretch gap-4 border-b border-zinc-200 pb-3">
+    <div className="flex flex-col sm:flex-row justify-between items-stretch gap-4 border-b border-zinc-200 pb-3.5">
       {/* Left: Company Brand & Entity Info with Logo */}
       <div className="flex items-start gap-3.5 flex-1 min-w-0">
         {/* Top-Left Logo Card */}
@@ -505,7 +523,7 @@ export function OfficialInvoiceDocument({
                 <path d="M55,45 C75,32 90,18 100,0 L100,45 Z" fill="#a7f3d0" fillOpacity="0.95" />
               </svg>
               <div className="relative z-10 w-full h-full flex flex-col items-center justify-center text-center text-white pb-2">
-                <div className="text-3xl mb-1 drop-shadow-sm">🚀</div>
+                <Sparkles className="w-7 h-7 mb-1 text-teal-200 drop-shadow-sm" />
                 <div className="font-black text-xs tracking-wider uppercase leading-tight font-sans">
                   {resolvedBrandName}
                 </div>
@@ -517,18 +535,39 @@ export function OfficialInvoiceDocument({
           )}
         </motion.div>
 
-        {/* Title, Subtitle, Legal IDs & Registered Office Coordinates */}
-        <div className="space-y-1 flex-1 min-w-0 pt-0.5">
+        {/* Title, Full Company Name, Subtitle, ISO Badge & Legal IDs */}
+        <div className="space-y-1.5 flex-1 min-w-0 pt-0.5">
           <div>
-            <h1 className="text-xl sm:text-2xl font-black tracking-tight leading-none">
-              <span className="text-zinc-950">{resolvedBrandName}</span>{" "}
-              {resolvedDivisionName && <span className={`${theme.primaryText} font-extrabold`}>{resolvedDivisionName}</span>}
+            {/* Registered Full Corporate Name */}
+            <h1 className="text-lg sm:text-xl font-black tracking-tight leading-snug text-zinc-950 uppercase font-sans">
+              {fullRegisteredCompanyName}
             </h1>
+
+            {/* Brand & Division Highlight if distinct */}
+            {(resolvedBrandName && resolvedBrandName !== fullRegisteredCompanyName) && (
+              <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                <span className="text-xs font-black tracking-wider text-zinc-800 uppercase">
+                  {resolvedBrandName}
+                </span>
+                {resolvedDivisionName && (
+                  <span className={`text-xs font-black uppercase ${theme.primaryText}`}>
+                    • {resolvedDivisionName}
+                  </span>
+                )}
+              </div>
+            )}
+
             {resolvedSubtitle && (
-              <h2 className="text-xs sm:text-sm font-bold text-zinc-700 tracking-wider mt-1">
+              <h2 className="text-xs font-semibold text-zinc-600 tracking-wider mt-0.5">
                 {resolvedSubtitle}
               </h2>
             )}
+
+            {/* ISO 9001:2015 Certified Company Tagline Badge */}
+            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 border border-amber-300/90 dark:border-amber-700/80 text-amber-900 dark:text-amber-200 text-[8.5px] font-black tracking-wider uppercase shadow-2xs mt-1">
+              <Award size={11} className="text-amber-600 dark:text-amber-400 shrink-0" />
+              <span>An ISO 9001:2015 Certified Company</span>
+            </div>
           </div>
 
           {/* Legal IDs: CIN, GSTIN (GST Only), PAN */}
@@ -551,7 +590,9 @@ export function OfficialInvoiceDocument({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[9.5px] text-zinc-700 pt-1">
               {resolvedAddress ? (
                 <div className="flex items-start gap-1.5">
-                  <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center text-[8px] shrink-0 mt-0.5`}>📍</span>
+                  <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0 mt-0.5`}>
+                    <MapPin size={9} />
+                  </span>
                   <div className="leading-snug">
                     <strong className="text-zinc-900 block text-[9.5px]">Registered Office:</strong>
                     <span className="text-zinc-600 text-[9px]">{resolvedAddress}</span>
@@ -563,19 +604,25 @@ export function OfficialInvoiceDocument({
                 <div className="space-y-0.5">
                   {resolvedPhone && (
                     <p className="flex items-center gap-1.5">
-                      <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center text-[7px] shrink-0`}>📞</span>
+                      <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
+                        <Phone size={8} />
+                      </span>
                       <span className="font-mono text-zinc-800 font-semibold text-[9px]">{resolvedPhone}</span>
                     </p>
                   )}
                   {resolvedWebsite && (
                     <p className="flex items-center gap-1.5">
-                      <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center text-[7px] shrink-0`}>🌐</span>
+                      <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
+                        <Globe size={8} />
+                      </span>
                       <span className="text-zinc-700 text-[9px]">{resolvedWebsite}</span>
                     </p>
                   )}
                   {resolvedEmail && (
                     <p className="flex items-center gap-1.5">
-                      <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center text-[7px] shrink-0`}>✉️</span>
+                      <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
+                        <Mail size={8} />
+                      </span>
                       <span className="text-zinc-700 text-[9px]">{resolvedEmail}</span>
                     </p>
                   )}
@@ -584,44 +631,100 @@ export function OfficialInvoiceDocument({
             </div>
           )}
 
-          {/* Issuing Branch / Operating Unit Section (Only when invoice is generated from a branch / sub-branch) */}
-          {(activeBranch || activeSubBranch) && (
-            <div className="mt-1.5 p-2 rounded-xl bg-gradient-to-r from-zinc-50 to-zinc-100/70 dark:from-zinc-900/60 dark:to-zinc-800/40 border border-zinc-200/90 dark:border-zinc-700/60 text-[9px] text-zinc-700 dark:text-zinc-300">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-extrabold text-zinc-900 dark:text-zinc-100 flex items-center gap-1">
-                  <span className="text-[10px]">🏢</span>
-                  <span>Issuing Branch:</span>
-                  <span className="text-blue-700 dark:text-blue-400 font-black">{activeBranch?.name || activeSubBranch?.name}</span>
+          {/* 3-Tier Hierarchy: Sub-Branch Billing Breakdown (Company -> Branch -> Sub-Branch) */}
+          {activeSubBranch ? (
+            <div className="mt-2 p-2.5 rounded-xl bg-gradient-to-r from-zinc-50 via-slate-50 to-zinc-100/80 dark:from-zinc-900/70 dark:to-zinc-800/50 border border-zinc-200/90 dark:border-zinc-700/70 text-[9px] text-zinc-700 dark:text-zinc-300 space-y-1.5 shadow-2xs">
+              {/* Tier 1: Parent Company */}
+              <div className="flex items-center justify-between border-b border-zinc-200/70 dark:border-zinc-700/60 pb-1 flex-wrap gap-1">
+                <span className="font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                  <Building2 size={12} className="text-blue-600 shrink-0" />
+                  <span>Corporate Entity: <strong>{fullRegisteredCompanyName}</strong></span>
                 </span>
-                {(activeBranch?.code || activeSubBranch?.code) && (
-                  <span className="font-mono text-[8.5px] px-1.5 py-0.2 rounded-md bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300 font-bold border border-blue-200/60 dark:border-blue-800/60">
-                    Branch Code: {(activeBranch?.code || activeSubBranch?.code || '').toUpperCase()}
-                  </span>
-                )}
-                {activeSubBranch && (
-                  <span className="font-mono text-[8.5px] px-1.5 py-0.2 rounded-md bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 font-bold border border-emerald-200/60">
-                    🌿 Partner Sub-Branch ({activeSubBranch.revenueSharePct}% Share)
-                  </span>
+                {resolvedCin && (
+                  <span className="font-mono text-[8.5px] text-zinc-500">CIN: {resolvedCin}</span>
                 )}
               </div>
-              {((activeBranch?.address || activeSubBranch?.address) || (activeBranch?.city || activeSubBranch?.city) || (activeBranch?.phone || activeSubBranch?.partnerPhone) || (activeBranch?.email || activeSubBranch?.partnerEmail)) && (
-                <div className="flex items-center gap-3 flex-wrap text-[8.5px] text-zinc-600 dark:text-zinc-400 mt-1 font-medium">
-                  {(activeBranch?.address || activeSubBranch?.address) && (
-                    <span>📍 {activeBranch?.address || activeSubBranch?.address}</span>
+              
+              {/* Tier 2: Controlling Branch */}
+              <div className="flex items-center justify-between border-b border-zinc-200/70 dark:border-zinc-700/60 pb-1 flex-wrap gap-1">
+                <span className="font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                  <Landmark size={12} className="text-indigo-600 shrink-0" />
+                  <span>Branch: <strong>{activeBranch?.name || "Main Branch"}</strong></span>
+                  {activeBranch?.code && (
+                    <span className="font-mono text-[8px] px-1.5 py-0.2 rounded bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300 font-bold">
+                      Code: {activeBranch.code.toUpperCase()}
+                    </span>
                   )}
-                  {(activeBranch?.city || activeSubBranch?.city) && (
-                    <span>({activeBranch?.city || activeSubBranch?.city})</span>
+                </span>
+                {activeBranch?.city && (
+                  <span className="text-zinc-500 font-medium">({activeBranch.city}{activeBranch.state ? `, ${activeBranch.state}` : ''})</span>
+                )}
+              </div>
+
+              {/* Tier 3: Operating Partner Sub-Branch */}
+              <div className="flex items-center justify-between flex-wrap gap-1">
+                <span className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                  <ShieldCheck size={12} className="text-emerald-600 shrink-0" />
+                  <span>Partner Sub-Branch: <strong>{activeSubBranch.name}</strong></span>
+                  {activeSubBranch.code && (
+                    <span className="font-mono text-[8px] px-1.5 py-0.2 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold">
+                      Code: {activeSubBranch.code.toUpperCase()}
+                    </span>
                   )}
-                  {(activeBranch?.phone || activeSubBranch?.partnerPhone) && (
-                    <span>📞 {activeBranch?.phone || activeSubBranch?.partnerPhone}</span>
+                </span>
+                <span className="font-mono text-[8.5px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 font-extrabold border border-emerald-300 dark:border-emerald-700 flex items-center gap-1">
+                  <Sparkles size={10} className="text-emerald-600" />
+                  <span>{activeSubBranch.revenueSharePct}% Partner Share</span>
+                </span>
+              </div>
+              {/* Sub-Branch Contact/Location details */}
+              {(activeSubBranch.address || activeSubBranch.city || (activeSubBranch as any).partnerPhone || (activeSubBranch as any).partnerEmail) && (
+                <div className="flex items-center gap-3 flex-wrap text-[8.5px] text-zinc-600 dark:text-zinc-400 pt-0.5 font-medium">
+                  {activeSubBranch.address && (
+                    <span className="flex items-center gap-1"><MapPin size={10} className="text-emerald-600" />{activeSubBranch.address}</span>
                   )}
-                  {(activeBranch?.email || activeSubBranch?.partnerEmail) && (
-                    <span>✉️ {activeBranch?.email || activeSubBranch?.partnerEmail}</span>
+                  {(activeSubBranch as any).partnerPhone && (
+                    <span className="flex items-center gap-1"><Phone size={10} className="text-emerald-600" />{(activeSubBranch as any).partnerPhone}</span>
+                  )}
+                  {(activeSubBranch as any).partnerEmail && (
+                    <span className="flex items-center gap-1"><Mail size={10} className="text-emerald-600" />{(activeSubBranch as any).partnerEmail}</span>
                   )}
                 </div>
               )}
             </div>
-          )}
+          ) : activeBranch ? (
+            /* Standard Branch Section (without Sub-Branch) */
+            <div className="mt-1.5 p-2 rounded-xl bg-gradient-to-r from-zinc-50 to-zinc-100/70 dark:from-zinc-900/60 dark:to-zinc-800/40 border border-zinc-200/90 dark:border-zinc-700/60 text-[9px] text-zinc-700 dark:text-zinc-300">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-extrabold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                  <Building2 size={12} className="text-blue-600 shrink-0" />
+                  <span>Branch:</span>
+                  <span className="text-blue-700 dark:text-blue-400 font-black">{activeBranch.name}</span>
+                </span>
+                {activeBranch.code && (
+                  <span className="font-mono text-[8.5px] px-1.5 py-0.2 rounded-md bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300 font-bold border border-blue-200/60 dark:border-blue-800/60">
+                    Branch Code: {activeBranch.code.toUpperCase()}
+                  </span>
+                )}
+              </div>
+              {(activeBranch.address || activeBranch.city || activeBranch.phone || activeBranch.email) && (
+                <div className="flex items-center gap-3 flex-wrap text-[8.5px] text-zinc-600 dark:text-zinc-400 mt-1 font-medium">
+                  {activeBranch.address && (
+                    <span className="flex items-center gap-1"><MapPin size={10} className="text-blue-600" />{activeBranch.address}</span>
+                  )}
+                  {activeBranch.city && (
+                    <span>({activeBranch.city})</span>
+                  )}
+                  {activeBranch.phone && (
+                    <span className="flex items-center gap-1"><Phone size={10} className="text-blue-600" />{activeBranch.phone}</span>
+                  )}
+                  {activeBranch.email && (
+                    <span className="flex items-center gap-1"><Mail size={10} className="text-blue-600" />{activeBranch.email}</span>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -671,7 +774,9 @@ export function OfficialInvoiceDocument({
       {/* Box 1: BILL TO (6 cols) */}
       <div className={`sm:col-span-6 p-3 rounded-2xl ${theme.lightBg} border ${theme.lightBorder} space-y-1 shadow-2xs`}>
         <div className="flex items-center gap-1.5 text-[10.5px] font-black uppercase tracking-wider text-zinc-700">
-          <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center text-[8px]`}>👤</span>
+          <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
+            <UserCheck size={9} />
+          </span>
           <span>BILL TO</span>
         </div>
         <p className="font-black text-xs text-zinc-900 leading-tight">{invoice.client}</p>
@@ -679,7 +784,7 @@ export function OfficialInvoiceDocument({
           <strong>Address:</strong> {clientDetails?.address || (invoice.clientEmail ? `${clientDetails?.address || 'Corporate Center'}` : 'Head Office')}
         </p>
         <p className="text-[10px] text-zinc-600">
-          <strong>State / Location:</strong> {clientDetails?.state || clientDetails?.city || (activeCompany?.state || 'West Bengal')}
+          <strong>Location:</strong> {clientDetails?.city || clientDetails?.state || (activeCompany?.city ? `${activeCompany.city}, ${activeCompany?.state || ''}` : activeCompany?.state || 'West Bengal')}
         </p>
         {isGstInvoice && clientDetails?.gstNumber && (
           <p className="text-[9.5px] font-mono font-bold text-zinc-800">
@@ -692,19 +797,21 @@ export function OfficialInvoiceDocument({
       <div className={`sm:col-span-6 p-3 rounded-2xl ${theme.lightBg} border ${theme.lightBorder} shadow-2xs flex items-center justify-between gap-2.5`}>
         <div className="space-y-1 flex-1 min-w-0">
           <div className="flex items-center gap-1.5 text-[10.5px] font-black uppercase tracking-wider text-zinc-700">
-            <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center text-[8px]`}>💼</span>
+            <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
+              <Briefcase size={9} />
+            </span>
             <span>PROJECT / SERVICE SCOPE</span>
           </div>
           <p className="font-bold text-xs text-zinc-900 truncate">{invoice.project || "Enterprise Solutions"}</p>
           <p className="text-[10px] text-zinc-600 font-mono">
             <strong>Billing Scheme:</strong> {isGstInvoice ? 'GST Tax Invoice' : 'Non-GST Direct Invoice'}
           </p>
-          <p className="text-[10px] text-zinc-600">
-            <strong>Issuing Entity:</strong> {activeCompany?.name || 'SAAMPARK Group'}
+          <p className="text-[10px] text-zinc-600 truncate">
+            <strong>Company:</strong> {fullRegisteredCompanyName}
           </p>
           {(activeBranch || activeSubBranch) && (
-            <p className="text-[10px] text-zinc-700 font-semibold">
-              <strong>Branch:</strong> {activeBranch?.name || activeSubBranch?.name} {((activeBranch?.code || activeSubBranch?.code)) ? `(Code: ${(activeBranch?.code || activeSubBranch?.code || '').toUpperCase()})` : ''}
+            <p className="text-[10px] text-zinc-700 font-semibold truncate">
+              <strong>Branch:</strong> {activeSubBranch ? activeSubBranch.name : activeBranch?.name} {((activeBranch?.code || activeSubBranch?.code)) ? `(Code: ${(activeBranch?.code || activeSubBranch?.code || '').toUpperCase()})` : ''}
             </p>
           )}
         </div>
@@ -815,8 +922,9 @@ export function OfficialInvoiceDocument({
         {/* Left 6 Columns: Amount in Words & Terms */}
         <div className="sm:col-span-6 space-y-2">
           <div className={`p-2.5 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-0.5 shadow-2xs`}>
-            <span className="font-black text-[9.5px] uppercase tracking-wider text-zinc-600 flex items-center gap-1">
-              <span>📝</span> TOTAL AMOUNT IN WORDS
+            <span className="font-black text-[9.5px] uppercase tracking-wider text-zinc-600 flex items-center gap-1.5">
+              <FileText size={12} className={theme.primaryText} />
+              <span>TOTAL AMOUNT IN WORDS</span>
             </span>
             <p className="font-bold text-zinc-900 italic text-[10.5px] leading-tight">
               {numberToIndianWords(totalVal)}
@@ -834,7 +942,7 @@ export function OfficialInvoiceDocument({
                 .filter(Boolean)
                 .map((line, idx) => (
                   <li key={idx} className="flex items-start gap-1.5">
-                    <span className={`${theme.primaryText} font-bold`}>✔</span>
+                    <Check size={11} className={`${theme.primaryText} font-bold shrink-0 mt-0.5`} />
                     <span>{line}</span>
                   </li>
                 ))}
@@ -917,8 +1025,9 @@ export function OfficialInvoiceDocument({
           {hasUpiDetails && (
             <div className={`p-2.5 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-1 shadow-2xs`}>
               <div className="flex items-center justify-between">
-                <span className="font-black text-[10px] uppercase tracking-wider text-zinc-800 flex items-center gap-1">
-                  <span>📱</span> UPI & DIGITAL PAYMENT
+                <span className="font-black text-[10px] uppercase tracking-wider text-zinc-800 flex items-center gap-1.5">
+                  <QrCode size={12} className={theme.primaryText} />
+                  <span>UPI & DIGITAL PAYMENT</span>
                 </span>
                 <span className="text-[8.5px] font-bold text-emerald-700">Instant Settlement</span>
               </div>
@@ -962,8 +1071,9 @@ export function OfficialInvoiceDocument({
 
           {hasBankDetails && (
             <div className={`p-2.5 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-0.5 shadow-2xs`}>
-              <span className="font-black text-[10px] uppercase tracking-wider text-zinc-800 flex items-center gap-1">
-                <span>🏛️</span> BANK DETAILS
+              <span className="font-black text-[10px] uppercase tracking-wider text-zinc-800 flex items-center gap-1.5">
+                <Landmark size={12} className={theme.primaryText} />
+                <span>BANK DETAILS</span>
               </span>
               <div className="space-y-0.5 text-[9px] text-zinc-700">
                 {resolvedBankName && (
@@ -1066,7 +1176,7 @@ export function OfficialInvoiceDocument({
       <div className={`rounded-xl ${theme.headerGradient} text-white p-1.5 text-[8.5px] font-medium flex flex-wrap items-center justify-between gap-1 shadow-xs`}>
         <p className="flex items-center gap-1">
           <MapPin size={10} />
-          <span>{resolvedAddress || `${resolvedBrandName} ${resolvedDivisionName}`.trim()}</span>
+          <span>{resolvedAddress || fullRegisteredCompanyName}</span>
         </p>
         <p>
           {resolvedEmail ? `Support: ${resolvedEmail}` : ""} {resolvedPhone ? `| Tel: ${resolvedPhone}` : ""}

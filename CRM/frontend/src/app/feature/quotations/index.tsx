@@ -35,6 +35,7 @@ export default function QuotationsMain() {
 
   // Modals
   const [isModalOpen, setIsModalOpen] = React.useState(false)
+  const [isStudioOpen, setIsStudioOpen] = React.useState(false)
   const [editingItem, setEditingItem] = React.useState<QuotationData | null>(null)
   const [deleteConfirm, setDeleteConfirm] = React.useState<QuotationData | null>(null)
   const [viewingItem, setViewingItem] = React.useState<QuotationData | null>(null)
@@ -487,8 +488,8 @@ export default function QuotationsMain() {
 
           {canAdd && (
             <button 
-              onClick={openAddModal} 
-              className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all shadow-md active:scale-95"
+              onClick={() => { setEditingItem(null); setIsStudioOpen(true) }} 
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all shadow-md active:scale-95 cursor-pointer"
             >
               <Plus size={15} />
               <span>Create Quotation</span>
@@ -743,6 +744,21 @@ export default function QuotationsMain() {
         onSaveSuccess={() => {
           setIsEstimateStudioOpen(false)
           setEstimateInitialData(null)
+        }}
+      />
+
+      {/* INTERACTIVE SPLIT-SCREEN DOCUMENT STUDIO (QUOTATION) */}
+      <DocumentStudioModal
+        isOpen={isStudioOpen}
+        mode="quotation"
+        onClose={() => {
+          setIsStudioOpen(false)
+          setEditingItem(null)
+        }}
+        onSaveSuccess={() => {
+          setIsStudioOpen(false)
+          setEditingItem(null)
+          loadData()
         }}
       />
 

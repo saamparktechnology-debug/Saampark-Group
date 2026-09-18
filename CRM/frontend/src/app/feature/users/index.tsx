@@ -264,6 +264,7 @@ export default function UsersMain() {
           phone: userData.phone,
           status: userData.status?.toLowerCase(),
           role_id,
+          role: userData.role,
           company_id: userData.companyId || (userData.companyIds && userData.companyIds[0]),
           company_ids: userData.companyIds,
           branch_id: userData.branchId !== undefined ? userData.branchId : null,

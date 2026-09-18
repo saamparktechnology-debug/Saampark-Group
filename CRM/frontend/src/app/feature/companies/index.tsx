@@ -6,7 +6,7 @@ import {
   Building2, Plus, Search, Edit2, Trash2, ChevronRight, ChevronDown, 
   MapPin, Phone, Mail, Globe, Users, Briefcase, DollarSign, Building, 
   Loader2, AlertCircle, Shield, CreditCard, Award, CheckCircle2, Image,
-  X, Sparkles
+  X, Sparkles, Eye, Landmark, QrCode, FileText, Check, ShieldCheck
 } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
@@ -15,6 +15,8 @@ import { Company, Branch, SubBranch } from "./types"
 import { useAuthStore, isMatchingCompany } from "@/store/useAuthStore"
 import { markGlobalItemDeleted, unmarkGlobalItemDeleted, fetchModuleDataFromDB, saveModuleDataToDB, syncGlobalDeletedIds, isGlobalItemDeleted, getLocalDeletedIds } from "@/lib/storageSync"
 import { ImageUploadField } from "@/components/ui/ImageUploadField"
+import { OfficialInvoiceDocument } from "@/app/feature/sales/invoices/components/OfficialInvoiceDocument"
+import { InvoiceItem } from "@/app/feature/sales/invoices/services/invoiceService"
 
 const INDUSTRIES = [
   "Technology", "Healthcare", "Finance", "Education", "Manufacturing",
@@ -985,297 +987,399 @@ export default function CompaniesMain() {
         })}
       </div>
 
-      {/* ── UPGRADED 5-TAB COMPANY MODAL ────────────────────────────────────── */}
+      {/* ── UPGRADED 5-TAB COMPANY MODAL WITH LIVE INVOICE PREVIEW ────────────────── */}
       <AnimatePresence>
         {showCompanyModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-surface rounded-2xl border border-border shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden text-xs">
-              <div className="flex items-center justify-between p-4 border-b border-border shrink-0">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold">🏢</div>
-                  <h2 className="text-base font-bold text-foreground">{editingCompany ? `Edit Company: ${editingCompany.name}` : "Create New Company Entity"}</h2>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-surface rounded-2xl border border-border shadow-2xl w-full max-w-6xl xl:max-w-7xl max-h-[94vh] flex flex-col overflow-hidden text-xs">
+              <div className="flex items-center justify-between p-4 border-b border-border shrink-0 bg-muted/20">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold shadow-sm">
+                    <Building2 size={16} />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+                      <span>{editingCompany ? `Edit Company: ${editingCompany.name}` : "Create New Company Entity"}</span>
+                      <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                        <Sparkles size={10} /> Live Invoice Preview Active
+                      </span>
+                    </h2>
+                    <p className="text-[11px] text-muted-foreground">Changes to branding, legal IDs, bank accounts, and stamps are rendered live in real-time</p>
+                  </div>
                 </div>
                 <Button variant="ghost" size="sm" onClick={() => setShowCompanyModal(false)}><X className="h-4 w-4" /></Button>
               </div>
 
-              {/* Modal Tabs */}
-              <div className="grid grid-cols-5 border-b border-border bg-muted/40 font-bold text-center shrink-0">
-                <button type="button" onClick={() => setCompanyTab("identity")} className={`py-2.5 border-b-2 transition-all ${companyTab === "identity" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>1. Identity & Logo</button>
-                <button type="button" onClick={() => setCompanyTab("tax")} className={`py-2.5 border-b-2 transition-all ${companyTab === "tax" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>2. GST & Legal</button>
-                <button type="button" onClick={() => setCompanyTab("signatory")} className={`py-2.5 border-b-2 transition-all ${companyTab === "signatory" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>3. Stamp & Sign</button>
-                <button type="button" onClick={() => setCompanyTab("contact")} className={`py-2.5 border-b-2 transition-all ${companyTab === "contact" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>4. Address & Desk</button>
-                <button type="button" onClick={() => setCompanyTab("bank")} className={`py-2.5 border-b-2 transition-all ${companyTab === "bank" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>5. Bank & UPI</button>
-              </div>
-
-              <div className="p-6 space-y-4 overflow-y-auto flex-1">
-                {/* TAB 1: IDENTITY & LOGO */}
-                {companyTab === "identity" && (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block font-semibold mb-1">Company Registered Name *</label>
-                        <Input placeholder="e.g. SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED" value={companyForm.name} onChange={e => setCompanyForm({ ...companyForm, name: e.target.value })} />
-                      </div>
-                      <div>
-                        <label className="block font-semibold mb-1">Brand Name</label>
-                        <Input placeholder="e.g. SAAMPARK" value={companyForm.brand_name} onChange={e => setCompanyForm({ ...companyForm, brand_name: e.target.value })} />
-                      </div>
-                      <div>
-                        <label className="block font-semibold mb-1">Division Name</label>
-                        <Input placeholder="e.g. TECHNOLOGY & AI LABS" value={companyForm.division_name} onChange={e => setCompanyForm({ ...companyForm, division_name: e.target.value })} />
-                      </div>
-                      <div>
-                        <label className="block font-semibold mb-1">Subtitle / Tagline</label>
-                        <Input placeholder="e.g. RESEARCH & INNOVATION" value={companyForm.subtitle} onChange={e => setCompanyForm({ ...companyForm, subtitle: e.target.value })} />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block font-semibold mb-1">System Slug / ID</label>
-                        <Input placeholder="e.g. tech" value={companyForm.slug} onChange={e => setCompanyForm({ ...companyForm, slug: e.target.value })} disabled={!!editingCompany} />
-                      </div>
-                      <div>
-                        <label className="block font-semibold mb-1">Industry</label>
-                        <select value={companyForm.industry} onChange={e => setCompanyForm({ ...companyForm, industry: e.target.value })} className="w-full px-3 py-2 rounded-md border border-border bg-surface text-foreground text-xs">
-                          {INDUSTRIES.map(ind => <option key={ind} value={ind}>{ind}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block font-semibold mb-1">Currency</label>
-                        <select value={companyForm.currency} onChange={e => setCompanyForm({ ...companyForm, currency: e.target.value })} className="w-full px-3 py-2 rounded-md border border-border bg-surface text-foreground text-xs">
-                          {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.symbol} {c.name}</option>)}
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* Company Logo Upload with ImgBB */}
-                    <div className="p-4 rounded-xl border border-border bg-muted/20">
-                      <ImageUploadField
-                        label="Company Logo / Brand Crest"
-                        value={companyForm.logo_url}
-                        onChange={url => setCompanyForm({ ...companyForm, logo_url: url })}
-                        uploadNamePrefix="company_logo"
-                        helperText="Uploaded directly to ImgBB permanent cloud. Displayed on top-left of Invoices, Quotations, and Official Letters."
-                      />
-                    </div>
+              {/* Modal Body: Split Screen (Left: Form Tabs, Right: Live Document Preview) */}
+              <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
+                {/* Left Side: 5 Form Configuration Tabs */}
+                <div className="w-full lg:w-[54%] flex flex-col border-b lg:border-b-0 lg:border-r border-border overflow-hidden">
+                  <div className="grid grid-cols-5 border-b border-border bg-muted/40 font-bold text-center shrink-0">
+                    <button type="button" onClick={() => setCompanyTab("identity")} className={`py-2.5 border-b-2 text-[11px] transition-all ${companyTab === "identity" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>1. Identity</button>
+                    <button type="button" onClick={() => setCompanyTab("tax")} className={`py-2.5 border-b-2 text-[11px] transition-all ${companyTab === "tax" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>2. GST & Legal</button>
+                    <button type="button" onClick={() => setCompanyTab("signatory")} className={`py-2.5 border-b-2 text-[11px] transition-all ${companyTab === "signatory" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>3. Stamp & Sign</button>
+                    <button type="button" onClick={() => setCompanyTab("contact")} className={`py-2.5 border-b-2 text-[11px] transition-all ${companyTab === "contact" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>4. Address</button>
+                    <button type="button" onClick={() => setCompanyTab("bank")} className={`py-2.5 border-b-2 text-[11px] transition-all ${companyTab === "bank" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>5. Bank & UPI</button>
                   </div>
-                )}
 
-                {/* TAB 2: LEGAL & TAX */}
-                {companyTab === "tax" && (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block font-semibold mb-1">GSTIN (Goods and Services Tax Number)</label>
-                        <Input placeholder="e.g. 19ABFCS1234D1ZS" value={companyForm.gstin} onChange={e => setCompanyForm({ ...companyForm, gstin: e.target.value.toUpperCase() })} className="font-mono" />
-                      </div>
-                      <div>
-                        <label className="block font-semibold mb-1">PAN (Permanent Account Number)</label>
-                        <Input placeholder="e.g. ABFCS1234D" value={companyForm.pan} onChange={e => setCompanyForm({ ...companyForm, pan: e.target.value.toUpperCase() })} className="font-mono" />
-                      </div>
-                      <div>
-                        <label className="block font-semibold mb-1">CIN (Corporate Identity Number)</label>
-                        <Input placeholder="e.g. U72900WB2024PTC271234" value={companyForm.cin} onChange={e => setCompanyForm({ ...companyForm, cin: e.target.value.toUpperCase() })} className="font-mono" />
-                      </div>
-                      <div>
-                        <label className="block font-semibold mb-1">MSME / Udyam Registration No.</label>
-                        <Input placeholder="e.g. UDYAM-WB-10-0012345" value={companyForm.msme_reg} onChange={e => setCompanyForm({ ...companyForm, msme_reg: e.target.value })} className="font-mono" />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* TAB 3: SIGNATORY & STAMP */}
-                {companyTab === "signatory" && (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block font-semibold mb-1">Authorized Signatory Name</label>
-                        <Input placeholder="e.g. Supriya Naskar" value={companyForm.signatory_name} onChange={e => setCompanyForm({ ...companyForm, signatory_name: e.target.value })} />
-                      </div>
-                      <div>
-                        <label className="block font-semibold mb-1">Signatory Designation</label>
-                        <Input placeholder="e.g. Managing Director" value={companyForm.signatory_designation} onChange={e => setCompanyForm({ ...companyForm, signatory_designation: e.target.value })} />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="p-3.5 rounded-xl border border-border bg-muted/20">
-                        <ImageUploadField
-                          label="Authorized Digital Signature"
-                          value={companyForm.signature_image_url}
-                          onChange={url => setCompanyForm({ ...companyForm, signature_image_url: url })}
-                          uploadNamePrefix="company_signature"
-                          aspectRatio="signature"
-                          helperText="Uploaded to ImgBB. Rendered on the Authorised Signatory line on Invoices."
-                        />
-                      </div>
-                      <div className="p-3.5 rounded-xl border border-border bg-muted/20">
-                        <ImageUploadField
-                          label="Official Company Seal / Stamp"
-                          value={companyForm.stamp_image_url}
-                          onChange={url => setCompanyForm({ ...companyForm, stamp_image_url: url })}
-                          uploadNamePrefix="company_stamp"
-                          helperText="Uploaded to ImgBB. Rendered next to the signature on Invoices."
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* TAB 4: ADDRESS & CONTACTS */}
-                {companyTab === "contact" && (
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block font-semibold mb-1">Registered Street Address</label>
-                      <Input placeholder="Office address, premises, street..." value={companyForm.address} onChange={e => setCompanyForm({ ...companyForm, address: e.target.value })} />
-                    </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      <div><label className="block font-semibold mb-1">City</label><Input value={companyForm.city} onChange={e => setCompanyForm({ ...companyForm, city: e.target.value })} /></div>
-                      <div><label className="block font-semibold mb-1">State</label><Input value={companyForm.state} onChange={e => setCompanyForm({ ...companyForm, state: e.target.value })} /></div>
-                      <div><label className="block font-semibold mb-1">ZIP / PIN Code</label><Input value={companyForm.zip} onChange={e => setCompanyForm({ ...companyForm, zip: e.target.value })} /></div>
-                      <div><label className="block font-semibold mb-1">Country</label><Input value={companyForm.country} onChange={e => setCompanyForm({ ...companyForm, country: e.target.value })} /></div>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div><label className="block font-semibold mb-1">Official Phone</label><Input placeholder="+91 9901518567" value={companyForm.phone} onChange={e => setCompanyForm({ ...companyForm, phone: e.target.value })} /></div>
-                      <div><label className="block font-semibold mb-1">Official Email</label><Input placeholder="info@saampark.com" value={companyForm.email} onChange={e => setCompanyForm({ ...companyForm, email: e.target.value })} /></div>
-                      <div><label className="block font-semibold mb-1">Official Website</label><Input placeholder="www.saampark.com" value={companyForm.website} onChange={e => setCompanyForm({ ...companyForm, website: e.target.value })} /></div>
-                    </div>
-                  </div>
-                )}
-
-                {/* TAB 5: BANK & UPI (DUAL GST vs NON-GST OPTIONS) */}
-                {companyTab === "bank" && (
-                  <div className="space-y-4">
-                    {/* Sub-Tab Selector: GST Bills vs Non-GST Bills */}
-                    <div className="flex p-1 bg-muted/60 dark:bg-zinc-800/80 rounded-xl border border-border">
-                      <button
-                        type="button"
-                        onClick={() => setCompanyBankSubTab("gst")}
-                        className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                          companyBankSubTab === "gst"
-                            ? "bg-teal-600 text-white shadow-sm"
-                            : "text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        <span>🏢 GST Bills Bank & QR</span>
-                        <span className="text-[10px] opacity-80 font-normal">(For 18% Tax Invoices)</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCompanyBankSubTab("nongst")}
-                        className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                          companyBankSubTab === "nongst"
-                            ? "bg-blue-600 text-white shadow-sm"
-                            : "text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        <span>📄 Non-GST Bills Bank & QR</span>
-                        <span className="text-[10px] opacity-80 font-normal">(For 0% / Non-GST Invoices)</span>
-                      </button>
-                    </div>
-
-                    {companyBankSubTab === "gst" ? (
-                      <div className="p-4 rounded-2xl border border-teal-500/20 bg-teal-50/30 dark:bg-teal-950/10 space-y-4">
-                        <div className="flex items-center justify-between border-b border-teal-500/10 pb-2">
-                          <span className="text-xs font-bold text-teal-800 dark:text-teal-300 flex items-center gap-1.5">
-                            🏢 Bank & UPI Details for GST Invoices
-                          </span>
-                          <span className="text-[10px] text-teal-600 dark:text-teal-400 font-semibold">Auto-linked to GST Tax Invoices</span>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-xs font-semibold mb-1">Bank Name</label>
-                            <Input placeholder="e.g. HDFC Bank Ltd" value={companyForm.gst_bank_name || companyForm.bank_name} onChange={e => setCompanyForm({ ...companyForm, gst_bank_name: e.target.value, bank_name: e.target.value })} />
+                  <div className="p-5 space-y-4 overflow-y-auto flex-1 max-h-[60vh] lg:max-h-none">
+                    {/* TAB 1: IDENTITY & LOGO */}
+                    {companyTab === "identity" && (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                          <div className="sm:col-span-2">
+                            <label className="block font-semibold mb-1">Company Registered Legal Full Name *</label>
+                            <Input placeholder="e.g. SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED" value={companyForm.name} onChange={e => setCompanyForm({ ...companyForm, name: e.target.value })} className="font-bold" />
                           </div>
                           <div>
-                            <label className="block text-xs font-semibold mb-1">Account Holder Name</label>
-                            <Input placeholder="e.g. SAAMPARK TECHNOLOGY PVT LTD" value={companyForm.gst_account_holder || companyForm.account_holder} onChange={e => setCompanyForm({ ...companyForm, gst_account_holder: e.target.value, account_holder: e.target.value })} />
+                            <label className="block font-semibold mb-1">Brand Name</label>
+                            <Input placeholder="e.g. SAAMPARK" value={companyForm.brand_name} onChange={e => setCompanyForm({ ...companyForm, brand_name: e.target.value })} />
                           </div>
                           <div>
-                            <label className="block text-xs font-semibold mb-1">Account Number</label>
-                            <Input placeholder="e.g. 50200012345678" value={companyForm.gst_account_number || companyForm.account_number} onChange={e => setCompanyForm({ ...companyForm, gst_account_number: e.target.value, account_number: e.target.value })} className="font-mono" />
+                            <label className="block font-semibold mb-1">Division Name</label>
+                            <Input placeholder="e.g. TECHNOLOGY" value={companyForm.division_name} onChange={e => setCompanyForm({ ...companyForm, division_name: e.target.value })} />
                           </div>
-                          <div>
-                            <label className="block text-xs font-semibold mb-1">IFSC Code</label>
-                            <Input placeholder="e.g. HDFC0001234" value={companyForm.gst_ifsc_code || companyForm.ifsc_code} onChange={e => setCompanyForm({ ...companyForm, gst_ifsc_code: e.target.value.toUpperCase(), ifsc_code: e.target.value.toUpperCase() })} className="font-mono" />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-semibold mb-1">Bank Branch</label>
-                            <Input placeholder="e.g. Sector V Kolkata Branch" value={companyForm.gst_bank_branch || companyForm.bank_branch} onChange={e => setCompanyForm({ ...companyForm, gst_bank_branch: e.target.value, bank_branch: e.target.value })} />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-semibold mb-1">UPI ID for Direct Transfers</label>
-                            <Input placeholder="e.g. saampark@hdfcbank" value={companyForm.gst_upi_id || companyForm.upi_id} onChange={e => setCompanyForm({ ...companyForm, gst_upi_id: e.target.value, upi_id: e.target.value })} className="font-mono" />
+                          <div className="sm:col-span-2">
+                            <label className="block font-semibold mb-1">Subtitle / Tagline</label>
+                            <Input placeholder="e.g. AND RESEARCH PRIVATE LIMITED" value={companyForm.subtitle} onChange={e => setCompanyForm({ ...companyForm, subtitle: e.target.value })} />
                           </div>
                         </div>
 
-                        <div className="p-3.5 rounded-xl border border-teal-500/20 bg-white/60 dark:bg-zinc-900/60 mt-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div>
+                            <label className="block font-semibold mb-1">System Slug / ID</label>
+                            <Input placeholder="e.g. tech" value={companyForm.slug} onChange={e => setCompanyForm({ ...companyForm, slug: e.target.value })} disabled={!!editingCompany} />
+                          </div>
+                          <div>
+                            <label className="block font-semibold mb-1">Industry</label>
+                            <select value={companyForm.industry} onChange={e => setCompanyForm({ ...companyForm, industry: e.target.value })} className="w-full px-3 py-2 rounded-md border border-border bg-surface text-foreground text-xs">
+                              {INDUSTRIES.map(ind => <option key={ind} value={ind}>{ind}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block font-semibold mb-1">Currency</label>
+                            <select value={companyForm.currency} onChange={e => setCompanyForm({ ...companyForm, currency: e.target.value })} className="w-full px-3 py-2 rounded-md border border-border bg-surface text-foreground text-xs">
+                              {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.symbol} {c.name}</option>)}
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Company Logo Upload with ImgBB */}
+                        <div className="p-3.5 rounded-xl border border-border bg-muted/20">
                           <ImageUploadField
-                            label="GST Payment Scanner / UPI QR Code"
-                            value={companyForm.gst_payment_qr_url || companyForm.payment_qr_url}
-                            onChange={url => setCompanyForm({ ...companyForm, gst_payment_qr_url: url, payment_qr_url: url })}
-                            uploadNamePrefix="company_gst_qr"
-                            helperText="Displayed on all official GST Tax Invoices for instant scan-to-pay."
-                          />
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="p-4 rounded-2xl border border-blue-500/20 bg-blue-50/30 dark:bg-blue-950/10 space-y-4">
-                        <div className="flex items-center justify-between border-b border-blue-500/10 pb-2">
-                          <span className="text-xs font-bold text-blue-800 dark:text-blue-300 flex items-center gap-1.5">
-                            📄 Bank & UPI Details for Non-GST Invoices
-                          </span>
-                          <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold">Auto-linked to Non-GST 0% Invoices</span>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-xs font-semibold mb-1">Bank Name</label>
-                            <Input placeholder="e.g. ICICI Bank / Kotak Bank" value={companyForm.nongst_bank_name} onChange={e => setCompanyForm({ ...companyForm, nongst_bank_name: e.target.value })} />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-semibold mb-1">Account Holder Name</label>
-                            <Input placeholder="e.g. SAAMPARK ENTERPRISES" value={companyForm.nongst_account_holder} onChange={e => setCompanyForm({ ...companyForm, nongst_account_holder: e.target.value })} />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-semibold mb-1">Account Number</label>
-                            <Input placeholder="e.g. 1029384756" value={companyForm.nongst_account_number} onChange={e => setCompanyForm({ ...companyForm, nongst_account_number: e.target.value })} className="font-mono" />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-semibold mb-1">IFSC Code</label>
-                            <Input placeholder="e.g. ICIC0001234" value={companyForm.nongst_ifsc_code} onChange={e => setCompanyForm({ ...companyForm, nongst_ifsc_code: e.target.value.toUpperCase() })} className="font-mono" />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-semibold mb-1">Bank Branch</label>
-                            <Input placeholder="e.g. Salt Lake Branch" value={companyForm.nongst_bank_branch} onChange={e => setCompanyForm({ ...companyForm, nongst_bank_branch: e.target.value })} />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-semibold mb-1">UPI ID for Non-GST Transfers</label>
-                            <Input placeholder="e.g. saamparkpay@icici" value={companyForm.nongst_upi_id} onChange={e => setCompanyForm({ ...companyForm, nongst_upi_id: e.target.value })} className="font-mono" />
-                          </div>
-                        </div>
-
-                        <div className="p-3.5 rounded-xl border border-blue-500/20 bg-white/60 dark:bg-zinc-900/60 mt-2">
-                          <ImageUploadField
-                            label="Non-GST Payment Scanner / UPI QR Code"
-                            value={companyForm.nongst_payment_qr_url}
-                            onChange={url => setCompanyForm({ ...companyForm, nongst_payment_qr_url: url })}
-                            uploadNamePrefix="company_nongst_qr"
-                            helperText="Displayed on all 0% / Non-GST Invoices and Estimates for instant scan-to-pay."
+                            label="Company Logo / Brand Crest"
+                            value={companyForm.logo_url}
+                            onChange={url => setCompanyForm({ ...companyForm, logo_url: url })}
+                            uploadNamePrefix="company_logo"
+                            helperText="Uploaded directly to ImgBB. Immediately updates the invoice header."
                           />
                         </div>
                       </div>
                     )}
+
+                    {/* TAB 2: LEGAL & TAX */}
+                    {companyTab === "tax" && (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                          <div>
+                            <label className="block font-semibold mb-1">GSTIN (Goods and Services Tax Number)</label>
+                            <Input placeholder="e.g. 19ABFCS1234D1ZS" value={companyForm.gstin} onChange={e => setCompanyForm({ ...companyForm, gstin: e.target.value.toUpperCase() })} className="font-mono font-bold" />
+                          </div>
+                          <div>
+                            <label className="block font-semibold mb-1">PAN (Permanent Account Number)</label>
+                            <Input placeholder="e.g. ABFCS1234D" value={companyForm.pan} onChange={e => setCompanyForm({ ...companyForm, pan: e.target.value.toUpperCase() })} className="font-mono font-bold" />
+                          </div>
+                          <div>
+                            <label className="block font-semibold mb-1">CIN (Corporate Identity Number)</label>
+                            <Input placeholder="e.g. U72900WB2024PTC271234" value={companyForm.cin} onChange={e => setCompanyForm({ ...companyForm, cin: e.target.value.toUpperCase() })} className="font-mono" />
+                          </div>
+                          <div>
+                            <label className="block font-semibold mb-1">MSME / Udyam Registration No.</label>
+                            <Input placeholder="e.g. UDYAM-WB-10-0012345" value={companyForm.msme_reg} onChange={e => setCompanyForm({ ...companyForm, msme_reg: e.target.value })} className="font-mono" />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* TAB 3: SIGNATORY & STAMP */}
+                    {companyTab === "signatory" && (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                          <div>
+                            <label className="block font-semibold mb-1">Authorized Signatory Name</label>
+                            <Input placeholder="e.g. Supriya Naskar" value={companyForm.signatory_name} onChange={e => setCompanyForm({ ...companyForm, signatory_name: e.target.value })} />
+                          </div>
+                          <div>
+                            <label className="block font-semibold mb-1">Signatory Designation</label>
+                            <Input placeholder="e.g. Managing Director" value={companyForm.signatory_designation} onChange={e => setCompanyForm({ ...companyForm, signatory_designation: e.target.value })} />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                          <div className="p-3.5 rounded-xl border border-border bg-muted/20">
+                            <ImageUploadField
+                              label="Authorized Digital Signature"
+                              value={companyForm.signature_image_url}
+                              onChange={url => setCompanyForm({ ...companyForm, signature_image_url: url })}
+                              uploadNamePrefix="company_signature"
+                              aspectRatio="signature"
+                              helperText="Rendered on the Authorised Signatory line on Invoices."
+                            />
+                          </div>
+                          <div className="p-3.5 rounded-xl border border-border bg-muted/20">
+                            <ImageUploadField
+                              label="Official Company Seal / Stamp"
+                              value={companyForm.stamp_image_url}
+                              onChange={url => setCompanyForm({ ...companyForm, stamp_image_url: url })}
+                              uploadNamePrefix="company_stamp"
+                              helperText="Rendered next to the signature on Invoices."
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* TAB 4: ADDRESS & CONTACTS */}
+                    {companyTab === "contact" && (
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block font-semibold mb-1">Registered Street Address</label>
+                          <Input placeholder="Office address, premises, street..." value={companyForm.address} onChange={e => setCompanyForm({ ...companyForm, address: e.target.value })} />
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          <div><label className="block font-semibold mb-1">City</label><Input value={companyForm.city} onChange={e => setCompanyForm({ ...companyForm, city: e.target.value })} /></div>
+                          <div><label className="block font-semibold mb-1">State</label><Input value={companyForm.state} onChange={e => setCompanyForm({ ...companyForm, state: e.target.value })} /></div>
+                          <div><label className="block font-semibold mb-1">ZIP / PIN Code</label><Input value={companyForm.zip} onChange={e => setCompanyForm({ ...companyForm, zip: e.target.value })} /></div>
+                          <div><label className="block font-semibold mb-1">Country</label><Input value={companyForm.country} onChange={e => setCompanyForm({ ...companyForm, country: e.target.value })} /></div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div><label className="block font-semibold mb-1">Official Phone</label><Input placeholder="+91 9901518567" value={companyForm.phone} onChange={e => setCompanyForm({ ...companyForm, phone: e.target.value })} /></div>
+                          <div><label className="block font-semibold mb-1">Official Email</label><Input placeholder="info@saampark.com" value={companyForm.email} onChange={e => setCompanyForm({ ...companyForm, email: e.target.value })} /></div>
+                          <div><label className="block font-semibold mb-1">Official Website</label><Input placeholder="www.saampark.com" value={companyForm.website} onChange={e => setCompanyForm({ ...companyForm, website: e.target.value })} /></div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* TAB 5: BANK & UPI (DUAL GST vs NON-GST OPTIONS) */}
+                    {companyTab === "bank" && (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2 p-1 bg-muted/60 rounded-xl border border-border">
+                          <button
+                            type="button"
+                            onClick={() => setCompanyBankSubTab("gst")}
+                            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all ${
+                              companyBankSubTab === "gst" 
+                                ? "bg-teal-600 text-white shadow-xs" 
+                                : "text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            GST Tax Invoices Bank & UPI Account
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCompanyBankSubTab("nongst")}
+                            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all ${
+                              companyBankSubTab === "nongst" 
+                                ? "bg-blue-600 text-white shadow-xs" 
+                                : "text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            Non-GST (0%) Invoices Bank & UPI Account
+                          </button>
+                        </div>
+
+                        {companyBankSubTab === "gst" ? (
+                          <div className="p-4 rounded-2xl border border-teal-500/20 bg-teal-50/30 dark:bg-teal-950/10 space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-xs font-semibold mb-1">Bank Name</label>
+                                <Input placeholder="e.g. HDFC Bank" value={companyForm.gst_bank_name || companyForm.bank_name} onChange={e => setCompanyForm({ ...companyForm, gst_bank_name: e.target.value, bank_name: e.target.value })} />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-semibold mb-1">Account Holder Name</label>
+                                <Input placeholder="e.g. SAAMPARK TECHNOLOGY AND RESEARCH PVT LTD" value={companyForm.gst_account_holder || companyForm.account_holder} onChange={e => setCompanyForm({ ...companyForm, gst_account_holder: e.target.value, account_holder: e.target.value })} />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-semibold mb-1">Account Number</label>
+                                <Input placeholder="e.g. 50200012345678" value={companyForm.gst_account_number || companyForm.account_number} onChange={e => setCompanyForm({ ...companyForm, gst_account_number: e.target.value, account_number: e.target.value })} className="font-mono font-bold" />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-semibold mb-1">IFSC Code</label>
+                                <Input placeholder="e.g. HDFC0001234" value={companyForm.gst_ifsc_code || companyForm.ifsc_code} onChange={e => setCompanyForm({ ...companyForm, gst_ifsc_code: e.target.value.toUpperCase(), ifsc_code: e.target.value.toUpperCase() })} className="font-mono font-bold" />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-semibold mb-1">Bank Branch</label>
+                                <Input placeholder="e.g. Sector V Kolkata Branch" value={companyForm.gst_bank_branch || companyForm.bank_branch} onChange={e => setCompanyForm({ ...companyForm, gst_bank_branch: e.target.value, bank_branch: e.target.value })} />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-semibold mb-1">UPI ID for Direct Transfers</label>
+                                <Input placeholder="e.g. saampark@hdfcbank" value={companyForm.gst_upi_id || companyForm.upi_id} onChange={e => setCompanyForm({ ...companyForm, gst_upi_id: e.target.value, upi_id: e.target.value })} className="font-mono font-bold" />
+                              </div>
+                            </div>
+
+                            <div className="p-3.5 rounded-xl border border-teal-500/20 bg-white/60 dark:bg-zinc-900/60 mt-2">
+                              <ImageUploadField
+                                label="GST Payment Scanner / UPI QR Code"
+                                value={companyForm.gst_payment_qr_url || companyForm.payment_qr_url}
+                                onChange={url => setCompanyForm({ ...companyForm, gst_payment_qr_url: url, payment_qr_url: url })}
+                                uploadNamePrefix="company_gst_qr"
+                                helperText="Displayed on all official GST Tax Invoices for instant scan-to-pay."
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-4 rounded-2xl border border-blue-500/20 bg-blue-50/30 dark:bg-blue-950/10 space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-xs font-semibold mb-1">Bank Name</label>
+                                <Input placeholder="e.g. ICICI Bank" value={companyForm.nongst_bank_name} onChange={e => setCompanyForm({ ...companyForm, nongst_bank_name: e.target.value })} />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-semibold mb-1">Account Holder Name</label>
+                                <Input placeholder="e.g. SAAMPARK ENTERPRISES" value={companyForm.nongst_account_holder} onChange={e => setCompanyForm({ ...companyForm, nongst_account_holder: e.target.value })} />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-semibold mb-1">Account Number</label>
+                                <Input placeholder="e.g. 1029384756" value={companyForm.nongst_account_number} onChange={e => setCompanyForm({ ...companyForm, nongst_account_number: e.target.value })} className="font-mono font-bold" />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-semibold mb-1">IFSC Code</label>
+                                <Input placeholder="e.g. ICIC0001234" value={companyForm.nongst_ifsc_code} onChange={e => setCompanyForm({ ...companyForm, nongst_ifsc_code: e.target.value.toUpperCase() })} className="font-mono font-bold" />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-semibold mb-1">Bank Branch</label>
+                                <Input placeholder="e.g. Salt Lake Branch" value={companyForm.nongst_bank_branch} onChange={e => setCompanyForm({ ...companyForm, nongst_bank_branch: e.target.value })} />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-semibold mb-1">UPI ID for Non-GST Transfers</label>
+                                <Input placeholder="e.g. saamparkpay@icici" value={companyForm.nongst_upi_id} onChange={e => setCompanyForm({ ...companyForm, nongst_upi_id: e.target.value })} className="font-mono font-bold" />
+                              </div>
+                            </div>
+
+                            <div className="p-3.5 rounded-xl border border-blue-500/20 bg-white/60 dark:bg-zinc-900/60 mt-2">
+                              <ImageUploadField
+                                label="Non-GST Payment Scanner / UPI QR Code"
+                                value={companyForm.nongst_payment_qr_url}
+                                onChange={url => setCompanyForm({ ...companyForm, nongst_payment_qr_url: url })}
+                                uploadNamePrefix="company_nongst_qr"
+                                helperText="Displayed on all 0% / Non-GST Invoices and Estimates for instant scan-to-pay."
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
+
+                {/* Right Side: Real-Time Live Invoicing Document Preview */}
+                <div className="w-full lg:w-[46%] bg-zinc-100/80 dark:bg-zinc-950 p-4 flex flex-col overflow-y-auto border-t lg:border-t-0 border-border">
+                  <div className="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="font-bold text-xs text-foreground">Live Invoice Output</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-muted-foreground bg-surface px-2 py-0.5 rounded border border-border">
+                      {companyForm.name ? "Auto-synced" : "Preview"}
+                    </span>
+                  </div>
+
+                  <div className="py-3 flex-1 flex items-start justify-center overflow-x-hidden">
+                    <div className="w-full max-w-[650px] transform origin-top scale-[0.72] sm:scale-[0.8] lg:scale-[0.82] transition-transform shadow-xl rounded-2xl">
+                      <OfficialInvoiceDocument
+                        invoice={{
+                          id: "INV-2026-LIVE",
+                          client: "Global Enterprises Corp",
+                          clientEmail: "accounts@globalent.com",
+                          project: "Custom Enterprise Cloud Architecture & Services",
+                          billDate: new Date().toLocaleDateString("en-GB"),
+                          dueDate: new Date(Date.now() + 15 * 86400000).toLocaleDateString("en-GB"),
+                          baseAmount: 45000,
+                          setupCharge: 5000,
+                          discount: 2000,
+                          gstRate: 18,
+                          gstAmount: 8640,
+                          totalInvoiced: "₹56,640",
+                          paymentReceived: "₹25,000",
+                          due: "₹31,640",
+                          status: "Partially paid",
+                          companyId: companyForm.slug || "tech",
+                          items: [
+                            {
+                              id: "s1",
+                              serviceName: "Enterprise Software & Cloud Engineering",
+                              sacCode: "998313",
+                              qty: 1,
+                              unit: "Project",
+                              rate: 35000,
+                              gstRate: 18,
+                              gstAmount: 6300,
+                              totalAmount: 41300,
+                            },
+                            {
+                              id: "s2",
+                              serviceName: "Dedicated Technical Support & Maintenance",
+                              sacCode: "998314",
+                              qty: 1,
+                              unit: "Service",
+                              rate: 10000,
+                              gstRate: 18,
+                              gstAmount: 1800,
+                              totalAmount: 11800,
+                            },
+                          ],
+                        }}
+                        companyDetails={{
+                          id: editingCompany?.id || companyForm.slug || "tech",
+                          name: companyForm.name || "SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED",
+                          slug: companyForm.slug || "tech",
+                          brand_name: companyForm.brand_name || "SAAMPARK",
+                          division_name: companyForm.division_name || "TECHNOLOGY",
+                          subtitle: companyForm.subtitle || "RESEARCH & INNOVATION",
+                          industry: companyForm.industry || "Technology",
+                          currency: companyForm.currency || "INR",
+                          currency_symbol: "₹",
+                          logo_url: companyForm.logo_url,
+                          address: companyForm.address || "Kolkata, West Bengal, India",
+                          city: companyForm.city || "Kolkata",
+                          state: companyForm.state || "West Bengal",
+                          country: companyForm.country || "India",
+                          phone: companyForm.phone || "+91 9901518567",
+                          email: companyForm.email || "info@saamparktechnology.com",
+                          website: companyForm.website || "www.saamparktechnology.com",
+                          gstin: companyForm.gstin,
+                          pan: companyForm.pan,
+                          cin: companyForm.cin,
+                          signatory_name: companyForm.signatory_name || "Authorized Signatory",
+                          signatory_designation: companyForm.signatory_designation || "Managing Director",
+                          signature_image_url: companyForm.signature_image_url,
+                          stamp_image_url: companyForm.stamp_image_url,
+                          gst_bank_name: companyForm.gst_bank_name || companyForm.bank_name,
+                          gst_account_holder: companyForm.gst_account_holder || companyForm.account_holder,
+                          gst_account_number: companyForm.gst_account_number || companyForm.account_number,
+                          gst_ifsc_code: companyForm.gst_ifsc_code || companyForm.ifsc_code,
+                          gst_bank_branch: companyForm.gst_bank_branch || companyForm.bank_branch,
+                          gst_upi_id: companyForm.gst_upi_id || companyForm.upi_id,
+                          gst_payment_qr_url: companyForm.gst_payment_qr_url || companyForm.payment_qr_url,
+                          nongst_bank_name: companyForm.nongst_bank_name || companyForm.bank_name,
+                          nongst_account_holder: companyForm.nongst_account_holder || companyForm.account_holder,
+                          nongst_account_number: companyForm.nongst_account_number || companyForm.account_number,
+                          nongst_ifsc_code: companyForm.nongst_ifsc_code || companyForm.ifsc_code,
+                          nongst_bank_branch: companyForm.nongst_bank_branch || companyForm.bank_branch,
+                          nongst_upi_id: companyForm.nongst_upi_id || companyForm.upi_id,
+                          nongst_payment_qr_url: companyForm.nongst_payment_qr_url || companyForm.payment_qr_url,
+                        } as any}
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="flex items-center justify-between p-4 border-t border-border shrink-0 bg-muted/20">
                 <span className="text-muted-foreground text-[11px]">* All details automatically link into Quotations, Estimates, Letters & Invoices</span>
                 <div className="flex items-center gap-2">
                   <Button variant="outline" onClick={() => setShowCompanyModal(false)}>Cancel</Button>
-                  <Button onClick={saveCompany} disabled={saving || !companyForm.name.trim()} className="font-bold">
+                  <Button onClick={saveCompany} disabled={saving || !companyForm.name.trim()} className="font-bold bg-blue-600 hover:bg-blue-700 text-white">
                     {saving && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
                     {editingCompany ? "Update Company Entity" : "Create Company Entity"}
                   </Button>
@@ -1286,116 +1390,182 @@ export default function CompaniesMain() {
         )}
       </AnimatePresence>
 
-      {/* ── UPGRADED 4-TAB BRANCH MODAL ─────────────────────────────────────── */}
+      {/* ── UPGRADED 4-TAB BRANCH MODAL WITH LIVE INVOICE PREVIEW ────────────── */}
       <AnimatePresence>
         {showBranchModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-surface rounded-2xl border border-border shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden text-xs">
-              <div className="flex items-center justify-between p-4 border-b border-border shrink-0">
-                <h2 className="text-base font-bold text-foreground">{editingBranch ? `Edit Branch: ${editingBranch.name}` : "Add Operational Branch"}</h2>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-surface rounded-2xl border border-border shadow-2xl w-full max-w-6xl xl:max-w-7xl max-h-[94vh] flex flex-col overflow-hidden text-xs">
+              <div className="flex items-center justify-between p-4 border-b border-border shrink-0 bg-muted/20">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold">
+                    <Building size={16} />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-foreground">{editingBranch ? `Edit Branch: ${editingBranch.name}` : "Add Operational Branch"}</h2>
+                    <p className="text-[11px] text-muted-foreground">Configures branch address, legal credentials, manager, and scan-to-pay QR</p>
+                  </div>
+                </div>
                 <Button variant="ghost" size="sm" onClick={() => setShowBranchModal(false)}><X className="h-4 w-4" /></Button>
               </div>
 
-              <div className="grid grid-cols-4 border-b border-border bg-muted/40 font-bold text-center shrink-0">
-                <button type="button" onClick={() => setBranchTab("basic")} className={`py-2.5 border-b-2 ${branchTab === "basic" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>1. Info & Manager</button>
-                <button type="button" onClick={() => setBranchTab("tax")} className={`py-2.5 border-b-2 ${branchTab === "tax" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>2. Address & Contacts</button>
-                <button type="button" onClick={() => setBranchTab("signatory")} className={`py-2.5 border-b-2 ${branchTab === "signatory" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>3. Tax & Stamp</button>
-                <button type="button" onClick={() => setBranchTab("bank")} className={`py-2.5 border-b-2 ${branchTab === "bank" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>4. Bank & UPI</button>
-              </div>
+              <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
+                <div className="w-full lg:w-[54%] flex flex-col border-b lg:border-b-0 lg:border-r border-border overflow-hidden">
+                  <div className="grid grid-cols-4 border-b border-border bg-muted/40 font-bold text-center shrink-0">
+                    <button type="button" onClick={() => setBranchTab("basic")} className={`py-2.5 border-b-2 text-[11px] ${branchTab === "basic" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>1. Info & Manager</button>
+                    <button type="button" onClick={() => setBranchTab("tax")} className={`py-2.5 border-b-2 text-[11px] ${branchTab === "tax" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>2. Address</button>
+                    <button type="button" onClick={() => setBranchTab("signatory")} className={`py-2.5 border-b-2 text-[11px] ${branchTab === "signatory" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>3. Tax & Stamp</button>
+                    <button type="button" onClick={() => setBranchTab("bank")} className={`py-2.5 border-b-2 text-[11px] ${branchTab === "bank" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>4. Bank & UPI</button>
+                  </div>
 
-              <div className="p-6 space-y-4 overflow-y-auto flex-1">
-                {branchTab === "basic" && (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div><label className="block font-semibold mb-1">Branch Name *</label><Input placeholder="e.g. Kolkata Salt Lake Branch" value={branchForm.name} onChange={e => setBranchForm({ ...branchForm, name: e.target.value })} /></div>
-                      <div><label className="block font-semibold mb-1">Branch Code *</label><Input placeholder="e.g. BR-KOL-01" value={branchForm.code} onChange={e => setBranchForm({ ...branchForm, code: e.target.value })} className="font-mono" /></div>
-                      <div><label className="block font-semibold mb-1">Branch Manager Name</label><Input placeholder="e.g. Amit Sen" value={branchForm.managerName} onChange={e => setBranchForm({ ...branchForm, managerName: e.target.value })} /></div>
-                      <div><label className="block font-semibold mb-1">Manager Phone</label><Input placeholder="+91 98765 43210" value={branchForm.managerPhone} onChange={e => setBranchForm({ ...branchForm, managerPhone: e.target.value })} /></div>
+                  <div className="p-5 space-y-4 overflow-y-auto flex-1 max-h-[60vh] lg:max-h-none">
+                    {branchTab === "basic" && (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                          <div><label className="block font-semibold mb-1">Branch Name *</label><Input placeholder="e.g. Kolkata Salt Lake Branch" value={branchForm.name} onChange={e => setBranchForm({ ...branchForm, name: e.target.value })} className="font-bold" /></div>
+                          <div><label className="block font-semibold mb-1">Branch Code *</label><Input placeholder="e.g. BR-KOL-01" value={branchForm.code} onChange={e => setBranchForm({ ...branchForm, code: e.target.value })} className="font-mono font-bold" /></div>
+                          <div><label className="block font-semibold mb-1">Branch Manager Name</label><Input placeholder="e.g. Amit Sen" value={branchForm.managerName} onChange={e => setBranchForm({ ...branchForm, managerName: e.target.value })} /></div>
+                          <div><label className="block font-semibold mb-1">Manager Phone</label><Input placeholder="+91 98765 43210" value={branchForm.managerPhone} onChange={e => setBranchForm({ ...branchForm, managerPhone: e.target.value })} /></div>
+                        </div>
+                        <div className="p-3.5 rounded-xl border border-border bg-muted/20 mt-3">
+                          <ImageUploadField
+                            label="Branch Logo (Overrides Company Logo on Branch Invoices)"
+                            value={branchForm.logo_url}
+                            onChange={url => setBranchForm({ ...branchForm, logo_url: url })}
+                            uploadNamePrefix="branch_logo"
+                            helperText="Displayed on Invoices and Letters issued from this Branch."
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {branchTab === "tax" && (
+                      <div className="space-y-4">
+                        <div><label className="block font-semibold mb-1">Branch Address</label><Input placeholder="Street address..." value={branchForm.address} onChange={e => setBranchForm({ ...branchForm, address: e.target.value })} /></div>
+                        <div className="grid grid-cols-3 gap-3">
+                          <div><label className="block font-semibold mb-1">City</label><Input value={branchForm.city} onChange={e => setBranchForm({ ...branchForm, city: e.target.value })} /></div>
+                          <div><label className="block font-semibold mb-1">State</label><Input value={branchForm.state} onChange={e => setBranchForm({ ...branchForm, state: e.target.value })} /></div>
+                          <div><label className="block font-semibold mb-1">Country</label><Input value={branchForm.country} onChange={e => setBranchForm({ ...branchForm, country: e.target.value })} /></div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div><label className="block font-semibold mb-1">Phone</label><Input value={branchForm.phone} onChange={e => setBranchForm({ ...branchForm, phone: e.target.value })} /></div>
+                          <div><label className="block font-semibold mb-1">Email</label><Input value={branchForm.email} onChange={e => setBranchForm({ ...branchForm, email: e.target.value })} /></div>
+                        </div>
+                      </div>
+                    )}
+
+                    {branchTab === "signatory" && (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div><label className="block font-semibold mb-1">Branch GSTIN</label><Input placeholder="GSTIN" value={branchForm.gstin} onChange={e => setBranchForm({ ...branchForm, gstin: e.target.value })} className="font-mono font-bold" /></div>
+                          <div><label className="block font-semibold mb-1">Branch PAN</label><Input placeholder="PAN" value={branchForm.pan} onChange={e => setBranchForm({ ...branchForm, pan: e.target.value })} className="font-mono font-bold" /></div>
+                          <div><label className="block font-semibold mb-1">Signatory Name</label><Input value={branchForm.signatory_name} onChange={e => setBranchForm({ ...branchForm, signatory_name: e.target.value })} /></div>
+                          <div><label className="block font-semibold mb-1">Signatory Designation</label><Input value={branchForm.signatory_designation} onChange={e => setBranchForm({ ...branchForm, signatory_designation: e.target.value })} /></div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-border">
+                          <div className="p-3.5 rounded-xl border border-border bg-muted/20">
+                            <ImageUploadField
+                              label="Branch Authorized Signature"
+                              value={branchForm.signature_image_url}
+                              onChange={url => setBranchForm({ ...branchForm, signature_image_url: url })}
+                              uploadNamePrefix="branch_signature"
+                              aspectRatio="signature"
+                              helperText="Displayed on invoices issued from this Branch."
+                            />
+                          </div>
+                          <div className="p-3.5 rounded-xl border border-border bg-muted/20">
+                            <ImageUploadField
+                              label="Branch Official Stamp / Seal"
+                              value={branchForm.stamp_image_url}
+                              onChange={url => setBranchForm({ ...branchForm, stamp_image_url: url })}
+                              uploadNamePrefix="branch_stamp"
+                              helperText="Official Branch stamp."
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {branchTab === "bank" && (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div><label className="block font-semibold mb-1">Bank Name</label><Input value={branchForm.bank_name} onChange={e => setBranchForm({ ...branchForm, bank_name: e.target.value })} /></div>
+                          <div><label className="block font-semibold mb-1">Account Holder</label><Input value={branchForm.account_holder} onChange={e => setBranchForm({ ...branchForm, account_holder: e.target.value })} /></div>
+                          <div><label className="block font-semibold mb-1">Account Number</label><Input value={branchForm.account_number} onChange={e => setBranchForm({ ...branchForm, account_number: e.target.value })} className="font-mono font-bold" /></div>
+                          <div><label className="block font-semibold mb-1">IFSC Code</label><Input value={branchForm.ifsc_code} onChange={e => setBranchForm({ ...branchForm, ifsc_code: e.target.value })} className="font-mono font-bold" /></div>
+                          <div><label className="block font-semibold mb-1">UPI ID</label><Input value={branchForm.upi_id} onChange={e => setBranchForm({ ...branchForm, upi_id: e.target.value })} className="font-mono font-bold" /></div>
+                        </div>
+                        <div className="p-3.5 rounded-xl border border-border bg-muted/20 mt-3">
+                          <ImageUploadField
+                            label="Branch UPI Scanner / Payment QR Code"
+                            value={branchForm.payment_qr_url}
+                            onChange={url => setBranchForm({ ...branchForm, payment_qr_url: url })}
+                            uploadNamePrefix="branch_upi_qr"
+                            helperText="Scan-to-pay QR code displayed on invoices issued from this Branch."
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Right Side: Live Branch Invoice Preview */}
+                <div className="w-full lg:w-[46%] bg-zinc-100/80 dark:bg-zinc-950 p-4 flex flex-col overflow-y-auto border-t lg:border-t-0 border-border">
+                  <div className="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
+                      <span className="font-bold text-xs text-foreground">Branch Invoice Preview</span>
                     </div>
-                    <div className="p-3.5 rounded-xl border border-border bg-muted/20 mt-3">
-                      <ImageUploadField
-                        label="Branch Logo (Overrides Company Logo on Branch Invoices)"
-                        value={branchForm.logo_url}
-                        onChange={url => setBranchForm({ ...branchForm, logo_url: url })}
-                        uploadNamePrefix="branch_logo"
-                        helperText="Uploaded directly to ImgBB. Displayed on Invoices and Letters issued from this Branch."
+                    <span className="text-[10px] font-mono text-muted-foreground bg-surface px-2 py-0.5 rounded border border-border">
+                      {branchForm.code || "Branch Preview"}
+                    </span>
+                  </div>
+
+                  <div className="py-3 flex-1 flex items-start justify-center overflow-x-hidden">
+                    <div className="w-full max-w-[650px] transform origin-top scale-[0.72] sm:scale-[0.8] lg:scale-[0.82] transition-transform shadow-xl rounded-2xl">
+                      <OfficialInvoiceDocument
+                        invoice={{
+                          id: "INV-BR-SAMPLE",
+                          client: "Prime Tech Partners",
+                          clientEmail: "prime@techcorp.com",
+                          project: "Regional Infrastructure & Development",
+                          billDate: new Date().toLocaleDateString("en-GB"),
+                          dueDate: new Date(Date.now() + 15 * 86400000).toLocaleDateString("en-GB"),
+                          baseAmount: 30000,
+                          setupCharge: 0,
+                          discount: 0,
+                          gstRate: 18,
+                          gstAmount: 5400,
+                          totalInvoiced: "₹35,400",
+                          paymentReceived: "₹35,400",
+                          due: "₹0",
+                          status: "Fully paid",
+                          companyId: branchCompanyId || "tech",
+                          branchId: editingBranch?.id || "sample-branch",
+                          branchName: branchForm.name || "Regional Branch Office",
+                          items: [
+                            {
+                              id: "br_it1",
+                              serviceName: "Branch Technical Deployment",
+                              sacCode: "998313",
+                              qty: 1,
+                              unit: "Job",
+                              rate: 30000,
+                              gstRate: 18,
+                              gstAmount: 5400,
+                              totalAmount: 35400,
+                            }
+                          ]
+                        }}
+                        companyDetails={companies.find(c => c.id === branchCompanyId) || companies[0]}
                       />
                     </div>
                   </div>
-                )}
-
-                {branchTab === "tax" && (
-                  <div className="space-y-4">
-                    <div><label className="block font-semibold mb-1">Branch Address</label><Input placeholder="Street address..." value={branchForm.address} onChange={e => setBranchForm({ ...branchForm, address: e.target.value })} /></div>
-                    <div className="grid grid-cols-3 gap-3">
-                      <div><label className="block font-semibold mb-1">City</label><Input value={branchForm.city} onChange={e => setBranchForm({ ...branchForm, city: e.target.value })} /></div>
-                      <div><label className="block font-semibold mb-1">State</label><Input value={branchForm.state} onChange={e => setBranchForm({ ...branchForm, state: e.target.value })} /></div>
-                      <div><label className="block font-semibold mb-1">Country</label><Input value={branchForm.country} onChange={e => setBranchForm({ ...branchForm, country: e.target.value })} /></div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div><label className="block font-semibold mb-1">Phone</label><Input value={branchForm.phone} onChange={e => setBranchForm({ ...branchForm, phone: e.target.value })} /></div>
-                      <div><label className="block font-semibold mb-1">Email</label><Input value={branchForm.email} onChange={e => setBranchForm({ ...branchForm, email: e.target.value })} /></div>
-                    </div>
-                  </div>
-                )}
-
-                {branchTab === "signatory" && (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div><label className="block font-semibold mb-1">Branch GSTIN</label><Input placeholder="GSTIN" value={branchForm.gstin} onChange={e => setBranchForm({ ...branchForm, gstin: e.target.value })} className="font-mono" /></div>
-                      <div><label className="block font-semibold mb-1">Branch PAN</label><Input placeholder="PAN" value={branchForm.pan} onChange={e => setBranchForm({ ...branchForm, pan: e.target.value })} className="font-mono" /></div>
-                      <div><label className="block font-semibold mb-1">Signatory Name</label><Input value={branchForm.signatory_name} onChange={e => setBranchForm({ ...branchForm, signatory_name: e.target.value })} /></div>
-                      <div><label className="block font-semibold mb-1">Signatory Designation</label><Input value={branchForm.signatory_designation} onChange={e => setBranchForm({ ...branchForm, signatory_designation: e.target.value })} /></div>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-border">
-                      <div className="p-3.5 rounded-xl border border-border bg-muted/20">
-                        <ImageUploadField
-                          label="Branch Authorized Signature"
-                          value={branchForm.signature_image_url}
-                          onChange={url => setBranchForm({ ...branchForm, signature_image_url: url })}
-                          uploadNamePrefix="branch_signature"
-                          aspectRatio="signature"
-                          helperText="Uploaded to ImgBB. Displayed on invoices issued from this Branch."
-                        />
-                      </div>
-                      <div className="p-3.5 rounded-xl border border-border bg-muted/20">
-                        <ImageUploadField
-                          label="Branch Official Stamp / Seal"
-                          value={branchForm.stamp_image_url}
-                          onChange={url => setBranchForm({ ...branchForm, stamp_image_url: url })}
-                          uploadNamePrefix="branch_stamp"
-                          helperText="Uploaded to ImgBB. Official Branch stamp."
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {branchTab === "bank" && (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div><label className="block font-semibold mb-1">Bank Name</label><Input value={branchForm.bank_name} onChange={e => setBranchForm({ ...branchForm, bank_name: e.target.value })} /></div>
-                      <div><label className="block font-semibold mb-1">Account Holder</label><Input value={branchForm.account_holder} onChange={e => setBranchForm({ ...branchForm, account_holder: e.target.value })} /></div>
-                      <div><label className="block font-semibold mb-1">Account Number</label><Input value={branchForm.account_number} onChange={e => setBranchForm({ ...branchForm, account_number: e.target.value })} className="font-mono" /></div>
-                      <div><label className="block font-semibold mb-1">IFSC Code</label><Input value={branchForm.ifsc_code} onChange={e => setBranchForm({ ...branchForm, ifsc_code: e.target.value })} className="font-mono" /></div>
-                      <div><label className="block font-semibold mb-1">UPI ID</label><Input value={branchForm.upi_id} onChange={e => setBranchForm({ ...branchForm, upi_id: e.target.value })} className="font-mono" /></div>
-                    </div>
-                    <div className="p-3.5 rounded-xl border border-border bg-muted/20 mt-3">
-                      <ImageUploadField
-                        label="Branch UPI Scanner / Payment QR Code"
-                        value={branchForm.payment_qr_url}
-                        onChange={url => setBranchForm({ ...branchForm, payment_qr_url: url })}
-                        uploadNamePrefix="branch_upi_qr"
-                        helperText="Uploaded to ImgBB. Scan-to-pay QR code displayed on invoices issued from this Branch."
-                      />
-                    </div>
-                  </div>
-                )}
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-2 p-4 border-t border-border shrink-0 bg-muted/20">
                 <Button variant="outline" onClick={() => setShowBranchModal(false)}>Cancel</Button>
-                <Button onClick={saveBranch} disabled={saving || !branchForm.name.trim()} className="font-bold">
+                <Button onClick={saveBranch} disabled={saving || !branchForm.name.trim()} className="font-bold bg-blue-600 hover:bg-blue-700 text-white">
                   {saving && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
                   {editingBranch ? "Update Branch" : "Create Branch"}
                 </Button>
@@ -1405,157 +1575,219 @@ export default function CompaniesMain() {
         )}
       </AnimatePresence>
 
-      {/* ── UPGRADED 3-TAB SUB-BRANCH (% SHARE) MODAL ───────────────────────── */}
+      {/* ── UPGRADED 4-TAB SUB-BRANCH (% SHARE) MODAL WITH 3-TIER LIVE PREVIEW ─── */}
       <AnimatePresence>
         {showSubBranchModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-surface rounded-2xl border border-border shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden text-xs">
-              <div className="flex items-center justify-between p-4 border-b border-border shrink-0">
-                <h2 className="text-base font-bold text-foreground">{editingSubBranch ? `Edit Sub-Branch: ${editingSubBranch.name}` : "Add Sub-Branch (Partner & Revenue Share Hub)"}</h2>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-surface rounded-2xl border border-border shadow-2xl w-full max-w-6xl xl:max-w-7xl max-h-[94vh] flex flex-col overflow-hidden text-xs">
+              <div className="flex items-center justify-between p-4 border-b border-border shrink-0 bg-muted/20">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold">
+                    <ShieldCheck size={16} />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-foreground">{editingSubBranch ? `Edit Sub-Branch: ${editingSubBranch.name}` : "Add Sub-Branch (Partner & Revenue Share Hub)"}</h2>
+                    <p className="text-[11px] text-muted-foreground">Sets up partner percentage share, franchise branding, and payout accounts</p>
+                  </div>
+                </div>
                 <Button variant="ghost" size="sm" onClick={() => setShowSubBranchModal(false)}><X className="h-4 w-4" /></Button>
               </div>
 
-              <div className="grid grid-cols-4 border-b border-border bg-muted/40 font-bold text-center shrink-0">
-                <button type="button" onClick={() => setSubBranchTab("partner")} className={`py-2.5 border-b-2 ${subBranchTab === "partner" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>1. Partner & % Share</button>
-                <button type="button" onClick={() => setSubBranchTab("branding")} className={`py-2.5 border-b-2 ${subBranchTab === "branding" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>2. Logo, Stamp & Sign</button>
-                <button type="button" onClick={() => setSubBranchTab("location")} className={`py-2.5 border-b-2 ${subBranchTab === "location" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>3. Address & Contacts</button>
-                <button type="button" onClick={() => setSubBranchTab("bank")} className={`py-2.5 border-b-2 ${subBranchTab === "bank" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>4. Bank & Payouts</button>
-              </div>
+              <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
+                <div className="w-full lg:w-[54%] flex flex-col border-b lg:border-b-0 lg:border-r border-border overflow-hidden">
+                  <div className="grid grid-cols-4 border-b border-border bg-muted/40 font-bold text-center shrink-0">
+                    <button type="button" onClick={() => setSubBranchTab("partner")} className={`py-2.5 border-b-2 text-[11px] ${subBranchTab === "partner" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>1. Partner & Share</button>
+                    <button type="button" onClick={() => setSubBranchTab("branding")} className={`py-2.5 border-b-2 text-[11px] ${subBranchTab === "branding" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>2. Logo & Stamp</button>
+                    <button type="button" onClick={() => setSubBranchTab("location")} className={`py-2.5 border-b-2 text-[11px] ${subBranchTab === "location" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>3. Address</button>
+                    <button type="button" onClick={() => setSubBranchTab("bank")} className={`py-2.5 border-b-2 text-[11px] ${subBranchTab === "bank" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>4. Bank & UPI</button>
+                  </div>
 
-              <div className="p-6 space-y-4 overflow-y-auto flex-1">
-                {subBranchTab === "partner" && (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div><label className="block font-semibold mb-1">Sub-Branch Name *</label><Input placeholder="e.g. Durgapur City Center Sub-Branch" value={subBranchForm.name} onChange={e => setSubBranchForm({ ...subBranchForm, name: e.target.value })} /></div>
-                      <div><label className="block font-semibold mb-1">Sub-Branch Code *</label><Input placeholder="e.g. SB-DUR-01" value={subBranchForm.code} onChange={e => setSubBranchForm({ ...subBranchForm, code: e.target.value })} className="font-mono" /></div>
-                      <div><label className="block font-semibold mb-1">Partner / Associate Full Name *</label><Input placeholder="Partner person/entity name" value={subBranchForm.partner_name} onChange={e => setSubBranchForm({ ...subBranchForm, partner_name: e.target.value })} /></div>
-                      <div>
-                        <label className="block font-semibold mb-1">Partner Network Type</label>
-                        <select value={subBranchForm.partner_type} onChange={e => setSubBranchForm({ ...subBranchForm, partner_type: e.target.value })} className="w-full px-3 py-2 rounded-md border border-border bg-surface text-foreground text-xs">
-                          {PARTNER_TYPES.map(pt => <option key={pt} value={pt}>{pt}</option>)}
-                        </select>
+                  <div className="p-5 space-y-4 overflow-y-auto flex-1 max-h-[60vh] lg:max-h-none">
+                    {subBranchTab === "partner" && (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                          <div><label className="block font-semibold mb-1">Sub-Branch Name *</label><Input placeholder="e.g. Durgapur City Center Sub-Branch" value={subBranchForm.name} onChange={e => setSubBranchForm({ ...subBranchForm, name: e.target.value })} className="font-bold" /></div>
+                          <div><label className="block font-semibold mb-1">Sub-Branch Code *</label><Input placeholder="e.g. SB-DUR-01" value={subBranchForm.code} onChange={e => setSubBranchForm({ ...subBranchForm, code: e.target.value })} className="font-mono font-bold" /></div>
+                          <div><label className="block font-semibold mb-1">Partner / Associate Full Name *</label><Input placeholder="Partner person/entity name" value={subBranchForm.partner_name} onChange={e => setSubBranchForm({ ...subBranchForm, partner_name: e.target.value })} /></div>
+                          <div>
+                            <label className="block font-semibold mb-1">Partner Network Type</label>
+                            <select value={subBranchForm.partner_type} onChange={e => setSubBranchForm({ ...subBranchForm, partner_type: e.target.value })} className="w-full px-3 py-2 rounded-md border border-border bg-surface text-foreground text-xs">
+                              {PARTNER_TYPES.map(pt => <option key={pt} value={pt}>{pt}</option>)}
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                          <div>
+                            <label className="block font-semibold mb-1">Sub-Branch GSTIN</label>
+                            <Input placeholder="e.g. 19ABCDE1234F1Z5" value={subBranchForm.gstin} onChange={e => setSubBranchForm({ ...subBranchForm, gstin: e.target.value.toUpperCase() })} className="font-mono font-bold" />
+                          </div>
+                          <div>
+                            <label className="block font-semibold mb-1">Partner PAN</label>
+                            <Input placeholder="e.g. ABCDE1234F" value={subBranchForm.pan} onChange={e => setSubBranchForm({ ...subBranchForm, pan: e.target.value.toUpperCase() })} className="font-mono font-bold" />
+                          </div>
+                        </div>
+
+                        {/* Revenue Share Percentage Slider / Input */}
+                        <div className="p-4 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/30 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="font-bold text-indigo-900 dark:text-indigo-200">Partner Revenue Share Percentage (%)</label>
+                            <span className="text-base font-extrabold text-indigo-600 dark:text-indigo-400 font-mono">{subBranchForm.revenue_share_pct}%</span>
+                          </div>
+                          <input 
+                            type="range" 
+                            min="0" 
+                            max="100" 
+                            value={subBranchForm.revenue_share_pct}
+                            onChange={e => setSubBranchForm({ ...subBranchForm, revenue_share_pct: Number(e.target.value) })}
+                            className="w-full cursor-pointer accent-indigo-600"
+                          />
+                          <p className="text-[10px] text-muted-foreground">Earnings will automatically calculate: {subBranchForm.revenue_share_pct}% to Sub-Branch Partner, {100 - subBranchForm.revenue_share_pct}% to Headquarters.</p>
+                        </div>
                       </div>
+                    )}
+
+                    {subBranchTab === "branding" && (
+                      <div className="space-y-4">
+                        <div className="p-3.5 rounded-xl border border-border bg-muted/20">
+                          <ImageUploadField
+                            label="Sub-Branch Partner Logo"
+                            value={subBranchForm.logo_url}
+                            onChange={url => setSubBranchForm({ ...subBranchForm, logo_url: url })}
+                            uploadNamePrefix="subbranch_logo"
+                            helperText="Displayed on top-left of invoices & estimates issued by this Sub-Branch."
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block font-semibold mb-1">Partner Signatory Name</label>
+                            <Input placeholder="e.g. Partner Manager" value={subBranchForm.signatory_name} onChange={e => setSubBranchForm({ ...subBranchForm, signatory_name: e.target.value })} />
+                          </div>
+                          <div>
+                            <label className="block font-semibold mb-1">Partner Designation</label>
+                            <Input placeholder="e.g. Franchise Head / Branch Associate" value={subBranchForm.signatory_designation} onChange={e => setSubBranchForm({ ...subBranchForm, signatory_designation: e.target.value })} />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="p-3.5 rounded-xl border border-border bg-muted/20">
+                            <ImageUploadField
+                              label="Partner Authorized Signature"
+                              value={subBranchForm.signature_image_url}
+                              onChange={url => setSubBranchForm({ ...subBranchForm, signature_image_url: url })}
+                              uploadNamePrefix="subbranch_signature"
+                              aspectRatio="signature"
+                              helperText="Digital signature for this Sub-Branch."
+                            />
+                          </div>
+                          <div className="p-3.5 rounded-xl border border-border bg-muted/20">
+                            <ImageUploadField
+                              label="Partner Official Stamp / Seal"
+                              value={subBranchForm.stamp_image_url}
+                              onChange={url => setSubBranchForm({ ...subBranchForm, stamp_image_url: url })}
+                              uploadNamePrefix="subbranch_stamp"
+                              helperText="Stamp/seal for this Sub-Branch."
+                            />
+                          </div>
+                        </div>
+
+                        <div className="p-3.5 rounded-xl border border-border bg-muted/20">
+                          <ImageUploadField
+                            label="Partner UPI Payment Scanner / QR Code"
+                            value={subBranchForm.payment_qr_url}
+                            onChange={url => setSubBranchForm({ ...subBranchForm, payment_qr_url: url })}
+                            uploadNamePrefix="subbranch_upi_qr"
+                            helperText="Scan-to-pay QR code displayed on documents issued by this Sub-Branch."
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {subBranchTab === "location" && (
+                      <div className="space-y-4">
+                        <div><label className="block font-semibold mb-1">Sub-Branch Address</label><Input value={subBranchForm.address} onChange={e => setSubBranchForm({ ...subBranchForm, address: e.target.value })} /></div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div><label className="block font-semibold mb-1">City</label><Input value={subBranchForm.city} onChange={e => setSubBranchForm({ ...subBranchForm, city: e.target.value })} /></div>
+                          <div><label className="block font-semibold mb-1">State</label><Input value={subBranchForm.state} onChange={e => setSubBranchForm({ ...subBranchForm, state: e.target.value })} /></div>
+                          <div><label className="block font-semibold mb-1">Phone</label><Input value={subBranchForm.phone} onChange={e => setSubBranchForm({ ...subBranchForm, phone: e.target.value })} /></div>
+                          <div><label className="block font-semibold mb-1">Email</label><Input value={subBranchForm.email} onChange={e => setSubBranchForm({ ...subBranchForm, email: e.target.value })} /></div>
+                        </div>
+                      </div>
+                    )}
+
+                    {subBranchTab === "bank" && (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div><label className="block font-semibold mb-1">Partner Bank Name</label><Input value={subBranchForm.bank_name} onChange={e => setSubBranchForm({ ...subBranchForm, bank_name: e.target.value })} /></div>
+                          <div><label className="block font-semibold mb-1">Account Number</label><Input value={subBranchForm.account_number} onChange={e => setSubBranchForm({ ...subBranchForm, account_number: e.target.value })} className="font-mono font-bold" /></div>
+                          <div><label className="block font-semibold mb-1">IFSC Code</label><Input value={subBranchForm.ifsc_code} onChange={e => setSubBranchForm({ ...subBranchForm, ifsc_code: e.target.value })} className="font-mono font-bold" /></div>
+                          <div><label className="block font-semibold mb-1">UPI ID for Payouts</label><Input value={subBranchForm.upi_id} onChange={e => setSubBranchForm({ ...subBranchForm, upi_id: e.target.value })} className="font-mono font-bold" /></div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Right Side: Live 3-Tier Sub-Branch Invoice Preview */}
+                <div className="w-full lg:w-[46%] bg-zinc-100/80 dark:bg-zinc-950 p-4 flex flex-col overflow-y-auto border-t lg:border-t-0 border-border">
+                  <div className="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="font-bold text-xs text-foreground">3-Tier Sub-Branch Preview</span>
                     </div>
+                    <span className="text-[10px] font-mono text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950 px-2 py-0.5 rounded border border-emerald-300">
+                      {subBranchForm.revenue_share_pct}% Partner Share
+                    </span>
+                  </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block font-semibold mb-1">Sub-Branch GSTIN</label>
-                        <Input placeholder="e.g. 19ABCDE1234F1Z5" value={subBranchForm.gstin} onChange={e => setSubBranchForm({ ...subBranchForm, gstin: e.target.value.toUpperCase() })} className="font-mono" />
-                      </div>
-                      <div>
-                        <label className="block font-semibold mb-1">Partner PAN</label>
-                        <Input placeholder="e.g. ABCDE1234F" value={subBranchForm.pan} onChange={e => setSubBranchForm({ ...subBranchForm, pan: e.target.value.toUpperCase() })} className="font-mono" />
-                      </div>
-                    </div>
-
-                    {/* Revenue Share Percentage Slider / Input */}
-                    <div className="p-4 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/30 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <label className="font-bold text-indigo-900 dark:text-indigo-200">Partner Revenue Share Percentage (%)</label>
-                        <span className="text-base font-extrabold text-indigo-600 dark:text-indigo-400 font-mono">{subBranchForm.revenue_share_pct}%</span>
-                      </div>
-                      <input 
-                        type="range" 
-                        min="0" 
-                        max="100" 
-                        value={subBranchForm.revenue_share_pct}
-                        onChange={e => setSubBranchForm({ ...subBranchForm, revenue_share_pct: Number(e.target.value) })}
-                        className="w-full cursor-pointer accent-indigo-600"
+                  <div className="py-3 flex-1 flex items-start justify-center overflow-x-hidden">
+                    <div className="w-full max-w-[650px] transform origin-top scale-[0.72] sm:scale-[0.8] lg:scale-[0.82] transition-transform shadow-xl rounded-2xl">
+                      <OfficialInvoiceDocument
+                        invoice={{
+                          id: "INV-SB-SAMPLE",
+                          client: "Zenith Retail Network",
+                          clientEmail: "zenith@retail.com",
+                          project: "Point-of-Sale Hardware & Media Setup",
+                          billDate: new Date().toLocaleDateString("en-GB"),
+                          dueDate: new Date(Date.now() + 15 * 86400000).toLocaleDateString("en-GB"),
+                          baseAmount: 20000,
+                          setupCharge: 2000,
+                          discount: 0,
+                          gstRate: 18,
+                          gstAmount: 3960,
+                          totalInvoiced: "₹25,960",
+                          paymentReceived: "₹10,000",
+                          due: "₹15,960",
+                          status: "Partially paid",
+                          companyId: subBranchCompanyId || "tech",
+                          branchId: subBranchBranchId || "br-1",
+                          subBranchId: editingSubBranch?.id || "sample-sb",
+                          subBranchName: subBranchForm.name || "Partner Sub-Branch",
+                          items: [
+                            {
+                              id: "sb_it1",
+                              serviceName: "Retail Media & Signage Installation",
+                              sacCode: "998311",
+                              qty: 1,
+                              unit: "Unit",
+                              rate: 20000,
+                              gstRate: 18,
+                              gstAmount: 3600,
+                              totalAmount: 23600,
+                            }
+                          ]
+                        }}
+                        companyDetails={companies.find(c => c.id === subBranchCompanyId) || companies[0]}
                       />
-                      <p className="text-[10px] text-muted-foreground">Earnings will automatically calculate: {subBranchForm.revenue_share_pct}% to Sub-Branch Partner, {100 - subBranchForm.revenue_share_pct}% to Headquarters.</p>
                     </div>
                   </div>
-                )}
-
-                {/* TAB 2: LOGO, STAMP & SIGNATURE FOR SUB-BRANCH */}
-                {subBranchTab === "branding" && (
-                  <div className="space-y-4">
-                    {/* Sub-Branch Partner Logo */}
-                    <div className="p-3.5 rounded-xl border border-border bg-muted/20">
-                      <ImageUploadField
-                        label="Sub-Branch Partner Logo"
-                        value={subBranchForm.logo_url}
-                        onChange={url => setSubBranchForm({ ...subBranchForm, logo_url: url })}
-                        uploadNamePrefix="subbranch_logo"
-                        helperText="Uploaded to ImgBB. Displayed on top-left of invoices & estimates issued by this Sub-Branch."
-                      />
-                    </div>
-
-                    {/* Signatory Info */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block font-semibold mb-1">Partner Signatory Name</label>
-                        <Input placeholder="e.g. Partner Manager" value={subBranchForm.signatory_name} onChange={e => setSubBranchForm({ ...subBranchForm, signatory_name: e.target.value })} />
-                      </div>
-                      <div>
-                        <label className="block font-semibold mb-1">Partner Designation</label>
-                        <Input placeholder="e.g. Franchise Head / Branch Associate" value={subBranchForm.signatory_designation} onChange={e => setSubBranchForm({ ...subBranchForm, signatory_designation: e.target.value })} />
-                      </div>
-                    </div>
-
-                    {/* Signature & Stamp */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="p-3.5 rounded-xl border border-border bg-muted/20">
-                        <ImageUploadField
-                          label="Partner Authorized Signature"
-                          value={subBranchForm.signature_image_url}
-                          onChange={url => setSubBranchForm({ ...subBranchForm, signature_image_url: url })}
-                          uploadNamePrefix="subbranch_signature"
-                          aspectRatio="signature"
-                          helperText="Uploaded to ImgBB. Digital signature for this Sub-Branch."
-                        />
-                      </div>
-                      <div className="p-3.5 rounded-xl border border-border bg-muted/20">
-                        <ImageUploadField
-                          label="Partner Official Stamp / Seal"
-                          value={subBranchForm.stamp_image_url}
-                          onChange={url => setSubBranchForm({ ...subBranchForm, stamp_image_url: url })}
-                          uploadNamePrefix="subbranch_stamp"
-                          helperText="Uploaded to ImgBB. Stamp/seal for this Sub-Branch."
-                        />
-                      </div>
-                    </div>
-
-                    {/* Payment QR */}
-                    <div className="p-3.5 rounded-xl border border-border bg-muted/20">
-                      <ImageUploadField
-                        label="Partner UPI Payment Scanner / QR Code"
-                        value={subBranchForm.payment_qr_url}
-                        onChange={url => setSubBranchForm({ ...subBranchForm, payment_qr_url: url })}
-                        uploadNamePrefix="subbranch_upi_qr"
-                        helperText="Uploaded to ImgBB. Scan-to-pay QR code displayed on documents issued by this Sub-Branch."
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {subBranchTab === "location" && (
-                  <div className="space-y-4">
-                    <div><label className="block font-semibold mb-1">Sub-Branch Address</label><Input value={subBranchForm.address} onChange={e => setSubBranchForm({ ...subBranchForm, address: e.target.value })} /></div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div><label className="block font-semibold mb-1">City</label><Input value={subBranchForm.city} onChange={e => setSubBranchForm({ ...subBranchForm, city: e.target.value })} /></div>
-                      <div><label className="block font-semibold mb-1">State</label><Input value={subBranchForm.state} onChange={e => setSubBranchForm({ ...subBranchForm, state: e.target.value })} /></div>
-                      <div><label className="block font-semibold mb-1">Phone</label><Input value={subBranchForm.phone} onChange={e => setSubBranchForm({ ...subBranchForm, phone: e.target.value })} /></div>
-                      <div><label className="block font-semibold mb-1">Email</label><Input value={subBranchForm.email} onChange={e => setSubBranchForm({ ...subBranchForm, email: e.target.value })} /></div>
-                    </div>
-                  </div>
-                )}
-
-                {subBranchTab === "bank" && (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div><label className="block font-semibold mb-1">Partner Bank Name</label><Input value={subBranchForm.bank_name} onChange={e => setSubBranchForm({ ...subBranchForm, bank_name: e.target.value })} /></div>
-                      <div><label className="block font-semibold mb-1">Account Number</label><Input value={subBranchForm.account_number} onChange={e => setSubBranchForm({ ...subBranchForm, account_number: e.target.value })} className="font-mono" /></div>
-                      <div><label className="block font-semibold mb-1">IFSC Code</label><Input value={subBranchForm.ifsc_code} onChange={e => setSubBranchForm({ ...subBranchForm, ifsc_code: e.target.value })} className="font-mono" /></div>
-                      <div><label className="block font-semibold mb-1">UPI ID for Payouts</label><Input value={subBranchForm.upi_id} onChange={e => setSubBranchForm({ ...subBranchForm, upi_id: e.target.value })} className="font-mono" /></div>
-                    </div>
-                  </div>
-                )}
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-2 p-4 border-t border-border shrink-0 bg-muted/20">
                 <Button variant="outline" onClick={() => setShowSubBranchModal(false)}>Cancel</Button>
-                <Button onClick={saveSubBranch} disabled={saving || !subBranchForm.name.trim()} className="font-bold">
+                <Button onClick={saveSubBranch} disabled={saving || !subBranchForm.name.trim()} className="font-bold bg-emerald-600 hover:bg-emerald-700 text-white">
                   {saving && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
                   {editingSubBranch ? "Update Sub-Branch" : "Save Sub-Branch"}
                 </Button>
