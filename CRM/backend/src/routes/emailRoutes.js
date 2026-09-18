@@ -13,7 +13,7 @@ const {
 // ─── TEST SMTP CONNECTION ───────────────────────────────────────────────────
 router.post('/test-connection', async (req, res, next) => {
   try {
-    const { host, port, secure, user, pass, fromName, fromEmail, testEmail, companyId, company_id } = req.body;
+    const { host, port, secure, user, pass, fromName, fromEmail, testEmail, companyId, company_id, companyName } = req.body;
     const targetCompId = companyId || company_id || null;
 
     if (!user || !pass) {
@@ -30,6 +30,7 @@ router.post('/test-connection', async (req, res, next) => {
       fromEmail,
       testEmail,
       companyId: targetCompId,
+      companyName,
     });
 
     res.status(200).json({ status: 'success', message: result.message });
@@ -39,6 +40,113 @@ router.post('/test-connection', async (req, res, next) => {
       status: 'error',
       message: `SMTP Authentication Failed: ${err.message || 'Please check your Google App Password or Host credentials.'}`,
     });
+  }
+});
+
+// ─── SAVE COMPANY SMTP CONFIG ──────────────────────────────────────────────
+router.post('/company-config', async (req, res, next) => {
+  try {
+    const pool = require('../config/db');
+    const { companyId, host, port, secure, user, pass, fromName, fromEmail } = req.body;
+    if (!companyId) {
+      return res.status(400).json({ status: 'error', message: 'Company ID is required.' });
+    }
+
+    const [compRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "companies"');
+    let companies = [];
+    if (compRows.length > 0 && compRows[0].data_json) {
+      try {
+        companies = JSON.parse(compRows[0].data_json) || [];
+      } catch {}
+    }
+
+    const canonId = String(companyId).toLowerCase().trim();
+    const compIndex = companies.findIndex(c => 
+      String(c.id || '').toLowerCase().trim() === canonId || 
+      String(c.slug || '').toLowerCase().trim() === canonId ||
+      String(c.numeric_id || '').toLowerCase().trim() === canonId
+    );
+
+    if (compIndex >= 0) {
+      companies[compIndex] = {
+        ...companies[compIndex],
+        smtp_host: host,
+        smtp_port: port,
+        smtp_secure: secure,
+        smtp_user: user,
+        smtp_pass: pass,
+        smtp_from_name: fromName,
+        smtp_from_email: fromEmail,
+      };
+    } else {
+      companies.push({
+        id: companyId,
+        slug: companyId,
+        name: fromName || companyId,
+        smtp_host: host,
+        smtp_port: port,
+        smtp_secure: secure,
+        smtp_user: user,
+        smtp_pass: pass,
+        smtp_from_name: fromName,
+        smtp_from_email: fromEmail,
+      });
+    }
+
+    await pool.execute(
+      `INSERT INTO app_data (module_key, data_json) VALUES ("companies", ?)
+       ON DUPLICATE KEY UPDATE data_json = VALUES(data_json), updated_at = NOW()`,
+      [JSON.stringify(companies)]
+    );
+
+    return res.status(200).json({ status: 'success', message: `SMTP configuration saved for company ${companyId}` });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── SAVE LEGACY / GLOBAL SMTP CONFIG ──────────────────────────────────────
+router.post('/config', async (req, res, next) => {
+  try {
+    const pool = require('../config/db');
+    const { host, port, secure, user, pass, fromName, fromEmail, companyId } = req.body;
+
+    if (companyId && companyId !== 'all') {
+      const [compRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "companies"');
+      let companies = [];
+      if (compRows.length > 0 && compRows[0].data_json) {
+        try { companies = JSON.parse(compRows[0].data_json) || []; } catch {}
+      }
+      const canonId = String(companyId).toLowerCase().trim();
+      const compIndex = companies.findIndex(c => String(c.id || '').toLowerCase() === canonId || String(c.slug || '').toLowerCase() === canonId);
+      if (compIndex >= 0) {
+        companies[compIndex] = {
+          ...companies[compIndex],
+          smtp_host: host,
+          smtp_port: port,
+          smtp_secure: secure,
+          smtp_user: user,
+          smtp_pass: pass,
+          smtp_from_name: fromName,
+          smtp_from_email: fromEmail,
+        };
+        await pool.execute(
+          `INSERT INTO app_data (module_key, data_json) VALUES ("companies", ?)
+           ON DUPLICATE KEY UPDATE data_json = VALUES(data_json), updated_at = NOW()`,
+          [JSON.stringify(companies)]
+        );
+      }
+    }
+
+    await pool.execute(
+      `INSERT INTO app_data (module_key, data_json) VALUES ("settings", ?)
+       ON DUPLICATE KEY UPDATE data_json = VALUES(data_json), updated_at = NOW()`,
+      [JSON.stringify({ smtpHost: host, smtpPort: port, smtpSecure: secure, smtpUser: user, smtpPass: pass, smtpFromName: fromName, smtpFromEmail: fromEmail })]
+    );
+
+    return res.status(200).json({ status: 'success', message: 'SMTP settings saved successfully' });
+  } catch (err) {
+    next(err);
   }
 });
 

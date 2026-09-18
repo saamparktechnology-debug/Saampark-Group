@@ -36,11 +36,18 @@ async function getEmailConfig(companyId = null, overrideConfig = null) {
 
   // 2. If companyId provided, try to find Company's specific SMTP settings
   if (companyId && companyId !== 'all') {
+    const canonId = String(companyId).toLowerCase().trim();
     try {
       const [compRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "companies"');
       if (compRows.length > 0) {
         const companies = JSON.parse(compRows[0].data_json);
-        const comp = Array.isArray(companies) ? companies.find(c => c.id === companyId || c.slug === companyId) : null;
+        const comp = Array.isArray(companies) ? companies.find(c => {
+          const cId = String(c.id || '').toLowerCase().trim();
+          const cSlug = String(c.slug || '').toLowerCase().trim();
+          const cNum = String(c.numeric_id || '').toLowerCase().trim();
+          return cId === canonId || cSlug === canonId || cNum === canonId || (canonId.includes('consult') && (cId.includes('consult') || cSlug.includes('consult')));
+        }) : null;
+
         if (comp && comp.smtp_user && comp.smtp_pass) {
           const host = (comp.smtp_host || 'smtp.gmail.com').trim();
           const port = parseInt(comp.smtp_port || '587', 10);
@@ -68,13 +75,21 @@ async function getEmailConfig(companyId = null, overrideConfig = null) {
             fromName,
           };
         }
+
+        // If this is Saampark Consultancy and consultancy SMTP is NOT configured yet:
+        if (canonId === 'consultancy' || canonId === '2' || canonId.includes('consult') || (comp && String(comp.name || '').toLowerCase().includes('consult'))) {
+          throw new Error('SMTP configuration is not set up for SAAMPARK Consultancy. Please configure SMTP credentials in Super Admin Settings > Email / SMTP Setup.');
+        }
       }
     } catch (err) {
+      if (err.message && err.message.includes('SMTP configuration is not set up')) {
+        throw err;
+      }
       console.warn('Company SMTP lookup error:', err.message);
     }
   }
 
-  // 3. Try to read Global Settings from DB
+  // 3. Try to read Global Settings from DB (for Saampark Technology fallback)
   try {
     const [settingsRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "settings"');
     if (settingsRows.length > 0) {
@@ -83,7 +98,7 @@ async function getEmailConfig(companyId = null, overrideConfig = null) {
         const host = (settings.smtpHost || 'smtp.gmail.com').trim();
         const port = parseInt(settings.smtpPort || '587', 10);
         const secure = settings.smtpSecure === true || settings.smtpSecure === 'true' || port === 465;
-        const fromName = settings.smtpFromName || settings.companyName || 'SAAMPARK CRM';
+        const fromName = settings.smtpFromName || settings.companyName || 'SAAMPARK Technology';
         const fromEmail = settings.smtpFromEmail || settings.smtpUser;
 
         const transporter = nodemailer.createTransport({
@@ -111,7 +126,7 @@ async function getEmailConfig(companyId = null, overrideConfig = null) {
     console.warn('Global Settings SMTP lookup error:', err.message);
   }
 
-  // 4. Default Fallback
+  // 4. Default Fallback (for Saampark Technology)
   const defaultUser = process.env.SMTP_USER || 'supriyogod@gmail.com';
   const defaultPass = process.env.SMTP_PASS || 'vctonocakbbgbvib';
   const defaultHost = process.env.SMTP_HOST || 'smtp.gmail.com';
@@ -132,9 +147,9 @@ async function getEmailConfig(companyId = null, overrideConfig = null) {
 
   return {
     transporter,
-    from: `"SAAMPARK CRM" <${defaultUser}>`,
+    from: `"SAAMPARK Technology" <${defaultUser}>`,
     fromEmail: defaultUser,
-    fromName: 'SAAMPARK CRM',
+    fromName: 'SAAMPARK Technology',
   };
 }
 
@@ -151,31 +166,32 @@ function generateOTP() {
 }
 
 /**
- * Store an OTP for an email
+ * Store OTP in memory
  */
 function storeOTP(email, otp, type = 'reset') {
   otpStore.set(email.toLowerCase(), {
     otp,
-    expiresAt: Date.now() + OTP_EXPIRY_MS,
     type,
+    expiresAt: Date.now() + OTP_EXPIRY_MS,
     attempts: 0,
   });
 }
 
 /**
- * Verify OTP for an email. Returns { valid, error }
+ * Verify OTP
  */
-function verifyOTP(email, inputOtp, type = 'reset') {
+function verifyOTP(email, inputOtp) {
   const record = otpStore.get(email.toLowerCase());
-  if (!record) return { valid: false, error: 'OTP not found. Please request a new one.' };
-  if (record.type !== type) return { valid: false, error: 'Invalid OTP type.' };
+  if (!record) {
+    return { valid: false, error: 'OTP expired or not requested. Please request a new OTP.' };
+  }
   if (Date.now() > record.expiresAt) {
     otpStore.delete(email.toLowerCase());
     return { valid: false, error: 'OTP has expired. Please request a new one.' };
   }
   if (record.attempts >= MAX_OTP_ATTEMPTS) {
     otpStore.delete(email.toLowerCase());
-    return { valid: false, error: 'Too many failed attempts. Please request a new OTP.' };
+    return { valid: false, error: 'Too many incorrect attempts. Please request a new OTP.' };
   }
   if (record.otp !== inputOtp) {
     record.attempts += 1;
@@ -190,7 +206,7 @@ function verifyOTP(email, inputOtp, type = 'reset') {
  * Test SMTP connection and send a test email
  */
 async function testSmtpConnection(config) {
-  const { host, port, secure, user, pass, fromName, fromEmail, testEmail, companyId } = config;
+  const { host, port, secure, user, pass, fromName, fromEmail, testEmail, companyId, companyName } = config;
   const emailConfig = await getEmailConfig(companyId, { host, port, secure, user, pass, fromName, fromEmail });
 
   // 1. Verify credentials with SMTP server
@@ -198,29 +214,31 @@ async function testSmtpConnection(config) {
 
   // 2. Send test email to target recipient
   const recipient = (testEmail || user || emailConfig.fromEmail).trim();
+  const brandTitle = fromName || companyName || (String(companyId).includes('consult') ? 'SAAMPARK Consultancy' : 'SAAMPARK Technology');
   if (recipient) {
     const testHtml = `
       <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 520px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden; border: 1px solid #1e1e2e;">
         <div style="background: linear-gradient(135deg, #10b981, #059669); padding: 32px 40px; text-align: center;">
           <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 700;">SMTP Test Successful! ✅</h1>
-          <p style="color: rgba(255,255,255,0.85); margin: 8px 0 0; font-size: 13px;">Google / Custom SMTP Credentials Verified</p>
+          <p style="color: rgba(255,255,255,0.85); margin: 8px 0 0; font-size: 13px;">${brandTitle} - SMTP Connection Verified</p>
         </div>
         <div style="padding: 32px 40px; background: #16161e;">
           <p style="color: #e2e8f0; font-size: 15px; margin: 0 0 12px;">Hello Administrator,</p>
           <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0 0 20px;">
-            This email confirms that your SMTP configurations in <strong>SAAMPARK CRM</strong> are working and actively sending emails!
+            This email confirms that the dedicated SMTP configuration for <strong>${brandTitle}</strong> in <strong>SAAMPARK CRM</strong> is working and actively sending emails!
           </p>
           <div style="background: #1e1e2e; border: 1px solid #2d2d3d; border-radius: 12px; padding: 20px; margin-bottom: 24px; font-size: 13px;">
+            <div style="color: #94a3b8; margin-bottom: 6px;"><strong>Company / Workspace:</strong> <span style="color: #38bdf8; font-weight: bold;">${brandTitle}</span></div>
             <div style="color: #94a3b8; margin-bottom: 6px;"><strong>SMTP Host:</strong> <span style="color: #38bdf8; font-family: monospace;">${config.host || 'smtp.gmail.com'}</span></div>
             <div style="color: #94a3b8; margin-bottom: 6px;"><strong>Sender User:</strong> <span style="color: #e2e8f0; font-family: monospace;">${config.user || emailConfig.fromEmail}</span></div>
             <div style="color: #94a3b8;"><strong>Timestamp:</strong> <span style="color: #10b981;">${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</span></div>
           </div>
           <p style="color: #64748b; font-size: 12px; line-height: 1.5; margin: 0;">
-            All automated invoice dispatches, OTP resets, project milestone notices, and payment receipts will now be delivered through this authenticated SMTP account.
+            All automated invoice dispatches, quotations, estimates, OTP resets, and notifications for <strong>${brandTitle}</strong> will now be delivered through this authenticated SMTP account.
           </p>
         </div>
         <div style="padding: 20px 40px; background: #0f0f13; text-align: center; border-top: 1px solid #1e1e2e;">
-          <p style="color: #475569; font-size: 12px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
+          <p style="color: #475569; font-size: 12px; margin: 0;">© 2026 ${brandTitle}. All rights reserved.</p>
         </div>
       </div>
     `;
@@ -228,12 +246,12 @@ async function testSmtpConnection(config) {
     await emailConfig.transporter.sendMail({
       from: emailConfig.from,
       to: recipient,
-      subject: `✅ SAAMPARK CRM: SMTP Test Connection Successful (${config.host || 'Gmail'})`,
+      subject: `✅ ${brandTitle}: SMTP Test Connection Successful (${config.host || 'Gmail'})`,
       html: testHtml,
     });
   }
 
-  return { success: true, message: `SMTP connection verified and test email successfully delivered to ${recipient}` };
+  return { success: true, message: `SMTP connection verified and test email successfully delivered to ${recipient} for ${brandTitle}` };
 }
 
 /**

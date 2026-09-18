@@ -14,7 +14,7 @@ import {
 
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
-import { useAuthStore } from "@/store/useAuthStore"
+import { useAuthStore, Company, DEFAULT_COMPANIES } from "@/store/useAuthStore"
 import { useTheme } from "next-themes"
 import { fetchModuleDataFromDB, saveModuleDataToDB } from "@/lib/storageSync"
 import { 
@@ -37,7 +37,7 @@ import {
 type SettingsTab = "profile" | "kyc" | "payments" | "company" | "smtp" | "theme"
 
 export default function SettingsMain() {
-  const { user, loginAs } = useAuthStore()
+  const { user, loginAs, companies, updateCompany, fetchCompanies } = useAuthStore()
   const { theme, setTheme } = useTheme()
 
   const isSuperAdmin = user?.role === "Super Admin"
@@ -78,19 +78,101 @@ export default function SettingsMain() {
   const [address, setAddress] = React.useState("Saampark House, Tech Park, India")
   const [industry, setIndustry] = React.useState("Software & IT Services")
 
-  // SMTP Settings Form State (Super Admin)
-  const [smtpPreset, setSmtpPreset] = React.useState<"gmail" | "zoho" | "outlook" | "custom">("gmail")
-  const [smtpUser, setSmtpUser] = React.useState("")
-  const [smtpPass, setSmtpPass] = React.useState("")
-  const [smtpHost, setSmtpHost] = React.useState("smtp.gmail.com")
-  const [smtpPort, setSmtpPort] = React.useState("587")
-  const [smtpSecure, setSmtpSecure] = React.useState(false)
-  const [smtpFromName, setSmtpFromName] = React.useState("SAAMPARK Technology")
-  const [smtpFromEmail, setSmtpFromEmail] = React.useState("")
+  // ── Multi-Company SMTP Settings State (Super Admin Only) ──
+  const effectiveCompanies = React.useMemo(() => {
+    return (companies && companies.length > 0) ? companies : DEFAULT_COMPANIES
+  }, [companies])
+
+  const [selectedSmtpCompanyId, setSelectedSmtpCompanyId] = React.useState<string>("tech")
+  const [companySmtpMap, setCompanySmtpMap] = React.useState<Record<string, {
+    preset: "gmail" | "zoho" | "outlook" | "custom"
+    host: string
+    port: string
+    secure: boolean
+    user: string
+    pass: string
+    fromName: string
+    fromEmail: string
+  }>>({})
+
   const [showSmtpPass, setShowSmtpPass] = React.useState(false)
   const [isTestingSmtp, setIsTestingSmtp] = React.useState(false)
   const [smtpTestResult, setSmtpTestResult] = React.useState<{ success?: boolean; message?: string } | null>(null)
   const [smtpTestRecipient, setSmtpTestRecipient] = React.useState("")
+
+  const getInitialSmtpForCompany = React.useCallback((comp: Company | undefined, compId: string) => {
+    const isTech = String(compId).toLowerCase() === "tech" || String(compId).toLowerCase() === "1" || String(comp?.name || "").toLowerCase().includes("tech")
+    
+    // If company has saved smtp fields in DB / state
+    if (comp && (comp.smtp_user || comp.smtp_pass || comp.smtp_host)) {
+      const host = comp.smtp_host || (isTech ? "smtp.gmail.com" : "")
+      let preset: "gmail" | "zoho" | "outlook" | "custom" = "gmail"
+      if (host.includes("zoho")) preset = "zoho"
+      else if (host.includes("outlook") || host.includes("office365")) preset = "outlook"
+      else if (host && !host.includes("gmail")) preset = "custom"
+
+      return {
+        preset,
+        host,
+        port: String(comp.smtp_port || "587"),
+        secure: comp.smtp_secure === true || String(comp.smtp_port) === "465",
+        user: comp.smtp_user || "",
+        pass: comp.smtp_pass || "",
+        fromName: comp.smtp_from_name || comp.brand_name || comp.name || (isTech ? "SAAMPARK Technology" : "SAAMPARK Consultancy"),
+        fromEmail: comp.smtp_from_email || comp.smtp_user || "",
+      }
+    }
+
+    // Saampark Technology: prefilled working credentials (supriyogod@gmail.com / vctonocakbbgbvib)
+    if (isTech) {
+      return {
+        preset: "gmail" as const,
+        host: "smtp.gmail.com",
+        port: "587",
+        secure: false,
+        user: "supriyogod@gmail.com",
+        pass: "vctonocakbbgbvib",
+        fromName: "SAAMPARK Technology",
+        fromEmail: "supriyogod@gmail.com",
+      }
+    }
+
+    // Saampark Consultancy & Any other company: strictly EMPTY until filled by Super Admin
+    return {
+      preset: "gmail" as const,
+      host: "",
+      port: "587",
+      secure: false,
+      user: "",
+      pass: "",
+      fromName: comp?.brand_name ? `${comp.brand_name} ${comp.division_name || comp.name || ""}`.trim() : (comp?.name || "SAAMPARK Consultancy"),
+      fromEmail: "",
+    }
+  }, [])
+
+  const activeSmtpCompany = React.useMemo(() => {
+    return effectiveCompanies.find(c => 
+      String(c.id).toLowerCase() === String(selectedSmtpCompanyId).toLowerCase() || 
+      String(c.slug || '').toLowerCase() === String(selectedSmtpCompanyId).toLowerCase()
+    ) || effectiveCompanies[0]
+  }, [effectiveCompanies, selectedSmtpCompanyId])
+
+  const currentSmtp = React.useMemo(() => {
+    if (companySmtpMap[selectedSmtpCompanyId]) {
+      return companySmtpMap[selectedSmtpCompanyId]
+    }
+    return getInitialSmtpForCompany(activeSmtpCompany, selectedSmtpCompanyId)
+  }, [companySmtpMap, selectedSmtpCompanyId, activeSmtpCompany, getInitialSmtpForCompany])
+
+  const updateCurrentSmtp = (updates: Partial<typeof currentSmtp>) => {
+    setCompanySmtpMap(prev => ({
+      ...prev,
+      [selectedSmtpCompanyId]: {
+        ...currentSmtp,
+        ...updates,
+      }
+    }))
+  }
 
   // ── KYC Form State ──
   const [kycFullName, setKycFullName] = React.useState(user?.name || "")
@@ -126,26 +208,8 @@ export default function SettingsMain() {
 
   // Load settings & user profile & payment QR settings on mount
   React.useEffect(() => {
-    // 1. First load local storage cache for instant hydration
-    try {
-      const localSmtp = typeof window !== "undefined" ? localStorage.getItem("saampark_smtp_settings") : null
-      if (localSmtp) {
-        const parsed = JSON.parse(localSmtp)
-        if (parsed.smtpUser) setSmtpUser(parsed.smtpUser)
-        if (parsed.smtpPass) setSmtpPass(parsed.smtpPass)
-        if (parsed.smtpHost) {
-          setSmtpHost(parsed.smtpHost)
-          if (parsed.smtpHost.includes("gmail")) setSmtpPreset("gmail")
-          else if (parsed.smtpHost.includes("zoho")) setSmtpPreset("zoho")
-          else if (parsed.smtpHost.includes("office365") || parsed.smtpHost.includes("outlook")) setSmtpPreset("outlook")
-          else setSmtpPreset("custom")
-        }
-        if (parsed.smtpPort) setSmtpPort(parsed.smtpPort)
-        if (parsed.smtpSecure !== undefined) setSmtpSecure(parsed.smtpSecure)
-        if (parsed.smtpFromName) setSmtpFromName(parsed.smtpFromName)
-        if (parsed.smtpFromEmail) setSmtpFromEmail(parsed.smtpFromEmail)
-      }
-    } catch {}
+    // 1. Fetch companies to ensure latest per-company SMTP configs are loaded
+    fetchCompanies().catch(() => {})
 
     // 2. Fetch from DB master scope
     fetchModuleDataFromDB("settings", null, "all").then((saved: any) => {
@@ -155,19 +219,21 @@ export default function SettingsMain() {
         if (saved.currencySymbol) setCurrencySymbol(saved.currencySymbol)
         if (saved.address) setAddress(saved.address)
         if (saved.industry) setIndustry(saved.industry)
-        if (saved.smtpUser) setSmtpUser(saved.smtpUser)
-        if (saved.smtpPass) setSmtpPass(saved.smtpPass)
-        if (saved.smtpHost) {
-          setSmtpHost(saved.smtpHost)
-          if (saved.smtpHost.includes("gmail")) setSmtpPreset("gmail")
-          else if (saved.smtpHost.includes("zoho")) setSmtpPreset("zoho")
-          else if (saved.smtpHost.includes("office365") || saved.smtpHost.includes("outlook")) setSmtpPreset("outlook")
-          else setSmtpPreset("custom")
+        if (saved.smtpUser && saved.smtpPass) {
+          setCompanySmtpMap((prev) => ({
+            ...prev,
+            tech: {
+              preset: saved.smtpHost?.includes("gmail") ? "gmail" : (saved.smtpHost?.includes("zoho") ? "zoho" : "custom"),
+              host: saved.smtpHost || "smtp.gmail.com",
+              port: String(saved.smtpPort || "587"),
+              secure: saved.smtpSecure === true,
+              user: saved.smtpUser || "supriyogod@gmail.com",
+              pass: saved.smtpPass || "vctonocakbbgbvib",
+              fromName: saved.smtpFromName || "SAAMPARK Technology",
+              fromEmail: saved.smtpFromEmail || saved.smtpUser || "supriyogod@gmail.com",
+            }
+          }))
         }
-        if (saved.smtpPort) setSmtpPort(saved.smtpPort)
-        if (saved.smtpSecure !== undefined) setSmtpSecure(saved.smtpSecure)
-        if (saved.smtpFromName) setSmtpFromName(saved.smtpFromName)
-        if (saved.smtpFromEmail) setSmtpFromEmail(saved.smtpFromEmail)
       }
     })
 
@@ -619,7 +685,6 @@ export default function SettingsMain() {
     setLoading(true)
     await saveModuleDataToDB("settings", {
       companyName, currency, currencySymbol, address, industry,
-      smtpUser, smtpPass, smtpHost, smtpPort
     })
     setLoading(false)
     setSuccessMsg("Company settings saved to MySQL database successfully!")
@@ -630,68 +695,91 @@ export default function SettingsMain() {
     e.preventDefault()
     if (!isSuperAdmin) return
     setLoading(true)
+    setErrorMsg("")
+    setSuccessMsg("")
 
-    const smtpPayload = {
-      companyName, currency, currencySymbol, address, industry,
-      smtpUser: smtpUser.trim(),
-      smtpPass: smtpPass.trim(),
-      smtpHost: smtpHost.trim(),
-      smtpPort: smtpPort.trim(),
-      smtpSecure,
-      smtpFromName: smtpFromName.trim(),
-      smtpFromEmail: smtpFromEmail.trim() || smtpUser.trim(),
-    }
+    const curr = currentSmtp
+    const compId = selectedSmtpCompanyId
+    const comp = activeSmtpCompany
+    const isTech = String(compId).toLowerCase() === "tech" || String(compId).toLowerCase() === "1" || String(comp?.name || "").toLowerCase().includes("tech")
 
-    // 1. Immediately cache in localStorage for instant hydration on refresh
-    if (typeof window !== "undefined") {
-      localStorage.setItem("saampark_smtp_settings", JSON.stringify(smtpPayload))
-    }
-
-    // 2. Save to MySQL database master scope
-    await saveModuleDataToDB("settings", smtpPayload, "all")
-
-    // 3. Dispatch to backend API /email/config if available
     try {
-      const { api } = await import("@/lib/api")
-      await api.post("/email/config", {
-        host: smtpHost.trim(),
-        port: smtpPort.trim(),
-        secure: smtpSecure,
-        user: smtpUser.trim(),
-        pass: smtpPass.trim(),
-        fromName: smtpFromName.trim() || companyName || "SAAMPARK CRM",
-        fromEmail: smtpFromEmail.trim() || smtpUser.trim(),
-      }).catch(() => {})
-    } catch {}
+      // 1. Update company in Zustand store and persist to MySQL `companies` table / `app_data`
+      await updateCompany(compId, {
+        smtp_host: curr.host.trim(),
+        smtp_port: curr.port.trim(),
+        smtp_secure: curr.secure,
+        smtp_user: curr.user.trim(),
+        smtp_pass: curr.pass.trim(),
+        smtp_from_name: curr.fromName.trim() || comp?.name || "SAAMPARK",
+        smtp_from_email: curr.fromEmail.trim() || curr.user.trim(),
+      })
 
-    setLoading(false)
-    setSuccessMsg("SMTP configurations saved and synced across all email services successfully!")
-    setTimeout(() => setSuccessMsg(""), 3000)
+      // 2. Dispatch to backend API /email/company-config
+      try {
+        const { api } = await import("@/lib/api")
+        await api.post("/email/company-config", {
+          companyId: compId,
+          host: curr.host.trim(),
+          port: curr.port.trim(),
+          secure: curr.secure,
+          user: curr.user.trim(),
+          pass: curr.pass.trim(),
+          fromName: curr.fromName.trim() || comp?.name || "SAAMPARK",
+          fromEmail: curr.fromEmail.trim() || curr.user.trim(),
+        }).catch(() => {})
+
+        // If this is Saampark Technology, also sync global master settings fallback
+        if (isTech) {
+          const smtpPayload = {
+            companyName, currency, currencySymbol, address, industry,
+            smtpUser: curr.user.trim(),
+            smtpPass: curr.pass.trim(),
+            smtpHost: curr.host.trim(),
+            smtpPort: curr.port.trim(),
+            smtpSecure: curr.secure,
+            smtpFromName: curr.fromName.trim(),
+            smtpFromEmail: curr.fromEmail.trim() || curr.user.trim(),
+          }
+          if (typeof window !== "undefined") {
+            localStorage.setItem("saampark_smtp_settings", JSON.stringify(smtpPayload))
+          }
+          await saveModuleDataToDB("settings", smtpPayload, "all").catch(() => {})
+          await api.post("/email/settings", smtpPayload).catch(() => {})
+        }
+      } catch {}
+
+      setSuccessMsg(`✅ SMTP configurations for ${comp?.name || compId} saved and synced successfully!`)
+      setTimeout(() => setSuccessMsg(""), 4000)
+    } catch (err: any) {
+      setErrorMsg(`Error saving SMTP settings: ${err.message}`)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const applySmtpPreset = (preset: "gmail" | "zoho" | "outlook" | "custom") => {
-    setSmtpPreset(preset)
     setSmtpTestResult(null)
     if (preset === "gmail") {
-      setSmtpHost("smtp.gmail.com")
-      setSmtpPort("587")
-      setSmtpSecure(false)
+      updateCurrentSmtp({ preset: "gmail", host: "smtp.gmail.com", port: "587", secure: false })
     } else if (preset === "zoho") {
-      setSmtpHost("smtp.zoho.in")
-      setSmtpPort("465")
-      setSmtpSecure(true)
+      updateCurrentSmtp({ preset: "zoho", host: "smtp.zoho.in", port: "465", secure: true })
     } else if (preset === "outlook") {
-      setSmtpHost("smtp.office365.com")
-      setSmtpPort("587")
-      setSmtpSecure(false)
+      updateCurrentSmtp({ preset: "outlook", host: "smtp.office365.com", port: "587", secure: false })
+    } else {
+      updateCurrentSmtp({ preset: "custom" })
     }
   }
 
   const handleTestSmtpConnection = async () => {
-    if (!smtpUser.trim() || !smtpPass.trim()) {
+    const curr = currentSmtp
+    const compId = selectedSmtpCompanyId
+    const comp = activeSmtpCompany
+
+    if (!curr.user.trim() || !curr.pass.trim()) {
       setSmtpTestResult({
         success: false,
-        message: "Please enter SMTP Sender Email and App Password before testing.",
+        message: `Please enter SMTP Username and App Password for ${comp?.name || compId} before testing.`,
       })
       return
     }
@@ -702,19 +790,21 @@ export default function SettingsMain() {
     try {
       const { api } = await import("@/lib/api")
       const res = await api.post("/email/test-connection", {
-        host: smtpHost.trim() || "smtp.gmail.com",
-        port: smtpPort.trim() || "587",
-        secure: smtpSecure,
-        user: smtpUser.trim(),
-        pass: smtpPass.trim(),
-        fromName: smtpFromName.trim() || companyName || "SAAMPARK CRM",
-        fromEmail: smtpFromEmail.trim() || smtpUser.trim(),
-        testEmail: smtpTestRecipient.trim() || smtpUser.trim(),
+        host: curr.host.trim() || "smtp.gmail.com",
+        port: curr.port.trim() || "587",
+        secure: curr.secure,
+        user: curr.user.trim(),
+        pass: curr.pass.trim(),
+        fromName: curr.fromName.trim() || comp?.name || "SAAMPARK CRM",
+        fromEmail: curr.fromEmail.trim() || curr.user.trim(),
+        testEmail: smtpTestRecipient.trim() || curr.user.trim(),
+        companyId: compId,
+        companyName: comp?.name || (compId === "consultancy" ? "SAAMPARK Consultancy" : "SAAMPARK Technology"),
       })
 
       setSmtpTestResult({
         success: true,
-        message: res.data?.message || `Verified! Test email successfully sent to ${smtpTestRecipient.trim() || smtpUser.trim()}`,
+        message: res.data?.message || `Verified! Test email successfully sent to ${smtpTestRecipient.trim() || curr.user.trim()} for ${comp?.name || compId}`,
       })
     } catch (err: any) {
       setSmtpTestResult({
@@ -1505,33 +1595,88 @@ export default function SettingsMain() {
         </form>
       )}
 
-      {/* ── TAB 3: SMTP SETUP (Super Admin Only) ────────────────────────────── */}
+      {/* ── TAB 3: MULTI-COMPANY SMTP SETUP (Super Admin Only) ─────────────── */}
       {activeTab === "smtp" && isSuperAdmin && (
-        <form onSubmit={handleSaveSmtp} className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-3xl p-6 space-y-5 max-w-3xl text-xs shadow-2xs">
-          <div className="flex items-start justify-between border-b border-border/50 pb-3.5">
+        <form onSubmit={handleSaveSmtp} className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-3xl p-6 space-y-6 max-w-4xl text-xs shadow-2xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/50 pb-4">
             <div>
-              <h3 className="font-bold text-sm text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                <Mail size={16} className="text-blue-600" />
-                <span>Global SMTP Email Dispatch Configurations</span>
+              <h3 className="font-bold text-base text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                <Mail size={18} className="text-blue-600" />
+                <span>Multi-Company SMTP Mail Server Configurations</span>
               </h3>
-              <p className="text-muted-foreground text-[11px] mt-0.5">
-                Configure primary Google / Workspace or custom SMTP credentials used for system-wide invoices, password resets, and notifications.
+              <p className="text-muted-foreground text-xs mt-0.5">
+                Configure separate SMTP credentials and email dispatch gateways for each company in SAAMPARK Group.
               </p>
             </div>
-            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 shrink-0">
-              Live Dynamic Engine
+            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 shrink-0 w-fit">
+              Super Admin Exclusive
             </span>
           </div>
 
-          {/* Quick Presets */}
+          {/* 🏢 Company Switcher Tabs */}
+          <div className="p-4 bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/80 rounded-2xl space-y-2.5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <span className="font-bold text-zinc-800 dark:text-zinc-200 text-xs flex items-center gap-1.5">
+                <Building2 size={14} className="text-blue-600" />
+                <span>Select Company to Configure SMTP:</span>
+              </span>
+              <span className="text-[11px] text-zinc-500">
+                Active Gateway: <strong className="text-zinc-800 dark:text-zinc-200">{activeSmtpCompany?.name || selectedSmtpCompanyId}</strong>
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2.5 flex-wrap pt-1">
+              {effectiveCompanies.map((comp) => {
+                const compKey = String(comp.id || comp.slug || "").toLowerCase()
+                const isSelected = compKey === String(selectedSmtpCompanyId).toLowerCase() || String(comp.slug || '').toLowerCase() === String(selectedSmtpCompanyId).toLowerCase()
+                const cSmtp = companySmtpMap[comp.id] || getInitialSmtpForCompany(comp, comp.id)
+                const isConfigured = Boolean(cSmtp.user && cSmtp.pass)
+
+                return (
+                  <button
+                    key={comp.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedSmtpCompanyId(comp.id)
+                      setSmtpTestResult(null)
+                      if (cSmtp.user) setSmtpTestRecipient(cSmtp.user)
+                    }}
+                    className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2.5 transition-all cursor-pointer ${
+                      isSelected
+                        ? "bg-blue-600 text-white shadow-md shadow-blue-500/20 ring-2 ring-blue-500/30"
+                        : "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                    }`}
+                  >
+                    <span className="text-sm">{comp.id === "consultancy" || String(comp.name).toLowerCase().includes("consult") ? "💼" : "🏢"}</span>
+                    <span className="font-semibold">{comp.brand_name ? `${comp.brand_name} ${comp.division_name || comp.name || ""}`.trim() : comp.name}</span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                      isSelected
+                        ? "bg-white/25 text-white"
+                        : isConfigured
+                          ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                          : "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20"
+                    }`}>
+                      {isConfigured ? "✅ Configured" : "⚠️ Empty / Unset"}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="p-2.5 bg-blue-500/10 border border-blue-500/20 rounded-xl text-[11px] text-blue-900 dark:text-blue-200 mt-2">
+              ℹ️ Users who log in under <strong>{activeSmtpCompany?.name || selectedSmtpCompanyId}</strong> will only dispatch and receive emails through this dedicated SMTP channel.
+            </div>
+          </div>
+
+          {/* Quick Presets for Selected Company */}
           <div className="space-y-1.5">
-            <label className="block font-bold text-foreground text-[11px]">Choose Mail Provider Preset:</label>
+            <label className="block font-bold text-foreground text-[11px]">Mail Provider Preset for {activeSmtpCompany?.name}:</label>
             <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
                 onClick={() => applySmtpPreset("gmail")}
                 className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
-                  smtpPreset === "gmail"
+                  currentSmtp.preset === "gmail"
                     ? "bg-red-600 text-white shadow-sm"
                     : "bg-surface border border-border text-foreground hover:bg-surface-hover"
                 }`}
@@ -1542,7 +1687,7 @@ export default function SettingsMain() {
                 type="button"
                 onClick={() => applySmtpPreset("zoho")}
                 className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
-                  smtpPreset === "zoho"
+                  currentSmtp.preset === "zoho"
                     ? "bg-amber-600 text-white shadow-sm"
                     : "bg-surface border border-border text-foreground hover:bg-surface-hover"
                 }`}
@@ -1553,7 +1698,7 @@ export default function SettingsMain() {
                 type="button"
                 onClick={() => applySmtpPreset("outlook")}
                 className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
-                  smtpPreset === "outlook"
+                  currentSmtp.preset === "outlook"
                     ? "bg-blue-600 text-white shadow-sm"
                     : "bg-surface border border-border text-foreground hover:bg-surface-hover"
                 }`}
@@ -1564,7 +1709,7 @@ export default function SettingsMain() {
                 type="button"
                 onClick={() => applySmtpPreset("custom")}
                 className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
-                  smtpPreset === "custom"
+                  currentSmtp.preset === "custom"
                     ? "bg-zinc-800 text-white dark:bg-zinc-200 dark:text-zinc-900 shadow-sm"
                     : "bg-surface border border-border text-foreground hover:bg-surface-hover"
                 }`}
@@ -1579,9 +1724,9 @@ export default function SettingsMain() {
               <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">SMTP Host</label>
               <input
                 type="text"
-                value={smtpHost}
-                onChange={(e) => setSmtpHost(e.target.value)}
-                placeholder="smtp.gmail.com"
+                value={currentSmtp.host}
+                onChange={(e) => updateCurrentSmtp({ host: e.target.value })}
+                placeholder="e.g. smtp.gmail.com"
                 className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono focus:outline-hidden"
               />
             </div>
@@ -1591,12 +1736,13 @@ export default function SettingsMain() {
                 <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Port</label>
                 <input
                   type="text"
-                  value={smtpPort}
+                  value={currentSmtp.port}
                   onChange={(e) => {
                     const p = e.target.value
-                    setSmtpPort(p)
-                    if (p === "465") setSmtpSecure(true)
-                    if (p === "587") setSmtpSecure(false)
+                    updateCurrentSmtp({
+                      port: p,
+                      secure: p === "465",
+                    })
                   }}
                   placeholder="587 / 465"
                   className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono focus:outline-hidden"
@@ -1605,8 +1751,8 @@ export default function SettingsMain() {
               <div>
                 <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Encryption</label>
                 <select
-                  value={smtpSecure ? "ssl" : "tls"}
-                  onChange={(e) => setSmtpSecure(e.target.value === "ssl")}
+                  value={currentSmtp.secure ? "ssl" : "tls"}
+                  onChange={(e) => updateCurrentSmtp({ secure: e.target.value === "ssl" })}
                   className="w-full px-2.5 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-semibold focus:outline-hidden cursor-pointer"
                 >
                   <option value="tls">STARTTLS (587)</option>
@@ -1619,13 +1765,16 @@ export default function SettingsMain() {
               <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Sender Email (Username) *</label>
               <input
                 type="email"
-                value={smtpUser}
+                value={currentSmtp.user}
                 onChange={(e) => {
-                  setSmtpUser(e.target.value)
-                  if (!smtpFromEmail) setSmtpFromEmail(e.target.value)
-                  if (!smtpTestRecipient) setSmtpTestRecipient(e.target.value)
+                  const val = e.target.value
+                  updateCurrentSmtp({
+                    user: val,
+                    fromEmail: currentSmtp.fromEmail || val,
+                  })
+                  if (!smtpTestRecipient) setSmtpTestRecipient(val)
                 }}
-                placeholder="supriyogod@gmail.com"
+                placeholder={selectedSmtpCompanyId === "tech" ? "supriyogod@gmail.com" : "consultancy@saampark.in"}
                 className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono focus:outline-hidden"
               />
             </div>
@@ -1643,8 +1792,8 @@ export default function SettingsMain() {
               </div>
               <input
                 type={showSmtpPass ? "text" : "password"}
-                value={smtpPass}
-                onChange={(e) => setSmtpPass(e.target.value)}
+                value={currentSmtp.pass}
+                onChange={(e) => updateCurrentSmtp({ pass: e.target.value })}
                 placeholder="16-digit Google App Password"
                 className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono focus:outline-hidden"
               />
@@ -1654,9 +1803,9 @@ export default function SettingsMain() {
               <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Sender From Name</label>
               <input
                 type="text"
-                value={smtpFromName}
-                onChange={(e) => setSmtpFromName(e.target.value)}
-                placeholder="SAAMPARK Technology"
+                value={currentSmtp.fromName}
+                onChange={(e) => updateCurrentSmtp({ fromName: e.target.value })}
+                placeholder={activeSmtpCompany?.name || "SAAMPARK CRM"}
                 className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden"
               />
             </div>
@@ -1665,21 +1814,21 @@ export default function SettingsMain() {
               <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Sender From Email (Header)</label>
               <input
                 type="email"
-                value={smtpFromEmail}
-                onChange={(e) => setSmtpFromEmail(e.target.value)}
-                placeholder="info@saamparktechnology.com"
+                value={currentSmtp.fromEmail}
+                onChange={(e) => updateCurrentSmtp({ fromEmail: e.target.value })}
+                placeholder={currentSmtp.user || "info@saampark.in"}
                 className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono focus:outline-hidden"
               />
             </div>
           </div>
 
           {/* Google App Password Help Banner */}
-          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-[11px] text-amber-900 dark:text-amber-200 space-y-1">
+          <div className="p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-[11px] text-amber-900 dark:text-amber-200 space-y-1">
             <p className="font-bold flex items-center gap-1.5">
-              <span>💡 Setting up Google / Gmail SMTP:</span>
+              <span>💡 Google / Custom SMTP Security Notice for {activeSmtpCompany?.name}:</span>
             </p>
             <p className="text-muted-foreground leading-relaxed">
-              Google requires a 16-character <strong>App Password</strong>. Navigate to <strong>Google Account ➔ Security ➔ 2-Step Verification ➔ App passwords</strong>, create an app password (name it "CRM"), and paste it above.
+              Google requires a 16-character <strong>App Password</strong>. Navigate to <strong>Google Account ➔ Security ➔ 2-Step Verification ➔ App passwords</strong>, create an app password (name it "{activeSmtpCompany?.name || 'CRM'}"), and paste it above.
             </p>
           </div>
 
@@ -1687,8 +1836,8 @@ export default function SettingsMain() {
           <div className="p-4 bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 rounded-2xl space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
-                <span className="font-bold text-foreground text-xs block">Verify SMTP Connection & Send Test Email</span>
-                <span className="text-[10px] text-muted-foreground">Test credentials in real time against the backend mail server.</span>
+                <span className="font-bold text-foreground text-xs block">Verify SMTP for {activeSmtpCompany?.name}</span>
+                <span className="text-[10px] text-muted-foreground">Test credentials in real time and deliver a branded test verification email.</span>
               </div>
               <div className="flex items-center gap-2">
                 <input
@@ -1700,12 +1849,12 @@ export default function SettingsMain() {
                 />
                 <button
                   type="button"
-                  disabled={isTestingSmtp || !smtpUser || !smtpPass}
+                  disabled={isTestingSmtp || !currentSmtp.user || !currentSmtp.pass}
                   onClick={handleTestSmtpConnection}
-                  className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition-all"
+                  className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition-all shrink-0"
                 >
                   <Sparkles size={13} className={isTestingSmtp ? "animate-spin" : ""} />
-                  <span>{isTestingSmtp ? "Verifying..." : "⚡ Test SMTP"}</span>
+                  <span>{isTestingSmtp ? "Verifying..." : `⚡ Test SMTP (${activeSmtpCompany?.id || selectedSmtpCompanyId})`}</span>
                 </button>
               </div>
             </div>
@@ -1729,7 +1878,7 @@ export default function SettingsMain() {
               className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
             >
               <Save size={14} />
-              <span>Save & Apply SMTP Settings</span>
+              <span>Save & Apply {activeSmtpCompany?.name || selectedSmtpCompanyId} SMTP Settings</span>
             </button>
           </div>
         </form>
