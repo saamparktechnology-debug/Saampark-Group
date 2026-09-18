@@ -155,7 +155,12 @@ const getAllUsers = async (req, res, next) => {
         throw qErr;
       }
     }
-    return successResponse(res, 200, 'Users fetched successfully', users);
+    const mappedUsers = (users || []).map(u => ({
+      ...u,
+      name: u.full_name || u.name || u.username || u.email || 'User',
+      role: u.role_name || u.role || 'Teams'
+    }));
+    return successResponse(res, 200, 'Users fetched successfully', mappedUsers);
   } catch (error) {
     next(error);
   }

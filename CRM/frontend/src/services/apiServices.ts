@@ -89,8 +89,24 @@ export const AuthService = {
 
 export const UserService = {
   getTeamMembers: async () => {
+    try {
+      const { getStoredUserAccountsAsync } = await import("@/app/feature/users/services/userService")
+      const localUsers = await getStoredUserAccountsAsync()
+      if (Array.isArray(localUsers) && localUsers.length > 0) {
+        return localUsers.map((u: any) => ({
+          ...u,
+          name: u.name || u.full_name || u.fullName || u.username || u.email || "Team Member",
+          role: u.role || u.role_name || u.roleName || "Teams"
+        }))
+      }
+    } catch {}
     const res = await api.get('/users')
-    return unpackArray(res, 'users')
+    const raw = unpackArray(res, 'users')
+    return (raw || []).map((u: any) => ({
+      ...u,
+      name: u.name || u.full_name || u.fullName || u.username || u.email || "Team Member",
+      role: u.role || u.role_name || u.roleName || "Teams"
+    }))
   },
   getUserById: async (id: string | number) => api.get(`/users/${id}`),
   updateUser: async (id: string | number, data: any) => api.put(`/users/${id}`, data),

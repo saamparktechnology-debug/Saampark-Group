@@ -382,7 +382,12 @@ function InvoicesPageContent() {
     if (teamMembers.length === 0) {
       UserService.getTeamMembers().then(users => {
         if (Array.isArray(users)) {
-          setTeamMembers(users.filter((u: any) => !((u.role || "").toLowerCase().includes("client"))))
+          const nonClients = users.filter((u: any) => !((u.role || u.role_name || "").toLowerCase().includes("client")))
+          setTeamMembers(nonClients.map((u: any) => ({
+            ...u,
+            name: u.name || u.full_name || u.fullName || u.username || u.email || "Team Member",
+            role: u.role || u.role_name || u.roleName || "Teams"
+          })))
         }
       }).catch(() => {})
     }
@@ -705,8 +710,12 @@ function InvoicesPageContent() {
 
       UserService.getTeamMembers().then(users => {
         if (Array.isArray(users)) {
-          const nonClients = users.filter((u: any) => !((u.role || "").toLowerCase().includes("client")))
-          setTeamMembers(nonClients)
+          const nonClients = users.filter((u: any) => !((u.role || u.role_name || "").toLowerCase().includes("client")))
+          setTeamMembers(nonClients.map((u: any) => ({
+            ...u,
+            name: u.name || u.full_name || u.fullName || u.username || u.email || "Team Member",
+            role: u.role || u.role_name || u.roleName || "Teams"
+          })))
         }
       }).catch(() => {})
     }
@@ -1843,11 +1852,15 @@ function InvoicesPageContent() {
                         className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-purple-300 dark:border-purple-700 rounded-lg text-xs font-semibold text-foreground focus:outline-hidden"
                       >
                         <option value="">🚫 No Team Member Assigned (100% Company)</option>
-                        {teamMembers.map((m: any) => (
-                          <option key={m.id || m._id} value={String(m.id || m._id)}>
-                            👤 {m.name} {m.role ? `(${m.role})` : ""}
-                          </option>
-                        ))}
+                        {teamMembers.map((m: any) => {
+                          const displayName = m.name || m.full_name || m.fullName || m.username || m.email || "Team Member"
+                          const displayRole = m.role || m.role_name || m.roleName || ""
+                          return (
+                            <option key={m.id || m._id} value={String(m.id || m._id)}>
+                              👤 {displayName} {displayRole ? `(${displayRole})` : ""}
+                            </option>
+                          )
+                        })}
                       </select>
                     </div>
 
@@ -2913,11 +2926,15 @@ function InvoicesPageContent() {
                         className="w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-purple-300 dark:border-purple-700 rounded-lg text-xs font-semibold text-foreground focus:outline-hidden"
                       >
                         <option value="">🚫 No Team Member Assigned (100% Company)</option>
-                        {teamMembers.map((m: any) => (
-                          <option key={m.id || m._id} value={String(m.id || m._id)}>
-                            👤 {m.name} {m.role ? `(${m.role})` : ""}
-                          </option>
-                        ))}
+                        {teamMembers.map((m: any) => {
+                          const displayName = m.name || m.full_name || m.fullName || m.username || m.email || "Team Member"
+                          const displayRole = m.role || m.role_name || m.roleName || ""
+                          return (
+                            <option key={m.id || m._id} value={String(m.id || m._id)}>
+                              👤 {displayName} {displayRole ? `(${displayRole})` : ""}
+                            </option>
+                          )
+                        })}
                       </select>
                     </div>
 

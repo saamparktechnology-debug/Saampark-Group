@@ -53,10 +53,12 @@ export default function TicketsMain() {
   const roleLower = (user?.role || "").toLowerCase().trim()
   const isSuperAdmin = roleLower === "super admin" || roleLower === "superadmin" || roleLower.includes("super")
 
-  // Anyone can raise a ticket; only Super Admin can resolve/change status or delete
-  const canAddTicket = true
-  const canResolveTicket = isSuperAdmin
-  const canDeleteTicket = isSuperAdmin
+  const { canPerformAction } = usePermissionStore()
+
+  // Granular action access permissions
+  const canAddTicket = canPerformAction(user, "Tickets", "add") || isSuperAdmin
+  const canResolveTicket = canPerformAction(user, "Tickets", "edit") || isSuperAdmin
+  const canDeleteTicket = canPerformAction(user, "Tickets", "delete") || isSuperAdmin
 
   const currentUserEmail = (user?.email || "").toLowerCase().trim()
   const currentUserName = user?.name || "User"
