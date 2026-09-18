@@ -13,6 +13,7 @@ import { getSubscriptions } from "@/app/feature/subscriptions/services/subscript
 import { Subscription, calculateTeamRevenueShare } from "@/app/feature/subscriptions/types"
 import { getProjects } from "@/app/feature/projects/services/projectService"
 import { Project, ProjectMember } from "@/app/feature/projects/types"
+import { getInvoices, InvoiceItem } from "@/app/feature/sales/invoices/services/invoiceService"
 
 const BANKING_STORAGE_KEY = "team_banking_details"
 const PAYOUTS_STORAGE_KEY = "team_payout_records"
@@ -191,10 +192,11 @@ export const getProjectWiseUserEarnings = async (
   branchId?: string,
   subBranchId?: string
 ): Promise<ProjectUserEarningsRecord[]> => {
-  const [projects, users, payouts] = await Promise.all([
+  const [projects, users, payouts, invoices] = await Promise.all([
     getProjects(companyId).catch(() => []),
     getUsers(companyId).catch(() => []),
     getPayoutRecords(companyId, branchId, subBranchId),
+    getInvoices(companyId).catch(() => []),
   ])
 
   const records: ProjectUserEarningsRecord[] = []
@@ -273,6 +275,79 @@ export const getProjectWiseUserEarnings = async (
         lastDisbursedDate,
       })
     }
+  }
+
+  // Process Invoices with team member attributions
+  for (const inv of invoices) {
+    if (!inv || !inv.assignedMemberId) continue
+
+    const invTotal = inv.baseAmount !== undefined && inv.baseAmount > 0
+      ? inv.baseAmount
+      : (parseInt(String(inv.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0)
+
+    let clientPaid = 0
+    if (inv.status === "Fully paid" || inv.status === "Credited") {
+      const rec = parseInt(String(inv.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
+      clientPaid = rec > 0 ? rec : invTotal
+    } else {
+      clientPaid = parseInt(String(inv.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
+    }
+
+    const payoutType = inv.memberPayoutType || "percentage"
+    let sharePct = typeof inv.memberPayoutValue === "number"
+      ? inv.memberPayoutValue
+      : (typeof inv.memberSharePct === "number" ? inv.memberSharePct : 50)
+    let totalEarned = 0
+
+    if (payoutType === "fixed") {
+      const fixedAmount = typeof inv.memberPayoutValue === "number" ? inv.memberPayoutValue : (inv.memberPayoutAmount || 0)
+      const proportion = invTotal > 0 ? Math.min(1, clientPaid / invTotal) : (clientPaid > 0 ? 1 : 0)
+      totalEarned = Math.round(fixedAmount * proportion)
+      if (invTotal > 0) {
+        sharePct = Number(((fixedAmount / invTotal) * 100).toFixed(1))
+      }
+    } else {
+      // Dynamic % payout based on client payments received:
+      // Part payment e.g. ₹1,000 with 50% => ₹500 earned
+      // When full payment received e.g. ₹10,000 => ₹5,000 earned!
+      totalEarned = Math.round((clientPaid * sharePct) / 100)
+    }
+
+    // Check existing payouts for this invoice attribution
+    const memberInvPayouts = payouts.filter((pay: TeamPayoutRecord) =>
+      (pay.projectId === inv.id || (pay as any).invoiceId === inv.id || pay.projectTitle?.includes(inv.id)) &&
+      (String(pay.memberId) === String(inv.assignedMemberId) || (pay.memberEmail && inv.assignedMemberId && pay.memberEmail.toLowerCase() === String(inv.assignedMemberId).toLowerCase()))
+    )
+
+    const paidAmount = memberInvPayouts.reduce((sum: number, pay: TeamPayoutRecord) => sum + (pay.netAmount || 0), 0)
+    const pendingAmount = Math.max(0, totalEarned - paidAmount)
+    const lastDisbursedDate = memberInvPayouts.length > 0 ? memberInvPayouts[0].paymentDate : undefined
+
+    const matchedUser = nonClientUsers.find(u => String(u.id) === String(inv.assignedMemberId))
+
+    records.push({
+      id: `INV-EARN-${inv.id}-${inv.assignedMemberId}`,
+      projectId: inv.id,
+      projectTitle: `Invoice #${inv.id}: ${inv.project || "Invoice Services"}`,
+      clientName: inv.client || "Client Account",
+      projectTotalValue: invTotal,
+      clientPaymentReceived: clientPaid,
+      clientPaymentStatus: inv.status || (clientPaid >= invTotal ? "Paid" : clientPaid > 0 ? "Partially Paid" : "Unpaid"),
+      memberId: String(inv.assignedMemberId),
+      memberName: inv.assignedMemberName || matchedUser?.name || "Team Member",
+      memberEmail: matchedUser?.email || "",
+      memberRole: inv.assignedMemberRole || matchedUser?.role || "Team Member",
+      memberSharePercentage: sharePct,
+      memberTotalEarned: totalEarned,
+      memberPaidAmount: paidAmount,
+      memberPendingAmount: pendingAmount,
+      companyId: inv.companyId || companyId || "tech",
+      branchId: inv.branchId,
+      branchName: inv.branchName,
+      subBranchId: inv.subBranchId,
+      subbranchName: inv.subBranchName,
+      lastDisbursedDate,
+    })
   }
 
   let filtered = records

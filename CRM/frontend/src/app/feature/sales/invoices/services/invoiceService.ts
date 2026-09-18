@@ -474,6 +474,8 @@ export const recordPartialPayment = async (
 
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("saampark_data_synced"))
+    window.dispatchEvent(new Event("saampark_team_payouts_updated"))
+    window.dispatchEvent(new Event("saampark_invoices_updated"))
     window.dispatchEvent(new Event("storage"))
   }
 
@@ -570,6 +572,13 @@ export const markPaymentCompleted = async (
   }
   current[idx] = updated
   await saveModuleDataToDB("invoices", current)
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("saampark_data_synced"))
+    window.dispatchEvent(new Event("saampark_team_payouts_updated"))
+    window.dispatchEvent(new Event("saampark_invoices_updated"))
+    window.dispatchEvent(new Event("storage"))
+  }
 
   // Settle or update existing payment record in-place
   try {

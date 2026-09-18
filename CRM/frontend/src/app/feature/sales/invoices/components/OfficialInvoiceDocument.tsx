@@ -467,6 +467,8 @@ export function OfficialInvoiceDocument({
         <motion.div
           drag={interactive}
           dragMomentum={false}
+          dragElastic={0}
+          whileDrag={{ scale: 1.04, zIndex: 50 }}
           animate={{ x: logoPosition?.x || 0, y: logoPosition?.y || 0 }}
           onDragEnd={(_, info) => {
             if (onLogoPositionChange) {
@@ -1008,6 +1010,8 @@ export function OfficialInvoiceDocument({
         <motion.div
           drag={interactive}
           dragMomentum={false}
+          dragElastic={0}
+          whileDrag={{ scale: 1.04, zIndex: 50 }}
           animate={{ x: signaturePosition?.x || 0, y: signaturePosition?.y || 0 }}
           onDragEnd={(_, info) => {
             if (onSignaturePositionChange) {
@@ -1079,6 +1083,8 @@ export function OfficialInvoiceDocument({
           key={stamp.id}
           drag={interactive}
           dragMomentum={false}
+          dragElastic={0}
+          whileDrag={{ scale: 1.05, zIndex: 60 }}
           animate={{ x: stamp.x, y: stamp.y }}
           onDragEnd={(_, info) => {
             if (onCustomStampMove) {

@@ -10,7 +10,7 @@ import {
   ShieldCheck, AlertCircle, Eye, UploadCloud, Edit3, Landmark, QrCode
 } from "lucide-react"
 
-import { useAuthStore, Company, Branch, SubBranch, getCompanyLogoUrl } from "@/store/useAuthStore"
+import { useAuthStore, Company, Branch, SubBranch, getCompanyLogoUrl, getCanonicalCompanyId } from "@/store/useAuthStore"
 import { getClients, saveStoredClient } from "@/app/feature/clients/services/clientService"
 import { ClientItem } from "@/app/feature/clients/types"
 import { 
@@ -21,6 +21,7 @@ import {
   updateInvoice, 
   generateInvoiceNumber 
 } from "@/app/feature/sales/invoices/services/invoiceService"
+import { UserService } from "@/services/apiServices"
 import { QuotationService, EstimateService } from "@/services/salesService"
 import { OfficialInvoiceDocument, CustomTextStamp } from "@/app/feature/sales/invoices/components/OfficialInvoiceDocument"
 import { Button } from "@/components/ui/Button"
@@ -84,16 +85,40 @@ export function DocumentStudioModal({
 
   // Resolve selected company & issuing branch
   const activeCompany = React.useMemo(() => {
-    return companies.find(c => c.id === companyId || c.slug === companyId) || companies[0]
-  }, [companies, companyId])
+    const canonTarget = getCanonicalCompanyId(companyId || activeCompanyId || "tech")
+    return companies.find(c => {
+      const canonC = getCanonicalCompanyId(c.id || c.slug)
+      return (canonTarget && canonC && canonTarget === canonC) || c.id === companyId || c.slug === companyId
+    }) || companies[0]
+  }, [companies, companyId, activeCompanyId])
 
   const companyBranches = React.useMemo(() => {
-    return branches.filter(b => b.company_id === companyId || (b as any).companyId === companyId)
-  }, [branches, companyId])
+    if (!branches || branches.length === 0) return []
+    const canonTarget = getCanonicalCompanyId(companyId || activeCompanyId || "tech")
+    const filtered = branches.filter(b => {
+      const bComp = String((b as any).companyId || (b as any).company_id || "").toLowerCase().trim()
+      const canonB = getCanonicalCompanyId(bComp)
+      if (canonTarget && canonB) return canonTarget === canonB
+      return bComp === canonTarget || (!bComp && canonTarget === "tech")
+    })
+    return filtered.length > 0 ? filtered : branches
+  }, [branches, companyId, activeCompanyId])
 
   const branchSubBranches = React.useMemo(() => {
     return subBranches.filter(sb => String((sb as any).branch_id || (sb as any).branchId) === String(branchId))
   }, [subBranches, branchId])
+
+  // Team Member Attribution State
+  const [availableTeamMembers, setAvailableTeamMembers] = React.useState<any[]>([])
+  const [assignedMemberId, setAssignedMemberId] = React.useState<string>(initialData?.assignedMemberId || "")
+  const [assignedMemberName, setAssignedMemberName] = React.useState<string>(initialData?.assignedMemberName || "")
+  const [assignedMemberRole, setAssignedMemberRole] = React.useState<string>(initialData?.assignedMemberRole || "")
+  const [memberPayoutType, setMemberPayoutType] = React.useState<"percentage" | "fixed">(initialData?.memberPayoutType || "percentage")
+  const [memberPayoutValue, setMemberPayoutValue] = React.useState<number | "">(
+    initialData?.memberPayoutValue !== undefined 
+      ? initialData.memberPayoutValue 
+      : (initialData?.memberSharePct !== undefined ? initialData.memberSharePct : 50)
+  )
 
   // 2. Client Setup
   const [allClients, setAllClients] = React.useState<ClientItem[]>([])
@@ -180,9 +205,24 @@ export function DocumentStudioModal({
   const [activeLeftTab, setActiveLeftTab] = React.useState<"entity" | "client" | "items" | "customization">("entity")
   const [isSubmitting, setIsSubmitting] = React.useState(false)
 
-  // Load clients & initialize default company & document numbers
+  // Load clients, branches, team members & initialize default company & document numbers
   React.useEffect(() => {
     if (isOpen) {
+      fetchCompanies?.()
+      fetchBranches?.()
+      fetchSubBranches?.()
+
+      UserService.getTeamMembers().then(users => {
+        if (Array.isArray(users)) {
+          const nonClients = users.filter((u: any) => !((u.role || u.role_name || "").toLowerCase().includes("client")))
+          setAvailableTeamMembers(nonClients.map((u: any) => ({
+            ...u,
+            name: u.name || u.full_name || u.fullName || u.username || u.email || "Team Member",
+            role: u.role || u.role_name || u.roleName || "Team Member"
+          })))
+        }
+      }).catch(() => {})
+
       getClients("all").then(cl => {
         setAllClients(cl)
         if (prefilledClient) {
@@ -389,12 +429,20 @@ export function DocumentStudioModal({
       items: items,
       notes: notes,
       terms: terms,
+      assignedMemberId: assignedMemberId || undefined,
+      assignedMemberName: assignedMemberName || undefined,
+      assignedMemberRole: assignedMemberRole || undefined,
+      memberPayoutType: memberPayoutType,
+      memberPayoutValue: typeof memberPayoutValue === "number" ? memberPayoutValue : undefined,
+      memberSharePct: memberPayoutType === "percentage" ? (typeof memberPayoutValue === "number" ? memberPayoutValue : 50) : undefined,
+      memberPayoutAmount: memberPayoutType === "fixed" ? (typeof memberPayoutValue === "number" ? memberPayoutValue : undefined) : undefined,
     }
   }, [
     docNumber, clientName, selectedClient, clientEmail, clientPhone, clientAddress,
     clientCity, clientState, clientGst, projectTitle, issueDate, dueDate, grandTotal,
     docScheme, companyId, activeCompany, branchId, subBranchId, branches, subBranches,
-    taxableBase, calculatedGst, calculatedDiscount, numSetupCharge, items, notes, terms
+    taxableBase, calculatedGst, calculatedDiscount, numSetupCharge, items, notes, terms,
+    assignedMemberId, assignedMemberName, assignedMemberRole, memberPayoutType, memberPayoutValue
   ])
 
   // Save Document handler
@@ -420,6 +468,13 @@ export function DocumentStudioModal({
         clientState: clientState || selectedClient?.state,
         clientGstin: clientGst || selectedClient?.gstNumber,
         companyDetails: activeCompany,
+        assignedMemberId: assignedMemberId || undefined,
+        assignedMemberName: assignedMemberName || undefined,
+        assignedMemberRole: assignedMemberRole || undefined,
+        memberPayoutType: memberPayoutType,
+        memberPayoutValue: typeof memberPayoutValue === "number" ? memberPayoutValue : undefined,
+        memberSharePct: memberPayoutType === "percentage" ? (typeof memberPayoutValue === "number" ? memberPayoutValue : 50) : undefined,
+        memberPayoutAmount: memberPayoutType === "fixed" ? (typeof memberPayoutValue === "number" ? memberPayoutValue : undefined) : undefined,
         overrideBankDetails: {
           bankName: bankNameOverride,
           accountHolder: accountHolderOverride,
@@ -724,6 +779,101 @@ export function DocumentStudioModal({
                         </select>
                       </div>
                     )}
+                  </div>
+
+                  {/* Team Member Attribution & Commission (Optional) */}
+                  <div className="p-3.5 rounded-2xl border border-indigo-200/80 dark:border-indigo-900/40 bg-indigo-50/30 dark:bg-indigo-950/20 space-y-3">
+                    <div className="flex items-center justify-between border-b border-indigo-200/60 dark:border-indigo-800/40 pb-2">
+                      <span className="font-extrabold text-indigo-900 dark:text-indigo-200 flex items-center gap-1.5 text-xs">
+                        <Users size={14} className="text-indigo-600 dark:text-indigo-400" />
+                        <span>Team Member Attribution (Optional)</span>
+                      </span>
+                      <span className="text-[10px] text-indigo-700 dark:text-indigo-400 font-semibold">
+                        Auto-links payments to Team Payroll
+                      </span>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      <div>
+                        <label className="block text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                          Assign Team Member
+                        </label>
+                        <select
+                          value={assignedMemberId}
+                          onChange={(e) => {
+                            const val = e.target.value
+                            setAssignedMemberId(val)
+                            const matched = availableTeamMembers.find(m => String(m.id) === String(val))
+                            if (matched) {
+                              setAssignedMemberName(matched.name)
+                              setAssignedMemberRole(matched.role)
+                            } else {
+                              setAssignedMemberName("")
+                              setAssignedMemberRole("")
+                            }
+                          }}
+                          className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-xs font-bold text-zinc-900 dark:text-zinc-100"
+                        >
+                          <option value="">None / Direct Company Revenue</option>
+                          {availableTeamMembers.map(m => (
+                            <option key={m.id} value={m.id}>
+                              {m.name} ({m.role || "Team"})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {assignedMemberId && (
+                        <div className="p-2.5 rounded-xl bg-white dark:bg-zinc-900/80 border border-indigo-100 dark:border-indigo-900/40 grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
+                              Commission Type
+                            </label>
+                            <div className="flex rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden text-[11px] font-bold">
+                              <button
+                                type="button"
+                                onClick={() => setMemberPayoutType("percentage")}
+                                className={`flex-1 py-1 text-center transition-all cursor-pointer ${
+                                  memberPayoutType === "percentage"
+                                    ? "bg-indigo-600 text-white"
+                                    : "bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
+                                }`}
+                              >
+                                % Percent
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setMemberPayoutType("fixed")}
+                                className={`flex-1 py-1 text-center transition-all cursor-pointer ${
+                                  memberPayoutType === "fixed"
+                                    ? "bg-indigo-600 text-white"
+                                    : "bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
+                                }`}
+                              >
+                                ₹ Fixed
+                              </button>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
+                              {memberPayoutType === "percentage" ? "Share Percentage (%)" : "Payout Amount (₹)"}
+                            </label>
+                            <Input
+                              type="number"
+                              value={memberPayoutValue}
+                              onChange={(e) => setMemberPayoutValue(e.target.value === "" ? "" : Number(e.target.value))}
+                              placeholder={memberPayoutType === "percentage" ? "e.g. 50" : "e.g. 1000"}
+                              className="text-xs h-8"
+                            />
+                          </div>
+
+                          <div className="col-span-2 text-[10px] text-indigo-700 dark:text-indigo-300 font-medium">
+                            ℹ️ When client makes partial payment (e.g. ₹1,000), {memberPayoutType === "percentage" ? `${memberPayoutValue || 50}% (₹${Math.round((1000 * (Number(memberPayoutValue) || 50)) / 100)})` : `proportional share`} will be reflected in payroll. When full payment is completed, full share is added.
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {/* Dual Bank & QR Settings */}
@@ -1252,21 +1402,78 @@ export function DocumentStudioModal({
                       Document Logo & Signatory Overrides
                     </span>
                     <div className="space-y-3">
-                      <ImageUploadField
-                        label="Logo Override (Overrides Company Logo on this Document)"
-                        value={logoUrlOverride}
-                        onChange={url => setLogoUrlOverride(url)}
-                        uploadNamePrefix="doc_logo_override"
-                        helperText="Uploaded to ImgBB. Leave empty to use company default logo."
-                      />
-                      <ImageUploadField
-                        label="Authorized Signature Override"
-                        value={signatureUrlOverride}
-                        onChange={url => setSignatureUrlOverride(url)}
-                        uploadNamePrefix="doc_sig_override"
-                        aspectRatio="signature"
-                        helperText="Uploaded to ImgBB. Leave empty to use company default signature."
-                      />
+                      <div>
+                        <ImageUploadField
+                          label="Logo Override (Overrides Company Logo on this Document)"
+                          value={logoUrlOverride}
+                          onChange={url => setLogoUrlOverride(url)}
+                          uploadNamePrefix="doc_logo_override"
+                          helperText="Uploaded to ImgBB or paste direct image URL. Leave empty to use company default logo."
+                        />
+                        <div className="flex items-center gap-1.5 pt-1 text-[10px] flex-wrap">
+                          <span className="font-bold text-zinc-500">Quick Test Logos:</span>
+                          <button
+                            type="button"
+                            onClick={() => setLogoUrlOverride("https://cdn-icons-png.flaticon.com/512/3135/3135715.png")}
+                            className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-teal-700 dark:text-teal-400 font-bold hover:bg-teal-50 border border-zinc-200 dark:border-zinc-700 cursor-pointer"
+                          >
+                            Tech Emblem
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setLogoUrlOverride("https://cdn-icons-png.flaticon.com/512/3063/3063822.png")}
+                            className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-indigo-700 dark:text-indigo-400 font-bold hover:bg-indigo-50 border border-zinc-200 dark:border-zinc-700 cursor-pointer"
+                          >
+                            Corporate Crest
+                          </button>
+                          {logoUrlOverride && (
+                            <button
+                              type="button"
+                              onClick={() => setLogoUrlOverride("")}
+                              className="text-rose-500 hover:text-rose-700 font-bold underline cursor-pointer ml-auto"
+                            >
+                              Reset to Default Logo
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <ImageUploadField
+                          label="Authorized Signature Override"
+                          value={signatureUrlOverride}
+                          onChange={url => setSignatureUrlOverride(url)}
+                          uploadNamePrefix="doc_sig_override"
+                          aspectRatio="signature"
+                          helperText="Uploaded to ImgBB or paste direct image URL. Leave empty to use company default signature."
+                        />
+                        <div className="flex items-center gap-1.5 pt-1 text-[10px] flex-wrap">
+                          <span className="font-bold text-zinc-500">Quick Test Signatures:</span>
+                          <button
+                            type="button"
+                            onClick={() => setSignatureUrlOverride("https://upload.wikimedia.org/wikipedia/commons/f/fa/Signature_sample.png")}
+                            className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-teal-700 dark:text-teal-400 font-bold hover:bg-teal-50 border border-zinc-200 dark:border-zinc-700 cursor-pointer"
+                          >
+                            Formal Signature
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSignatureUrlOverride("https://upload.wikimedia.org/wikipedia/commons/3/3a/Jon_Kirsch_Signature.png")}
+                            className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-indigo-700 dark:text-indigo-400 font-bold hover:bg-indigo-50 border border-zinc-200 dark:border-zinc-700 cursor-pointer"
+                          >
+                            Director Signature
+                          </button>
+                          {signatureUrlOverride && (
+                            <button
+                              type="button"
+                              onClick={() => setSignatureUrlOverride("")}
+                              className="text-rose-500 hover:text-rose-700 font-bold underline cursor-pointer ml-auto"
+                            >
+                              Reset to Default Signature
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
 
