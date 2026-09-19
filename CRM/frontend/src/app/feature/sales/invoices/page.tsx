@@ -920,7 +920,7 @@ function InvoicesPageContent() {
       const effectiveBranchName = matchedBranch?.name || undefined
       const effectiveBranchCode = matchedBranch?.code ? matchedBranch.code.toUpperCase() : undefined
       const matchedCompObj = (companies as any[]).find(c => c.id?.toLowerCase() === targetComp.toLowerCase())
-      const effectiveCompanyName = matchedCompObj?.brand_name || matchedCompObj?.name || (targetComp === "print" ? "Print Space India" : "SAAMPARK Technology")
+      const effectiveCompanyName = matchedCompObj?.name || (matchedCompObj?.brand_name ? `${matchedCompObj.brand_name} ${matchedCompObj.division_name || ''}`.trim() : null) || (targetComp === "print" ? "Print Space India" : "SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED")
 
       // 1. Save or update client in database with complete billing details
       try {
@@ -992,6 +992,7 @@ function InvoicesPageContent() {
         status: finalStatus,
         billedBy: user?.name || "Admin",
         companyId: targetComp,
+        companyName: effectiveCompanyName,
         branchId: effectiveBranchId,
         branchName: effectiveBranchName,
         branchCode: effectiveBranchCode,

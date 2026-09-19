@@ -272,30 +272,47 @@ export function getCompanyLogoUrl(company?: Partial<Company> | null): string | n
 
 export function getCompanyFullName(company?: Partial<Company> | null): string {
   if (!company) return "SAAMPARK GROUP"
+  
+  // If company explicitly has a customized/full registered name, respect it
+  const explicitName = (company.name || "").trim()
+  if (explicitName && explicitName.toLowerCase() !== "saampark" && explicitName.toLowerCase() !== "saampark group") {
+    return explicitName
+  }
+
   const canon = getCanonicalCompanyId(company.slug || company.id || (company as any)?.numeric_id || company.name)
   const brand = (company.brand_name || "SAAMPARK").trim()
   
   if (canon === "tech" || canon === "1") {
     let div = (company.division_name || "").trim()
     if (!div || div.toLowerCase().includes("consult")) div = "TECHNOLOGY"
+    const sub = (company.subtitle || "").trim()
+    if (sub && !sub.toLowerCase().includes("consult")) {
+      return `${brand} ${div} ${sub}`.trim()
+    }
     return `${brand} ${div}`.trim()
   }
 
   if (canon === "consultancy" || canon === "2") {
     let div = (company.division_name || "").trim()
     if (!div || div.toLowerCase().includes("tech")) div = "CONSULTANCY SERVICE"
+    const sub = (company.subtitle || "").trim()
+    if (sub && !sub.toLowerCase().includes("tech")) {
+      return `${brand} ${div} ${sub}`.trim()
+    }
     return `${brand} ${div}`.trim()
   }
 
   const rawBrand = (company.brand_name || "").trim()
   const rawDivision = (company.division_name || "").trim()
+  const rawSubtitle = (company.subtitle || "").trim()
   const rawName = (company.name || "").trim()
 
-  if (rawDivision) {
-    return `${rawBrand || "SAAMPARK"} ${rawDivision}`
+  if (rawName) return rawName
+  if (rawBrand && rawDivision) {
+    return rawSubtitle ? `${rawBrand} ${rawDivision} ${rawSubtitle}`.trim() : `${rawBrand} ${rawDivision}`.trim()
   }
 
-  return rawName || rawBrand || "SAAMPARK"
+  return rawBrand || "SAAMPARK GROUP"
 }
 
 export function getCanonicalCompanyId(val: string | number | null | undefined): string {
@@ -352,7 +369,7 @@ export const DEFAULT_COMPANIES: Company[] = [
     numeric_id: 1,
     brand_name: 'SAAMPARK',
     division_name: 'TECHNOLOGY',
-    name: 'SAAMPARK TECHNOLOGY', 
+    name: 'SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED', 
     subtitle: 'AND RESEARCH PRIVATE LIMITED',
     logo: '💻', 
     logo_url: '/saampark-logo.png',
@@ -448,6 +465,7 @@ export const DEFAULT_BRANCHES: Branch[] = [
 ]
 
 export const COMPANIES = DEFAULT_COMPANIES
+
 
 export const DEMO_USERS: Record<Role, User | null> = {
   'Super Admin': null,
@@ -611,10 +629,10 @@ export const useAuthStore = create<AuthState>()(
             id: 'tech',
             slug: 'tech',
             numeric_id: 1,
-            brand_name: 'SAAMPARK',
+            brand_name: rawTech.brand_name || 'SAAMPARK',
             division_name: (rawTech.division_name && !rawTech.division_name.toLowerCase().includes('consult')) ? rawTech.division_name : 'TECHNOLOGY',
             subtitle: (rawTech.subtitle && !rawTech.subtitle.toLowerCase().includes('consult')) ? rawTech.subtitle : 'AND RESEARCH PRIVATE LIMITED',
-            name: 'SAAMPARK TECHNOLOGY',
+            name: (rawTech.name && rawTech.name.trim() !== '') ? rawTech.name : 'SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED',
             logo: '💻',
             logo_url: (rawTech.logo_url && rawTech.logo_url.trim() !== '') ? rawTech.logo_url : '/saampark-logo.png',
           }
@@ -625,10 +643,10 @@ export const useAuthStore = create<AuthState>()(
             id: 'consultancy',
             slug: 'consultancy',
             numeric_id: 2,
-            brand_name: 'SAAMPARK',
+            brand_name: rawConsult.brand_name || 'SAAMPARK',
             division_name: 'CONSULTANCY SERVICE',
             subtitle: (rawConsult.subtitle && !rawConsult.subtitle.toLowerCase().includes('research') && !rawConsult.subtitle.toLowerCase().includes('technology')) ? rawConsult.subtitle : 'MANAGEMENT & ADVISORY SERVICES',
-            name: 'SAAMPARK CONSULTANCY SERVICE',
+            name: (rawConsult.name && rawConsult.name.trim() !== '') ? rawConsult.name : 'SAAMPARK CONSULTANCY SERVICE',
             logo: '💼',
             // Consultancy starts totally fresh — never inherit technology logo
             logo_url: (rawConsult.logo_url && rawConsult.logo_url !== '/saampark-logo.png') ? rawConsult.logo_url : '',

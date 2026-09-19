@@ -361,7 +361,11 @@ export function OfficialInvoiceDocument({
   // Full official company name resolution
   const fullRegisteredCompanyName = (
     companyDetails?.name || 
+    (invoice as any).companyName ||
     activeCompany?.name || 
+    ((activeCompany?.name && activeCompany?.subtitle && !activeCompany.name.includes(activeCompany.subtitle))
+      ? `${activeCompany.name} ${activeCompany.subtitle}`.trim()
+      : "") ||
     `${resolvedBrandName} ${resolvedDivisionName}`.trim() || 
     "SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED"
   ).trim()
