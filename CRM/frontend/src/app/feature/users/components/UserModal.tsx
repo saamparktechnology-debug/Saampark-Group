@@ -114,6 +114,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
     (email && isRootSuperAdminEmail(email))
   )
   const [role, setRole] = React.useState<UserRole>("Teams")
+  const [employeeId, setEmployeeId] = React.useState("")
   const [selectedBranchId, setSelectedBranchId] = React.useState<string>("")
   const [department, setDepartment] = React.useState("")
   const [designation, setDesignation] = React.useState("")
@@ -283,6 +284,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
 
       setDepartment(editingUser.department || "")
       setDesignation((editingUser as any).designation || "")
+      setEmployeeId(editingUser.employeeId || "")
       setCommissionRate((editingUser as any).commissionRate || (editingUser as any).invoiceRate || "")
       setPhone(editingUser.phone || "")
       setPassword(editingUser.password || "")
@@ -316,6 +318,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
     } else {
       setName("")
       setEmail("")
+      setEmployeeId("")
       setEmailError(null)
       const defaultRole: UserRole = (!isCurrentSuperAdmin && (initialRole === "Super Admin" || initialRole === "Admin")) ? "Teams" : (initialRole || "Teams")
       setRole(defaultRole)
@@ -461,6 +464,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
       avatarUrl: avatarUrl || undefined,
       kycStatus,
       joinedDate: joiningDate || editingUser?.joinedDate || new Date().toISOString().split("T")[0],
+      employeeId: employeeId.trim() || editingUser?.employeeId || undefined,
       designation: designation.trim() || (role === "Teams" ? "Technical Specialist" : undefined),
       ctc: ctc.trim() || undefined,
       offerLetterSentAt: (!editingUser && autoSendOfferLetter) ? new Date().toISOString() : editingUser?.offerLetterSentAt,
@@ -921,17 +925,33 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                         </div>
                       </div>
 
-                      <div>
-                        <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                          Designation / Job Title
-                        </label>
-                        <input
-                          type="text"
-                          value={designation}
-                          onChange={(e) => setDesignation(e.target.value)}
-                          placeholder="e.g. Senior Branch Executive"
-                          className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#090d16]/90 border border-slate-300 dark:border-white/15 text-xs text-slate-900 dark:text-white focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3)] shadow-xs dark:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-medium transition-all"
-                        />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
+                            <span>Employee ID Number</span>
+                            <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold">SP-EMP-XXXX</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={employeeId}
+                            onChange={(e) => setEmployeeId(e.target.value)}
+                            placeholder="e.g. SP-EMP-0041 (auto if empty)"
+                            className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#090d16]/90 border border-slate-300 dark:border-white/15 text-xs text-slate-900 dark:text-white font-mono focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3)] shadow-xs dark:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-bold transition-all"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                            Designation / Job Title
+                          </label>
+                          <input
+                            type="text"
+                            value={designation}
+                            onChange={(e) => setDesignation(e.target.value)}
+                            placeholder="e.g. Senior Branch Executive"
+                            className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#090d16]/90 border border-slate-300 dark:border-white/15 text-xs text-slate-900 dark:text-white focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3)] shadow-xs dark:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-medium transition-all"
+                          />
+                        </div>
                       </div>
 
                       <div>

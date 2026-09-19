@@ -160,8 +160,11 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
                             )
                           })()}
                           <div>
-                            <div className="font-semibold text-foreground group-hover/user:text-primary transition-colors flex items-center gap-1.5">
+                            <div className="font-semibold text-foreground group-hover/user:text-primary transition-colors flex items-center gap-1.5 flex-wrap">
                               <span>{u.name}</span>
+                              <span className="font-mono text-[10px] font-bold bg-primary/10 text-primary px-1.5 py-0.2 rounded border border-primary/20">
+                                {u.employeeId || `SP-EMP-${String(u.id).replace(/[^0-9]/g, "").slice(-4).padStart(4, "0") || "0041"}`}
+                              </span>
                               {u.kycStatus === "Verified" && (
                                 <span className="text-[10px] text-emerald-500 font-bold" title="KYC Verified">✓</span>
                               )}

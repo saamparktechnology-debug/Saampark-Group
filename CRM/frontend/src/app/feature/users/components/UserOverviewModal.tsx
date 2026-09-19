@@ -4,7 +4,7 @@ import {
   X, User, Mail, Phone, Building2, MapPin, Shield, Calendar, 
   CheckCircle2, Clock, AlertCircle, XCircle, FileText, ExternalLink, 
   CreditCard, Landmark, Eye, Check, RefreshCw, Lock, Award, Send, 
-  Printer, Sparkles, UserCheck, Briefcase, DollarSign
+  Printer, Sparkles, UserCheck, Briefcase, DollarSign, Layers
 } from "lucide-react"
 import { UserItem, KycStatus } from "../types"
 import { recordUserAccount } from "../services/userService"
@@ -72,9 +72,15 @@ export function UserOverviewModal({
   const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>(user?.companyId || "tech")
   const [selectedBranchId, setSelectedBranchId] = React.useState<string>(user?.branchId || "")
   const [selectedSubBranchId, setSelectedSubBranchId] = React.useState<string>(user?.subBranchId || "")
-  const [customJoiningDate, setCustomJoiningDate] = React.useState<string>(user?.joinedDate || "2024-06-15")
-  const [customDesignation, setCustomDesignation] = React.useState<string>(user?.designation || user?.role || "Technical Specialist")
-  const [customCtc, setCustomCtc] = React.useState<string>(user?.ctc || "₹4,80,000 per Annum (INR 4.8 LPA)")
+  const [customJoiningDate, setCustomJoiningDate] = React.useState<string>(user?.joinedDate || "2026-10-01")
+  const [customDesignation, setCustomDesignation] = React.useState<string>(user?.designation || user?.role || "Senior Executive")
+  const [customCtc, setCustomCtc] = React.useState<string>((user as any)?.ctc || "₹4,80,000 per Annum (INR 4.8 LPA)")
+  const [customMonthlySalary, setCustomMonthlySalary] = React.useState<string>("₹40,000 / Month (Gross)")
+  const [customDepartment, setCustomDepartment] = React.useState<string>(user?.department || "Operations & Technology")
+  const [customReportingManager, setCustomReportingManager] = React.useState<string>("Department Head / Branch Director")
+  const [customProbationPeriod, setCustomProbationPeriod] = React.useState<string>("3 Months from Date of Joining")
+  const [customWorkingHours, setCustomWorkingHours] = React.useState<string>("Monday – Saturday (9:30 AM to 6:30 PM)")
+  const [customWorkMode, setCustomWorkMode] = React.useState<string>("Full-time On-site")
   const [isSendingEmail, setIsSendingEmail] = React.useState(false)
   const [emailStatusMsg, setEmailStatusMsg] = React.useState<string | null>(null)
 
@@ -82,10 +88,11 @@ export function UserOverviewModal({
     if (user) {
       setSelectedCompanyId(user.companyId || (companies[0]?.id || "tech"))
       setSelectedBranchId(user.branchId || "")
-      setSelectedSubBranchId(user.subBranchId || user.sub_branch_id || "")
-      setCustomJoiningDate(user.joinedDate || "2024-06-15")
-      setCustomDesignation(user.designation || user.role || "Technical Specialist")
-      setCustomCtc(user.ctc || "₹4,80,000 per Annum (INR 4.8 LPA)")
+      setSelectedSubBranchId(user.subBranchId || (user as any).sub_branch_id || "")
+      setCustomJoiningDate(user.joinedDate || "2026-10-01")
+      setCustomDesignation(user.designation || user.role || "Senior Executive")
+      setCustomCtc((user as any).ctc || "₹4,80,000 per Annum (INR 4.8 LPA)")
+      setCustomDepartment(user.department || "Operations & Technology")
     }
   }, [user, companies])
 
@@ -265,6 +272,9 @@ export function UserOverviewModal({
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-base sm:text-lg font-bold text-foreground">{user.name}</h3>
+                <span className="inline-flex items-center gap-1 font-mono text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                  ID: {user.employeeId || `SP-EMP-${String(user.id).replace(/[^0-9]/g, "").slice(-4).padStart(4, "0") || "0041"}`}
+                </span>
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
                   {user.role}
                 </span>
@@ -392,28 +402,36 @@ export function UserOverviewModal({
                 <div className="p-3.5 rounded-2xl bg-surface-hover/20 border border-border/60 space-y-1.5">
                   <div className="flex items-center gap-2 text-muted-foreground font-semibold">
                     <MapPin size={14} className="text-primary" />
-                    <span>Branch / Location Hub</span>
+                    <span>Location / Operations</span>
                   </div>
                   <p className="text-sm font-bold text-foreground">
-                    {user.branchName || (user.branchId ? `Branch (${user.branchId})` : "Headquarters / All Branches")}
+                    {user.branchName && !user.branchName.toLowerCase().includes("all") && !user.branchName.toLowerCase().includes("headquarters")
+                      ? user.branchName 
+                      : (user.companyName || "Corporate Headquarters (Central Operations)")}
                   </p>
-                  <p className="text-[11px] text-muted-foreground">Unit: {user.department || "General Administration"}</p>
+                  <p className="text-[11px] text-muted-foreground">Unit / Dept: {user.department || "Enterprise Operations"}</p>
                 </div>
               </div>
 
               {/* Contact & Meta Data */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 rounded-2xl bg-surface-hover/20 border border-border/60">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 rounded-2xl bg-surface-hover/20 border border-border/60">
                 <div>
-                  <span className="text-[11px] text-muted-foreground font-semibold">Phone Number</span>
-                  <p className="font-semibold text-foreground mt-0.5">{user.phone || "Not provided"}</p>
+                  <span className="text-[11px] text-muted-foreground font-semibold">Employee ID</span>
+                  <p className="font-mono font-bold text-foreground mt-0.5 text-xs text-primary">
+                    {user.employeeId || `SP-EMP-${String(user.id).replace(/[^0-9]/g, "").slice(-4).padStart(4, "0") || "0041"}`}
+                  </p>
                 </div>
                 <div>
-                  <span className="text-[11px] text-muted-foreground font-semibold">Joined / Account Date</span>
-                  <p className="font-semibold text-foreground mt-0.5">{user.joinedDate || "Recent"}</p>
+                  <span className="text-[11px] text-muted-foreground font-semibold">Phone Number</span>
+                  <p className="font-semibold text-foreground mt-0.5 text-xs">{user.phone || "Not provided"}</p>
+                </div>
+                <div>
+                  <span className="text-[11px] text-muted-foreground font-semibold">Joined Date</span>
+                  <p className="font-semibold text-foreground mt-0.5 text-xs">{user.joinedDate || "Recent"}</p>
                 </div>
                 <div>
                   <span className="text-[11px] text-muted-foreground font-semibold">Last Active</span>
-                  <p className="font-semibold text-foreground mt-0.5">{user.lastLogin || "Active"}</p>
+                  <p className="font-semibold text-foreground mt-0.5 text-xs">{user.lastLogin || "Active"}</p>
                 </div>
               </div>
 
@@ -621,60 +639,146 @@ export function UserOverviewModal({
              ═══════════════════════════════════════════════════════════════════ */}
           {activeTab === "offer_letter" && (
             <div className="space-y-4">
-              {/* Entity Selector Bar */}
-              <div className="p-4 rounded-2xl bg-surface-hover/30 border border-border grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {/* Select Company */}
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-muted-foreground flex items-center gap-1">
-                    <Building2 size={12} className="text-primary" />
-                    <span>Issuing Company:</span>
-                  </label>
-                  <select
-                    value={selectedCompanyId}
-                    onChange={(e) => setSelectedCompanyId(e.target.value)}
-                    className="w-full px-3 py-1.5 rounded-xl bg-surface border border-border text-xs font-semibold focus:outline-hidden cursor-pointer"
-                  >
-                    {companies.map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} {c.brand_name ? `(${c.brand_name})` : ""}
-                      </option>
-                    ))}
-                  </select>
+              {/* Entity & Offer Customization Selector Bar */}
+              <div className="p-4 rounded-2xl bg-surface-hover/30 border border-border space-y-3.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <Sparkles size={14} className="text-primary" />
+                    <span>Offer Letter Customization Controls</span>
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">
+                    All fields below update the letter live; you can also click directly on any text on the A4 page to edit!
+                  </span>
                 </div>
 
-                {/* Select Branch */}
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-muted-foreground flex items-center gap-1">
-                    <MapPin size={12} className="text-primary" />
-                    <span>Issuing Branch:</span>
-                  </label>
-                  <select
-                    value={selectedBranchId}
-                    onChange={(e) => setSelectedBranchId(e.target.value)}
-                    className="w-full px-3 py-1.5 rounded-xl bg-surface border border-border text-xs font-semibold focus:outline-hidden cursor-pointer"
-                  >
-                    <option value="">Default Headquarters</option>
-                    {branches.filter(b => !selectedCompanyId || String(b.company_id) === String(selectedCompanyId)).map(b => (
-                      <option key={b.id} value={b.id}>
-                        {b.name} {b.city ? `(${b.city})` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                  {/* Select Company */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-muted-foreground flex items-center gap-1">
+                      <Building2 size={12} className="text-primary" />
+                      <span>Issuing Company:</span>
+                    </label>
+                    <select
+                      value={selectedCompanyId}
+                      onChange={(e) => setSelectedCompanyId(e.target.value)}
+                      className="w-full px-3 py-1.5 rounded-xl bg-surface border border-border text-xs font-semibold focus:outline-hidden cursor-pointer"
+                    >
+                      {companies.map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} {c.brand_name ? `(${c.brand_name})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                {/* Designation / Role */}
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-muted-foreground flex items-center gap-1">
-                    <Briefcase size={12} className="text-primary" />
-                    <span>Appointed Designation:</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={customDesignation}
-                    onChange={(e) => setCustomDesignation(e.target.value)}
-                    placeholder="e.g. Senior Software Engineer"
-                    className="w-full px-3 py-1.5 rounded-xl bg-surface border border-border text-xs font-semibold focus:outline-hidden"
-                  />
+                  {/* Select Branch */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-muted-foreground flex items-center gap-1">
+                      <MapPin size={12} className="text-primary" />
+                      <span>Issuing Branch / Hub:</span>
+                    </label>
+                    <select
+                      value={selectedBranchId}
+                      onChange={(e) => setSelectedBranchId(e.target.value)}
+                      className="w-full px-3 py-1.5 rounded-xl bg-surface border border-border text-xs font-semibold focus:outline-hidden cursor-pointer"
+                    >
+                      <option value="">Default Headquarters</option>
+                      {branches.filter(b => !selectedCompanyId || String(b.company_id) === String(selectedCompanyId)).map(b => (
+                        <option key={b.id} value={b.id}>
+                          {b.name} {b.city ? `(${b.city})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Designation / Role */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-muted-foreground flex items-center gap-1">
+                      <Briefcase size={12} className="text-primary" />
+                      <span>Appointed Designation:</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={customDesignation}
+                      onChange={(e) => setCustomDesignation(e.target.value)}
+                      placeholder="e.g. Senior Software Engineer"
+                      className="w-full px-3 py-1.5 rounded-xl bg-surface border border-border text-xs font-semibold focus:outline-hidden"
+                    />
+                  </div>
+
+                  {/* Department */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-muted-foreground flex items-center gap-1">
+                      <Layers size={12} className="text-primary" />
+                      <span>Department:</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={customDepartment}
+                      onChange={(e) => setCustomDepartment(e.target.value)}
+                      placeholder="e.g. Technology & Engineering"
+                      className="w-full px-3 py-1.5 rounded-xl bg-surface border border-border text-xs font-semibold focus:outline-hidden"
+                    />
+                  </div>
+
+                  {/* Offer Salary (Annual CTC) */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-muted-foreground flex items-center gap-1">
+                      <DollarSign size={12} className="text-primary" />
+                      <span>Annual Cost to Company (CTC):</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={customCtc}
+                      onChange={(e) => setCustomCtc(e.target.value)}
+                      placeholder="e.g. ₹4,80,000 per Annum (INR 4.8 LPA)"
+                      className="w-full px-3 py-1.5 rounded-xl bg-surface border border-border text-xs font-bold font-mono focus:outline-hidden"
+                    />
+                  </div>
+
+                  {/* Monthly Gross Salary */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-muted-foreground flex items-center gap-1">
+                      <DollarSign size={12} className="text-emerald-500" />
+                      <span>Monthly Gross Compensation:</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={customMonthlySalary}
+                      onChange={(e) => setCustomMonthlySalary(e.target.value)}
+                      placeholder="e.g. ₹40,000 / Month (Gross)"
+                      className="w-full px-3 py-1.5 rounded-xl bg-surface border border-border text-xs font-semibold font-mono focus:outline-hidden"
+                    />
+                  </div>
+
+                  {/* Reporting Manager */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-muted-foreground flex items-center gap-1">
+                      <User size={12} className="text-primary" />
+                      <span>Reporting Authority:</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={customReportingManager}
+                      onChange={(e) => setCustomReportingManager(e.target.value)}
+                      placeholder="e.g. Head of Engineering / Branch Lead"
+                      className="w-full px-3 py-1.5 rounded-xl bg-surface border border-border text-xs font-semibold focus:outline-hidden"
+                    />
+                  </div>
+
+                  {/* Joining Date */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-muted-foreground flex items-center gap-1">
+                      <Calendar size={12} className="text-primary" />
+                      <span>Date of Joining:</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={customJoiningDate}
+                      onChange={(e) => setCustomJoiningDate(e.target.value)}
+                      className="w-full px-3 py-1.5 rounded-xl bg-surface border border-border text-xs font-bold focus:outline-hidden cursor-pointer"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -692,6 +796,18 @@ export function UserOverviewModal({
                   onDesignationChange={setCustomDesignation}
                   ctc={customCtc}
                   onCtcChange={setCustomCtc}
+                  monthlySalary={customMonthlySalary}
+                  onMonthlySalaryChange={setCustomMonthlySalary}
+                  department={customDepartment}
+                  onDepartmentChange={setCustomDepartment}
+                  reportingManager={customReportingManager}
+                  onReportingManagerChange={setCustomReportingManager}
+                  probationPeriod={customProbationPeriod}
+                  onProbationPeriodChange={setCustomProbationPeriod}
+                  workingHours={customWorkingHours}
+                  onWorkingHoursChange={setCustomWorkingHours}
+                  workMode={customWorkMode}
+                  onWorkModeChange={setCustomWorkMode}
                   onSendEmail={() => handleSendDocumentEmail("offer_letter")}
                   isSendingEmail={isSendingEmail}
                 />

@@ -80,7 +80,7 @@ export function AppModuleGuard({ children }: { children: React.ReactNode }) {
   if (!mounted) return <>{children}</>
 
   // Public routes always render without restriction
-  if (!pathname || pathname === "/login" || pathname.startsWith("/public/") || pathname.startsWith("/verify-invoice")) {
+  if (!pathname || pathname === "/login" || pathname.startsWith("/public/") || pathname.startsWith("/verify-invoice") || pathname.startsWith("/verify-member")) {
     return <>{children}</>
   }
 

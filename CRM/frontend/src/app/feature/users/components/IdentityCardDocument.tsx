@@ -34,23 +34,45 @@ export function IdentityCardDocument({
   const [activeSide, setActiveSide] = React.useState<"front" | "back">("front")
   const [orientation, setOrientation] = React.useState<"portrait" | "landscape">(layoutOrientation)
 
-  const empId = user.employeeId || `SP-EMP-${String(user.id).replace(/[^0-9]/g, "").slice(-4).padStart(4, "0") || "1024"}`
+  const empId = user.employeeId || `SP-EMP-${String(user.id).replace(/[^0-9]/g, "").slice(-4).padStart(4, "0") || "0041"}`
   const companyName = company?.name || user.companyName || "SAAMPARK TECHNOLOGY PRIVATE LIMITED"
   const brandName = company?.brand_name || "SAAMPARK"
   const divisionName = company?.division_name || "TECHNOLOGY"
   const logoUrl = company?.logo_url || "/logo.png"
-  const branchName = branch?.name || user.branchName || "Kharagpur Regional Branch"
+  
+  const hasBranch = Boolean(
+    branch?.name || 
+    (user.branchName && user.branchName.trim() && !user.branchName.toLowerCase().includes("all") && !user.branchName.toLowerCase().includes("headquarters")) || 
+    user.branchId
+  )
+  const branchName = branch?.name || user.branchName || "Regional Operational Branch"
   const subBranchName = subBranch?.name || user.subBranchName || user.sub_branch_name
-  const designation = user.designation || user.role || "Technical Specialist"
-  const bloodGroup = user.bloodGroup || "O+"
+  const locationLabel = hasBranch ? "Branch:" : "Organization:"
+  const locationValue = hasBranch ? branchName : companyName
+
+  const designation = user.designation || user.role || "Executive Team Member"
   const joiningDate = user.joinedDate || "15-Jun-2024"
   const avatarSrc = user.avatarUrl || (user as any).avatar
   const signatureUrl = company?.signature_image_url || branch?.signature_image_url
   const stampUrl = company?.stamp_image_url || branch?.stamp_image_url
 
-  // Official verification URL for QR code
+  // Official verification URL for QR code (passes member details so any scanned device can verify with 0 login)
   const originUrl = typeof window !== "undefined" && window.location.origin ? window.location.origin : "https://saampark.com"
-  const verificationUrl = `${originUrl}/verify-member?id=${encodeURIComponent(user.id)}&empId=${encodeURIComponent(empId)}`
+  const queryParams = new URLSearchParams({
+    id: String(user.id || ""),
+    empId: empId,
+    name: user.name || "",
+    email: user.email || "",
+    phone: user.phone || "",
+    role: user.role || "Teams",
+    designation: designation,
+    department: user.department || "",
+    company: companyName,
+    branch: hasBranch ? branchName : "",
+    subBranch: subBranchName || "",
+    joined: joiningDate,
+  })
+  const verificationUrl = `${originUrl}/verify-member?${queryParams.toString()}`
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=1&ecc=M&data=${encodeURIComponent(verificationUrl)}`
 
   return (
@@ -188,26 +210,28 @@ export function IdentityCardDocument({
             </div>
 
             {/* Key Member Credentials Table */}
-            <div className="px-5 py-2 space-y-1.5 text-[9px] text-zinc-600 border-t border-b border-zinc-100 bg-zinc-50/60">
+            <div className="px-5 py-2.5 space-y-1.5 text-[8.5px] text-zinc-600 border-t border-b border-zinc-100 bg-zinc-50/70">
               <div className="flex justify-between items-center">
-                <span className="font-semibold text-zinc-500">Branch:</span>
-                <span className="font-bold text-zinc-900 truncate max-w-[160px]">{branchName}</span>
+                <span className="font-semibold text-zinc-500">Email:</span>
+                <span className="font-medium text-zinc-900 truncate max-w-[170px]">{user.email || "help@saampark.com"}</span>
               </div>
-              {subBranchName && (
+              <div className="flex justify-between items-center">
+                <span className="font-semibold text-zinc-500">Phone:</span>
+                <span className="font-medium text-zinc-900">{user.phone || "+91 90915 18567"}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="font-semibold text-zinc-500">{locationLabel}</span>
+                <span className="font-bold text-zinc-900 truncate max-w-[170px]">{locationValue}</span>
+              </div>
+              {hasBranch && subBranchName && (
                 <div className="flex justify-between items-center">
                   <span className="font-semibold text-zinc-500">Sub-Branch:</span>
-                  <span className="font-bold text-emerald-700 truncate max-w-[160px]">{subBranchName}</span>
+                  <span className="font-bold text-emerald-700 truncate max-w-[170px]">{subBranchName}</span>
                 </div>
               )}
               <div className="flex justify-between items-center">
                 <span className="font-semibold text-zinc-500">Joined Date:</span>
                 <span className="font-bold font-mono text-zinc-900">{joiningDate}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="font-semibold text-zinc-500">Blood Group:</span>
-                <span className="font-black text-rose-600 font-mono bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200">
-                  {bloodGroup}
-                </span>
               </div>
             </div>
 
@@ -332,18 +356,22 @@ export function IdentityCardDocument({
                 <div className="space-y-1 flex-1 min-w-0">
                   <h3 className="text-sm font-black text-zinc-950 uppercase tracking-tight truncate">{user.name}</h3>
                   <p className="text-xs font-bold text-teal-700 truncate">{designation}</p>
-                  <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[8px] text-zinc-600 pt-1">
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[8px] text-zinc-600 pt-1">
                     <div>
                       <span className="text-zinc-400 block text-[7px]">ID Number:</span>
                       <strong className="font-mono text-zinc-900">{empId}</strong>
                     </div>
                     <div>
-                      <span className="text-zinc-400 block text-[7px]">Blood Group:</span>
-                      <strong className="font-mono text-rose-600 font-black">{bloodGroup}</strong>
+                      <span className="text-zinc-400 block text-[7px]">Phone:</span>
+                      <strong className="text-zinc-900 font-medium truncate block">{user.phone || "+91 90915 18567"}</strong>
                     </div>
                     <div className="col-span-2 truncate">
-                      <span className="text-zinc-400 block text-[7px]">Branch:</span>
-                      <strong className="text-zinc-900 truncate block">{branchName}</strong>
+                      <span className="text-zinc-400 block text-[7px]">Email:</span>
+                      <strong className="text-zinc-900 font-medium truncate block">{user.email}</strong>
+                    </div>
+                    <div className="col-span-2 truncate">
+                      <span className="text-zinc-400 block text-[7px]">{locationLabel}</span>
+                      <strong className="text-zinc-900 truncate block">{locationValue}</strong>
                     </div>
                   </div>
                 </div>

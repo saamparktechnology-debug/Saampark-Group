@@ -185,7 +185,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   if (!isMounted) return null
 
   // If on login or public unauthenticated verification page, render directly
-  const isPublicPage = pathname === "/login" || pathname?.startsWith("/public") || pathname?.startsWith("/verify-invoice")
+  const isPublicPage = pathname === "/login" || pathname?.startsWith("/public") || pathname?.startsWith("/verify-invoice") || pathname?.startsWith("/verify-member")
   if (isPublicPage) return <>{children}</>
 
   // If not authenticated and not on public page, render nothing while redirecting

@@ -770,8 +770,8 @@ export function OfficialInvoiceDocument({
               })
             }
           }}
-          className={`relative shrink-0 select-none ${
-            interactive ? "cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-blue-500 rounded-2xl group transition-shadow z-20" : ""
+          className={`relative shrink-0 select-none bg-transparent ${
+            interactive ? "cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-blue-500/60 rounded-2xl group transition-shadow z-20" : ""
           }`}
           style={{ transformOrigin: "top left" }}
         >
@@ -815,11 +815,11 @@ export function OfficialInvoiceDocument({
             </div>
           )}
           {resolvedLogoUrl ? (
-            <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden shadow-2xs shrink-0 border border-zinc-200/90 bg-white flex items-center justify-center p-2">
+            <div className="relative w-24 h-24 sm:w-28 sm:h-28 shrink-0 bg-transparent flex items-center justify-center p-0.5 border-0 shadow-none">
               <img 
                 src={resolvedLogoUrl} 
                 alt={resolvedBrandName || "Entity Logo"} 
-                className="max-w-full max-h-full object-contain pointer-events-none select-none" 
+                className="max-w-full max-h-full object-contain pointer-events-none select-none bg-transparent" 
               />
             </div>
           ) : (
@@ -1703,97 +1703,77 @@ export function OfficialInvoiceDocument({
             </div>
           </div>
 
-          {/* Center-Right: Independent Draggable Corporate Seal / Stamp */}
-          <motion.div
-            drag={interactive}
-            dragMomentum={false}
-            dragElastic={0}
-            whileDrag={{ scale: (stampScale || 1) * 1.05, zIndex: 50 }}
-            animate={{ x: stampPosition?.x || 0, y: stampPosition?.y || 0, scale: stampScale || 1 }}
-            onDragEnd={(_, info) => {
-              if (onStampPositionChange) {
-                onStampPositionChange({
-                  x: (stampPosition?.x || 0) + info.offset.x,
-                  y: (stampPosition?.y || 0) + info.offset.y,
-                })
-              }
-            }}
-            className={`shrink-0 select-none relative ${
-              interactive ? "cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-emerald-500 rounded-2xl group transition-shadow p-1 z-20" : ""
-            }`}
-            style={{ transformOrigin: "bottom center" }}
-          >
-            {interactive && (
-              <div className="absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity bg-zinc-900/95 text-white px-2 py-0.5 rounded-lg shadow-xl flex items-center gap-1.5 z-40 text-[9px] pointer-events-auto whitespace-nowrap border border-white/20">
-                <span className="text-[7.5px] font-bold text-zinc-400 select-none">✥ Seal</span>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onStampScaleChange?.(Math.max(0.5, Number(((stampScale || 1) - 0.1).toFixed(1))))
-                  }}
-                  className="hover:text-emerald-300 font-bold px-1 cursor-pointer"
-                  title="Zoom Out Stamp / Seal"
-                >
-                  🔍-
-                </button>
-                <span className="font-mono text-[8px] text-zinc-300 font-bold">{Math.round((stampScale || 1) * 100)}%</span>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onStampScaleChange?.(Math.min(2.5, Number(((stampScale || 1) + 0.1).toFixed(1))))
-                  }}
-                  className="hover:text-emerald-300 font-bold px-1 cursor-pointer"
-                  title="Zoom In Stamp / Seal"
-                >
-                  🔍+
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onStampScaleChange?.(1)
-                  }}
-                  className="text-[7.5px] text-zinc-400 hover:text-white px-0.5 cursor-pointer"
-                  title="Reset Seal Zoom (100%)"
-                >
-                  100%
-                </button>
-              </div>
-            )}
-            {resolvedStampUrl ? (
-              <div className="w-22 h-22 sm:w-24 sm:h-24 flex items-center justify-center p-0.5 shadow-2xs">
+          {/* Center-Right: Independent Draggable Corporate Seal / Stamp (Only shown when stamp image is provided) */}
+          {resolvedStampUrl ? (
+            <motion.div
+              drag={interactive}
+              dragMomentum={false}
+              dragElastic={0}
+              whileDrag={{ scale: (stampScale || 1) * 1.05, zIndex: 50 }}
+              animate={{ x: stampPosition?.x || 0, y: stampPosition?.y || 0, scale: stampScale || 1 }}
+              onDragEnd={(_, info) => {
+                if (onStampPositionChange) {
+                  onStampPositionChange({
+                    x: (stampPosition?.x || 0) + info.offset.x,
+                    y: (stampPosition?.y || 0) + info.offset.y,
+                  })
+                }
+              }}
+              className={`shrink-0 select-none relative bg-transparent ${
+                interactive ? "cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-emerald-500/50 rounded-2xl group transition-shadow p-1 z-20" : ""
+              }`}
+              style={{ transformOrigin: "bottom center" }}
+            >
+              {interactive && (
+                <div className="absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity bg-zinc-900/95 text-white px-2 py-0.5 rounded-lg shadow-xl flex items-center gap-1.5 z-40 text-[9px] pointer-events-auto whitespace-nowrap border border-white/20">
+                  <span className="text-[7.5px] font-bold text-zinc-400 select-none">✥ Seal</span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onStampScaleChange?.(Math.max(0.5, Number(((stampScale || 1) - 0.1).toFixed(1))))
+                    }}
+                    className="hover:text-emerald-300 font-bold px-1 cursor-pointer"
+                    title="Zoom Out Stamp / Seal"
+                  >
+                    🔍-
+                  </button>
+                  <span className="font-mono text-[8px] text-zinc-300 font-bold">{Math.round((stampScale || 1) * 100)}%</span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onStampScaleChange?.(Math.min(2.5, Number(((stampScale || 1) + 0.1).toFixed(1))))
+                    }}
+                    className="hover:text-emerald-300 font-bold px-1 cursor-pointer"
+                    title="Zoom In Stamp / Seal"
+                  >
+                    🔍+
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onStampScaleChange?.(1)
+                    }}
+                    className="text-[7.5px] text-zinc-400 hover:text-white px-0.5 cursor-pointer"
+                    title="Reset Seal Zoom (100%)"
+                  >
+                    100%
+                  </button>
+                </div>
+              )}
+              <div className="w-22 h-22 sm:w-24 sm:h-24 flex items-center justify-center p-0.5 bg-transparent">
                 <img 
                   src={resolvedStampUrl} 
                   alt="Official Company Seal" 
-                  className="max-h-24 max-w-24 object-contain pointer-events-none select-none drop-shadow-sm" 
+                  className="max-h-24 max-w-24 object-contain pointer-events-none select-none drop-shadow-sm bg-transparent" 
                 />
               </div>
-            ) : (
-              /* High-Fidelity Vector Circular Corporate Stamp Seal */
-              <div className={`w-22 h-22 sm:w-24 sm:h-24 rounded-full border-2 border-dashed ${theme.sealColor} flex flex-col items-center justify-center p-1 text-center bg-white shadow-2xs rotate-[-5deg] relative`}>
-                <div className="w-[66px] h-[66px] rounded-full border border-zinc-300 dark:border-zinc-700 flex flex-col items-center justify-center p-0.5">
-                  <EditableText
-                    value={resolvedBrandName}
-                    interactive={interactive}
-                    className="text-[7px] font-black uppercase tracking-tighter leading-tight text-zinc-900 truncate max-w-[58px]"
-                  />
-                  <div className="w-full border-t border-zinc-300 dark:border-zinc-700 my-0.5" />
-                  <EditableText
-                    value="★ OFFICIAL SEAL ★"
-                    interactive={interactive}
-                    className="text-[6.5px] font-black text-emerald-700 dark:text-emerald-400 tracking-wider uppercase leading-none"
-                  />
-                  <EditableText
-                    value="VERIFIED"
-                    interactive={interactive}
-                    className="text-[5.5px] font-bold text-zinc-500 uppercase tracking-tight leading-none mt-0.5"
-                  />
-                </div>
-              </div>
-            )}
-          </motion.div>
+            </motion.div>
+          ) : (
+            <div className="w-16 h-16 sm:w-20 sm:h-20 shrink-0 pointer-events-none" />
+          )}
 
           {/* Right: Independent Draggable Company Authorized Signatory */}
           <motion.div

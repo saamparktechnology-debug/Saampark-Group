@@ -17,8 +17,8 @@ import { BranchApiService, SubBranchApiService } from "@/app/feature/companies/s
 import { OfficialInvoiceDocument } from "@/app/feature/sales/invoices/components/OfficialInvoiceDocument"
 
 type Tab = "branches" | "sub-branches"
-type BranchModalTab = "basic" | "address" | "tax"
-type SubBranchModalTab = "basic" | "address"
+type BranchModalTab = "basic" | "address" | "tax" | "bank" | "signatory"
+type SubBranchModalTab = "basic" | "address" | "tax" | "bank" | "signatory"
 
 export default function BranchesMain() {
   const { 
@@ -366,6 +366,32 @@ export default function BranchesMain() {
       invoice_notes: (b as any).invoice_notes || "",
     })
     setIsBranchModalOpen(true)
+  }
+
+  const handleCopyBranchGstToNongst = () => {
+    setBranchForm(prev => ({
+      ...prev,
+      nongst_bank_name: prev.gst_bank_name || prev.bank_name,
+      nongst_account_holder: prev.gst_account_holder || prev.account_holder,
+      nongst_account_number: prev.gst_account_number || prev.account_number,
+      nongst_ifsc_code: prev.gst_ifsc_code || prev.ifsc_code,
+      nongst_bank_branch: prev.gst_bank_branch || prev.bank_branch,
+      nongst_upi_id: prev.gst_upi_id || prev.upi_id,
+      nongst_payment_qr_url: prev.gst_payment_qr_url || prev.payment_qr_url,
+    }))
+  }
+
+  const handleCopySubBranchGstToNongst = () => {
+    setSubBranchForm(prev => ({
+      ...prev,
+      nongst_bank_name: prev.gst_bank_name || prev.bank_name,
+      nongst_account_holder: prev.gst_account_holder || prev.account_holder,
+      nongst_account_number: prev.gst_account_number || prev.account_number,
+      nongst_ifsc_code: prev.gst_ifsc_code || prev.ifsc_code,
+      nongst_bank_branch: prev.gst_bank_branch || prev.bank_branch,
+      nongst_upi_id: prev.gst_upi_id || prev.upi_id,
+      nongst_payment_qr_url: prev.gst_payment_qr_url || prev.payment_qr_url,
+    }))
   }
 
   // ── SAVE BRANCH ────────────────────────────────────────────────────
@@ -1010,48 +1036,76 @@ export default function BranchesMain() {
 
               {/* Form Content */}
               <div className="flex flex-col flex-1 overflow-hidden">
-                {/* 3 Tab Navigation Header */}
-                <div className="grid grid-cols-3 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/40 font-semibold text-center shrink-0">
+                {/* 5 Tab Navigation Header */}
+                <div className="grid grid-cols-5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/40 font-semibold text-center shrink-0">
                   <button 
                     type="button" 
                     onClick={() => setBranchTab("basic")} 
-                    className={`py-3 px-2 border-b-2 transition-colors flex items-center justify-center gap-1.5 ${
+                    className={`py-2.5 px-1 border-b-2 transition-colors flex items-center justify-center gap-1 text-[11px] ${
                       branchTab === "basic" 
                         ? "border-blue-600 text-blue-600 bg-white dark:bg-zinc-900 font-bold" 
                         : "border-transparent text-zinc-500 hover:text-zinc-800"
                     }`}
                   >
-                    <Building size={13} />
-                    <span className="hidden sm:inline">1. Basic Info</span>
-                    <span className="sm:hidden">1. Basic</span>
+                    <Building size={12} />
+                    <span className="hidden sm:inline">1. Basic</span>
+                    <span className="sm:hidden">1</span>
                   </button>
 
                   <button 
                     type="button" 
                     onClick={() => setBranchTab("address")} 
-                    className={`py-3 px-2 border-b-2 transition-colors flex items-center justify-center gap-1.5 ${
+                    className={`py-2.5 px-1 border-b-2 transition-colors flex items-center justify-center gap-1 text-[11px] ${
                       branchTab === "address" 
                         ? "border-blue-600 text-blue-600 bg-white dark:bg-zinc-900 font-bold" 
                         : "border-transparent text-zinc-500 hover:text-zinc-800"
                     }`}
                   >
-                    <MapPin size={13} />
-                    <span className="hidden sm:inline">2. Address &amp; Contact</span>
-                    <span className="sm:hidden">2. Loc</span>
+                    <MapPin size={12} />
+                    <span className="hidden sm:inline">2. Address</span>
+                    <span className="sm:hidden">2</span>
                   </button>
 
                   <button 
                     type="button" 
                     onClick={() => setBranchTab("tax")} 
-                    className={`py-3 px-2 border-b-2 transition-colors flex items-center justify-center gap-1.5 ${
+                    className={`py-2.5 px-1 border-b-2 transition-colors flex items-center justify-center gap-1 text-[11px] ${
                       branchTab === "tax" 
                         ? "border-blue-600 text-blue-600 bg-white dark:bg-zinc-900 font-bold" 
                         : "border-transparent text-zinc-500 hover:text-zinc-800"
                     }`}
                   >
-                    <Shield size={13} />
-                    <span className="hidden sm:inline">3. Legal &amp; Tax IDs</span>
-                    <span className="sm:hidden">3. Tax</span>
+                    <Shield size={12} />
+                    <span className="hidden sm:inline">3. Tax IDs</span>
+                    <span className="sm:hidden">3</span>
+                  </button>
+
+                  <button 
+                    type="button" 
+                    onClick={() => setBranchTab("bank")} 
+                    className={`py-2.5 px-1 border-b-2 transition-colors flex items-center justify-center gap-1 text-[11px] ${
+                      branchTab === "bank" 
+                        ? "border-blue-600 text-blue-600 bg-white dark:bg-zinc-900 font-bold" 
+                        : "border-transparent text-zinc-500 hover:text-zinc-800"
+                    }`}
+                  >
+                    <CreditCard size={12} />
+                    <span className="hidden sm:inline">4. Bank &amp; QR</span>
+                    <span className="sm:hidden">4</span>
+                  </button>
+
+                  <button 
+                    type="button" 
+                    onClick={() => setBranchTab("signatory")} 
+                    className={`py-2.5 px-1 border-b-2 transition-colors flex items-center justify-center gap-1 text-[11px] ${
+                      branchTab === "signatory" 
+                        ? "border-blue-600 text-blue-600 bg-white dark:bg-zinc-900 font-bold" 
+                        : "border-transparent text-zinc-500 hover:text-zinc-800"
+                    }`}
+                  >
+                    <Stamp size={12} />
+                    <span className="hidden sm:inline">5. Stamp &amp; Sig</span>
+                    <span className="sm:hidden">5</span>
                   </button>
                 </div>
 
@@ -1061,7 +1115,7 @@ export default function BranchesMain() {
                     {/* Informational note about banking, signatory & terms inheritance */}
                     <div className="p-3 bg-blue-50/60 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/50 rounded-xl flex items-center gap-2 text-xs text-blue-700 dark:text-blue-300">
                       <Landmark size={14} className="shrink-0 text-blue-600" />
-                      <span>Banking, UPI QR codes, Signatories, Stamps, and Terms are centralized and inherited from the parent Company.</span>
+                      <span>Optional Overrides: Any banking, signature, or stamp field left empty will inherit from the parent Company.</span>
                     </div>
                     
                     {/* ── TAB 1: BASIC & BRAND ── */}
@@ -1346,6 +1400,265 @@ export default function BranchesMain() {
                         </div>
                       </div>
                     )}
+
+                    {/* ── TAB 4: DUAL GST & NON-GST BANKING & PAYMENT QR ── */}
+                    {branchTab === "bank" && (
+                      <div className="space-y-4">
+                        {/* Dual Profile Switcher Header */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 rounded-2xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
+                          <div className="flex items-center gap-1.5 p-0.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700">
+                            <button
+                              type="button"
+                              onClick={() => setBranchBankProfileTab("gst")}
+                              className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                                branchBankProfileTab === "gst"
+                                  ? "bg-blue-600 text-white shadow-xs"
+                                  : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
+                              }`}
+                            >
+                              <CreditCard size={13} />
+                              <span>GST Bank Profile</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setBranchBankProfileTab("nongst")}
+                              className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                                branchBankProfileTab === "nongst"
+                                  ? "bg-amber-600 text-white shadow-xs"
+                                  : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
+                              }`}
+                            >
+                              <CreditCard size={13} />
+                              <span>Non-GST Bank Profile</span>
+                            </button>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={handleCopyBranchGstToNongst}
+                            className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 font-semibold text-[11px] flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
+                            title="Copy details from GST profile into Non-GST profile"
+                          >
+                            <Sparkles size={12} className="text-blue-600" />
+                            <span>Copy GST to Non-GST</span>
+                          </button>
+                        </div>
+
+                        {/* Branch GST Bank Profile */}
+                        {branchBankProfileTab === "gst" && (
+                          <div className="p-4 rounded-2xl border border-blue-500/20 bg-blue-50/20 dark:bg-blue-950/10 space-y-3.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-bold text-blue-700 dark:text-blue-400 uppercase tracking-wider block">
+                                Branch GST Invoicing Bank &amp; Settlement Account
+                              </span>
+                              <span className="text-[10px] text-zinc-500">Used for Official Branch GST Invoices</span>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                              <div>
+                                <label className="block font-semibold mb-1">GST Bank Name</label>
+                                <input 
+                                  type="text" 
+                                  placeholder="e.g. ICICI Bank Ltd" 
+                                  value={branchForm.gst_bank_name} 
+                                  onChange={e => setBranchForm({ ...branchForm, gst_bank_name: e.target.value, bank_name: e.target.value })} 
+                                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg"
+                                />
+                              </div>
+                              <div>
+                                <label className="block font-semibold mb-1">Account Holder Name</label>
+                                <input 
+                                  type="text" 
+                                  placeholder="e.g. SAAMPARK TECHNOLOGY - BRANCH" 
+                                  value={branchForm.gst_account_holder} 
+                                  onChange={e => setBranchForm({ ...branchForm, gst_account_holder: e.target.value, account_holder: e.target.value })} 
+                                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg"
+                                />
+                              </div>
+                              <div>
+                                <label className="block font-semibold mb-1">GST Account Number</label>
+                                <input 
+                                  type="text" 
+                                  placeholder="Branch GST A/C number..." 
+                                  value={branchForm.gst_account_number} 
+                                  onChange={e => setBranchForm({ ...branchForm, gst_account_number: e.target.value, account_number: e.target.value })} 
+                                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono font-bold" 
+                                />
+                              </div>
+                              <div>
+                                <label className="block font-semibold mb-1">IFSC Code</label>
+                                <input 
+                                  type="text" 
+                                  placeholder="e.g. ICIC0001234" 
+                                  value={branchForm.gst_ifsc_code} 
+                                  onChange={e => setBranchForm({ ...branchForm, gst_ifsc_code: e.target.value.toUpperCase(), ifsc_code: e.target.value.toUpperCase() })} 
+                                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono font-bold uppercase" 
+                                />
+                              </div>
+                              <div>
+                                <label className="block font-semibold mb-1">Bank Branch Name</label>
+                                <input 
+                                  type="text" 
+                                  placeholder="e.g. Sector V Branch" 
+                                  value={branchForm.gst_bank_branch} 
+                                  onChange={e => setBranchForm({ ...branchForm, gst_bank_branch: e.target.value, bank_branch: e.target.value })} 
+                                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg"
+                                />
+                              </div>
+                              <div>
+                                <label className="block font-semibold mb-1">GST UPI ID / VPA</label>
+                                <input 
+                                  type="text" 
+                                  placeholder="e.g. saampark.gst@icici" 
+                                  value={branchForm.gst_upi_id} 
+                                  onChange={e => setBranchForm({ ...branchForm, gst_upi_id: e.target.value, upi_id: e.target.value })} 
+                                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono" 
+                                />
+                              </div>
+                            </div>
+                            <div className="pt-2">
+                              <ImageUploadField
+                                label="GST Payment QR Code / Scanner"
+                                value={branchForm.gst_payment_qr_url}
+                                onChange={url => setBranchForm({ ...branchForm, gst_payment_qr_url: url, payment_qr_url: url })}
+                                uploadNamePrefix="branch_gst_qr"
+                                helperText="Official QR scanner image printed on Branch GST Tax Invoices."
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Branch Non-GST Bank Profile */}
+                        {branchBankProfileTab === "nongst" && (
+                          <div className="p-4 rounded-2xl border border-amber-500/20 bg-amber-50/20 dark:bg-amber-950/10 space-y-3.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider block">
+                                Branch Non-GST Invoicing Bank &amp; Settlement Account
+                              </span>
+                              <span className="text-[10px] text-zinc-500">Used for Non-GST / Direct Estimates &amp; Bills</span>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                              <div>
+                                <label className="block font-semibold mb-1">Non-GST Bank Name</label>
+                                <input 
+                                  type="text" 
+                                  placeholder="e.g. HDFC Bank Ltd" 
+                                  value={branchForm.nongst_bank_name} 
+                                  onChange={e => setBranchForm({ ...branchForm, nongst_bank_name: e.target.value })} 
+                                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg"
+                                />
+                              </div>
+                              <div>
+                                <label className="block font-semibold mb-1">Account Holder Name</label>
+                                <input 
+                                  type="text" 
+                                  placeholder="Branch Non-GST Account Holder" 
+                                  value={branchForm.nongst_account_holder} 
+                                  onChange={e => setBranchForm({ ...branchForm, nongst_account_holder: e.target.value })} 
+                                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg"
+                                />
+                              </div>
+                              <div>
+                                <label className="block font-semibold mb-1">Non-GST Account Number</label>
+                                <input 
+                                  type="text" 
+                                  placeholder="Branch Non-GST A/C number..." 
+                                  value={branchForm.nongst_account_number} 
+                                  onChange={e => setBranchForm({ ...branchForm, nongst_account_number: e.target.value })} 
+                                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono font-bold" 
+                                />
+                              </div>
+                              <div>
+                                <label className="block font-semibold mb-1">IFSC Code</label>
+                                <input 
+                                  type="text" 
+                                  placeholder="e.g. HDFC0000123" 
+                                  value={branchForm.nongst_ifsc_code} 
+                                  onChange={e => setBranchForm({ ...branchForm, nongst_ifsc_code: e.target.value.toUpperCase() })} 
+                                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono font-bold uppercase" 
+                                />
+                              </div>
+                              <div>
+                                <label className="block font-semibold mb-1">Bank Branch Name</label>
+                                <input 
+                                  type="text" 
+                                  placeholder="e.g. Salt Lake Main Branch" 
+                                  value={branchForm.nongst_bank_branch} 
+                                  onChange={e => setBranchForm({ ...branchForm, nongst_bank_branch: e.target.value })} 
+                                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg"
+                                />
+                              </div>
+                              <div>
+                                <label className="block font-semibold mb-1">Non-GST UPI ID / VPA</label>
+                                <input 
+                                  type="text" 
+                                  placeholder="e.g. branch.nongst@hdfcbank" 
+                                  value={branchForm.nongst_upi_id} 
+                                  onChange={e => setBranchForm({ ...branchForm, nongst_upi_id: e.target.value })} 
+                                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono" 
+                                />
+                              </div>
+                            </div>
+                            <div className="pt-2">
+                              <ImageUploadField
+                                label="Non-GST Payment QR Code / Scanner"
+                                value={branchForm.nongst_payment_qr_url}
+                                onChange={url => setBranchForm({ ...branchForm, nongst_payment_qr_url: url })}
+                                uploadNamePrefix="branch_nongst_qr"
+                                helperText="Official QR scanner image printed on Branch Non-GST Direct Bills."
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* ── TAB 5: SIGNATORY & OFFICIAL STAMP ── */}
+                    {branchTab === "signatory" && (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                          <div>
+                            <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Branch Signatory Name</label>
+                            <input 
+                              type="text" 
+                              placeholder="e.g. Supriya Kumar (or blank for default)" 
+                              value={branchForm.signatory_name} 
+                              onChange={e => setBranchForm({ ...branchForm, signatory_name: e.target.value })} 
+                              className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Signatory Designation</label>
+                            <input 
+                              type="text" 
+                              placeholder="e.g. Branch Head / Operations Manager" 
+                              value={branchForm.signatory_designation} 
+                              onChange={e => setBranchForm({ ...branchForm, signatory_designation: e.target.value })} 
+                              className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                          <div className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
+                            <ImageUploadField
+                              label="Branch Authorized Signature"
+                              value={branchForm.signature_image_url}
+                              onChange={url => setBranchForm({ ...branchForm, signature_image_url: url })}
+                              uploadNamePrefix="branch_sig"
+                              helperText="If not uploaded, the parent Company's signature image is automatically used."
+                            />
+                          </div>
+                          <div className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
+                            <ImageUploadField
+                              label="Branch Official Stamp / Seal"
+                              value={branchForm.stamp_image_url}
+                              onChange={url => setBranchForm({ ...branchForm, stamp_image_url: url })}
+                              uploadNamePrefix="branch_stamp"
+                              helperText="If not uploaded, the parent Company's corporate seal stamp is automatically used."
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </form>
               </div>
@@ -1353,7 +1666,7 @@ export default function BranchesMain() {
               {/* Footer Buttons */}
               <div className="flex items-center justify-between px-6 py-3.5 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/40 shrink-0">
                 <div className="text-zinc-400 text-[11px]">
-                  Step {branchTab === "basic" ? "1" : branchTab === "address" ? "2" : "3"} of 3
+                  Step {branchTab === "basic" ? "1" : branchTab === "address" ? "2" : branchTab === "tax" ? "3" : branchTab === "bank" ? "4" : "5"} of 5
                 </div>
                 <div className="flex items-center gap-2">
                   <button 
@@ -1412,39 +1725,82 @@ export default function BranchesMain() {
                 </button>
               </div>
 
-              {/* Tab Navigation: 2 Clean Tabs */}
-              <div className="flex items-center gap-1 px-6 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 shrink-0 overflow-x-auto">
+              {/* Tab Navigation: 5 Tabs */}
+              <div className="grid grid-cols-5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 shrink-0 text-center font-semibold">
                 <button
                   type="button"
                   onClick={() => setSubBranchTab("basic")}
-                  className={`flex items-center gap-1.5 py-3 px-3.5 border-b-2 font-medium text-xs whitespace-nowrap transition-colors ${
+                  className={`flex items-center justify-center gap-1 py-2.5 px-1 border-b-2 text-[11px] transition-colors ${
                     subBranchTab === "basic"
-                      ? "border-emerald-600 text-emerald-600 dark:text-emerald-400 font-semibold"
+                      ? "border-emerald-600 text-emerald-600 dark:text-emerald-400 font-bold bg-white dark:bg-zinc-900"
                       : "border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300"
                   }`}
                 >
-                  <Building size={14} /> 1. Basic &amp; Partner Attribution
+                  <Building size={12} />
+                  <span className="hidden sm:inline">1. Partner</span>
+                  <span className="sm:hidden">1</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setSubBranchTab("address")}
-                  className={`flex items-center gap-1.5 py-3 px-3.5 border-b-2 font-medium text-xs whitespace-nowrap transition-colors ${
+                  className={`flex items-center justify-center gap-1 py-2.5 px-1 border-b-2 text-[11px] transition-colors ${
                     subBranchTab === "address"
-                      ? "border-emerald-600 text-emerald-600 dark:text-emerald-400 font-semibold"
+                      ? "border-emerald-600 text-emerald-600 dark:text-emerald-400 font-bold bg-white dark:bg-zinc-900"
                       : "border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300"
                   }`}
                 >
-                  <MapPin size={14} /> 2. Address &amp; Contact
+                  <MapPin size={12} />
+                  <span className="hidden sm:inline">2. Address</span>
+                  <span className="sm:hidden">2</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSubBranchTab("tax")}
+                  className={`flex items-center justify-center gap-1 py-2.5 px-1 border-b-2 text-[11px] transition-colors ${
+                    subBranchTab === "tax"
+                      ? "border-emerald-600 text-emerald-600 dark:text-emerald-400 font-bold bg-white dark:bg-zinc-900"
+                      : "border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300"
+                  }`}
+                >
+                  <Shield size={12} />
+                  <span className="hidden sm:inline">3. Tax IDs</span>
+                  <span className="sm:hidden">3</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSubBranchTab("bank")}
+                  className={`flex items-center justify-center gap-1 py-2.5 px-1 border-b-2 text-[11px] transition-colors ${
+                    subBranchTab === "bank"
+                      ? "border-emerald-600 text-emerald-600 dark:text-emerald-400 font-bold bg-white dark:bg-zinc-900"
+                      : "border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300"
+                  }`}
+                >
+                  <CreditCard size={12} />
+                  <span className="hidden sm:inline">4. Bank &amp; QR</span>
+                  <span className="sm:hidden">4</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSubBranchTab("signatory")}
+                  className={`flex items-center justify-center gap-1 py-2.5 px-1 border-b-2 text-[11px] transition-colors ${
+                    subBranchTab === "signatory"
+                      ? "border-emerald-600 text-emerald-600 dark:text-emerald-400 font-bold bg-white dark:bg-zinc-900"
+                      : "border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300"
+                  }`}
+                >
+                  <Stamp size={12} />
+                  <span className="hidden sm:inline">5. Stamp &amp; Sig</span>
+                  <span className="sm:hidden">5</span>
                 </button>
               </div>
 
               {/* Form Content */}
-              <div className="flex-1 overflow-y-auto p-6">
+              <div className="flex-1 overflow-y-auto p-5">
                 <form id="subBranchFormSubmit" onSubmit={handleSaveSubBranch}>
                   {/* Informational note */}
                   <div className="p-3 mb-4 bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/50 rounded-xl flex items-center gap-2 text-xs text-emerald-700 dark:text-emerald-300">
                     <Landmark size={14} className="shrink-0 text-emerald-600" />
-                    <span>Banking, UPI QR codes, Signatories, Stamps, and Terms are centralized and inherited from the parent Company.</span>
+                    <span>Sub-Branch / Franchise Partner: Any banking or signatory field left empty will inherit from the parent Company.</span>
                   </div>
 
                   {/* TAB 1: BASIC & ATTRIBUTION */}
@@ -1690,13 +2046,300 @@ export default function BranchesMain() {
                       </div>
                     </div>
                   )}
+
+                  {/* TAB 3: LEGAL & TAX IDS */}
+                  {subBranchTab === "tax" && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Sub-Branch GSTIN (Optional)</label>
+                          <input 
+                            type="text" 
+                            placeholder="e.g. 19AAECS1234F1Z8" 
+                            value={subBranchForm.gstin} 
+                            onChange={(e) => setSubBranchForm({ ...subBranchForm, gstin: e.target.value.toUpperCase() })} 
+                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono uppercase" 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Sub-Branch PAN (Optional)</label>
+                          <input 
+                            type="text" 
+                            placeholder="e.g. AAECS1234F" 
+                            value={subBranchForm.pan} 
+                            onChange={(e) => setSubBranchForm({ ...subBranchForm, pan: e.target.value.toUpperCase() })} 
+                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono uppercase" 
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TAB 4: DUAL GST & NON-GST BANKING & PAYMENT QR */}
+                  {subBranchTab === "bank" && (
+                    <div className="space-y-4">
+                      {/* Dual Profile Switcher Header */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 rounded-2xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
+                        <div className="flex items-center gap-1.5 p-0.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700">
+                          <button
+                            type="button"
+                            onClick={() => setSubBranchBankProfileTab("gst")}
+                            className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                              subBranchBankProfileTab === "gst"
+                                ? "bg-emerald-600 text-white shadow-xs"
+                                : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
+                            }`}
+                          >
+                            <CreditCard size={13} />
+                            <span>GST Bank Profile</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSubBranchBankProfileTab("nongst")}
+                            className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                              subBranchBankProfileTab === "nongst"
+                                ? "bg-amber-600 text-white shadow-xs"
+                                : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200"
+                            }`}
+                          >
+                            <CreditCard size={13} />
+                            <span>Non-GST Bank Profile</span>
+                          </button>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleCopySubBranchGstToNongst}
+                          className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 font-semibold text-[11px] flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
+                          title="Copy details from GST profile into Non-GST profile"
+                        >
+                          <Sparkles size={12} className="text-emerald-600" />
+                          <span>Copy GST to Non-GST</span>
+                        </button>
+                      </div>
+
+                      {/* Sub-Branch GST Bank Profile */}
+                      {subBranchBankProfileTab === "gst" && (
+                        <div className="p-4 rounded-2xl border border-emerald-500/20 bg-emerald-50/20 dark:bg-emerald-950/10 space-y-3.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block">
+                              Sub-Branch GST Invoicing Bank &amp; Settlement Account
+                            </span>
+                            <span className="text-[10px] text-zinc-500">Used for Sub-Branch Official GST Invoices</span>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                            <div>
+                              <label className="block font-semibold mb-1">GST Bank Name</label>
+                              <input 
+                                type="text" 
+                                placeholder="e.g. State Bank of India" 
+                                value={subBranchForm.gst_bank_name} 
+                                onChange={e => setSubBranchForm({ ...subBranchForm, gst_bank_name: e.target.value, bank_name: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg"
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-semibold mb-1">Account Holder Name</label>
+                              <input 
+                                type="text" 
+                                placeholder="e.g. Saampark Franchise Hub" 
+                                value={subBranchForm.gst_account_holder} 
+                                onChange={e => setSubBranchForm({ ...subBranchForm, gst_account_holder: e.target.value, account_holder: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg"
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-semibold mb-1">GST Account Number</label>
+                              <input 
+                                type="text" 
+                                placeholder="Sub-Branch GST A/C number..." 
+                                value={subBranchForm.gst_account_number} 
+                                onChange={e => setSubBranchForm({ ...subBranchForm, gst_account_number: e.target.value, account_number: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono font-bold" 
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-semibold mb-1">IFSC Code</label>
+                              <input 
+                                type="text" 
+                                placeholder="e.g. SBIN0001234" 
+                                value={subBranchForm.gst_ifsc_code} 
+                                onChange={e => setSubBranchForm({ ...subBranchForm, gst_ifsc_code: e.target.value.toUpperCase(), ifsc_code: e.target.value.toUpperCase() })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono font-bold uppercase" 
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-semibold mb-1">Bank Branch Name</label>
+                              <input 
+                                type="text" 
+                                placeholder="e.g. City Center Branch" 
+                                value={subBranchForm.gst_bank_branch} 
+                                onChange={e => setSubBranchForm({ ...subBranchForm, gst_bank_branch: e.target.value, bank_branch: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg"
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-semibold mb-1">GST UPI ID / VPA</label>
+                              <input 
+                                type="text" 
+                                placeholder="e.g. saampark.sb@sbi" 
+                                value={subBranchForm.gst_upi_id} 
+                                onChange={e => setSubBranchForm({ ...subBranchForm, gst_upi_id: e.target.value, upi_id: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono" 
+                              />
+                            </div>
+                          </div>
+                          <div className="pt-2">
+                            <ImageUploadField
+                              label="GST Payment QR Code / Scanner"
+                              value={subBranchForm.gst_payment_qr_url}
+                              onChange={url => setSubBranchForm({ ...subBranchForm, gst_payment_qr_url: url, payment_qr_url: url })}
+                              uploadNamePrefix="subbranch_gst_qr"
+                              helperText="Official QR scanner image printed on Sub-Branch GST Tax Invoices."
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Sub-Branch Non-GST Bank Profile */}
+                      {subBranchBankProfileTab === "nongst" && (
+                        <div className="p-4 rounded-2xl border border-amber-500/20 bg-amber-50/20 dark:bg-amber-950/10 space-y-3.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider block">
+                              Sub-Branch Non-GST Invoicing Bank &amp; Settlement Account
+                            </span>
+                            <span className="text-[10px] text-zinc-500">Used for Sub-Branch Non-GST / Direct Estimates &amp; Bills</span>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                            <div>
+                              <label className="block font-semibold mb-1">Non-GST Bank Name</label>
+                              <input 
+                                type="text" 
+                                placeholder="e.g. HDFC Bank Ltd" 
+                                value={subBranchForm.nongst_bank_name} 
+                                onChange={e => setSubBranchForm({ ...subBranchForm, nongst_bank_name: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg"
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-semibold mb-1">Account Holder Name</label>
+                              <input 
+                                type="text" 
+                                placeholder="Sub-Branch Non-GST Account Holder" 
+                                value={subBranchForm.nongst_account_holder} 
+                                onChange={e => setSubBranchForm({ ...subBranchForm, nongst_account_holder: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg"
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-semibold mb-1">Non-GST Account Number</label>
+                              <input 
+                                type="text" 
+                                placeholder="Sub-Branch Non-GST A/C number..." 
+                                value={subBranchForm.nongst_account_number} 
+                                onChange={e => setSubBranchForm({ ...subBranchForm, nongst_account_number: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono font-bold" 
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-semibold mb-1">IFSC Code</label>
+                              <input 
+                                type="text" 
+                                placeholder="e.g. HDFC0000123" 
+                                value={subBranchForm.nongst_ifsc_code} 
+                                onChange={e => setSubBranchForm({ ...subBranchForm, nongst_ifsc_code: e.target.value.toUpperCase() })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono font-bold uppercase" 
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-semibold mb-1">Bank Branch Name</label>
+                              <input 
+                                type="text" 
+                                placeholder="e.g. Main Branch" 
+                                value={subBranchForm.nongst_bank_branch} 
+                                onChange={e => setSubBranchForm({ ...subBranchForm, nongst_bank_branch: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg"
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-semibold mb-1">Non-GST UPI ID / VPA</label>
+                              <input 
+                                type="text" 
+                                placeholder="e.g. partner.sb@hdfcbank" 
+                                value={subBranchForm.nongst_upi_id} 
+                                onChange={e => setSubBranchForm({ ...subBranchForm, nongst_upi_id: e.target.value })} 
+                                className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono" 
+                              />
+                            </div>
+                          </div>
+                          <div className="pt-2">
+                            <ImageUploadField
+                              label="Non-GST Payment QR Code / Scanner"
+                              value={subBranchForm.nongst_payment_qr_url}
+                              onChange={url => setSubBranchForm({ ...subBranchForm, nongst_payment_qr_url: url })}
+                              uploadNamePrefix="subbranch_nongst_qr"
+                              helperText="Official QR scanner image printed on Sub-Branch Non-GST Direct Bills."
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* TAB 5: SIGNATORY & OFFICIAL STAMP */}
+                  {subBranchTab === "signatory" && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                        <div>
+                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Signatory Name</label>
+                          <input 
+                            type="text" 
+                            placeholder="e.g. Rahul Das" 
+                            value={subBranchForm.signatory_name} 
+                            onChange={e => setSubBranchForm({ ...subBranchForm, signatory_name: e.target.value })} 
+                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Signatory Designation</label>
+                          <input 
+                            type="text" 
+                            placeholder="e.g. Franchise Partner" 
+                            value={subBranchForm.signatory_designation} 
+                            onChange={e => setSubBranchForm({ ...subBranchForm, signatory_designation: e.target.value })} 
+                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg" 
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                        <div className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
+                          <ImageUploadField
+                            label="Sub-Branch Authorized Signature"
+                            value={subBranchForm.signature_image_url}
+                            onChange={url => setSubBranchForm({ ...subBranchForm, signature_image_url: url })}
+                            uploadNamePrefix="subbranch_sig"
+                            helperText="If not uploaded, the parent Company's signature image is automatically used."
+                          />
+                        </div>
+                        <div className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
+                          <ImageUploadField
+                            label="Sub-Branch Official Stamp / Seal"
+                            value={subBranchForm.stamp_image_url}
+                            onChange={url => setSubBranchForm({ ...subBranchForm, stamp_image_url: url })}
+                            uploadNamePrefix="subbranch_stamp"
+                            helperText="If not uploaded, the parent Company's corporate seal stamp is automatically used."
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </form>
               </div>
 
               {/* Modal Footer */}
               <div className="flex items-center justify-between px-6 py-3.5 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/40 shrink-0">
                 <div className="text-zinc-400 text-[11px]">
-                  Step {subBranchTab === "basic" ? "1" : subBranchTab === "address" ? "2" : subBranchTab === "tax_bank" ? "3" : "4"} of 4
+                  Step {subBranchTab === "basic" ? "1" : subBranchTab === "address" ? "2" : subBranchTab === "tax" ? "3" : subBranchTab === "bank" ? "4" : "5"} of 5
                 </div>
                 <div className="flex items-center gap-2">
                   <button 
