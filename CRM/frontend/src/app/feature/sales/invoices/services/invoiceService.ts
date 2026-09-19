@@ -14,6 +14,7 @@ export interface InvoiceLineCharge {
 export interface InvoiceLineItem {
   id: string
   serviceName: string
+  description?: string
   sacCode?: string
   qty: number
   unit: string

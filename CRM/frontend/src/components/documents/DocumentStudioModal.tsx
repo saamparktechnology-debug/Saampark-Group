@@ -6,8 +6,7 @@ import {
   X, Check, DollarSign, Calculator, UserCheck, Users, Calendar, Briefcase, FileText, 
   Coins, RefreshCw, Layers, CreditCard, Building2, Mail, Phone, MapPin, 
   Plus, Trash2, Tag, ChevronDown, ChevronUp, Sparkles, Search, Receipt,
-  ZoomIn, ZoomOut, Maximize2, Move, Stamp, Printer, Download, ArrowRight,
-  ShieldCheck, AlertCircle, Eye, UploadCloud, Edit3, Landmark, QrCode
+  ShieldCheck, AlertCircle, Eye, UploadCloud, Edit3, Landmark, QrCode, Award
 } from "lucide-react"
 
 import { useAuthStore, Company, Branch, SubBranch, getCompanyLogoUrl, getCanonicalCompanyId } from "@/store/useAuthStore"
@@ -24,7 +23,7 @@ import {
 } from "@/app/feature/sales/invoices/services/invoiceService"
 import { UserService } from "@/services/apiServices"
 import { QuotationService, EstimateService } from "@/services/salesService"
-import { OfficialInvoiceDocument, CustomTextStamp } from "@/app/feature/sales/invoices/components/OfficialInvoiceDocument"
+import { CustomTextStamp, numberToIndianWords } from "@/app/feature/sales/invoices/components/OfficialInvoiceDocument"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { ImageUploadField } from "@/components/ui/ImageUploadField"
@@ -47,15 +46,6 @@ const SERVICE_PRESETS = [
   { name: "Digital Marketing & SEO Management", sac: "998311", gst: 18, unit: "Month", rate: 12000 },
   { name: "Printing & Media Collateral", sac: "998912", gst: 12, unit: "Job", rate: 8000 },
   { name: "General Consulting (Non-GST)", sac: "998319", gst: 0, unit: "Nos", rate: 10000 },
-]
-
-const STAMP_PRESETS = [
-  { text: "ORIGINAL FOR RECIPIENT", color: "#005f69" },
-  { text: "TAX INVOICE", color: "#008a99" },
-  { text: "OFFICIALLY APPROVED", color: "#16a34a" },
-  { text: "CONFIDENTIAL", color: "#dc2626" },
-  { text: "DUPLICATE FOR TRANSPORTER", color: "#0284c7" },
-  { text: "SUBJECT TO KOLKATA JURISDICTION", color: "#4f46e5" },
 ]
 
 export function DocumentStudioModal({
@@ -84,6 +74,10 @@ export function DocumentStudioModal({
   const [branchId, setBranchId] = React.useState<string>(activeBranchId || "")
   const [subBranchId, setSubBranchId] = React.useState<string>("")
 
+  // Active Tab: entity, client, items, bank, terms
+  const [activeTab, setActiveTab] = React.useState<"entity" | "client" | "items" | "bank" | "terms">("entity")
+  const [isSubmitting, setIsSubmitting] = React.useState(false)
+
   // Resolve selected company & issuing branch
   const activeCompany = React.useMemo(() => {
     const canonTarget = getCanonicalCompanyId(companyId || activeCompanyId || "tech")
@@ -106,7 +100,7 @@ export function DocumentStudioModal({
   }, [branches, companyId, activeCompanyId])
 
   const branchSubBranches = React.useMemo(() => {
-    return subBranches.filter(sb => String((sb as any).branch_id || (sb as any).branchId) === String(branchId))
+    return subBranches.filter(sb => String((sb as any).branch_id || (sb as any).branchId || (sb as any).parentBranchId) === String(branchId))
   }, [subBranches, branchId])
 
   // Multiple Team Member Attribution State
@@ -249,26 +243,11 @@ export function DocumentStudioModal({
   const [upiIdOverride, setUpiIdOverride] = React.useState("")
   const [paymentQrUrlOverride, setPaymentQrUrlOverride] = React.useState("")
 
-  // 7. Interactive Draggable Canvas Controls
-  const [logoUrlOverride, setLogoUrlOverride] = React.useState("")
+  // Signatory & Stamp
+  const [signatoryName, setSignatoryName] = React.useState("Authorized Signatory")
+  const [signatoryDesignation, setSignatoryDesignation] = React.useState("Managing Director")
   const [signatureUrlOverride, setSignatureUrlOverride] = React.useState("")
   const [stampUrlOverride, setStampUrlOverride] = React.useState("")
-  
-  const [logoPosition, setLogoPosition] = React.useState<{ x: number; y: number }>({ x: 0, y: 0 })
-  const [signaturePosition, setSignaturePosition] = React.useState<{ x: number; y: number }>({ x: 0, y: 0 })
-  const [customStamps, setCustomStamps] = React.useState<CustomTextStamp[]>([
-    { id: "stamp_orig", text: "ORIGINAL FOR RECIPIENT", color: "#005f69", fontSize: 11, x: 10, y: 5 }
-  ])
-
-  // Custom text stamp creator
-  const [newStampText, setNewStampText] = React.useState("")
-  const [newStampColor, setNewStampColor] = React.useState("#005f69")
-  const [newStampFontSize, setNewStampFontSize] = React.useState(11)
-
-  // Canvas zoom
-  const [canvasZoom, setCanvasZoom] = React.useState<number>(95)
-  const [activeLeftTab, setActiveLeftTab] = React.useState<"entity" | "client" | "items" | "customization">("entity")
-  const [isSubmitting, setIsSubmitting] = React.useState(false)
 
   // Load clients, branches, team members & initialize default company & document numbers
   React.useEffect(() => {
@@ -326,6 +305,11 @@ export function DocumentStudioModal({
       setUpiIdOverride(activeCompany.nongst_upi_id || activeCompany.upi_id || "")
       setPaymentQrUrlOverride(activeCompany.nongst_payment_qr_url || activeCompany.payment_qr_url || "")
     }
+
+    setSignatoryName(activeCompany.signatory_name || "Authorized Signatory")
+    setSignatoryDesignation(activeCompany.signatory_designation || "Managing Director")
+    setSignatureUrlOverride(activeCompany.signature_image_url || "")
+    setStampUrlOverride(activeCompany.stamp_image_url || "")
   }, [activeCompany, docScheme])
 
   // Generate document number
@@ -405,33 +389,6 @@ export function DocumentStudioModal({
     }))
   }
 
-  // Stamp operations
-  const handleAddCustomStamp = () => {
-    if (!newStampText.trim()) return
-    const newStamp: CustomTextStamp = {
-      id: `stamp_${Date.now()}`,
-      text: newStampText.trim().toUpperCase(),
-      color: newStampColor,
-      fontSize: newStampFontSize,
-      x: Math.floor(Math.random() * 40) - 20,
-      y: Math.floor(Math.random() * 40) - 20
-    }
-    setCustomStamps(prev => [...prev, newStamp])
-    setNewStampText("")
-  }
-
-  const handleRemoveCustomStamp = (id: string) => {
-    setCustomStamps(prev => prev.filter(s => s.id !== id))
-  }
-
-  const handleResetPositions = () => {
-    setLogoPosition({ x: 0, y: 0 })
-    setSignaturePosition({ x: 0, y: 0 })
-    setCustomStamps([
-      { id: "stamp_orig", text: "ORIGINAL FOR RECIPIENT", color: "#005f69", fontSize: 11, x: 0, y: 0 }
-    ])
-  }
-
   // Financial Calculations
   const calculatedSubtotal = React.useMemo(() => {
     return items.reduce((sum, it) => sum + ((it.rate || 0) * (it.qty || 1)), 0)
@@ -449,68 +406,15 @@ export function DocumentStudioModal({
   const taxableBase = Math.max(0, calculatedSubtotal - calculatedDiscount + numSetupCharge)
 
   const calculatedGst = React.useMemo(() => {
-    if (docScheme !== "gst") return 0
+    if (docScheme === "nongst") return 0
     return items.reduce((sum, it) => {
-      const itBase = (it.rate || 0) * (it.qty || 1)
-      const itGst = (it.gstRate !== undefined ? it.gstRate : 18) / 100
-      return sum + Math.round(itBase * itGst)
+      const base = (it.rate || 0) * (it.qty || 1)
+      const rate = it.gstRate !== undefined ? it.gstRate : 18
+      return sum + Math.round(base * (rate / 100))
     }, 0)
   }, [items, docScheme])
 
   const grandTotal = taxableBase + calculatedGst
-
-  // Live Invoice object for preview
-  const livePreviewInvoice: InvoiceItem = React.useMemo(() => {
-    const curBranch = branches.find(b => b.id === branchId)
-    const curSubBranch = subBranches.find(sb => sb.id === subBranchId)
-
-    return {
-      id: docNumber || "INV-PREVIEW",
-      client: clientName || selectedClient?.name || "Sample Client Enterprise",
-      clientEmail: clientEmail || selectedClient?.email || "client@example.com",
-      clientPhone: clientPhone || selectedClient?.phone || "+91 98765 43210",
-      clientAddress: clientAddress || selectedClient?.address || "123 Business Boulevard",
-      clientCity: clientCity || selectedClient?.city || "Kolkata",
-      clientState: clientState || selectedClient?.state || "West Bengal",
-      clientGstin: clientGst || selectedClient?.gstNumber || selectedClient?.vatNumber || "",
-      project: projectTitle || "Custom Solution Project",
-      invoiceDate: issueDate,
-      billDate: issueDate,
-      dueDate: dueDate,
-      totalInvoiced: `₹${grandTotal.toLocaleString("en-IN")}`,
-      paymentReceived: "₹0",
-      due: `₹${grandTotal.toLocaleString("en-IN")}`,
-      status: "Not paid",
-      invoiceType: docScheme,
-      companyId: companyId,
-      companyName: activeCompany?.brand_name || activeCompany?.name || "SAAMPARK",
-      branchId: branchId || undefined,
-      branchName: curBranch?.name || undefined,
-      subBranchId: subBranchId || undefined,
-      subBranchName: curSubBranch?.name || undefined,
-      baseAmount: taxableBase,
-      gstAmount: calculatedGst,
-      gstRate: docScheme === "gst" ? 18 : 0,
-      discount: calculatedDiscount,
-      setupCharge: numSetupCharge,
-      items: items,
-      notes: notes,
-      assignedMembers: assignedMembers.length > 0 ? assignedMembers : undefined,
-      assignedMemberId: assignedMembers.length > 0 ? assignedMembers[0].memberId : undefined,
-      assignedMemberName: assignedMembers.length > 0 ? assignedMembers[0].memberName : undefined,
-      assignedMemberRole: assignedMembers.length > 0 ? assignedMembers[0].memberRole : undefined,
-      memberPayoutType: assignedMembers.length > 0 ? assignedMembers[0].payoutType : undefined,
-      memberPayoutValue: assignedMembers.length > 0 ? assignedMembers[0].payoutValue : undefined,
-      memberSharePct: assignedMembers.length > 0 && assignedMembers[0].payoutType === "percentage" ? assignedMembers[0].payoutValue : undefined,
-      memberPayoutAmount: assignedMembers.length > 0 && assignedMembers[0].payoutType === "fixed" ? assignedMembers[0].payoutValue : undefined,
-    }
-  }, [
-    docNumber, clientName, selectedClient, clientEmail, clientPhone, clientAddress,
-    clientCity, clientState, clientGst, projectTitle, issueDate, dueDate, grandTotal,
-    docScheme, companyId, activeCompany, branchId, subBranchId, branches, subBranches,
-    taxableBase, calculatedGst, calculatedDiscount, numSetupCharge, items, notes, terms,
-    assignedMembers
-  ])
 
   // Save Document handler
   const handleSaveDocument = async () => {
@@ -525,8 +429,10 @@ export function DocumentStudioModal({
 
     setIsSubmitting(true)
     try {
-      const finalDocPayload: InvoiceItem = {
-        ...livePreviewInvoice,
+      const finalDocPayload: any = {
+        id: docNumber,
+        invoiceNumber: docNumber,
+        number: docNumber,
         client: String(clientName || selectedClient?.name || "Client"),
         clientEmail: clientEmail || selectedClient?.email,
         clientPhone: clientPhone || selectedClient?.phone,
@@ -534,15 +440,37 @@ export function DocumentStudioModal({
         clientCity: clientCity || selectedClient?.city,
         clientState: clientState || selectedClient?.state,
         clientGstin: clientGst || selectedClient?.gstNumber,
+        project: projectTitle,
+        billDate: issueDate,
+        invoiceDate: issueDate,
+        date: issueDate,
+        dueDate: dueDate,
+        validTill: dueDate,
+        baseAmount: taxableBase,
+        subtotal: taxableBase,
+        discount: calculatedDiscount,
+        setupCharge: numSetupCharge,
+        gstRate: docScheme === "gst" ? 18 : 0,
+        gstAmount: calculatedGst,
+        tax: calculatedGst,
+        totalInvoiced: `₹${grandTotal.toLocaleString("en-IN")}`,
+        total: grandTotal,
+        paymentReceived: "₹0",
+        due: grandTotal,
+        status: "Draft",
+        companyId: companyId,
+        branchId: branchId || undefined,
+        subBranchId: subBranchId || undefined,
         companyDetails: activeCompany,
+        items: items,
+        notes: notes,
+        terms: terms,
         assignedMembers: assignedMembers.length > 0 ? assignedMembers : undefined,
         assignedMemberId: assignedMembers.length > 0 ? assignedMembers[0].memberId : undefined,
         assignedMemberName: assignedMembers.length > 0 ? assignedMembers[0].memberName : undefined,
         assignedMemberRole: assignedMembers.length > 0 ? assignedMembers[0].memberRole : undefined,
         memberPayoutType: assignedMembers.length > 0 ? assignedMembers[0].payoutType : undefined,
         memberPayoutValue: assignedMembers.length > 0 ? assignedMembers[0].payoutValue : undefined,
-        memberSharePct: assignedMembers.length > 0 && assignedMembers[0].payoutType === "percentage" ? assignedMembers[0].payoutValue : undefined,
-        memberPayoutAmount: assignedMembers.length > 0 && assignedMembers[0].payoutType === "fixed" ? assignedMembers[0].payoutValue : undefined,
         overrideBankDetails: {
           bankName: bankNameOverride,
           accountHolder: accountHolderOverride,
@@ -552,12 +480,10 @@ export function DocumentStudioModal({
           upiId: upiIdOverride,
           paymentQrUrl: paymentQrUrlOverride,
         },
-        overrideLogoUrl: logoUrlOverride || undefined,
+        signatory_name: signatoryName,
+        signatory_designation: signatoryDesignation,
         overrideSignatureUrl: signatureUrlOverride || undefined,
         overrideStampUrl: stampUrlOverride || undefined,
-        logoPosition,
-        signaturePosition,
-        customStamps,
       }
 
       if (mode === "invoice") {
@@ -616,16 +542,23 @@ export function DocumentStudioModal({
           status: "Draft",
           companyId: companyId,
           branchId: branchId,
-          items: items
+          subBranchId: subBranchId,
+          items: items.map(it => ({
+            id: it.id,
+            name: it.serviceName,
+            sac: it.sacCode,
+            quantity: it.qty,
+            unitPrice: it.rate,
+            total: it.totalAmount || (it.rate * it.qty)
+          }))
         }
         const saved = await EstimateService.create(estimatePayload)
         onSaveSuccess?.(saved || estimatePayload)
       }
-
       onClose()
     } catch (err: any) {
-      console.error("Error saving in Document Studio:", err)
-      alert(`Failed to save: ${err?.message || "Please check connection"}`)
+      console.error("Save Document error:", err)
+      alert("Error saving document: " + (err?.message || "Unknown error"))
     } finally {
       setIsSubmitting(false)
     }
@@ -633,1216 +566,882 @@ export function DocumentStudioModal({
 
   if (!isOpen) return null
 
+  const modalTitle = mode === "invoice" 
+    ? (docScheme === "gst" ? "Create Official GST Tax Invoice" : "Create Commercial Non-GST Invoice")
+    : mode === "quotation"
+    ? "Create Commercial Quotation & Tender"
+    : "Create Project Cost Estimate"
+
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-md p-2 sm:p-4 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-5 overflow-y-auto">
       <motion.div 
         initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.96 }}
-        className="w-full max-w-[1700px] h-[95vh] flex flex-col bg-zinc-100 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl overflow-hidden"
+        className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden text-xs"
       >
-        {/* ── TOP HEADER / TOOLBAR ────────────────────────────────────── */}
-        <div className="px-5 py-3.5 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between shrink-0 shadow-xs">
+        {/* ── HEADER ── */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 shrink-0 bg-zinc-50/80 dark:bg-zinc-800/40">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-teal-600 to-blue-600 text-white flex items-center justify-center font-black text-sm shadow-md">
-              ⚡
+            <div className={`p-2.5 rounded-xl ${docScheme === "gst" ? "bg-teal-600 text-white" : "bg-sky-600 text-white"} shadow-md`}>
+              {mode === "invoice" ? <Receipt size={18} /> : mode === "quotation" ? <FileText size={18} /> : <Calculator size={18} />}
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-sm sm:text-base font-extrabold text-zinc-900 dark:text-zinc-100">
-                  Interactive Document Studio
-                </h1>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300 border border-teal-200">
-                  {mode === "invoice" ? "Invoice Engine" : mode === "quotation" ? "Quotation Engine" : "Estimate Engine"}
-                </span>
-                <span className="font-mono text-xs font-bold text-zinc-400">
-                  [{docNumber || "DRAFT"}]
+                <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100">{modalTitle}</h2>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                  docScheme === "gst" ? "bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300" : "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300"
+                }`}>
+                  {docScheme === "gst" ? "GST 18%" : "Non-GST 0%"}
                 </span>
               </div>
-              <p className="text-[11px] text-zinc-500 flex items-center gap-2">
-                <span>Hold & drag logo, signature & badges on the live document preview</span>
-                <span>•</span>
-                <span className="text-teal-600 font-semibold">Dual GST & Non-GST Profile Active</span>
+              <p className="text-[11px] text-zinc-500 font-mono font-bold mt-0.5">
+                Ref: {docNumber} • {activeCompany?.brand_name || activeCompany?.name}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5">
-            {/* Quick Document Date Selector in Header */}
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-700">
-              <Calendar size={13} className="text-teal-600 shrink-0" />
-              <div className="flex items-center gap-1">
-                <span className="text-[10px] font-bold text-zinc-500 hidden sm:inline">Date:</span>
-                <input
-                  type="date"
-                  value={issueDate}
-                  onChange={(e) => {
-                    const newD = e.target.value
-                    setIssueDate(newD)
-                    generateDocNumber(docScheme, newD)
-                  }}
-                  title="Document Issue Date (Default: Today. Click to select past or future date)"
-                  className="bg-transparent text-xs font-bold text-zinc-800 dark:text-zinc-200 focus:outline-none cursor-pointer"
-                />
+          {/* Quick Live Totals Badge */}
+          <div className="flex items-center gap-3">
+            <div className="hidden sm:flex items-center gap-3 px-3.5 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
+              <div>
+                <span className="text-[10px] text-zinc-400 block leading-none">Subtotal</span>
+                <span className="font-bold text-zinc-800 dark:text-zinc-200 font-mono">₹{taxableBase.toLocaleString("en-IN")}</span>
+              </div>
+              {docScheme === "gst" && (
+                <div>
+                  <span className="text-[10px] text-zinc-400 block leading-none">GST Tax</span>
+                  <span className="font-bold text-teal-600 dark:text-teal-400 font-mono">+₹{calculatedGst.toLocaleString("en-IN")}</span>
+                </div>
+              )}
+              <div className="border-l border-zinc-200 dark:border-zinc-700 pl-3">
+                <span className="text-[10px] text-zinc-400 block leading-none font-bold">Grand Total</span>
+                <span className="font-black text-emerald-600 dark:text-emerald-400 font-mono text-sm">₹{grandTotal.toLocaleString("en-IN")}</span>
               </div>
             </div>
 
-            {/* GST vs Non-GST Selector in Top Header */}
-            <div className="flex p-0.5 bg-zinc-100 dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-700">
-              <button
-                type="button"
-                onClick={() => handleSchemeChange("gst")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  docScheme === "gst"
-                    ? "bg-teal-600 text-white shadow-xs"
-                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
-                }`}
-              >
-                <span>🏢 GST Bill (18%)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSchemeChange("nongst")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  docScheme === "nongst"
-                    ? "bg-blue-600 text-white shadow-xs"
-                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
-                }`}
-              >
-                <span>📄 Non-GST (0%)</span>
-              </button>
-            </div>
-
-            <Button variant="outline" size="sm" onClick={onClose} className="text-xs h-9">
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleSaveDocument} 
-              disabled={isSubmitting} 
-              className="text-xs font-bold h-9 bg-teal-600 hover:bg-teal-700 text-white gap-1.5 shadow-md cursor-pointer"
-            >
-              {isSubmitting ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-              <span>Save & Issue {mode === "invoice" ? "Invoice" : mode === "quotation" ? "Quotation" : "Estimate"}</span>
-            </Button>
-            <button
-              onClick={onClose}
-              className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 p-1.5 rounded-lg ml-1"
+            <button 
+              type="button" 
+              onClick={onClose} 
+              className="p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
             >
               <X size={18} />
             </button>
           </div>
         </div>
 
-        {/* ── SPLIT MAIN BODY ────────────────────────────────────────── */}
-        <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-          
-          {/* ════ LEFT PANEL: FORM INPUTS (48% WIDTH) ════ */}
-          <div className="w-full lg:w-[46%] xl:w-[44%] bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800 flex flex-col overflow-hidden">
-            
-            {/* Form Section Navigation Tabs */}
-            <div className="grid grid-cols-4 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 text-center font-bold text-[11px] shrink-0">
-              <button
-                type="button"
-                onClick={() => setActiveLeftTab("entity")}
-                className={`py-2.5 border-b-2 transition-all flex items-center justify-center gap-1 cursor-pointer ${
-                  activeLeftTab === "entity" 
-                    ? "border-teal-600 text-teal-700 dark:text-teal-400 bg-white dark:bg-zinc-900" 
-                    : "border-transparent text-zinc-500 hover:text-zinc-800"
-                }`}
-              >
-                <span>🏢 Entity & Bank</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveLeftTab("client")}
-                className={`py-2.5 border-b-2 transition-all flex items-center justify-center gap-1 cursor-pointer ${
-                  activeLeftTab === "client" 
-                    ? "border-teal-600 text-teal-700 dark:text-teal-400 bg-white dark:bg-zinc-900" 
-                    : "border-transparent text-zinc-500 hover:text-zinc-800"
-                }`}
-              >
-                <span>👤 Client & Meta</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveLeftTab("items")}
-                className={`py-2.5 border-b-2 transition-all flex items-center justify-center gap-1 cursor-pointer ${
-                  activeLeftTab === "items" 
-                    ? "border-teal-600 text-teal-700 dark:text-teal-400 bg-white dark:bg-zinc-900" 
-                    : "border-transparent text-zinc-500 hover:text-zinc-800"
-                }`}
-              >
-                <span>📦 Line Items ({items.length})</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveLeftTab("customization")}
-                className={`py-2.5 border-b-2 transition-all flex items-center justify-center gap-1 cursor-pointer ${
-                  activeLeftTab === "customization" 
-                    ? "border-teal-600 text-teal-700 dark:text-teal-400 bg-white dark:bg-zinc-900" 
-                    : "border-transparent text-zinc-500 hover:text-zinc-800"
-                }`}
-              >
-                <span>✨ Badges & Sign</span>
-              </button>
-            </div>
+        {/* ── 5-STEP TAB NAVIGATION ── */}
+        <div className="grid grid-cols-5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 text-center font-bold shrink-0">
+          <button
+            type="button"
+            onClick={() => setActiveTab("entity")}
+            className={`py-3 border-b-2 text-xs transition-all cursor-pointer ${
+              activeTab === "entity" ? "border-teal-600 text-teal-600 bg-white dark:bg-zinc-900" : "border-transparent text-zinc-500 hover:text-zinc-800"
+            }`}
+          >
+            1. Entity &amp; Attribution
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("client")}
+            className={`py-3 border-b-2 text-xs transition-all cursor-pointer ${
+              activeTab === "client" ? "border-teal-600 text-teal-600 bg-white dark:bg-zinc-900" : "border-transparent text-zinc-500 hover:text-zinc-800"
+            }`}
+          >
+            2. Client &amp; Dates
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("items")}
+            className={`py-3 border-b-2 text-xs transition-all cursor-pointer ${
+              activeTab === "items" ? "border-teal-600 text-teal-600 bg-white dark:bg-zinc-900" : "border-transparent text-zinc-500 hover:text-zinc-800"
+            }`}
+          >
+            3. Line Items &amp; Pricing
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("bank")}
+            className={`py-3 border-b-2 text-xs transition-all cursor-pointer ${
+              activeTab === "bank" ? "border-teal-600 text-teal-600 bg-white dark:bg-zinc-900" : "border-transparent text-zinc-500 hover:text-zinc-800"
+            }`}
+          >
+            4. Bank &amp; Payment QR
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("terms")}
+            className={`py-3 border-b-2 text-xs transition-all cursor-pointer ${
+              activeTab === "terms" ? "border-teal-600 text-teal-600 bg-white dark:bg-zinc-900" : "border-transparent text-zinc-500 hover:text-zinc-800"
+            }`}
+          >
+            5. Notes &amp; Signatory
+          </button>
+        </div>
 
-            {/* Scrollable Form Content */}
-            <div className="flex-1 p-5 overflow-y-auto space-y-5 text-xs">
-              
-              {/* ──────────────── TAB 1: ISSUING ENTITY & DUAL BANKING ──────────────── */}
-              {activeLeftTab === "entity" && (
-                <div className="space-y-4">
-                  {/* Entity Selection */}
-                  <div className="p-3.5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-3">
-                    <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-700/60 pb-2">
-                      <span className="font-extrabold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
-                        <Building2 size={14} className="text-teal-600" />
-                        <span>Issuing Organization Scope</span>
-                      </span>
-                      <span className="text-[10px] text-zinc-500 font-semibold">Auto-binds entity details</span>
+        {/* ── MODAL BODY: FULL WIDTH FORMS ── */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+
+          {/* ════ TAB 1: ENTITY, TAX SCHEME & ATTRIBUTION ════ */}
+          {activeTab === "entity" && (
+            <div className="space-y-5">
+              {/* GST vs Non-GST Tax Scheme Switcher */}
+              <div className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                    <Receipt size={15} className="text-teal-600" />
+                    <span>Invoicing Tax Scheme &amp; GST Mode</span>
+                  </span>
+                  <span className="text-[11px] text-zinc-500">Select whether to issue a GST Tax Document or Non-GST Document</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div
+                    onClick={() => handleSchemeChange("gst")}
+                    className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex items-start gap-3 ${
+                      docScheme === "gst" 
+                        ? "border-teal-600 bg-teal-50/50 dark:bg-teal-950/30 shadow-xs" 
+                        : "border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:border-zinc-300"
+                    }`}
+                  >
+                    <div className={`p-2 rounded-lg ${docScheme === "gst" ? "bg-teal-600 text-white" : "bg-zinc-100 text-zinc-500"}`}>
+                      <Building2 size={16} />
                     </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
-                          Company Entity *
-                        </label>
-                        <select
-                          value={companyId}
-                          onChange={(e) => {
-                            setCompanyId(e.target.value)
-                            setBranchId("")
-                            setSubBranchId("")
-                          }}
-                          className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-xs font-bold text-zinc-900 dark:text-zinc-100"
-                        >
-                          {companies.map(c => (
-                            <option key={c.id} value={c.id}>
-                              {c.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
-                          Operational Branch (Optional)
-                        </label>
-                        <select
-                          value={branchId}
-                          onChange={(e) => {
-                            setBranchId(e.target.value)
-                            setSubBranchId("")
-                          }}
-                          className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-xs font-medium text-zinc-900 dark:text-zinc-100"
-                        >
-                          <option value="">Head Office / Default</option>
-                          {companyBranches.map(b => (
-                            <option key={b.id} value={b.id}>
-                              {b.name} ({b.code})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                    <div>
+                      <div className="font-bold text-zinc-900 dark:text-zinc-100">GST Tax Invoicing (Standard 18%)</div>
+                      <div className="text-[11px] text-zinc-500 mt-0.5">Includes HSN/SAC codes, CGST/SGST/IGST breakdown, and Company GSTIN on the bill.</div>
                     </div>
-
-                    {branchId && branchSubBranches.length > 0 && (
-                      <div>
-                        <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
-                          Partner Sub-Branch (Optional)
-                        </label>
-                        <select
-                          value={subBranchId}
-                          onChange={(e) => setSubBranchId(e.target.value)}
-                          className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-xs font-medium text-zinc-900 dark:text-zinc-100"
-                        >
-                          <option value="">None (Standard Branch Bill)</option>
-                          {branchSubBranches.map(sb => (
-                            <option key={sb.id} value={sb.id}>
-                              {sb.name} ({sb.revenueSharePct || (sb as any).revenue_share_pct || 0}% Partner)
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
                   </div>
 
-                  {/* Team Member Attribution & Commission (Multiple Members Support) */}
-                  <div className="p-3.5 rounded-2xl border border-indigo-200/80 dark:border-indigo-900/40 bg-indigo-50/30 dark:bg-indigo-950/20 space-y-3">
-                    <div className="flex items-center justify-between border-b border-indigo-200/60 dark:border-indigo-800/40 pb-2">
-                      <div className="flex items-center gap-1.5">
-                        <Users size={14} className="text-indigo-600 dark:text-indigo-400" />
-                        <span className="font-extrabold text-indigo-900 dark:text-indigo-200 text-xs">
-                          Team Member Attribution ({assignedMembers.length})
-                        </span>
-                      </div>
-                      <span className="text-[10px] text-indigo-700 dark:text-indigo-400 font-semibold">
-                        Auto-links part & full payments to Team Payroll
-                      </span>
+                  <div
+                    onClick={() => handleSchemeChange("nongst")}
+                    className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex items-start gap-3 ${
+                      docScheme === "nongst" 
+                        ? "border-sky-600 bg-sky-50/50 dark:bg-sky-950/30 shadow-xs" 
+                        : "border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:border-zinc-300"
+                    }`}
+                  >
+                    <div className={`p-2 rounded-lg ${docScheme === "nongst" ? "bg-sky-600 text-white" : "bg-zinc-100 text-zinc-500"}`}>
+                      <Receipt size={16} />
                     </div>
-
-                    {assignedMembers.length === 0 ? (
-                      <div className="text-center py-2 space-y-2">
-                        <p className="text-[11px] text-zinc-500">
-                          No team members assigned. 100% of revenue goes directly to company.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={handleAddAssignedMember}
-                          className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs cursor-pointer transition-all inline-flex items-center gap-1.5"
-                        >
-                          <Plus size={13} /> Assign Team Member & Set Share
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {assignedMembers.map((m, idx) => {
-                          const isPct = m.payoutType === "percentage"
-                          const sampleVal = isPct 
-                            ? Math.round((1000 * (Number(m.payoutValue) || 0)) / 100)
-                            : (grandTotal > 0 ? Math.round((Number(m.payoutValue) || 0) * (1000 / grandTotal)) : (Number(m.payoutValue) || 0))
-
-                          return (
-                            <div 
-                              key={idx} 
-                              className="p-3 rounded-xl bg-white dark:bg-zinc-900 border border-indigo-100 dark:border-indigo-900/40 space-y-2.5 shadow-2xs"
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="font-bold text-[11px] text-indigo-950 dark:text-indigo-200 flex items-center gap-1">
-                                  <span>👤 Member #{idx + 1}:</span>
-                                  <strong className="text-zinc-900 dark:text-zinc-100">{m.memberName}</strong>
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveAssignedMember(idx)}
-                                  className="text-rose-500 hover:text-rose-700 text-[10px] font-bold flex items-center gap-0.5 cursor-pointer"
-                                >
-                                  <Trash2 size={11} /> Remove
-                                </button>
-                              </div>
-
-                              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
-                                <div className="sm:col-span-6">
-                                  <label className="block text-[9.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">
-                                    Team Member (Staff Only)
-                                  </label>
-                                  <select
-                                    value={m.memberId}
-                                    onChange={(e) => handleUpdateAssignedMember(idx, "memberId", e.target.value)}
-                                    className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs font-bold text-zinc-900 dark:text-zinc-100"
-                                  >
-                                    {availableTeamMembers.map(tm => (
-                                      <option key={tm.id} value={tm.id}>
-                                        {tm.name} ({tm.role || "Team"})
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-
-                                <div className="sm:col-span-3">
-                                  <label className="block text-[9.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">
-                                    Type
-                                  </label>
-                                  <div className="flex rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden text-[10.5px] font-bold h-8">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleUpdateAssignedMember(idx, "payoutType", "percentage")}
-                                      className={`flex-1 py-1 text-center transition-all cursor-pointer ${
-                                        m.payoutType === "percentage"
-                                          ? "bg-indigo-600 text-white"
-                                          : "bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
-                                      }`}
-                                    >
-                                      %
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleUpdateAssignedMember(idx, "payoutType", "fixed")}
-                                      className={`flex-1 py-1 text-center transition-all cursor-pointer ${
-                                        m.payoutType === "fixed"
-                                          ? "bg-indigo-600 text-white"
-                                          : "bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
-                                      }`}
-                                    >
-                                      ₹
-                                    </button>
-                                  </div>
-                                </div>
-
-                                <div className="sm:col-span-3">
-                                  <label className="block text-[9.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">
-                                    {isPct ? "Share (%)" : "Amount (₹)"}
-                                  </label>
-                                  <Input
-                                    type="number"
-                                    value={m.payoutValue}
-                                    onChange={(e) => handleUpdateAssignedMember(idx, "payoutValue", e.target.value === "" ? "" : Number(e.target.value))}
-                                    placeholder={isPct ? "50" : "1000"}
-                                    className="text-xs h-8 font-bold font-mono"
-                                  />
-                                </div>
-                              </div>
-
-                              <div className="text-[9.5px] text-indigo-700 dark:text-indigo-300 font-medium bg-indigo-50/60 dark:bg-indigo-950/40 p-1.5 rounded-lg flex items-center justify-between">
-                                <span>💡 If client pays ₹1,000 part payment:</span>
-                                <strong className="font-mono font-bold">₹{sampleVal.toLocaleString("en-IN")} credited to payroll</strong>
-                              </div>
-                            </div>
-                          )
-                        })}
-
-                        <div className="flex items-center justify-between pt-1">
-                          {availableTeamMembers.length > assignedMembers.length ? (
-                            <button
-                              type="button"
-                              onClick={handleAddAssignedMember}
-                              className="text-xs font-bold text-indigo-700 hover:text-indigo-900 dark:text-indigo-400 flex items-center gap-1 cursor-pointer"
-                            >
-                              <Plus size={13} /> + Add Another Team Member
-                            </button>
-                          ) : <div />}
-
-                          <div className="text-[10px] text-zinc-500 font-semibold">
-                            Total Assigned: <strong className="text-indigo-900 dark:text-indigo-200">{assignedMembers.reduce((sum, am) => sum + (am.payoutType === "percentage" ? (Number(am.payoutValue) || 0) : 0), 0)}%</strong>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Dual Bank & QR Settings */}
-                  <div className="p-4 rounded-2xl border border-teal-500/20 bg-teal-50/20 dark:bg-teal-950/10 space-y-3">
-                    <div className="flex items-center justify-between border-b border-teal-500/20 pb-2">
-                      <div className="flex items-center gap-1.5">
-                        <Landmark size={15} className="text-teal-700" />
-                        <span className="font-extrabold text-teal-900 dark:text-teal-200 text-xs">
-                          Bank & Payment QR Configuration
-                        </span>
-                      </div>
-                      <span className="text-[10px] text-teal-700 font-bold">
-                        {bankProfile === "gst" ? "🏢 GST Profile Linked" : "📄 Non-GST Profile Linked"}
-                      </span>
-                    </div>
-
-                    {/* Bank Profile Switcher */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setBankProfile("gst")
-                          if (activeCompany) {
-                            setBankNameOverride(activeCompany.gst_bank_name || activeCompany.bank_name || "")
-                            setAccountHolderOverride(activeCompany.gst_account_holder || activeCompany.account_holder || "")
-                            setAccountNumberOverride(activeCompany.gst_account_number || activeCompany.account_number || "")
-                            setIfscCodeOverride(activeCompany.gst_ifsc_code || activeCompany.ifsc_code || "")
-                            setBankBranchOverride(activeCompany.gst_bank_branch || activeCompany.bank_branch || "")
-                            setUpiIdOverride(activeCompany.gst_upi_id || activeCompany.upi_id || "")
-                            setPaymentQrUrlOverride(activeCompany.gst_payment_qr_url || activeCompany.payment_qr_url || "")
-                          }
-                        }}
-                        className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
-                          bankProfile === "gst"
-                            ? "bg-teal-600 text-white border-teal-600 font-bold shadow-xs"
-                            : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600"
-                        }`}
-                      >
-                        <div className="font-bold">🏢 Company GST Bank & QR</div>
-                        <div className="text-[9.5px] opacity-80">Official Current A/C</div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setBankProfile("nongst")
-                          if (activeCompany) {
-                            setBankNameOverride(activeCompany.nongst_bank_name || activeCompany.bank_name || "")
-                            setAccountHolderOverride(activeCompany.nongst_account_holder || activeCompany.account_holder || "")
-                            setAccountNumberOverride(activeCompany.nongst_account_number || activeCompany.account_number || "")
-                            setIfscCodeOverride(activeCompany.nongst_ifsc_code || activeCompany.ifsc_code || "")
-                            setBankBranchOverride(activeCompany.nongst_bank_branch || activeCompany.bank_branch || "")
-                            setUpiIdOverride(activeCompany.nongst_upi_id || activeCompany.upi_id || "")
-                            setPaymentQrUrlOverride(activeCompany.nongst_payment_qr_url || activeCompany.payment_qr_url || "")
-                          }
-                        }}
-                        className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
-                          bankProfile === "nongst"
-                            ? "bg-blue-600 text-white border-blue-600 font-bold shadow-xs"
-                            : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600"
-                        }`}
-                      >
-                        <div className="font-bold">📄 Company Non-GST Bank & QR</div>
-                        <div className="text-[9.5px] opacity-80">0% Invoicing A/C</div>
-                      </button>
-                    </div>
-
-                    {/* Editable Bank Details */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                      <div>
-                        <label className="block text-[10px] font-bold text-zinc-600 mb-0.5">Bank Name</label>
-                        <Input value={bankNameOverride} onChange={e => setBankNameOverride(e.target.value)} placeholder="e.g. HDFC Bank" />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-zinc-600 mb-0.5">Account Holder Name</label>
-                        <Input value={accountHolderOverride} onChange={e => setAccountHolderOverride(e.target.value)} placeholder="A/C Holder" />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-zinc-600 mb-0.5">Account Number</label>
-                        <Input value={accountNumberOverride} onChange={e => setAccountNumberOverride(e.target.value)} className="font-mono" placeholder="Account No" />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-zinc-600 mb-0.5">IFSC Code</label>
-                        <Input value={ifscCodeOverride} onChange={e => setIfscCodeOverride(e.target.value.toUpperCase())} className="font-mono" placeholder="IFSC" />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-zinc-600 mb-0.5">Bank Branch Location</label>
-                        <Input value={bankBranchOverride} onChange={e => setBankBranchOverride(e.target.value)} placeholder="Branch location" />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-zinc-600 mb-0.5">UPI ID</label>
-                        <Input value={upiIdOverride} onChange={e => setUpiIdOverride(e.target.value)} className="font-mono" placeholder="upi@bank" />
-                      </div>
-                    </div>
-
-                    {/* QR Code Upload / Link */}
-                    <div className="pt-2">
-                      <ImageUploadField
-                        label="Payment Scanner / QR Code URL"
-                        value={paymentQrUrlOverride}
-                        onChange={url => setPaymentQrUrlOverride(url)}
-                        uploadNamePrefix="doc_payment_qr"
-                        helperText="Scan-to-pay QR code displayed in the payment footer of this document."
-                      />
+                    <div>
+                      <div className="font-bold text-zinc-900 dark:text-zinc-100">Non-GST / Commercial Billing (0% Tax)</div>
+                      <div className="text-[11px] text-zinc-500 mt-0.5">No tax added to the line items. Uses Non-GST banking and payment details.</div>
                     </div>
                   </div>
                 </div>
-              )}
+              </div>
 
-              {/* ──────────────── TAB 2: CLIENT & METADATA ──────────────── */}
-              {activeLeftTab === "client" && (
-                <div className="space-y-4">
-                  {/* Client Selector & Mode */}
-                  <div className="p-3.5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-3">
-                    <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-700/60 pb-2">
-                      <span className="font-extrabold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
-                        <UserCheck size={14} className="text-teal-600" />
-                        <span>Client Information</span>
-                      </span>
-                      <div className="flex gap-1">
-                        <button
-                          type="button"
-                          onClick={() => setClientMode("select")}
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
-                            clientMode === "select" ? "bg-teal-600 text-white" : "text-zinc-500 hover:text-zinc-800"
-                          }`}
-                        >
-                          Select Client
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setClientMode("custom")
-                            setSelectedClient(null)
-                          }}
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
-                            clientMode === "custom" ? "bg-teal-600 text-white" : "text-zinc-500 hover:text-zinc-800"
-                          }`}
-                        >
-                          + New / Custom
-                        </button>
-                      </div>
-                    </div>
+              {/* Company & Branch Hierarchy */}
+              <div className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-3">
+                <span className="font-extrabold text-zinc-800 dark:text-zinc-200 block border-b border-zinc-200 dark:border-zinc-700/60 pb-2 text-xs">
+                  Issuing Entity &amp; Branch Location
+                </span>
 
-                    {clientMode === "select" ? (
-                      <div className="relative">
-                        <label className="block text-[10.5px] font-bold text-zinc-600 mb-1">
-                          Choose From CRM Clients ({allClients.length} Registered)
-                        </label>
-                        <div
-                          onClick={() => setIsClientSearchOpen(!isClientSearchOpen)}
-                          className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 flex items-center justify-between cursor-pointer hover:border-teal-500"
-                        >
-                          <span className="font-bold text-zinc-900 dark:text-zinc-100 truncate">
-                            {selectedClient ? selectedClient.name : "Click to select client..."}
-                          </span>
-                          <ChevronDown size={14} className="text-zinc-400 shrink-0" />
-                        </div>
-
-                        {isClientSearchOpen && (
-                          <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-2xl z-50 overflow-hidden p-2 space-y-2">
-                            <input
-                              type="text"
-                              placeholder="Search client by name, email, phone..."
-                              value={clientSearchQuery}
-                              onChange={(e) => setClientSearchQuery(e.target.value)}
-                              className="w-full px-3 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs"
-                              autoFocus
-                            />
-                            <div className="max-h-48 overflow-y-auto divide-y divide-zinc-100 dark:divide-zinc-800">
-                              {allClients
-                                .filter(c => !clientSearchQuery || c.name.toLowerCase().includes(clientSearchQuery.toLowerCase()))
-                                .map(c => (
-                                  <div
-                                    key={c.id}
-                                    onClick={() => handleSelectClient(c)}
-                                    className="p-2 hover:bg-teal-50 dark:hover:bg-teal-950/30 cursor-pointer rounded-lg flex items-center justify-between"
-                                  >
-                                    <div>
-                                      <div className="font-bold text-zinc-900 dark:text-zinc-100">{c.name}</div>
-                                      <div className="text-[10px] text-zinc-400">{c.email || c.phone || "No contact"}</div>
-                                    </div>
-                                    <span className="text-[10px] text-teal-600 font-bold">Select</span>
-                                  </div>
-                                ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ) : null}
-
-                    {/* Editable Client Details Fields */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      <div>
-                        <label className="block text-[10px] font-bold text-zinc-600 mb-0.5">Client / Business Name *</label>
-                        <Input value={clientName} onChange={e => setClientName(e.target.value)} placeholder="Client Name" />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-zinc-600 mb-0.5">Client Email</label>
-                        <Input value={clientEmail} onChange={e => setClientEmail(e.target.value)} placeholder="client@domain.com" />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-zinc-600 mb-0.5">Client Phone</label>
-                        <Input value={clientPhone} onChange={e => setClientPhone(e.target.value)} placeholder="+91 ..." />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-zinc-600 mb-0.5">Client GSTIN</label>
-                        <Input value={clientGst} onChange={e => setClientGst(e.target.value.toUpperCase())} className="font-mono" placeholder="GSTIN (if applicable)" />
-                      </div>
-                      <div className="sm:col-span-2">
-                        <label className="block text-[10px] font-bold text-zinc-600 mb-0.5">Client Street Address</label>
-                        <Input value={clientAddress} onChange={e => setClientAddress(e.target.value)} placeholder="Billing address" />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-zinc-600 mb-0.5">City</label>
-                        <Input value={clientCity} onChange={e => setClientCity(e.target.value)} placeholder="City" />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-zinc-600 mb-0.5">State</label>
-                        <Input value={clientState} onChange={e => setClientState(e.target.value)} placeholder="State" />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Document Metadata (Number, Dates, Project) */}
-                  <div className="p-3.5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-3">
-                    <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-700/60 pb-2">
-                      <span className="font-extrabold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
-                        <Receipt size={14} className="text-teal-600" />
-                        <span>Document Number & Dates</span>
-                      </span>
-                      <span className="text-[10.5px] font-semibold text-teal-600 dark:text-teal-400">
-                        ⚡ Supports Past (Backdated) & Future Dates
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                      <div>
-                        <label className="block text-[10px] font-bold text-zinc-600 mb-0.5">Document Number *</label>
-                        <Input value={docNumber} onChange={e => setDocNumber(e.target.value)} className="font-mono font-bold" />
-                      </div>
-                      <div>
-                        <div className="flex items-center justify-between mb-0.5">
-                          <label className="block text-[10px] font-bold text-zinc-600">Issue Date *</label>
-                          <span className="text-[9px] text-zinc-400 font-medium">Default: Today</span>
-                        </div>
-                        <Input 
-                          type="date" 
-                          value={issueDate} 
-                          onChange={e => {
-                            const val = e.target.value
-                            setIssueDate(val)
-                            generateDocNumber(docScheme, val)
-                          }} 
-                          className="font-medium"
-                        />
-                      </div>
-                      <div>
-                        <div className="flex items-center justify-between mb-0.5">
-                          <label className="block text-[10px] font-bold text-zinc-600">Due Date / Valid Till</label>
-                          <span className="text-[9px] text-zinc-400 font-medium">+15 Days Default</span>
-                        </div>
-                        <Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="font-medium" />
-                      </div>
-
-                      {/* Quick Date Shortcut Pills */}
-                      <div className="sm:col-span-3 flex flex-wrap items-center gap-1.5 pt-0.5">
-                        <span className="text-[9.5px] font-bold text-zinc-400 mr-1">Quick Date:</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const today = new Date().toISOString().split("T")[0]
-                            setIssueDate(today)
-                            generateDocNumber(docScheme, today)
-                          }}
-                          className="px-2 py-0.5 rounded-md bg-teal-50 hover:bg-teal-100 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300 border border-teal-200/80 text-[10px] font-semibold cursor-pointer"
-                        >
-                          📅 Today
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const y = new Date()
-                            y.setDate(y.getDate() - 1)
-                            const yStr = y.toISOString().split("T")[0]
-                            setIssueDate(yStr)
-                            generateDocNumber(docScheme, yStr)
-                          }}
-                          className="px-2 py-0.5 rounded-md bg-zinc-100 hover:bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 border border-zinc-200 text-[10px] font-semibold cursor-pointer"
-                        >
-                          ⏮️ Yesterday
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const d = new Date()
-                            d.setDate(1)
-                            const dStr = d.toISOString().split("T")[0]
-                            setIssueDate(dStr)
-                            generateDocNumber(docScheme, dStr)
-                          }}
-                          className="px-2 py-0.5 rounded-md bg-zinc-100 hover:bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 border border-zinc-200 text-[10px] font-semibold cursor-pointer"
-                        >
-                          ⏪ 1st of Month
-                        </button>
-                        <span className="text-zinc-300 dark:text-zinc-700">|</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const d = new Date(issueDate ? new Date(issueDate) : new Date())
-                            d.setDate(d.getDate() + 7)
-                            setDueDate(d.toISOString().split("T")[0])
-                          }}
-                          className="px-2 py-0.5 rounded-md bg-zinc-100 hover:bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 border border-zinc-200 text-[10px] font-semibold cursor-pointer"
-                        >
-                          Due +7d
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const d = new Date(issueDate ? new Date(issueDate) : new Date())
-                            d.setDate(d.getDate() + 15)
-                            setDueDate(d.toISOString().split("T")[0])
-                          }}
-                          className="px-2 py-0.5 rounded-md bg-zinc-100 hover:bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 border border-zinc-200 text-[10px] font-semibold cursor-pointer"
-                        >
-                          Due +15d
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const d = new Date(issueDate ? new Date(issueDate) : new Date())
-                            d.setDate(d.getDate() + 30)
-                            setDueDate(d.toISOString().split("T")[0])
-                          }}
-                          className="px-2 py-0.5 rounded-md bg-zinc-100 hover:bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 border border-zinc-200 text-[10px] font-semibold cursor-pointer"
-                        >
-                          Due +30d
-                        </button>
-                      </div>
-
-                      <div className="sm:col-span-3">
-                        <label className="block text-[10px] font-bold text-zinc-600 mb-0.5">Project / Subject Reference</label>
-                        <Input value={projectTitle} onChange={e => setProjectTitle(e.target.value)} placeholder="e.g. Enterprise Cloud ERP Development" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* ──────────────── TAB 3: LINE ITEMS & COMPUTATIONS ──────────────── */}
-              {activeLeftTab === "items" && (
-                <div className="space-y-4">
-                  {/* Presets Bar */}
-                  <div className="space-y-1.5">
-                    <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">
-                      ⚡ Quick Presets (Click to insert item):
-                    </span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {SERVICE_PRESETS.map((preset, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => handleAddItem(preset)}
-                          className="px-2 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-teal-50 hover:text-teal-700 border border-zinc-200 dark:border-zinc-700 text-[10px] font-semibold transition-colors cursor-pointer"
-                        >
-                          + {preset.name} (₹{preset.rate.toLocaleString()})
-                        </button>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Company Entity *</label>
+                    <select
+                      value={companyId}
+                      onChange={(e) => {
+                        setCompanyId(e.target.value)
+                        setBranchId("")
+                        setSubBranchId("")
+                      }}
+                      className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-bold"
+                    >
+                      {companies.map(c => (
+                        <option key={c.id} value={c.id}>{c.brand_name || c.name}</option>
                       ))}
-                    </div>
+                    </select>
                   </div>
 
-                  {/* Items List */}
+                  <div>
+                    <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Issuing Branch</label>
+                    <select
+                      value={branchId}
+                      onChange={(e) => {
+                        setBranchId(e.target.value)
+                        setSubBranchId("")
+                      }}
+                      className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-medium"
+                    >
+                      <option value="">🏢 Company HQ / Central Office</option>
+                      {companyBranches.map(b => (
+                        <option key={b.id} value={b.id}>📍 {b.name} ({b.code})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Sub-Branch / Partner</label>
+                    <select
+                      value={subBranchId}
+                      disabled={!branchId || branchSubBranches.length === 0}
+                      onChange={(e) => setSubBranchId(e.target.value)}
+                      className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-medium disabled:opacity-50"
+                    >
+                      <option value="">None (Direct Branch Billing)</option>
+                      {branchSubBranches.map(sb => (
+                        <option key={sb.id} value={sb.id}>🤝 {sb.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Team Member / Sales Attribution */}
+              <div className="p-4 rounded-2xl border border-indigo-500/20 bg-indigo-50/20 dark:bg-indigo-950/10 space-y-3">
+                <div className="flex items-center justify-between border-b border-indigo-500/20 pb-2">
+                  <div className="flex items-center gap-1.5">
+                    <Users size={15} className="text-indigo-600" />
+                    <span className="font-extrabold text-indigo-900 dark:text-indigo-200 text-xs">
+                      Assigned Team Members &amp; Commission Attribution
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddAssignedMember}
+                    className="text-[11px] font-bold text-indigo-600 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus size={13} /> + Add Member
+                  </button>
+                </div>
+
+                {assignedMembers.length === 0 ? (
+                  <div className="py-4 text-center text-zinc-400 text-xs">
+                    No team members assigned yet. Click "+ Add Member" to assign sales reps or engineers.
+                  </div>
+                ) : (
                   <div className="space-y-2.5">
-                    {items.map((item, index) => (
-                      <div 
-                        key={item.id} 
-                        className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/40 space-y-2"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-extrabold text-[11px] text-zinc-700 dark:text-zinc-300">
-                            #{index + 1} Line Item
-                          </span>
-                          {items.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveItem(item.id)}
-                              className="text-rose-500 hover:text-rose-700 text-[10px] font-bold flex items-center gap-1 cursor-pointer"
-                            >
-                              <Trash2 size={12} /> Remove
-                            </button>
-                          )}
+                    {assignedMembers.map((m, idx) => (
+                      <div key={idx} className="p-3 bg-white dark:bg-zinc-900 border border-indigo-100 dark:border-indigo-900/60 rounded-xl grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+                        <div className="sm:col-span-5">
+                          <label className="block text-[10px] font-bold text-zinc-500 mb-0.5">Team Member</label>
+                          <select
+                            value={m.memberId}
+                            onChange={(e) => handleUpdateAssignedMember(idx, "memberId", e.target.value)}
+                            className="w-full px-2.5 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs font-bold"
+                          >
+                            {availableTeamMembers.map(tm => (
+                              <option key={tm.id} value={tm.id}>{tm.name} ({tm.role})</option>
+                            ))}
+                          </select>
                         </div>
 
-                        <div>
-                          <label className="block text-[10px] font-bold text-zinc-600 mb-0.5">Item / Service Description *</label>
+                        <div className="sm:col-span-3">
+                          <label className="block text-[10px] font-bold text-zinc-500 mb-0.5">Payout Mode</label>
+                          <div className="flex rounded-lg border border-zinc-200 dark:border-zinc-700 overflow-hidden">
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateAssignedMember(idx, "payoutType", "percentage")}
+                              className={`flex-1 py-1 text-center font-bold ${m.payoutType === "percentage" ? "bg-indigo-600 text-white" : "bg-zinc-50 dark:bg-zinc-800 text-zinc-600"}`}
+                            >
+                              % Share
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateAssignedMember(idx, "payoutType", "fixed")}
+                              className={`flex-1 py-1 text-center font-bold ${m.payoutType === "fixed" ? "bg-indigo-600 text-white" : "bg-zinc-50 dark:bg-zinc-800 text-zinc-600"}`}
+                            >
+                              ₹ Fixed
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="sm:col-span-3">
+                          <label className="block text-[10px] font-bold text-zinc-500 mb-0.5">
+                            {m.payoutType === "percentage" ? "Share Percentage (%)" : "Fixed Amount (₹)"}
+                          </label>
                           <Input
-                            value={item.serviceName}
-                            onChange={(e) => handleUpdateItem(item.id, "serviceName", e.target.value)}
-                            placeholder="e.g. Website Development, Server Hosting..."
+                            type="number"
+                            value={m.payoutValue}
+                            onChange={(e) => handleUpdateAssignedMember(idx, "payoutValue", Number(e.target.value))}
+                            placeholder={m.payoutType === "percentage" ? "30" : "5000"}
+                            className="font-bold"
                           />
                         </div>
 
-                        <div className="grid grid-cols-4 gap-2">
-                          <div>
-                            <label className="block text-[9.5px] font-bold text-zinc-600 mb-0.5">SAC / HSN</label>
-                            <Input
-                              value={item.sacCode || ""}
-                              onChange={(e) => handleUpdateItem(item.id, "sacCode", e.target.value)}
-                              className="font-mono text-[11px]"
-                              placeholder="998313"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[9.5px] font-bold text-zinc-600 mb-0.5">Qty</label>
-                            <Input
-                              type="number"
-                              min={1}
-                              value={item.qty}
-                              onChange={(e) => handleUpdateItem(item.id, "qty", parseInt(e.target.value) || 1)}
-                              className="text-[11px]"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[9.5px] font-bold text-zinc-600 mb-0.5">Unit Rate (₹)</label>
-                            <Input
-                              type="number"
-                              value={item.rate}
-                              onChange={(e) => handleUpdateItem(item.id, "rate", parseFloat(e.target.value) || 0)}
-                              className="font-mono text-[11px]"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[9.5px] font-bold text-zinc-600 mb-0.5">GST %</label>
-                            <select
-                              value={docScheme === "gst" ? item.gstRate : 0}
-                              onChange={(e) => handleUpdateItem(item.id, "gstRate", parseInt(e.target.value) || 0)}
-                              disabled={docScheme === "nongst"}
-                              className="w-full px-2 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-bold"
-                            >
-                              <option value={18}>18% GST</option>
-                              <option value={12}>12% GST</option>
-                              <option value={5}>5% GST</option>
-                              <option value={0}>0% (Non-GST)</option>
-                            </select>
-                          </div>
+                        <div className="sm:col-span-1 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveAssignedMember(idx)}
+                            className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg cursor-pointer"
+                          >
+                            <Trash2 size={15} />
+                          </button>
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
-                    <Button
+          {/* ════ TAB 2: CLIENT & METADATA ════ */}
+          {activeTab === "client" && (
+            <div className="space-y-5">
+              {/* Client Selection */}
+              <div className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-3">
+                <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-700/60 pb-2">
+                  <span className="font-extrabold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                    <UserCheck size={15} className="text-teal-600" />
+                    <span>Client / Organization Information</span>
+                  </span>
+                  <div className="flex gap-1.5">
+                    <button
                       type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleAddItem()}
-                      className="w-full text-xs font-bold border-dashed border-teal-500/40 text-teal-700 hover:bg-teal-50 cursor-pointer"
+                      onClick={() => setClientMode("select")}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold cursor-pointer transition-all ${
+                        clientMode === "select" ? "bg-teal-600 text-white shadow-xs" : "bg-white dark:bg-zinc-800 text-zinc-600 border border-zinc-200 dark:border-zinc-700"
+                      }`}
                     >
-                      + Add Another Line Item
-                    </Button>
-                  </div>
-
-                  {/* Adjustments: Discount & Setup Fee */}
-                  <div className="p-3.5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-3">
-                    <span className="font-extrabold text-zinc-800 dark:text-zinc-200 block border-b border-zinc-200 pb-1.5 text-xs">
-                      Discounts & Additional Charges
-                    </span>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[10px] font-bold text-zinc-600 mb-0.5">Discount</label>
-                        <div className="flex gap-1">
-                          <select
-                            value={discountType}
-                            onChange={(e) => setDiscountType(e.target.value as any)}
-                            className="px-2 py-1 rounded-lg border border-zinc-200 text-xs bg-white dark:bg-zinc-900"
-                          >
-                            <option value="percentage">%</option>
-                            <option value="fixed">₹</option>
-                          </select>
-                          <Input
-                            type="number"
-                            value={discountValue}
-                            onChange={e => setDiscountValue(e.target.value === "" ? "" : parseFloat(e.target.value))}
-                            placeholder={discountType === "percentage" ? "10%" : "₹1000"}
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-zinc-600 mb-0.5">Setup / Delivery Charge (₹)</label>
-                        <Input
-                          type="number"
-                          value={setupCharge}
-                          onChange={e => setSetupCharge(e.target.value === "" ? "" : parseFloat(e.target.value))}
-                          placeholder="₹0"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Financial Computation Summary */}
-                  <div className="p-3.5 rounded-2xl bg-teal-900 text-white space-y-1.5 shadow-md">
-                    <div className="flex justify-between text-xs opacity-90">
-                      <span>Subtotal Base:</span>
-                      <span className="font-mono">₹{calculatedSubtotal.toLocaleString("en-IN")}</span>
-                    </div>
-                    {calculatedDiscount > 0 && (
-                      <div className="flex justify-between text-xs text-teal-200">
-                        <span>Discount:</span>
-                        <span className="font-mono">-₹{calculatedDiscount.toLocaleString("en-IN")}</span>
-                      </div>
-                    )}
-                    {docScheme === "gst" && (
-                      <div className="flex justify-between text-xs text-teal-200">
-                        <span>Total GST (CGST 9% + SGST 9%):</span>
-                        <span className="font-mono">+₹{calculatedGst.toLocaleString("en-IN")}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between text-sm font-black pt-1.5 border-t border-teal-700/60">
-                      <span>Grand Total Invoiced:</span>
-                      <span className="font-mono text-base text-teal-300">₹{grandTotal.toLocaleString("en-IN")}</span>
-                    </div>
+                      Select Existing Client
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setClientMode("custom")
+                        setSelectedClient(null)
+                      }}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold cursor-pointer transition-all ${
+                        clientMode === "custom" ? "bg-teal-600 text-white shadow-xs" : "bg-white dark:bg-zinc-800 text-zinc-600 border border-zinc-200 dark:border-zinc-700"
+                      }`}
+                    >
+                      + New / Custom Client
+                    </button>
                   </div>
                 </div>
-              )}
 
-              {/* ──────────────── TAB 4: BADGES, SIGNATURE & OVERRIDES ──────────────── */}
-              {activeLeftTab === "customization" && (
-                <div className="space-y-4">
-                  {/* Draggable Custom Badges Creator */}
-                  <div className="p-4 rounded-2xl border border-emerald-500/20 bg-emerald-50/20 dark:bg-emerald-950/10 space-y-3">
-                    <div className="flex items-center justify-between border-b border-emerald-500/20 pb-2">
-                      <div className="flex items-center gap-1.5">
-                        <Stamp size={15} className="text-emerald-600" />
-                        <span className="font-extrabold text-emerald-950 dark:text-emerald-200 text-xs">
-                          Custom Draggable Badges & Stamps
-                        </span>
+                {clientMode === "select" && (
+                  <div className="relative">
+                    <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
+                      Choose from CRM Clients ({allClients.length} Registered)
+                    </label>
+                    <div
+                      onClick={() => setIsClientSearchOpen(!isClientSearchOpen)}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 flex items-center justify-between cursor-pointer hover:border-teal-500"
+                    >
+                      <span className="font-bold text-zinc-900 dark:text-zinc-100 truncate">
+                        {selectedClient ? `${selectedClient.name} (${selectedClient.email || selectedClient.phone || 'No contact'})` : "Click to select a client..."}
+                      </span>
+                      <ChevronDown size={16} className="text-zinc-400 shrink-0" />
+                    </div>
+
+                    {isClientSearchOpen && (
+                      <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-2xl z-50 overflow-hidden p-2 space-y-2">
+                        <input
+                          type="text"
+                          placeholder="Search client by name, email, phone..."
+                          value={clientSearchQuery}
+                          onChange={(e) => setClientSearchQuery(e.target.value)}
+                          className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs"
+                          autoFocus
+                        />
+                        <div className="max-h-52 overflow-y-auto divide-y divide-zinc-100 dark:divide-zinc-800">
+                          {allClients
+                            .filter(c => !clientSearchQuery || c.name.toLowerCase().includes(clientSearchQuery.toLowerCase()))
+                            .map(c => (
+                              <div
+                                key={c.id}
+                                onClick={() => handleSelectClient(c)}
+                                className="p-2.5 hover:bg-teal-50 dark:hover:bg-teal-950/30 cursor-pointer rounded-lg flex items-center justify-between"
+                              >
+                                <div>
+                                  <div className="font-bold text-zinc-900 dark:text-zinc-100">{c.name}</div>
+                                  <div className="text-[10.5px] text-zinc-400">{c.email || c.phone || "No contact"}</div>
+                                </div>
+                                <span className="text-[10.5px] text-teal-600 font-bold">Select</span>
+                              </div>
+                            ))}
+                        </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={handleResetPositions}
-                        className="text-[10px] text-zinc-500 hover:text-zinc-800 font-bold underline cursor-pointer"
-                      >
-                        Reset All Positions
-                      </button>
-                    </div>
+                    )}
+                  </div>
+                )}
 
-                    <p className="text-[10.5px] text-zinc-500">
-                      Create movable badges that you can hold and drag to any location on the document canvas.
-                    </p>
+                {/* Client Editable Details */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Client / Organization Name *</label>
+                    <Input value={clientName} onChange={e => setClientName(e.target.value)} placeholder="e.g. Acme Corp" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Client Email</label>
+                    <Input value={clientEmail} onChange={e => setClientEmail(e.target.value)} placeholder="client@company.com" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Client Phone</label>
+                    <Input value={clientPhone} onChange={e => setClientPhone(e.target.value)} placeholder="+91 98765 43210" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Client GSTIN</label>
+                    <Input value={clientGst} onChange={e => setClientGst(e.target.value.toUpperCase())} className="font-mono uppercase" placeholder="19AAAAA0000A1Z5" />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Billing Street Address</label>
+                    <Input value={clientAddress} onChange={e => setClientAddress(e.target.value)} placeholder="Full street address..." />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">City</label>
+                    <Input value={clientCity} onChange={e => setClientCity(e.target.value)} placeholder="City" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">State</label>
+                    <Input value={clientState} onChange={e => setClientState(e.target.value)} placeholder="State" />
+                  </div>
+                </div>
+              </div>
 
-                    {/* Quick Preset Stamps */}
-                    <div className="flex flex-wrap gap-1.5">
-                      {STAMP_PRESETS.map((st, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => {
-                            setCustomStamps(prev => [
-                              ...prev,
-                              { id: `stamp_${Date.now()}_${idx}`, text: st.text, color: st.color, fontSize: 11, x: 0, y: 0 }
-                            ])
-                          }}
-                          className="px-2 py-1 rounded-md text-[9.5px] font-bold border transition-all cursor-pointer"
-                          style={{ borderColor: st.color, color: st.color, backgroundColor: 'rgba(255,255,255,0.8)' }}
-                        >
-                          + {st.text}
-                        </button>
-                      ))}
-                    </div>
+              {/* Document Identification & Dates */}
+              <div className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-3">
+                <span className="font-extrabold text-zinc-800 dark:text-zinc-200 block border-b border-zinc-200 dark:border-zinc-700/60 pb-2 text-xs">
+                  Document Number, Dates &amp; Project Reference
+                </span>
 
-                    {/* Custom Stamp Creator */}
-                    <div className="flex gap-2 pt-1">
-                      <Input
-                        value={newStampText}
-                        onChange={e => setNewStampText(e.target.value)}
-                        placeholder="Enter custom stamp text (e.g. APPROVED)..."
-                        className="text-xs"
-                      />
-                      <input
-                        type="color"
-                        value={newStampColor}
-                        onChange={e => setNewStampColor(e.target.value)}
-                        className="w-9 h-9 p-0.5 rounded-lg border cursor-pointer shrink-0"
-                        title="Choose badge color"
-                      />
-                      <Button
-                        type="button"
-                        onClick={handleAddCustomStamp}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shrink-0 cursor-pointer"
-                      >
-                        Add Stamp
-                      </Button>
-                    </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Document Number *</label>
+                    <Input value={docNumber} onChange={e => setDocNumber(e.target.value)} className="font-mono font-bold" />
+                  </div>
 
-                    {/* List of active custom stamps */}
-                    {customStamps.length > 0 && (
-                      <div className="space-y-1.5 pt-2 border-t border-emerald-500/10">
-                        <span className="text-[10px] font-bold text-zinc-500 uppercase">Active Movable Stamps:</span>
-                        <div className="flex flex-wrap gap-2">
-                          {customStamps.map(s => (
-                            <span 
-                              key={s.id}
-                              className="px-2.5 py-1 rounded-lg border text-[10px] font-black uppercase flex items-center gap-1.5 bg-white shadow-2xs"
-                              style={{ borderColor: s.color, color: s.color }}
-                            >
-                              <span>{s.text}</span>
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Issue Date *</label>
+                    <Input 
+                      type="date" 
+                      value={issueDate} 
+                      onChange={e => {
+                        setIssueDate(e.target.value)
+                        generateDocNumber(docScheme, e.target.value)
+                      }} 
+                      className="font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Due Date / Valid Till</label>
+                    <Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="font-medium" />
+                  </div>
+
+                  <div className="sm:col-span-3">
+                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Project / Subject Reference</label>
+                    <Input value={projectTitle} onChange={e => setProjectTitle(e.target.value)} placeholder="e.g. Enterprise Cloud ERP Implementation" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ════ TAB 3: LINE ITEMS & PRICING ════ */}
+          {activeTab === "items" && (
+            <div className="space-y-5">
+              {/* Service Presets */}
+              <div className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
+                <span className="text-[10.5px] font-bold text-zinc-500 uppercase tracking-wider block mb-2">
+                  ⚡ Quick Service Presets (Click to insert):
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {SERVICE_PRESETS.map((preset, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => handleAddItem(preset)}
+                      className="px-2.5 py-1 rounded-lg bg-white dark:bg-zinc-800 hover:bg-teal-50 hover:text-teal-700 dark:hover:bg-teal-950/40 border border-zinc-200 dark:border-zinc-700 text-[11px] font-semibold transition-colors cursor-pointer"
+                    >
+                      + {preset.name} (₹{preset.rate.toLocaleString("en-IN")})
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Items Table / Cards */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-zinc-900 dark:text-zinc-100 text-sm">Line Items &amp; Services ({items.length})</span>
+                  <button
+                    type="button"
+                    onClick={() => handleAddItem()}
+                    className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs cursor-pointer"
+                  >
+                    <Plus size={14} /> Add Line Item
+                  </button>
+                </div>
+
+                <div className="space-y-2.5">
+                  {items.map((item, index) => {
+                    const rowBase = (item.rate || 0) * (item.qty || 1)
+                    const rowTax = docScheme === "gst" ? Math.round(rowBase * ((item.gstRate !== undefined ? item.gstRate : 18) / 100)) : 0
+                    const rowTotal = rowBase + rowTax
+
+                    return (
+                      <div key={item.id} className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xs space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="font-black text-zinc-800 dark:text-zinc-200 text-xs">#{index + 1} Line Item</span>
+                          <div className="flex items-center gap-3">
+                            <span className="font-mono font-bold text-teal-600 dark:text-teal-400 text-xs">
+                              Row Total: ₹{rowTotal.toLocaleString("en-IN")} {docScheme === "gst" ? `(incl. ₹${rowTax} tax)` : ''}
+                            </span>
+                            {items.length > 1 && (
                               <button
                                 type="button"
-                                onClick={() => handleRemoveCustomStamp(s.id)}
-                                className="w-3.5 h-3.5 rounded-full bg-rose-500 text-white flex items-center justify-center text-[8px] cursor-pointer"
+                                onClick={() => handleRemoveItem(item.id)}
+                                className="p-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg cursor-pointer"
+                                title="Remove Item"
                               >
-                                ✕
+                                <Trash2 size={14} />
                               </button>
-                            </span>
-                          ))}
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
 
-                  {/* Logo & Signature Image Overrides */}
-                  <div className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-3">
-                    <span className="font-extrabold text-zinc-800 dark:text-zinc-200 block border-b border-zinc-200 pb-1.5 text-xs">
-                      Document Logo & Signatory Overrides
-                    </span>
-                    <div className="space-y-3">
-                      <div>
-                        <ImageUploadField
-                          label="Logo Override (Overrides Company Logo on this Document)"
-                          value={logoUrlOverride}
-                          onChange={url => setLogoUrlOverride(url)}
-                          uploadNamePrefix="doc_logo_override"
-                          helperText="Uploaded to ImgBB or paste direct image URL. Leave empty to use company default logo."
-                        />
-                        <div className="flex items-center gap-1.5 pt-1 text-[10px] flex-wrap">
-                          <span className="font-bold text-zinc-500">Quick Test Logos:</span>
-                          <button
-                            type="button"
-                            onClick={() => setLogoUrlOverride("https://cdn-icons-png.flaticon.com/512/3135/3135715.png")}
-                            className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-teal-700 dark:text-teal-400 font-bold hover:bg-teal-50 border border-zinc-200 dark:border-zinc-700 cursor-pointer"
-                          >
-                            Tech Emblem
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setLogoUrlOverride("https://cdn-icons-png.flaticon.com/512/3063/3063822.png")}
-                            className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-indigo-700 dark:text-indigo-400 font-bold hover:bg-indigo-50 border border-zinc-200 dark:border-zinc-700 cursor-pointer"
-                          >
-                            Corporate Crest
-                          </button>
-                          {logoUrlOverride && (
-                            <button
-                              type="button"
-                              onClick={() => setLogoUrlOverride("")}
-                              className="text-rose-500 hover:text-rose-700 font-bold underline cursor-pointer ml-auto"
-                            >
-                              Reset to Default Logo
-                            </button>
+                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+                          <div className="sm:col-span-4">
+                            <label className="block text-[10px] font-bold text-zinc-500 mb-0.5">Service / Product Name *</label>
+                            <Input
+                              value={item.serviceName}
+                              onChange={e => handleUpdateItem(item.id, "serviceName", e.target.value)}
+                              placeholder="e.g. Website Development"
+                              className="font-bold"
+                            />
+                          </div>
+
+                          <div className="sm:col-span-2">
+                            <label className="block text-[10px] font-bold text-zinc-500 mb-0.5">SAC / HSN Code</label>
+                            <Input
+                              value={item.sacCode}
+                              onChange={e => handleUpdateItem(item.id, "sacCode", e.target.value)}
+                              placeholder="998313"
+                              className="font-mono"
+                            />
+                          </div>
+
+                          <div className="sm:col-span-2">
+                            <label className="block text-[10px] font-bold text-zinc-500 mb-0.5">Quantity</label>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={item.qty}
+                              onChange={e => handleUpdateItem(item.id, "qty", Math.max(1, Number(e.target.value)))}
+                              className="font-bold"
+                            />
+                          </div>
+
+                          <div className="sm:col-span-2">
+                            <label className="block text-[10px] font-bold text-zinc-500 mb-0.5">Unit</label>
+                            <Input
+                              value={item.unit || "Project"}
+                              onChange={e => handleUpdateItem(item.id, "unit", e.target.value)}
+                              placeholder="Project / Nos / Hr"
+                            />
+                          </div>
+
+                          <div className="sm:col-span-2">
+                            <label className="block text-[10px] font-bold text-zinc-500 mb-0.5">Rate / Price (₹) *</label>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={item.rate}
+                              onChange={e => handleUpdateItem(item.id, "rate", Math.max(0, Number(e.target.value)))}
+                              placeholder="10000"
+                              className="font-bold text-emerald-600"
+                            />
+                          </div>
+
+                          {docScheme === "gst" && (
+                            <div className="sm:col-span-3">
+                              <label className="block text-[10px] font-bold text-zinc-500 mb-0.5">GST Rate (%)</label>
+                              <select
+                                value={item.gstRate !== undefined ? item.gstRate : 18}
+                                onChange={e => handleUpdateItem(item.id, "gstRate", Number(e.target.value))}
+                                className="w-full px-2.5 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs font-bold"
+                              >
+                                <option value={0}>0% (Exempt)</option>
+                                <option value={5}>5%</option>
+                                <option value={12}>12%</option>
+                                <option value={18}>18% (Standard)</option>
+                                <option value={28}>28%</option>
+                              </select>
+                            </div>
                           )}
+
+                          <div className={docScheme === "gst" ? "sm:col-span-9" : "sm:col-span-12"}>
+                            <label className="block text-[10px] font-bold text-zinc-500 mb-0.5">Description / Deliverables Scope</label>
+                            <Input
+                              value={item.description || ""}
+                              onChange={e => handleUpdateItem(item.id, "description", e.target.value)}
+                              placeholder="Brief deliverables summary..."
+                            />
+                          </div>
                         </div>
                       </div>
-
-                      <div>
-                        <ImageUploadField
-                          label="Authorized Signature Override"
-                          value={signatureUrlOverride}
-                          onChange={url => setSignatureUrlOverride(url)}
-                          uploadNamePrefix="doc_sig_override"
-                          aspectRatio="signature"
-                          helperText="Uploaded to ImgBB or paste direct image URL. Leave empty to use company default signature."
-                        />
-                        <div className="flex items-center gap-1.5 pt-1 text-[10px] flex-wrap">
-                          <span className="font-bold text-zinc-500">Quick Test Signatures:</span>
-                          <button
-                            type="button"
-                            onClick={() => setSignatureUrlOverride("https://upload.wikimedia.org/wikipedia/commons/f/fa/Signature_sample.png")}
-                            className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-teal-700 dark:text-teal-400 font-bold hover:bg-teal-50 border border-zinc-200 dark:border-zinc-700 cursor-pointer"
-                          >
-                            Formal Signature
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setSignatureUrlOverride("https://upload.wikimedia.org/wikipedia/commons/3/3a/Jon_Kirsch_Signature.png")}
-                            className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-indigo-700 dark:text-indigo-400 font-bold hover:bg-indigo-50 border border-zinc-200 dark:border-zinc-700 cursor-pointer"
-                          >
-                            Director Signature
-                          </button>
-                          {signatureUrlOverride && (
-                            <button
-                              type="button"
-                              onClick={() => setSignatureUrlOverride("")}
-                              className="text-rose-500 hover:text-rose-700 font-bold underline cursor-pointer ml-auto"
-                            >
-                              Reset to Default Signature
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Notes & Terms */}
-                  <div className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-3">
-                    <span className="font-extrabold text-zinc-800 dark:text-zinc-200 block border-b border-zinc-200 pb-1.5 text-xs">
-                      Notes & Terms of Service
-                    </span>
-                    <div>
-                      <label className="block text-[10px] font-bold text-zinc-600 mb-0.5">Notes to Customer</label>
-                      <textarea
-                        rows={2}
-                        value={notes}
-                        onChange={e => setNotes(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-white dark:bg-zinc-900 text-xs"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-zinc-600 mb-0.5">Terms & Conditions</label>
-                      <textarea
-                        rows={3}
-                        value={terms}
-                        onChange={e => setTerms(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-white dark:bg-zinc-900 text-xs"
-                      />
-                    </div>
-                  </div>
+                    )
+                  })}
                 </div>
-              )}
-
-            </div>
-          </div>
-
-          {/* ════ RIGHT PANEL: LIVE WYSIWYG DOCUMENT CANVAS (54% WIDTH) ════ */}
-          <div className="flex-1 bg-zinc-200/70 dark:bg-zinc-950/80 flex flex-col overflow-hidden relative">
-            
-            {/* Top Canvas Bar with Zoom & Instructions */}
-            <div className="px-4 py-2.5 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-sm border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2">
-                <span className="flex h-2 w-2 relative">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-                <span className="text-xs font-extrabold text-zinc-800 dark:text-zinc-200">
-                  Live WYSIWYG Document Canvas
-                </span>
-                <span className="text-[11px] text-zinc-500 hidden sm:inline">
-                  • Real-time updates as you type on the left
-                </span>
               </div>
 
-              <div className="flex items-center gap-2">
-                {/* Drag info helper badge */}
-                <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 text-[10.5px] font-bold text-blue-700 dark:text-blue-300">
-                  <Move size={12} />
-                  <span>Hold & drag logo / signature / badges to position</span>
+              {/* Financial Adjustments Card */}
+              <div className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-3">
+                <span className="font-extrabold text-zinc-800 dark:text-zinc-200 block border-b border-zinc-200 dark:border-zinc-700/60 pb-2 text-xs">
+                  Financial Adjustments, Setup Charges &amp; Discounts
+                </span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Platform / Setup Fee (₹)</label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={setupCharge}
+                      onChange={e => setSetupCharge(e.target.value === "" ? "" : Math.max(0, Number(e.target.value)))}
+                      placeholder="e.g. 2000"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Discount Type</label>
+                    <select
+                      value={discountType}
+                      onChange={e => setDiscountType(e.target.value as any)}
+                      className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-bold"
+                    >
+                      <option value="percentage">% Percentage Discount</option>
+                      <option value="fixed">₹ Fixed Amount Discount</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">
+                      {discountType === "percentage" ? "Discount (%)" : "Discount Amount (₹)"}
+                    </label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={discountValue}
+                      onChange={e => setDiscountValue(e.target.value === "" ? "" : Math.max(0, Number(e.target.value)))}
+                      placeholder={discountType === "percentage" ? "10" : "1500"}
+                    />
+                  </div>
                 </div>
 
-                {/* Zoom controls */}
-                <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg border border-zinc-200 dark:border-zinc-700 p-0.5">
-                  <button
-                    type="button"
-                    onClick={() => setCanvasZoom(z => Math.max(65, z - 10))}
-                    className="p-1 text-zinc-600 hover:text-zinc-900 rounded"
-                    title="Zoom Out"
-                  >
-                    <ZoomOut size={14} />
-                  </button>
-                  <span className="px-1.5 text-[10.5px] font-mono font-bold text-zinc-700 dark:text-zinc-300">
-                    {canvasZoom}%
+                {/* Final Calculation Summary */}
+                <div className="p-3.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 space-y-2 mt-2">
+                  <div className="flex items-center justify-between text-zinc-600 dark:text-zinc-400 text-xs">
+                    <span>Subtotal Base Amount:</span>
+                    <span className="font-mono font-bold text-zinc-900 dark:text-zinc-100">₹{calculatedSubtotal.toLocaleString("en-IN")}</span>
+                  </div>
+                  {numSetupCharge > 0 && (
+                    <div className="flex items-center justify-between text-zinc-600 dark:text-zinc-400 text-xs">
+                      <span>Platform / Setup Fee:</span>
+                      <span className="font-mono font-bold text-zinc-900 dark:text-zinc-100">+₹{numSetupCharge.toLocaleString("en-IN")}</span>
+                    </div>
+                  )}
+                  {calculatedDiscount > 0 && (
+                    <div className="flex items-center justify-between text-rose-600 text-xs">
+                      <span>Discount Applied:</span>
+                      <span className="font-mono font-bold">-₹{calculatedDiscount.toLocaleString("en-IN")}</span>
+                    </div>
+                  )}
+                  {docScheme === "gst" && (
+                    <div className="flex items-center justify-between text-teal-600 dark:text-teal-400 text-xs">
+                      <span>GST (18% Statutory):</span>
+                      <span className="font-mono font-bold">+₹{calculatedGst.toLocaleString("en-IN")}</span>
+                    </div>
+                  )}
+                  <div className="border-t border-zinc-200 dark:border-zinc-700 pt-2 flex items-center justify-between text-sm">
+                    <span className="font-black text-zinc-900 dark:text-zinc-100">Grand Total Payable:</span>
+                    <span className="font-black font-mono text-emerald-600 dark:text-emerald-400 text-base">₹{grandTotal.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="text-[10px] text-zinc-400 font-medium italic">
+                    Amount in words: {numberToIndianWords(grandTotal)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ════ TAB 4: BANK, UPI & PAYMENT QR ════ */}
+          {activeTab === "bank" && (
+            <div className="space-y-5">
+              <div className="p-4 rounded-2xl border border-teal-500/20 bg-teal-50/20 dark:bg-teal-950/10 space-y-3">
+                <div className="flex items-center justify-between border-b border-teal-500/20 pb-2">
+                  <div className="flex items-center gap-1.5">
+                    <Landmark size={16} className="text-teal-700" />
+                    <span className="font-extrabold text-teal-900 dark:text-teal-200 text-xs">
+                      Bank Account &amp; UPI Payment QR Code
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-teal-700 font-bold">
+                    {docScheme === "gst" ? "🏢 Linked with Company GST Bank Profile" : "📄 Linked with Company Non-GST Bank Profile"}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => setCanvasZoom(z => Math.min(120, z + 10))}
-                    className="p-1 text-zinc-600 hover:text-zinc-900 rounded"
-                    title="Zoom In"
-                  >
-                    <ZoomIn size={14} />
-                  </button>
                 </div>
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleResetPositions}
-                  className="text-xs h-7 px-2 font-bold cursor-pointer"
-                  title="Reset positions of logo, signature and stamps"
-                >
-                  <RefreshCw size={12} className="mr-1" /> Reset Drag
-                </Button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Bank Name</label>
+                    <Input value={bankNameOverride} onChange={e => setBankNameOverride(e.target.value)} placeholder="e.g. HDFC Bank Ltd" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Account Holder Name</label>
+                    <Input value={accountHolderOverride} onChange={e => setAccountHolderOverride(e.target.value)} placeholder="A/C Holder Name" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Account Number</label>
+                    <Input value={accountNumberOverride} onChange={e => setAccountNumberOverride(e.target.value)} className="font-mono" placeholder="502000..." />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">IFSC Code</label>
+                    <Input value={ifscCodeOverride} onChange={e => setIfscCodeOverride(e.target.value.toUpperCase())} className="font-mono uppercase" placeholder="HDFC0001234" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Bank Branch Location</label>
+                    <Input value={bankBranchOverride} onChange={e => setBankBranchOverride(e.target.value)} placeholder="Branch location" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">UPI ID / VPA</label>
+                    <Input value={upiIdOverride} onChange={e => setUpiIdOverride(e.target.value)} className="font-mono" placeholder="saampark@hdfcbank" />
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <ImageUploadField
+                    label="Payment QR Code Image URL / Upload"
+                    value={paymentQrUrlOverride}
+                    onChange={url => setPaymentQrUrlOverride(url)}
+                    uploadNamePrefix="doc_payment_qr"
+                    helperText="Scan-to-pay QR code displayed in the payment footer of this document."
+                  />
+                </div>
               </div>
             </div>
+          )}
 
-            {/* Canvas Scrollable Container */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-8 flex justify-center items-start">
-              <div 
-                style={{ 
-                  transform: `scale(${canvasZoom / 100})`, 
-                  transformOrigin: "top center",
-                  transition: "transform 0.15s ease-out"
-                }}
-                className="w-full max-w-[840px] drop-shadow-2xl select-text"
-              >
-                {/* Real-time Interactive Official Invoice / Quotation / Estimate Document */}
-                <OfficialInvoiceDocument
-                  invoice={livePreviewInvoice}
-                  clientDetails={selectedClient}
-                  companyDetails={activeCompany}
-                  interactive={true}
-                  logoPosition={logoPosition}
-                  onLogoPositionChange={pos => setLogoPosition(pos)}
-                  signaturePosition={signaturePosition}
-                  onSignaturePositionChange={pos => setSignaturePosition(pos)}
-                  customStamps={customStamps}
-                  onCustomStampMove={(id, pos) => {
-                    setCustomStamps(prev => prev.map(s => s.id === id ? { ...s, x: pos.x, y: pos.y } : s))
-                  }}
-                  onRemoveCustomStamp={id => handleRemoveCustomStamp(id)}
-                  overrideLogoUrl={logoUrlOverride || undefined}
-                  overrideSignatureUrl={signatureUrlOverride || undefined}
-                  overrideStampUrl={stampUrlOverride || undefined}
-                  overrideBankDetails={{
-                    bankName: bankNameOverride,
-                    accountHolder: accountHolderOverride,
-                    accountNumber: accountNumberOverride,
-                    ifscCode: ifscCodeOverride,
-                    bankBranch: bankBranchOverride,
-                    upiId: upiIdOverride,
-                    paymentQrUrl: paymentQrUrlOverride,
-                  }}
-                />
+          {/* ════ TAB 5: NOTES, TERMS & SIGNATORY ════ */}
+          {activeTab === "terms" && (
+            <div className="space-y-5">
+              {/* Signatory Details */}
+              <div className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-3">
+                <span className="font-extrabold text-zinc-800 dark:text-zinc-200 block border-b border-zinc-200 dark:border-zinc-700/60 pb-2 text-xs">
+                  Authorized Signatory &amp; Official Seal
+                </span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Signatory Name</label>
+                    <Input value={signatoryName} onChange={e => setSignatoryName(e.target.value)} placeholder="Authorized Signatory Name" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Designation</label>
+                    <Input value={signatoryDesignation} onChange={e => setSignatoryDesignation(e.target.value)} placeholder="e.g. Managing Director" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <ImageUploadField
+                    label="Authorized Signature Image"
+                    value={signatureUrlOverride}
+                    onChange={url => setSignatureUrlOverride(url)}
+                    uploadNamePrefix="doc_sig_override"
+                    aspectRatio="signature"
+                    helperText="Upload official signature image."
+                  />
+                  <ImageUploadField
+                    label="Official Company Seal / Stamp"
+                    value={stampUrlOverride}
+                    onChange={url => setStampUrlOverride(url)}
+                    uploadNamePrefix="doc_stamp_override"
+                    aspectRatio="square"
+                    helperText="Upload official company seal."
+                  />
+                </div>
+              </div>
+
+              {/* Notes & Terms of Service */}
+              <div className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-3">
+                <span className="font-extrabold text-zinc-800 dark:text-zinc-200 block border-b border-zinc-200 dark:border-zinc-700/60 pb-2 text-xs">
+                  Notes &amp; Terms of Service
+                </span>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Notes to Customer</label>
+                  <textarea
+                    rows={2}
+                    value={notes}
+                    onChange={e => setNotes(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Terms &amp; Conditions</label>
+                  <textarea
+                    rows={3}
+                    value={terms}
+                    onChange={e => setTerms(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500"
+                  />
+                </div>
               </div>
             </div>
-
-          </div>
+          )}
 
         </div>
+
+        {/* ── FOOTER ── */}
+        <div className="flex items-center justify-between px-6 py-4 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-800/40 shrink-0">
+          <div className="text-zinc-400 text-xs font-medium">
+            Step {activeTab === "entity" ? "1" : activeTab === "client" ? "2" : activeTab === "items" ? "3" : activeTab === "bank" ? "4" : "5"} of 5
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl cursor-pointer"
+            >
+              Cancel
+            </button>
+
+            {activeTab !== "entity" && (
+              <button
+                type="button"
+                onClick={() => {
+                  const tabs: Array<"entity" | "client" | "items" | "bank" | "terms"> = ["entity", "client", "items", "bank", "terms"]
+                  const currIdx = tabs.indexOf(activeTab)
+                  if (currIdx > 0) setActiveTab(tabs[currIdx - 1])
+                }}
+                className="px-4 py-2 text-xs font-bold text-zinc-700 dark:text-zinc-200 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 rounded-xl cursor-pointer"
+              >
+                Previous Step
+              </button>
+            )}
+
+            {activeTab !== "terms" ? (
+              <button
+                type="button"
+                onClick={() => {
+                  const tabs: Array<"entity" | "client" | "items" | "bank" | "terms"> = ["entity", "client", "items", "bank", "terms"]
+                  const currIdx = tabs.indexOf(activeTab)
+                  if (currIdx < tabs.length - 1) setActiveTab(tabs[currIdx + 1])
+                }}
+                className="px-5 py-2 text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 rounded-xl shadow-md transition-all cursor-pointer"
+              >
+                Next Step →
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={handleSaveDocument}
+                className="px-6 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-xl shadow-lg transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <Check size={15} />
+                <span>{isSubmitting ? "Saving Document..." : (initialData?.id ? "Update Document" : "Save & Generate Document")}</span>
+              </button>
+            )}
+          </div>
+        </div>
+
       </motion.div>
     </div>
   )
