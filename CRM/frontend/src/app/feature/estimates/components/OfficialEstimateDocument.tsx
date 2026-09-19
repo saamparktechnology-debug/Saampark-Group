@@ -280,9 +280,9 @@ export function OfficialEstimateDocument({
   const hasContactInfo = Boolean(resolvedPhone || resolvedWebsite || resolvedEmail)
 
   return (
-    <div className="official-estimate-modal-root relative flex flex-col w-full max-w-4xl mx-auto my-4 bg-white text-zinc-900 rounded-2xl shadow-2xl overflow-hidden border border-zinc-200 print:border-none print:shadow-none print:my-0 print:max-w-none print:w-full">
+    <div className="official-estimate-modal-root relative flex flex-col w-full max-w-4xl mx-auto my-2 sm:my-4 bg-white text-zinc-900 rounded-2xl shadow-2xl overflow-hidden border border-zinc-200 print:border-none print:shadow-none print:my-0 print:max-w-none print:w-full">
       {/* ── TOP ACTION BAR (Hidden in Print) ── */}
-      <div className="no-print flex items-center justify-between px-6 py-3.5 bg-gradient-to-r from-zinc-900 via-zinc-800 to-zinc-900 text-white border-b border-zinc-700 shrink-0">
+      <div className="no-print flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 px-3.5 py-3 sm:px-6 sm:py-3.5 bg-gradient-to-r from-zinc-900 via-zinc-800 to-zinc-900 text-white border-b border-zinc-700 shrink-0">
         <div className="flex items-center gap-2.5">
           <div className="p-1.5 rounded-lg bg-teal-500/20 text-teal-400 border border-teal-400/30">
             <Calculator size={18} />
@@ -296,7 +296,7 @@ export function OfficialEstimateDocument({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={handlePrint}
@@ -355,7 +355,7 @@ export function OfficialEstimateDocument({
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors ml-2 cursor-pointer"
+              className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors ml-auto sm:ml-2 cursor-pointer"
             >
               <X size={16} />
             </button>
@@ -363,8 +363,9 @@ export function OfficialEstimateDocument({
         </div>
       </div>
 
-      {/* ── PRINTABLE DOCUMENT BODY (Standard A4 Corporate Format) ── */}
-      <div id="printable-estimate" className="p-8 sm:p-10 space-y-5 text-xs leading-relaxed bg-white print:p-6 print:space-y-4">
+      {/* ── PRINTABLE DOCUMENT BODY (Standard A4 Corporate Format with horizontal scroll on mobile) ── */}
+      <div className="w-full overflow-x-auto">
+        <div id="printable-estimate" className="min-w-[620px] sm:min-w-0 p-5 sm:p-10 space-y-5 text-xs leading-relaxed bg-white print:min-w-0 print:p-6 print:space-y-4">
         
         {/* 1. Top Header: Company Brand, Logo, Statutory IDs & Document Header Card */}
         <div className="flex flex-col sm:flex-row justify-between items-stretch gap-4 border-b-2 border-zinc-900 pb-4">
@@ -699,12 +700,12 @@ export function OfficialEstimateDocument({
         </div>
 
         {/* 5. Scope of Deliverables & Commercial Notes */}
-        {estimate.notes && (
+        {(estimate.notes || activeCompany?.quotation_notes || activeCompany?.terms_conditions) && (
           <div className="p-4 rounded-xl border border-zinc-200 bg-zinc-50/60 space-y-1 text-[11px] text-zinc-600">
             <span className="font-bold text-zinc-900 uppercase text-[10px] tracking-wider block">
               Deliverables Scope &amp; Commercial Terms:
             </span>
-            <p className="whitespace-pre-line leading-relaxed">{estimate.notes}</p>
+            <p className="whitespace-pre-line leading-relaxed">{estimate.notes || activeCompany?.quotation_notes || activeCompany?.terms_conditions}</p>
           </div>
         )}
 
@@ -755,6 +756,7 @@ export function OfficialEstimateDocument({
           Corporate Office: {resolvedAddress} • Registered under the Companies Act • All disputes subject to local jurisdiction only.
         </div>
       </div>
+    </div>
     </div>
   )
 }

@@ -414,6 +414,17 @@ export function OfficialInvoiceDocument({
       : (activeCompany as any)?.iso_certification
   ) ?? "An ISO 9001:2015 Certified Company"
 
+  // Terms & Conditions / Notes (Strictly inherited from company settings with optional invoice override)
+  const resolvedTermsAndNotes = (
+    (invoice as any)?.terms ||
+    (invoice as any)?.notes ||
+    companyDetails?.invoice_notes ||
+    activeCompany?.invoice_notes ||
+    companyDetails?.terms_conditions ||
+    activeCompany?.terms_conditions ||
+    "1. E. & O.E.\n2. Total payment due within due date to avoid suspension/cancellation.\n3. Please include invoice number in payment notes.\n4. All disputes subject to local jurisdiction."
+  )?.trim()
+
   // Theme configuration based on GST (Teal theme) vs Non-GST (Light Blue theme)
   const theme = isGstInvoice
     ? {
@@ -1259,6 +1270,16 @@ export function OfficialInvoiceDocument({
           </div>
         </div>
       </div>
+
+      {/* TERMS & CONDITIONS / INVOICE NOTES (Centralized & Inherited) */}
+      {resolvedTermsAndNotes && (
+        <div className="p-2 rounded-xl border border-zinc-200/90 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/40 text-[7.5px] text-zinc-600 dark:text-zinc-400 space-y-0.5">
+          <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[7px] tracking-wider block">
+            Terms &amp; Conditions / Official Notes:
+          </span>
+          <p className="whitespace-pre-line leading-relaxed">{resolvedTermsAndNotes}</p>
+        </div>
+      )}
 
       {/* SIGNATURES & OFFICIAL SEAL ROW */}
       <div className="flex flex-row justify-between items-end gap-3 pt-2 border-t border-zinc-200 dark:border-zinc-800">

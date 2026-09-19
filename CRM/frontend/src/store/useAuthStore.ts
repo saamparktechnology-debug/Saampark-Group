@@ -81,6 +81,7 @@ export interface Branch {
   nongst_payment_qr_url?: string
   terms_conditions?: string
   invoice_notes?: string
+  quotation_notes?: string
   status: 'Active' | 'Inactive'
   createdAt?: string
 }
@@ -207,6 +208,7 @@ export interface Company {
   // Invoice Customization
   terms_conditions?: string
   invoice_notes?: string
+  quotation_notes?: string
   signatory_name?: string
   signatory_designation?: string
   signature_image_url?: string
@@ -798,9 +800,11 @@ export const useAuthStore = create<AuthState>()(
             payment_qr_url: newComp.payment_qr_url || '',
             terms_conditions: newComp.terms_conditions || '',
             invoice_notes: newComp.invoice_notes || '',
+            quotation_notes: newComp.quotation_notes || '',
             signatory_name: newComp.signatory_name || '',
             signatory_designation: newComp.signatory_designation || '',
             signature_image_url: newComp.signature_image_url || '',
+            stamp_image_url: newComp.stamp_image_url || '',
           }
 
           unmarkGlobalItemDeleted(created.id)

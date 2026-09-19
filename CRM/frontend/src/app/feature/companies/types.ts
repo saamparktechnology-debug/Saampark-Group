@@ -46,6 +46,7 @@ export interface Company {
   stamp_image_url?: string
   terms_conditions?: string
   invoice_notes?: string
+  quotation_notes?: string
   iso_certification?: string
 }
 
