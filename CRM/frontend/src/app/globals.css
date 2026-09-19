@@ -585,7 +585,7 @@ html, body, input, textarea, select, button, table, span, div, p {
    ======================================================== */
 @page {
   size: A4 portrait;
-  margin: 0;
+  margin: 0mm;
 }
 
 @media print {
@@ -608,6 +608,7 @@ html, body, input, textarea, select, button, table, span, div, p {
 
   #printable-invoice {
     width: 210mm !important;
+    max-width: 210mm !important;
     margin: 0 auto !important;
     padding: 0 !important;
     display: block !important;
@@ -616,10 +617,10 @@ html, body, input, textarea, select, button, table, span, div, p {
 
   .a4-page {
     width: 210mm !important;
-    min-height: 297mm !important;
-    max-height: 297mm !important;
-    height: 297mm !important;
-    padding: 8mm 10mm !important;
+    max-width: 210mm !important;
+    min-height: 280mm !important;
+    height: auto !important;
+    padding: 6mm 8mm !important;
     margin: 0 auto !important;
     box-sizing: border-box !important;
     box-shadow: none !important;
@@ -627,10 +628,11 @@ html, body, input, textarea, select, button, table, span, div, p {
     border-radius: 0 !important;
     page-break-after: always !important;
     break-after: page !important;
-    overflow: hidden !important;
+    overflow: visible !important;
     display: flex !important;
     flex-direction: column !important;
-    justify-content: space-between !important;
+    justify-content: flex-start !important;
+    gap: 2mm !important;
     background: #ffffff !important;
   }
 

@@ -1423,7 +1423,7 @@ export function OfficialInvoiceDocument({
       {paginatedPages.map((pg) => (
         <div
           key={`invoice-page-${pg.pageNumber}`}
-          className="a4-page bg-white text-zinc-900 font-sans p-4 sm:p-5 text-xs shadow-2xl border border-zinc-200/90 rounded-2xl w-full max-w-[794px] mx-auto relative flex flex-col gap-2.5 overflow-visible print:w-[210mm] print:h-[297mm] print:min-h-[297mm] print:max-h-[297mm] print:p-[8mm] print:m-0 print:shadow-none print:border-none print:rounded-none page-break-after"
+          className="a4-page bg-white text-zinc-900 font-sans p-4 sm:p-5 text-xs shadow-2xl border border-zinc-200/90 rounded-2xl w-full max-w-[794px] mx-auto relative flex flex-col gap-2.5 overflow-visible print:w-[210mm] print:max-w-[210mm] print:h-auto print:min-h-[280mm] print:p-[6mm_8mm] print:gap-2 print:m-0 print:shadow-none print:border-none print:rounded-none page-break-after"
         >
           {/* Draggable Custom Text Stamps / Badges Overlay (on page 1) */}
           {pg.isFirstPage && customStamps && customStamps.map(stamp => (

@@ -15,7 +15,7 @@ import { Company, Branch, SubBranch } from "./types"
 import { useAuthStore, isMatchingCompany } from "@/store/useAuthStore"
 import { markGlobalItemDeleted, unmarkGlobalItemDeleted, fetchModuleDataFromDB, saveModuleDataToDB, syncGlobalDeletedIds, isGlobalItemDeleted, getLocalDeletedIds } from "@/lib/storageSync"
 import { ImageUploadField } from "@/components/ui/ImageUploadField"
-import { OfficialInvoiceDocument } from "@/app/feature/sales/invoices/components/OfficialInvoiceDocument"
+import { OfficialInvoiceDocument, CustomTextStamp } from "@/app/feature/sales/invoices/components/OfficialInvoiceDocument"
 import { InvoiceItem, InvoiceLineItem } from "@/app/feature/sales/invoices/services/invoiceService"
 
 const INDUSTRIES = [
@@ -114,7 +114,7 @@ export default function CompaniesMain() {
   // Modal states
   const [showCompanyModal, setShowCompanyModal] = React.useState(false)
   const [editingCompany, setEditingCompany] = React.useState<Company | null>(null)
-  const [companyTab, setCompanyTab] = React.useState<"identity" | "tax" | "signatory" | "contact" | "branding" | "bank" | "branches">("identity")
+  const [companyTab, setCompanyTab] = React.useState<"identity" | "tax" | "contact" | "branding" | "signatory" | "bank" | "preview">("identity")
   const [companyBankProfileTab, setCompanyBankProfileTab] = React.useState<"gst" | "nongst">("gst")
   const [companyBankSubTab, setCompanyBankSubTab] = React.useState<"gst" | "nongst">("gst")
   const [companyPreviewScale, setCompanyPreviewScale] = React.useState<"fit" | "normal" | "large">("fit")
@@ -124,6 +124,18 @@ export default function CompaniesMain() {
   const [previewInvoiceType, setPreviewInvoiceType] = React.useState<"gst" | "nongst">("gst")
   const [selectedPreviewBranchId, setSelectedPreviewBranchId] = React.useState<string>("")
   const [selectedPreviewSubBranchId, setSelectedPreviewSubBranchId] = React.useState<string>("")
+  const [companySignaturePos, setCompanySignaturePos] = React.useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [branchSignaturePos, setBranchSignaturePos] = React.useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [subBranchSignaturePos, setSubBranchSignaturePos] = React.useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [companyCustomStamps, setCompanyCustomStamps] = React.useState<CustomTextStamp[]>([])
+  const [activePreviewDocModal, setActivePreviewDocModal] = React.useState<{
+    isOpen: boolean
+    entityType: "company" | "branch" | "subbranch"
+    companyData?: any
+    branchData?: any
+    subBranchData?: any
+  } | null>(null)
+
   const [companyForm, setCompanyForm] = React.useState({
     name: "", brand_name: "", division_name: "", subtitle: "", slug: "", 
     industry: "Technology", currency: "INR", logo_url: "",
@@ -140,7 +152,7 @@ export default function CompaniesMain() {
   const [showBranchModal, setShowBranchModal] = React.useState(false)
   const [editingBranch, setEditingBranch] = React.useState<Branch | null>(null)
   const [branchCompanyId, setBranchCompanyId] = React.useState("")
-  const [branchTab, setBranchTab] = React.useState<"basic" | "tax" | "signatory" | "bank">("basic")
+  const [branchTab, setBranchTab] = React.useState<"basic" | "tax" | "preview">("basic")
   const [branchForm, setBranchForm] = React.useState({
     name: "", code: "", brand_name: "", division_name: "",
     logo_url: "", payment_qr_url: "",
@@ -155,7 +167,7 @@ export default function CompaniesMain() {
   const [editingSubBranch, setEditingSubBranch] = React.useState<SubBranch | null>(null)
   const [subBranchBranchId, setSubBranchBranchId] = React.useState("")
   const [subBranchCompanyId, setSubBranchCompanyId] = React.useState("")
-  const [subBranchTab, setSubBranchTab] = React.useState<"partner" | "branding" | "location" | "bank">("partner")
+  const [subBranchTab, setSubBranchTab] = React.useState<"partner" | "location" | "preview">("partner")
   const [subBranchForm, setSubBranchForm] = React.useState({
     name: "", code: "", partner_name: "", partner_phone: "", partner_email: "",
     revenue_share_pct: 0, partner_type: "Individual",
@@ -938,6 +950,7 @@ export default function CompaniesMain() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                  <Button variant="ghost" size="sm" onClick={() => { openEditCompany(company); setCompanyTab("preview") }} title="Live Preview Document & Stamps" className="h-8 gap-1 text-xs text-primary font-bold"><Eye className="h-4 w-4" />Preview</Button>
                   <Button variant="ghost" size="sm" onClick={() => openAddBranch(company.id)} title="Add Branch"><Plus className="h-4 w-4" /></Button>
                   <Button variant="ghost" size="sm" onClick={() => openEditCompany(company)} title="Edit Full Company Details"><Edit2 className="h-4 w-4" /></Button>
                 </div>
@@ -984,6 +997,7 @@ export default function CompaniesMain() {
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                  <Button variant="ghost" size="sm" onClick={() => { openEditBranch(branch); setBranchTab("preview") }} title="Live Preview Branch Invoice" className="text-xs h-7 gap-1 text-blue-600 font-semibold"><Eye className="h-3.5 w-3.5" />Preview</Button>
                                   <Button variant="ghost" size="sm" onClick={() => openAddSubBranch(branch.id, branch.company_id)} title="Add Sub-Branch" className="text-xs h-7 gap-1"><Plus className="h-3 w-3" />Sub-Branch</Button>
                                   <Button variant="ghost" size="sm" onClick={() => openEditBranch(branch)} title="Edit Branch" className="h-7 w-7 p-0"><Edit2 className="h-3 w-3" /></Button>
                                   {isSuperAdmin && (
@@ -1018,6 +1032,7 @@ export default function CompaniesMain() {
                                           </div>
                                         </div>
                                         <div className="flex items-center gap-1">
+                                          <Button variant="ghost" size="sm" onClick={() => { openEditSubBranch(sb); setSubBranchTab("preview") }} title="Live Preview Sub-Branch Invoice" className="text-xs h-7 gap-1 text-emerald-600 font-semibold"><Eye className="h-3.5 w-3.5" />Preview</Button>
                                           <Button variant="ghost" size="sm" onClick={() => openEditSubBranch(sb)} className="h-7 w-7 p-0"><Edit2 className="h-3 w-3" /></Button>
                                           {isSuperAdmin && (
                                             <Button variant="ghost" size="sm" onClick={() => confirmDelete("sub_branch", sb.id)} className="h-7 w-7 p-0 text-destructive"><Trash2 className="h-3 w-3" /></Button>
@@ -1063,13 +1078,14 @@ export default function CompaniesMain() {
 
               {/* Full Width Form Tabs (Mobile Scrollable) */}
               <div className="flex flex-col flex-1 overflow-hidden">
-                <div className="flex sm:grid sm:grid-cols-6 border-b border-border bg-muted/40 font-bold text-center shrink-0 overflow-x-auto">
+                <div className="flex sm:grid sm:grid-cols-7 border-b border-border bg-muted/40 font-bold text-center shrink-0 overflow-x-auto">
                   <button type="button" onClick={() => setCompanyTab("identity")} className={`py-2.5 px-3 border-b-2 text-[10px] sm:text-[11px] font-bold transition-all whitespace-nowrap flex-1 ${companyTab === "identity" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>1. Identity</button>
                   <button type="button" onClick={() => setCompanyTab("tax")} className={`py-2.5 px-3 border-b-2 text-[10px] sm:text-[11px] font-bold transition-all whitespace-nowrap flex-1 ${companyTab === "tax" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>2. GST & Legal</button>
                   <button type="button" onClick={() => setCompanyTab("contact")} className={`py-2.5 px-3 border-b-2 text-[10px] sm:text-[11px] font-bold transition-all whitespace-nowrap flex-1 ${companyTab === "contact" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>3. Address</button>
                   <button type="button" onClick={() => setCompanyTab("branding")} className={`py-2.5 px-3 border-b-2 text-[10px] sm:text-[11px] font-bold transition-all whitespace-nowrap flex-1 ${companyTab === "branding" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>4. Branding</button>
                   <button type="button" onClick={() => setCompanyTab("signatory")} className={`py-2.5 px-3 border-b-2 text-[10px] sm:text-[11px] font-bold transition-all whitespace-nowrap flex-1 ${companyTab === "signatory" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>5. Stamp & Sig</button>
                   <button type="button" onClick={() => setCompanyTab("bank")} className={`py-2.5 px-3 border-b-2 text-[10px] sm:text-[11px] font-bold transition-all whitespace-nowrap flex-1 ${companyTab === "bank" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>6. Dual Bank & QR</button>
+                  <button type="button" onClick={() => setCompanyTab("preview")} className={`py-2.5 px-3 border-b-2 text-[10px] sm:text-[11px] font-bold transition-all whitespace-nowrap flex-1 ${companyTab === "preview" ? "border-emerald-600 text-emerald-600 bg-surface dark:bg-zinc-900" : "border-transparent text-muted-foreground hover:text-foreground"}`}>7. Live Preview &amp; Drag</button>
                 </div>
 
                 <div className="p-5 space-y-4 overflow-y-auto flex-1 max-h-[64vh]">
@@ -1229,37 +1245,36 @@ export default function CompaniesMain() {
                             <button
                               type="button"
                               onClick={() => {
-                                setCompanyForm({
-                                  ...companyForm,
-                                  nongst_bank_name: companyForm.gst_bank_name || companyForm.bank_name,
-                                  nongst_account_holder: companyForm.gst_account_holder || companyForm.account_holder,
-                                  nongst_account_number: companyForm.gst_account_number || companyForm.account_number,
-                                  nongst_ifsc_code: companyForm.gst_ifsc_code || companyForm.ifsc_code,
-                                  nongst_bank_branch: companyForm.gst_bank_branch || companyForm.bank_branch,
-                                  nongst_upi_id: companyForm.gst_upi_id || companyForm.upi_id,
-                                  nongst_payment_qr_url: companyForm.gst_payment_qr_url || companyForm.payment_qr_url,
-                                })
+                                setCompanyForm(prev => ({
+                                  ...prev,
+                                  gst_bank_name: "Union Bank of India",
+                                  gst_account_holder: prev.name || "SAAMPARK TECHNOLOGY RESEARCH & INNOVATION PRIVATE LIMITED",
+                                  gst_account_number: "130321010000212",
+                                  gst_ifsc_code: "UBIN0913031",
+                                  gst_bank_branch: "DEBRA BRANCH",
+                                  gst_upi_id: "80638401@ubin"
+                                }))
                               }}
-                              className="text-[10px] text-teal-600 hover:underline font-semibold"
+                              className="text-[10px] text-teal-600 dark:text-teal-400 font-bold hover:underline"
                             >
-                              Copy GST to Non-GST
+                              Fill Default GST Bank
                             </button>
                           </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div><label className="block font-semibold mb-1">Bank Name</label><Input placeholder="e.g. HDFC Bank Ltd" value={companyForm.gst_bank_name || companyForm.bank_name} onChange={e => setCompanyForm({ ...companyForm, gst_bank_name: e.target.value, bank_name: e.target.value })} /></div>
-                            <div><label className="block font-semibold mb-1">Account Holder</label><Input placeholder="e.g. SAAMPARK TECHNOLOGY PVT LTD" value={companyForm.gst_account_holder || companyForm.account_holder} onChange={e => setCompanyForm({ ...companyForm, gst_account_holder: e.target.value, account_holder: e.target.value })} /></div>
-                            <div><label className="block font-semibold mb-1">Account Number</label><Input placeholder="e.g. 50200012345678" value={companyForm.gst_account_number || companyForm.account_number} onChange={e => setCompanyForm({ ...companyForm, gst_account_number: e.target.value, account_number: e.target.value })} className="font-mono font-bold" /></div>
-                            <div><label className="block font-semibold mb-1">IFSC Code</label><Input placeholder="e.g. HDFC0001234" value={companyForm.gst_ifsc_code || companyForm.ifsc_code} onChange={e => setCompanyForm({ ...companyForm, gst_ifsc_code: e.target.value.toUpperCase(), ifsc_code: e.target.value.toUpperCase() })} className="font-mono font-bold uppercase" /></div>
-                            <div><label className="block font-semibold mb-1">Bank Branch</label><Input placeholder="e.g. Sector V Salt Lake Branch" value={companyForm.gst_bank_branch || companyForm.bank_branch} onChange={e => setCompanyForm({ ...companyForm, gst_bank_branch: e.target.value, bank_branch: e.target.value })} /></div>
-                            <div><label className="block font-semibold mb-1">UPI ID / VPA</label><Input placeholder="e.g. saampark@hdfcbank" value={companyForm.gst_upi_id || companyForm.upi_id} onChange={e => setCompanyForm({ ...companyForm, gst_upi_id: e.target.value, upi_id: e.target.value })} className="font-mono" /></div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                            <div><label className="block font-semibold mb-1">GST Bank Name</label><Input placeholder="e.g. HDFC Bank Ltd" value={companyForm.gst_bank_name} onChange={e => setCompanyForm({ ...companyForm, gst_bank_name: e.target.value })} /></div>
+                            <div><label className="block font-semibold mb-1">GST Account Holder</label><Input placeholder="e.g. Registered Company A/C" value={companyForm.gst_account_holder} onChange={e => setCompanyForm({ ...companyForm, gst_account_holder: e.target.value })} /></div>
+                            <div><label className="block font-semibold mb-1">GST Account Number</label><Input placeholder="e.g. 50200084920194" value={companyForm.gst_account_number} onChange={e => setCompanyForm({ ...companyForm, gst_account_number: e.target.value })} className="font-mono font-bold" /></div>
+                            <div><label className="block font-semibold mb-1">GST IFSC Code</label><Input placeholder="e.g. HDFC0001234" value={companyForm.gst_ifsc_code} onChange={e => setCompanyForm({ ...companyForm, gst_ifsc_code: e.target.value.toUpperCase() })} className="font-mono font-bold uppercase" /></div>
+                            <div><label className="block font-semibold mb-1">GST Bank Branch</label><Input placeholder="e.g. Salt Lake Sector V" value={companyForm.gst_bank_branch} onChange={e => setCompanyForm({ ...companyForm, gst_bank_branch: e.target.value })} /></div>
+                            <div><label className="block font-semibold mb-1">GST UPI ID / VPA</label><Input placeholder="e.g. saamparkgst@hdfcbank" value={companyForm.gst_upi_id} onChange={e => setCompanyForm({ ...companyForm, gst_upi_id: e.target.value })} className="font-mono" /></div>
                           </div>
                           <div className="pt-2">
                             <ImageUploadField
                               label="Company GST Payment Scanner / QR Code"
-                              value={companyForm.gst_payment_qr_url || companyForm.payment_qr_url}
-                              onChange={url => setCompanyForm({ ...companyForm, gst_payment_qr_url: url, payment_qr_url: url })}
+                              value={companyForm.gst_payment_qr_url}
+                              onChange={url => setCompanyForm({ ...companyForm, gst_payment_qr_url: url })}
                               uploadNamePrefix="company_gst_qr"
-                              helperText="Used on official GST Tax Invoices."
+                              helperText="Rendered on GST Tax Invoices for instant scan-to-pay settlement."
                             />
                           </div>
                         </div>
@@ -1269,12 +1284,29 @@ export default function CompaniesMain() {
                             <span className="text-[11px] font-bold text-sky-700 dark:text-sky-400 uppercase tracking-wider">
                               Non-GST Invoices Bank &amp; UPI
                             </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCompanyForm(prev => ({
+                                  ...prev,
+                                  nongst_bank_name: "ICICI Bank Ltd",
+                                  nongst_account_holder: prev.brand_name || "SAAMPARK GROUP",
+                                  nongst_account_number: "000201012345",
+                                  nongst_ifsc_code: "ICIC0000002",
+                                  nongst_bank_branch: "Kolkata Main Branch",
+                                  nongst_upi_id: "saamparkcommercial@icici"
+                                }))
+                              }}
+                              className="text-[10px] text-sky-600 dark:text-sky-400 font-bold hover:underline"
+                            >
+                              Fill Default Non-GST Bank
+                            </button>
                           </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div><label className="block font-semibold mb-1">Non-GST Bank Name</label><Input placeholder="e.g. ICICI Bank" value={companyForm.nongst_bank_name} onChange={e => setCompanyForm({ ...companyForm, nongst_bank_name: e.target.value })} /></div>
-                            <div><label className="block font-semibold mb-1">Non-GST Account Holder</label><Input placeholder="e.g. SAAMPARK ENTERPRISE" value={companyForm.nongst_account_holder} onChange={e => setCompanyForm({ ...companyForm, nongst_account_holder: e.target.value })} /></div>
-                            <div><label className="block font-semibold mb-1">Non-GST Account Number</label><Input placeholder="e.g. 501004928172" value={companyForm.nongst_account_number} onChange={e => setCompanyForm({ ...companyForm, nongst_account_number: e.target.value })} className="font-mono font-bold" /></div>
-                            <div><label className="block font-semibold mb-1">Non-GST IFSC Code</label><Input placeholder="e.g. ICIC0000021" value={companyForm.nongst_ifsc_code} onChange={e => setCompanyForm({ ...companyForm, nongst_ifsc_code: e.target.value.toUpperCase() })} className="font-mono font-bold uppercase" /></div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                            <div><label className="block font-semibold mb-1">Non-GST Bank Name</label><Input placeholder="e.g. ICICI Bank Ltd" value={companyForm.nongst_bank_name} onChange={e => setCompanyForm({ ...companyForm, nongst_bank_name: e.target.value })} /></div>
+                            <div><label className="block font-semibold mb-1">Non-GST Account Holder</label><Input placeholder="e.g. Operating Commercial A/C" value={companyForm.nongst_account_holder} onChange={e => setCompanyForm({ ...companyForm, nongst_account_holder: e.target.value })} /></div>
+                            <div><label className="block font-semibold mb-1">Non-GST Account Number</label><Input placeholder="e.g. 000201012345" value={companyForm.nongst_account_number} onChange={e => setCompanyForm({ ...companyForm, nongst_account_number: e.target.value })} className="font-mono font-bold" /></div>
+                            <div><label className="block font-semibold mb-1">Non-GST IFSC Code</label><Input placeholder="e.g. ICIC0000002" value={companyForm.nongst_ifsc_code} onChange={e => setCompanyForm({ ...companyForm, nongst_ifsc_code: e.target.value.toUpperCase() })} className="font-mono font-bold uppercase" /></div>
                             <div><label className="block font-semibold mb-1">Non-GST Bank Branch</label><Input placeholder="e.g. Main Market Branch" value={companyForm.nongst_bank_branch} onChange={e => setCompanyForm({ ...companyForm, nongst_bank_branch: e.target.value })} /></div>
                             <div><label className="block font-semibold mb-1">Non-GST UPI ID / VPA</label><Input placeholder="e.g. saamparknongst@icici" value={companyForm.nongst_upi_id} onChange={e => setCompanyForm({ ...companyForm, nongst_upi_id: e.target.value })} className="font-mono" /></div>
                           </div>
@@ -1289,6 +1321,159 @@ export default function CompaniesMain() {
                           </div>
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {companyTab === "preview" && (
+                    <div className="space-y-4">
+                      {/* Top Controls Bar */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-muted/60 dark:bg-zinc-800/60 rounded-xl border border-border">
+                        {/* Scheme Switcher */}
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-bold text-muted-foreground">Scheme:</span>
+                          <button
+                            type="button"
+                            onClick={() => setPreviewInvoiceType("gst")}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                              previewInvoiceType === "gst" ? "bg-teal-600 text-white shadow-xs" : "bg-muted text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            GST Tax Invoice (Teal)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPreviewInvoiceType("nongst")}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                              previewInvoiceType === "nongst" ? "bg-sky-600 text-white shadow-xs" : "bg-muted text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            Non-GST Commercial (Sky Blue)
+                          </button>
+                        </div>
+
+                        {/* Stamp adders and signature position reset */}
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newStamp = {
+                                id: "stamp-" + Date.now(),
+                                text: "PAID IN FULL",
+                                x: 10,
+                                y: 20,
+                                color: "#059669",
+                                fontSize: 12
+                              }
+                              setCompanyCustomStamps(prev => [...prev, newStamp])
+                            }}
+                            className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 hover:bg-emerald-200 cursor-pointer"
+                          >
+                            + PAID Stamp
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newStamp = {
+                                id: "stamp-" + Date.now(),
+                                text: "OFFICIAL SEAL",
+                                x: -10,
+                                y: 15,
+                                color: "#0d9488",
+                                fontSize: 11
+                              }
+                              setCompanyCustomStamps(prev => [...prev, newStamp])
+                            }}
+                            className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300 border border-teal-300 hover:bg-teal-200 cursor-pointer"
+                          >
+                            + SEAL Stamp
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCompanySignaturePos({ x: 0, y: 0 })
+                              setCompanyCustomStamps([])
+                            }}
+                            className="px-2 py-1 text-[10px] font-semibold text-muted-foreground hover:text-foreground border border-border rounded-lg"
+                          >
+                            Reset Position
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Interactive Drag Notice */}
+                      <div className="p-2.5 rounded-xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-[11px] text-amber-900 dark:text-amber-300 flex items-center justify-between">
+                        <span className="font-semibold flex items-center gap-1.5">
+                          <span>✥</span>
+                          <span>Interactive Live Placement: Drag the <strong>Authorized Signatory Block</strong> or <strong>Stamps</strong> to calibrate positioning.</span>
+                        </span>
+                        <span className="font-mono text-[10px] bg-amber-100 dark:bg-amber-900 px-2 py-0.5 rounded font-bold">
+                          X: {companySignaturePos.x}px, Y: {companySignaturePos.y}px
+                        </span>
+                      </div>
+
+                      {/* Scaled Preview Document */}
+                      <div className="w-full overflow-x-auto p-4 bg-zinc-100 dark:bg-zinc-950 rounded-2xl border border-zinc-300 dark:border-zinc-800 flex justify-center shadow-inner">
+                        <div className="w-full max-w-[794px]">
+                          <OfficialInvoiceDocument
+                            invoice={{
+                              id: "DEMO-INV-001",
+                              invoiceNumber: "INV-" + (companyForm.slug?.toUpperCase() || "DEMO") + "-2026-001",
+                              invoice_number: "INV-" + (companyForm.slug?.toUpperCase() || "DEMO") + "-2026-001",
+                              date: "2026-09-18",
+                              issueDate: "2026-09-18",
+                              dueDate: "2026-10-03",
+                              companyId: editingCompany?.id || companyForm.slug || "tech",
+                              company_id: editingCompany?.id || companyForm.slug || "tech",
+                              client: "Acme Corp",
+                              clientName: "Acme Corp",
+                              customer: "Acme Corp",
+                              clientEmail: "billing@acmecorp.com",
+                              clientPhone: "+91 90915 18567",
+                              clientAddress: "Corporate Center, Paschim Medinipur, West Bengal",
+                              clientGstin: "19ABASCS1649D1ZY",
+                              projectTitle: "Custom Solution Project",
+                              status: "Draft",
+                              scheme: previewInvoiceType,
+                              items: [
+                                {
+                                  id: "item-1",
+                                  description: "Custom Enterprise Consulting & Development",
+                                  serviceName: "Custom Enterprise Consulting & Development",
+                                  sacCode: "998313",
+                                  sac: "998313",
+                                  qty: 1,
+                                  quantity: 1,
+                                  rate: 15000,
+                                  unitPrice: 15000,
+                                  unit: "Project",
+                                  gstRate: previewInvoiceType === "gst" ? 18 : 0,
+                                  totalAmount: previewInvoiceType === "gst" ? 17700 : 15000,
+                                  total: previewInvoiceType === "gst" ? 17700 : 15000,
+                                }
+                              ],
+                              subtotal: 15000,
+                              taxableBase: 15000,
+                              tax: previewInvoiceType === "gst" ? 2700 : 0,
+                              taxAmount: previewInvoiceType === "gst" ? 2700 : 0,
+                              total: previewInvoiceType === "gst" ? 17700 : 15000,
+                              totalAmount: previewInvoiceType === "gst" ? 17700 : 15000,
+                              paidAmount: 0,
+                              received: 0,
+                              due: previewInvoiceType === "gst" ? 17700 : 15000,
+                              dueAmount: previewInvoiceType === "gst" ? 17700 : 15000,
+                              terms: companyForm.terms_conditions || "1. Payment is due within statutory terms.\n2. Goods & Services once delivered are subject to project sign-off.\n3. Disputed items must be notified within 7 days.",
+                              notes: companyForm.invoice_notes || "Thank you for your business."
+                            } as any}
+                            companyDetails={companyForm as any}
+                            interactive={true}
+                            signaturePosition={companySignaturePos}
+                            onSignaturePositionChange={setCompanySignaturePos}
+                            customStamps={companyCustomStamps}
+                            onCustomStampMove={(id, pos) => setCompanyCustomStamps(prev => prev.map(s => s.id === id ? { ...s, ...pos } : s))}
+                            onRemoveCustomStamp={(id) => setCompanyCustomStamps(prev => prev.filter(s => s.id !== id))}
+                          />
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1309,11 +1494,11 @@ export default function CompaniesMain() {
         )}
       </AnimatePresence>
 
-      {/* ── UPGRADED 2-TAB BRANCH MODAL ────────────── */}
+      {/* ── UPGRADED 3-TAB BRANCH MODAL ────────────── */}
       <AnimatePresence>
         {showBranchModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-surface rounded-2xl border border-border shadow-2xl w-full max-w-3xl max-h-[94vh] flex flex-col overflow-hidden text-xs">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-surface rounded-2xl border border-border shadow-2xl w-full max-w-4xl max-h-[94vh] flex flex-col overflow-hidden text-xs">
               <div className="flex items-center justify-between p-4 border-b border-border shrink-0 bg-muted/20">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold">
@@ -1321,16 +1506,17 @@ export default function CompaniesMain() {
                   </div>
                   <div>
                     <h2 className="text-base font-bold text-foreground">{editingBranch ? `Edit Branch: ${editingBranch.name}` : "Add Operational Branch"}</h2>
-                    <p className="text-[11px] text-muted-foreground">Configures branch location, manager, and tax credentials</p>
+                    <p className="text-[11px] text-muted-foreground">Configures branch location, manager, tax credentials, and live preview</p>
                   </div>
                 </div>
                 <Button variant="ghost" size="sm" onClick={() => setShowBranchModal(false)}><X className="h-4 w-4" /></Button>
               </div>
 
               <div className="flex flex-col flex-1 overflow-hidden">
-                <div className="grid grid-cols-2 border-b border-border bg-muted/40 font-bold text-center shrink-0">
+                <div className="grid grid-cols-3 border-b border-border bg-muted/40 font-bold text-center shrink-0">
                   <button type="button" onClick={() => setBranchTab("basic")} className={`py-2.5 border-b-2 text-[11px] ${branchTab === "basic" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>1. Info &amp; Manager</button>
                   <button type="button" onClick={() => setBranchTab("tax")} className={`py-2.5 border-b-2 text-[11px] ${branchTab === "tax" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>2. Address &amp; Tax</button>
+                  <button type="button" onClick={() => setBranchTab("preview")} className={`py-2.5 border-b-2 text-[11px] ${branchTab === "preview" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>3. Live Preview &amp; Drag</button>
                 </div>
 
                 <div className="p-5 space-y-4 overflow-y-auto flex-1 max-h-[65vh]">
@@ -1378,6 +1564,169 @@ export default function CompaniesMain() {
                       </div>
                     </div>
                   )}
+
+                  {branchTab === "preview" && (
+                    <div className="space-y-4">
+                      {/* Top Controls Bar */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-muted/60 dark:bg-zinc-800/60 rounded-xl border border-border">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-bold text-muted-foreground">Scheme:</span>
+                          <button
+                            type="button"
+                            onClick={() => setPreviewInvoiceType("gst")}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                              previewInvoiceType === "gst" ? "bg-teal-600 text-white shadow-xs" : "bg-muted text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            GST Tax Invoice (Teal)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPreviewInvoiceType("nongst")}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                              previewInvoiceType === "nongst" ? "bg-sky-600 text-white shadow-xs" : "bg-muted text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            Non-GST Commercial (Sky Blue)
+                          </button>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newStamp = {
+                                id: "stamp-" + Date.now(),
+                                text: "PAID IN FULL",
+                                x: 10,
+                                y: 20,
+                                color: "#059669",
+                                fontSize: 12
+                              }
+                              setCompanyCustomStamps(prev => [...prev, newStamp])
+                            }}
+                            className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 hover:bg-emerald-200 cursor-pointer"
+                          >
+                            + PAID Stamp
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newStamp = {
+                                id: "stamp-" + Date.now(),
+                                text: "OFFICIAL SEAL",
+                                x: -10,
+                                y: 15,
+                                color: "#0d9488",
+                                fontSize: 11
+                              }
+                              setCompanyCustomStamps(prev => [...prev, newStamp])
+                            }}
+                            className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300 border border-teal-300 hover:bg-teal-200 cursor-pointer"
+                          >
+                            + SEAL Stamp
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setBranchSignaturePos({ x: 0, y: 0 })
+                              setCompanyCustomStamps([])
+                            }}
+                            className="px-2 py-1 text-[10px] font-semibold text-muted-foreground hover:text-foreground border border-border rounded-lg"
+                          >
+                            Reset Position
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Interactive Drag Notice */}
+                      <div className="p-2.5 rounded-xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-[11px] text-amber-900 dark:text-amber-300 flex items-center justify-between">
+                        <span className="font-semibold flex items-center gap-1.5">
+                          <span>✥</span>
+                          <span>Interactive Live Placement: Drag the <strong>Authorized Signatory Block</strong> or <strong>Stamps</strong> to calibrate positioning.</span>
+                        </span>
+                        <span className="font-mono text-[10px] bg-amber-100 dark:bg-amber-900 px-2 py-0.5 rounded font-bold">
+                          X: {branchSignaturePos.x}px, Y: {branchSignaturePos.y}px
+                        </span>
+                      </div>
+
+                      {/* Scaled Preview Document */}
+                      <div className="w-full overflow-x-auto p-4 bg-zinc-100 dark:bg-zinc-950 rounded-2xl border border-zinc-300 dark:border-zinc-800 flex justify-center shadow-inner">
+                        <div className="w-full max-w-[794px]">
+                          {(() => {
+                            const pComp = companies.find(c => c.id === branchCompanyId) || companies[0]
+                            return (
+                              <OfficialInvoiceDocument
+                                invoice={{
+                                  id: "DEMO-BR-INV-001",
+                                  invoiceNumber: "INV-" + (branchForm.code || "BR") + "-2026-001",
+                                  invoice_number: "INV-" + (branchForm.code || "BR") + "-2026-001",
+                                  date: "2026-09-18",
+                                  issueDate: "2026-09-18",
+                                  dueDate: "2026-10-03",
+                                  companyId: branchCompanyId || "tech",
+                                  company_id: branchCompanyId || "tech",
+                                  branchId: editingBranch?.id || "branch-preview",
+                                  branch_id: editingBranch?.id || "branch-preview",
+                                  client: "Acme Corp",
+                                  clientName: "Acme Corp",
+                                  customer: "Acme Corp",
+                                  clientEmail: "billing@acmecorp.com",
+                                  clientPhone: "+91 90915 18567",
+                                  clientAddress: "Corporate Center, Paschim Medinipur, West Bengal",
+                                  clientGstin: "19ABASCS1649D1ZY",
+                                  projectTitle: "Custom Solution Project",
+                                  status: "Draft",
+                                  scheme: previewInvoiceType,
+                                  items: [
+                                    {
+                                      id: "item-1",
+                                      description: "Custom Enterprise Consulting & Development",
+                                      serviceName: "Custom Enterprise Consulting & Development",
+                                      sacCode: "998313",
+                                      sac: "998313",
+                                      qty: 1,
+                                      quantity: 1,
+                                      rate: 15000,
+                                      unitPrice: 15000,
+                                      unit: "Project",
+                                      gstRate: previewInvoiceType === "gst" ? 18 : 0,
+                                      totalAmount: previewInvoiceType === "gst" ? 17700 : 15000,
+                                      total: previewInvoiceType === "gst" ? 17700 : 15000,
+                                    }
+                                  ],
+                                  subtotal: 15000,
+                                  taxableBase: 15000,
+                                  tax: previewInvoiceType === "gst" ? 2700 : 0,
+                                  taxAmount: previewInvoiceType === "gst" ? 2700 : 0,
+                                  total: previewInvoiceType === "gst" ? 17700 : 15000,
+                                  totalAmount: previewInvoiceType === "gst" ? 17700 : 15000,
+                                  paidAmount: 0,
+                                  received: 0,
+                                  due: previewInvoiceType === "gst" ? 17700 : 15000,
+                                  dueAmount: previewInvoiceType === "gst" ? 17700 : 15000,
+                                  terms: pComp?.terms_conditions || "1. Payment is due within statutory terms.\n2. Goods & Services once delivered are subject to project sign-off.\n3. Disputed items must be notified within 7 days.",
+                                  notes: pComp?.invoice_notes || "Thank you for your business."
+                                } as any}
+                                companyDetails={pComp}
+                                activeBranch={{
+                                  ...branchForm,
+                                  id: editingBranch?.id || "branch-preview",
+                                  company_id: branchCompanyId
+                                } as any}
+                                interactive={true}
+                                signaturePosition={branchSignaturePos}
+                                onSignaturePositionChange={setBranchSignaturePos}
+                                customStamps={companyCustomStamps}
+                                onCustomStampMove={(id, pos) => setCompanyCustomStamps(prev => prev.map(s => s.id === id ? { ...s, ...pos } : s))}
+                                onRemoveCustomStamp={(id) => setCompanyCustomStamps(prev => prev.filter(s => s.id !== id))}
+                              />
+                            )
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1393,11 +1742,11 @@ export default function CompaniesMain() {
         )}
       </AnimatePresence>
 
-      {/* ── UPGRADED 2-TAB SUB-BRANCH (% SHARE) MODAL ─── */}
+      {/* ── UPGRADED 3-TAB SUB-BRANCH (% SHARE) MODAL ─── */}
       <AnimatePresence>
         {showSubBranchModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-surface rounded-2xl border border-border shadow-2xl w-full max-w-3xl max-h-[94vh] flex flex-col overflow-hidden text-xs">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-surface rounded-2xl border border-border shadow-2xl w-full max-w-4xl max-h-[94vh] flex flex-col overflow-hidden text-xs">
               <div className="flex items-center justify-between p-4 border-b border-border shrink-0 bg-muted/20">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold">
@@ -1405,16 +1754,17 @@ export default function CompaniesMain() {
                   </div>
                   <div>
                     <h2 className="text-base font-bold text-foreground">{editingSubBranch ? `Edit Sub-Branch: ${editingSubBranch.name}` : "Add Sub-Branch (Partner & Revenue Share Hub)"}</h2>
-                    <p className="text-[11px] text-muted-foreground">Sets up partner percentage share and location attribution</p>
+                    <p className="text-[11px] text-muted-foreground">Sets up partner percentage share, location attribution, and live document preview</p>
                   </div>
                 </div>
                 <Button variant="ghost" size="sm" onClick={() => setShowSubBranchModal(false)}><X className="h-4 w-4" /></Button>
               </div>
 
               <div className="flex flex-col flex-1 overflow-hidden">
-                <div className="grid grid-cols-2 border-b border-border bg-muted/40 font-bold text-center shrink-0">
+                <div className="grid grid-cols-3 border-b border-border bg-muted/40 font-bold text-center shrink-0">
                   <button type="button" onClick={() => setSubBranchTab("partner")} className={`py-2.5 border-b-2 text-[11px] ${subBranchTab === "partner" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>1. Partner &amp; Share</button>
                   <button type="button" onClick={() => setSubBranchTab("location")} className={`py-2.5 border-b-2 text-[11px] ${subBranchTab === "location" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>2. Address &amp; Location</button>
+                  <button type="button" onClick={() => setSubBranchTab("preview")} className={`py-2.5 border-b-2 text-[11px] ${subBranchTab === "preview" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>3. Live Preview &amp; Drag</button>
                 </div>
 
                 <div className="p-5 space-y-4 overflow-y-auto flex-1 max-h-[65vh]">
@@ -1465,6 +1815,174 @@ export default function CompaniesMain() {
                         <div><label className="block font-semibold mb-1">State</label><Input value={subBranchForm.state} onChange={e => setSubBranchForm({ ...subBranchForm, state: e.target.value })} /></div>
                         <div><label className="block font-semibold mb-1">Partner Phone</label><Input value={subBranchForm.phone} onChange={e => setSubBranchForm({ ...subBranchForm, phone: e.target.value })} /></div>
                         <div><label className="block font-semibold mb-1">Partner Email</label><Input value={subBranchForm.email} onChange={e => setSubBranchForm({ ...subBranchForm, email: e.target.value })} /></div>
+                      </div>
+                    </div>
+                  )}
+
+                  {subBranchTab === "preview" && (
+                    <div className="space-y-4">
+                      {/* Top Controls Bar */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-muted/60 dark:bg-zinc-800/60 rounded-xl border border-border">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-bold text-muted-foreground">Scheme:</span>
+                          <button
+                            type="button"
+                            onClick={() => setPreviewInvoiceType("gst")}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                              previewInvoiceType === "gst" ? "bg-teal-600 text-white shadow-xs" : "bg-muted text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            GST Tax Invoice (Teal)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPreviewInvoiceType("nongst")}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                              previewInvoiceType === "nongst" ? "bg-sky-600 text-white shadow-xs" : "bg-muted text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            Non-GST Commercial (Sky Blue)
+                          </button>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newStamp = {
+                                id: "stamp-" + Date.now(),
+                                text: "PAID IN FULL",
+                                x: 10,
+                                y: 20,
+                                color: "#059669",
+                                fontSize: 12
+                              }
+                              setCompanyCustomStamps(prev => [...prev, newStamp])
+                            }}
+                            className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 hover:bg-emerald-200 cursor-pointer"
+                          >
+                            + PAID Stamp
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newStamp = {
+                                id: "stamp-" + Date.now(),
+                                text: "OFFICIAL SEAL",
+                                x: -10,
+                                y: 15,
+                                color: "#0d9488",
+                                fontSize: 11
+                              }
+                              setCompanyCustomStamps(prev => [...prev, newStamp])
+                            }}
+                            className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300 border border-teal-300 hover:bg-teal-200 cursor-pointer"
+                          >
+                            + SEAL Stamp
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSubBranchSignaturePos({ x: 0, y: 0 })
+                              setCompanyCustomStamps([])
+                            }}
+                            className="px-2 py-1 text-[10px] font-semibold text-muted-foreground hover:text-foreground border border-border rounded-lg"
+                          >
+                            Reset Position
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Interactive Drag Notice */}
+                      <div className="p-2.5 rounded-xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-[11px] text-amber-900 dark:text-amber-300 flex items-center justify-between">
+                        <span className="font-semibold flex items-center gap-1.5">
+                          <span>✥</span>
+                          <span>Interactive Live Placement: Drag the <strong>Authorized Signatory Block</strong> or <strong>Stamps</strong> to calibrate positioning.</span>
+                        </span>
+                        <span className="font-mono text-[10px] bg-amber-100 dark:bg-amber-900 px-2 py-0.5 rounded font-bold">
+                          X: {subBranchSignaturePos.x}px, Y: {subBranchSignaturePos.y}px
+                        </span>
+                      </div>
+
+                      {/* Scaled Preview Document */}
+                      <div className="w-full overflow-x-auto p-4 bg-zinc-100 dark:bg-zinc-950 rounded-2xl border border-zinc-300 dark:border-zinc-800 flex justify-center shadow-inner">
+                        <div className="w-full max-w-[794px]">
+                          {(() => {
+                            const pBranch = branches.find(b => b.id === subBranchBranchId)
+                            const pComp = companies.find(c => c.id === subBranchCompanyId || c.id === pBranch?.company_id) || companies[0]
+                            return (
+                              <OfficialInvoiceDocument
+                                invoice={{
+                                  id: "DEMO-SB-INV-001",
+                                  invoiceNumber: "INV-" + (subBranchForm.code || "SB") + "-2026-001",
+                                  invoice_number: "INV-" + (subBranchForm.code || "SB") + "-2026-001",
+                                  date: "2026-09-18",
+                                  issueDate: "2026-09-18",
+                                  dueDate: "2026-10-03",
+                                  companyId: pComp?.id || "tech",
+                                  company_id: pComp?.id || "tech",
+                                  branchId: pBranch?.id || subBranchBranchId,
+                                  branch_id: pBranch?.id || subBranchBranchId,
+                                  subBranchId: editingSubBranch?.id || "subbranch-preview",
+                                  sub_branch_id: editingSubBranch?.id || "subbranch-preview",
+                                  client: "Acme Corp",
+                                  clientName: "Acme Corp",
+                                  customer: "Acme Corp",
+                                  clientEmail: "billing@acmecorp.com",
+                                  clientPhone: "+91 90915 18567",
+                                  clientAddress: "Corporate Center, Paschim Medinipur, West Bengal",
+                                  clientGstin: "19ABASCS1649D1ZY",
+                                  projectTitle: "Custom Solution Project",
+                                  status: "Draft",
+                                  scheme: previewInvoiceType,
+                                  items: [
+                                    {
+                                      id: "item-1",
+                                      description: "Custom Enterprise Consulting & Development",
+                                      serviceName: "Custom Enterprise Consulting & Development",
+                                      sacCode: "998313",
+                                      sac: "998313",
+                                      qty: 1,
+                                      quantity: 1,
+                                      rate: 15000,
+                                      unitPrice: 15000,
+                                      unit: "Project",
+                                      gstRate: previewInvoiceType === "gst" ? 18 : 0,
+                                      totalAmount: previewInvoiceType === "gst" ? 17700 : 15000,
+                                      total: previewInvoiceType === "gst" ? 17700 : 15000,
+                                    }
+                                  ],
+                                  subtotal: 15000,
+                                  taxableBase: 15000,
+                                  tax: previewInvoiceType === "gst" ? 2700 : 0,
+                                  taxAmount: previewInvoiceType === "gst" ? 2700 : 0,
+                                  total: previewInvoiceType === "gst" ? 17700 : 15000,
+                                  totalAmount: previewInvoiceType === "gst" ? 17700 : 15000,
+                                  paidAmount: 0,
+                                  received: 0,
+                                  due: previewInvoiceType === "gst" ? 17700 : 15000,
+                                  dueAmount: previewInvoiceType === "gst" ? 17700 : 15000,
+                                  terms: pComp?.terms_conditions || "1. Payment is due within statutory terms.\n2. Goods & Services once delivered are subject to project sign-off.\n3. Disputed items must be notified within 7 days.",
+                                  notes: pComp?.invoice_notes || "Thank you for your business."
+                                } as any}
+                                companyDetails={pComp}
+                                activeBranch={pBranch}
+                                activeSubBranch={{
+                                  ...subBranchForm,
+                                  id: editingSubBranch?.id || "subbranch-preview",
+                                  branch_id: subBranchBranchId,
+                                  company_id: subBranchCompanyId
+                                } as any}
+                                interactive={true}
+                                signaturePosition={subBranchSignaturePos}
+                                onSignaturePositionChange={setSubBranchSignaturePos}
+                                customStamps={companyCustomStamps}
+                                onCustomStampMove={(id, pos) => setCompanyCustomStamps(prev => prev.map(s => s.id === id ? { ...s, ...pos } : s))}
+                                onRemoveCustomStamp={(id) => setCompanyCustomStamps(prev => prev.filter(s => s.id !== id))}
+                              />
+                            )
+                          })()}
+                        </div>
                       </div>
                     </div>
                   )}
