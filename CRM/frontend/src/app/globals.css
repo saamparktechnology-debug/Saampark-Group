@@ -618,9 +618,10 @@ html, body, input, textarea, select, button, table, span, div, p {
   .a4-page {
     width: 210mm !important;
     max-width: 210mm !important;
-    min-height: 280mm !important;
-    height: auto !important;
-    padding: 6mm 8mm !important;
+    min-height: 282mm !important;
+    height: 282mm !important;
+    max-height: 282mm !important;
+    padding: 5mm 8mm !important;
     margin: 0 auto !important;
     box-sizing: border-box !important;
     box-shadow: none !important;
@@ -628,11 +629,10 @@ html, body, input, textarea, select, button, table, span, div, p {
     border-radius: 0 !important;
     page-break-after: always !important;
     break-after: page !important;
-    overflow: visible !important;
+    overflow: hidden !important;
     display: flex !important;
     flex-direction: column !important;
-    justify-content: flex-start !important;
-    gap: 2mm !important;
+    justify-content: space-between !important;
     background: #ffffff !important;
   }
 

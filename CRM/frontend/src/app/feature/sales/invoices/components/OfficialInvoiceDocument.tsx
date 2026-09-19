@@ -299,108 +299,139 @@ export function OfficialInvoiceDocument({
     upiId: "saampark@icici",
   }
 
-  // Bank & UPI details resolved specifically for issuing entity and GST vs Non-GST
+  // Parent Company baseline values
+  const companyGstUpi = (companyDetails?.gst_upi_id || activeCompany?.gst_upi_id || (companyDetails as any)?.upi_id || activeCompany?.upi_id || paySettings?.upiId || "")?.trim()
+  const companyNonGstUpi = (companyDetails?.nongst_upi_id || activeCompany?.nongst_upi_id || (companyDetails as any)?.upi_id || activeCompany?.upi_id || paySettings?.upiId || "")?.trim()
+  const companyUpi = isGstInvoice ? companyGstUpi : companyNonGstUpi
+
+  const companyGstHolder = (companyDetails?.gst_account_holder || activeCompany?.gst_account_holder || (companyDetails as any)?.account_holder || activeCompany?.account_holder || paySettings?.accountHolderName || fullRegisteredCompanyName || "")?.trim()
+  const companyNonGstHolder = (companyDetails?.nongst_account_holder || activeCompany?.nongst_account_holder || (companyDetails as any)?.account_holder || activeCompany?.account_holder || paySettings?.accountHolderName || fullRegisteredCompanyName || "")?.trim()
+  const companyHolder = isGstInvoice ? companyGstHolder : companyNonGstHolder
+
+  const companyGstBank = (companyDetails?.gst_bank_name || activeCompany?.gst_bank_name || (companyDetails as any)?.bank_name || activeCompany?.bank_name || paySettings?.bankName || "")?.trim()
+  const companyNonGstBank = (companyDetails?.nongst_bank_name || activeCompany?.nongst_bank_name || (companyDetails as any)?.bank_name || activeCompany?.bank_name || paySettings?.bankName || "")?.trim()
+  const companyBank = isGstInvoice ? companyGstBank : companyNonGstBank
+
+  const companyGstAccNum = (companyDetails?.gst_account_number || activeCompany?.gst_account_number || (companyDetails as any)?.account_number || activeCompany?.account_number || paySettings?.accountNumber || "")?.trim()
+  const companyNonGstAccNum = (companyDetails?.nongst_account_number || activeCompany?.nongst_account_number || (companyDetails as any)?.account_number || activeCompany?.account_number || paySettings?.accountNumber || "")?.trim()
+  const companyAccNum = isGstInvoice ? companyGstAccNum : companyNonGstAccNum
+
+  const companyGstIfsc = (companyDetails?.gst_ifsc_code || activeCompany?.gst_ifsc_code || (companyDetails as any)?.ifsc_code || activeCompany?.ifsc_code || paySettings?.ifscCode || "")?.trim()
+  const companyNonGstIfsc = (companyDetails?.nongst_ifsc_code || activeCompany?.nongst_ifsc_code || (companyDetails as any)?.ifsc_code || activeCompany?.ifsc_code || paySettings?.ifscCode || "")?.trim()
+  const companyIfsc = isGstInvoice ? companyGstIfsc : companyNonGstIfsc
+
+  const companyGstBranch = (companyDetails?.gst_bank_branch || activeCompany?.gst_bank_branch || (companyDetails as any)?.bank_branch || activeCompany?.bank_branch || paySettings?.branch || "")?.trim()
+  const companyNonGstBranch = (companyDetails?.nongst_bank_branch || activeCompany?.nongst_bank_branch || (companyDetails as any)?.bank_branch || activeCompany?.bank_branch || paySettings?.branch || "")?.trim()
+  const companyBranch = isGstInvoice ? companyGstBranch : companyNonGstBranch
+
+  // Bank & UPI details resolved specifically for issuing entity with strict company fallback
   const resolvedUpiId = (
     overrideBankDetails?.upiId ||
     (isSubBranchIssued 
-      ? (isGstInvoice ? (activeSubBranch?.gst_upi_id || (activeSubBranch as any)?.bankDetails?.upiId || activeSubBranch?.upi_id) : (activeSubBranch?.nongst_upi_id || (activeSubBranch as any)?.bankDetails?.upiId || activeSubBranch?.upi_id))
+      ? (isGstInvoice ? (activeSubBranch?.gst_upi_id || activeSubBranch?.upi_id || activeBranch?.gst_upi_id || activeBranch?.upi_id || companyUpi) : (activeSubBranch?.nongst_upi_id || activeSubBranch?.upi_id || activeBranch?.nongst_upi_id || activeBranch?.upi_id || companyUpi))
       : isBranchIssued 
-      ? (isGstInvoice ? (activeBranch?.gst_upi_id || activeBranch?.upi_id) : (activeBranch?.nongst_upi_id || activeBranch?.upi_id))
-      : (isGstInvoice 
-          ? (companyDetails?.gst_upi_id || activeCompany?.gst_upi_id || (companyDetails as any)?.upi_id || activeCompany?.upi_id) 
-          : (companyDetails?.nongst_upi_id || activeCompany?.nongst_upi_id || (companyDetails as any)?.upi_id || activeCompany?.upi_id)
-        ) || paySettings?.upiId
+      ? (isGstInvoice ? (activeBranch?.gst_upi_id || activeBranch?.upi_id || companyUpi) : (activeBranch?.nongst_upi_id || activeBranch?.upi_id || companyUpi))
+      : companyUpi
     )
   )?.trim() || activeCompany?.upi_id || defaultBankFallback.upiId
 
   const resolvedAccountHolder = (
     overrideBankDetails?.accountHolder ||
     (isSubBranchIssued 
-      ? (isGstInvoice ? (activeSubBranch?.gst_account_holder || (activeSubBranch as any)?.bankDetails?.accountHolder || activeSubBranch?.account_holder) : (activeSubBranch?.nongst_account_holder || (activeSubBranch as any)?.bankDetails?.accountHolder || activeSubBranch?.account_holder))
+      ? (isGstInvoice ? (activeSubBranch?.gst_account_holder || activeSubBranch?.account_holder || activeBranch?.gst_account_holder || activeBranch?.account_holder || companyHolder) : (activeSubBranch?.nongst_account_holder || activeSubBranch?.account_holder || activeBranch?.nongst_account_holder || activeBranch?.account_holder || companyHolder))
       : isBranchIssued 
-      ? (isGstInvoice ? (activeBranch?.gst_account_holder || activeBranch?.account_holder) : (activeBranch?.nongst_account_holder || activeBranch?.account_holder))
-      : (isGstInvoice 
-          ? (companyDetails?.gst_account_holder || activeCompany?.gst_account_holder || (companyDetails as any)?.account_holder || activeCompany?.account_holder) 
-          : (companyDetails?.nongst_account_holder || activeCompany?.nongst_account_holder || (companyDetails as any)?.account_holder || activeCompany?.account_holder)
-        ) || paySettings?.accountHolderName
+      ? (isGstInvoice ? (activeBranch?.gst_account_holder || activeBranch?.account_holder || companyHolder) : (activeBranch?.nongst_account_holder || activeBranch?.account_holder || companyHolder))
+      : companyHolder
     )
   )?.trim() || fullRegisteredCompanyName || defaultBankFallback.accountHolder
 
   const resolvedBankName = (
     overrideBankDetails?.bankName ||
     (isSubBranchIssued 
-      ? (isGstInvoice ? (activeSubBranch?.gst_bank_name || (activeSubBranch as any)?.bankDetails?.bankName || activeSubBranch?.bank_name) : (activeSubBranch?.nongst_bank_name || (activeSubBranch as any)?.bankDetails?.bankName || activeSubBranch?.bank_name))
+      ? (isGstInvoice ? (activeSubBranch?.gst_bank_name || activeSubBranch?.bank_name || activeBranch?.gst_bank_name || activeBranch?.bank_name || companyBank) : (activeSubBranch?.nongst_bank_name || activeSubBranch?.bank_name || activeBranch?.nongst_bank_name || activeBranch?.bank_name || companyBank))
       : isBranchIssued 
-      ? (isGstInvoice ? (activeBranch?.gst_bank_name || activeBranch?.bank_name) : (activeBranch?.nongst_bank_name || activeBranch?.bank_name))
-      : (isGstInvoice 
-          ? (companyDetails?.gst_bank_name || activeCompany?.gst_bank_name || (companyDetails as any)?.bank_name || activeCompany?.bank_name) 
-          : (companyDetails?.nongst_bank_name || activeCompany?.nongst_bank_name || (companyDetails as any)?.bank_name || activeCompany?.bank_name)
-        ) || paySettings?.bankName
+      ? (isGstInvoice ? (activeBranch?.gst_bank_name || activeBranch?.bank_name || companyBank) : (activeBranch?.nongst_bank_name || activeBranch?.bank_name || companyBank))
+      : companyBank
     )
   )?.trim() || activeCompany?.bank_name || defaultBankFallback.bankName
 
   const resolvedAccountNumber = (
     overrideBankDetails?.accountNumber ||
     (isSubBranchIssued 
-      ? (isGstInvoice ? (activeSubBranch?.gst_account_number || (activeSubBranch as any)?.bankDetails?.accountNumber || activeSubBranch?.account_number) : (activeSubBranch?.nongst_account_number || (activeSubBranch as any)?.bankDetails?.accountNumber || activeSubBranch?.account_number))
+      ? (isGstInvoice ? (activeSubBranch?.gst_account_number || activeSubBranch?.account_number || activeBranch?.gst_account_number || activeBranch?.account_number || companyAccNum) : (activeSubBranch?.nongst_account_number || activeSubBranch?.account_number || activeBranch?.nongst_account_number || activeBranch?.account_number || companyAccNum))
       : isBranchIssued 
-      ? (isGstInvoice ? (activeBranch?.gst_account_number || activeBranch?.account_number) : (activeBranch?.nongst_account_number || activeBranch?.account_number))
-      : (isGstInvoice 
-          ? (companyDetails?.gst_account_number || activeCompany?.gst_account_number || (companyDetails as any)?.account_number || activeCompany?.account_number) 
-          : (companyDetails?.nongst_account_number || activeCompany?.nongst_account_number || (companyDetails as any)?.account_number || activeCompany?.account_number)
-        ) || paySettings?.accountNumber
+      ? (isGstInvoice ? (activeBranch?.gst_account_number || activeBranch?.account_number || companyAccNum) : (activeBranch?.nongst_account_number || activeBranch?.account_number || companyAccNum))
+      : companyAccNum
     )
   )?.trim() || activeCompany?.account_number || defaultBankFallback.accountNumber
 
   const resolvedIfscCode = (
     overrideBankDetails?.ifscCode ||
     (isSubBranchIssued 
-      ? (isGstInvoice ? (activeSubBranch?.gst_ifsc_code || (activeSubBranch as any)?.bankDetails?.ifscCode || activeSubBranch?.ifsc_code) : (activeSubBranch?.nongst_ifsc_code || (activeSubBranch as any)?.bankDetails?.ifscCode || activeSubBranch?.ifsc_code))
+      ? (isGstInvoice ? (activeSubBranch?.gst_ifsc_code || activeSubBranch?.ifsc_code || activeBranch?.gst_ifsc_code || activeBranch?.ifsc_code || companyIfsc) : (activeSubBranch?.nongst_ifsc_code || activeSubBranch?.ifsc_code || activeBranch?.nongst_ifsc_code || activeBranch?.ifsc_code || companyIfsc))
       : isBranchIssued 
-      ? (isGstInvoice ? (activeBranch?.gst_ifsc_code || activeBranch?.ifsc_code) : (activeBranch?.nongst_ifsc_code || activeBranch?.ifsc_code))
-      : (isGstInvoice 
-          ? (companyDetails?.gst_ifsc_code || activeCompany?.gst_ifsc_code || (companyDetails as any)?.ifsc_code || activeCompany?.ifsc_code) 
-          : (companyDetails?.nongst_ifsc_code || activeCompany?.nongst_ifsc_code || (companyDetails as any)?.ifsc_code || activeCompany?.ifsc_code)
-        ) || paySettings?.ifscCode
+      ? (isGstInvoice ? (activeBranch?.gst_ifsc_code || activeBranch?.ifsc_code || companyIfsc) : (activeBranch?.nongst_ifsc_code || activeBranch?.ifsc_code || companyIfsc))
+      : companyIfsc
     )
   )?.trim() || activeCompany?.ifsc_code || defaultBankFallback.ifscCode
 
   const resolvedBankBranch = (
     overrideBankDetails?.bankBranch ||
     (isSubBranchIssued 
-      ? (isGstInvoice ? (activeSubBranch?.gst_bank_branch || activeSubBranch?.bank_branch) : (activeSubBranch?.nongst_bank_branch || activeSubBranch?.bank_branch))
+      ? (isGstInvoice ? (activeSubBranch?.gst_bank_branch || activeSubBranch?.bank_branch || activeBranch?.gst_bank_branch || activeBranch?.bank_branch || companyBranch) : (activeSubBranch?.nongst_bank_branch || activeSubBranch?.bank_branch || activeBranch?.nongst_bank_branch || activeBranch?.bank_branch || companyBranch))
       : isBranchIssued 
-      ? (isGstInvoice ? (activeBranch?.gst_bank_branch || activeBranch?.bank_branch) : (activeBranch?.nongst_bank_branch || activeBranch?.bank_branch))
-      : (isGstInvoice 
-          ? (companyDetails?.gst_bank_branch || activeCompany?.gst_bank_branch || (companyDetails as any)?.bank_branch || activeCompany?.bank_branch) 
-          : (companyDetails?.nongst_bank_branch || activeCompany?.nongst_bank_branch || (companyDetails as any)?.bank_branch || activeCompany?.bank_branch)
-        ) || paySettings?.branch
+      ? (isGstInvoice ? (activeBranch?.gst_bank_branch || activeBranch?.bank_branch || companyBranch) : (activeBranch?.nongst_bank_branch || activeBranch?.bank_branch || companyBranch))
+      : companyBranch
     )
   )?.trim() || activeCompany?.bank_branch || defaultBankFallback.bankBranch
 
-  // Signatory & Stamp URLs (Strict to issuing entity with overrides and fallback)
-  const resolvedSignatureUrl = overrideSignatureUrl || (isSubBranchIssued 
-    ? activeSubBranch?.signature_image_url 
-    : isBranchIssued 
-    ? activeBranch?.signature_image_url 
-    : ((companyDetails as any)?.signature_image_url || (companyDetails as any)?.signatureImageUrl || (companyDetails as any)?.signature_url || activeCompany?.signature_image_url || (activeCompany as any)?.signatureImageUrl || (activeCompany as any)?.signature_url))?.trim() || ""
+  // Signatory & Stamp URLs (Strict to issuing entity with seamless cascade to parent Company)
+  const companySignatureFallback = (
+    (companyDetails as any)?.signature_image_url ||
+    (companyDetails as any)?.signatureImageUrl ||
+    (companyDetails as any)?.signature_url ||
+    activeCompany?.signature_image_url ||
+    (activeCompany as any)?.signatureImageUrl ||
+    (activeCompany as any)?.signature_url ||
+    ""
+  )?.trim()
 
-  const resolvedStampUrl = overrideStampUrl || (isSubBranchIssued 
-    ? activeSubBranch?.stamp_image_url 
-    : isBranchIssued 
-    ? activeBranch?.stamp_image_url 
-    : ((companyDetails as any)?.stamp_image_url || (companyDetails as any)?.stampImageUrl || (companyDetails as any)?.stamp_url || activeCompany?.stamp_image_url || (activeCompany as any)?.stampImageUrl || (activeCompany as any)?.stamp_url))?.trim() || ""
+  const companyStampFallback = (
+    (companyDetails as any)?.stamp_image_url ||
+    (companyDetails as any)?.stampImageUrl ||
+    (companyDetails as any)?.stamp_url ||
+    activeCompany?.stamp_image_url ||
+    (activeCompany as any)?.stampImageUrl ||
+    (activeCompany as any)?.stamp_url ||
+    ""
+  )?.trim()
+
+  const resolvedSignatureUrl = overrideSignatureUrl || (
+    isSubBranchIssued 
+      ? (activeSubBranch?.signature_image_url?.trim() || activeBranch?.signature_image_url?.trim() || companySignatureFallback)
+      : isBranchIssued 
+      ? (activeBranch?.signature_image_url?.trim() || companySignatureFallback)
+      : companySignatureFallback
+  ) || ""
+
+  const resolvedStampUrl = overrideStampUrl || (
+    isSubBranchIssued 
+      ? (activeSubBranch?.stamp_image_url?.trim() || activeBranch?.stamp_image_url?.trim() || companyStampFallback)
+      : isBranchIssued 
+      ? (activeBranch?.stamp_image_url?.trim() || companyStampFallback)
+      : companyStampFallback
+  ) || ""
 
   const resolvedSignatoryName = (isSubBranchIssued 
-    ? (activeSubBranch?.signatory_name || (activeSubBranch as any)?.partner_name || (activeSubBranch as any)?.partnerName)
+    ? (activeSubBranch?.signatory_name || (activeSubBranch as any)?.partner_name || (activeSubBranch as any)?.partnerName || activeBranch?.signatory_name || (companyDetails as any)?.signatory_name || activeCompany?.signatory_name)
     : isBranchIssued 
-    ? (activeBranch?.signatory_name || activeBranch?.managerName || (activeBranch as any)?.manager_name)
+    ? (activeBranch?.signatory_name || activeBranch?.managerName || (activeBranch as any)?.manager_name || (companyDetails as any)?.signatory_name || activeCompany?.signatory_name)
     : ((companyDetails as any)?.signatory_name || activeCompany?.signatory_name))?.trim() || "Authorized Signatory"
 
   const resolvedSignatoryDesignation = (isSubBranchIssued 
-    ? (activeSubBranch?.signatory_designation || `${(activeSubBranch as any)?.partner_type || 'Franchise'} Partner`)
+    ? (activeSubBranch?.signatory_designation || `${(activeSubBranch as any)?.partner_type || 'Franchise'} Partner` || activeBranch?.signatory_designation || (companyDetails as any)?.signatory_designation || activeCompany?.signatory_designation)
     : isBranchIssued 
-    ? (activeBranch?.signatory_designation || "Branch Manager")
+    ? (activeBranch?.signatory_designation || "Branch Manager" || (companyDetails as any)?.signatory_designation || activeCompany?.signatory_designation)
     : ((companyDetails as any)?.signatory_designation || activeCompany?.signatory_designation))?.trim() || "Managing Director"
 
   // ISO / Quality Certification Badge text (Editable)
@@ -498,26 +529,31 @@ export function OfficialInvoiceDocument({
     ? "PART PAID" 
     : "NOT PAID"
 
-  // Resolve QR Code URL: 100% scanable high-res square modules with margin
+  // Resolve QR Code URL: 100% scanable high-res square modules with margin (Cascading from Sub-Branch -> Branch -> Parent Company)
+  const companyGstQr = (companyDetails?.gst_payment_qr_url || activeCompany?.gst_payment_qr_url || (companyDetails as any)?.payment_qr_url || activeCompany?.payment_qr_url || "")?.trim()
+  const companyNonGstQr = (companyDetails?.nongst_payment_qr_url || activeCompany?.nongst_payment_qr_url || (companyDetails as any)?.payment_qr_url || activeCompany?.payment_qr_url || "")?.trim()
+  const companyQr = isGstInvoice ? (companyGstQr || companyNonGstQr) : (companyNonGstQr || companyGstQr)
+
   const customPaymentQrUrl = 
     overrideBankDetails?.paymentQrUrl ||
     (isSubBranchIssued
       ? (isGstInvoice 
-          ? (activeSubBranch?.gst_payment_qr_url || activeSubBranch?.payment_qr_url) 
-          : (activeSubBranch?.nongst_payment_qr_url || activeSubBranch?.payment_qr_url)
+          ? (activeSubBranch?.gst_payment_qr_url || activeSubBranch?.payment_qr_url || activeBranch?.gst_payment_qr_url || activeBranch?.payment_qr_url || companyGstQr || companyQr) 
+          : (activeSubBranch?.nongst_payment_qr_url || activeSubBranch?.payment_qr_url || activeBranch?.nongst_payment_qr_url || activeBranch?.payment_qr_url || companyNonGstQr || companyQr)
         )
       : isBranchIssued
       ? (isGstInvoice 
-          ? (activeBranch?.gst_payment_qr_url || activeBranch?.payment_qr_url) 
-          : (activeBranch?.nongst_payment_qr_url || activeBranch?.payment_qr_url)
+          ? (activeBranch?.gst_payment_qr_url || activeBranch?.payment_qr_url || companyGstQr || companyQr) 
+          : (activeBranch?.nongst_payment_qr_url || activeBranch?.payment_qr_url || companyNonGstQr || companyQr)
         )
       : (isGstInvoice 
-          ? (companyDetails?.gst_payment_qr_url || activeCompany?.gst_payment_qr_url || (companyDetails as any)?.payment_qr_url || activeCompany?.payment_qr_url) 
-          : (companyDetails?.nongst_payment_qr_url || activeCompany?.nongst_payment_qr_url || (companyDetails as any)?.payment_qr_url || activeCompany?.payment_qr_url)
+          ? (companyGstQr || companyQr) 
+          : (companyNonGstQr || companyQr)
         )
     ) ||
     activeSubBranch?.payment_qr_url ||
     activeBranch?.payment_qr_url ||
+    companyQr ||
     activeCompany?.payment_qr_url ||
     paySettings?.qrCodeUrl ||
     (resolvedUpiId
@@ -1106,7 +1142,7 @@ export function OfficialInvoiceDocument({
   }
 
   const renderFinancialsAndFooter = (pageNumber: number = 1, totalPgs: number = 1) => (
-    <div className="space-y-2 mt-2">
+    <div className="flex-1 flex flex-col justify-between space-y-2 mt-auto">
       {/* 2-COLUMN BALANCED MATRIX: LEFT = TOTAL IN WORDS + BANK & UPI PAYMENT DETAILS; RIGHT = FINANCIAL SUMMARY */}
       <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-stretch">
         {/* Left 6 Columns: Amount in Words + Bank & UPI Payment Details */}
@@ -1127,7 +1163,7 @@ export function OfficialInvoiceDocument({
             <div className="flex items-center justify-between border-b border-zinc-200/80 dark:border-zinc-700/60 pb-1">
               <span className="font-black text-[9px] uppercase tracking-wider text-zinc-800 dark:text-zinc-200 flex items-center gap-1">
                 <Landmark size={11} className={theme.primaryText} />
-                <span>BANK & UPI PAYMENT DETAILS</span>
+                <span>BANK &amp; UPI PAYMENT DETAILS</span>
               </span>
               <span className="text-[7px] font-black px-1.5 py-0.2 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
                 Instant Settlement
@@ -1271,142 +1307,145 @@ export function OfficialInvoiceDocument({
         </div>
       </div>
 
-      {/* TERMS & CONDITIONS / INVOICE NOTES (Centralized & Inherited) */}
+      {/* TERMS & CONDITIONS / INVOICE NOTES (Enlarged, Clear & Prominent) */}
       {resolvedTermsAndNotes && (
-        <div className="p-2 rounded-xl border border-zinc-200/90 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/40 text-[7.5px] text-zinc-600 dark:text-zinc-400 space-y-0.5">
-          <span className="font-bold text-zinc-900 dark:text-zinc-100 uppercase text-[7px] tracking-wider block">
+        <div className="p-2.5 sm:p-3 rounded-xl border border-zinc-300/90 dark:border-zinc-700 bg-zinc-50/90 dark:bg-zinc-900/60 text-[8.5px] sm:text-[9.5px] text-zinc-700 dark:text-zinc-300 space-y-1 shadow-2xs">
+          <span className="font-extrabold text-zinc-900 dark:text-zinc-100 uppercase text-[8px] sm:text-[8.5px] tracking-wider block">
             Terms &amp; Conditions / Official Notes:
           </span>
-          <p className="whitespace-pre-line leading-relaxed">{resolvedTermsAndNotes}</p>
+          <p className="whitespace-pre-line leading-relaxed font-normal">{resolvedTermsAndNotes}</p>
         </div>
       )}
 
-      {/* SIGNATURES & OFFICIAL SEAL ROW */}
-      <div className="flex flex-row justify-between items-end gap-3 pt-2 border-t border-zinc-200 dark:border-zinc-800">
-        {/* Left: Customer Acceptance */}
-        <div className="text-center space-y-1">
-          <div className="h-11 flex items-end justify-center">
-            {/* Blank space for physical signing */}
-          </div>
-          <div className="w-40 border-t-2 border-zinc-400 dark:border-zinc-600 pt-0.5">
-            <p className="text-[8px] font-black uppercase text-zinc-700 dark:text-zinc-300">CUSTOMER SIGNATURE</p>
-            <p className="text-[6.5px] text-zinc-500 font-medium">Accepted &amp; Confirmed</p>
-          </div>
-        </div>
-
-        {/* Right: Company Authorized Signatory & Official Seal */}
-        <motion.div
-          drag={interactive}
-          dragMomentum={false}
-          dragElastic={0}
-          whileDrag={{ scale: 1.04, zIndex: 50 }}
-          animate={{ x: signaturePosition?.x || 0, y: signaturePosition?.y || 0 }}
-          onDragEnd={(_, info) => {
-            if (onSignaturePositionChange) {
-              onSignaturePositionChange({
-                x: (signaturePosition?.x || 0) + info.offset.x,
-                y: (signaturePosition?.y || 0) + info.offset.y,
-              })
-            }
-          }}
-          className={`flex items-end gap-3 relative select-none ${
-            interactive ? "cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-blue-500 rounded-xl group transition-shadow p-1 z-20" : ""
-          }`}
-        >
-          {interactive && (
-            <div className="absolute -top-2 -right-2 bg-blue-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xs z-30">
-              ✥ Drag Signature
+      {/* STICKY BOTTOM SECTION: SIGNATURES, OFFICIAL SEAL & FOOTER BANNER */}
+      <div className="space-y-2 mt-auto pt-1">
+        {/* SIGNATURES & OFFICIAL SEAL ROW */}
+        <div className="flex flex-row justify-between items-end gap-3 pt-2 border-t border-zinc-200 dark:border-zinc-800">
+          {/* Left: Customer Acceptance */}
+          <div className="text-center space-y-1">
+            <div className="h-11 flex items-end justify-center">
+              {/* Blank space for physical signing */}
             </div>
-          )}
+            <div className="w-40 border-t-2 border-zinc-400 dark:border-zinc-600 pt-0.5">
+              <p className="text-[8px] font-black uppercase text-zinc-700 dark:text-zinc-300">CUSTOMER SIGNATURE</p>
+              <p className="text-[6.5px] text-zinc-500 font-medium">Accepted &amp; Confirmed</p>
+            </div>
+          </div>
 
-          {/* Official Seal / Stamp */}
-          <div className="shrink-0 select-none">
-            {resolvedStampUrl ? (
-              <div className="w-16 h-16 flex items-center justify-center p-0.5 shadow-2xs">
-                <img 
-                  src={resolvedStampUrl} 
-                  alt="Official Company Seal" 
-                  className="max-h-16 max-w-16 object-contain pointer-events-none select-none drop-shadow-sm" 
-                />
-              </div>
-            ) : (
-              /* High-Fidelity Vector Circular Corporate Stamp Seal */
-              <div className={`w-16 h-16 rounded-full border-2 border-dashed ${theme.sealColor} flex flex-col items-center justify-center p-1 text-center bg-white shadow-2xs rotate-[-5deg] relative`}>
-                <div className="w-[52px] h-[52px] rounded-full border border-zinc-300 dark:border-zinc-700 flex flex-col items-center justify-center p-0.5">
-                  <div className="text-[5.5px] font-black uppercase tracking-tighter leading-tight text-zinc-900 truncate max-w-[48px]">
-                    {resolvedBrandName}
-                  </div>
-                  <div className="w-full border-t border-zinc-300 dark:border-zinc-700 my-0.5" />
-                  <div className="text-[5px] font-black text-emerald-700 dark:text-emerald-400 tracking-wider uppercase leading-none">
-                    ★ OFFICIAL SEAL ★
-                  </div>
-                  <div className="text-[4px] font-bold text-zinc-500 uppercase tracking-tight leading-none mt-0.5">
-                    VERIFIED
-                  </div>
-                </div>
+          {/* Right: Company Authorized Signatory & Official Seal */}
+          <motion.div
+            drag={interactive}
+            dragMomentum={false}
+            dragElastic={0}
+            whileDrag={{ scale: 1.04, zIndex: 50 }}
+            animate={{ x: signaturePosition?.x || 0, y: signaturePosition?.y || 0 }}
+            onDragEnd={(_, info) => {
+              if (onSignaturePositionChange) {
+                onSignaturePositionChange({
+                  x: (signaturePosition?.x || 0) + info.offset.x,
+                  y: (signaturePosition?.y || 0) + info.offset.y,
+                })
+              }
+            }}
+            className={`flex items-end gap-3 relative select-none ${
+              interactive ? "cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-blue-500 rounded-xl group transition-shadow p-1 z-20" : ""
+            }`}
+          >
+            {interactive && (
+              <div className="absolute -top-2 -right-2 bg-blue-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xs z-30">
+                ✥ Drag Signature
               </div>
             )}
-          </div>
 
-          {/* Authorized Signatory Details */}
-          <div className="text-center space-y-0.5 min-w-[150px]">
-            <p className="text-[7px] font-bold text-zinc-500 uppercase tracking-tight truncate max-w-[160px]">
-              For {fullRegisteredCompanyName} {isSubBranchIssued && activeSubBranch ? `(${activeSubBranch.name})` : isBranchIssued && activeBranch ? `(${activeBranch.name})` : ""}
-            </p>
-            <div className="h-11 flex items-center justify-center">
-              {resolvedSignatureUrl ? (
-                <img 
-                  src={resolvedSignatureUrl} 
-                  alt="Authorized Signature" 
-                  className="max-h-11 max-w-[140px] object-contain drop-shadow-xs pointer-events-none select-none" 
-                />
+            {/* Official Seal / Stamp */}
+            <div className="shrink-0 select-none">
+              {resolvedStampUrl ? (
+                <div className="w-16 h-16 flex items-center justify-center p-0.5 shadow-2xs">
+                  <img 
+                    src={resolvedStampUrl} 
+                    alt="Official Company Seal" 
+                    className="max-h-16 max-w-16 object-contain pointer-events-none select-none drop-shadow-sm" 
+                  />
+                </div>
               ) : (
-                /* Elegant Digital Calligraphic Signature Graphic */
-                <div className="flex flex-col items-center justify-center">
-                  <span className="font-serif italic font-extrabold text-sm tracking-wide text-zinc-800 dark:text-zinc-200">
-                    {resolvedSignatoryName || "Authorized Signatory"}
-                  </span>
-                  <span className="text-[5.5px] font-bold text-emerald-600 dark:text-emerald-400 tracking-widest uppercase flex items-center gap-0.5">
-                    ✓ Digitally Authorized
-                  </span>
+                /* High-Fidelity Vector Circular Corporate Stamp Seal */
+                <div className={`w-16 h-16 rounded-full border-2 border-dashed ${theme.sealColor} flex flex-col items-center justify-center p-1 text-center bg-white shadow-2xs rotate-[-5deg] relative`}>
+                  <div className="w-[52px] h-[52px] rounded-full border border-zinc-300 dark:border-zinc-700 flex flex-col items-center justify-center p-0.5">
+                    <div className="text-[5.5px] font-black uppercase tracking-tighter leading-tight text-zinc-900 truncate max-w-[48px]">
+                      {resolvedBrandName}
+                    </div>
+                    <div className="w-full border-t border-zinc-300 dark:border-zinc-700 my-0.5" />
+                    <div className="text-[5px] font-black text-emerald-700 dark:text-emerald-400 tracking-wider uppercase leading-none">
+                      ★ OFFICIAL SEAL ★
+                    </div>
+                    <div className="text-[4px] font-bold text-zinc-500 uppercase tracking-tight leading-none mt-0.5">
+                      VERIFIED
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
-            <div className="w-full border-t-2 border-zinc-400 dark:border-zinc-600 pt-0.5">
-              <p className="text-[8px] font-black uppercase text-zinc-800 dark:text-zinc-200 font-bold leading-tight truncate">
-                {resolvedSignatoryName || "Authorized Signatory"}
-              </p>
-              <p className="text-[6.5px] text-zinc-500 font-medium leading-tight truncate">
-                {resolvedSignatoryDesignation || "Managing Director"}
-              </p>
-            </div>
-          </div>
-        </motion.div>
-      </div>
 
-      {/* BOTTOM BANNER WITH PAGE NUMBER */}
-      <div className={`rounded-xl ${theme.headerGradient} text-white p-1 text-[7.5px] font-medium flex flex-wrap items-center justify-between gap-1 shadow-xs print:mt-auto`}>
-        <p className="flex items-center gap-1">
-          <MapPin size={8} />
-          <span>{resolvedAddress || fullRegisteredCompanyName}</span>
-        </p>
-        <div className="flex items-center gap-2">
-          <span>{resolvedEmail ? `Support: ${resolvedEmail}` : ""} {resolvedPhone ? `| Tel: ${resolvedPhone}` : ""}</span>
-          <span className="font-mono font-bold bg-black/20 px-1.5 py-0.2 rounded text-[7px]">
-            Page {pageNumber} of {totalPgs}
-          </span>
+            {/* Authorized Signatory Details */}
+            <div className="text-center space-y-0.5 min-w-[150px]">
+              <p className="text-[7px] font-bold text-zinc-500 uppercase tracking-tight truncate max-w-[160px]">
+                For {fullRegisteredCompanyName} {isSubBranchIssued && activeSubBranch ? `(${activeSubBranch.name})` : isBranchIssued && activeBranch ? `(${activeBranch.name})` : ""}
+              </p>
+              <div className="h-11 flex items-center justify-center">
+                {resolvedSignatureUrl ? (
+                  <img 
+                    src={resolvedSignatureUrl} 
+                    alt="Authorized Signature" 
+                    className="max-h-11 max-w-[140px] object-contain drop-shadow-xs pointer-events-none select-none" 
+                  />
+                ) : (
+                  /* Elegant Digital Calligraphic Signature Graphic */
+                  <div className="flex flex-col items-center justify-center">
+                    <span className="font-serif italic font-extrabold text-sm tracking-wide text-zinc-800 dark:text-zinc-200">
+                      {resolvedSignatoryName || "Authorized Signatory"}
+                    </span>
+                    <span className="text-[5.5px] font-bold text-emerald-600 dark:text-emerald-400 tracking-widest uppercase flex items-center gap-0.5">
+                      ✓ Digitally Authorized
+                    </span>
+                  </div>
+                )}
+              </div>
+              <div className="w-full border-t-2 border-zinc-400 dark:border-zinc-600 pt-0.5">
+                <p className="text-[8px] font-black uppercase text-zinc-800 dark:text-zinc-200 font-bold leading-tight truncate">
+                  {resolvedSignatoryName || "Authorized Signatory"}
+                </p>
+                <p className="text-[6.5px] text-zinc-500 font-medium leading-tight truncate">
+                  {resolvedSignatoryDesignation || "Managing Director"}
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+
+        {/* BOTTOM BANNER WITH PAGE NUMBER */}
+        <div className={`rounded-xl ${theme.headerGradient} text-white p-1 text-[7.5px] font-medium flex flex-wrap items-center justify-between gap-1 shadow-xs`}>
+          <p className="flex items-center gap-1">
+            <MapPin size={8} />
+            <span>{resolvedAddress || fullRegisteredCompanyName}</span>
+          </p>
+          <div className="flex items-center gap-2">
+            <span>{resolvedEmail ? `Support: ${resolvedEmail}` : ""} {resolvedPhone ? `| Tel: ${resolvedPhone}` : ""}</span>
+            <span className="font-mono font-bold bg-black/20 px-1.5 py-0.2 rounded text-[7px]">
+              Page {pageNumber} of {totalPgs}
+            </span>
+          </div>
         </div>
       </div>
     </div>
   )
 
   const renderPageFooterOnly = (pageNumber: number, totalPgs: number) => (
-    <div className="mt-4 pt-2 border-t border-zinc-200">
+    <div className="mt-auto shrink-0 pt-2 border-t border-zinc-200 space-y-2">
       <div className="flex justify-between items-center bg-zinc-50 p-2 rounded-xl border border-zinc-200 text-[8.5px] text-zinc-600">
         <span>Continued to Next Page...</span>
         <span className="font-mono font-bold text-zinc-800">Page {pageNumber} of {totalPgs}</span>
       </div>
-      <div className={`rounded-xl ${theme.headerGradient} text-white p-1.5 text-[8px] font-medium flex flex-wrap items-center justify-between gap-1 shadow-xs mt-2`}>
+      <div className={`rounded-xl ${theme.headerGradient} text-white p-1.5 text-[8px] font-medium flex flex-wrap items-center justify-between gap-1 shadow-xs`}>
         <p className="flex items-center gap-1">
           <MapPin size={9} />
           <span>{resolvedAddress || fullRegisteredCompanyName}</span>
@@ -1423,7 +1462,7 @@ export function OfficialInvoiceDocument({
       {paginatedPages.map((pg) => (
         <div
           key={`invoice-page-${pg.pageNumber}`}
-          className="a4-page bg-white text-zinc-900 font-sans p-4 sm:p-5 text-xs shadow-2xl border border-zinc-200/90 rounded-2xl w-full max-w-[794px] mx-auto relative flex flex-col gap-2.5 overflow-visible print:w-[210mm] print:max-w-[210mm] print:h-auto print:min-h-[280mm] print:p-[6mm_8mm] print:gap-2 print:m-0 print:shadow-none print:border-none print:rounded-none page-break-after"
+          className="a4-page bg-white text-zinc-900 font-sans p-4 sm:p-5 text-xs shadow-2xl border border-zinc-200/90 rounded-2xl w-full max-w-[794px] min-h-[1080px] mx-auto relative flex flex-col justify-between gap-2.5 overflow-visible print:w-[210mm] print:max-w-[210mm] print:h-[282mm] print:min-h-[282mm] print:max-h-[282mm] print:p-[5mm_8mm] print:gap-1.5 print:m-0 print:shadow-none print:border-none print:rounded-none page-break-after"
         >
           {/* Draggable Custom Text Stamps / Badges Overlay (on page 1) */}
           {pg.isFirstPage && customStamps && customStamps.map(stamp => (
@@ -1474,22 +1513,24 @@ export function OfficialInvoiceDocument({
             </motion.div>
           ))}
 
-          {/* PAGE CONTENT */}
-          {pg.isFirstPage ? (
-            <>
-              {renderTopHeader(pg.pageNumber, totalPages)}
-              {renderEntityHierarchyStrip()}
-              {renderInfoCards()}
-              {renderTable(pg.items, pg.startIndex, pg.isLastPage)}
-            </>
-          ) : (
-            <>
-              {renderCompactSubsequentHeader(pg.pageNumber, totalPages)}
-              {renderTable(pg.items, pg.startIndex, pg.isLastPage)}
-            </>
-          )}
+          {/* PAGE CONTENT (Top to mid sections) */}
+          <div className="flex flex-col gap-2 shrink-0">
+            {pg.isFirstPage ? (
+              <>
+                {renderTopHeader(pg.pageNumber, totalPages)}
+                {renderEntityHierarchyStrip()}
+                {renderInfoCards()}
+                {renderTable(pg.items, pg.startIndex, pg.isLastPage)}
+              </>
+            ) : (
+              <>
+                {renderCompactSubsequentHeader(pg.pageNumber, totalPages)}
+                {renderTable(pg.items, pg.startIndex, pg.isLastPage)}
+              </>
+            )}
+          </div>
 
-          {/* FINANCIALS, SIGNATURES & FOOTER */}
+          {/* FINANCIALS, SIGNATURES & STICKY FOOTER */}
           {pg.isLastPage ? (
             renderFinancialsAndFooter(pg.pageNumber, totalPages)
           ) : (
