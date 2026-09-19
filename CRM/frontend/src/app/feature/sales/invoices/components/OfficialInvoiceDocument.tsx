@@ -33,10 +33,16 @@ interface OfficialInvoiceDocumentProps {
   interactive?: boolean
   logoPosition?: { x: number; y: number }
   onLogoPositionChange?: (pos: { x: number; y: number }) => void
+  logoScale?: number
+  onLogoScaleChange?: (scale: number) => void
   stampPosition?: { x: number; y: number }
   onStampPositionChange?: (pos: { x: number; y: number }) => void
+  stampScale?: number
+  onStampScaleChange?: (scale: number) => void
   signaturePosition?: { x: number; y: number }
   onSignaturePositionChange?: (pos: { x: number; y: number }) => void
+  signatureScale?: number
+  onSignatureScaleChange?: (scale: number) => void
   customStamps?: CustomTextStamp[]
   onCustomStampMove?: (id: string, pos: { x: number; y: number }) => void
   onCustomStampUpdate?: (id: string, updates: Partial<CustomTextStamp>) => void
@@ -76,10 +82,14 @@ export function EditableText({
   interactive?: boolean
   fieldKey?: string
 }) {
-  const displayVal = value ?? ""
+  const [internalVal, setInternalVal] = React.useState(value ?? "")
+  React.useEffect(() => {
+    setInternalVal(value ?? "")
+  }, [value])
+
   if (!interactive) {
     const Tag = as
-    return <Tag className={className}>{displayVal || placeholder}</Tag>
+    return <Tag className={className}>{value || placeholder}</Tag>
   }
 
   const Tag = as
@@ -87,14 +97,21 @@ export function EditableText({
     <Tag
       contentEditable
       suppressContentEditableWarning
-      className={`${className} outline-none transition-all rounded px-0.5 -mx-0.5 hover:bg-blue-100/70 hover:ring-1 hover:ring-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-600 focus:shadow-xs cursor-text inline-block min-w-[20px]`}
+      className={`${className} outline-none transition-all rounded px-0.5 -mx-0.5 hover:bg-blue-100/70 hover:ring-1 hover:ring-blue-400 focus:bg-white focus:text-zinc-950 focus:ring-2 focus:ring-blue-600 focus:shadow-xs cursor-text inline-block min-w-[12px]`}
       onBlur={(e: React.FocusEvent<HTMLElement>) => {
         const text = e.currentTarget.innerText.trim()
+        setInternalVal(text)
         if (onChange) onChange(text)
+      }}
+      onKeyDown={(e: React.KeyboardEvent<HTMLElement>) => {
+        if (e.key === "Enter" && as !== "div" && as !== "p") {
+          e.preventDefault()
+          ;(e.target as HTMLElement).blur()
+        }
       }}
       title="Click or touch to edit this text directly"
     >
-      {displayVal || placeholder}
+      {internalVal || placeholder}
     </Tag>
   )
 }
@@ -168,10 +185,16 @@ export function OfficialInvoiceDocument({
   interactive = false,
   logoPosition = { x: 0, y: 0 },
   onLogoPositionChange,
+  logoScale = 1,
+  onLogoScaleChange,
   stampPosition = { x: 0, y: 0 },
   onStampPositionChange,
+  stampScale = 1,
+  onStampScaleChange,
   signaturePosition = { x: 0, y: 0 },
   onSignaturePositionChange,
+  signatureScale = 1,
+  onSignatureScaleChange,
   customStamps = [],
   onCustomStampMove,
   onCustomStampUpdate,
@@ -737,8 +760,8 @@ export function OfficialInvoiceDocument({
           drag={interactive}
           dragMomentum={false}
           dragElastic={0}
-          whileDrag={{ scale: 1.04, zIndex: 50 }}
-          animate={{ x: logoPosition?.x || 0, y: logoPosition?.y || 0 }}
+          whileDrag={{ scale: (logoScale || 1) * 1.04, zIndex: 50 }}
+          animate={{ x: logoPosition?.x || 0, y: logoPosition?.y || 0, scale: logoScale || 1 }}
           onDragEnd={(_, info) => {
             if (onLogoPositionChange) {
               onLogoPositionChange({
@@ -750,10 +773,45 @@ export function OfficialInvoiceDocument({
           className={`relative shrink-0 select-none ${
             interactive ? "cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-blue-500 rounded-2xl group transition-shadow z-20" : ""
           }`}
+          style={{ transformOrigin: "top left" }}
         >
           {interactive && (
-            <div className="absolute -top-2 -left-2 bg-blue-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xs z-30">
-              ✥ Drag Logo
+            <div className="absolute -top-7 left-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity bg-zinc-900/95 text-white px-2 py-0.5 rounded-lg shadow-xl flex items-center gap-1.5 z-40 text-[9px] pointer-events-auto whitespace-nowrap border border-white/20">
+              <span className="text-[7.5px] font-bold text-zinc-400 select-none">✥ Logo</span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onLogoScaleChange?.(Math.max(0.5, Number(((logoScale || 1) - 0.1).toFixed(1))))
+                }}
+                className="hover:text-blue-300 font-bold px-1 cursor-pointer"
+                title="Zoom Out Logo (Scale down)"
+              >
+                🔍-
+              </button>
+              <span className="font-mono text-[8px] text-zinc-300 font-bold">{Math.round((logoScale || 1) * 100)}%</span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onLogoScaleChange?.(Math.min(2.5, Number(((logoScale || 1) + 0.1).toFixed(1))))
+                }}
+                className="hover:text-blue-300 font-bold px-1 cursor-pointer"
+                title="Zoom In Logo (Scale up)"
+              >
+                🔍+
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onLogoScaleChange?.(1)
+                }}
+                className="text-[7.5px] text-zinc-400 hover:text-white px-0.5 cursor-pointer"
+                title="Reset Logo Zoom (100%)"
+              >
+                100%
+              </button>
             </div>
           )}
           {resolvedLogoUrl ? (
@@ -780,7 +838,7 @@ export function OfficialInvoiceDocument({
         </motion.div>
 
         {/* Title, Full Company Name, Subtitle, ISO Badge & Legal IDs */}
-        <div className="space-y-0.5 flex-1 min-w-0 pt-0.5">
+        <div className="space-y-1.5 flex-1 min-w-0 pt-0.5">
           <div>
             {/* Primary Official Registered Corporate Name */}
             <EditableText
@@ -789,7 +847,7 @@ export function OfficialInvoiceDocument({
               onChange={(val) => onFieldChange?.("name", val)}
               interactive={interactive}
               fieldKey="name"
-              className="text-sm sm:text-base font-black tracking-tight leading-tight text-zinc-950 uppercase font-sans"
+              className="text-base sm:text-lg font-black tracking-tight leading-tight text-zinc-950 uppercase font-sans"
             />
 
             {/* If a distinct subtitle/tagline is defined, display it */}
@@ -801,14 +859,14 @@ export function OfficialInvoiceDocument({
                 interactive={interactive}
                 fieldKey="subtitle"
                 placeholder="Add company subtitle or division tagline..."
-                className="text-[9.5px] font-semibold text-zinc-600 tracking-wider mt-0.5 block"
+                className="text-[10.5px] sm:text-[11px] font-semibold text-zinc-600 tracking-wider mt-0.5 block"
               />
             )}
 
             {/* Editable ISO 9001 / Quality Certification Badge */}
             {(resolvedIsoCertification || interactive) && (
-              <div className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-amber-50 dark:bg-amber-950/60 border border-amber-300/90 dark:border-amber-700/80 text-amber-900 dark:text-amber-200 text-[7.5px] font-black tracking-wider uppercase shadow-2xs mt-0.5">
-                <Award size={10} className="text-amber-600 dark:text-amber-400 shrink-0" />
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 border border-amber-300/90 dark:border-amber-700/80 text-amber-900 dark:text-amber-200 text-[9px] sm:text-[9.5px] font-black tracking-wider uppercase shadow-2xs mt-1">
+                <Award size={12} className="text-amber-600 dark:text-amber-400 shrink-0" />
                 <EditableText
                   value={resolvedIsoCertification}
                   onChange={(val) => onFieldChange?.("iso_certification", val)}
@@ -820,12 +878,16 @@ export function OfficialInvoiceDocument({
             )}
           </div>
 
-          {/* Legal IDs: CIN, GSTIN (GST Only), PAN */}
+          {/* Legal IDs: CIN, GSTIN (GST Only), PAN - All labels & numbers 100% editable */}
           {hasLegalIds && (
-            <p className="text-[8.5px] font-semibold text-zinc-600 font-mono pt-0.5 flex items-center gap-2 flex-wrap">
+            <p className="text-[10px] sm:text-[10.5px] font-semibold text-zinc-600 font-mono pt-1 flex items-center gap-2.5 flex-wrap">
               {(resolvedCin || interactive) && (
-                <span className="inline-flex items-center gap-0.5">
-                  <span className="text-zinc-500">CIN:</span>
+                <span className="inline-flex items-center gap-1">
+                  <EditableText
+                    value="CIN:"
+                    interactive={interactive}
+                    className="text-zinc-500 font-sans text-[9.5px] font-bold"
+                  />
                   <EditableText
                     value={resolvedCin}
                     onChange={(val) => onFieldChange?.("cin", val)}
@@ -837,9 +899,13 @@ export function OfficialInvoiceDocument({
                 </span>
               )}
               {(isGstInvoice && (resolvedGstin || interactive)) && (
-                <span className="inline-flex items-center gap-0.5">
+                <span className="inline-flex items-center gap-1">
                   {(resolvedCin || interactive) ? <span className="text-zinc-300 mr-0.5">|</span> : null}
-                  <span className="text-zinc-500">GSTIN:</span>
+                  <EditableText
+                    value="GSTIN:"
+                    interactive={interactive}
+                    className="text-zinc-500 font-sans text-[9.5px] font-bold"
+                  />
                   <EditableText
                     value={resolvedGstin}
                     onChange={(val) => onFieldChange?.("gstin", val)}
@@ -851,9 +917,13 @@ export function OfficialInvoiceDocument({
                 </span>
               )}
               {(resolvedPan || interactive) && (
-                <span className="inline-flex items-center gap-0.5">
+                <span className="inline-flex items-center gap-1">
                   {((resolvedCin || (isGstInvoice && resolvedGstin)) || interactive) ? <span className="text-zinc-300 mr-0.5">|</span> : null}
-                  <span className="text-zinc-500">PAN:</span>
+                  <EditableText
+                    value="PAN:"
+                    interactive={interactive}
+                    className="text-zinc-500 font-sans text-[9.5px] font-bold"
+                  />
                   <EditableText
                     value={resolvedPan}
                     onChange={(val) => onFieldChange?.("pan", val)}
@@ -869,32 +939,36 @@ export function OfficialInvoiceDocument({
 
           {/* Address & Contact Row */}
           {(resolvedAddress || hasContactInfo || interactive) && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-2 gap-y-0.5 text-[8.5px] text-zinc-700 pt-0.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1 text-[10px] text-zinc-700 pt-1">
               {(resolvedAddress || interactive) ? (
-                <div className="flex items-start gap-1">
-                  <span className={`w-3 h-3 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0 mt-0.5`}>
-                    <MapPin size={7} />
+                <div className="flex items-start gap-1.5">
+                  <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0 mt-0.5`}>
+                    <MapPin size={9} />
                   </span>
                   <div className="leading-tight flex-1">
-                    <strong className="text-zinc-900 block text-[8.5px]">Office:</strong>
+                    <EditableText
+                      value="Office:"
+                      interactive={interactive}
+                      className="text-zinc-900 block text-[9.5px] font-bold"
+                    />
                     <EditableText
                       value={resolvedAddress}
                       onChange={(val) => onFieldChange?.("address", val)}
                       interactive={interactive}
                       fieldKey="address"
                       placeholder="Company address..."
-                      className="text-zinc-600 text-[8px]"
+                      className="text-zinc-600 text-[9.5px]"
                     />
                   </div>
                 </div>
               ) : <div />}
 
               {(hasContactInfo || interactive) && (
-                <div className="space-y-0.2">
+                <div className="space-y-1">
                   {(resolvedPhone || interactive) && (
-                    <p className="flex items-center gap-1">
-                      <span className={`w-3 h-3 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
-                        <Phone size={6.5} />
+                    <p className="flex items-center gap-1.5">
+                      <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
+                        <Phone size={8.5} />
                       </span>
                       <EditableText
                         value={resolvedPhone}
@@ -902,14 +976,14 @@ export function OfficialInvoiceDocument({
                         interactive={interactive}
                         fieldKey="phone"
                         placeholder="+91 Phone..."
-                        className="font-mono text-zinc-800 font-semibold text-[8px]"
+                        className="font-mono text-zinc-800 font-semibold text-[9.5px]"
                       />
                     </p>
                   )}
                   {(resolvedEmail || interactive) && (
-                    <p className="flex items-center gap-1">
-                      <span className={`w-3 h-3 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
-                        <Mail size={6.5} />
+                    <p className="flex items-center gap-1.5">
+                      <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
+                        <Mail size={8.5} />
                       </span>
                       <EditableText
                         value={resolvedEmail}
@@ -917,14 +991,14 @@ export function OfficialInvoiceDocument({
                         interactive={interactive}
                         fieldKey="email"
                         placeholder="Official email..."
-                        className="text-zinc-700 text-[8px]"
+                        className="text-zinc-700 text-[9.5px]"
                       />
                     </p>
                   )}
                   {(resolvedWebsite || interactive) && (
-                    <p className="flex items-center gap-1">
-                      <span className={`w-3 h-3 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
-                        <Globe size={6.5} />
+                    <p className="flex items-center gap-1.5">
+                      <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
+                        <Globe size={8.5} />
                       </span>
                       <EditableText
                         value={resolvedWebsite}
@@ -932,7 +1006,7 @@ export function OfficialInvoiceDocument({
                         interactive={interactive}
                         fieldKey="website"
                         placeholder="Website..."
-                        className="text-zinc-700 text-[8px]"
+                        className="text-zinc-700 text-[9.5px]"
                       />
                     </p>
                   )}
@@ -943,41 +1017,63 @@ export function OfficialInvoiceDocument({
         </div>
       </div>
 
-      {/* Right: Header Card with Status Badge & Dates */}
-      <div className={`w-full sm:w-48 rounded-xl ${theme.cardHeaderGradient} text-white p-2.5 shadow-md shrink-0 flex flex-col self-start space-y-1.5`}>
-        <div className="flex items-center justify-between border-b border-white/20 pb-1">
-          <span className="font-black text-[10px] tracking-wider uppercase">
-            {theme.invoiceTypeLabel} {totalPgs > 1 ? `(P.${pageNumber}/${totalPgs})` : ''}
-          </span>
-          <span className={`px-1.5 py-0.2 rounded-full text-[7.5px] font-black tracking-wider uppercase ${
-            isFullyPaid 
-              ? "bg-white text-emerald-800" 
-              : isPartPaid 
-              ? "bg-white text-amber-800" 
-              : "bg-white text-rose-800"
-          }`}>
-            {statusBadgeText}
-          </span>
+      {/* Right: Header Card with Status Badge & Dates - All editable */}
+      <div className={`w-full sm:w-56 rounded-xl ${theme.cardHeaderGradient} text-white p-3.5 shadow-md shrink-0 flex flex-col self-start space-y-2`}>
+        <div className="flex items-center justify-between border-b border-white/20 pb-1.5">
+          <EditableText
+            value={theme.invoiceTypeLabel + (totalPgs > 1 ? ` (P.${pageNumber}/${totalPgs})` : '')}
+            interactive={interactive}
+            className="font-black text-[11.5px] tracking-wider uppercase text-white"
+          />
+          <EditableText
+            value={statusBadgeText}
+            interactive={interactive}
+            className={`px-2 py-0.5 rounded-full text-[8.5px] font-black tracking-wider uppercase ${
+              isFullyPaid 
+                ? "bg-white text-emerald-800" 
+                : isPartPaid 
+                ? "bg-white text-amber-800" 
+                : "bg-white text-rose-800"
+            }`}
+          />
         </div>
 
-        <div className="space-y-1 text-[9px]">
+        <div className="space-y-1.5 text-[10px]">
           <div>
-            <span className="text-white/80 text-[7.5px] uppercase tracking-wider font-semibold block">INVOICE NO:</span>
-            <strong className="font-mono text-white text-[11px] font-bold break-all leading-tight block">
-              {invoiceNumOrId}
-            </strong>
+            <EditableText
+              value="INVOICE NO:"
+              interactive={interactive}
+              className="text-white/80 text-[8.5px] uppercase tracking-wider font-semibold block"
+            />
+            <EditableText
+              value={invoiceNumOrId}
+              interactive={interactive}
+              className="font-mono text-white text-[13px] font-black break-all leading-tight block"
+            />
           </div>
           <div className="flex items-center gap-2 pt-0.5">
-            <span className="text-white/80 text-[7.5px] uppercase font-bold tracking-wider shrink-0 w-8">DATE:</span>
-            <strong className="text-white font-mono text-[8.5px]">
-              {formatInvoiceDate(invoice.billDate)}
-            </strong>
+            <EditableText
+              value="DATE:"
+              interactive={interactive}
+              className="text-white/80 text-[8.5px] uppercase font-bold tracking-wider shrink-0 w-9"
+            />
+            <EditableText
+              value={formatInvoiceDate(invoice.billDate)}
+              interactive={interactive}
+              className="text-white font-mono text-[10px] font-bold"
+            />
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-white/80 text-[7.5px] uppercase font-bold tracking-wider shrink-0 w-8">DUE:</span>
-            <strong className="text-white font-mono text-[8.5px]">
-              {hasDue ? formatInvoiceDate(invoice.dueDate) : "-"}
-            </strong>
+            <EditableText
+              value="DUE:"
+              interactive={interactive}
+              className="text-white/80 text-[8.5px] uppercase font-bold tracking-wider shrink-0 w-9"
+            />
+            <EditableText
+              value={hasDue ? formatInvoiceDate(invoice.dueDate) : "-"}
+              interactive={interactive}
+              className="text-white font-mono text-[10px] font-bold"
+            />
           </div>
         </div>
       </div>
@@ -990,10 +1086,10 @@ export function OfficialInvoiceDocument({
         <h2 className="text-xs font-black tracking-tight text-zinc-900 uppercase">
           {fullRegisteredCompanyName}
         </h2>
-        <span className="text-[9px] text-zinc-500 font-mono">| Invoice: <strong>{invoiceNumOrId}</strong></span>
+        <span className="text-[9.5px] text-zinc-500 font-mono">| Invoice: <strong>{invoiceNumOrId}</strong></span>
       </div>
       <div className="flex items-center gap-2">
-        <span className={`px-2 py-0.5 rounded-md ${theme.primaryBg} text-white font-mono font-bold text-[8.5px] uppercase tracking-wider`}>
+        <span className={`px-2.5 py-0.5 rounded-md ${theme.primaryBg} text-white font-mono font-bold text-[9px] uppercase tracking-wider`}>
           Page {pageNumber} of {totalPgs}
         </span>
       </div>
@@ -1013,30 +1109,38 @@ export function OfficialInvoiceDocument({
       const subCity = activeSubBranch.city || activeSubBranch.state
 
       return (
-        <div className="w-full rounded-xl bg-gradient-to-r from-blue-50/90 via-slate-50 to-emerald-50/90 border border-zinc-200/90 p-2 shadow-2xs">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 divide-y sm:divide-y-0 sm:divide-x divide-zinc-200">
+        <div className="w-full rounded-xl bg-gradient-to-r from-blue-50/90 via-slate-50 to-emerald-50/90 border border-zinc-200/90 p-2.5 sm:p-3 shadow-2xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 divide-y sm:divide-y-0 sm:divide-x divide-zinc-200">
             {/* Left: Parent Branch */}
-            <div className="flex items-center gap-2 min-w-0 pr-0 sm:pr-2">
-              <span className="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
-                <Building2 size={12} />
+            <div className="flex items-center gap-2.5 min-w-0 pr-0 sm:pr-2">
+              <span className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                <Building2 size={14} />
               </span>
               <div className="min-w-0 flex-1 leading-tight">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[7px] uppercase font-black text-blue-700 tracking-wider">Parent Branch:</span>
-                  <span className="font-bold text-zinc-900 text-[9.5px] truncate">{parentName}</span>
+                  <EditableText
+                    value="Parent Branch:"
+                    interactive={interactive}
+                    className="text-[8.5px] uppercase font-black text-blue-700 tracking-wider"
+                  />
+                  <EditableText
+                    value={parentName}
+                    interactive={interactive}
+                    className="font-bold text-zinc-900 text-[11px] truncate"
+                  />
                   {parentCode && (
-                    <span className="font-mono text-[7px] bg-blue-100 text-blue-950 font-bold px-1 py-0.2 rounded border border-blue-200">
+                    <span className="font-mono text-[8px] bg-blue-100 text-blue-950 font-bold px-1.5 py-0.2 rounded border border-blue-200">
                       {parentCode}
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-2 text-[8px] text-zinc-600 mt-0.5 flex-wrap">
+                <div className="flex items-center gap-2.5 text-[9.5px] text-zinc-600 mt-0.5 flex-wrap">
                   {parentManager && (
                     <span>Mgr: <strong className="text-zinc-800">{parentManager}</strong></span>
                   )}
                   {parentCity && (
-                    <span className="flex items-center gap-0.5 text-zinc-500 font-medium">
-                      <MapPin size={8} className="text-blue-600 shrink-0" />
+                    <span className="flex items-center gap-1 text-zinc-500 font-medium">
+                      <MapPin size={9} className="text-blue-600 shrink-0" />
                       <span>{parentCity}</span>
                     </span>
                   )}
@@ -1045,27 +1149,35 @@ export function OfficialInvoiceDocument({
             </div>
 
             {/* Right: Franchise Sub-Branch */}
-            <div className="flex items-center gap-2 min-w-0 pt-1.5 sm:pt-0 pl-0 sm:pl-2">
-              <span className="w-6 h-6 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
-                <ShieldCheck size={12} />
+            <div className="flex items-center gap-2.5 min-w-0 pt-2 sm:pt-0 pl-0 sm:pl-2">
+              <span className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                <ShieldCheck size={14} />
               </span>
               <div className="min-w-0 flex-1 leading-tight">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[7px] uppercase font-black text-emerald-700 tracking-wider">Franchise Sub-Branch:</span>
-                  <span className="font-bold text-zinc-900 text-[9.5px] truncate">{subName}</span>
+                  <EditableText
+                    value="Franchise Sub-Branch:"
+                    interactive={interactive}
+                    className="text-[8.5px] uppercase font-black text-emerald-700 tracking-wider"
+                  />
+                  <EditableText
+                    value={subName}
+                    interactive={interactive}
+                    className="font-bold text-zinc-900 text-[11px] truncate"
+                  />
                   {subCode && (
-                    <span className="font-mono text-[7px] bg-emerald-100 text-emerald-950 font-bold px-1 py-0.2 rounded border border-emerald-200">
+                    <span className="font-mono text-[8px] bg-emerald-100 text-emerald-950 font-bold px-1.5 py-0.2 rounded border border-emerald-200">
                       [{subCode}]
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-2 text-[8px] text-zinc-600 mt-0.5 flex-wrap">
+                <div className="flex items-center gap-2.5 text-[9.5px] text-zinc-600 mt-0.5 flex-wrap">
                   {partnerName && (
                     <span>Partner: <strong className="text-zinc-800">{partnerName}</strong></span>
                   )}
                   {subCity && (
-                    <span className="flex items-center gap-0.5 text-zinc-500 font-medium">
-                      <MapPin size={8} className="text-emerald-600 shrink-0" />
+                    <span className="flex items-center gap-1 text-zinc-500 font-medium">
+                      <MapPin size={9} className="text-emerald-600 shrink-0" />
                       <span>{subCity}</span>
                     </span>
                   )}
@@ -1084,23 +1196,31 @@ export function OfficialInvoiceDocument({
       const branchLocation = [activeBranch.city, activeBranch.state].filter(Boolean).join(", ")
 
       return (
-        <div className="w-full rounded-xl bg-blue-50/80 border border-blue-200/90 p-2 shadow-2xs">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
-                <Building2 size={12} />
+        <div className="w-full rounded-xl bg-blue-50/80 border border-blue-200/90 p-2.5 sm:p-3 shadow-2xs">
+          <div className="flex items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                <Building2 size={14} />
               </span>
               <div className="min-w-0 leading-tight">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[7px] uppercase font-black text-blue-700 tracking-wider">Issuing Operational Branch:</span>
-                  <strong className="text-zinc-900 text-[9.5px]">{branchName}</strong>
+                  <EditableText
+                    value="Issuing Operational Branch:"
+                    interactive={interactive}
+                    className="text-[8.5px] uppercase font-black text-blue-700 tracking-wider"
+                  />
+                  <EditableText
+                    value={branchName}
+                    interactive={interactive}
+                    className="text-zinc-900 text-[11px] font-bold"
+                  />
                   {branchCode && (
-                    <span className="font-mono text-[7px] bg-blue-200/80 text-blue-950 font-bold px-1.5 py-0.2 rounded border border-blue-300">
+                    <span className="font-mono text-[8px] bg-blue-200/80 text-blue-950 font-bold px-1.5 py-0.2 rounded border border-blue-300">
                       [{branchCode}]
                     </span>
                   )}
                   {branchManager && (
-                    <span className="text-[8px] text-zinc-600">
+                    <span className="text-[9.5px] text-zinc-600">
                       • Manager: <strong className="text-zinc-800">{branchManager}</strong>
                     </span>
                   )}
@@ -1109,8 +1229,8 @@ export function OfficialInvoiceDocument({
             </div>
 
             {branchLocation && (
-              <div className="flex items-center gap-1 text-[8px] text-zinc-600 shrink-0 bg-white/80 px-2 py-0.5 rounded-md border border-blue-200">
-                <MapPin size={8} className="text-blue-600 shrink-0" />
+              <div className="flex items-center gap-1 text-[9.5px] text-zinc-600 shrink-0 bg-white/80 px-2 py-0.5 rounded-md border border-blue-200">
+                <MapPin size={9} className="text-blue-600 shrink-0" />
                 <span className="font-medium">{branchLocation}</span>
               </div>
             )}
@@ -1123,59 +1243,88 @@ export function OfficialInvoiceDocument({
   }
 
   const renderInfoCards = () => (
-    <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 pt-0.5">
+    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-1">
       {/* Box 1: BILL TO (6 cols) */}
-      <div className={`sm:col-span-6 p-2 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-0.5 shadow-2xs`}>
-        <div className="flex items-center gap-1 text-[8.5px] font-black uppercase tracking-wider text-zinc-700">
-          <span className={`w-3 h-3 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
-            <UserCheck size={7} />
+      <div className={`sm:col-span-6 p-3.5 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-1 shadow-2xs`}>
+        <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-zinc-700">
+          <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
+            <UserCheck size={9} />
           </span>
-          <span>BILL TO</span>
+          <EditableText
+            value="BILL TO"
+            interactive={interactive}
+            className="font-black text-[10px] uppercase tracking-wider text-zinc-700"
+          />
         </div>
-        <p className="font-black text-[10.5px] text-zinc-900 leading-tight">{invoice.client}</p>
-        <p className="text-[8px] text-zinc-600 leading-tight">
-          <strong>Address:</strong> {clientDetails?.address || (invoice.clientEmail ? `${clientDetails?.address || 'Corporate Center'}` : 'Head Office')}
+        <EditableText
+          value={invoice.client}
+          interactive={interactive}
+          className="font-black text-xs sm:text-sm text-zinc-900 leading-tight block"
+        />
+        <p className="text-[9.5px] text-zinc-600 leading-tight">
+          <EditableText value="Address:" interactive={interactive} className="font-bold mr-1" />
+          <EditableText
+            value={clientDetails?.address || (invoice.clientEmail ? `${clientDetails?.address || 'Corporate Center'}` : 'Head Office')}
+            interactive={interactive}
+          />
         </p>
-        <p className="text-[8px] text-zinc-600 flex items-center gap-1">
-          <MapPin size={7.5} className="text-zinc-500 shrink-0" />
-          <span><strong>Location:</strong> {clientDetails?.city || clientDetails?.state || (activeCompany?.city ? `${activeCompany.city}, ${activeCompany?.state || ''}` : activeCompany?.state || 'West Bengal')}</span>
+        <p className="text-[9.5px] text-zinc-600 flex items-center gap-1">
+          <MapPin size={9} className="text-zinc-500 shrink-0" />
+          <EditableText value="Location:" interactive={interactive} className="font-bold mr-1" />
+          <EditableText
+            value={clientDetails?.city || clientDetails?.state || (activeCompany?.city ? `${activeCompany.city}, ${activeCompany?.state || ''}` : activeCompany?.state || 'West Bengal')}
+            interactive={interactive}
+          />
         </p>
         {isGstInvoice && clientDetails?.gstNumber && (
-          <p className="text-[7.5px] font-mono font-bold text-zinc-800">
-            <strong>Client GSTIN:</strong> {clientDetails.gstNumber}
+          <p className="text-[9px] font-mono font-bold text-zinc-800">
+            <EditableText value="Client GSTIN:" interactive={interactive} className="font-bold mr-1 font-sans" />
+            <EditableText value={clientDetails.gstNumber} interactive={interactive} />
           </p>
         )}
       </div>
 
       {/* Box 2: SERVICE / ENGAGEMENT DETAILS (6 cols) with embedded Official Verification QR beside it */}
-      <div className={`sm:col-span-6 p-2 rounded-xl ${theme.lightBg} border ${theme.lightBorder} shadow-2xs flex items-center justify-between gap-2`}>
-        <div className="space-y-0.5 flex-1 min-w-0">
-          <div className="flex items-center gap-1 text-[8.5px] font-black uppercase tracking-wider text-zinc-700">
-            <span className={`w-3 h-3 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
-              <Briefcase size={7} />
+      <div className={`sm:col-span-6 p-3.5 rounded-xl ${theme.lightBg} border ${theme.lightBorder} shadow-2xs flex items-center justify-between gap-3`}>
+        <div className="space-y-1 flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-zinc-700">
+            <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
+              <Briefcase size={9} />
             </span>
-            <span>PROJECT / SERVICE SCOPE</span>
+            <EditableText
+              value="PROJECT / SERVICE SCOPE"
+              interactive={interactive}
+              className="font-black text-[10px] uppercase tracking-wider text-zinc-700"
+            />
           </div>
-          <p className="font-bold text-[10.5px] text-zinc-900 truncate">{invoice.project || "Enterprise Solutions"}</p>
-          <p className="text-[8px] text-zinc-600 font-mono">
-            <strong>Scheme:</strong> {isGstInvoice ? 'GST Tax Invoice' : 'Non-GST Direct Invoice'}
+          <EditableText
+            value={invoice.project || "Enterprise Solutions"}
+            interactive={interactive}
+            className="font-bold text-xs sm:text-sm text-zinc-900 truncate block"
+          />
+          <p className="text-[9.5px] text-zinc-600 font-mono">
+            <EditableText value="Scheme:" interactive={interactive} className="font-bold font-sans mr-1" />
+            <EditableText value={isGstInvoice ? 'GST Tax Invoice' : 'Non-GST Direct Invoice'} interactive={interactive} />
           </p>
-          <p className="text-[8px] text-zinc-600 truncate">
-            <strong>Company:</strong> {fullRegisteredCompanyName}
+          <p className="text-[9.5px] text-zinc-600 truncate">
+            <EditableText value="Company:" interactive={interactive} className="font-bold mr-1" />
+            <EditableText value={fullRegisteredCompanyName} interactive={interactive} />
           </p>
           {isSubBranchIssued ? (
-            <p className="text-[7.5px] text-emerald-800 dark:text-emerald-300 truncate font-semibold">
-              <strong>Unit:</strong> {activeSubBranch?.name} {activeSubBranch?.code ? `[${activeSubBranch.code}]` : ""}
+            <p className="text-[9px] text-emerald-800 dark:text-emerald-300 truncate font-semibold">
+              <EditableText value="Unit:" interactive={interactive} className="font-bold mr-1" />
+              <EditableText value={`${activeSubBranch?.name} ${activeSubBranch?.code ? `[${activeSubBranch.code}]` : ""}`} interactive={interactive} />
             </p>
           ) : isBranchIssued && activeBranch ? (
-            <p className="text-[7.5px] text-blue-900 dark:text-blue-300 truncate font-semibold">
-              <strong>Branch:</strong> {activeBranch.name} {activeBranch.code ? `[${activeBranch.code}]` : ""}
+            <p className="text-[9px] text-blue-900 dark:text-blue-300 truncate font-semibold">
+              <EditableText value="Branch:" interactive={interactive} className="font-bold mr-1" />
+              <EditableText value={`${activeBranch.name} ${activeBranch.code ? `[${activeBranch.code}]` : ""}`} interactive={interactive} />
             </p>
           ) : null}
         </div>
 
         {/* Official Scan & Verify QR Code beside Project Scope */}
-        <div className="shrink-0 text-center flex flex-col items-center bg-white p-1 border border-zinc-300 shadow-2xs rounded-lg">
+        <div className="shrink-0 text-center flex flex-col items-center bg-white p-2 border border-zinc-300 shadow-2xs rounded-xl">
           <a 
             href={publicInvoiceViewUrl} 
             target="_blank" 
@@ -1186,13 +1335,15 @@ export function OfficialInvoiceDocument({
             <img 
               src={invoiceVerificationQrUrl} 
               alt={`QR ${invoiceNumOrId}`} 
-              className="w-10 h-10 bg-white object-contain group-hover:scale-105 transition-transform" 
+              className="w-14 h-14 bg-white object-contain group-hover:scale-105 transition-transform" 
               style={{ imageRendering: 'pixelated' }}
             />
           </a>
-          <span className="text-[5.5px] font-mono font-bold text-zinc-700 mt-0.5 block uppercase tracking-tight">
-            Scan & Verify
-          </span>
+          <EditableText
+            value="Scan & Verify"
+            interactive={interactive}
+            className="text-[7px] font-mono font-bold text-zinc-700 mt-1 block uppercase tracking-tight"
+          />
         </div>
       </div>
     </div>
@@ -1205,43 +1356,61 @@ export function OfficialInvoiceDocument({
     const pageSubtotalGross = isGstInvoice ? itemsToRender.reduce((sum, it) => sum + it.rowTotal, 0) : pageSubtotalBase
 
     return (
-      <div className="rounded-xl border border-zinc-200 overflow-hidden shadow-2xs mt-0.5">
+      <div className="rounded-xl border border-zinc-200 overflow-hidden shadow-2xs mt-1.5">
         <table className="w-full text-left text-xs border-collapse">
           <thead>
-            <tr className={`${theme.tableHeaderBg} text-[8.5px] uppercase font-black tracking-wider`}>
-              <th className="py-1.5 px-2.5 w-8 text-center">#</th>
-              <th className="py-1.5 px-2.5">Service / Product Description</th>
-              <th className="py-1.5 px-1.5 w-10 text-center">Qty</th>
-              <th className="py-1.5 px-1.5 w-12 text-center">Unit</th>
-              <th className="py-1.5 px-2 w-20 text-right">Unit Rate</th>
-              <th className="py-1.5 px-2 w-20 text-right">{isGstInvoice ? "GST Rate / Amt" : "Taxes"}</th>
-              <th className="py-1.5 px-2.5 w-24 text-right">Amount (INR)</th>
+            <tr className={`${theme.tableHeaderBg} text-[10px] uppercase font-black tracking-wider`}>
+              <th className="py-2.5 px-3 w-10 text-center">
+                <EditableText value="#" interactive={interactive} className="text-white" />
+              </th>
+              <th className="py-2.5 px-3">
+                <EditableText value="Service / Product Description" interactive={interactive} className="text-white" />
+              </th>
+              <th className="py-2.5 px-2 w-12 text-center">
+                <EditableText value="Qty" interactive={interactive} className="text-white" />
+              </th>
+              <th className="py-2.5 px-2 w-14 text-center">
+                <EditableText value="Unit" interactive={interactive} className="text-white" />
+              </th>
+              <th className="py-2.5 px-2.5 w-24 text-right">
+                <EditableText value="Unit Rate" interactive={interactive} className="text-white" />
+              </th>
+              <th className="py-2.5 px-2.5 w-28 text-right">
+                <EditableText value={isGstInvoice ? "GST Rate / Amt" : "Taxes"} interactive={interactive} className="text-white" />
+              </th>
+              <th className="py-2.5 px-3 w-28 text-right">
+                <EditableText value="Amount (INR)" interactive={interactive} className="text-white" />
+              </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-200 text-[9.5px] text-zinc-800 bg-white">
+          <tbody className="divide-y divide-zinc-200 text-[11px] text-zinc-800 bg-white">
             {itemsToRender.map((item, idx) => (
               <tr key={item.id || idx} className="hover:bg-zinc-50/80 transition-colors">
-                <td className="py-1.5 px-2.5 text-center font-mono font-bold text-zinc-500">
+                <td className="py-2.5 px-3 text-center font-mono font-bold text-zinc-500">
                   {startIndex + idx + 1}
                 </td>
-                <td className="py-1.5 px-2.5 font-semibold text-zinc-900">
-                  <div>{item.serviceName}</div>
+                <td className="py-2.5 px-3 font-semibold text-zinc-900">
+                  <EditableText
+                    value={item.serviceName}
+                    interactive={interactive}
+                    className="text-[11.5px] font-bold text-zinc-900 block"
+                  />
                   {item.itemCharges > 0 && (
-                    <div className="text-[8px] text-zinc-500 font-normal">
+                    <div className="text-[9px] text-zinc-500 font-normal mt-0.5">
                       + Platform Setup: ₹{item.itemCharges.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                     </div>
                   )}
                 </td>
-                <td className="py-1.5 px-1.5 text-center font-mono">{item.itemQty}</td>
-                <td className="py-1.5 px-1.5 text-center text-zinc-500">{item.unit || "Unit"}</td>
-                <td className="py-1.5 px-2 text-right font-mono">
+                <td className="py-2.5 px-2 text-center font-mono">{item.itemQty}</td>
+                <td className="py-2.5 px-2 text-center text-zinc-500">{item.unit || "Unit"}</td>
+                <td className="py-2.5 px-2.5 text-right font-mono font-semibold">
                   ₹{item.itemRate.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                 </td>
-                <td className="py-1.5 px-2 text-right font-mono text-zinc-600">
+                <td className="py-2.5 px-2.5 text-right font-mono text-zinc-600">
                   {isGstInvoice ? (
                     <div>
                       <span className="font-bold">{item.gstRate || gstRate}%</span>
-                      <span className="text-[7.5px] text-zinc-500 block">
+                      <span className="text-[8.5px] text-zinc-500 block">
                         (₹{item.rowTax.toLocaleString("en-IN", { minimumFractionDigits: 2 })})
                       </span>
                     </div>
@@ -1249,7 +1418,7 @@ export function OfficialInvoiceDocument({
                     <span className="font-mono text-zinc-400">₹0.00</span>
                   )}
                 </td>
-                <td className="py-1.5 px-2.5 text-right font-mono font-black text-zinc-900">
+                <td className="py-2.5 px-3 text-right font-mono font-black text-zinc-900 text-[11.5px]">
                   ₹{item.rowTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                 </td>
               </tr>
@@ -1257,19 +1426,22 @@ export function OfficialInvoiceDocument({
           </tbody>
           {showSubtotal && (
             <tfoot>
-              <tr className={`${theme.tableSubtotalBg} font-bold text-[9px] border-t border-zinc-200`}>
-                <td colSpan={2} className="py-1 px-2.5 uppercase tracking-wider">
-                  SUBTOTAL SERVICES & BASE AMOUNT
+              <tr className={`${theme.tableSubtotalBg} font-bold text-[10px] border-t border-zinc-200`}>
+                <td colSpan={2} className="py-2.5 px-3 uppercase tracking-wider">
+                  <EditableText
+                    value="SUBTOTAL SERVICES & BASE AMOUNT"
+                    interactive={interactive}
+                  />
                 </td>
-                <td className="py-1 px-1.5 text-center font-mono">{pageSubtotalQty}</td>
-                <td className="py-1 px-1.5 text-center">Items</td>
-                <td className="py-1 px-2 text-right font-mono">
+                <td className="py-2.5 px-2 text-center font-mono">{pageSubtotalQty}</td>
+                <td className="py-2.5 px-2 text-center">Items</td>
+                <td className="py-2.5 px-2.5 text-right font-mono">
                   ₹{pageSubtotalBase.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                 </td>
-                <td className="py-1 px-2 text-right font-mono">
+                <td className="py-2.5 px-2.5 text-right font-mono">
                   ₹{pageSubtotalGst.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                 </td>
-                <td className="py-1 px-2.5 text-right font-mono font-black">
+                <td className="py-2.5 px-3 text-right font-mono font-black text-[11px]">
                   ₹{pageSubtotalGross.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                 </td>
               </tr>
@@ -1281,55 +1453,63 @@ export function OfficialInvoiceDocument({
   }
 
   const renderFinancialsAndFooter = (pageNumber: number = 1, totalPgs: number = 1) => (
-    <div className="flex-1 flex flex-col justify-between space-y-2 mt-auto">
+    <div className="flex-1 flex flex-col justify-between space-y-2.5 mt-auto pt-1">
       {/* 2-COLUMN BALANCED MATRIX: LEFT = TOTAL IN WORDS + BANK & UPI PAYMENT DETAILS; RIGHT = FINANCIAL SUMMARY */}
-      <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-stretch">
+      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-stretch">
         {/* Left 6 Columns: Amount in Words + Bank & UPI Payment Details */}
-        <div className="sm:col-span-6 flex flex-col justify-between gap-1.5">
+        <div className="sm:col-span-6 flex flex-col justify-between gap-2">
           {/* Card 1: TOTAL AMOUNT IN WORDS */}
-          <div className={`p-2 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-0.5 shadow-2xs`}>
-            <span className="font-black text-[8.5px] uppercase tracking-wider text-zinc-600 flex items-center gap-1">
-              <FileText size={10} className={theme.primaryText} />
-              <span>TOTAL AMOUNT IN WORDS</span>
-            </span>
-            <p className="font-bold text-zinc-900 italic text-[9.5px] leading-tight">
-              {numberToIndianWords(totalVal)}
-            </p>
+          <div className={`p-2.5 sm:p-3 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-1 shadow-2xs`}>
+            <div className="font-black text-[9px] uppercase tracking-wider text-zinc-600 flex items-center gap-1">
+              <FileText size={11} className={theme.primaryText} />
+              <EditableText value="TOTAL AMOUNT IN WORDS" interactive={interactive} />
+            </div>
+            <EditableText
+              value={numberToIndianWords(totalVal)}
+              interactive={interactive}
+              className="font-bold text-zinc-900 italic text-[10px] sm:text-[10.5px] leading-tight block"
+            />
           </div>
 
           {/* Card 2: BANK & UPI PAYMENT DETAILS (Always visible, prominent, and scannable) */}
-          <div className={`p-2 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-1.5 shadow-2xs flex-1 flex flex-col justify-between`}>
+          <div className={`p-2.5 sm:p-3 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-2 shadow-2xs flex-1 flex flex-col justify-between`}>
             <div className="flex items-center justify-between border-b border-zinc-200/80 dark:border-zinc-700/60 pb-1">
-              <span className="font-black text-[9px] uppercase tracking-wider text-zinc-800 dark:text-zinc-200 flex items-center gap-1">
-                <Landmark size={11} className={theme.primaryText} />
-                <span>BANK &amp; UPI PAYMENT DETAILS</span>
+              <span className="font-black text-[9.5px] uppercase tracking-wider text-zinc-800 dark:text-zinc-200 flex items-center gap-1">
+                <Landmark size={12} className={theme.primaryText} />
+                <EditableText value="BANK & UPI PAYMENT DETAILS" interactive={interactive} />
               </span>
-              <span className="text-[7px] font-black px-1.5 py-0.2 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
-                Instant Settlement
-              </span>
+              <EditableText
+                value="Instant Settlement"
+                interactive={interactive}
+                className="text-[7.5px] font-black px-1.5 py-0.2 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700"
+              />
             </div>
 
-            <div className="grid grid-cols-12 gap-2 items-center">
+            <div className="grid grid-cols-12 gap-2.5 items-center">
               {/* Left side of card: UPI QR Code & Instant Scan */}
-              <div className="col-span-4 flex flex-col items-center justify-center text-center space-y-0.5">
+              <div className="col-span-4 flex flex-col items-center justify-center text-center space-y-1">
                 {customPaymentQrUrl && (
-                  <div className="bg-white p-1 rounded-lg border border-zinc-300 shadow-2xs shrink-0">
+                  <div className="bg-white p-1.5 rounded-xl border border-zinc-300 shadow-2xs shrink-0">
                     <img 
                       src={customPaymentQrUrl} 
                       alt="UPI Payment QR Code" 
-                      className="w-14 h-14 object-contain" 
+                      className="w-16 h-16 object-contain" 
                       style={{ imageRendering: 'pixelated' }}
                     />
                   </div>
                 )}
-                <span className="text-[6.5px] font-black text-zinc-600 dark:text-zinc-400 uppercase tracking-tight">SCAN TO PAY</span>
+                <EditableText
+                  value="SCAN TO PAY"
+                  interactive={interactive}
+                  className="text-[7.5px] font-black text-zinc-600 dark:text-zinc-400 uppercase tracking-tight block"
+                />
               </div>
 
               {/* Right side of card: Direct Bank Account & UPI Details */}
-              <div className="col-span-8 space-y-0.5 text-[8px] text-zinc-700 dark:text-zinc-300">
+              <div className="col-span-8 space-y-1 text-[9px] text-zinc-700 dark:text-zinc-300">
                 {(resolvedBankName || interactive) && (
                   <div className="flex justify-between items-center gap-1">
-                    <span className="text-zinc-500 font-medium shrink-0">Bank:</span>
+                    <EditableText value="Bank:" interactive={interactive} className="text-zinc-500 font-medium shrink-0" />
                     <EditableText
                       value={resolvedBankName}
                       onChange={(val) => onFieldChange?.("bank_name", val)}
@@ -1342,7 +1522,7 @@ export function OfficialInvoiceDocument({
                 )}
                 {(resolvedAccountNumber || interactive) && (
                   <div className="flex justify-between items-center gap-1 font-mono">
-                    <span className="text-zinc-500 font-medium font-sans shrink-0">A/C No:</span>
+                    <EditableText value="A/C No:" interactive={interactive} className="text-zinc-500 font-medium font-sans shrink-0" />
                     <EditableText
                       value={resolvedAccountNumber}
                       onChange={(val) => onFieldChange?.("account_number", val)}
@@ -1355,7 +1535,7 @@ export function OfficialInvoiceDocument({
                 )}
                 {(resolvedIfscCode || interactive) && (
                   <div className="flex justify-between items-center gap-1 font-mono">
-                    <span className="text-zinc-500 font-medium font-sans shrink-0">IFSC:</span>
+                    <EditableText value="IFSC:" interactive={interactive} className="text-zinc-500 font-medium font-sans shrink-0" />
                     <EditableText
                       value={resolvedIfscCode}
                       onChange={(val) => onFieldChange?.("ifsc_code", val)}
@@ -1368,7 +1548,7 @@ export function OfficialInvoiceDocument({
                 )}
                 {(resolvedAccountHolder || interactive) && (
                   <div className="flex justify-between items-center gap-1">
-                    <span className="text-zinc-500 font-medium shrink-0">A/C Name:</span>
+                    <EditableText value="A/C Name:" interactive={interactive} className="text-zinc-500 font-medium shrink-0" />
                     <EditableText
                       value={resolvedAccountHolder}
                       onChange={(val) => onFieldChange?.("account_holder", val)}
@@ -1381,7 +1561,7 @@ export function OfficialInvoiceDocument({
                 )}
                 {(resolvedUpiId || interactive) && (
                   <div className="flex justify-between items-center gap-1 pt-0.5 border-t border-zinc-200/60 dark:border-zinc-700/50 font-mono">
-                    <span className="text-zinc-500 font-medium font-sans shrink-0">UPI ID:</span>
+                    <EditableText value="UPI ID:" interactive={interactive} className="text-zinc-500 font-medium font-sans shrink-0" />
                     <EditableText
                       value={resolvedUpiId}
                       onChange={(val) => onFieldChange?.("upi_id", val)}
@@ -1396,84 +1576,84 @@ export function OfficialInvoiceDocument({
             </div>
 
             {/* Payment App Badges */}
-            <div className="flex items-center justify-between gap-1 pt-0.5 border-t border-zinc-200/70 dark:border-zinc-700/60 text-[6.5px] font-bold text-zinc-500">
-              <span className="uppercase text-[6px] font-extrabold text-zinc-400">Accepted:</span>
+            <div className="flex items-center justify-between gap-1 pt-0.5 border-t border-zinc-200/70 dark:border-zinc-700/60 text-[7px] font-bold text-zinc-500">
+              <EditableText value="Accepted:" interactive={interactive} className="uppercase text-[7px] font-extrabold text-zinc-400" />
               <div className="flex items-center gap-1">
-                <span className="px-1 py-0.2 rounded bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300">GPay</span>
-                <span className="px-1 py-0.2 rounded bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300">PhonePe</span>
-                <span className="px-1 py-0.2 rounded bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300">Paytm</span>
-                <span className="px-1 py-0.2 rounded bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300">NEFT/IMPS</span>
+                <EditableText value="GPay" interactive={interactive} className="px-1.5 py-0.2 rounded bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300" />
+                <EditableText value="PhonePe" interactive={interactive} className="px-1.5 py-0.2 rounded bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300" />
+                <EditableText value="Paytm" interactive={interactive} className="px-1.5 py-0.2 rounded bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300" />
+                <EditableText value="NEFT/IMPS" interactive={interactive} className="px-1.5 py-0.2 rounded bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300" />
               </div>
             </div>
           </div>
         </div>
 
         {/* Right 6 Columns: Financial Computation Matrix */}
-        <div className="sm:col-span-6 flex flex-col justify-between text-[8.5px]">
-          <div className="p-2 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 space-y-0.5 text-zinc-700 dark:text-zinc-300 shadow-2xs h-full flex flex-col justify-between">
+        <div className="sm:col-span-6 flex flex-col justify-between text-[9.5px]">
+          <div className="p-3 sm:p-3.5 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 space-y-1 text-zinc-700 dark:text-zinc-300 shadow-2xs h-full flex flex-col justify-between">
             <div className="space-y-0.5">
-              <div className="flex justify-between py-0.2">
-                <span>Total Services Value</span>
+              <div className="flex justify-between py-0.5">
+                <EditableText value="Total Services Value" interactive={interactive} />
                 <span className="font-mono font-semibold">₹{baseNum.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
               </div>
               {setupCharge > 0 && (
-                <div className="flex justify-between py-0.2">
-                  <span>Platform / Setup Charge</span>
+                <div className="flex justify-between py-0.5">
+                  <EditableText value="Platform / Setup Charge" interactive={interactive} />
                   <span className="font-mono">₹{setupCharge.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
                 </div>
               )}
 
               {invoice.discountsList && invoice.discountsList.length > 0 ? (
                 invoice.discountsList.map((d: any) => (
-                  <div key={d.id} className="flex justify-between py-0.2 text-zinc-500">
+                  <div key={d.id} className="flex justify-between py-0.5 text-zinc-500">
                     <span>Less: {d.name}</span>
                     <span className="font-mono">(-) ₹{(d.amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
                   </div>
                 ))
               ) : discount > 0 ? (
-                <div className="flex justify-between py-0.2 text-zinc-500">
-                  <span>Less: Promotional Discount</span>
+                <div className="flex justify-between py-0.5 text-zinc-500">
+                  <EditableText value="Less: Promotional Discount" interactive={interactive} />
                   <span className="font-mono">(-) ₹{discount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
                 </div>
               ) : null}
 
-              <div className="flex justify-between py-0.5 border-t border-zinc-200 dark:border-zinc-700 font-bold text-zinc-900 dark:text-zinc-100">
-                <span>Taxable Base Amount</span>
+              <div className="flex justify-between py-1 border-t border-zinc-200 dark:border-zinc-700 font-bold text-zinc-900 dark:text-zinc-100">
+                <EditableText value="Taxable Base Amount" interactive={interactive} />
                 <span className="font-mono">₹{taxableBase.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
               </div>
 
               {isGstInvoice && (
                 <>
-                  <div className="flex justify-between py-0.2 text-zinc-600 dark:text-zinc-400">
-                    <span>CGST ({(gstRate / 2).toFixed(1)}%)</span>
+                  <div className="flex justify-between py-0.5 text-zinc-600 dark:text-zinc-400">
+                    <EditableText value={`CGST (${(gstRate / 2).toFixed(1)}%)`} interactive={interactive} />
                     <span className="font-mono">₹{cgstAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
                   </div>
-                  <div className="flex justify-between py-0.2 text-zinc-600 dark:text-zinc-400">
-                    <span>SGST ({(gstRate / 2).toFixed(1)}%)</span>
+                  <div className="flex justify-between py-0.5 text-zinc-600 dark:text-zinc-400">
+                    <EditableText value={`SGST (${(gstRate / 2).toFixed(1)}%)`} interactive={interactive} />
                     <span className="font-mono">₹{sgstAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
                   </div>
                 </>
               )}
             </div>
 
-            <div className={`flex justify-between p-1.5 rounded-lg ${theme.grandTotalBg} font-black text-[9.5px] tracking-wide my-1 shadow-xs`}>
-              <span>GRAND TOTAL (NET PAYABLE)</span>
-              <span className="font-mono text-xs">₹{totalVal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+            <div className={`flex justify-between p-2 sm:p-2.5 rounded-lg ${theme.grandTotalBg} font-black text-[10.5px] sm:text-[11px] tracking-wide my-1.5 shadow-xs`}>
+              <EditableText value="GRAND TOTAL (NET PAYABLE)" interactive={interactive} className="text-white" />
+              <span className="font-mono text-sm sm:text-base">₹{totalVal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
             </div>
 
-            <div className="space-y-0.2">
-              <div className="flex justify-between py-0.2 text-emerald-700 dark:text-emerald-400 font-bold">
-                <span>Received Amount</span>
+            <div className="space-y-0.5">
+              <div className="flex justify-between py-0.5 text-emerald-700 dark:text-emerald-400 font-bold">
+                <EditableText value="Received Amount" interactive={interactive} />
                 <span className="font-mono">₹{parsedReceived.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
               </div>
 
-              <div className="flex justify-between py-0.2 border-t border-zinc-200 dark:border-zinc-700 font-black text-[8.5px] text-rose-600 dark:text-rose-400">
-                <span>Current Balance (Total Due)</span>
+              <div className="flex justify-between py-0.5 border-t border-zinc-200 dark:border-zinc-700 font-black text-[9.5px] text-rose-600 dark:text-rose-400">
+                <EditableText value="Current Balance (Total Due)" interactive={interactive} />
                 <span className="font-mono">₹{parsedDue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
               </div>
 
-              <div className="flex justify-between pt-0.5 text-[8px] text-zinc-500">
-                <span>Next Due Date</span>
+              <div className="flex justify-between pt-0.5 text-[9px] text-zinc-500">
+                <EditableText value="Next Due Date" interactive={interactive} />
                 <span className="font-mono font-bold text-zinc-800 dark:text-zinc-200">{hasDue ? formatInvoiceDate(invoice.dueDate) : "-"}</span>
               </div>
             </div>
@@ -1483,10 +1663,12 @@ export function OfficialInvoiceDocument({
 
       {/* TERMS & CONDITIONS / INVOICE NOTES (Enlarged, Clear & Prominent) */}
       {(resolvedTermsAndNotes || interactive) && (
-        <div className="p-2.5 sm:p-3 rounded-xl border border-zinc-300/90 dark:border-zinc-700 bg-zinc-50/90 dark:bg-zinc-900/60 text-[8.5px] sm:text-[9.5px] text-zinc-700 dark:text-zinc-300 space-y-1 shadow-2xs">
-          <span className="font-extrabold text-zinc-900 dark:text-zinc-100 uppercase text-[8px] sm:text-[8.5px] tracking-wider block">
-            Terms &amp; Conditions / Official Notes:
-          </span>
+        <div className="p-3 sm:p-3.5 rounded-xl border border-zinc-300/90 dark:border-zinc-700 bg-zinc-50/90 dark:bg-zinc-900/60 text-[9.5px] sm:text-[10.5px] text-zinc-700 dark:text-zinc-300 space-y-1 shadow-2xs">
+          <EditableText
+            value="Terms & Conditions / Official Notes:"
+            interactive={interactive}
+            className="font-extrabold text-zinc-900 dark:text-zinc-100 uppercase text-[9px] sm:text-[9.5px] tracking-wider block"
+          />
           <EditableText
             value={resolvedTermsAndNotes}
             onChange={(val) => onFieldChange?.("terms_conditions", val)}
@@ -1501,15 +1683,23 @@ export function OfficialInvoiceDocument({
       {/* STICKY BOTTOM SECTION: SIGNATURES, OFFICIAL SEAL & FOOTER BANNER */}
       <div className="space-y-2 mt-auto pt-1">
         {/* SIGNATURES & OFFICIAL SEAL ROW */}
-        <div className="flex flex-row justify-between items-end gap-3 pt-2 border-t border-zinc-200 dark:border-zinc-800">
+        <div className="flex flex-row justify-between items-end gap-3 pt-2.5 border-t border-zinc-200 dark:border-zinc-800">
           {/* Left: Customer Acceptance */}
           <div className="text-center space-y-1">
-            <div className="h-11 flex items-end justify-center">
+            <div className="h-12 flex items-end justify-center">
               {/* Blank space for physical signing */}
             </div>
-            <div className="w-40 border-t-2 border-zinc-400 dark:border-zinc-600 pt-0.5">
-              <p className="text-[8px] font-black uppercase text-zinc-700 dark:text-zinc-300">CUSTOMER SIGNATURE</p>
-              <p className="text-[6.5px] text-zinc-500 font-medium">Accepted &amp; Confirmed</p>
+            <div className="w-44 border-t-2 border-zinc-400 dark:border-zinc-600 pt-1">
+              <EditableText
+                value="CUSTOMER SIGNATURE"
+                interactive={interactive}
+                className="text-[9px] font-black uppercase text-zinc-700 dark:text-zinc-300 block"
+              />
+              <EditableText
+                value="Accepted & Confirmed"
+                interactive={interactive}
+                className="text-[7.5px] text-zinc-500 font-medium block"
+              />
             </div>
           </div>
 
@@ -1518,8 +1708,8 @@ export function OfficialInvoiceDocument({
             drag={interactive}
             dragMomentum={false}
             dragElastic={0}
-            whileDrag={{ scale: 1.05, zIndex: 50 }}
-            animate={{ x: stampPosition?.x || 0, y: stampPosition?.y || 0 }}
+            whileDrag={{ scale: (stampScale || 1) * 1.05, zIndex: 50 }}
+            animate={{ x: stampPosition?.x || 0, y: stampPosition?.y || 0, scale: stampScale || 1 }}
             onDragEnd={(_, info) => {
               if (onStampPositionChange) {
                 onStampPositionChange({
@@ -1531,34 +1721,75 @@ export function OfficialInvoiceDocument({
             className={`shrink-0 select-none relative ${
               interactive ? "cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-emerald-500 rounded-2xl group transition-shadow p-1 z-20" : ""
             }`}
+            style={{ transformOrigin: "bottom center" }}
           >
             {interactive && (
-              <div className="absolute -top-3 -left-2 bg-emerald-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xs z-30 whitespace-nowrap">
-                ✥ Drag Stamp / Seal
+              <div className="absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity bg-zinc-900/95 text-white px-2 py-0.5 rounded-lg shadow-xl flex items-center gap-1.5 z-40 text-[9px] pointer-events-auto whitespace-nowrap border border-white/20">
+                <span className="text-[7.5px] font-bold text-zinc-400 select-none">✥ Seal</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onStampScaleChange?.(Math.max(0.5, Number(((stampScale || 1) - 0.1).toFixed(1))))
+                  }}
+                  className="hover:text-emerald-300 font-bold px-1 cursor-pointer"
+                  title="Zoom Out Stamp / Seal"
+                >
+                  🔍-
+                </button>
+                <span className="font-mono text-[8px] text-zinc-300 font-bold">{Math.round((stampScale || 1) * 100)}%</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onStampScaleChange?.(Math.min(2.5, Number(((stampScale || 1) + 0.1).toFixed(1))))
+                  }}
+                  className="hover:text-emerald-300 font-bold px-1 cursor-pointer"
+                  title="Zoom In Stamp / Seal"
+                >
+                  🔍+
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onStampScaleChange?.(1)
+                  }}
+                  className="text-[7.5px] text-zinc-400 hover:text-white px-0.5 cursor-pointer"
+                  title="Reset Seal Zoom (100%)"
+                >
+                  100%
+                </button>
               </div>
             )}
             {resolvedStampUrl ? (
-              <div className="w-18 h-18 sm:w-20 sm:h-20 flex items-center justify-center p-0.5 shadow-2xs">
+              <div className="w-22 h-22 sm:w-24 sm:h-24 flex items-center justify-center p-0.5 shadow-2xs">
                 <img 
                   src={resolvedStampUrl} 
                   alt="Official Company Seal" 
-                  className="max-h-20 max-w-20 object-contain pointer-events-none select-none drop-shadow-sm" 
+                  className="max-h-24 max-w-24 object-contain pointer-events-none select-none drop-shadow-sm" 
                 />
               </div>
             ) : (
               /* High-Fidelity Vector Circular Corporate Stamp Seal */
-              <div className={`w-18 h-18 sm:w-20 sm:h-20 rounded-full border-2 border-dashed ${theme.sealColor} flex flex-col items-center justify-center p-1 text-center bg-white shadow-2xs rotate-[-5deg] relative`}>
-                <div className="w-[56px] h-[56px] rounded-full border border-zinc-300 dark:border-zinc-700 flex flex-col items-center justify-center p-0.5">
-                  <div className="text-[6px] font-black uppercase tracking-tighter leading-tight text-zinc-900 truncate max-w-[50px]">
-                    {resolvedBrandName}
-                  </div>
+              <div className={`w-22 h-22 sm:w-24 sm:h-24 rounded-full border-2 border-dashed ${theme.sealColor} flex flex-col items-center justify-center p-1 text-center bg-white shadow-2xs rotate-[-5deg] relative`}>
+                <div className="w-[66px] h-[66px] rounded-full border border-zinc-300 dark:border-zinc-700 flex flex-col items-center justify-center p-0.5">
+                  <EditableText
+                    value={resolvedBrandName}
+                    interactive={interactive}
+                    className="text-[7px] font-black uppercase tracking-tighter leading-tight text-zinc-900 truncate max-w-[58px]"
+                  />
                   <div className="w-full border-t border-zinc-300 dark:border-zinc-700 my-0.5" />
-                  <div className="text-[5.5px] font-black text-emerald-700 dark:text-emerald-400 tracking-wider uppercase leading-none">
-                    ★ OFFICIAL SEAL ★
-                  </div>
-                  <div className="text-[4.5px] font-bold text-zinc-500 uppercase tracking-tight leading-none mt-0.5">
-                    VERIFIED
-                  </div>
+                  <EditableText
+                    value="★ OFFICIAL SEAL ★"
+                    interactive={interactive}
+                    className="text-[6.5px] font-black text-emerald-700 dark:text-emerald-400 tracking-wider uppercase leading-none"
+                  />
+                  <EditableText
+                    value="VERIFIED"
+                    interactive={interactive}
+                    className="text-[5.5px] font-bold text-zinc-500 uppercase tracking-tight leading-none mt-0.5"
+                  />
                 </div>
               </div>
             )}
@@ -1569,8 +1800,8 @@ export function OfficialInvoiceDocument({
             drag={interactive}
             dragMomentum={false}
             dragElastic={0}
-            whileDrag={{ scale: 1.04, zIndex: 50 }}
-            animate={{ x: signaturePosition?.x || 0, y: signaturePosition?.y || 0 }}
+            whileDrag={{ scale: (signatureScale || 1) * 1.04, zIndex: 50 }}
+            animate={{ x: signaturePosition?.x || 0, y: signaturePosition?.y || 0, scale: signatureScale || 1 }}
             onDragEnd={(_, info) => {
               if (onSignaturePositionChange) {
                 onSignaturePositionChange({
@@ -1579,46 +1810,87 @@ export function OfficialInvoiceDocument({
                 })
               }
             }}
-            className={`text-center space-y-0.5 min-w-[150px] relative select-none ${
+            className={`text-center space-y-0.5 min-w-[160px] relative select-none ${
               interactive ? "cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-blue-500 rounded-xl group transition-shadow p-1.5 z-20" : ""
             }`}
+            style={{ transformOrigin: "bottom right" }}
           >
             {interactive && (
-              <div className="absolute -top-3 -right-2 bg-blue-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xs z-30 whitespace-nowrap">
-                ✥ Drag Signature
+              <div className="absolute -top-7 right-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity bg-zinc-900/95 text-white px-2 py-0.5 rounded-lg shadow-xl flex items-center gap-1.5 z-40 text-[9px] pointer-events-auto whitespace-nowrap border border-white/20">
+                <span className="text-[7.5px] font-bold text-zinc-400 select-none">✥ Signature</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onSignatureScaleChange?.(Math.max(0.5, Number(((signatureScale || 1) - 0.1).toFixed(1))))
+                  }}
+                  className="hover:text-blue-300 font-bold px-1 cursor-pointer"
+                  title="Zoom Out Signature (Scale down)"
+                >
+                  🔍-
+                </button>
+                <span className="font-mono text-[8px] text-zinc-300 font-bold">{Math.round((signatureScale || 1) * 100)}%</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onSignatureScaleChange?.(Math.min(2.5, Number(((signatureScale || 1) + 0.1).toFixed(1))))
+                  }}
+                  className="hover:text-blue-300 font-bold px-1 cursor-pointer"
+                  title="Zoom In Signature (Scale up)"
+                >
+                  🔍+
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onSignatureScaleChange?.(1)
+                  }}
+                  className="text-[7.5px] text-zinc-400 hover:text-white px-0.5 cursor-pointer"
+                  title="Reset Signature Zoom (100%)"
+                >
+                  100%
+                </button>
               </div>
             )}
 
-            <p className="text-[7.5px] font-bold text-zinc-500 uppercase tracking-tight truncate max-w-[160px]">
-              For {fullRegisteredCompanyName} {isSubBranchIssued && activeSubBranch ? `(${activeSubBranch.name})` : isBranchIssued && activeBranch ? `(${activeBranch.name})` : ""}
-            </p>
-            <div className="h-11 flex items-center justify-center">
+            <EditableText
+              value={`For ${fullRegisteredCompanyName} ${isSubBranchIssued && activeSubBranch ? `(${activeSubBranch.name})` : isBranchIssued && activeBranch ? `(${activeBranch.name})` : ""}`}
+              interactive={interactive}
+              className="text-[8.5px] font-bold text-zinc-500 uppercase tracking-tight truncate max-w-[175px] block"
+            />
+            <div className="h-12 flex items-center justify-center">
               {resolvedSignatureUrl ? (
                 <img 
                   src={resolvedSignatureUrl} 
                   alt="Authorized Signature" 
-                  className="max-h-11 max-w-[140px] object-contain drop-shadow-xs pointer-events-none select-none" 
+                  className="max-h-12 max-w-[150px] object-contain drop-shadow-xs pointer-events-none select-none" 
                 />
               ) : (
                 /* Elegant Digital Calligraphic Signature Graphic */
                 <div className="flex flex-col items-center justify-center">
-                  <span className="font-serif italic font-extrabold text-sm tracking-wide text-zinc-800 dark:text-zinc-200">
-                    {resolvedSignatoryName || "Authorized Signatory"}
-                  </span>
-                  <span className="text-[5.5px] font-bold text-emerald-600 dark:text-emerald-400 tracking-widest uppercase flex items-center gap-0.5">
-                    ✓ Digitally Authorized
-                  </span>
+                  <EditableText
+                    value={resolvedSignatoryName || "Authorized Signatory"}
+                    interactive={interactive}
+                    className="font-serif italic font-extrabold text-sm sm:text-base tracking-wide text-zinc-800 dark:text-zinc-200"
+                  />
+                  <EditableText
+                    value="✓ Digitally Authorized"
+                    interactive={interactive}
+                    className="text-[6.5px] font-bold text-emerald-600 dark:text-emerald-400 tracking-widest uppercase flex items-center gap-0.5"
+                  />
                 </div>
               )}
             </div>
-            <div className="w-full border-t-2 border-zinc-400 dark:border-zinc-600 pt-0.5">
+            <div className="w-full border-t-2 border-zinc-400 dark:border-zinc-600 pt-1">
               <EditableText
                 value={resolvedSignatoryName || "Authorized Signatory"}
                 onChange={(val) => onFieldChange?.("signatory_name", val)}
                 interactive={interactive}
                 fieldKey="signatory_name"
                 placeholder="Signatory name..."
-                className="text-[8px] font-black uppercase text-zinc-800 dark:text-zinc-200 font-bold leading-tight block truncate"
+                className="text-[9px] font-black uppercase text-zinc-800 dark:text-zinc-200 font-bold leading-tight block truncate"
               />
               <EditableText
                 value={resolvedSignatoryDesignation || "Managing Director"}
@@ -1626,21 +1898,29 @@ export function OfficialInvoiceDocument({
                 interactive={interactive}
                 fieldKey="signatory_designation"
                 placeholder="Designation..."
-                className="text-[6.5px] text-zinc-500 font-medium leading-tight block truncate"
+                className="text-[7.5px] text-zinc-500 font-medium leading-tight block truncate"
               />
             </div>
           </motion.div>
         </div>
 
         {/* BOTTOM BANNER WITH PAGE NUMBER */}
-        <div className={`rounded-xl ${theme.headerGradient} text-white p-1 text-[7.5px] font-medium flex flex-wrap items-center justify-between gap-1 shadow-xs`}>
+        <div className={`rounded-xl ${theme.headerGradient} text-white p-2 text-[8.5px] sm:text-[9px] font-medium flex flex-wrap items-center justify-between gap-1.5 shadow-xs`}>
           <p className="flex items-center gap-1">
-            <MapPin size={8} />
-            <span>{resolvedAddress || fullRegisteredCompanyName}</span>
+            <MapPin size={9} />
+            <EditableText
+              value={resolvedAddress || fullRegisteredCompanyName}
+              onChange={(val) => onFieldChange?.("address", val)}
+              interactive={interactive}
+              fieldKey="address"
+              className="text-white"
+            />
           </p>
           <div className="flex items-center gap-2">
-            <span>{resolvedEmail ? `Support: ${resolvedEmail}` : ""} {resolvedPhone ? `| Tel: ${resolvedPhone}` : ""}</span>
-            <span className="font-mono font-bold bg-black/20 px-1.5 py-0.2 rounded text-[7px]">
+            <span>
+              {resolvedEmail ? `Support: ${resolvedEmail}` : ""} {resolvedPhone ? `| Tel: ${resolvedPhone}` : ""}
+            </span>
+            <span className="font-mono font-bold bg-black/20 px-2 py-0.5 rounded text-[8px]">
               Page {pageNumber} of {totalPgs}
             </span>
           </div>
@@ -1672,7 +1952,7 @@ export function OfficialInvoiceDocument({
       {paginatedPages.map((pg) => (
         <div
           key={`invoice-page-${pg.pageNumber}`}
-          className="a4-page bg-white text-zinc-900 font-sans p-4 sm:p-5 text-xs shadow-2xl border border-zinc-200/90 rounded-2xl w-full max-w-[794px] min-h-[1080px] mx-auto relative flex flex-col justify-between gap-2.5 overflow-visible print:w-[210mm] print:max-w-[210mm] print:h-[282mm] print:min-h-[282mm] print:max-h-[282mm] print:p-[5mm_8mm] print:gap-1.5 print:m-0 print:shadow-none print:border-none print:rounded-none page-break-after"
+          className="a4-page bg-white text-zinc-900 font-sans p-5 sm:p-6 text-xs shadow-2xl border border-zinc-200/90 rounded-2xl w-full max-w-[794px] min-h-[1080px] mx-auto relative flex flex-col justify-between gap-3 sm:gap-3.5 overflow-visible print:w-[210mm] print:max-w-[210mm] print:h-[282mm] print:min-h-[282mm] print:max-h-[282mm] print:p-[6mm_8mm] print:gap-2 print:m-0 print:shadow-none print:border-none print:rounded-none page-break-after"
         >
           {/* Draggable Custom Text Stamps / Badges Overlay (on page 1) */}
           {pg.isFirstPage && customStamps && customStamps.map(stamp => {

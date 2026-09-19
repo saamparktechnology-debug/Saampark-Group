@@ -52,6 +52,15 @@ export interface UserItem {
   kycData?: KycData;
   previousEmails?: string[];
   previousEmail?: string;
+  designation?: string;
+  employeeId?: string;
+  salary?: number;
+  ctc?: string;
+  bloodGroup?: string;
+  emergencyContact?: string;
+  address?: string;
+  offerLetterSentAt?: string;
+  idCardIssuedAt?: string;
 }
 
 export type User = UserItem;

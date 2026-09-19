@@ -24,7 +24,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
     const state = useAuthStore.getState()
     const isAuth = Boolean(state.isAuthenticated && state.user && state.user.email)
-    const isPublicPage = pathname === "/login" || pathname?.startsWith("/public/") || pathname?.startsWith("/verify-invoice")
+    const isPublicPage = pathname === "/login" || pathname?.startsWith("/public/") || pathname?.startsWith("/verify-invoice") || pathname?.startsWith("/verify-member")
 
     if (isAuth && typeof window !== "undefined") {
       const isSessionActive = sessionStorage.getItem("saampark_session_active") === "true"

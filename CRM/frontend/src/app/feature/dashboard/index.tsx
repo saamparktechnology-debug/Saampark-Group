@@ -22,7 +22,7 @@ import { getInvoices, InvoiceItem } from "../sales/invoices/services/invoiceServ
 import { getOrders, OrderItem } from "../sales/orders/services/orderService"
 import { Task } from "../tasks/types"
 import { Project } from "../projects/types"
-import { filterGlobalDeletedItems, fetchModuleDataFromDB } from "@/lib/storageSync"
+import { filterGlobalDeletedItems, fetchModuleDataFromDB, saveModuleDataToDB } from "@/lib/storageSync"
 import { normalizeRole } from "@/store/usePermissionStore"
 import { ClientDashboard } from "./components/ClientDashboard"
 import { SuperAdminDashboard } from "./components/SuperAdminDashboard"
@@ -41,7 +41,27 @@ export default function DashboardMain() {
     return <SuperAdminDashboard />
   }
 
-  const { isClockedIn, clockIn, clockOut, secondsElapsed, tick } = useTimerStore()
+  const { 
+    isClockedIn, 
+    isOnBreak, 
+    workMode, 
+    secondsElapsed, 
+    clockIn, 
+    clockOut, 
+    startBreak, 
+    endBreak, 
+    setWorkMode, 
+    tick 
+  } = useTimerStore()
+
+  // Real-time tick effect for team member shift
+  React.useEffect(() => {
+    let interval: NodeJS.Timeout
+    if (isClockedIn) {
+      interval = setInterval(() => tick(), 1000)
+    }
+    return () => clearInterval(interval)
+  }, [isClockedIn, tick])
 
   // Real registered users list from user management service
   const [realUsers, setRealUsers] = React.useState<any[]>([])
@@ -544,25 +564,126 @@ export default function DashboardMain() {
         </div>
 
         {/* Shift Clock & KPIs */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-surface border border-border rounded-xl p-5 shadow-2xs flex flex-col gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-surface border border-border rounded-2xl p-5 shadow-xs flex flex-col justify-between gap-3 relative overflow-hidden">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-muted-foreground">Shift Attendance</span>
-              <span className={`w-2.5 h-2.5 rounded-full ${isClockedIn ? "bg-emerald-500 animate-pulse" : "bg-zinc-400"}`} />
+              <div className="flex items-center gap-2">
+                <span className={`w-2.5 h-2.5 rounded-full ${
+                  isOnBreak ? "bg-amber-500 animate-ping" : (isClockedIn ? "bg-emerald-500 animate-pulse" : "bg-slate-400")
+                }`} />
+                <span className="text-xs font-bold text-foreground">
+                  {isOnBreak ? "On Break ☕" : (isClockedIn ? "Active Shift 🟢" : "Shift Punch Card")}
+                </span>
+              </div>
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase">
+                {workMode || "Office"}
+              </span>
             </div>
-            <div className="text-xl font-bold font-mono text-foreground">
-              {isClockedIn ? formatTime(secondsElapsed) : "00:00:00"}
+
+            <div className="flex items-baseline justify-between">
+              <div className="text-2xl font-black font-mono text-foreground tracking-tight">
+                {isClockedIn ? formatTime(secondsElapsed) : "00:00:00"}
+              </div>
+              {isClockedIn && (
+                <span className="text-[11px] text-muted-foreground font-medium">
+                  Net Working Time
+                </span>
+              )}
             </div>
-            <button
-              onClick={() => isClockedIn ? clockOut() : clockIn()}
-              className={`w-full py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                isClockedIn
-                  ? "bg-rose-500 text-white hover:bg-rose-600 shadow-2xs"
-                  : "bg-emerald-600 text-white hover:bg-emerald-700 shadow-2xs"
-              }`}
-            >
-              {isClockedIn ? "Punch Out Shift" : "Punch In Shift"}
-            </button>
+
+            <div className="space-y-2 pt-1">
+              {!isClockedIn && (
+                <div className="flex gap-1">
+                  {(["Office", "Work From Home", "Field / Client Visit"] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setWorkMode(mode)}
+                      className={`flex-1 py-1 text-[10px] font-bold rounded-lg border transition-all cursor-pointer truncate ${
+                        workMode === mode
+                          ? "bg-blue-600 text-white border-blue-500 shadow-2xs"
+                          : "bg-surface-subtle text-muted-foreground border-border hover:text-foreground"
+                      }`}
+                    >
+                      {mode === "Office" ? "🏢 Office" : mode === "Work From Home" ? "🏠 WFH" : "🚗 Field"}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                {isClockedIn && (
+                  <button
+                    type="button"
+                    onClick={() => isOnBreak ? endBreak() : startBreak()}
+                    className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                      isOnBreak
+                        ? "bg-amber-500 text-white border-amber-600 hover:bg-amber-600 shadow-2xs"
+                        : "bg-surface-subtle text-foreground border-border hover:bg-surface hover:border-slate-300"
+                    }`}
+                  >
+                    {isOnBreak ? "▶️ Resume" : "☕ Break"}
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const now = new Date()
+                    const timeStr = now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
+                    const dateStr = now.toISOString().split("T")[0]
+                    const compId = currentCompanyObj.id || "tech"
+
+                    if (!isClockedIn) {
+                      clockIn(workMode)
+                      const stored = await fetchModuleDataFromDB<any[]>("timecards", [], "all").catch(() => [])
+                      const newCard = {
+                        id: `tc_${Date.now()}`,
+                        userId: String(user.id),
+                        memberName: user.name,
+                        memberEmail: user.email,
+                        memberRole: user.role,
+                        memberAvatar: user.avatar || (user as any).avatarUrl,
+                        companyId: compId,
+                        branchName: currentBranchObj?.name || "Main HQ",
+                        workMode: workMode || "Office",
+                        inDate: dateStr,
+                        inTime: timeStr,
+                        durationSecs: 0,
+                        status: "Active Shift",
+                        notes: `Clocked in from team dashboard (${workMode})`
+                      }
+                      await saveModuleDataToDB("timecards", [newCard, ...stored], "all").catch(() => {})
+                    } else {
+                      clockOut()
+                      const stored = await fetchModuleDataFromDB<any[]>("timecards", [], "all").catch(() => [])
+                      const normEmail = user.email.toLowerCase().trim()
+                      const updated = stored.map((tc: any) => {
+                        if (tc.memberEmail?.toLowerCase().trim() === normEmail && (tc.status === "Active Shift" || tc.status === "On Break")) {
+                          return {
+                            ...tc,
+                            outDate: dateStr,
+                            outTime: timeStr,
+                            durationSecs: secondsElapsed > 0 ? secondsElapsed : 28800,
+                            status: "Completed",
+                            notes: "Clocked out normally"
+                          }
+                        }
+                        return tc
+                      })
+                      await saveModuleDataToDB("timecards", updated, "all").catch(() => {})
+                    }
+                  }}
+                  className={`flex-1 py-2 rounded-xl text-xs font-black transition-all cursor-pointer shadow-2xs ${
+                    isClockedIn
+                      ? "bg-rose-600 text-white hover:bg-rose-700 shadow-rose-500/20"
+                      : "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-500/20"
+                  }`}
+                >
+                  {isClockedIn ? "⏹️ Punch Out" : "▶️ Punch In Now"}
+                </button>
+              </div>
+            </div>
           </div>
 
           <KPICard icon={CheckSquare} colorClass="bg-blue-500" value={`${myTasks.length} Tasks`} label="My Assigned Tasks" />

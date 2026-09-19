@@ -185,10 +185,19 @@ export default function CompaniesMain() {
   const [selectedPreviewBranchId, setSelectedPreviewBranchId] = React.useState<string>("")
   const [companySignaturePos, setCompanySignaturePos] = React.useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [companyStampPos, setCompanyStampPos] = React.useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [companyLogoScale, setCompanyLogoScale] = React.useState<number>(1)
+  const [companyStampScale, setCompanyStampScale] = React.useState<number>(1)
+  const [companySignatureScale, setCompanySignatureScale] = React.useState<number>(1)
   const [branchSignaturePos, setBranchSignaturePos] = React.useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [branchStampPos, setBranchStampPos] = React.useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [branchLogoScale, setBranchLogoScale] = React.useState<number>(1)
+  const [branchStampScale, setBranchStampScale] = React.useState<number>(1)
+  const [branchSignatureScale, setBranchSignatureScale] = React.useState<number>(1)
   const [subBranchSignaturePos, setSubBranchSignaturePos] = React.useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [subBranchStampPos, setSubBranchStampPos] = React.useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [subBranchLogoScale, setSubBranchLogoScale] = React.useState<number>(1)
+  const [subBranchStampScale, setSubBranchStampScale] = React.useState<number>(1)
+  const [subBranchSignatureScale, setSubBranchSignatureScale] = React.useState<number>(1)
   const [companyZoom, setCompanyZoom] = React.useState<number>(100)
   const [branchZoom, setBranchZoom] = React.useState<number>(100)
   const [subBranchZoom, setSubBranchZoom] = React.useState<number>(100)
@@ -1674,10 +1683,16 @@ export default function CompaniesMain() {
                           } as any}
                           companyDetails={companyForm as any}
                           interactive={true}
+                          logoScale={companyLogoScale}
+                          onLogoScaleChange={setCompanyLogoScale}
                           stampPosition={companyStampPos}
                           onStampPositionChange={setCompanyStampPos}
+                          stampScale={companyStampScale}
+                          onStampScaleChange={setCompanyStampScale}
                           signaturePosition={companySignaturePos}
                           onSignaturePositionChange={setCompanySignaturePos}
+                          signatureScale={companySignatureScale}
+                          onSignatureScaleChange={setCompanySignatureScale}
                           customStamps={companyCustomStamps}
                           onCustomStampMove={(id, pos) => setCompanyCustomStamps(prev => prev.map(s => s.id === id ? { ...s, ...pos } : s))}
                           onCustomStampUpdate={(id, updates) => setCompanyCustomStamps(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s))}
@@ -2096,10 +2111,16 @@ export default function CompaniesMain() {
                                 company_id: branchCompanyId
                               } as any}
                               interactive={true}
+                              logoScale={branchLogoScale}
+                              onLogoScaleChange={setBranchLogoScale}
                               stampPosition={branchStampPos}
                               onStampPositionChange={setBranchStampPos}
+                              stampScale={branchStampScale}
+                              onStampScaleChange={setBranchStampScale}
                               signaturePosition={branchSignaturePos}
                               onSignaturePositionChange={setBranchSignaturePos}
+                              signatureScale={branchSignatureScale}
+                              onSignatureScaleChange={setBranchSignatureScale}
                               customStamps={branchCustomStamps}
                               onCustomStampMove={(id, pos) => setBranchCustomStamps(prev => prev.map(s => s.id === id ? { ...s, ...pos } : s))}
                               onCustomStampUpdate={(id, updates) => setBranchCustomStamps(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s))}
@@ -2534,10 +2555,16 @@ export default function CompaniesMain() {
                                 company_id: subBranchCompanyId
                               } as any}
                               interactive={true}
+                              logoScale={subBranchLogoScale}
+                              onLogoScaleChange={setSubBranchLogoScale}
                               stampPosition={subBranchStampPos}
                               onStampPositionChange={setSubBranchStampPos}
+                              stampScale={subBranchStampScale}
+                              onStampScaleChange={setSubBranchStampScale}
                               signaturePosition={subBranchSignaturePos}
                               onSignaturePositionChange={setSubBranchSignaturePos}
+                              signatureScale={subBranchSignatureScale}
+                              onSignatureScaleChange={setSubBranchSignatureScale}
                               customStamps={subBranchCustomStamps}
                               onCustomStampMove={(id, pos) => setSubBranchCustomStamps(prev => prev.map(s => s.id === id ? { ...s, ...pos } : s))}
                               onCustomStampUpdate={(id, updates) => setSubBranchCustomStamps(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s))}

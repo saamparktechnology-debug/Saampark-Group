@@ -21,7 +21,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("resize", checkMobile)
   }, [])
 
-  if (pathname === "/login" || pathname?.startsWith("/public/") || pathname?.startsWith("/verify-invoice")) {
+  if (pathname === "/login" || pathname?.startsWith("/public/") || pathname?.startsWith("/verify-invoice") || pathname?.startsWith("/verify-member")) {
     return <>{children}</>
   }
 

@@ -35,7 +35,6 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useAuthStore, getCompanyFullName, isMatchingCompany, isMatchingBranch, getCanonicalCompanyId } from "@/store/useAuthStore"
-import { useTimerStore } from "@/store/useTimerStore"
 import { getActivityLogs, ActivityLog } from "@/services/activityLogService"
 import { fetchModuleDataFromDB, filterGlobalDeletedItems } from "@/lib/storageSync"
 import { Widget } from "./Widget"
@@ -103,8 +102,6 @@ export function SuperAdminDashboard() {
     switchBranch 
   } = useAuthStore()
 
-  const { isClockedIn, clockIn, clockOut, secondsElapsed, tick } = useTimerStore()
-
   const [isLoading, setIsLoading] = React.useState(true)
   const [activeTab, setActiveTab] = React.useState<"companies" | "branches">("companies")
   const [revenueYear, setRevenueYear] = React.useState("This Year")
@@ -121,6 +118,7 @@ export function SuperAdminDashboard() {
   const [dbOrders, setDbOrders] = React.useState<OrderItem[]>([])
   const [dbTasks, setDbTasks] = React.useState<Task[]>([])
   const [dbExpenses, setDbExpenses] = React.useState<any[]>([])
+  const [dbTimecards, setDbTimecards] = React.useState<any[]>([])
 
   // User attendance / sticky note state
   const [selectedUserEmail, setSelectedUserEmail] = React.useState<string>("")
@@ -183,14 +181,15 @@ export function SuperAdminDashboard() {
 
   const loadDashboardData = React.useCallback(async () => {
     try {
-      const [uList, pList, invList, ordList, tList, expList, actList] = await Promise.all([
+      const [uList, pList, invList, ordList, tList, expList, actList, tcList] = await Promise.all([
         fetchModuleDataFromDB<any[]>("users", [], "all").catch(() => []),
         getProjects("all").catch(() => []),
         getInvoices("all").catch(() => []),
         getOrders("all").catch(() => []),
         taskService.getTasks("all").catch(() => []),
         fetchModuleDataFromDB<any[]>("expenses", [], "all").catch(() => []),
-        getActivityLogs(activeCompanyId || "all").catch(() => [])
+        getActivityLogs(activeCompanyId || "all").catch(() => []),
+        fetchModuleDataFromDB<any[]>("timecards", [], "all").catch(() => [])
       ])
       
       const cleanUsers = filterGlobalDeletedItems(uList || [])
@@ -199,6 +198,7 @@ export function SuperAdminDashboard() {
       const cleanOrders = filterGlobalDeletedItems(ordList || [])
       const cleanTasks = filterGlobalDeletedItems(tList || [])
       const cleanExpenses = filterGlobalDeletedItems(expList || [])
+      const cleanTimecards = filterGlobalDeletedItems(tcList || [])
 
       setDbUsers(cleanUsers)
       setDbProjects(cleanProjects)
@@ -206,6 +206,7 @@ export function SuperAdminDashboard() {
       setDbOrders(cleanOrders)
       setDbTasks(cleanTasks)
       setDbExpenses(cleanExpenses)
+      setDbTimecards(cleanTimecards)
       setActivities(actList || [])
 
       if (cleanUsers.length > 0 && !selectedUserEmail) {
@@ -231,15 +232,6 @@ export function SuperAdminDashboard() {
       window.removeEventListener("saampark_activity_logged", handleSync)
     }
   }, [loadDashboardData])
-
-  // Timer interval
-  React.useEffect(() => {
-    let interval: NodeJS.Timeout
-    if (isClockedIn) {
-      interval = setInterval(() => tick(), 1000)
-    }
-    return () => clearInterval(interval)
-  }, [isClockedIn, tick])
 
   // Sticky notes & todos local storage
   React.useEffect(() => {
@@ -1224,31 +1216,27 @@ export function SuperAdminDashboard() {
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-6">
           <KPICard 
             icon={Clock} 
-            colorClass={isClockedIn ? "bg-emerald-500" : "bg-pink-500"} 
+            colorClass="bg-blue-600" 
             value={
-              <button 
-                onClick={() => isClockedIn ? clockOut() : clockIn()}
-                className={`text-xs font-bold px-3 py-1.5 rounded-xl border flex items-center gap-1.5 w-fit ml-auto transition-all cursor-pointer btn-3d ${
-                  isClockedIn 
-                    ? "bg-emerald-500 text-white border-emerald-600 shadow-emerald-500/25" 
-                    : "bg-gradient-to-r from-pink-500 to-rose-500 text-white border-pink-600 shadow-pink-500/25"
-                }`}
-              >
-                <Monitor size={14}/> 
-                {isClockedIn ? "Clock Out" : "Clock In"}
-              </button>
+              <div className="flex items-center justify-between">
+                <span>{dbTimecards.filter(t => t.status === "Active Shift" || t.status === "On Break").length} Active</span>
+                <Link 
+                  href="/feature/attendance"
+                  className="text-[11px] font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400 flex items-center gap-1 cursor-pointer bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded-lg border border-blue-200/60 dark:border-blue-900/60"
+                >
+                  <span>Hub</span>
+                  <ArrowUpRight size={13} />
+                </Link>
+              </div>
             } 
-            label="" 
+            label="Live Team Shifts" 
             subtextNode={
-              <div className="mt-2 text-xs">
-                {isClockedIn ? (
-                  <p className="text-emerald-600 font-mono font-medium flex items-center justify-end gap-1">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    {formatTime(secondsElapsed)}
-                  </p>
-                ) : (
-                  <p className="text-muted-foreground">You are currently clocked out</p>
-                )}
+              <div className="mt-1 flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Staff Clocked In</span>
+                <span className="inline-flex items-center gap-1 font-bold text-emerald-600 dark:text-emerald-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Live Monitoring
+                </span>
               </div>
             }
           />
@@ -1606,22 +1594,18 @@ export function SuperAdminDashboard() {
                           const currentEmail = (user?.email || "").toLowerCase().trim()
                           const isActiveUser = Boolean(uEmail && currentEmail && uEmail === currentEmail)
 
-                          let punchInTime = "09:00 AM"
-                          let punchOutTime = "-"
-                          let workedHours = "-"
+                          const uCard = dbTimecards.find((tc: any) => tc.memberEmail?.toLowerCase().trim() === uEmail)
+                          let punchInTime = uCard?.inTime || "09:30 AM"
+                          let punchOutTime = uCard?.outTime || (uCard?.status === "Active Shift" ? "Active Session" : "-")
+                          let workedHours = uCard?.durationSecs ? `${Math.floor(uCard.durationSecs / 3600)}h ${Math.floor((uCard.durationSecs % 3600) / 60)}m` : "-"
                           let statusBadge = <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">Offline</span>
 
-                          if (isActiveUser) {
-                            punchInTime = "Today at 09:15 AM"
-                            if (isClockedIn) {
-                              punchOutTime = "Active Session"
-                              workedHours = formatTime(secondsElapsed)
-                              statusBadge = <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 shadow-xs">🟢 CLOCKED IN</span>
-                            } else {
-                              punchOutTime = "06:15 PM"
-                              workedHours = "08 hrs 15 mins"
-                              statusBadge = <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 font-semibold shadow-xs">🔵 LOGGED IN</span>
-                            }
+                          if (uCard?.status === "Active Shift") {
+                            statusBadge = <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 shadow-xs">🟢 CLOCKED IN</span>
+                          } else if (uCard?.status === "On Break") {
+                            statusBadge = <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 shadow-xs">☕ ON BREAK</span>
+                          } else if (uCard?.status === "Completed") {
+                            statusBadge = <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 font-semibold shadow-xs">🔵 COMPLETED</span>
                           } else if (u?.status === "Active") {
                             statusBadge = <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 shadow-xs">ACTIVE</span>
                           }

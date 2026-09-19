@@ -23,6 +23,7 @@ import {
   DEFAULT_ROLE_PERMISSIONS,
   DEFAULT_ROLE_ACTION_PERMISSIONS
 } from "@/store/usePermissionStore"
+import { createNotification } from "@/services/notificationService"
 
 interface UserModalProps {
   isOpen: boolean
@@ -117,6 +118,9 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
   const [department, setDepartment] = React.useState("")
   const [designation, setDesignation] = React.useState("")
   const [commissionRate, setCommissionRate] = React.useState("")
+  const [joiningDate, setJoiningDate] = React.useState(new Date().toISOString().split("T")[0])
+  const [ctc, setCtc] = React.useState("₹4,80,000 per Annum")
+  const [autoSendOfferLetter, setAutoSendOfferLetter] = React.useState(true)
   const [phone, setPhone] = React.useState("")
   const [password, setPassword] = React.useState("")
   const [showPassword, setShowPassword] = React.useState(false)
@@ -456,6 +460,10 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
       status,
       avatarUrl: avatarUrl || undefined,
       kycStatus,
+      joinedDate: joiningDate || editingUser?.joinedDate || new Date().toISOString().split("T")[0],
+      designation: designation.trim() || (role === "Teams" ? "Technical Specialist" : undefined),
+      ctc: ctc.trim() || undefined,
+      offerLetterSentAt: (!editingUser && autoSendOfferLetter) ? new Date().toISOString() : editingUser?.offerLetterSentAt,
       allowedModules,
       permissions: {
         allowedModules,
@@ -463,6 +471,16 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
       },
       ...((role === "Teams" && designation) ? { designation: designation.trim() } : {}),
       ...((role === "Teams" && commissionRate) ? { commissionRate: commissionRate.trim() } : {}),
+    }
+
+    if (!editingUser && autoSendOfferLetter && email.trim()) {
+      createNotification({
+        title: "Official Offer & Welcome Kit Dispatched",
+        message: `Welcome to ${companyNameToSave}! Your official appointment letter has been issued to ${email.trim()}.`,
+        type: "system",
+        targetEmail: email.trim().toLowerCase(),
+        sendEmailNotification: true,
+      }).catch(console.warn)
     }
 
     onSave(userData)
@@ -929,6 +947,50 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                           className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#090d16]/90 border border-slate-300 dark:border-white/15 text-xs text-slate-900 dark:text-white focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3)] shadow-xs dark:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-medium transition-all"
                         />
                       </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                            Date of Joining (Past or Present)
+                          </label>
+                          <input
+                            type="date"
+                            value={joiningDate}
+                            onChange={(e) => setJoiningDate(e.target.value)}
+                            className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#090d16]/90 border border-slate-300 dark:border-white/15 text-xs text-slate-900 dark:text-white focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3)] shadow-xs dark:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-medium transition-all"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                            CTC / Salary Package
+                          </label>
+                          <input
+                            type="text"
+                            value={ctc}
+                            onChange={(e) => setCtc(e.target.value)}
+                            placeholder="e.g. ₹4,80,000 per Annum"
+                            className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#090d16]/90 border border-slate-300 dark:border-white/15 text-xs text-slate-900 dark:text-white focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3)] shadow-xs dark:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-medium transition-all"
+                          />
+                        </div>
+                      </div>
+
+                      {!editingUser && (
+                        <div className="p-3 bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/80 dark:border-blue-800/40 rounded-xl flex items-start gap-2.5">
+                          <input
+                            type="checkbox"
+                            id="autoSendOfferLetterCheck"
+                            checked={autoSendOfferLetter}
+                            onChange={(e) => setAutoSendOfferLetter(e.target.checked)}
+                            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                          />
+                          <label htmlFor="autoSendOfferLetterCheck" className="text-xs text-slate-700 dark:text-slate-300 cursor-pointer select-none">
+                            <span className="font-bold text-blue-700 dark:text-blue-400">✉️ Auto-send Welcome Email & Offer Letter</span>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                              When this team member is created, an official offer letter and onboarding credentials will be dispatched to their email address.
+                            </p>
+                          </label>
+                        </div>
+                      )}
                     </>
                   )}
 
