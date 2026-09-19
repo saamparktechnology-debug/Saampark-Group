@@ -5,7 +5,7 @@ import { motion } from "framer-motion"
 import { 
   Building2, MapPin, Calendar, Mail, Phone, ShieldCheck, 
   Award, QrCode, Download, Printer, Send, Sparkles, Droplets,
-  CheckCircle2, RefreshCw, Check
+  CheckCircle2, RefreshCw, Check, Camera, UploadCloud
 } from "lucide-react"
 import { UserItem } from "../types"
 import { Company, Branch, SubBranch } from "@/app/feature/companies/types"
@@ -19,6 +19,7 @@ interface IdentityCardDocumentProps {
   layoutOrientation?: "portrait" | "landscape"
   onSendEmail?: () => void
   isSendingEmail?: boolean
+  onAvatarUpload?: (newAvatarUrl: string) => Promise<void> | void
 }
 
 export function IdentityCardDocument({
@@ -30,9 +31,30 @@ export function IdentityCardDocument({
   layoutOrientation = "portrait",
   onSendEmail,
   isSendingEmail = false,
+  onAvatarUpload,
 }: IdentityCardDocumentProps) {
   const [activeSide, setActiveSide] = React.useState<"front" | "back">("front")
   const [orientation, setOrientation] = React.useState<"portrait" | "landscape">(layoutOrientation)
+  const [isUploadingPhoto, setIsUploadingPhoto] = React.useState(false)
+  const fileInputRef = React.useRef<HTMLInputElement>(null)
+
+  const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      setIsUploadingPhoto(true)
+      const { uploadImageToImgBB } = await import("@/lib/imgbbUpload")
+      const res = await uploadImageToImgBB(file, `${user.name}_badge_avatar`)
+      if (res && res.url) {
+        await onAvatarUpload?.(res.url)
+      }
+    } catch (err) {
+      console.error("Error uploading team badge photo:", err)
+    } finally {
+      setIsUploadingPhoto(false)
+      if (fileInputRef.current) fileInputRef.current.value = ""
+    }
+  }
 
   const empId = user.employeeId || `SP-EMP-${String(user.id).replace(/[^0-9]/g, "").slice(-4).padStart(4, "0") || "0041"}`
   const companyName = company?.name || user.companyName || "SAAMPARK TECHNOLOGY PRIVATE LIMITED"
@@ -77,6 +99,15 @@ export function IdentityCardDocument({
 
   return (
     <div className="flex flex-col items-center gap-5 w-full">
+      {/* Hidden File Input for Avatar Upload */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handlePhotoSelect}
+        accept="image/*"
+        className="hidden"
+      />
+
       {/* Interactive Controls Bar (Hides in Print) */}
       <div className="print:hidden w-full flex flex-wrap items-center justify-between gap-3 bg-surface border border-border p-3 rounded-2xl shadow-xs">
         {/* Front / Back Side Switcher */}
@@ -133,6 +164,18 @@ export function IdentityCardDocument({
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2">
+          {onAvatarUpload && (
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploadingPhoto}
+              className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+            >
+              <Camera size={13} className={isUploadingPhoto ? "animate-spin" : ""} />
+              <span>{isUploadingPhoto ? "Uploading Photo..." : "Upload Team Photo"}</span>
+            </button>
+          )}
+
           {onSendEmail && (
             <button
               type="button"
@@ -185,12 +228,22 @@ export function IdentityCardDocument({
             {/* Profile Photo with Verified Holographic Ring */}
             <div className="flex flex-col items-center text-center px-4 -mt-2">
               <div className="relative">
-                <div className="w-24 h-24 rounded-2xl overflow-hidden border-3 border-teal-600 shadow-lg bg-slate-100 p-0.5">
+                <div 
+                  onClick={() => onAvatarUpload ? fileInputRef.current?.click() : undefined}
+                  className={`w-24 h-24 rounded-2xl overflow-hidden border-3 border-teal-600 shadow-lg bg-slate-100 p-0.5 relative group/avatar ${onAvatarUpload ? 'cursor-pointer hover:border-teal-400 transition-all' : ''}`}
+                  title={onAvatarUpload ? "Click to upload / change team member photo" : undefined}
+                >
                   {avatarSrc && !avatarSrc.includes("dicebear") ? (
                     <img src={avatarSrc} alt={user.name} className="w-full h-full object-cover rounded-xl" />
                   ) : (
                     <div className="w-full h-full bg-gradient-to-br from-[#005f69] to-[#008a99] text-white font-black text-2xl flex items-center justify-center rounded-xl">
                       {user.name.substring(0, 2).toUpperCase()}
+                    </div>
+                  )}
+                  {onAvatarUpload && (
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-2xs rounded-xl opacity-0 group-hover/avatar:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[8px] font-bold p-1 text-center">
+                      <Camera size={16} className="mb-0.5" />
+                      <span>{isUploadingPhoto ? "Uploading..." : "Change Photo"}</span>
                     </div>
                   )}
                 </div>
@@ -339,12 +392,22 @@ export function IdentityCardDocument({
               {/* Body: Left Photo, Right Details */}
               <div className="flex items-center gap-4 px-4 py-2 flex-1 min-w-0">
                 <div className="relative shrink-0">
-                  <div className="w-20 h-20 rounded-2xl overflow-hidden border-2 border-teal-600 shadow-md bg-slate-100 p-0.5">
+                  <div 
+                    onClick={() => onAvatarUpload ? fileInputRef.current?.click() : undefined}
+                    className={`w-20 h-20 rounded-2xl overflow-hidden border-2 border-teal-600 shadow-md bg-slate-100 p-0.5 relative group/avatar ${onAvatarUpload ? 'cursor-pointer hover:border-teal-400 transition-all' : ''}`}
+                    title={onAvatarUpload ? "Click to upload / change team member photo" : undefined}
+                  >
                     {avatarSrc && !avatarSrc.includes("dicebear") ? (
                       <img src={avatarSrc} alt={user.name} className="w-full h-full object-cover rounded-xl" />
                     ) : (
                       <div className="w-full h-full bg-gradient-to-br from-[#005f69] to-[#008a99] text-white font-black text-xl flex items-center justify-center rounded-xl">
                         {user.name.substring(0, 2).toUpperCase()}
+                      </div>
+                    )}
+                    {onAvatarUpload && (
+                      <div className="absolute inset-0 bg-black/50 backdrop-blur-2xs rounded-xl opacity-0 group-hover/avatar:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[7px] font-bold p-1 text-center">
+                        <Camera size={14} className="mb-0.5" />
+                        <span>{isUploadingPhoto ? "..." : "Change"}</span>
                       </div>
                     )}
                   </div>
