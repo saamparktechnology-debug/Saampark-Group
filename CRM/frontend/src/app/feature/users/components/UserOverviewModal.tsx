@@ -237,6 +237,24 @@ export function UserOverviewModal({
     }
   }
 
+  // Handle Live Avatar Upload for Team Identity Badge
+  const handleAvatarUpload = async (newAvatarUrl: string) => {
+    if (!user) return
+    const updatedUser: UserItem = {
+      ...user,
+      avatarUrl: newAvatarUrl,
+      avatar: newAvatarUrl,
+    }
+    await recordUserAccount(updatedUser)
+    try {
+      const { cascadeUserAvatarChange } = await import("../services/userService")
+      cascadeUserAvatarChange(user.name, user.email, newAvatarUrl).catch(() => {})
+    } catch (e) {
+      console.error(e)
+    }
+    onUserUpdated?.(updatedUser)
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/75 backdrop-blur-sm overflow-y-auto">
       <motion.div
@@ -889,6 +907,7 @@ export function UserOverviewModal({
                   branch={resolvedBranch}
                   subBranch={resolvedSubBranch}
                   interactive={true}
+                  onAvatarUpload={handleAvatarUpload}
                   onSendEmail={() => handleSendDocumentEmail("id_card")}
                   isSendingEmail={isSendingEmail}
                 />

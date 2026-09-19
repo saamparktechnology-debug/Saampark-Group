@@ -182,6 +182,9 @@ export async function uploadToImgBB(
   }
 }
 
+export const uploadImageToImgBB = uploadToImgBB
+
+
 /**
  * Helper to convert File or Blob to Base64 data URL
  */

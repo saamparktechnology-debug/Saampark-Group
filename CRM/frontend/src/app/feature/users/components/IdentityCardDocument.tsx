@@ -43,8 +43,8 @@ export function IdentityCardDocument({
     if (!file) return
     try {
       setIsUploadingPhoto(true)
-      const { uploadImageToImgBB } = await import("@/lib/imgbbUpload")
-      const res = await uploadImageToImgBB(file, `${user.name}_badge_avatar`)
+      const { uploadToImgBB } = await import("@/lib/imgbbUpload")
+      const res = await uploadToImgBB(file, `${user.name}_badge_avatar`)
       if (res && res.url) {
         await onAvatarUpload?.(res.url)
       }
