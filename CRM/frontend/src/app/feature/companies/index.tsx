@@ -16,7 +16,7 @@ import { useAuthStore, isMatchingCompany } from "@/store/useAuthStore"
 import { markGlobalItemDeleted, unmarkGlobalItemDeleted, fetchModuleDataFromDB, saveModuleDataToDB, syncGlobalDeletedIds, isGlobalItemDeleted, getLocalDeletedIds } from "@/lib/storageSync"
 import { ImageUploadField } from "@/components/ui/ImageUploadField"
 import { OfficialInvoiceDocument } from "@/app/feature/sales/invoices/components/OfficialInvoiceDocument"
-import { InvoiceItem } from "@/app/feature/sales/invoices/services/invoiceService"
+import { InvoiceItem, InvoiceLineItem } from "@/app/feature/sales/invoices/services/invoiceService"
 
 const INDUSTRIES = [
   "Technology", "Healthcare", "Finance", "Education", "Manufacturing",
@@ -114,12 +114,19 @@ export default function CompaniesMain() {
   // Modal states
   const [showCompanyModal, setShowCompanyModal] = React.useState(false)
   const [editingCompany, setEditingCompany] = React.useState<Company | null>(null)
-  const [companyTab, setCompanyTab] = React.useState<"identity" | "tax" | "signatory" | "contact" | "bank">("identity")
+  const [companyTab, setCompanyTab] = React.useState<"identity" | "tax" | "signatory" | "contact" | "bank" | "branches">("identity")
   const [companyBankSubTab, setCompanyBankSubTab] = React.useState<"gst" | "nongst">("gst")
+  const [companyPreviewScale, setCompanyPreviewScale] = React.useState<"fit" | "normal" | "large">("fit")
+  const [branchPreviewScale, setBranchPreviewScale] = React.useState<"fit" | "normal" | "large">("fit")
+  const [subBranchPreviewScale, setSubBranchPreviewScale] = React.useState<"fit" | "normal" | "large">("fit")
+  const [previewEntityLevel, setPreviewEntityLevel] = React.useState<"company" | "branch" | "subbranch">("company")
+  const [previewInvoiceType, setPreviewInvoiceType] = React.useState<"gst" | "nongst">("gst")
+  const [selectedPreviewBranchId, setSelectedPreviewBranchId] = React.useState<string>("")
+  const [selectedPreviewSubBranchId, setSelectedPreviewSubBranchId] = React.useState<string>("")
   const [companyForm, setCompanyForm] = React.useState({
     name: "", brand_name: "", division_name: "", subtitle: "", slug: "", 
     industry: "Technology", currency: "INR", logo_url: "",
-    gstin: "", pan: "", cin: "", msme_reg: "",
+    gstin: "", pan: "", cin: "", msme_reg: "", iso_certification: "An ISO 9001:2015 Certified Company",
     signatory_name: "", signatory_designation: "", signature_image_url: "", stamp_image_url: "",
     address: "", city: "", state: "", zip: "", country: "India", phone: "", email: "", website: "",
     bank_name: "", account_holder: "", account_number: "", ifsc_code: "", bank_branch: "", upi_id: "", payment_qr_url: "",
@@ -444,7 +451,7 @@ export default function CompaniesMain() {
     setCompanyForm({
       name: "", brand_name: "SAAMPARK", division_name: "", subtitle: "", slug: "",
       industry: "Technology", currency: "INR", logo_url: "",
-      gstin: "", pan: "", cin: "", msme_reg: "",
+      gstin: "", pan: "", cin: "", msme_reg: "", iso_certification: "An ISO 9001:2015 Certified Company",
       signatory_name: "Authorized Signatory", signatory_designation: "Managing Director", signature_image_url: "", stamp_image_url: "",
       address: "", city: "Kolkata", state: "West Bengal", zip: "", country: "India", phone: "", email: "", website: "",
       bank_name: "", account_holder: "", account_number: "", ifsc_code: "", bank_branch: "", upi_id: "", payment_qr_url: "",
@@ -463,6 +470,7 @@ export default function CompaniesMain() {
       name: c.name || "", brand_name: c.brand_name || "", division_name: c.division_name || "", subtitle: c.subtitle || "", slug: c.slug || "",
       industry: c.industry || "Technology", currency: c.currency || "INR", logo_url: c.logo_url || "",
       gstin: c.gstin || "", pan: c.pan || "", cin: c.cin || "", msme_reg: c.msme_reg || "",
+      iso_certification: c.iso_certification ?? "An ISO 9001:2015 Certified Company",
       signatory_name: c.signatory_name || "Authorized Signatory", signatory_designation: c.signatory_designation || "Managing Director", signature_image_url: c.signature_image_url || "", stamp_image_url: c.stamp_image_url || "",
       address: c.address || "", city: c.city || "", state: c.state || "", zip: c.zip || "", country: c.country || "India", phone: c.phone || "", email: c.email || "", website: c.website || "",
       bank_name: c.bank_name || c.gst_bank_name || "",
@@ -542,12 +550,32 @@ export default function CompaniesMain() {
     setBranchCompanyId(companyId)
     setBranchTab("basic")
     setBranchForm({
-      name: "", code: `BR-${Math.floor(100 + Math.random() * 900)}`, brand_name: "SAAMPARK", division_name: "",
-      logo_url: "", payment_qr_url: "",
-      gstin: "", pan: "",
-      signatory_name: "Authorized Signatory", signatory_designation: "Branch Manager", signature_image_url: "", stamp_image_url: "",
-      address: "", city: "", state: "West Bengal", zip: "", country: "India", phone: "", email: "", managerName: "", managerPhone: "",
-      bank_name: "", account_holder: "", account_number: "", ifsc_code: "", upi_id: "",
+      name: "Salt Lake Technology Center Branch",
+      code: `STR-BR-${Math.floor(100 + Math.random() * 900)}`,
+      brand_name: "SAAMPARK",
+      division_name: "Operations",
+      logo_url: "",
+      payment_qr_url: "",
+      gstin: "19AAECS1234F1Z8",
+      pan: "AAECS1234F",
+      signatory_name: "Supriya Kumar",
+      signatory_designation: "Branch Manager",
+      signature_image_url: "",
+      stamp_image_url: "",
+      address: "Plot 4, Block DP, Sector V, Salt Lake City",
+      city: "Kolkata",
+      state: "West Bengal",
+      zip: "700091",
+      country: "India",
+      phone: "+91 99015 18567",
+      email: "saltlake.branch@saamparktechnology.com",
+      managerName: "Supriya Kumar",
+      managerPhone: "+91 98765 43210",
+      bank_name: "ICICI Bank Ltd",
+      account_holder: "SAAMPARK TECHNOLOGY - BRANCH OPERATIONS",
+      account_number: "123405009876",
+      ifsc_code: "ICIC0001234",
+      upi_id: "saampark.branch@icici",
       status: "active"
     })
     setShowBranchModal(true)
@@ -618,12 +646,30 @@ export default function CompaniesMain() {
     setSubBranchCompanyId(companyId)
     setSubBranchTab("partner")
     setSubBranchForm({
-      name: "", code: `SB-${Math.floor(100 + Math.random() * 900)}`, partner_name: "", partner_phone: "", partner_email: "",
-      revenue_share_pct: 30, partner_type: "Franchise Partner",
-      address: "", city: "", state: "West Bengal", phone: "", email: "",
-      gstin: "", pan: "", bank_name: "", account_number: "", ifsc_code: "", upi_id: "",
-      logo_url: "", signature_image_url: "", stamp_image_url: "", payment_qr_url: "",
-      signatory_name: "Partner Signatory", signatory_designation: "Franchise Partner",
+      name: "Durgapur City Center Sub-Branch",
+      code: `SB-DUR-${Math.floor(100 + Math.random() * 900)}`,
+      partner_name: "Debabrata Mukherjee",
+      partner_phone: "+91 98321 45678",
+      partner_email: "debabrata.durgapur@saampark.com",
+      revenue_share_pct: 30,
+      partner_type: "Franchise Partner",
+      address: "Bengal Shristi Commercial Complex, City Center",
+      city: "Durgapur",
+      state: "West Bengal",
+      phone: "+91 98321 45678",
+      email: "durgapur.franchise@saamparktechnology.com",
+      gstin: "19BBCCS5678G1Z2",
+      pan: "BBCCS5678G",
+      bank_name: "State Bank of India",
+      account_number: "39871234567",
+      ifsc_code: "SBIN0001234",
+      upi_id: "saampark.durgapur@sbi",
+      logo_url: "",
+      signature_image_url: "",
+      stamp_image_url: "",
+      payment_qr_url: "",
+      signatory_name: "Debabrata Mukherjee",
+      signatory_designation: "Franchise Partner",
       status: "active"
     })
     setShowSubBranchModal(true)
@@ -1012,14 +1058,15 @@ export default function CompaniesMain() {
 
               {/* Modal Body: Split Screen (Left: Form Tabs, Right: Live Document Preview) */}
               <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
-                {/* Left Side: 5 Form Configuration Tabs */}
+                {/* Left Side: 6 Form Configuration Tabs */}
                 <div className="w-full lg:w-[54%] flex flex-col border-b lg:border-b-0 lg:border-r border-border overflow-hidden">
-                  <div className="grid grid-cols-5 border-b border-border bg-muted/40 font-bold text-center shrink-0">
-                    <button type="button" onClick={() => setCompanyTab("identity")} className={`py-2.5 border-b-2 text-[11px] transition-all ${companyTab === "identity" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>1. Identity</button>
-                    <button type="button" onClick={() => setCompanyTab("tax")} className={`py-2.5 border-b-2 text-[11px] transition-all ${companyTab === "tax" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>2. GST & Legal</button>
-                    <button type="button" onClick={() => setCompanyTab("signatory")} className={`py-2.5 border-b-2 text-[11px] transition-all ${companyTab === "signatory" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>3. Stamp & Sign</button>
-                    <button type="button" onClick={() => setCompanyTab("contact")} className={`py-2.5 border-b-2 text-[11px] transition-all ${companyTab === "contact" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>4. Address</button>
-                    <button type="button" onClick={() => setCompanyTab("bank")} className={`py-2.5 border-b-2 text-[11px] transition-all ${companyTab === "bank" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground"}`}>5. Bank & UPI</button>
+                  <div className="grid grid-cols-3 sm:grid-cols-6 border-b border-border bg-muted/40 font-bold text-center shrink-0">
+                    <button type="button" onClick={() => setCompanyTab("identity")} className={`py-2.5 border-b-2 text-[10px] sm:text-[11px] font-bold transition-all ${companyTab === "identity" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>1. Identity</button>
+                    <button type="button" onClick={() => setCompanyTab("tax")} className={`py-2.5 border-b-2 text-[10px] sm:text-[11px] font-bold transition-all ${companyTab === "tax" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>2. GST & Legal</button>
+                    <button type="button" onClick={() => setCompanyTab("signatory")} className={`py-2.5 border-b-2 text-[10px] sm:text-[11px] font-bold transition-all ${companyTab === "signatory" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>3. Stamp & Sign</button>
+                    <button type="button" onClick={() => setCompanyTab("contact")} className={`py-2.5 border-b-2 text-[10px] sm:text-[11px] font-bold transition-all ${companyTab === "contact" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>4. Address</button>
+                    <button type="button" onClick={() => setCompanyTab("bank")} className={`py-2.5 border-b-2 text-[10px] sm:text-[11px] font-bold transition-all ${companyTab === "bank" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>5. Bank & UPI</button>
+                    <button type="button" onClick={() => setCompanyTab("branches")} className={`py-2.5 border-b-2 text-[10px] sm:text-[11px] font-bold transition-all ${companyTab === "branches" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>6. Branches & Subs</button>
                   </div>
 
                   <div className="p-5 space-y-4 overflow-y-auto flex-1 max-h-[60vh] lg:max-h-none">
@@ -1097,17 +1144,38 @@ export default function CompaniesMain() {
                             <label className="block font-semibold mb-1">MSME / Udyam Registration No.</label>
                             <Input placeholder="e.g. UDYAM-WB-10-0012345" value={companyForm.msme_reg} onChange={e => setCompanyForm({ ...companyForm, msme_reg: e.target.value })} className="font-mono" />
                           </div>
+                          <div className="sm:col-span-2">
+                            <label className="block font-semibold mb-1">ISO / Quality Certification Tagline</label>
+                            <Input 
+                              placeholder="e.g. An ISO 9001:2015 Certified Company (or leave blank to hide)" 
+                              value={companyForm.iso_certification} 
+                              onChange={e => setCompanyForm({ ...companyForm, iso_certification: e.target.value })} 
+                            />
+                            <span className="text-[10.5px] text-muted-foreground mt-1 block">
+                              Rendered as the golden certification badge in the invoice header. Leave blank to hide.
+                            </span>
+                          </div>
                         </div>
                       </div>
                     )}
 
-                    {/* TAB 3: SIGNATORY & STAMP */}
+                    {/* TAB 3: SIGNATORY & STAMP (EXPANDED OPTIONS WITH LIVE CARDS) */}
                     {companyTab === "signatory" && (
                       <div className="space-y-4">
+                        <div className="p-3 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/40 text-[11px] text-blue-900 dark:text-blue-200 flex items-center gap-2.5">
+                          <span className="p-1 rounded-md bg-blue-600 text-white shrink-0 font-bold text-xs">✍</span>
+                          <div>
+                            <span className="font-bold block">Authorized Digital Signature &amp; Official Seal Options</span>
+                            <span className="text-[10.5px] text-blue-800/80 dark:text-blue-300/80">
+                              Configure signatory details and corporate stamp. Upload custom images or utilize built-in verified vector seals and calligraphic digital signatures.
+                            </span>
+                          </div>
+                        </div>
+
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                           <div>
-                            <label className="block font-semibold mb-1">Authorized Signatory Name</label>
-                            <Input placeholder="e.g. Supriya Naskar" value={companyForm.signatory_name} onChange={e => setCompanyForm({ ...companyForm, signatory_name: e.target.value })} />
+                            <label className="block font-semibold mb-1">Authorized Signatory Name *</label>
+                            <Input placeholder="e.g. Supriya Naskar" value={companyForm.signatory_name} onChange={e => setCompanyForm({ ...companyForm, signatory_name: e.target.value })} className="font-bold" />
                           </div>
                           <div>
                             <label className="block font-semibold mb-1">Signatory Designation</label>
@@ -1115,25 +1183,93 @@ export default function CompaniesMain() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                          <div className="p-3.5 rounded-xl border border-border bg-muted/20">
-                            <ImageUploadField
-                              label="Authorized Digital Signature"
-                              value={companyForm.signature_image_url}
-                              onChange={url => setCompanyForm({ ...companyForm, signature_image_url: url })}
-                              uploadNamePrefix="company_signature"
-                              aspectRatio="signature"
-                              helperText="Rendered on the Authorised Signatory line on Invoices."
-                            />
+                        {/* Two Config Cards: Digital Signature & Corporate Stamp */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                          {/* Card A: Digital Signature */}
+                          <div className="p-3.5 rounded-2xl border border-border bg-surface flex flex-col justify-between space-y-3 shadow-2xs">
+                            <div>
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="font-bold text-xs text-foreground flex items-center gap-1.5">
+                                  <span>✍</span> Digital Signature
+                                </span>
+                                <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${companyForm.signature_image_url ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'}`}>
+                                  {companyForm.signature_image_url ? 'Custom Upload' : 'Auto Vector Calligraphy'}
+                                </span>
+                              </div>
+                              <ImageUploadField
+                                label="Upload Signature (Transparent PNG)"
+                                value={companyForm.signature_image_url}
+                                onChange={url => setCompanyForm({ ...companyForm, signature_image_url: url })}
+                                uploadNamePrefix="company_signature"
+                                aspectRatio="signature"
+                                helperText="Rendered on the Authorised Signatory line on Invoices and Quotations."
+                              />
+                            </div>
+
+                            {/* Live Signature Preview Box */}
+                            <div className="p-2.5 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/60 flex flex-col items-center justify-center text-center">
+                              <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1 block">Live Signature Preview</span>
+                              <div className="h-10 flex items-center justify-center">
+                                {companyForm.signature_image_url ? (
+                                  <img src={companyForm.signature_image_url} alt="Signature" className="max-h-10 max-w-[150px] object-contain" />
+                                ) : (
+                                  <div className="text-center">
+                                    <span className="font-serif italic font-black text-sm tracking-wide text-foreground">
+                                      {companyForm.signatory_name || "Authorized Signatory"}
+                                    </span>
+                                    <span className="text-[7px] font-bold text-emerald-600 dark:text-emerald-400 tracking-widest uppercase flex items-center justify-center gap-0.5 mt-0.5">
+                                      ✓ Digitally Authorized
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                          <div className="p-3.5 rounded-xl border border-border bg-muted/20">
-                            <ImageUploadField
-                              label="Official Company Seal / Stamp"
-                              value={companyForm.stamp_image_url}
-                              onChange={url => setCompanyForm({ ...companyForm, stamp_image_url: url })}
-                              uploadNamePrefix="company_stamp"
-                              helperText="Rendered next to the signature on Invoices."
-                            />
+
+                          {/* Card B: Corporate Stamp Seal */}
+                          <div className="p-3.5 rounded-2xl border border-border bg-surface flex flex-col justify-between space-y-3 shadow-2xs">
+                            <div>
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="font-bold text-xs text-foreground flex items-center gap-1.5">
+                                  <span>💮</span> Corporate Seal / Stamp
+                                </span>
+                                <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${companyForm.stamp_image_url ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300'}`}>
+                                  {companyForm.stamp_image_url ? 'Custom Upload' : 'Auto Vector Seal'}
+                                </span>
+                              </div>
+                              <ImageUploadField
+                                label="Upload Round Stamp (Transparent PNG)"
+                                value={companyForm.stamp_image_url}
+                                onChange={url => setCompanyForm({ ...companyForm, stamp_image_url: url })}
+                                uploadNamePrefix="company_stamp"
+                                helperText="Rendered as the round official seal beside the signature."
+                              />
+                            </div>
+
+                            {/* Live Stamp Seal Preview Box */}
+                            <div className="p-2.5 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/60 flex flex-col items-center justify-center text-center">
+                              <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-1 block">Live Stamp Preview</span>
+                              <div className="h-16 flex items-center justify-center">
+                                {companyForm.stamp_image_url ? (
+                                  <img src={companyForm.stamp_image_url} alt="Stamp" className="max-h-16 max-w-16 object-contain" />
+                                ) : (
+                                  <div className="w-14 h-14 rounded-full border-2 border-dashed border-teal-600 dark:border-teal-400 flex flex-col items-center justify-center p-0.5 text-center bg-white dark:bg-zinc-900 shadow-2xs rotate-[-4deg]">
+                                    <div className="w-[46px] h-[46px] rounded-full border border-teal-300 dark:border-teal-700 flex flex-col items-center justify-center p-0.5">
+                                      <div className="text-[5.5px] font-black uppercase tracking-tighter leading-tight text-foreground truncate max-w-[42px]">
+                                        {companyForm.brand_name || "SAAMPARK"}
+                                      </div>
+                                      <div className="w-full border-t border-teal-200 dark:border-teal-800 my-0.5" />
+                                      <div className="text-[4.5px] font-black text-emerald-700 dark:text-emerald-400 tracking-wider uppercase leading-none">
+                                        ★ OFFICIAL SEAL ★
+                                      </div>
+                                      <div className="text-[3.5px] font-bold text-muted-foreground uppercase tracking-tight leading-none mt-0.5">
+                                        VERIFIED
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1269,107 +1405,474 @@ export default function CompaniesMain() {
                         )}
                       </div>
                     )}
+
+                    {/* TAB 6: BRANCHES & SUB-BRANCHES (EXPANDED DEDICATED MANAGEMENT) */}
+                    {companyTab === "branches" && (() => {
+                      const compId = editingCompany?.id || companyForm.slug || "tech"
+                      const compBranches = getBranchesForCompany(compId)
+                      const compSubBranches = subBranches.filter(sb => {
+                        const sbComp = sb.company_id || (sb as any).companyId
+                        const sbBranch = sb.branch_id || (sb as any).branchId
+                        return isMatchingCompany({ id: compId, slug: compId } as any, sbComp) || compBranches.some(b => String(b.id) === String(sbBranch))
+                      })
+
+                      return (
+                        <div className="space-y-4">
+                          {/* Header banner with Add buttons */}
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-3 rounded-2xl bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-teal-500/10 border border-blue-500/20">
+                            <div>
+                              <h3 className="font-bold text-xs text-foreground flex items-center gap-1.5">
+                                <Building size={14} className="text-blue-600" />
+                                <span>Operational Branches &amp; Franchise Sub-Branches</span>
+                              </h3>
+                              <p className="text-[10.5px] text-muted-foreground">
+                                Linked units for {companyForm.name || "Company"}. You can preview branch/sub-branch invoices in real-time.
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                size="sm"
+                                onClick={() => openAddBranch(compId)}
+                                className="text-[11px] font-bold bg-blue-600 hover:bg-blue-700 text-white h-7 px-2.5"
+                              >
+                                <Plus size={12} className="mr-1" /> Add Branch
+                              </Button>
+                              {compBranches.length > 0 && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => openAddSubBranch(compBranches[0].id, compId)}
+                                  className="text-[11px] font-bold h-7 px-2.5"
+                                >
+                                  <Plus size={12} className="mr-1" /> Add Sub-Branch
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Section 1: Operational Branches */}
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-xs text-foreground flex items-center gap-1">
+                                <span>📍</span> Operational Branches ({compBranches.length})
+                              </span>
+                            </div>
+
+                            {compBranches.length === 0 ? (
+                              <div className="p-4 rounded-xl border border-dashed border-border text-center space-y-2 bg-muted/10">
+                                <Building className="w-8 h-8 text-muted-foreground/50 mx-auto" />
+                                <p className="text-xs text-muted-foreground">No operational branches linked under this company yet.</p>
+                                <Button size="sm" variant="outline" onClick={() => openAddBranch(compId)} className="text-xs font-bold">
+                                  <Plus size={12} className="mr-1" /> Create First Branch
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="grid grid-cols-1 gap-2">
+                                {compBranches.map(b => (
+                                  <div key={b.id} className="p-3 rounded-xl border border-border bg-surface hover:border-primary/40 transition-all flex items-center justify-between gap-3 shadow-2xs">
+                                    <div className="space-y-0.5 min-w-0">
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-bold text-xs text-foreground truncate">{b.name}</span>
+                                        <span className="px-1.5 py-0.2 rounded font-mono text-[9.5px] font-bold bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300">{b.code || "BRANCH"}</span>
+                                      </div>
+                                      <p className="text-[10px] text-muted-foreground flex items-center gap-2 flex-wrap">
+                                        {b.city && <span>📍 {b.city}, {b.state}</span>}
+                                        {b.manager_name && <span>👤 Manager: {b.manager_name}</span>}
+                                        {b.phone && <span>📞 {b.phone}</span>}
+                                      </p>
+                                    </div>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => openEditBranch(b)}
+                                        className="h-7 px-2 text-[10.5px] font-bold"
+                                      >
+                                        <Edit2 size={11} className="mr-1" /> Edit Branch
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Section 2: Franchise Sub-Branches */}
+                          <div className="space-y-2 pt-2 border-t border-border">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-xs text-foreground flex items-center gap-1">
+                                <span>🤝</span> Franchise &amp; Partner Sub-Branches ({compSubBranches.length})
+                              </span>
+                            </div>
+
+                            {compSubBranches.length === 0 ? (
+                              <div className="p-4 rounded-xl border border-dashed border-border text-center space-y-2 bg-muted/10">
+                                <Users className="w-8 h-8 text-muted-foreground/50 mx-auto" />
+                                <p className="text-xs text-muted-foreground">No franchise sub-branches linked yet.</p>
+                                {compBranches.length > 0 && (
+                                  <Button size="sm" variant="outline" onClick={() => openAddSubBranch(compBranches[0].id, compId)} className="text-xs font-bold">
+                                    <Plus size={12} className="mr-1" /> Create First Sub-Branch
+                                  </Button>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="grid grid-cols-1 gap-2">
+                                {compSubBranches.map(sb => (
+                                  <div key={sb.id} className="p-3 rounded-xl border border-border bg-surface hover:border-teal-500/40 transition-all flex items-center justify-between gap-3 shadow-2xs">
+                                    <div className="space-y-0.5 min-w-0">
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-bold text-xs text-foreground truncate">{sb.name}</span>
+                                        <span className="px-1.5 py-0.2 rounded font-mono text-[9.5px] font-bold bg-teal-100 dark:bg-teal-950 text-teal-800 dark:text-teal-300">{sb.code || "SUB-BRANCH"}</span>
+                                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">{sb.revenue_share_pct || 30}% Share</span>
+                                      </div>
+                                      <p className="text-[10px] text-muted-foreground flex items-center gap-2 flex-wrap">
+                                        {sb.partner_name && <span>👤 Partner: {sb.partner_name}</span>}
+                                        {sb.partner_phone && <span>📞 {sb.partner_phone}</span>}
+                                        {sb.city && <span>📍 {sb.city}</span>}
+                                      </p>
+                                    </div>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => openEditSubBranch(sb)}
+                                        className="h-7 px-2 text-[10.5px] font-bold"
+                                      >
+                                        <Edit2 size={11} className="mr-1" /> Edit Sub-Branch
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })()}
                   </div>
                 </div>
 
-                {/* Right Side: Real-Time Live Invoicing Document Preview */}
-                <div className="w-full lg:w-[46%] bg-zinc-100/80 dark:bg-zinc-950 p-4 flex flex-col overflow-y-auto border-t lg:border-t-0 border-border">
-                  <div className="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                      <span className="font-bold text-xs text-foreground">Live Invoice Output</span>
-                    </div>
-                    <span className="text-[10px] font-mono text-muted-foreground bg-surface px-2 py-0.5 rounded border border-border">
-                      {companyForm.name ? "Auto-synced" : "Preview"}
-                    </span>
-                  </div>
+                {/* Right Side: Real-Time Live Multi-Entity Invoicing Document Preview */}
+                <div className="w-full lg:w-[46%] bg-zinc-100/80 dark:bg-zinc-950 p-3 sm:p-4 flex flex-col overflow-y-auto border-t lg:border-t-0 border-border">
+                  {/* Preview Toolbar: Level, Scheme, Zoom Controls */}
+                  {(() => {
+                    const compId = editingCompany?.id || companyForm.slug || "tech"
+                    const compBranches = getBranchesForCompany(compId)
+                    const compSubBranches = subBranches.filter(sb => {
+                      const sbComp = sb.company_id || (sb as any).companyId
+                      const sbBranch = sb.branch_id || (sb as any).branchId
+                      return isMatchingCompany({ id: compId, slug: compId } as any, sbComp) || compBranches.some(b => String(b.id) === String(sbBranch))
+                    })
 
-                  <div className="py-3 flex-1 flex items-start justify-center overflow-x-hidden">
-                    <div className="w-full max-w-[650px] transform origin-top scale-[0.72] sm:scale-[0.8] lg:scale-[0.82] transition-transform shadow-xl rounded-2xl">
-                      <OfficialInvoiceDocument
-                        invoice={{
-                          id: "INV-2026-LIVE",
-                          client: "Global Enterprises Corp",
-                          clientEmail: "accounts@globalent.com",
-                          project: "Custom Enterprise Cloud Architecture & Services",
-                          billDate: new Date().toLocaleDateString("en-GB"),
-                          dueDate: new Date(Date.now() + 15 * 86400000).toLocaleDateString("en-GB"),
-                          baseAmount: 45000,
-                          setupCharge: 5000,
-                          discount: 2000,
-                          gstRate: 18,
-                          gstAmount: 8640,
-                          totalInvoiced: "₹56,640",
-                          paymentReceived: "₹25,000",
-                          due: "₹31,640",
-                          status: "Partially paid",
-                          companyId: companyForm.slug || "tech",
-                          items: [
-                            {
-                              id: "s1",
-                              serviceName: "Enterprise Software & Cloud Engineering",
-                              sacCode: "998313",
-                              qty: 1,
-                              unit: "Project",
-                              rate: 35000,
-                              gstRate: 18,
-                              gstAmount: 6300,
-                              totalAmount: 41300,
-                            },
-                            {
-                              id: "s2",
-                              serviceName: "Dedicated Technical Support & Maintenance",
-                              sacCode: "998314",
-                              qty: 1,
-                              unit: "Service",
-                              rate: 10000,
-                              gstRate: 18,
-                              gstAmount: 1800,
-                              totalAmount: 11800,
-                            },
-                          ],
-                        }}
-                        companyDetails={{
-                          id: editingCompany?.id || companyForm.slug || "tech",
-                          name: companyForm.name || "SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED",
-                          slug: companyForm.slug || "tech",
-                          brand_name: companyForm.brand_name || "SAAMPARK",
-                          division_name: companyForm.division_name || "TECHNOLOGY",
-                          subtitle: companyForm.subtitle || "RESEARCH & INNOVATION",
-                          industry: companyForm.industry || "Technology",
-                          currency: companyForm.currency || "INR",
-                          currency_symbol: "₹",
-                          logo_url: companyForm.logo_url,
-                          address: companyForm.address || "Kolkata, West Bengal, India",
-                          city: companyForm.city || "Kolkata",
-                          state: companyForm.state || "West Bengal",
-                          country: companyForm.country || "India",
-                          phone: companyForm.phone || "+91 9901518567",
-                          email: companyForm.email || "info@saamparktechnology.com",
-                          website: companyForm.website || "www.saamparktechnology.com",
-                          gstin: companyForm.gstin,
-                          pan: companyForm.pan,
-                          cin: companyForm.cin,
-                          signatory_name: companyForm.signatory_name || "Authorized Signatory",
-                          signatory_designation: companyForm.signatory_designation || "Managing Director",
-                          signature_image_url: companyForm.signature_image_url,
-                          stamp_image_url: companyForm.stamp_image_url,
-                          gst_bank_name: companyForm.gst_bank_name || companyForm.bank_name,
-                          gst_account_holder: companyForm.gst_account_holder || companyForm.account_holder,
-                          gst_account_number: companyForm.gst_account_number || companyForm.account_number,
-                          gst_ifsc_code: companyForm.gst_ifsc_code || companyForm.ifsc_code,
-                          gst_bank_branch: companyForm.gst_bank_branch || companyForm.bank_branch,
-                          gst_upi_id: companyForm.gst_upi_id || companyForm.upi_id,
-                          gst_payment_qr_url: companyForm.gst_payment_qr_url || companyForm.payment_qr_url,
-                          nongst_bank_name: companyForm.nongst_bank_name || companyForm.bank_name,
-                          nongst_account_holder: companyForm.nongst_account_holder || companyForm.account_holder,
-                          nongst_account_number: companyForm.nongst_account_number || companyForm.account_number,
-                          nongst_ifsc_code: companyForm.nongst_ifsc_code || companyForm.ifsc_code,
-                          nongst_bank_branch: companyForm.nongst_bank_branch || companyForm.bank_branch,
-                          nongst_upi_id: companyForm.nongst_upi_id || companyForm.upi_id,
-                          nongst_payment_qr_url: companyForm.nongst_payment_qr_url || companyForm.payment_qr_url,
-                        } as any}
-                      />
+                    const activeBranch = compBranches.find(b => String(b.id) === String(selectedPreviewBranchId)) || compBranches[0]
+                    const activeSubBranch = compSubBranches.find(sb => String(sb.id) === String(selectedPreviewSubBranchId)) || compSubBranches[0]
+
+                    return (
+                      <div className="space-y-2 pb-2.5 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
+                        {/* Row 1: Header + Zoom controls */}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <span className="font-bold text-xs text-foreground">Live Invoice Output</span>
+                          </div>
+
+                          {/* Live Preview Scale / Zoom Controls */}
+                          <div className="flex items-center gap-1 bg-surface p-0.5 rounded-lg border border-border">
+                            <button
+                              type="button"
+                              onClick={() => setCompanyPreviewScale("fit")}
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                                companyPreviewScale === "fit" 
+                                  ? "bg-primary text-primary-foreground shadow-2xs" 
+                                  : "text-muted-foreground hover:text-foreground"
+                              }`}
+                              title="Fit complete single A4 page on screen"
+                            >
+                              Fit (60%)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setCompanyPreviewScale("normal")}
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                                companyPreviewScale === "normal" 
+                                  ? "bg-primary text-primary-foreground shadow-2xs" 
+                                  : "text-muted-foreground hover:text-foreground"
+                              }`}
+                              title="Standard 75% Scale"
+                            >
+                              75%
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setCompanyPreviewScale("large")}
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                                companyPreviewScale === "large" 
+                                  ? "bg-primary text-primary-foreground shadow-2xs" 
+                                  : "text-muted-foreground hover:text-foreground"
+                              }`}
+                              title="Full 100% Scale"
+                            >
+                              100%
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Row 2: Entity Switcher (Company vs Branch vs Sub-Branch) & Scheme Switcher (GST vs Non-GST) */}
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          {/* Entity Selector Pills */}
+                          <div className="flex items-center gap-1 bg-surface p-0.5 rounded-lg border border-border">
+                            <button
+                              type="button"
+                              onClick={() => setPreviewEntityLevel("company")}
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                                previewEntityLevel === "company"
+                                  ? "bg-blue-600 text-white shadow-2xs"
+                                  : "text-muted-foreground hover:text-foreground"
+                              }`}
+                            >
+                              🏢 Main Company
+                            </button>
+                            {compBranches.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPreviewEntityLevel("branch")
+                                  if (!selectedPreviewBranchId && compBranches[0]) {
+                                    setSelectedPreviewBranchId(String(compBranches[0].id))
+                                  }
+                                }}
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                                  previewEntityLevel === "branch"
+                                    ? "bg-indigo-600 text-white shadow-2xs"
+                                    : "text-muted-foreground hover:text-foreground"
+                                }`}
+                              >
+                                📍 Branch Office
+                              </button>
+                            )}
+                            {compSubBranches.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPreviewEntityLevel("subbranch")
+                                  if (!selectedPreviewSubBranchId && compSubBranches[0]) {
+                                    setSelectedPreviewSubBranchId(String(compSubBranches[0].id))
+                                  }
+                                }}
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                                  previewEntityLevel === "subbranch"
+                                    ? "bg-teal-600 text-white shadow-2xs"
+                                    : "text-muted-foreground hover:text-foreground"
+                                }`}
+                              >
+                                🤝 Sub-Branch
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Invoice Tax Scheme Switcher */}
+                          <div className="flex items-center gap-1 bg-surface p-0.5 rounded-lg border border-border">
+                            <button
+                              type="button"
+                              onClick={() => setPreviewInvoiceType("gst")}
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                                previewInvoiceType === "gst"
+                                  ? "bg-teal-600 text-white shadow-2xs"
+                                  : "text-muted-foreground hover:text-foreground"
+                              }`}
+                            >
+                              GST Tax (18%)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPreviewInvoiceType("nongst")}
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                                previewInvoiceType === "nongst"
+                                  ? "bg-sky-600 text-white shadow-2xs"
+                                  : "text-muted-foreground hover:text-foreground"
+                              }`}
+                            >
+                              Non-GST (0%)
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Branch / Sub-Branch dropdown if selected */}
+                        {previewEntityLevel === "branch" && compBranches.length > 1 && (
+                          <div className="flex items-center gap-1.5 text-[10px]">
+                            <span className="text-muted-foreground font-semibold">Active Branch:</span>
+                            <select
+                              value={selectedPreviewBranchId || compBranches[0]?.id}
+                              onChange={e => setSelectedPreviewBranchId(e.target.value)}
+                              className="px-2 py-1 rounded border border-border bg-surface text-foreground font-bold text-[10px]"
+                            >
+                              {compBranches.map(b => (
+                                <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
+                        {previewEntityLevel === "subbranch" && compSubBranches.length > 1 && (
+                          <div className="flex items-center gap-1.5 text-[10px]">
+                            <span className="text-muted-foreground font-semibold">Active Sub-Branch:</span>
+                            <select
+                              value={selectedPreviewSubBranchId || compSubBranches[0]?.id}
+                              onChange={e => setSelectedPreviewSubBranchId(e.target.value)}
+                              className="px-2 py-1 rounded border border-border bg-surface text-foreground font-bold text-[10px]"
+                            >
+                              {compSubBranches.map(sb => (
+                                <option key={sb.id} value={sb.id}>{sb.name} ({sb.partner_name})</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
+
+                  {/* Scaled Invoice Rendering Canvas */}
+                  <div className="py-2 flex-1 flex flex-col items-center justify-start overflow-y-auto pb-16">
+                    <div className={`w-full max-w-[680px] transform origin-top transition-all duration-200 shadow-xl rounded-2xl ${
+                      companyPreviewScale === "fit"
+                        ? "scale-[0.58] sm:scale-[0.62] xl:scale-[0.66]"
+                        : companyPreviewScale === "normal"
+                        ? "scale-[0.74] sm:scale-[0.78] xl:scale-[0.82]"
+                        : "scale-[0.92] sm:scale-100"
+                    }`}>
+                      {(() => {
+                        const compId = editingCompany?.id || companyForm.slug || "tech"
+                        const compBranches = getBranchesForCompany(compId)
+                        const compSubBranches = subBranches.filter(sb => {
+                          const sbComp = sb.company_id || (sb as any).companyId
+                          const sbBranch = sb.branch_id || (sb as any).branchId
+                          return isMatchingCompany({ id: compId, slug: compId } as any, sbComp) || compBranches.some(b => String(b.id) === String(sbBranch))
+                        })
+
+                        const activeBranch = compBranches.find(b => String(b.id) === String(selectedPreviewBranchId)) || compBranches[0]
+                        const activeSubBranch = compSubBranches.find(sb => String(sb.id) === String(selectedPreviewSubBranchId)) || compSubBranches[0]
+
+                        const isGst = previewInvoiceType === "gst"
+
+                        const sampleItems: InvoiceLineItem[] = isGst ? [
+                          {
+                            id: "s1",
+                            serviceName: "Enterprise Software & Cloud Engineering",
+                            sacCode: "998313",
+                            qty: 1,
+                            unit: "Project",
+                            rate: 35000,
+                            gstRate: 18,
+                            gstAmount: 6300,
+                            totalAmount: 41300,
+                          },
+                          {
+                            id: "s2",
+                            serviceName: "Dedicated Technical Support & Maintenance",
+                            sacCode: "998314",
+                            qty: 1,
+                            unit: "Service",
+                            rate: 10000,
+                            gstRate: 18,
+                            gstAmount: 1800,
+                            totalAmount: 11800,
+                          },
+                        ] : [
+                          {
+                            id: "s1",
+                            serviceName: "Direct Enterprise Consulting & Development",
+                            sacCode: "998313",
+                            qty: 1,
+                            unit: "Project",
+                            rate: 35000,
+                            gstRate: 0,
+                            gstAmount: 0,
+                            totalAmount: 35000,
+                          },
+                          {
+                            id: "s2",
+                            serviceName: "Direct Technical Support & Maintenance",
+                            sacCode: "998314",
+                            qty: 1,
+                            unit: "Service",
+                            rate: 10000,
+                            gstRate: 0,
+                            gstAmount: 0,
+                            totalAmount: 10000,
+                          },
+                        ]
+
+                        return (
+                          <OfficialInvoiceDocument
+                            invoice={{
+                              id: isGst ? "INV-2026-LIVE" : "NGINV-2026-LIVE",
+                              client: "Global Enterprises Corp",
+                              clientEmail: "accounts@globalent.com",
+                              project: "Custom Enterprise Cloud Architecture & Services",
+                              billDate: new Date().toLocaleDateString("en-GB"),
+                              dueDate: new Date(Date.now() + 15 * 86400000).toLocaleDateString("en-GB"),
+                              baseAmount: 45000,
+                              setupCharge: 5000,
+                              discount: 2000,
+                              gstRate: isGst ? 18 : 0,
+                              gstAmount: isGst ? 8640 : 0,
+                              totalInvoiced: isGst ? "₹56,640" : "₹48,000",
+                              paymentReceived: "₹25,000",
+                              due: isGst ? "₹31,640" : "₹23,000",
+                              status: "Partially paid",
+                              companyId: companyForm.slug || "tech",
+                              branchId: previewEntityLevel === "branch" ? (activeBranch?.id || "sample-branch") : undefined,
+                              branchName: previewEntityLevel === "branch" ? (activeBranch?.name || "Regional Branch") : undefined,
+                              subBranchId: previewEntityLevel === "subbranch" ? (activeSubBranch?.id || "sample-sub") : undefined,
+                              subBranchName: previewEntityLevel === "subbranch" ? (activeSubBranch?.name || "Franchise Sub-Branch") : undefined,
+                              items: sampleItems,
+                            }}
+                            companyDetails={{
+                              id: editingCompany?.id || companyForm.slug || "tech",
+                              name: companyForm.name || "SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED",
+                              slug: companyForm.slug || "tech",
+                              brand_name: companyForm.brand_name || "SAAMPARK",
+                              division_name: companyForm.division_name || "TECHNOLOGY",
+                              subtitle: companyForm.subtitle || "RESEARCH & INNOVATION",
+                              industry: companyForm.industry || "Technology",
+                              currency: companyForm.currency || "INR",
+                              currency_symbol: "₹",
+                              logo_url: companyForm.logo_url,
+                              address: companyForm.address || "Kolkata, West Bengal, India",
+                              city: companyForm.city || "Kolkata",
+                              state: companyForm.state || "West Bengal",
+                              country: companyForm.country || "India",
+                              phone: companyForm.phone || "+91 9901518567",
+                              email: companyForm.email || "info@saamparktechnology.com",
+                              website: companyForm.website || "www.saamparktechnology.com",
+                              gstin: companyForm.gstin,
+                              pan: companyForm.pan,
+                              cin: companyForm.cin,
+                              iso_certification: companyForm.iso_certification,
+                              signatory_name: companyForm.signatory_name || "Authorized Signatory",
+                              signatory_designation: companyForm.signatory_designation || "Managing Director",
+                              signature_image_url: companyForm.signature_image_url,
+                              stamp_image_url: companyForm.stamp_image_url,
+                              gst_bank_name: companyForm.gst_bank_name || companyForm.bank_name,
+                              gst_account_holder: companyForm.gst_account_holder || companyForm.account_holder,
+                              gst_account_number: companyForm.gst_account_number || companyForm.account_number,
+                              gst_ifsc_code: companyForm.gst_ifsc_code || companyForm.ifsc_code,
+                              gst_bank_branch: companyForm.gst_bank_branch || companyForm.bank_branch,
+                              gst_upi_id: companyForm.gst_upi_id || companyForm.upi_id,
+                              gst_payment_qr_url: companyForm.gst_payment_qr_url || companyForm.payment_qr_url,
+                              nongst_bank_name: companyForm.nongst_bank_name || companyForm.bank_name,
+                              nongst_account_holder: companyForm.nongst_account_holder || companyForm.account_holder,
+                              nongst_account_number: companyForm.nongst_account_number || companyForm.account_number,
+                              nongst_ifsc_code: companyForm.nongst_ifsc_code || companyForm.ifsc_code,
+                              nongst_bank_branch: companyForm.nongst_bank_branch || companyForm.bank_branch,
+                              nongst_upi_id: companyForm.nongst_upi_id || companyForm.upi_id,
+                              nongst_payment_qr_url: companyForm.nongst_payment_qr_url || companyForm.payment_qr_url,
+                            } as any}
+                            activeBranch={previewEntityLevel === "branch" ? activeBranch : (previewEntityLevel === "subbranch" ? (branches.find(b => String(b.id) === String((activeSubBranch as any)?.branch_id || (activeSubBranch as any)?.parentBranchId)) || activeBranch) : undefined)}
+                            activeSubBranch={previewEntityLevel === "subbranch" ? activeSubBranch : undefined}
+                          />
+                        )
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -1510,18 +2013,64 @@ export default function CompaniesMain() {
 
                 {/* Right Side: Live Branch Invoice Preview */}
                 <div className="w-full lg:w-[46%] bg-zinc-100/80 dark:bg-zinc-950 p-4 flex flex-col overflow-y-auto border-t lg:border-t-0 border-border">
-                  <div className="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
+                  <div className="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800 shrink-0 gap-2">
                     <div className="flex items-center gap-2">
                       <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
                       <span className="font-bold text-xs text-foreground">Branch Invoice Preview</span>
+                      <span className="text-[10px] font-mono text-muted-foreground bg-surface px-1.5 py-0.5 rounded border border-border">
+                        {branchForm.code || "Branch Preview"}
+                      </span>
                     </div>
-                    <span className="text-[10px] font-mono text-muted-foreground bg-surface px-2 py-0.5 rounded border border-border">
-                      {branchForm.code || "Branch Preview"}
-                    </span>
+
+                    {/* Scale Controls: Fit / 75% / 100% */}
+                    <div className="flex items-center gap-1 bg-surface p-0.5 rounded-lg border border-border shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setBranchPreviewScale("fit")}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                          branchPreviewScale === "fit" 
+                            ? "bg-primary text-primary-foreground shadow-2xs" 
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                        title="Fit to Width"
+                      >
+                        Fit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBranchPreviewScale("normal")}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                          branchPreviewScale === "normal" 
+                            ? "bg-primary text-primary-foreground shadow-2xs" 
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                        title="75% Scale"
+                      >
+                        75%
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBranchPreviewScale("large")}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                          branchPreviewScale === "large" 
+                            ? "bg-primary text-primary-foreground shadow-2xs" 
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                        title="100% Full Size"
+                      >
+                        100%
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="py-3 flex-1 flex items-start justify-center overflow-x-hidden">
-                    <div className="w-full max-w-[650px] transform origin-top scale-[0.72] sm:scale-[0.8] lg:scale-[0.82] transition-transform shadow-xl rounded-2xl">
+                  <div className="py-3 flex-1 flex flex-col items-center justify-start overflow-y-auto overflow-x-auto pb-16">
+                    <div className={`w-full max-w-[680px] transform origin-top transition-all duration-200 shadow-xl rounded-2xl ${
+                      branchPreviewScale === "fit"
+                        ? "scale-[0.58] sm:scale-[0.62] xl:scale-[0.66]"
+                        : branchPreviewScale === "normal"
+                        ? "scale-[0.74] sm:scale-[0.78] xl:scale-[0.82]"
+                        : "scale-[0.92] sm:scale-100"
+                    }`}>
                       <OfficialInvoiceDocument
                         invoice={{
                           id: "INV-BR-SAMPLE",
@@ -1557,6 +2106,33 @@ export default function CompaniesMain() {
                           ]
                         }}
                         companyDetails={companies.find(c => c.id === branchCompanyId) || companies[0]}
+                        activeBranch={{
+                          id: editingBranch?.id || "preview-branch",
+                          name: branchForm.name || "Salt Lake Technology Center Branch",
+                          code: branchForm.code || "STR-BR-701",
+                          companyId: branchCompanyId || "tech",
+                          status: "Active",
+                          managerName: branchForm.managerName || "Supriya Kumar",
+                          managerPhone: branchForm.managerPhone || "+91 98765 43210",
+                          address: branchForm.address || "Plot 4, Block DP, Sector V, Salt Lake City",
+                          city: branchForm.city || "Kolkata",
+                          state: branchForm.state || "West Bengal",
+                          phone: branchForm.phone || "+91 99015 18567",
+                          email: branchForm.email || "saltlake.branch@saamparktechnology.com",
+                          stamp_image_url: branchForm.stamp_image_url,
+                          signature_image_url: branchForm.signature_image_url,
+                          payment_qr_url: branchForm.payment_qr_url,
+                          gstin: branchForm.gstin || "19AAECS1234F1Z8",
+                          pan: branchForm.pan || "AAECS1234F",
+                          cin: (branchForm as any).cin || "",
+                          bank_name: branchForm.bank_name || "ICICI Bank Ltd",
+                          account_number: branchForm.account_number || "123405009876",
+                          ifsc_code: branchForm.ifsc_code || "ICIC0001234",
+                          upi_id: branchForm.upi_id || "saampark.branch@icici",
+                          logo_url: branchForm.logo_url,
+                          signatory_name: branchForm.signatory_name || branchForm.managerName || "Supriya Kumar",
+                          signatory_designation: branchForm.signatory_designation || "Branch Manager",
+                        } as any}
                       />
                     </div>
                   </div>
@@ -1731,18 +2307,61 @@ export default function CompaniesMain() {
 
                 {/* Right Side: Live 3-Tier Sub-Branch Invoice Preview */}
                 <div className="w-full lg:w-[46%] bg-zinc-100/80 dark:bg-zinc-950 p-4 flex flex-col overflow-y-auto border-t lg:border-t-0 border-border">
-                  <div className="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
+                  <div className="flex items-center justify-between pb-3 border-b border-zinc-200 dark:border-zinc-800 shrink-0 gap-2">
                     <div className="flex items-center gap-2">
                       <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
                       <span className="font-bold text-xs text-foreground">3-Tier Sub-Branch Preview</span>
                     </div>
-                    <span className="text-[10px] font-mono text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950 px-2 py-0.5 rounded border border-emerald-300">
-                      {subBranchForm.revenue_share_pct}% Partner Share
-                    </span>
+
+                    {/* Scale Controls: Fit / 75% / 100% */}
+                    <div className="flex items-center gap-1 bg-surface p-0.5 rounded-lg border border-border shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setSubBranchPreviewScale("fit")}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                          subBranchPreviewScale === "fit" 
+                            ? "bg-primary text-primary-foreground shadow-2xs" 
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                        title="Fit to Width"
+                      >
+                        Fit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSubBranchPreviewScale("normal")}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                          subBranchPreviewScale === "normal" 
+                            ? "bg-primary text-primary-foreground shadow-2xs" 
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                        title="75% Scale"
+                      >
+                        75%
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSubBranchPreviewScale("large")}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                          subBranchPreviewScale === "large" 
+                            ? "bg-primary text-primary-foreground shadow-2xs" 
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                        title="100% Full Size"
+                      >
+                        100%
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="py-3 flex-1 flex items-start justify-center overflow-x-hidden">
-                    <div className="w-full max-w-[650px] transform origin-top scale-[0.72] sm:scale-[0.8] lg:scale-[0.82] transition-transform shadow-xl rounded-2xl">
+                  <div className="py-3 flex-1 flex flex-col items-center justify-start overflow-y-auto overflow-x-auto pb-16">
+                    <div className={`w-full max-w-[680px] transform origin-top transition-all duration-200 shadow-xl rounded-2xl ${
+                      subBranchPreviewScale === "fit"
+                        ? "scale-[0.58] sm:scale-[0.62] xl:scale-[0.66]"
+                        : subBranchPreviewScale === "normal"
+                        ? "scale-[0.74] sm:scale-[0.78] xl:scale-[0.82]"
+                        : "scale-[0.92] sm:scale-100"
+                    }`}>
                       <OfficialInvoiceDocument
                         invoice={{
                           id: "INV-SB-SAMPLE",
@@ -1779,6 +2398,49 @@ export default function CompaniesMain() {
                           ]
                         }}
                         companyDetails={companies.find(c => c.id === subBranchCompanyId) || companies[0]}
+                        activeBranch={branches.find(b => String(b.id) === String(subBranchBranchId)) || {
+                          id: "branch-ho",
+                          name: "Head Office - Mumbai & Kolkata Technology Center",
+                          code: "STR-HO",
+                          managerName: "Supriya Kumar",
+                          managerPhone: "+91 98765 43210",
+                          city: "Mumbai & Kolkata",
+                          state: "West Bengal",
+                          address: "Sector V, Salt Lake, Kolkata",
+                          status: "Active",
+                          companyId: subBranchCompanyId || "tech",
+                          phone: "+91 99015 18567",
+                          email: "ho@saamparktechnology.com",
+                        } as any}
+                        activeSubBranch={{
+                          id: editingSubBranch?.id || "sample-sb",
+                          name: subBranchForm.name || "Durgapur City Center Sub-Branch",
+                          code: subBranchForm.code || "SB-DUR-01",
+                          partner_name: subBranchForm.partner_name || "Debabrata Mukherjee",
+                          partnerName: subBranchForm.partner_name || "Debabrata Mukherjee",
+                          partner_type: subBranchForm.partner_type || "Franchise Partner",
+                          partnerType: subBranchForm.partner_type || "Franchise Partner",
+                          parentBranchId: subBranchBranchId || "branch-ho",
+                          branch_id: subBranchBranchId || "branch-ho",
+                          company_id: subBranchCompanyId || "tech",
+                          address: subBranchForm.address || "Bengal Shristi Commercial Complex, City Center",
+                          city: subBranchForm.city || "Durgapur",
+                          state: subBranchForm.state || "West Bengal",
+                          phone: subBranchForm.phone || "+91 98321 45678",
+                          email: subBranchForm.email || "durgapur.franchise@saamparktechnology.com",
+                          stamp_image_url: subBranchForm.stamp_image_url,
+                          signature_image_url: subBranchForm.signature_image_url,
+                          payment_qr_url: subBranchForm.payment_qr_url,
+                          gstin: subBranchForm.gstin || "19BBCCS5678G1Z2",
+                          pan: subBranchForm.pan || "BBCCS5678G",
+                          bank_name: subBranchForm.bank_name || "State Bank of India",
+                          account_number: subBranchForm.account_number || "39871234567",
+                          ifsc_code: subBranchForm.ifsc_code || "SBIN0001234",
+                          upi_id: subBranchForm.upi_id || "saampark.durgapur@sbi",
+                          logo_url: subBranchForm.logo_url,
+                          signatory_name: subBranchForm.signatory_name || subBranchForm.partner_name || "Debabrata Mukherjee",
+                          signatory_designation: subBranchForm.signatory_designation || `${subBranchForm.partner_type || 'Franchise'} Partner`,
+                        } as any}
                       />
                     </div>
                   </div>

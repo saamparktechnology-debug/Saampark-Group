@@ -1,11 +1,47 @@
-﻿const pool = require('../config/db');
+const pool = require('../config/db');
+
+const ALLOWED_SUB_BRANCH_FIELDS = [
+  'branch_id', 'company_id', 'name', 'code', 'address', 'city', 'state', 'phone', 'email', 'manager_id', 'is_active',
+  'brand_name', 'division_name', 'subtitle', 'gstin', 'pan', 'cin', 'msme_reg', 'website',
+  'signatory_name', 'signatory_designation', 'signature_image_url', 'stamp_image_url',
+  'terms_conditions', 'invoice_notes', 'upi_id', 'account_holder', 'bank_name', 'account_number', 'ifsc_code', 'bank_branch', 'payment_qr_url',
+  'gst_bank_name', 'gst_account_holder', 'gst_account_number', 'gst_ifsc_code', 'gst_bank_branch', 'gst_upi_id', 'gst_payment_qr_url',
+  'nongst_bank_name', 'nongst_account_holder', 'nongst_account_number', 'nongst_ifsc_code', 'nongst_bank_branch', 'nongst_upi_id', 'nongst_payment_qr_url'
+];
 
 const subBranchModel = {
-  async create({ branch_id, company_id, name, code, address, city, state, phone, email, manager_id }) {
+  async create(data) {
+    const fields = [];
+    const placeholders = [];
+    const values = [];
+
+    for (const key of ALLOWED_SUB_BRANCH_FIELDS) {
+      if (data[key] !== undefined) {
+        fields.push(key);
+        placeholders.push('?');
+        values.push(data[key] === '' ? null : data[key]);
+      }
+    }
+
+    if (!fields.includes('name')) {
+      fields.push('name');
+      placeholders.push('?');
+      values.push(data.name || 'New Sub Branch');
+    }
+    if (!fields.includes('branch_id')) {
+      fields.push('branch_id');
+      placeholders.push('?');
+      values.push(data.branch_id || data.parentBranchId || 1);
+    }
+    if (!fields.includes('company_id')) {
+      fields.push('company_id');
+      placeholders.push('?');
+      values.push(data.company_id || 1);
+    }
+
     const [result] = await pool.execute(
-      `INSERT INTO sub_branches (branch_id, company_id, name, code, address, city, state, phone, email, manager_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [branch_id, company_id, name, code || null, address || null, city || null, state || null, phone || null, email || null, manager_id || null]
+      `INSERT INTO sub_branches (${fields.join(', ')}) VALUES (${placeholders.join(', ')})`,
+      values
     );
     return result.insertId;
   },
@@ -57,12 +93,13 @@ const subBranchModel = {
     const fields = [];
     const values = [];
     for (const [key, val] of Object.entries(data)) {
-      if (val !== undefined) {
+      if (ALLOWED_SUB_BRANCH_FIELDS.includes(key) && val !== undefined) {
         fields.push(`${key} = ?`);
-        values.push(val);
+        values.push(val === '' ? null : val);
       }
     }
     if (fields.length === 0) return false;
+    fields.push('updated_at = NOW()');
     values.push(id);
     await pool.execute(`UPDATE sub_branches SET ${fields.join(', ')} WHERE id = ?`, values);
     return true;

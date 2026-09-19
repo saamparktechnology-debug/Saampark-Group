@@ -580,4 +580,65 @@ html, body, input, textarea, select, button, table, span, div, p {
     inset 0 1.5px 0 0 rgba(255, 255, 255, 0.16);
 }
 
+/* ========================================================
+   OFFICIAL A4 INVOICE & DOCUMENT PRINT CALIBRATION
+   ======================================================== */
+@page {
+  size: A4 portrait;
+  margin: 0;
+}
+
+@media print {
+  html, body {
+    width: 210mm !important;
+    min-width: 210mm !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide navigation, toolbars, and extraneous buttons during print */
+  nav, header, sidebar, aside, .no-print, button, .sidebar-backdrop, .navbar, .portal-header, [data-theme-switcher] {
+    display: none !important;
+  }
+
+  #printable-invoice {
+    width: 210mm !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    display: block !important;
+    background: transparent !important;
+  }
+
+  .a4-page {
+    width: 210mm !important;
+    min-height: 297mm !important;
+    max-height: 297mm !important;
+    height: 297mm !important;
+    padding: 8mm 10mm !important;
+    margin: 0 auto !important;
+    box-sizing: border-box !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    background: #ffffff !important;
+  }
+
+  .a4-page:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+}
+
+
 

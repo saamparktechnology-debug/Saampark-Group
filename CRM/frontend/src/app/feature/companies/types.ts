@@ -46,6 +46,7 @@ export interface Company {
   stamp_image_url?: string
   terms_conditions?: string
   invoice_notes?: string
+  iso_certification?: string
 }
 
 export interface Branch {
@@ -76,6 +77,9 @@ export interface Branch {
   signatory_designation?: string
   signature_image_url?: string
   stamp_image_url?: string
+  iso_certification?: string
+  terms_conditions?: string
+  invoice_notes?: string
   bank_name?: string
   account_holder?: string
   account_number?: string

@@ -28,7 +28,14 @@ const createCompany = async (req, res, next) => {
     if (req.user.role_id !== 1 && req.user.role !== 'Super Admin') {
       return errorResponse(res, 403, 'Access denied: Only Super Admin can create companies.');
     }
-    const { name, slug, currency, currency_symbol, logo_url, address, industry } = req.body;
+    const { 
+      name, slug, currency, currency_symbol, logo_url, address, industry,
+      brand_name, division_name, subtitle, gstin, pan, cin, msme_reg, website,
+      signatory_name, signatory_designation, signature_image_url, stamp_image_url,
+      terms_conditions, invoice_notes, upi_id, account_holder, bank_name, account_number, ifsc_code, bank_branch, payment_qr_url,
+      gst_bank_name, gst_account_holder, gst_account_number, gst_ifsc_code, gst_bank_branch, gst_upi_id, gst_payment_qr_url,
+      nongst_bank_name, nongst_account_holder, nongst_account_number, nongst_ifsc_code, nongst_bank_branch, nongst_upi_id, nongst_payment_qr_url
+    } = req.body;
     if (!name) return errorResponse(res, 400, 'Company name is required.');
 
     const companySlug = slug || name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
@@ -38,8 +45,22 @@ const createCompany = async (req, res, next) => {
     if (existing.length) return errorResponse(res, 400, 'A company with this name/slug already exists.');
 
     const [result] = await pool.execute(
-      'INSERT INTO companies (name, slug, currency, currency_symbol, logo_url, address, industry, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [name, companySlug, currency || 'INR', currency_symbol || '₹', logo_url || null, address || null, industry || null, req.user.id]
+      `INSERT INTO companies (
+        name, slug, currency, currency_symbol, logo_url, address, industry, created_by,
+        brand_name, division_name, subtitle, gstin, pan, cin, msme_reg, website,
+        signatory_name, signatory_designation, signature_image_url, stamp_image_url,
+        terms_conditions, invoice_notes, upi_id, account_holder, bank_name, account_number, ifsc_code, bank_branch, payment_qr_url,
+        gst_bank_name, gst_account_holder, gst_account_number, gst_ifsc_code, gst_bank_branch, gst_upi_id, gst_payment_qr_url,
+        nongst_bank_name, nongst_account_holder, nongst_account_number, nongst_ifsc_code, nongst_bank_branch, nongst_upi_id, nongst_payment_qr_url
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        name, companySlug, currency || 'INR', currency_symbol || '₹', logo_url || null, address || null, industry || null, req.user.id,
+        brand_name || null, division_name || null, subtitle || null, gstin || null, pan || null, cin || null, msme_reg || null, website || null,
+        signatory_name || null, signatory_designation || null, signature_image_url || null, stamp_image_url || null,
+        terms_conditions || null, invoice_notes || null, upi_id || null, account_holder || null, bank_name || null, account_number || null, ifsc_code || null, bank_branch || null, payment_qr_url || null,
+        gst_bank_name || null, gst_account_holder || null, gst_account_number || null, gst_ifsc_code || null, gst_bank_branch || null, gst_upi_id || null, gst_payment_qr_url || null,
+        nongst_bank_name || null, nongst_account_holder || null, nongst_account_number || null, nongst_ifsc_code || null, nongst_bank_branch || null, nongst_upi_id || null, nongst_payment_qr_url || null
+      ]
     );
 
     return successResponse(res, 201, 'Company created successfully', { company_id: result.insertId, slug: companySlug });
@@ -52,19 +73,32 @@ const updateCompany = async (req, res, next) => {
     if (req.user.role_id !== 1 && req.user.role !== 'Super Admin') {
       return errorResponse(res, 403, 'Access denied: Only Super Admin can update companies.');
     }
-    const { name, currency, currency_symbol, logo_url, address, industry } = req.body;
-    await pool.execute(
-      `UPDATE companies SET
-        name = COALESCE(?, name),
-        currency = COALESCE(?, currency),
-        currency_symbol = COALESCE(?, currency_symbol),
-        logo_url = COALESCE(?, logo_url),
-        address = COALESCE(?, address),
-        industry = COALESCE(?, industry),
-        updated_at = NOW()
-       WHERE id = ?`,
-      [name || null, currency || null, currency_symbol || null, logo_url || null, address || null, industry || null, req.params.id]
-    );
+    
+    const allowedFields = [
+      'name', 'currency', 'currency_symbol', 'logo_url', 'address', 'industry',
+      'brand_name', 'division_name', 'subtitle', 'gstin', 'pan', 'cin', 'msme_reg', 'website',
+      'signatory_name', 'signatory_designation', 'signature_image_url', 'stamp_image_url',
+      'terms_conditions', 'invoice_notes', 'upi_id', 'account_holder', 'bank_name', 'account_number', 'ifsc_code', 'bank_branch', 'payment_qr_url',
+      'gst_bank_name', 'gst_account_holder', 'gst_account_number', 'gst_ifsc_code', 'gst_bank_branch', 'gst_upi_id', 'gst_payment_qr_url',
+      'nongst_bank_name', 'nongst_account_holder', 'nongst_account_number', 'nongst_ifsc_code', 'nongst_bank_branch', 'nongst_upi_id', 'nongst_payment_qr_url'
+    ];
+
+    const fields = [];
+    const values = [];
+
+    for (const field of allowedFields) {
+      if (req.body[field] !== undefined) {
+        fields.push(`${field} = ?`);
+        values.push(req.body[field] === '' ? null : req.body[field]);
+      }
+    }
+
+    if (fields.length > 0) {
+      fields.push('updated_at = NOW()');
+      values.push(req.params.id);
+      await pool.execute(`UPDATE companies SET ${fields.join(', ')} WHERE id = ?`, values);
+    }
+
     return successResponse(res, 200, 'Company updated');
   } catch (error) { next(error); }
 };

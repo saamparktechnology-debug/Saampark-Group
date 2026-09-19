@@ -86,6 +86,66 @@ async function migrate() {
     `);
     console.log('companies table ready');
 
+    // Dual GST and Non-GST & Enterprise Banking columns for companies, branches, sub_branches
+    const enterpriseCols = [
+      { col: 'brand_name', type: 'VARCHAR(150) NULL' },
+      { col: 'division_name', type: 'VARCHAR(150) NULL' },
+      { col: 'subtitle', type: 'VARCHAR(255) NULL' },
+      { col: 'gstin', type: 'VARCHAR(50) NULL' },
+      { col: 'pan', type: 'VARCHAR(50) NULL' },
+      { col: 'cin', type: 'VARCHAR(50) NULL' },
+      { col: 'msme_reg', type: 'VARCHAR(100) NULL' },
+      { col: 'website', type: 'VARCHAR(255) NULL' },
+      { col: 'signatory_name', type: 'VARCHAR(150) NULL' },
+      { col: 'signatory_designation', type: 'VARCHAR(150) NULL' },
+      { col: 'signature_image_url', type: 'LONGTEXT NULL' },
+      { col: 'stamp_image_url', type: 'LONGTEXT NULL' },
+      { col: 'terms_conditions', type: 'LONGTEXT NULL' },
+      { col: 'invoice_notes', type: 'LONGTEXT NULL' },
+      { col: 'upi_id', type: 'VARCHAR(100) NULL' },
+      { col: 'account_holder', type: 'VARCHAR(150) NULL' },
+      { col: 'bank_name', type: 'VARCHAR(150) NULL' },
+      { col: 'account_number', type: 'VARCHAR(100) NULL' },
+      { col: 'ifsc_code', type: 'VARCHAR(50) NULL' },
+      { col: 'bank_branch', type: 'VARCHAR(150) NULL' },
+      { col: 'payment_qr_url', type: 'LONGTEXT NULL' },
+      // GST Profile
+      { col: 'gst_bank_name', type: 'VARCHAR(150) NULL' },
+      { col: 'gst_account_holder', type: 'VARCHAR(150) NULL' },
+      { col: 'gst_account_number', type: 'VARCHAR(100) NULL' },
+      { col: 'gst_ifsc_code', type: 'VARCHAR(50) NULL' },
+      { col: 'gst_bank_branch', type: 'VARCHAR(150) NULL' },
+      { col: 'gst_upi_id', type: 'VARCHAR(100) NULL' },
+      { col: 'gst_payment_qr_url', type: 'LONGTEXT NULL' },
+      // Non-GST Profile
+      { col: 'nongst_bank_name', type: 'VARCHAR(150) NULL' },
+      { col: 'nongst_account_holder', type: 'VARCHAR(150) NULL' },
+      { col: 'nongst_account_number', type: 'VARCHAR(100) NULL' },
+      { col: 'nongst_ifsc_code', type: 'VARCHAR(50) NULL' },
+      { col: 'nongst_bank_branch', type: 'VARCHAR(150) NULL' },
+      { col: 'nongst_upi_id', type: 'VARCHAR(100) NULL' },
+      { col: 'nongst_payment_qr_url', type: 'LONGTEXT NULL' },
+    ];
+
+    for (const tbl of ['companies', 'branches', 'sub_branches']) {
+      try {
+        const [existingCols] = await pool.execute(`SHOW COLUMNS FROM ${tbl}`);
+        const fieldNames = existingCols.map(c => c.Field);
+        for (const ec of enterpriseCols) {
+          if (!fieldNames.includes(ec.col)) {
+            try {
+              await pool.execute(`ALTER TABLE ${tbl} ADD COLUMN ${ec.col} ${ec.type}`);
+              console.log(`Added column ${ec.col} to table ${tbl}`);
+            } catch (err) {
+              console.log(`Skip column ${ec.col} in ${tbl}: ${err.message}`);
+            }
+          }
+        }
+      } catch (err) {
+        console.log(`Table ${tbl} column migration notice:`, err.message);
+      }
+    }
+
     // Seed default companies if empty
     await pool.execute(`
       INSERT INTO companies (id, name, slug, currency, currency_symbol, industry)

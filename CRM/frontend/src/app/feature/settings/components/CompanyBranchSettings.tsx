@@ -115,7 +115,7 @@ export function CompanyBranchSettings() {
   const [companyEmail, setCompanyEmail] = React.useState("")
   const [companyWebsite, setCompanyWebsite] = React.useState("")
 
-  // Banking & UPI
+  // Banking & UPI (Default/Fallback)
   const [companyUpiId, setCompanyUpiId] = React.useState("")
   const [companyAccountHolder, setCompanyAccountHolder] = React.useState("")
   const [companyBankName, setCompanyBankName] = React.useState("")
@@ -123,6 +123,24 @@ export function CompanyBranchSettings() {
   const [companyIfscCode, setCompanyIfscCode] = React.useState("")
   const [companyBankBranch, setCompanyBankBranch] = React.useState("")
   const [companyPaymentQrUrl, setCompanyPaymentQrUrl] = React.useState("")
+
+  // Company Dual GST & Non-GST Bank Profiles
+  const [companyBankProfileTab, setCompanyBankProfileTab] = React.useState<"gst" | "nongst">("gst")
+  const [companyGstBankName, setCompanyGstBankName] = React.useState("")
+  const [companyGstAccountHolder, setCompanyGstAccountHolder] = React.useState("")
+  const [companyGstAccountNumber, setCompanyGstAccountNumber] = React.useState("")
+  const [companyGstIfscCode, setCompanyGstIfscCode] = React.useState("")
+  const [companyGstBankBranch, setCompanyGstBankBranch] = React.useState("")
+  const [companyGstUpiId, setCompanyGstUpiId] = React.useState("")
+  const [companyGstPaymentQrUrl, setCompanyGstPaymentQrUrl] = React.useState("")
+
+  const [companyNongstBankName, setCompanyNongstBankName] = React.useState("")
+  const [companyNongstAccountHolder, setCompanyNongstAccountHolder] = React.useState("")
+  const [companyNongstAccountNumber, setCompanyNongstAccountNumber] = React.useState("")
+  const [companyNongstIfscCode, setCompanyNongstIfscCode] = React.useState("")
+  const [companyNongstBankBranch, setCompanyNongstBankBranch] = React.useState("")
+  const [companyNongstUpiId, setCompanyNongstUpiId] = React.useState("")
+  const [companyNongstPaymentQrUrl, setCompanyNongstPaymentQrUrl] = React.useState("")
 
   // Terms & Signatory
   const [companyTermsConditions, setCompanyTermsConditions] = React.useState("")
@@ -186,7 +204,7 @@ export function CompanyBranchSettings() {
   const [branchEmail, setBranchEmail] = React.useState("")
   const [branchWebsite, setBranchWebsite] = React.useState("")
 
-  // 4. Bank & UPI Pay
+  // 4. Bank & UPI Pay (Default / Fallback)
   const [branchBankName, setBranchBankName] = React.useState("")
   const [branchAccountHolder, setBranchAccountHolder] = React.useState("")
   const [branchAccountNumber, setBranchAccountNumber] = React.useState("")
@@ -195,6 +213,24 @@ export function CompanyBranchSettings() {
   const [branchUpiId, setBranchUpiId] = React.useState("")
   const [branchPaymentQrUrl, setBranchPaymentQrUrl] = React.useState("")
   const [branchTermsConditions, setBranchTermsConditions] = React.useState("")
+
+  // Branch Dual GST & Non-GST Bank Profiles
+  const [branchBankProfileTab, setBranchBankProfileTab] = React.useState<"gst" | "nongst">("gst")
+  const [branchGstBankName, setBranchGstBankName] = React.useState("")
+  const [branchGstAccountHolder, setBranchGstAccountHolder] = React.useState("")
+  const [branchGstAccountNumber, setBranchGstAccountNumber] = React.useState("")
+  const [branchGstIfscCode, setBranchGstIfscCode] = React.useState("")
+  const [branchGstBankBranch, setBranchGstBankBranch] = React.useState("")
+  const [branchGstUpiId, setBranchGstUpiId] = React.useState("")
+  const [branchGstPaymentQrUrl, setBranchGstPaymentQrUrl] = React.useState("")
+
+  const [branchNongstBankName, setBranchNongstBankName] = React.useState("")
+  const [branchNongstAccountHolder, setBranchNongstAccountHolder] = React.useState("")
+  const [branchNongstAccountNumber, setBranchNongstAccountNumber] = React.useState("")
+  const [branchNongstIfscCode, setBranchNongstIfscCode] = React.useState("")
+  const [branchNongstBankBranch, setBranchNongstBankBranch] = React.useState("")
+  const [branchNongstUpiId, setBranchNongstUpiId] = React.useState("")
+  const [branchNongstPaymentQrUrl, setBranchNongstPaymentQrUrl] = React.useState("")
 
   // 5. Signature & Stamp
   const [branchSignatoryName, setBranchSignatoryName] = React.useState("")
@@ -245,7 +281,7 @@ export function CompanyBranchSettings() {
   const [subBranchEmail, setSubBranchEmail] = React.useState("")
   const [subBranchWebsite, setSubBranchWebsite] = React.useState("")
 
-  // 4. Bank & UPI Pay
+  // 4. Bank & UPI Pay (Default / Fallback)
   const [subBranchAccountHolder, setSubBranchAccountHolder] = React.useState("")
   const [subBranchBankName, setSubBranchBankName] = React.useState("")
   const [subBranchAccountNumber, setSubBranchAccountNumber] = React.useState("")
@@ -254,6 +290,24 @@ export function CompanyBranchSettings() {
   const [subBranchUpiId, setSubBranchUpiId] = React.useState("")
   const [subBranchPaymentQrUrl, setSubBranchPaymentQrUrl] = React.useState("")
   const [subBranchTermsConditions, setSubBranchTermsConditions] = React.useState("")
+
+  // Sub-Branch Dual GST & Non-GST Bank Profiles
+  const [subBranchBankProfileTab, setSubBranchBankProfileTab] = React.useState<"gst" | "nongst">("gst")
+  const [subBranchGstBankName, setSubBranchGstBankName] = React.useState("")
+  const [subBranchGstAccountHolder, setSubBranchGstAccountHolder] = React.useState("")
+  const [subBranchGstAccountNumber, setSubBranchGstAccountNumber] = React.useState("")
+  const [subBranchGstIfscCode, setSubBranchGstIfscCode] = React.useState("")
+  const [subBranchGstBankBranch, setSubBranchGstBankBranch] = React.useState("")
+  const [subBranchGstUpiId, setSubBranchGstUpiId] = React.useState("")
+  const [subBranchGstPaymentQrUrl, setSubBranchGstPaymentQrUrl] = React.useState("")
+
+  const [subBranchNongstBankName, setSubBranchNongstBankName] = React.useState("")
+  const [subBranchNongstAccountHolder, setSubBranchNongstAccountHolder] = React.useState("")
+  const [subBranchNongstAccountNumber, setSubBranchNongstAccountNumber] = React.useState("")
+  const [subBranchNongstIfscCode, setSubBranchNongstIfscCode] = React.useState("")
+  const [subBranchNongstBankBranch, setSubBranchNongstBankBranch] = React.useState("")
+  const [subBranchNongstUpiId, setSubBranchNongstUpiId] = React.useState("")
+  const [subBranchNongstPaymentQrUrl, setSubBranchNongstPaymentQrUrl] = React.useState("")
 
   // 5. Signature & Stamp
   const [subBranchLogoUrl, setSubBranchLogoUrl] = React.useState("")
@@ -267,15 +321,21 @@ export function CompanyBranchSettings() {
   const signatureFileInputRef = React.useRef<HTMLInputElement>(null)
   const companyStampInputRef = React.useRef<HTMLInputElement>(null)
   const qrFileInputRef = React.useRef<HTMLInputElement>(null)
+  const companyGstQrInputRef = React.useRef<HTMLInputElement>(null)
+  const companyNongstQrInputRef = React.useRef<HTMLInputElement>(null)
 
   const branchSignatureInputRef = React.useRef<HTMLInputElement>(null)
   const branchStampInputRef = React.useRef<HTMLInputElement>(null)
   const branchQrInputRef = React.useRef<HTMLInputElement>(null)
+  const branchGstQrInputRef = React.useRef<HTMLInputElement>(null)
+  const branchNongstQrInputRef = React.useRef<HTMLInputElement>(null)
 
   const subBranchLogoInputRef = React.useRef<HTMLInputElement>(null)
   const subBranchSignatureInputRef = React.useRef<HTMLInputElement>(null)
   const subBranchStampInputRef = React.useRef<HTMLInputElement>(null)
   const subBranchQrInputRef = React.useRef<HTMLInputElement>(null)
+  const subBranchGstQrInputRef = React.useRef<HTMLInputElement>(null)
+  const subBranchNongstQrInputRef = React.useRef<HTMLInputElement>(null)
 
   React.useEffect(() => {
     fetchCompanies()
@@ -360,21 +420,132 @@ export function CompanyBranchSettings() {
     }
   }
 
-  // Handle QR Image Upload
+  // Handle QR Image Uploads with ImgBB / Local Base64
   const handleQrUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 5 * 1024 * 1024) {
-      alert("QR Code image size should not exceed 5MB.")
-      return
-    }
+    if (file.size > 5 * 1024 * 1024) { alert("QR Code image size should not exceed 5MB."); return; }
     const reader = new FileReader()
     reader.onload = () => {
       if (typeof reader.result === "string") {
         setCompanyPaymentQrUrl(reader.result)
+        if (companyBankProfileTab === "gst") setCompanyGstPaymentQrUrl(reader.result)
+        else setCompanyNongstPaymentQrUrl(reader.result)
       }
     }
     reader.readAsDataURL(file)
+  }
+
+  const handleCompanyGstQrUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 10 * 1024 * 1024) { alert("QR Code image size should not exceed 10MB."); return; }
+    try {
+      const { uploadToImgBB } = await import("@/lib/imgbbUpload")
+      const res = await uploadToImgBB(file, "company_gst_qr", 800)
+      if (res && res.success && res.url) {
+        setCompanyGstPaymentQrUrl(res.url)
+        setCompanyPaymentQrUrl(res.url)
+      } else alert("Failed to upload GST QR to cloud.")
+    } catch (err: any) { alert("Upload error: " + err.message) }
+  }
+
+  const handleCompanyNongstQrUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 10 * 1024 * 1024) { alert("QR Code image size should not exceed 10MB."); return; }
+    try {
+      const { uploadToImgBB } = await import("@/lib/imgbbUpload")
+      const res = await uploadToImgBB(file, "company_nongst_qr", 800)
+      if (res && res.success && res.url) {
+        setCompanyNongstPaymentQrUrl(res.url)
+      } else alert("Failed to upload Non-GST QR to cloud.")
+    } catch (err: any) { alert("Upload error: " + err.message) }
+  }
+
+  const handleBranchGstQrUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 10 * 1024 * 1024) { alert("QR Code image size should not exceed 10MB."); return; }
+    try {
+      const { uploadToImgBB } = await import("@/lib/imgbbUpload")
+      const res = await uploadToImgBB(file, "branch_gst_qr", 800)
+      if (res && res.success && res.url) {
+        setBranchGstPaymentQrUrl(res.url)
+        setBranchPaymentQrUrl(res.url)
+      } else alert("Failed to upload branch GST QR to cloud.")
+    } catch (err: any) { alert("Upload error: " + err.message) }
+  }
+
+  const handleBranchNongstQrUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 10 * 1024 * 1024) { alert("QR Code image size should not exceed 10MB."); return; }
+    try {
+      const { uploadToImgBB } = await import("@/lib/imgbbUpload")
+      const res = await uploadToImgBB(file, "branch_nongst_qr", 800)
+      if (res && res.success && res.url) {
+        setBranchNongstPaymentQrUrl(res.url)
+      } else alert("Failed to upload branch Non-GST QR to cloud.")
+    } catch (err: any) { alert("Upload error: " + err.message) }
+  }
+
+  const handleSubBranchGstQrUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 10 * 1024 * 1024) { alert("QR Code image size should not exceed 10MB."); return; }
+    try {
+      const { uploadToImgBB } = await import("@/lib/imgbbUpload")
+      const res = await uploadToImgBB(file, "subbranch_gst_qr", 800)
+      if (res && res.success && res.url) {
+        setSubBranchGstPaymentQrUrl(res.url)
+        setSubBranchPaymentQrUrl(res.url)
+      } else alert("Failed to upload sub-branch GST QR to cloud.")
+    } catch (err: any) { alert("Upload error: " + err.message) }
+  }
+
+  const handleSubBranchNongstQrUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 10 * 1024 * 1024) { alert("QR Code image size should not exceed 10MB."); return; }
+    try {
+      const { uploadToImgBB } = await import("@/lib/imgbbUpload")
+      const res = await uploadToImgBB(file, "subbranch_nongst_qr", 800)
+      if (res && res.success && res.url) {
+        setSubBranchNongstPaymentQrUrl(res.url)
+      } else alert("Failed to upload sub-branch Non-GST QR to cloud.")
+    } catch (err: any) { alert("Upload error: " + err.message) }
+  }
+
+  // Copy GST to Non-GST Helpers
+  const handleCopyCompanyGstToNongst = () => {
+    setCompanyNongstBankName(companyGstBankName || companyBankName)
+    setCompanyNongstAccountHolder(companyGstAccountHolder || companyAccountHolder)
+    setCompanyNongstAccountNumber(companyGstAccountNumber || companyAccountNumber)
+    setCompanyNongstIfscCode(companyGstIfscCode || companyIfscCode)
+    setCompanyNongstBankBranch(companyGstBankBranch || companyBankBranch)
+    setCompanyNongstUpiId(companyGstUpiId || companyUpiId)
+    setCompanyNongstPaymentQrUrl(companyGstPaymentQrUrl || companyPaymentQrUrl)
+  }
+
+  const handleCopyBranchGstToNongst = () => {
+    setBranchNongstBankName(branchGstBankName || branchBankName)
+    setBranchNongstAccountHolder(branchGstAccountHolder || branchAccountHolder)
+    setBranchNongstAccountNumber(branchGstAccountNumber || branchAccountNumber)
+    setBranchNongstIfscCode(branchGstIfscCode || branchIfscCode)
+    setBranchNongstBankBranch(branchGstBankBranch || branchBankBranch)
+    setBranchNongstUpiId(branchGstUpiId || branchUpiId)
+    setBranchNongstPaymentQrUrl(branchGstPaymentQrUrl || branchPaymentQrUrl)
+  }
+
+  const handleCopySubBranchGstToNongst = () => {
+    setSubBranchNongstBankName(subBranchGstBankName || subBranchBankName)
+    setSubBranchNongstAccountHolder(subBranchGstAccountHolder || subBranchAccountHolder)
+    setSubBranchNongstAccountNumber(subBranchGstAccountNumber || subBranchAccountNumber)
+    setSubBranchNongstIfscCode(subBranchGstIfscCode || subBranchIfscCode)
+    setSubBranchNongstBankBranch(subBranchGstBankBranch || subBranchBankBranch)
+    setSubBranchNongstUpiId(subBranchGstUpiId || subBranchUpiId)
+    setSubBranchNongstPaymentQrUrl(subBranchGstPaymentQrUrl || subBranchPaymentQrUrl)
   }
 
   // Sync composed company name when brand or division changes
@@ -420,6 +591,21 @@ export function CompanyBranchSettings() {
     setCompanyIfscCode("")
     setCompanyBankBranch("")
     setCompanyPaymentQrUrl("")
+    setCompanyBankProfileTab("gst")
+    setCompanyGstBankName("")
+    setCompanyGstAccountHolder("")
+    setCompanyGstAccountNumber("")
+    setCompanyGstIfscCode("")
+    setCompanyGstBankBranch("")
+    setCompanyGstUpiId("")
+    setCompanyGstPaymentQrUrl("")
+    setCompanyNongstBankName("")
+    setCompanyNongstAccountHolder("")
+    setCompanyNongstAccountNumber("")
+    setCompanyNongstIfscCode("")
+    setCompanyNongstBankBranch("")
+    setCompanyNongstUpiId("")
+    setCompanyNongstPaymentQrUrl("")
     setCompanyTermsConditions("1. E.& O.E.\n2. Total payment due within due date to avoid suspension/cancellation.\n3. Please include invoice number in payment notes.\n4. All disputes subject to jurisdiction.")
     setCompanySignatoryName("Authorized Signatory")
     setCompanySignatoryDesignation("Managing Director")
@@ -469,6 +655,25 @@ export function CompanyBranchSettings() {
     setCompanyIfscCode(company.ifsc_code || "")
     setCompanyBankBranch(company.bank_branch || "")
     setCompanyPaymentQrUrl(company.payment_qr_url || "")
+
+    // Dual GST and Non-GST Profiles
+    setCompanyBankProfileTab("gst")
+    setCompanyGstBankName(company.gst_bank_name || company.bank_name || "")
+    setCompanyGstAccountHolder(company.gst_account_holder || company.account_holder || "")
+    setCompanyGstAccountNumber(company.gst_account_number || company.account_number || "")
+    setCompanyGstIfscCode(company.gst_ifsc_code || company.ifsc_code || "")
+    setCompanyGstBankBranch(company.gst_bank_branch || company.bank_branch || "")
+    setCompanyGstUpiId(company.gst_upi_id || company.upi_id || "")
+    setCompanyGstPaymentQrUrl(company.gst_payment_qr_url || company.payment_qr_url || "")
+
+    setCompanyNongstBankName(company.nongst_bank_name || company.bank_name || "")
+    setCompanyNongstAccountHolder(company.nongst_account_holder || company.account_holder || "")
+    setCompanyNongstAccountNumber(company.nongst_account_number || company.account_number || "")
+    setCompanyNongstIfscCode(company.nongst_ifsc_code || company.ifsc_code || "")
+    setCompanyNongstBankBranch(company.nongst_bank_branch || company.bank_branch || "")
+    setCompanyNongstUpiId(company.nongst_upi_id || company.upi_id || "")
+    setCompanyNongstPaymentQrUrl(company.nongst_payment_qr_url || company.payment_qr_url || "")
+
     setCompanyTermsConditions(company.terms_conditions || "")
     setCompanySignatoryName(company.signatory_name || "Authorized Signatory")
     setCompanySignatoryDesignation(company.signatory_designation || "")
@@ -531,13 +736,30 @@ export function CompanyBranchSettings() {
       phone: companyPhone.trim(),
       email: companyEmail.trim(),
       website: companyWebsite.trim(),
-      upi_id: companyUpiId.trim(),
-      account_holder: companyAccountHolder.trim(),
-      bank_name: companyBankName.trim(),
-      account_number: companyAccountNumber.trim(),
-      ifsc_code: companyIfscCode.trim(),
-      bank_branch: companyBankBranch.trim(),
-      payment_qr_url: companyPaymentQrUrl.trim(),
+      // Base/Fallback Banking
+      upi_id: (companyGstUpiId || companyUpiId || companyNongstUpiId).trim(),
+      account_holder: (companyGstAccountHolder || companyAccountHolder || companyNongstAccountHolder).trim(),
+      bank_name: (companyGstBankName || companyBankName || companyNongstBankName).trim(),
+      account_number: (companyGstAccountNumber || companyAccountNumber || companyNongstAccountNumber).trim(),
+      ifsc_code: (companyGstIfscCode || companyIfscCode || companyNongstIfscCode).trim(),
+      bank_branch: (companyGstBankBranch || companyBankBranch || companyNongstBankBranch).trim(),
+      payment_qr_url: companyGstPaymentQrUrl || companyPaymentQrUrl || companyNongstPaymentQrUrl,
+      // Distinct GST Banking Profile
+      gst_bank_name: companyGstBankName.trim(),
+      gst_account_holder: companyGstAccountHolder.trim(),
+      gst_account_number: companyGstAccountNumber.trim(),
+      gst_ifsc_code: companyGstIfscCode.trim().toUpperCase(),
+      gst_bank_branch: companyGstBankBranch.trim(),
+      gst_upi_id: companyGstUpiId.trim(),
+      gst_payment_qr_url: companyGstPaymentQrUrl,
+      // Distinct Non-GST Banking Profile
+      nongst_bank_name: companyNongstBankName.trim(),
+      nongst_account_holder: companyNongstAccountHolder.trim(),
+      nongst_account_number: companyNongstAccountNumber.trim(),
+      nongst_ifsc_code: companyNongstIfscCode.trim().toUpperCase(),
+      nongst_bank_branch: companyNongstBankBranch.trim(),
+      nongst_upi_id: companyNongstUpiId.trim(),
+      nongst_payment_qr_url: companyNongstPaymentQrUrl,
       terms_conditions: companyTermsConditions.trim(),
       signatory_name: companySignatoryName.trim(),
       signatory_designation: companySignatoryDesignation.trim(),
@@ -581,9 +803,9 @@ export function CompanyBranchSettings() {
     }, {
       actionType: isEdit ? "update" : "create",
       loadingTitle: isEdit ? "Saving Company Profile..." : "Creating Entity...",
-      loadingMsg: `Applying corporate branding, signature, and tax details for ${finalName}...`,
+      loadingMsg: `Applying corporate branding, GST/Non-GST profiles, and tax details for ${finalName}...`,
       successTitle: isEdit ? "Company Profile Saved!" : "Company Created Successfully!",
-      successMsg: `Company profile for ${finalName} has been saved and synced.`,
+      successMsg: `Company profile for ${finalName} with GST and Non-GST credentials has been saved.`,
       errorTitle: "Company Save Failed",
     })
   }
@@ -607,11 +829,13 @@ export function CompanyBranchSettings() {
   }
 
   const handleTestCompanySmtp = async () => {
-    if (!companySmtpUser.trim() || !companySmtpPass.trim()) {
-      setCompanySmtpTestResult({
-        success: false,
-        message: "Please enter SMTP User/Email and App Password before testing.",
-      })
+    if (!companySmtpHost || !companySmtpPort || !companySmtpUser || !companySmtpPass) {
+      alert("Please fill in SMTP host, port, username, and password before testing.")
+      return
+    }
+    const targetRecipient = companyTestEmail.trim() || companySmtpUser.trim()
+    if (!targetRecipient) {
+      alert("Please enter a test recipient email address.")
       return
     }
 
@@ -620,26 +844,26 @@ export function CompanyBranchSettings() {
 
     try {
       const { api } = await import("@/lib/api")
-      const res = await api.post("/email/test-connection", {
-        host: companySmtpHost.trim() || "smtp.gmail.com",
-        port: companySmtpPort.trim() || "587",
+      const res: any = await api.post("/email/test-smtp", {
+        host: companySmtpHost,
+        port: parseInt(companySmtpPort, 10),
         secure: companySmtpSecure,
-        user: companySmtpUser.trim(),
-        pass: companySmtpPass.trim(),
-        fromName: companySmtpFromName.trim() || companyName || "SAAMPARK",
-        fromEmail: companySmtpFromEmail.trim() || companySmtpUser.trim(),
-        testEmail: companyTestEmail.trim() || companySmtpUser.trim(),
-        companyId: editingCompany?.id || undefined,
+        user: companySmtpUser,
+        pass: companySmtpPass,
+        from_name: companySmtpFromName || companyBrandName || "SAAMPARK",
+        from_email: companySmtpFromEmail || companySmtpUser,
+        test_recipient: targetRecipient
       })
 
-      setCompanySmtpTestResult({
-        success: true,
-        message: res.data?.message || `Verified! Test email successfully delivered to ${companyTestEmail.trim() || companySmtpUser.trim()}`,
-      })
+      if (res?.data?.success || res?.status === 200 || res?.success) {
+        setCompanySmtpTestResult({ success: true, message: `Handshake successful! Test dispatch sent to ${targetRecipient}` })
+      } else {
+        setCompanySmtpTestResult({ success: false, message: res?.data?.error || res?.error || "SMTP test failed. Please check credentials." })
+      }
     } catch (err: any) {
-      setCompanySmtpTestResult({
-        success: false,
-        message: err.response?.data?.message || err.message || "Failed to verify SMTP credentials. Please check your App Password or Host.",
+      setCompanySmtpTestResult({ 
+        success: false, 
+        message: err?.response?.data?.error || err.message || "Failed to establish secure TLS SMTP connection." 
       })
     } finally {
       setIsTestingCompanySmtp(false)
@@ -700,8 +924,11 @@ export function CompanyBranchSettings() {
     try {
       const { uploadToImgBB } = await import("@/lib/imgbbUpload")
       const res = await uploadToImgBB(file, "branch_upi_qr", 800)
-      if (res && res.success && res.url) setBranchPaymentQrUrl(res.url)
-      else alert("Failed to upload branch UPI QR to ImgBB.")
+      if (res && res.success && res.url) {
+        setBranchPaymentQrUrl(res.url)
+        if (branchBankProfileTab === "gst") setBranchGstPaymentQrUrl(res.url)
+        else setBranchNongstPaymentQrUrl(res.url)
+      } else alert("Failed to upload branch UPI QR to ImgBB.")
     } catch (err: any) { alert("Upload error: " + err.message) }
   }
 
@@ -749,8 +976,11 @@ export function CompanyBranchSettings() {
     try {
       const { uploadToImgBB } = await import("@/lib/imgbbUpload")
       const res = await uploadToImgBB(file, "subbranch_upi_qr", 800)
-      if (res && res.success && res.url) setSubBranchPaymentQrUrl(res.url)
-      else alert("Failed to upload sub-branch UPI QR to ImgBB.")
+      if (res && res.success && res.url) {
+        setSubBranchPaymentQrUrl(res.url)
+        if (subBranchBankProfileTab === "gst") setSubBranchGstPaymentQrUrl(res.url)
+        else setSubBranchNongstPaymentQrUrl(res.url)
+      } else alert("Failed to upload sub-branch UPI QR to ImgBB.")
     } catch (err: any) { alert("Upload error: " + err.message) }
   }
 
@@ -787,6 +1017,21 @@ export function CompanyBranchSettings() {
     setBranchBankBranch("")
     setBranchUpiId("")
     setBranchPaymentQrUrl("")
+    setBranchBankProfileTab("gst")
+    setBranchGstBankName("")
+    setBranchGstAccountHolder("")
+    setBranchGstAccountNumber("")
+    setBranchGstIfscCode("")
+    setBranchGstBankBranch("")
+    setBranchGstUpiId("")
+    setBranchGstPaymentQrUrl("")
+    setBranchNongstBankName("")
+    setBranchNongstAccountHolder("")
+    setBranchNongstAccountNumber("")
+    setBranchNongstIfscCode("")
+    setBranchNongstBankBranch("")
+    setBranchNongstUpiId("")
+    setBranchNongstPaymentQrUrl("")
     setBranchTermsConditions("")
     setBranchSignatoryName("")
     setBranchSignatoryDesignation("")
@@ -828,6 +1073,25 @@ export function CompanyBranchSettings() {
     setBranchBankBranch(branch.bank_branch || "")
     setBranchUpiId(branch.upi_id || "")
     setBranchPaymentQrUrl(branch.payment_qr_url || "")
+
+    // Dual GST and Non-GST Profiles for Branch
+    setBranchBankProfileTab("gst")
+    setBranchGstBankName(branch.gst_bank_name || branch.bank_name || "")
+    setBranchGstAccountHolder(branch.gst_account_holder || branch.account_holder || "")
+    setBranchGstAccountNumber(branch.gst_account_number || branch.account_number || "")
+    setBranchGstIfscCode(branch.gst_ifsc_code || branch.ifsc_code || "")
+    setBranchGstBankBranch(branch.gst_bank_branch || branch.bank_branch || "")
+    setBranchGstUpiId(branch.gst_upi_id || branch.upi_id || "")
+    setBranchGstPaymentQrUrl(branch.gst_payment_qr_url || branch.payment_qr_url || "")
+
+    setBranchNongstBankName(branch.nongst_bank_name || branch.bank_name || "")
+    setBranchNongstAccountHolder(branch.nongst_account_holder || branch.account_holder || "")
+    setBranchNongstAccountNumber(branch.nongst_account_number || branch.account_number || "")
+    setBranchNongstIfscCode(branch.nongst_ifsc_code || branch.ifsc_code || "")
+    setBranchNongstBankBranch(branch.nongst_bank_branch || branch.bank_branch || "")
+    setBranchNongstUpiId(branch.nongst_upi_id || branch.upi_id || "")
+    setBranchNongstPaymentQrUrl(branch.nongst_payment_qr_url || branch.payment_qr_url || "")
+
     setBranchTermsConditions(branch.terms_conditions || "")
     setBranchSignatoryName(branch.signatory_name || "")
     setBranchSignatoryDesignation(branch.signatory_designation || "")
@@ -872,13 +1136,30 @@ export function CompanyBranchSettings() {
       phone: branchPhone.trim(),
       email: branchEmail.trim(),
       website: branchWebsite.trim(),
-      bank_name: branchBankName.trim(),
-      account_holder: branchAccountHolder.trim(),
-      account_number: branchAccountNumber.trim(),
-      ifsc_code: branchIfscCode.trim(),
-      bank_branch: branchBankBranch.trim(),
-      upi_id: branchUpiId.trim(),
-      payment_qr_url: branchPaymentQrUrl,
+      // Base/Fallback Banking
+      bank_name: (branchGstBankName || branchBankName || branchNongstBankName).trim(),
+      account_holder: (branchGstAccountHolder || branchAccountHolder || branchNongstAccountHolder).trim(),
+      account_number: (branchGstAccountNumber || branchAccountNumber || branchNongstAccountNumber).trim(),
+      ifsc_code: (branchGstIfscCode || branchIfscCode || branchNongstIfscCode).trim().toUpperCase(),
+      bank_branch: (branchGstBankBranch || branchBankBranch || branchNongstBankBranch).trim(),
+      upi_id: (branchGstUpiId || branchUpiId || branchNongstUpiId).trim(),
+      payment_qr_url: branchGstPaymentQrUrl || branchPaymentQrUrl || branchNongstPaymentQrUrl,
+      // Distinct GST Banking Profile
+      gst_bank_name: branchGstBankName.trim(),
+      gst_account_holder: branchGstAccountHolder.trim(),
+      gst_account_number: branchGstAccountNumber.trim(),
+      gst_ifsc_code: branchGstIfscCode.trim().toUpperCase(),
+      gst_bank_branch: branchGstBankBranch.trim(),
+      gst_upi_id: branchGstUpiId.trim(),
+      gst_payment_qr_url: branchGstPaymentQrUrl,
+      // Distinct Non-GST Banking Profile
+      nongst_bank_name: branchNongstBankName.trim(),
+      nongst_account_holder: branchNongstAccountHolder.trim(),
+      nongst_account_number: branchNongstAccountNumber.trim(),
+      nongst_ifsc_code: branchNongstIfscCode.trim().toUpperCase(),
+      nongst_bank_branch: branchNongstBankBranch.trim(),
+      nongst_upi_id: branchNongstUpiId.trim(),
+      nongst_payment_qr_url: branchNongstPaymentQrUrl,
       terms_conditions: branchTermsConditions.trim(),
       signatory_name: branchSignatoryName.trim(),
       signatory_designation: branchSignatoryDesignation.trim(),
@@ -900,9 +1181,9 @@ export function CompanyBranchSettings() {
     }, {
       actionType: isEdit ? "update" : "create",
       loadingTitle: isEdit ? "Updating Branch..." : "Creating Branch...",
-      loadingMsg: `Saving branch ${branchName.trim()}...`,
+      loadingMsg: `Saving branch ${branchName.trim()} with GST and Non-GST profiles...`,
       successTitle: isEdit ? "Branch Updated!" : "Branch Created Successfully!",
-      successMsg: `Branch ${branchName.trim()} has been saved with full tax, contact, and banking records.`,
+      successMsg: `Branch ${branchName.trim()} has been saved with full GST and Non-GST records.`,
       errorTitle: "Branch Save Failed",
     })
   }
@@ -957,6 +1238,21 @@ export function CompanyBranchSettings() {
     setSubBranchBankBranch("")
     setSubBranchUpiId("")
     setSubBranchPaymentQrUrl("")
+    setSubBranchBankProfileTab("gst")
+    setSubBranchGstBankName("")
+    setSubBranchGstAccountHolder("")
+    setSubBranchGstAccountNumber("")
+    setSubBranchGstIfscCode("")
+    setSubBranchGstBankBranch("")
+    setSubBranchGstUpiId("")
+    setSubBranchGstPaymentQrUrl("")
+    setSubBranchNongstBankName("")
+    setSubBranchNongstAccountHolder("")
+    setSubBranchNongstAccountNumber("")
+    setSubBranchNongstIfscCode("")
+    setSubBranchNongstBankBranch("")
+    setSubBranchNongstUpiId("")
+    setSubBranchNongstPaymentQrUrl("")
     setSubBranchTermsConditions("")
     setSubBranchSignatoryName("")
     setSubBranchSignatoryDesignation("")
@@ -1001,6 +1297,25 @@ export function CompanyBranchSettings() {
     setSubBranchBankBranch(sb.bank_branch || "")
     setSubBranchUpiId(sb.upi_id || sb.bankDetails?.upiId || "")
     setSubBranchPaymentQrUrl(sb.payment_qr_url || "")
+
+    // Dual GST and Non-GST Profiles for Sub-Branch
+    setSubBranchBankProfileTab("gst")
+    setSubBranchGstBankName(sb.gst_bank_name || sb.bank_name || sb.bankDetails?.bankName || "")
+    setSubBranchGstAccountHolder(sb.gst_account_holder || sb.account_holder || sb.bankDetails?.accountHolder || "")
+    setSubBranchGstAccountNumber(sb.gst_account_number || sb.account_number || sb.bankDetails?.accountNumber || "")
+    setSubBranchGstIfscCode(sb.gst_ifsc_code || sb.ifsc_code || sb.bankDetails?.ifscCode || "")
+    setSubBranchGstBankBranch(sb.gst_bank_branch || sb.bank_branch || "")
+    setSubBranchGstUpiId(sb.gst_upi_id || sb.upi_id || sb.bankDetails?.upiId || "")
+    setSubBranchGstPaymentQrUrl(sb.gst_payment_qr_url || sb.payment_qr_url || "")
+
+    setSubBranchNongstBankName(sb.nongst_bank_name || sb.bank_name || sb.bankDetails?.bankName || "")
+    setSubBranchNongstAccountHolder(sb.nongst_account_holder || sb.account_holder || sb.bankDetails?.accountHolder || "")
+    setSubBranchNongstAccountNumber(sb.nongst_account_number || sb.account_number || sb.bankDetails?.accountNumber || "")
+    setSubBranchNongstIfscCode(sb.nongst_ifsc_code || sb.ifsc_code || sb.bankDetails?.ifscCode || "")
+    setSubBranchNongstBankBranch(sb.nongst_bank_branch || sb.bank_branch || "")
+    setSubBranchNongstUpiId(sb.nongst_upi_id || sb.upi_id || sb.bankDetails?.upiId || "")
+    setSubBranchNongstPaymentQrUrl(sb.nongst_payment_qr_url || sb.payment_qr_url || "")
+
     setSubBranchTermsConditions(sb.terms_conditions || "")
     setSubBranchSignatoryName(sb.signatory_name || "")
     setSubBranchSignatoryDesignation(sb.signatory_designation || "")
@@ -1043,24 +1358,41 @@ export function CompanyBranchSettings() {
       pan: subBranchPan.trim(),
       cin: subBranchCin.trim(),
       msme_reg: subBranchMsmeReg.trim(),
-      account_holder: subBranchAccountHolder.trim(),
-      bank_name: subBranchBankName.trim(),
-      account_number: subBranchAccountNumber.trim(),
-      ifsc_code: subBranchIfscCode.trim(),
-      bank_branch: subBranchBankBranch.trim(),
-      upi_id: subBranchUpiId.trim(),
-      payment_qr_url: subBranchPaymentQrUrl,
       terms_conditions: subBranchTermsConditions.trim(),
       signatory_name: subBranchSignatoryName.trim(),
       signatory_designation: subBranchSignatoryDesignation.trim(),
       signature_image_url: subBranchSignatureImageUrl,
       stamp_image_url: subBranchStampImageUrl,
+      // Base/Fallback Banking
+      bank_name: (subBranchGstBankName || subBranchBankName || subBranchNongstBankName).trim(),
+      account_holder: (subBranchGstAccountHolder || subBranchAccountHolder || subBranchNongstAccountHolder).trim(),
+      account_number: (subBranchGstAccountNumber || subBranchAccountNumber || subBranchNongstAccountNumber).trim(),
+      ifsc_code: (subBranchGstIfscCode || subBranchIfscCode || subBranchNongstIfscCode).trim().toUpperCase(),
+      bank_branch: (subBranchGstBankBranch || subBranchBankBranch || subBranchNongstBankBranch).trim(),
+      upi_id: (subBranchGstUpiId || subBranchUpiId || subBranchNongstUpiId).trim(),
+      payment_qr_url: subBranchGstPaymentQrUrl || subBranchPaymentQrUrl || subBranchNongstPaymentQrUrl,
+      // Distinct GST Banking Profile
+      gst_bank_name: subBranchGstBankName.trim(),
+      gst_account_holder: subBranchGstAccountHolder.trim(),
+      gst_account_number: subBranchGstAccountNumber.trim(),
+      gst_ifsc_code: subBranchGstIfscCode.trim().toUpperCase(),
+      gst_bank_branch: subBranchGstBankBranch.trim(),
+      gst_upi_id: subBranchGstUpiId.trim(),
+      gst_payment_qr_url: subBranchGstPaymentQrUrl,
+      // Distinct Non-GST Banking Profile
+      nongst_bank_name: subBranchNongstBankName.trim(),
+      nongst_account_holder: subBranchNongstAccountHolder.trim(),
+      nongst_account_number: subBranchNongstAccountNumber.trim(),
+      nongst_ifsc_code: subBranchNongstIfscCode.trim().toUpperCase(),
+      nongst_bank_branch: subBranchNongstBankBranch.trim(),
+      nongst_upi_id: subBranchNongstUpiId.trim(),
+      nongst_payment_qr_url: subBranchNongstPaymentQrUrl,
       bankDetails: {
-        accountHolder: subBranchAccountHolder.trim(),
-        bankName: subBranchBankName.trim(),
-        accountNumber: subBranchAccountNumber.trim(),
-        ifscCode: subBranchIfscCode.trim(),
-        upiId: subBranchUpiId.trim(),
+        accountHolder: (subBranchGstAccountHolder || subBranchAccountHolder || subBranchNongstAccountHolder).trim(),
+        bankName: (subBranchGstBankName || subBranchBankName || subBranchNongstBankName).trim(),
+        accountNumber: (subBranchGstAccountNumber || subBranchAccountNumber || subBranchNongstAccountNumber).trim(),
+        ifscCode: (subBranchGstIfscCode || subBranchIfscCode || subBranchNongstIfscCode).trim().toUpperCase(),
+        upiId: (subBranchGstUpiId || subBranchUpiId || subBranchNongstUpiId).trim(),
       },
       status: subBranchStatus,
     }
@@ -1981,130 +2313,337 @@ export function CompanyBranchSettings() {
                   </div>
                 )}
 
-                {/* TAB 5: BANKING & DIGITAL UPI PAY */}
+                {/* TAB 5: BANKING & DIGITAL UPI PAY (DUAL GST & NON-GST PROFILES) */}
                 {companyModalTab === "bank" && (
-                  <div className="space-y-3">
-                    <p className="text-[11px] text-muted-foreground">
-                      Bank and UPI details printed on invoices for client payments. If bank details are left blank, the Bank Box is omitted.
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block font-bold text-foreground mb-1">UPI ID (e.g. GPay, PhonePe, Paytm)</label>
-                        <input
-                          type="text"
-                          value={companyUpiId}
-                          onChange={(e) => setCompanyUpiId(e.target.value)}
-                          placeholder="e.g. saampark@sbi (Leave blank if none)"
-                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold focus:outline-hidden"
-                        />
+                  <div className="space-y-3.5">
+                    {/* Dual Profile Switcher Header */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 rounded-2xl bg-surface-hover/60 border border-border">
+                      <div className="flex items-center gap-1.5 p-0.5 rounded-xl bg-surface border border-border/80">
+                        <button
+                          type="button"
+                          onClick={() => setCompanyBankProfileTab("gst")}
+                          className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                            companyBankProfileTab === "gst"
+                              ? "bg-primary text-primary-foreground shadow-xs"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          <CreditCard size={13} />
+                          <span>GST Invoice Bank Profile</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCompanyBankProfileTab("nongst")}
+                          className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                            companyBankProfileTab === "nongst"
+                              ? "bg-amber-600 text-white shadow-xs"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          <CreditCard size={13} />
+                          <span>Non-GST Invoice Bank Profile</span>
+                        </button>
                       </div>
 
-                      <div>
-                        <label className="block font-bold text-foreground mb-1">Bank Account Holder Name</label>
-                        <input
-                          type="text"
-                          value={companyAccountHolder}
-                          onChange={(e) => setCompanyAccountHolder(e.target.value)}
-                          placeholder="e.g. Saampark Technology & Research Pvt. Ltd."
-                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-semibold focus:outline-hidden"
-                        />
-                      </div>
+                      <button
+                        type="button"
+                        onClick={handleCopyCompanyGstToNongst}
+                        className="px-2.5 py-1.5 rounded-xl bg-surface border border-border text-foreground hover:bg-surface-hover font-semibold text-[11px] flex items-center gap-1.5 transition-all cursor-pointer shrink-0 self-start sm:self-auto"
+                        title="Copy details from GST profile into Non-GST profile"
+                      >
+                        <Sparkles size={12} className="text-primary" />
+                        <span>Copy GST to Non-GST</span>
+                      </button>
+                    </div>
 
-                      <div>
-                        <label className="block font-bold text-foreground mb-1">Bank Name</label>
-                        <input
-                          type="text"
-                          value={companyBankName}
-                          onChange={(e) => setCompanyBankName(e.target.value)}
-                          placeholder="e.g. State Bank of India"
-                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
-                        />
-                      </div>
+                    {/* GST Profile Form */}
+                    {companyBankProfileTab === "gst" && (
+                      <div className="space-y-3 p-3 rounded-2xl bg-primary/5 border border-primary/20">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-primary uppercase tracking-wider flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-primary inline-block"></span>
+                            GST Invoices Bank Account & QR (Tax B2B / B2C)
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">Auto-attached to all GST tax invoices</span>
+                        </div>
 
-                      <div>
-                        <label className="block font-bold text-foreground mb-1">Account Number</label>
-                        <input
-                          type="text"
-                          value={companyAccountNumber}
-                          onChange={(e) => setCompanyAccountNumber(e.target.value)}
-                          placeholder="e.g. 40912384759"
-                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block font-bold text-foreground mb-1">IFSC Code</label>
-                        <input
-                          type="text"
-                          value={companyIfscCode}
-                          onChange={(e) => setCompanyIfscCode(e.target.value)}
-                          placeholder="e.g. SBIN0001234"
-                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono uppercase focus:outline-hidden"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block font-bold text-foreground mb-1">Branch Name</label>
-                        <input
-                          type="text"
-                          value={companyBankBranch}
-                          onChange={(e) => setCompanyBankBranch(e.target.value)}
-                          placeholder="e.g. Balichak Station Road"
-                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
-                        />
-                      </div>
-
-                      {/* Custom Payment QR Code Upload & Link */}
-                      <div className="sm:col-span-2 p-3 rounded-2xl bg-surface-hover/50 border border-border space-y-2">
-                        <label className="block font-bold text-foreground">
-                          Custom Payment QR Code Image
-                        </label>
-                        <div className="flex items-center gap-3">
-                          <div className="w-16 h-16 rounded-2xl bg-surface border border-border flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
-                            {companyPaymentQrUrl ? (
-                              <img src={companyPaymentQrUrl} alt="Payment QR" className="w-14 h-14 object-contain" />
-                            ) : (
-                              <QrCode size={28} className="text-muted-foreground" />
-                            )}
-                          </div>
-                          <div className="space-y-1.5 flex-1 min-w-0">
-                            <input 
-                              type="file" 
-                              ref={qrFileInputRef}
-                              accept="image/*"
-                              onChange={handleQrUpload}
-                              className="hidden" 
-                            />
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => qrFileInputRef.current?.click()}
-                                className="px-3 py-1.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs flex items-center gap-1.5 hover:bg-primary/90 transition-all cursor-pointer shadow-xs"
-                              >
-                                <UploadCloud size={13} />
-                                <span>Upload QR Image</span>
-                              </button>
-                              {companyPaymentQrUrl && (
-                                <button
-                                  type="button"
-                                  onClick={() => setCompanyPaymentQrUrl("")}
-                                  className="px-2.5 py-1.5 rounded-xl border border-border text-rose-600 hover:bg-rose-50 font-semibold text-xs cursor-pointer"
-                                >
-                                  Clear Image
-                                </button>
-                              )}
-                            </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block font-bold text-foreground mb-1">Bank Name *</label>
                             <input
                               type="text"
-                              value={companyPaymentQrUrl}
-                              onChange={(e) => setCompanyPaymentQrUrl(e.target.value)}
-                              placeholder="Or paste direct image URL (e.g. /qr-code.png or https://...)"
-                              className="w-full px-3 py-1.5 rounded-lg bg-surface border border-border text-[11px] font-mono focus:outline-hidden"
+                              value={companyGstBankName}
+                              onChange={(e) => {
+                                setCompanyGstBankName(e.target.value)
+                                setCompanyBankName(e.target.value)
+                              }}
+                              placeholder="e.g. State Bank of India / HDFC Bank"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden font-bold"
                             />
+                          </div>
+
+                          <div>
+                            <label className="block font-bold text-foreground mb-1">Account Holder Name *</label>
+                            <input
+                              type="text"
+                              value={companyGstAccountHolder}
+                              onChange={(e) => {
+                                setCompanyGstAccountHolder(e.target.value)
+                                setCompanyAccountHolder(e.target.value)
+                              }}
+                              placeholder="e.g. Saampark Technology & Research Pvt Ltd"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-semibold focus:outline-hidden"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block font-bold text-foreground mb-1">Account Number *</label>
+                            <input
+                              type="text"
+                              value={companyGstAccountNumber}
+                              onChange={(e) => {
+                                setCompanyGstAccountNumber(e.target.value)
+                                setCompanyAccountNumber(e.target.value)
+                              }}
+                              placeholder="e.g. 40912384759"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold focus:outline-hidden"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block font-bold text-foreground mb-1">IFSC Code *</label>
+                            <input
+                              type="text"
+                              value={companyGstIfscCode}
+                              onChange={(e) => {
+                                const val = e.target.value.toUpperCase()
+                                setCompanyGstIfscCode(val)
+                                setCompanyIfscCode(val)
+                              }}
+                              placeholder="e.g. SBIN0001234"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold uppercase focus:outline-hidden"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block font-bold text-foreground mb-1">Bank Branch Location</label>
+                            <input
+                              type="text"
+                              value={companyGstBankBranch}
+                              onChange={(e) => {
+                                setCompanyGstBankBranch(e.target.value)
+                                setCompanyBankBranch(e.target.value)
+                              }}
+                              placeholder="e.g. Sector V Kolkata Branch"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block font-bold text-foreground mb-1">UPI ID (VPA)</label>
+                            <input
+                              type="text"
+                              value={companyGstUpiId}
+                              onChange={(e) => {
+                                setCompanyGstUpiId(e.target.value)
+                                setCompanyUpiId(e.target.value)
+                              }}
+                              placeholder="e.g. saampark@sbi"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold focus:outline-hidden"
+                            />
+                          </div>
+
+                          {/* GST Payment QR Code */}
+                          <div className="sm:col-span-2 p-3 rounded-2xl bg-surface border border-border space-y-2">
+                            <label className="block font-bold text-foreground">
+                              GST Payment QR Code Image (Standalone Bank QR)
+                            </label>
+                            <div className="flex items-center gap-3">
+                              <div className="w-16 h-16 rounded-2xl bg-surface border border-border flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                                {companyGstPaymentQrUrl ? (
+                                  <img src={companyGstPaymentQrUrl} alt="GST QR" className="w-14 h-14 object-contain" />
+                                ) : (
+                                  <QrCode size={28} className="text-muted-foreground" />
+                                )}
+                              </div>
+                              <div className="space-y-1.5 flex-1 min-w-0">
+                                <input 
+                                  type="file" 
+                                  ref={companyGstQrInputRef}
+                                  accept="image/*"
+                                  onChange={handleCompanyGstQrUpload}
+                                  className="hidden" 
+                                />
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => companyGstQrInputRef.current?.click()}
+                                    className="px-3 py-1.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs flex items-center gap-1.5 hover:bg-primary/90 transition-all cursor-pointer shadow-xs"
+                                  >
+                                    <UploadCloud size={13} />
+                                    <span>Upload GST QR Image</span>
+                                  </button>
+                                  {companyGstPaymentQrUrl && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setCompanyGstPaymentQrUrl("")
+                                        if (companyPaymentQrUrl === companyGstPaymentQrUrl) setCompanyPaymentQrUrl("")
+                                      }}
+                                      className="px-2.5 py-1.5 rounded-xl border border-border text-rose-600 hover:bg-rose-50 font-semibold text-xs cursor-pointer"
+                                    >
+                                      Clear Image
+                                    </button>
+                                  )}
+                                </div>
+                                <input
+                                  type="text"
+                                  value={companyGstPaymentQrUrl}
+                                  onChange={(e) => {
+                                    setCompanyGstPaymentQrUrl(e.target.value)
+                                    setCompanyPaymentQrUrl(e.target.value)
+                                  }}
+                                  placeholder="Or paste direct image URL (e.g. /gst-qr.png or https://...)"
+                                  className="w-full px-3 py-1.5 rounded-lg bg-surface border border-border text-[11px] font-mono focus:outline-hidden"
+                                />
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
+                    )}
+
+                    {/* Non-GST Profile Form */}
+                    {companyBankProfileTab === "nongst" && (
+                      <div className="space-y-3 p-3 rounded-2xl bg-amber-500/5 border border-amber-500/20">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-amber-500 inline-block"></span>
+                            Non-GST Invoices Bank Account & QR (Retail / Estimates / Non-Tax)
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">Auto-attached to all Non-GST invoices & estimates</span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block font-bold text-foreground mb-1">Non-GST Bank Name *</label>
+                            <input
+                              type="text"
+                              value={companyNongstBankName}
+                              onChange={(e) => setCompanyNongstBankName(e.target.value)}
+                              placeholder="e.g. State Bank of India / HDFC Bank"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden font-bold"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block font-bold text-foreground mb-1">Account Holder Name *</label>
+                            <input
+                              type="text"
+                              value={companyNongstAccountHolder}
+                              onChange={(e) => setCompanyNongstAccountHolder(e.target.value)}
+                              placeholder="e.g. Saampark Enterprise"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-semibold focus:outline-hidden"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block font-bold text-foreground mb-1">Account Number *</label>
+                            <input
+                              type="text"
+                              value={companyNongstAccountNumber}
+                              onChange={(e) => setCompanyNongstAccountNumber(e.target.value)}
+                              placeholder="e.g. 501004928172"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold focus:outline-hidden"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block font-bold text-foreground mb-1">IFSC Code *</label>
+                            <input
+                              type="text"
+                              value={companyNongstIfscCode}
+                              onChange={(e) => setCompanyNongstIfscCode(e.target.value.toUpperCase())}
+                              placeholder="e.g. HDFC0001234"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold uppercase focus:outline-hidden"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block font-bold text-foreground mb-1">Bank Branch Location</label>
+                            <input
+                              type="text"
+                              value={companyNongstBankBranch}
+                              onChange={(e) => setCompanyNongstBankBranch(e.target.value)}
+                              placeholder="e.g. Main Market Branch"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block font-bold text-foreground mb-1">UPI ID (VPA)</label>
+                            <input
+                              type="text"
+                              value={companyNongstUpiId}
+                              onChange={(e) => setCompanyNongstUpiId(e.target.value)}
+                              placeholder="e.g. saampark.retail@okhdfcbank"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold focus:outline-hidden"
+                            />
+                          </div>
+
+                          {/* Non-GST Payment QR Code */}
+                          <div className="sm:col-span-2 p-3 rounded-2xl bg-surface border border-border space-y-2">
+                            <label className="block font-bold text-foreground">
+                              Non-GST Payment QR Code Image (Standalone Bank / UPI QR)
+                            </label>
+                            <div className="flex items-center gap-3">
+                              <div className="w-16 h-16 rounded-2xl bg-surface border border-border flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                                {companyNongstPaymentQrUrl ? (
+                                  <img src={companyNongstPaymentQrUrl} alt="Non-GST QR" className="w-14 h-14 object-contain" />
+                                ) : (
+                                  <QrCode size={28} className="text-muted-foreground" />
+                                )}
+                              </div>
+                              <div className="space-y-1.5 flex-1 min-w-0">
+                                <input 
+                                  type="file" 
+                                  ref={companyNongstQrInputRef}
+                                  accept="image/*"
+                                  onChange={handleCompanyNongstQrUpload}
+                                  className="hidden" 
+                                />
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => companyNongstQrInputRef.current?.click()}
+                                    className="px-3 py-1.5 rounded-xl bg-amber-600 text-white font-bold text-xs flex items-center gap-1.5 hover:bg-amber-700 transition-all cursor-pointer shadow-xs"
+                                  >
+                                    <UploadCloud size={13} />
+                                    <span>Upload Non-GST QR</span>
+                                  </button>
+                                  {companyNongstPaymentQrUrl && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setCompanyNongstPaymentQrUrl("")}
+                                      className="px-2.5 py-1.5 rounded-xl border border-border text-rose-600 hover:bg-rose-50 font-semibold text-xs cursor-pointer"
+                                    >
+                                      Clear Image
+                                    </button>
+                                  )}
+                                </div>
+                                <input
+                                  type="text"
+                                  value={companyNongstPaymentQrUrl}
+                                  onChange={(e) => setCompanyNongstPaymentQrUrl(e.target.value)}
+                                  placeholder="Or paste direct image URL (e.g. /nongst-qr.png or https://...)"
+                                  className="w-full px-3 py-1.5 rounded-lg bg-surface border border-border text-[11px] font-mono focus:outline-hidden"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -2868,116 +3407,312 @@ export function CompanyBranchSettings() {
                   </div>
                 )}
 
-                {/* ── TAB 4: BANK & UPI PAY ── */}
+                {/* ── TAB 4: BANK & UPI PAY (DUAL GST & NON-GST PROFILES) ── */}
                 {branchModalTab === "bank" && (
                   <div className="space-y-3.5">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block font-semibold text-foreground mb-1">Bank Name</label>
-                        <input
-                          type="text"
-                          value={branchBankName}
-                          onChange={(e) => setBranchBankName(e.target.value)}
-                          placeholder="e.g. ICICI Bank Ltd."
-                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden font-bold"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-semibold text-foreground mb-1">Account Holder Name</label>
-                        <input
-                          type="text"
-                          value={branchAccountHolder}
-                          onChange={(e) => setBranchAccountHolder(e.target.value)}
-                          placeholder="e.g. SAAMPARK TECHNOLOGY PVT LTD (KOLKATA)"
-                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="col-span-2">
-                        <label className="block font-semibold text-foreground mb-1">Bank Account Number</label>
-                        <input
-                          type="text"
-                          value={branchAccountNumber}
-                          onChange={(e) => setBranchAccountNumber(e.target.value)}
-                          placeholder="002105023910"
-                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold focus:outline-hidden"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-semibold text-foreground mb-1">IFSC Code</label>
-                        <input
-                          type="text"
-                          value={branchIfscCode}
-                          onChange={(e) => setBranchIfscCode(e.target.value.toUpperCase())}
-                          placeholder="ICIC0000021"
-                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold uppercase focus:outline-hidden"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block font-semibold text-foreground mb-1">Bank Branch Location</label>
-                        <input
-                          type="text"
-                          value={branchBankBranch}
-                          onChange={(e) => setBranchBankBranch(e.target.value)}
-                          placeholder="Salt Lake Sector V Branch"
-                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-semibold text-foreground mb-1">Branch UPI VPA ID</label>
-                        <input
-                          type="text"
-                          value={branchUpiId}
-                          onChange={(e) => setBranchUpiId(e.target.value)}
-                          placeholder="saampark.kolkata@icici"
-                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden"
-                        />
-                      </div>
-                    </div>
-
-                    {/* QR Code Upload */}
-                    <div className="p-3.5 rounded-2xl bg-surface-pressed/30 border border-border/70 flex items-center justify-between gap-4">
-                      <div>
-                        <span className="font-bold text-foreground text-xs block">Branch Payment QR Code</span>
-                        <span className="text-[10px] text-muted-foreground block">
-                          Upload a standalone payment QR code for this branch. If omitted, live UPI QR is auto-generated.
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        {branchPaymentQrUrl && (
-                          <div className="relative w-12 h-12 rounded-xl bg-white p-1 border border-border overflow-hidden shrink-0">
-                            <img src={branchPaymentQrUrl} alt="QR Preview" className="w-full h-full object-contain" />
-                            <button
-                              type="button"
-                              onClick={() => setBranchPaymentQrUrl("")}
-                              className="absolute top-0.5 right-0.5 p-0.5 bg-rose-600 text-white rounded-full text-[8px]"
-                            >
-                              <X size={10} />
-                            </button>
-                          </div>
-                        )}
-                        <input
-                          type="file"
-                          ref={branchQrInputRef}
-                          onChange={handleBranchQrUpload}
-                          accept="image/*"
-                          className="hidden"
-                        />
+                    {/* Dual Profile Switcher Header */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 rounded-2xl bg-surface-hover/60 border border-border">
+                      <div className="flex items-center gap-1.5 p-0.5 rounded-xl bg-surface border border-border/80">
                         <button
                           type="button"
-                          onClick={() => branchQrInputRef.current?.click()}
-                          className="px-3 py-1.5 rounded-xl bg-surface border border-border text-xs font-bold hover:bg-surface-hover cursor-pointer"
+                          onClick={() => setBranchBankProfileTab("gst")}
+                          className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                            branchBankProfileTab === "gst"
+                              ? "bg-primary text-primary-foreground shadow-xs"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
                         >
-                          Upload QR
+                          <CreditCard size={13} />
+                          <span>GST Invoice Bank Profile</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBranchBankProfileTab("nongst")}
+                          className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                            branchBankProfileTab === "nongst"
+                              ? "bg-amber-600 text-white shadow-xs"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          <CreditCard size={13} />
+                          <span>Non-GST Invoice Bank Profile</span>
                         </button>
                       </div>
+
+                      <button
+                        type="button"
+                        onClick={handleCopyBranchGstToNongst}
+                        className="px-2.5 py-1.5 rounded-xl bg-surface border border-border text-foreground hover:bg-surface-hover font-semibold text-[11px] flex items-center gap-1.5 transition-all cursor-pointer shrink-0 self-start sm:self-auto"
+                        title="Copy details from GST profile into Non-GST profile"
+                      >
+                        <Sparkles size={12} className="text-primary" />
+                        <span>Copy GST to Non-GST</span>
+                      </button>
                     </div>
+
+                    {/* Branch GST Profile */}
+                    {branchBankProfileTab === "gst" && (
+                      <div className="space-y-3 p-3 rounded-2xl bg-primary/5 border border-primary/20">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-primary uppercase tracking-wider flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-primary inline-block"></span>
+                            Branch GST Invoices Bank Account & QR
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">Used on GST Invoices from this Branch</span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block font-semibold text-foreground mb-1">Bank Name *</label>
+                            <input
+                              type="text"
+                              value={branchGstBankName}
+                              onChange={(e) => {
+                                setBranchGstBankName(e.target.value)
+                                setBranchBankName(e.target.value)
+                              }}
+                              placeholder="e.g. ICICI Bank Ltd."
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden font-bold"
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-semibold text-foreground mb-1">Account Holder Name *</label>
+                            <input
+                              type="text"
+                              value={branchGstAccountHolder}
+                              onChange={(e) => {
+                                setBranchGstAccountHolder(e.target.value)
+                                setBranchAccountHolder(e.target.value)
+                              }}
+                              placeholder="e.g. SAAMPARK TECHNOLOGY PVT LTD"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="col-span-2">
+                            <label className="block font-semibold text-foreground mb-1">Bank Account Number *</label>
+                            <input
+                              type="text"
+                              value={branchGstAccountNumber}
+                              onChange={(e) => {
+                                setBranchGstAccountNumber(e.target.value)
+                                setBranchAccountNumber(e.target.value)
+                              }}
+                              placeholder="002105023910"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold focus:outline-hidden"
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-semibold text-foreground mb-1">IFSC Code *</label>
+                            <input
+                              type="text"
+                              value={branchGstIfscCode}
+                              onChange={(e) => {
+                                const val = e.target.value.toUpperCase()
+                                setBranchGstIfscCode(val)
+                                setBranchIfscCode(val)
+                              }}
+                              placeholder="ICIC0000021"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold uppercase focus:outline-hidden"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block font-semibold text-foreground mb-1">Bank Branch Location</label>
+                            <input
+                              type="text"
+                              value={branchGstBankBranch}
+                              onChange={(e) => {
+                                setBranchGstBankBranch(e.target.value)
+                                setBranchBankBranch(e.target.value)
+                              }}
+                              placeholder="Salt Lake Sector V Branch"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-semibold text-foreground mb-1">Branch UPI VPA ID</label>
+                            <input
+                              type="text"
+                              value={branchGstUpiId}
+                              onChange={(e) => {
+                                setBranchGstUpiId(e.target.value)
+                                setBranchUpiId(e.target.value)
+                              }}
+                              placeholder="saampark.kolkata@icici"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden"
+                            />
+                          </div>
+                        </div>
+
+                        {/* GST QR Code Upload */}
+                        <div className="p-3.5 rounded-2xl bg-surface border border-border/70 flex items-center justify-between gap-4">
+                          <div>
+                            <span className="font-bold text-foreground text-xs block">GST Payment QR Code</span>
+                            <span className="text-[10px] text-muted-foreground block">
+                              Upload a standalone payment QR code for GST billing.
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {branchGstPaymentQrUrl && (
+                              <div className="relative w-12 h-12 rounded-xl bg-white p-1 border border-border overflow-hidden shrink-0">
+                                <img src={branchGstPaymentQrUrl} alt="QR Preview" className="w-full h-full object-contain" />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setBranchGstPaymentQrUrl("")
+                                    if (branchPaymentQrUrl === branchGstPaymentQrUrl) setBranchPaymentQrUrl("")
+                                  }}
+                                  className="absolute top-0.5 right-0.5 p-0.5 bg-rose-600 text-white rounded-full text-[8px]"
+                                >
+                                  <X size={10} />
+                                </button>
+                              </div>
+                            )}
+                            <input
+                              type="file"
+                              ref={branchGstQrInputRef}
+                              onChange={handleBranchGstQrUpload}
+                              accept="image/*"
+                              className="hidden"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => branchGstQrInputRef.current?.click()}
+                              className="px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 cursor-pointer shadow-xs"
+                            >
+                              Upload GST QR
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Branch Non-GST Profile */}
+                    {branchBankProfileTab === "nongst" && (
+                      <div className="space-y-3 p-3 rounded-2xl bg-amber-500/5 border border-amber-500/20">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-amber-500 inline-block"></span>
+                            Branch Non-GST Invoices Bank Account & QR
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">Used on Non-GST Invoices from this Branch</span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block font-semibold text-foreground mb-1">Bank Name *</label>
+                            <input
+                              type="text"
+                              value={branchNongstBankName}
+                              onChange={(e) => setBranchNongstBankName(e.target.value)}
+                              placeholder="e.g. ICICI Bank Ltd."
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden font-bold"
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-semibold text-foreground mb-1">Account Holder Name *</label>
+                            <input
+                              type="text"
+                              value={branchNongstAccountHolder}
+                              onChange={(e) => setBranchNongstAccountHolder(e.target.value)}
+                              placeholder="e.g. SAAMPARK ENTERPRISE"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="col-span-2">
+                            <label className="block font-semibold text-foreground mb-1">Bank Account Number *</label>
+                            <input
+                              type="text"
+                              value={branchNongstAccountNumber}
+                              onChange={(e) => setBranchNongstAccountNumber(e.target.value)}
+                              placeholder="501004928172"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold focus:outline-hidden"
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-semibold text-foreground mb-1">IFSC Code *</label>
+                            <input
+                              type="text"
+                              value={branchNongstIfscCode}
+                              onChange={(e) => setBranchNongstIfscCode(e.target.value.toUpperCase())}
+                              placeholder="HDFC0001234"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold uppercase focus:outline-hidden"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block font-semibold text-foreground mb-1">Bank Branch Location</label>
+                            <input
+                              type="text"
+                              value={branchNongstBankBranch}
+                              onChange={(e) => setBranchNongstBankBranch(e.target.value)}
+                              placeholder="Main Market Branch"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-semibold text-foreground mb-1">Branch UPI VPA ID</label>
+                            <input
+                              type="text"
+                              value={branchNongstUpiId}
+                              onChange={(e) => setBranchNongstUpiId(e.target.value)}
+                              placeholder="saampark.retail@okhdfcbank"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Non-GST QR Code Upload */}
+                        <div className="p-3.5 rounded-2xl bg-surface border border-border/70 flex items-center justify-between gap-4">
+                          <div>
+                            <span className="font-bold text-foreground text-xs block">Non-GST Payment QR Code</span>
+                            <span className="text-[10px] text-muted-foreground block">
+                              Upload a standalone payment QR code for Non-GST billing.
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {branchNongstPaymentQrUrl && (
+                              <div className="relative w-12 h-12 rounded-xl bg-white p-1 border border-border overflow-hidden shrink-0">
+                                <img src={branchNongstPaymentQrUrl} alt="QR Preview" className="w-full h-full object-contain" />
+                                <button
+                                  type="button"
+                                  onClick={() => setBranchNongstPaymentQrUrl("")}
+                                  className="absolute top-0.5 right-0.5 p-0.5 bg-rose-600 text-white rounded-full text-[8px]"
+                                >
+                                  <X size={10} />
+                                </button>
+                              </div>
+                            )}
+                            <input
+                              type="file"
+                              ref={branchNongstQrInputRef}
+                              onChange={handleBranchNongstQrUpload}
+                              accept="image/*"
+                              className="hidden"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => branchNongstQrInputRef.current?.click()}
+                              className="px-3 py-1.5 rounded-xl bg-amber-600 text-white text-xs font-bold hover:bg-amber-700 cursor-pointer shadow-xs"
+                            >
+                              Upload Non-GST QR
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -3552,65 +4287,312 @@ export function CompanyBranchSettings() {
                   </div>
                 )}
 
-                {/* ── TAB 4: BANK & UPI PAY ── */}
+                {/* ── TAB 4: BANK & UPI PAY (DUAL GST & NON-GST PROFILES) ── */}
                 {subBranchModalTab === "bank" && (
                   <div className="space-y-3.5">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block font-semibold text-foreground mb-1">Account Holder Name</label>
-                        <input
-                          type="text"
-                          value={subBranchAccountHolder}
-                          onChange={(e) => setSubBranchAccountHolder(e.target.value)}
-                          placeholder="Partner Account Name"
-                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden font-bold"
-                        />
+                    {/* Dual Profile Switcher Header */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 rounded-2xl bg-surface-hover/60 border border-border">
+                      <div className="flex items-center gap-1.5 p-0.5 rounded-xl bg-surface border border-border/80">
+                        <button
+                          type="button"
+                          onClick={() => setSubBranchBankProfileTab("gst")}
+                          className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                            subBranchBankProfileTab === "gst"
+                              ? "bg-primary text-primary-foreground shadow-xs"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          <CreditCard size={13} />
+                          <span>GST Invoice Bank Profile</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSubBranchBankProfileTab("nongst")}
+                          className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                            subBranchBankProfileTab === "nongst"
+                              ? "bg-amber-600 text-white shadow-xs"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          <CreditCard size={13} />
+                          <span>Non-GST Invoice Bank Profile</span>
+                        </button>
                       </div>
-                      <div>
-                        <label className="block font-semibold text-foreground mb-1">Bank Name</label>
-                        <input
-                          type="text"
-                          value={subBranchBankName}
-                          onChange={(e) => setSubBranchBankName(e.target.value)}
-                          placeholder="Bank Name (e.g. HDFC Bank)"
-                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
-                        />
-                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleCopySubBranchGstToNongst}
+                        className="px-2.5 py-1.5 rounded-xl bg-surface border border-border text-foreground hover:bg-surface-hover font-semibold text-[11px] flex items-center gap-1.5 transition-all cursor-pointer shrink-0 self-start sm:self-auto"
+                        title="Copy details from GST profile into Non-GST profile"
+                      >
+                        <Sparkles size={12} className="text-primary" />
+                        <span>Copy GST to Non-GST</span>
+                      </button>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block font-semibold text-foreground mb-1">Account Number</label>
-                        <input
-                          type="text"
-                          value={subBranchAccountNumber}
-                          onChange={(e) => setSubBranchAccountNumber(e.target.value)}
-                          placeholder="Account Number"
-                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold focus:outline-hidden"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-semibold text-foreground mb-1">IFSC Code</label>
-                        <input
-                          type="text"
-                          value={subBranchIfscCode}
-                          onChange={(e) => setSubBranchIfscCode(e.target.value.toUpperCase())}
-                          placeholder="HDFC0001234"
-                          className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold uppercase focus:outline-hidden"
-                        />
-                      </div>
-                    </div>
+                    {/* Sub-Branch GST Profile */}
+                    {subBranchBankProfileTab === "gst" && (
+                      <div className="space-y-3 p-3 rounded-2xl bg-primary/5 border border-primary/20">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-primary uppercase tracking-wider flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-primary inline-block"></span>
+                            Sub-Branch GST Invoices Bank Account & QR
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">Used on GST Invoices from this Sub-Branch</span>
+                        </div>
 
-                    <div>
-                      <label className="block font-semibold text-foreground mb-1">Partner UPI ID</label>
-                      <input
-                        type="text"
-                        value={subBranchUpiId}
-                        onChange={(e) => setSubBranchUpiId(e.target.value)}
-                        placeholder="partner@okhdfcbank"
-                        className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden"
-                      />
-                    </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block font-semibold text-foreground mb-1">Bank Name *</label>
+                            <input
+                              type="text"
+                              value={subBranchGstBankName}
+                              onChange={(e) => {
+                                setSubBranchGstBankName(e.target.value)
+                                setSubBranchBankName(e.target.value)
+                              }}
+                              placeholder="e.g. HDFC Bank Ltd."
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden font-bold"
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-semibold text-foreground mb-1">Account Holder Name *</label>
+                            <input
+                              type="text"
+                              value={subBranchGstAccountHolder}
+                              onChange={(e) => {
+                                setSubBranchGstAccountHolder(e.target.value)
+                                setSubBranchAccountHolder(e.target.value)
+                              }}
+                              placeholder="Partner Account Name"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden font-semibold"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="col-span-2">
+                            <label className="block font-semibold text-foreground mb-1">Bank Account Number *</label>
+                            <input
+                              type="text"
+                              value={subBranchGstAccountNumber}
+                              onChange={(e) => {
+                                setSubBranchGstAccountNumber(e.target.value)
+                                setSubBranchAccountNumber(e.target.value)
+                              }}
+                              placeholder="Account Number"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold focus:outline-hidden"
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-semibold text-foreground mb-1">IFSC Code *</label>
+                            <input
+                              type="text"
+                              value={subBranchGstIfscCode}
+                              onChange={(e) => {
+                                const val = e.target.value.toUpperCase()
+                                setSubBranchGstIfscCode(val)
+                                setSubBranchIfscCode(val)
+                              }}
+                              placeholder="HDFC0001234"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold uppercase focus:outline-hidden"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block font-semibold text-foreground mb-1">Bank Branch Location</label>
+                            <input
+                              type="text"
+                              value={subBranchGstBankBranch}
+                              onChange={(e) => {
+                                setSubBranchGstBankBranch(e.target.value)
+                                setSubBranchBankBranch(e.target.value)
+                              }}
+                              placeholder="Local Branch"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-semibold text-foreground mb-1">Partner UPI ID</label>
+                            <input
+                              type="text"
+                              value={subBranchGstUpiId}
+                              onChange={(e) => {
+                                setSubBranchGstUpiId(e.target.value)
+                                setSubBranchUpiId(e.target.value)
+                              }}
+                              placeholder="partner@okhdfcbank"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Sub-Branch GST QR Code Upload */}
+                        <div className="p-3.5 rounded-2xl bg-surface border border-border/70 flex items-center justify-between gap-4">
+                          <div>
+                            <span className="font-bold text-foreground text-xs block">GST Payment QR Code</span>
+                            <span className="text-[10px] text-muted-foreground block">
+                              Upload a standalone payment QR code for GST billing.
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {subBranchGstPaymentQrUrl && (
+                              <div className="relative w-12 h-12 rounded-xl bg-white p-1 border border-border overflow-hidden shrink-0">
+                                <img src={subBranchGstPaymentQrUrl} alt="QR Preview" className="w-full h-full object-contain" />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSubBranchGstPaymentQrUrl("")
+                                    if (subBranchPaymentQrUrl === subBranchGstPaymentQrUrl) setSubBranchPaymentQrUrl("")
+                                  }}
+                                  className="absolute top-0.5 right-0.5 p-0.5 bg-rose-600 text-white rounded-full text-[8px]"
+                                >
+                                  <X size={10} />
+                                </button>
+                              </div>
+                            )}
+                            <input
+                              type="file"
+                              ref={subBranchGstQrInputRef}
+                              onChange={handleSubBranchGstQrUpload}
+                              accept="image/*"
+                              className="hidden"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => subBranchGstQrInputRef.current?.click()}
+                              className="px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 cursor-pointer shadow-xs"
+                            >
+                              Upload GST QR
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Sub-Branch Non-GST Profile */}
+                    {subBranchBankProfileTab === "nongst" && (
+                      <div className="space-y-3 p-3 rounded-2xl bg-amber-500/5 border border-amber-500/20">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-amber-500 inline-block"></span>
+                            Sub-Branch Non-GST Invoices Bank Account & QR
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">Used on Non-GST Invoices from this Sub-Branch</span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block font-semibold text-foreground mb-1">Bank Name *</label>
+                            <input
+                              type="text"
+                              value={subBranchNongstBankName}
+                              onChange={(e) => setSubBranchNongstBankName(e.target.value)}
+                              placeholder="e.g. State Bank of India"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden font-bold"
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-semibold text-foreground mb-1">Account Holder Name *</label>
+                            <input
+                              type="text"
+                              value={subBranchNongstAccountHolder}
+                              onChange={(e) => setSubBranchNongstAccountHolder(e.target.value)}
+                              placeholder="e.g. Partner Retail Account"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="col-span-2">
+                            <label className="block font-semibold text-foreground mb-1">Bank Account Number *</label>
+                            <input
+                              type="text"
+                              value={subBranchNongstAccountNumber}
+                              onChange={(e) => setSubBranchNongstAccountNumber(e.target.value)}
+                              placeholder="Account Number"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold focus:outline-hidden"
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-semibold text-foreground mb-1">IFSC Code *</label>
+                            <input
+                              type="text"
+                              value={subBranchNongstIfscCode}
+                              onChange={(e) => setSubBranchNongstIfscCode(e.target.value.toUpperCase())}
+                              placeholder="SBIN0001234"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono font-bold uppercase focus:outline-hidden"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block font-semibold text-foreground mb-1">Bank Branch Location</label>
+                            <input
+                              type="text"
+                              value={subBranchNongstBankBranch}
+                              onChange={(e) => setSubBranchNongstBankBranch(e.target.value)}
+                              placeholder="Local Branch Location"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs focus:outline-hidden"
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-semibold text-foreground mb-1">Partner UPI ID</label>
+                            <input
+                              type="text"
+                              value={subBranchNongstUpiId}
+                              onChange={(e) => setSubBranchNongstUpiId(e.target.value)}
+                              placeholder="partner.retail@oksbi"
+                              className="w-full px-3.5 py-2 rounded-xl bg-surface border border-border text-xs font-mono focus:outline-hidden"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Sub-Branch Non-GST QR Code Upload */}
+                        <div className="p-3.5 rounded-2xl bg-surface border border-border/70 flex items-center justify-between gap-4">
+                          <div>
+                            <span className="font-bold text-foreground text-xs block">Non-GST Payment QR Code</span>
+                            <span className="text-[10px] text-muted-foreground block">
+                              Upload a standalone payment QR code for Non-GST billing.
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {subBranchNongstPaymentQrUrl && (
+                              <div className="relative w-12 h-12 rounded-xl bg-white p-1 border border-border overflow-hidden shrink-0">
+                                <img src={subBranchNongstPaymentQrUrl} alt="QR Preview" className="w-full h-full object-contain" />
+                                <button
+                                  type="button"
+                                  onClick={() => setSubBranchNongstPaymentQrUrl("")}
+                                  className="absolute top-0.5 right-0.5 p-0.5 bg-rose-600 text-white rounded-full text-[8px]"
+                                >
+                                  <X size={10} />
+                                </button>
+                              </div>
+                            )}
+                            <input
+                              type="file"
+                              ref={subBranchNongstQrInputRef}
+                              onChange={handleSubBranchNongstQrUpload}
+                              accept="image/*"
+                              className="hidden"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => subBranchNongstQrInputRef.current?.click()}
+                              className="px-3 py-1.5 rounded-xl bg-amber-600 text-white text-xs font-bold hover:bg-amber-700 cursor-pointer shadow-xs"
+                            >
+                              Upload Non-GST QR
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
