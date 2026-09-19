@@ -15,8 +15,12 @@ import { useAuthStore, Company, Branch, SubBranch, DEFAULT_COMPANIES, getCompany
 export interface CustomTextStamp {
   id: string
   text: string
-  color: string
+  color?: string
+  bgStyle?: "stamp" | "badge" | "clean" | "watermark"
   fontSize?: number
+  isBold?: boolean
+  isItalic?: boolean
+  rotation?: number
   x: number
   y: number
 }
@@ -29,11 +33,16 @@ interface OfficialInvoiceDocumentProps {
   interactive?: boolean
   logoPosition?: { x: number; y: number }
   onLogoPositionChange?: (pos: { x: number; y: number }) => void
+  stampPosition?: { x: number; y: number }
+  onStampPositionChange?: (pos: { x: number; y: number }) => void
   signaturePosition?: { x: number; y: number }
   onSignaturePositionChange?: (pos: { x: number; y: number }) => void
   customStamps?: CustomTextStamp[]
   onCustomStampMove?: (id: string, pos: { x: number; y: number }) => void
+  onCustomStampUpdate?: (id: string, updates: Partial<CustomTextStamp>) => void
   onRemoveCustomStamp?: (id: string) => void
+  onAddCustomStamp?: (stamp?: Partial<CustomTextStamp>) => void
+  onFieldChange?: (field: string, value: string) => void
   overrideLogoUrl?: string
   overrideSignatureUrl?: string
   overrideStampUrl?: string
@@ -48,6 +57,46 @@ interface OfficialInvoiceDocumentProps {
   }
   activeBranch?: Branch | any | null
   activeSubBranch?: SubBranch | any | null
+}
+
+export function EditableText({
+  value,
+  onChange,
+  className = "",
+  placeholder = "",
+  as = "span",
+  interactive = false,
+  fieldKey,
+}: {
+  value?: string | null
+  onChange?: (val: string) => void
+  className?: string
+  placeholder?: string
+  as?: any
+  interactive?: boolean
+  fieldKey?: string
+}) {
+  const displayVal = value ?? ""
+  if (!interactive) {
+    const Tag = as
+    return <Tag className={className}>{displayVal || placeholder}</Tag>
+  }
+
+  const Tag = as
+  return (
+    <Tag
+      contentEditable
+      suppressContentEditableWarning
+      className={`${className} outline-none transition-all rounded px-0.5 -mx-0.5 hover:bg-blue-100/70 hover:ring-1 hover:ring-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-600 focus:shadow-xs cursor-text inline-block min-w-[20px]`}
+      onBlur={(e: React.FocusEvent<HTMLElement>) => {
+        const text = e.currentTarget.innerText.trim()
+        if (onChange) onChange(text)
+      }}
+      title="Click or touch to edit this text directly"
+    >
+      {displayVal || placeholder}
+    </Tag>
+  )
 }
 
 export function formatInvoiceDate(rawDate?: string | number | Date | null): string {
@@ -119,11 +168,16 @@ export function OfficialInvoiceDocument({
   interactive = false,
   logoPosition = { x: 0, y: 0 },
   onLogoPositionChange,
+  stampPosition = { x: 0, y: 0 },
+  onStampPositionChange,
   signaturePosition = { x: 0, y: 0 },
   onSignaturePositionChange,
   customStamps = [],
   onCustomStampMove,
+  onCustomStampUpdate,
   onRemoveCustomStamp,
+  onAddCustomStamp,
+  onFieldChange,
   overrideLogoUrl,
   overrideSignatureUrl,
   overrideStampUrl,
@@ -670,7 +724,7 @@ export function OfficialInvoiceDocument({
   const hasBankDetails = Boolean(resolvedBankName || resolvedAccountNumber)
   const hasUpiDetails = Boolean(resolvedUpiId || customPaymentQrUrl)
   const hasContactInfo = Boolean(resolvedPhone || resolvedWebsite || resolvedEmail)
-  const hasLegalIds = Boolean(resolvedCin || (isGstInvoice && resolvedGstin) || resolvedPan)
+  const hasLegalIds = Boolean(resolvedCin || (isGstInvoice && resolvedGstin) || resolvedPan || interactive)
 
 
 
@@ -703,7 +757,7 @@ export function OfficialInvoiceDocument({
             </div>
           )}
           {resolvedLogoUrl ? (
-            <div className="relative w-20 h-20 sm:w-22 sm:h-22 rounded-xl overflow-hidden shadow-2xs shrink-0 border border-zinc-200/90 bg-white flex items-center justify-center p-1.5">
+            <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden shadow-2xs shrink-0 border border-zinc-200/90 bg-white flex items-center justify-center p-2">
               <img 
                 src={resolvedLogoUrl} 
                 alt={resolvedBrandName || "Entity Logo"} 
@@ -711,13 +765,13 @@ export function OfficialInvoiceDocument({
               />
             </div>
           ) : (
-            <div className="relative w-20 h-20 sm:w-22 sm:h-22 rounded-xl overflow-hidden shadow-md shrink-0 border border-teal-900/30 bg-gradient-to-b from-[#004e59] via-[#005c68] to-[#003840] flex flex-col items-center justify-center p-1.5">
+            <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden shadow-md shrink-0 border border-teal-900/30 bg-gradient-to-b from-[#004e59] via-[#005c68] to-[#003840] flex flex-col items-center justify-center p-2">
               <div className="relative z-10 w-full h-full flex flex-col items-center justify-center text-center text-white">
-                <Sparkles className="w-5 h-5 mb-0.5 text-teal-200 drop-shadow-sm" />
-                <div className="font-black text-[10px] tracking-wider uppercase leading-tight font-sans">
+                <Sparkles className="w-6 h-6 mb-1 text-teal-200 drop-shadow-sm" />
+                <div className="font-black text-xs tracking-wider uppercase leading-tight font-sans">
                   {resolvedBrandName}
                 </div>
-                <div className="text-[6.5px] font-bold text-teal-200 tracking-widest uppercase mt-0.5">
+                <div className="text-[7.5px] font-bold text-teal-200 tracking-widest uppercase mt-0.5">
                   {resolvedDivisionName || "TECHNOLOGY"}
                 </div>
               </div>
@@ -729,22 +783,39 @@ export function OfficialInvoiceDocument({
         <div className="space-y-0.5 flex-1 min-w-0 pt-0.5">
           <div>
             {/* Primary Official Registered Corporate Name */}
-            <h1 className="text-sm sm:text-base font-black tracking-tight leading-tight text-zinc-950 uppercase font-sans">
-              {fullRegisteredCompanyName}
-            </h1>
+            <EditableText
+              as="h1"
+              value={fullRegisteredCompanyName}
+              onChange={(val) => onFieldChange?.("name", val)}
+              interactive={interactive}
+              fieldKey="name"
+              className="text-sm sm:text-base font-black tracking-tight leading-tight text-zinc-950 uppercase font-sans"
+            />
 
-            {/* If a distinct subtitle/tagline is defined and does not duplicate words in company name, display it */}
-            {resolvedSubtitle && !fullRegisteredCompanyName.toLowerCase().includes(resolvedSubtitle.toLowerCase().trim()) && (
-              <h2 className="text-[9.5px] font-semibold text-zinc-600 tracking-wider mt-0.5">
-                {resolvedSubtitle}
-              </h2>
+            {/* If a distinct subtitle/tagline is defined, display it */}
+            {(resolvedSubtitle || interactive) && (
+              <EditableText
+                as="h2"
+                value={resolvedSubtitle}
+                onChange={(val) => onFieldChange?.("subtitle", val)}
+                interactive={interactive}
+                fieldKey="subtitle"
+                placeholder="Add company subtitle or division tagline..."
+                className="text-[9.5px] font-semibold text-zinc-600 tracking-wider mt-0.5 block"
+              />
             )}
 
             {/* Editable ISO 9001 / Quality Certification Badge */}
-            {resolvedIsoCertification && resolvedIsoCertification.trim() !== "" && (
+            {(resolvedIsoCertification || interactive) && (
               <div className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-amber-50 dark:bg-amber-950/60 border border-amber-300/90 dark:border-amber-700/80 text-amber-900 dark:text-amber-200 text-[7.5px] font-black tracking-wider uppercase shadow-2xs mt-0.5">
                 <Award size={10} className="text-amber-600 dark:text-amber-400 shrink-0" />
-                <span>{resolvedIsoCertification}</span>
+                <EditableText
+                  value={resolvedIsoCertification}
+                  onChange={(val) => onFieldChange?.("iso_certification", val)}
+                  interactive={interactive}
+                  fieldKey="iso_certification"
+                  placeholder="Quality certification..."
+                />
               </div>
             )}
           </div>
@@ -752,49 +823,117 @@ export function OfficialInvoiceDocument({
           {/* Legal IDs: CIN, GSTIN (GST Only), PAN */}
           {hasLegalIds && (
             <p className="text-[8.5px] font-semibold text-zinc-600 font-mono pt-0.5 flex items-center gap-2 flex-wrap">
-              {resolvedCin && (
-                <span>CIN: <strong className="text-zinc-800 font-bold">{resolvedCin}</strong></span>
+              {(resolvedCin || interactive) && (
+                <span className="inline-flex items-center gap-0.5">
+                  <span className="text-zinc-500">CIN:</span>
+                  <EditableText
+                    value={resolvedCin}
+                    onChange={(val) => onFieldChange?.("cin", val)}
+                    interactive={interactive}
+                    fieldKey="cin"
+                    placeholder="CIN Number..."
+                    className="text-zinc-800 font-bold"
+                  />
+                </span>
               )}
-              {isGstInvoice && resolvedGstin && (
-                <span>{resolvedCin ? "| " : ""}GSTIN: <strong className="text-zinc-900 font-black">{resolvedGstin}</strong></span>
+              {(isGstInvoice && (resolvedGstin || interactive)) && (
+                <span className="inline-flex items-center gap-0.5">
+                  {(resolvedCin || interactive) ? <span className="text-zinc-300 mr-0.5">|</span> : null}
+                  <span className="text-zinc-500">GSTIN:</span>
+                  <EditableText
+                    value={resolvedGstin}
+                    onChange={(val) => onFieldChange?.("gstin", val)}
+                    interactive={interactive}
+                    fieldKey="gstin"
+                    placeholder="GSTIN..."
+                    className="text-zinc-900 font-black"
+                  />
+                </span>
               )}
-              {resolvedPan && (
-                <span>{(resolvedCin || (isGstInvoice && resolvedGstin)) ? "| " : ""}PAN: <strong className="text-zinc-900 font-black">{resolvedPan}</strong></span>
+              {(resolvedPan || interactive) && (
+                <span className="inline-flex items-center gap-0.5">
+                  {((resolvedCin || (isGstInvoice && resolvedGstin)) || interactive) ? <span className="text-zinc-300 mr-0.5">|</span> : null}
+                  <span className="text-zinc-500">PAN:</span>
+                  <EditableText
+                    value={resolvedPan}
+                    onChange={(val) => onFieldChange?.("pan", val)}
+                    interactive={interactive}
+                    fieldKey="pan"
+                    placeholder="PAN..."
+                    className="text-zinc-900 font-black"
+                  />
+                </span>
               )}
             </p>
           )}
 
           {/* Address & Contact Row */}
-          {(resolvedAddress || hasContactInfo) && (
+          {(resolvedAddress || hasContactInfo || interactive) && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-2 gap-y-0.5 text-[8.5px] text-zinc-700 pt-0.5">
-              {resolvedAddress ? (
+              {(resolvedAddress || interactive) ? (
                 <div className="flex items-start gap-1">
                   <span className={`w-3 h-3 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0 mt-0.5`}>
                     <MapPin size={7} />
                   </span>
-                  <div className="leading-tight">
+                  <div className="leading-tight flex-1">
                     <strong className="text-zinc-900 block text-[8.5px]">Office:</strong>
-                    <span className="text-zinc-600 text-[8px] line-clamp-1">{resolvedAddress}</span>
+                    <EditableText
+                      value={resolvedAddress}
+                      onChange={(val) => onFieldChange?.("address", val)}
+                      interactive={interactive}
+                      fieldKey="address"
+                      placeholder="Company address..."
+                      className="text-zinc-600 text-[8px]"
+                    />
                   </div>
                 </div>
               ) : <div />}
 
-              {hasContactInfo && (
+              {(hasContactInfo || interactive) && (
                 <div className="space-y-0.2">
-                  {resolvedPhone && (
+                  {(resolvedPhone || interactive) && (
                     <p className="flex items-center gap-1">
                       <span className={`w-3 h-3 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
                         <Phone size={6.5} />
                       </span>
-                      <span className="font-mono text-zinc-800 font-semibold text-[8px]">{resolvedPhone}</span>
+                      <EditableText
+                        value={resolvedPhone}
+                        onChange={(val) => onFieldChange?.("phone", val)}
+                        interactive={interactive}
+                        fieldKey="phone"
+                        placeholder="+91 Phone..."
+                        className="font-mono text-zinc-800 font-semibold text-[8px]"
+                      />
                     </p>
                   )}
-                  {resolvedEmail && (
+                  {(resolvedEmail || interactive) && (
                     <p className="flex items-center gap-1">
                       <span className={`w-3 h-3 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
                         <Mail size={6.5} />
                       </span>
-                      <span className="text-zinc-700 text-[8px] truncate">{resolvedEmail}</span>
+                      <EditableText
+                        value={resolvedEmail}
+                        onChange={(val) => onFieldChange?.("email", val)}
+                        interactive={interactive}
+                        fieldKey="email"
+                        placeholder="Official email..."
+                        className="text-zinc-700 text-[8px]"
+                      />
+                    </p>
+                  )}
+                  {(resolvedWebsite || interactive) && (
+                    <p className="flex items-center gap-1">
+                      <span className={`w-3 h-3 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
+                        <Globe size={6.5} />
+                      </span>
+                      <EditableText
+                        value={resolvedWebsite}
+                        onChange={(val) => onFieldChange?.("website", val)}
+                        interactive={interactive}
+                        fieldKey="website"
+                        placeholder="Website..."
+                        className="text-zinc-700 text-[8px]"
+                      />
                     </p>
                   )}
                 </div>
@@ -1188,34 +1327,69 @@ export function OfficialInvoiceDocument({
 
               {/* Right side of card: Direct Bank Account & UPI Details */}
               <div className="col-span-8 space-y-0.5 text-[8px] text-zinc-700 dark:text-zinc-300">
-                {resolvedBankName && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-zinc-500 font-medium">Bank:</span>
-                    <strong className="text-zinc-900 dark:text-zinc-100 font-bold truncate max-w-[140px]">{resolvedBankName}</strong>
+                {(resolvedBankName || interactive) && (
+                  <div className="flex justify-between items-center gap-1">
+                    <span className="text-zinc-500 font-medium shrink-0">Bank:</span>
+                    <EditableText
+                      value={resolvedBankName}
+                      onChange={(val) => onFieldChange?.("bank_name", val)}
+                      interactive={interactive}
+                      fieldKey="bank_name"
+                      placeholder="Bank name..."
+                      className="text-zinc-900 dark:text-zinc-100 font-bold truncate text-right flex-1"
+                    />
                   </div>
                 )}
-                {resolvedAccountNumber && (
-                  <div className="flex justify-between items-center font-mono">
-                    <span className="text-zinc-500 font-medium font-sans">A/C No:</span>
-                    <strong className="text-zinc-900 dark:text-zinc-100 font-extrabold">{resolvedAccountNumber}</strong>
+                {(resolvedAccountNumber || interactive) && (
+                  <div className="flex justify-between items-center gap-1 font-mono">
+                    <span className="text-zinc-500 font-medium font-sans shrink-0">A/C No:</span>
+                    <EditableText
+                      value={resolvedAccountNumber}
+                      onChange={(val) => onFieldChange?.("account_number", val)}
+                      interactive={interactive}
+                      fieldKey="account_number"
+                      placeholder="Account number..."
+                      className="text-zinc-900 dark:text-zinc-100 font-extrabold text-right flex-1"
+                    />
                   </div>
                 )}
-                {resolvedIfscCode && (
-                  <div className="flex justify-between items-center font-mono">
-                    <span className="text-zinc-500 font-medium font-sans">IFSC:</span>
-                    <strong className="text-zinc-900 dark:text-zinc-100 font-extrabold">{resolvedIfscCode}</strong>
+                {(resolvedIfscCode || interactive) && (
+                  <div className="flex justify-between items-center gap-1 font-mono">
+                    <span className="text-zinc-500 font-medium font-sans shrink-0">IFSC:</span>
+                    <EditableText
+                      value={resolvedIfscCode}
+                      onChange={(val) => onFieldChange?.("ifsc_code", val)}
+                      interactive={interactive}
+                      fieldKey="ifsc_code"
+                      placeholder="IFSC code..."
+                      className="text-zinc-900 dark:text-zinc-100 font-extrabold uppercase text-right flex-1"
+                    />
                   </div>
                 )}
-                {resolvedAccountHolder && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-zinc-500 font-medium">A/C Name:</span>
-                    <strong className="text-zinc-900 dark:text-zinc-100 font-bold truncate max-w-[125px]">{resolvedAccountHolder}</strong>
+                {(resolvedAccountHolder || interactive) && (
+                  <div className="flex justify-between items-center gap-1">
+                    <span className="text-zinc-500 font-medium shrink-0">A/C Name:</span>
+                    <EditableText
+                      value={resolvedAccountHolder}
+                      onChange={(val) => onFieldChange?.("account_holder", val)}
+                      interactive={interactive}
+                      fieldKey="account_holder"
+                      placeholder="A/C holder..."
+                      className="text-zinc-900 dark:text-zinc-100 font-bold truncate text-right flex-1"
+                    />
                   </div>
                 )}
-                {resolvedUpiId && (
-                  <div className="flex justify-between items-center pt-0.5 border-t border-zinc-200/60 dark:border-zinc-700/50 font-mono">
-                    <span className="text-zinc-500 font-medium font-sans">UPI ID:</span>
-                    <span className="text-indigo-700 dark:text-indigo-300 font-black truncate max-w-[130px] bg-indigo-50 dark:bg-indigo-950/60 px-1 py-0.2 rounded border border-indigo-200 dark:border-indigo-800">{resolvedUpiId}</span>
+                {(resolvedUpiId || interactive) && (
+                  <div className="flex justify-between items-center gap-1 pt-0.5 border-t border-zinc-200/60 dark:border-zinc-700/50 font-mono">
+                    <span className="text-zinc-500 font-medium font-sans shrink-0">UPI ID:</span>
+                    <EditableText
+                      value={resolvedUpiId}
+                      onChange={(val) => onFieldChange?.("upi_id", val)}
+                      interactive={interactive}
+                      fieldKey="upi_id"
+                      placeholder="UPI ID..."
+                      className="text-indigo-700 dark:text-indigo-300 font-black truncate bg-indigo-50 dark:bg-indigo-950/60 px-1 py-0.2 rounded border border-indigo-200 dark:border-indigo-800 text-right flex-1"
+                    />
                   </div>
                 )}
               </div>
@@ -1308,12 +1482,19 @@ export function OfficialInvoiceDocument({
       </div>
 
       {/* TERMS & CONDITIONS / INVOICE NOTES (Enlarged, Clear & Prominent) */}
-      {resolvedTermsAndNotes && (
+      {(resolvedTermsAndNotes || interactive) && (
         <div className="p-2.5 sm:p-3 rounded-xl border border-zinc-300/90 dark:border-zinc-700 bg-zinc-50/90 dark:bg-zinc-900/60 text-[8.5px] sm:text-[9.5px] text-zinc-700 dark:text-zinc-300 space-y-1 shadow-2xs">
           <span className="font-extrabold text-zinc-900 dark:text-zinc-100 uppercase text-[8px] sm:text-[8.5px] tracking-wider block">
             Terms &amp; Conditions / Official Notes:
           </span>
-          <p className="whitespace-pre-line leading-relaxed font-normal">{resolvedTermsAndNotes}</p>
+          <EditableText
+            value={resolvedTermsAndNotes}
+            onChange={(val) => onFieldChange?.("terms_conditions", val)}
+            interactive={interactive}
+            fieldKey="terms_conditions"
+            placeholder="Click to add default terms and conditions..."
+            className="whitespace-pre-line leading-relaxed font-normal block"
+          />
         </div>
       )}
 
@@ -1332,7 +1513,58 @@ export function OfficialInvoiceDocument({
             </div>
           </div>
 
-          {/* Right: Company Authorized Signatory & Official Seal */}
+          {/* Center-Right: Independent Draggable Corporate Seal / Stamp */}
+          <motion.div
+            drag={interactive}
+            dragMomentum={false}
+            dragElastic={0}
+            whileDrag={{ scale: 1.05, zIndex: 50 }}
+            animate={{ x: stampPosition?.x || 0, y: stampPosition?.y || 0 }}
+            onDragEnd={(_, info) => {
+              if (onStampPositionChange) {
+                onStampPositionChange({
+                  x: (stampPosition?.x || 0) + info.offset.x,
+                  y: (stampPosition?.y || 0) + info.offset.y,
+                })
+              }
+            }}
+            className={`shrink-0 select-none relative ${
+              interactive ? "cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-emerald-500 rounded-2xl group transition-shadow p-1 z-20" : ""
+            }`}
+          >
+            {interactive && (
+              <div className="absolute -top-3 -left-2 bg-emerald-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xs z-30 whitespace-nowrap">
+                ✥ Drag Stamp / Seal
+              </div>
+            )}
+            {resolvedStampUrl ? (
+              <div className="w-18 h-18 sm:w-20 sm:h-20 flex items-center justify-center p-0.5 shadow-2xs">
+                <img 
+                  src={resolvedStampUrl} 
+                  alt="Official Company Seal" 
+                  className="max-h-20 max-w-20 object-contain pointer-events-none select-none drop-shadow-sm" 
+                />
+              </div>
+            ) : (
+              /* High-Fidelity Vector Circular Corporate Stamp Seal */
+              <div className={`w-18 h-18 sm:w-20 sm:h-20 rounded-full border-2 border-dashed ${theme.sealColor} flex flex-col items-center justify-center p-1 text-center bg-white shadow-2xs rotate-[-5deg] relative`}>
+                <div className="w-[56px] h-[56px] rounded-full border border-zinc-300 dark:border-zinc-700 flex flex-col items-center justify-center p-0.5">
+                  <div className="text-[6px] font-black uppercase tracking-tighter leading-tight text-zinc-900 truncate max-w-[50px]">
+                    {resolvedBrandName}
+                  </div>
+                  <div className="w-full border-t border-zinc-300 dark:border-zinc-700 my-0.5" />
+                  <div className="text-[5.5px] font-black text-emerald-700 dark:text-emerald-400 tracking-wider uppercase leading-none">
+                    ★ OFFICIAL SEAL ★
+                  </div>
+                  <div className="text-[4.5px] font-bold text-zinc-500 uppercase tracking-tight leading-none mt-0.5">
+                    VERIFIED
+                  </div>
+                </div>
+              </div>
+            )}
+          </motion.div>
+
+          {/* Right: Independent Draggable Company Authorized Signatory */}
           <motion.div
             drag={interactive}
             dragMomentum={false}
@@ -1347,77 +1579,55 @@ export function OfficialInvoiceDocument({
                 })
               }
             }}
-            className={`flex items-end gap-3 relative select-none ${
-              interactive ? "cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-blue-500 rounded-xl group transition-shadow p-1 z-20" : ""
+            className={`text-center space-y-0.5 min-w-[150px] relative select-none ${
+              interactive ? "cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-blue-500 rounded-xl group transition-shadow p-1.5 z-20" : ""
             }`}
           >
             {interactive && (
-              <div className="absolute -top-2 -right-2 bg-blue-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xs z-30">
+              <div className="absolute -top-3 -right-2 bg-blue-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xs z-30 whitespace-nowrap">
                 ✥ Drag Signature
               </div>
             )}
 
-            {/* Official Seal / Stamp */}
-            <div className="shrink-0 select-none">
-              {resolvedStampUrl ? (
-                <div className="w-16 h-16 flex items-center justify-center p-0.5 shadow-2xs">
-                  <img 
-                    src={resolvedStampUrl} 
-                    alt="Official Company Seal" 
-                    className="max-h-16 max-w-16 object-contain pointer-events-none select-none drop-shadow-sm" 
-                  />
-                </div>
+            <p className="text-[7.5px] font-bold text-zinc-500 uppercase tracking-tight truncate max-w-[160px]">
+              For {fullRegisteredCompanyName} {isSubBranchIssued && activeSubBranch ? `(${activeSubBranch.name})` : isBranchIssued && activeBranch ? `(${activeBranch.name})` : ""}
+            </p>
+            <div className="h-11 flex items-center justify-center">
+              {resolvedSignatureUrl ? (
+                <img 
+                  src={resolvedSignatureUrl} 
+                  alt="Authorized Signature" 
+                  className="max-h-11 max-w-[140px] object-contain drop-shadow-xs pointer-events-none select-none" 
+                />
               ) : (
-                /* High-Fidelity Vector Circular Corporate Stamp Seal */
-                <div className={`w-16 h-16 rounded-full border-2 border-dashed ${theme.sealColor} flex flex-col items-center justify-center p-1 text-center bg-white shadow-2xs rotate-[-5deg] relative`}>
-                  <div className="w-[52px] h-[52px] rounded-full border border-zinc-300 dark:border-zinc-700 flex flex-col items-center justify-center p-0.5">
-                    <div className="text-[5.5px] font-black uppercase tracking-tighter leading-tight text-zinc-900 truncate max-w-[48px]">
-                      {resolvedBrandName}
-                    </div>
-                    <div className="w-full border-t border-zinc-300 dark:border-zinc-700 my-0.5" />
-                    <div className="text-[5px] font-black text-emerald-700 dark:text-emerald-400 tracking-wider uppercase leading-none">
-                      ★ OFFICIAL SEAL ★
-                    </div>
-                    <div className="text-[4px] font-bold text-zinc-500 uppercase tracking-tight leading-none mt-0.5">
-                      VERIFIED
-                    </div>
-                  </div>
+                /* Elegant Digital Calligraphic Signature Graphic */
+                <div className="flex flex-col items-center justify-center">
+                  <span className="font-serif italic font-extrabold text-sm tracking-wide text-zinc-800 dark:text-zinc-200">
+                    {resolvedSignatoryName || "Authorized Signatory"}
+                  </span>
+                  <span className="text-[5.5px] font-bold text-emerald-600 dark:text-emerald-400 tracking-widest uppercase flex items-center gap-0.5">
+                    ✓ Digitally Authorized
+                  </span>
                 </div>
               )}
             </div>
-
-            {/* Authorized Signatory Details */}
-            <div className="text-center space-y-0.5 min-w-[150px]">
-              <p className="text-[7px] font-bold text-zinc-500 uppercase tracking-tight truncate max-w-[160px]">
-                For {fullRegisteredCompanyName} {isSubBranchIssued && activeSubBranch ? `(${activeSubBranch.name})` : isBranchIssued && activeBranch ? `(${activeBranch.name})` : ""}
-              </p>
-              <div className="h-11 flex items-center justify-center">
-                {resolvedSignatureUrl ? (
-                  <img 
-                    src={resolvedSignatureUrl} 
-                    alt="Authorized Signature" 
-                    className="max-h-11 max-w-[140px] object-contain drop-shadow-xs pointer-events-none select-none" 
-                  />
-                ) : (
-                  /* Elegant Digital Calligraphic Signature Graphic */
-                  <div className="flex flex-col items-center justify-center">
-                    <span className="font-serif italic font-extrabold text-sm tracking-wide text-zinc-800 dark:text-zinc-200">
-                      {resolvedSignatoryName || "Authorized Signatory"}
-                    </span>
-                    <span className="text-[5.5px] font-bold text-emerald-600 dark:text-emerald-400 tracking-widest uppercase flex items-center gap-0.5">
-                      ✓ Digitally Authorized
-                    </span>
-                  </div>
-                )}
-              </div>
-              <div className="w-full border-t-2 border-zinc-400 dark:border-zinc-600 pt-0.5">
-                <p className="text-[8px] font-black uppercase text-zinc-800 dark:text-zinc-200 font-bold leading-tight truncate">
-                  {resolvedSignatoryName || "Authorized Signatory"}
-                </p>
-                <p className="text-[6.5px] text-zinc-500 font-medium leading-tight truncate">
-                  {resolvedSignatoryDesignation || "Managing Director"}
-                </p>
-              </div>
+            <div className="w-full border-t-2 border-zinc-400 dark:border-zinc-600 pt-0.5">
+              <EditableText
+                value={resolvedSignatoryName || "Authorized Signatory"}
+                onChange={(val) => onFieldChange?.("signatory_name", val)}
+                interactive={interactive}
+                fieldKey="signatory_name"
+                placeholder="Signatory name..."
+                className="text-[8px] font-black uppercase text-zinc-800 dark:text-zinc-200 font-bold leading-tight block truncate"
+              />
+              <EditableText
+                value={resolvedSignatoryDesignation || "Managing Director"}
+                onChange={(val) => onFieldChange?.("signatory_designation", val)}
+                interactive={interactive}
+                fieldKey="signatory_designation"
+                placeholder="Designation..."
+                className="text-[6.5px] text-zinc-500 font-medium leading-tight block truncate"
+              />
             </div>
           </motion.div>
         </div>
@@ -1465,53 +1675,169 @@ export function OfficialInvoiceDocument({
           className="a4-page bg-white text-zinc-900 font-sans p-4 sm:p-5 text-xs shadow-2xl border border-zinc-200/90 rounded-2xl w-full max-w-[794px] min-h-[1080px] mx-auto relative flex flex-col justify-between gap-2.5 overflow-visible print:w-[210mm] print:max-w-[210mm] print:h-[282mm] print:min-h-[282mm] print:max-h-[282mm] print:p-[5mm_8mm] print:gap-1.5 print:m-0 print:shadow-none print:border-none print:rounded-none page-break-after"
         >
           {/* Draggable Custom Text Stamps / Badges Overlay (on page 1) */}
-          {pg.isFirstPage && customStamps && customStamps.map(stamp => (
-            <motion.div
-              key={stamp.id}
-              drag={interactive}
-              dragMomentum={false}
-              dragElastic={0}
-              whileDrag={{ scale: 1.05, zIndex: 60 }}
-              animate={{ x: stamp.x, y: stamp.y }}
-              onDragEnd={(_, info) => {
-                if (onCustomStampMove) {
-                  onCustomStampMove(stamp.id, {
-                    x: stamp.x + info.offset.x,
-                    y: stamp.y + info.offset.y,
-                  })
-                }
-              }}
-              className={`absolute z-30 px-3 py-1 rounded-lg border-2 font-black uppercase tracking-wider select-none shadow-md flex items-center gap-1.5 ${
-                interactive ? "cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-emerald-400 group" : ""
-              }`}
-              style={{
-                borderColor: stamp.color || "#0d9488",
-                color: stamp.color || "#0d9488",
-                backgroundColor: "rgba(255, 255, 255, 0.95)",
-                fontSize: `${stamp.fontSize || 11}px`,
-                left: "40%",
-                top: "20%",
-              }}
-            >
-              {interactive && (
-                <span className="text-[9px] opacity-60 pointer-events-none">✥</span>
-              )}
-              <span>{stamp.text}</span>
-              {interactive && onRemoveCustomStamp && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onRemoveCustomStamp(stamp.id)
+          {pg.isFirstPage && customStamps && customStamps.map(stamp => {
+            const curSize = stamp.fontSize || 12
+            const curRot = stamp.rotation ?? (stamp.bgStyle === "stamp" ? -12 : 0)
+            const curStyle = stamp.bgStyle || "stamp"
+            const curColor = stamp.color || "#0d9488"
+            const isBold = stamp.isBold !== false
+
+            return (
+              <motion.div
+                key={stamp.id}
+                drag={interactive}
+                dragMomentum={false}
+                dragElastic={0}
+                whileDrag={{ scale: 1.05, zIndex: 60 }}
+                animate={{ x: stamp.x, y: stamp.y, rotate: curRot }}
+                onDragEnd={(_, info) => {
+                  if (onCustomStampMove) {
+                    onCustomStampMove(stamp.id, {
+                      x: stamp.x + info.offset.x,
+                      y: stamp.y + info.offset.y,
+                    })
+                  }
+                }}
+                className={`absolute z-30 select-none transition-shadow group ${
+                  interactive ? "cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-blue-400 p-1" : ""
+                }`}
+                style={{
+                  left: "35%",
+                  top: "18%",
+                }}
+              >
+                {/* Floating Interactive Micro-Toolbar (visible on hover when in interactive mode) */}
+                {interactive && (
+                  <div className="absolute -top-9 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity bg-zinc-900/95 backdrop-blur-sm text-white px-2 py-1 rounded-xl shadow-xl flex items-center gap-1.5 z-40 text-[9px] pointer-events-auto whitespace-nowrap border border-white/20">
+                    <span className="text-[7.5px] font-bold text-zinc-400 select-none">✥ Drag</span>
+
+                    {/* Zoom In / Zoom Out Font Size Controls */}
+                    <div className="flex items-center bg-zinc-800 rounded px-1 py-0.5 gap-1 border border-zinc-700">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onCustomStampUpdate?.(stamp.id, { fontSize: Math.max(8, curSize - 2) })
+                        }}
+                        className="text-[9px] font-bold hover:text-teal-300 px-1 cursor-pointer"
+                        title="Zoom out text (Decrease font size)"
+                      >
+                        A-
+                      </button>
+                      <span className="font-mono text-[8.5px] text-zinc-300 font-bold">{curSize}px</span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onCustomStampUpdate?.(stamp.id, { fontSize: Math.min(48, curSize + 2) })
+                        }}
+                        className="text-[9px] font-bold hover:text-teal-300 px-1 cursor-pointer"
+                        title="Zoom in text (Increase font size)"
+                      >
+                        A+
+                      </button>
+                    </div>
+
+                    {/* Quick Color Swatches */}
+                    <div className="flex items-center gap-0.5">
+                      {[
+                        { color: "#0d9488", title: "Teal" },
+                        { color: "#dc2626", title: "Crimson" },
+                        { color: "#2563eb", title: "Blue" },
+                        { color: "#d97706", title: "Amber" },
+                        { color: "#7c3aed", title: "Purple" },
+                        { color: "#18181b", title: "Black" },
+                      ].map((c) => (
+                        <button
+                          key={c.color}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onCustomStampUpdate?.(stamp.id, { color: c.color })
+                          }}
+                          className={`w-3 h-3 rounded-full border border-white/40 cursor-pointer ${curColor === c.color ? 'ring-2 ring-white scale-110' : 'hover:scale-105'}`}
+                          style={{ backgroundColor: c.color }}
+                          title={c.title}
+                        />
+                      ))}
+                    </div>
+
+                    {/* Rotation Cycle Button */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const rotSequence = [0, -12, -24, 15, 45]
+                        const nextIndex = (rotSequence.indexOf(curRot) + 1) % rotSequence.length
+                        onCustomStampUpdate?.(stamp.id, { rotation: rotSequence[nextIndex] })
+                      }}
+                      className="px-1.5 py-0.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded border border-zinc-700 text-[8px] font-bold cursor-pointer"
+                      title="Rotate stamp angle"
+                    >
+                      ⟳ {curRot}°
+                    </button>
+
+                    {/* Style Preset Cycler */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const styleSequence: ("stamp" | "badge" | "clean" | "watermark")[] = ["stamp", "badge", "clean", "watermark"]
+                        const nextIndex = (styleSequence.indexOf(curStyle) + 1) % styleSequence.length
+                        onCustomStampUpdate?.(stamp.id, { bgStyle: styleSequence[nextIndex] })
+                      }}
+                      className="px-1.5 py-0.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded border border-zinc-700 text-[8px] font-bold uppercase cursor-pointer"
+                      title="Cycle style: Stamp, Badge, Clean, Watermark"
+                    >
+                      {curStyle}
+                    </button>
+
+                    {/* Remove Stamp Button */}
+                    {onRemoveCustomStamp && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onRemoveCustomStamp(stamp.id)
+                        }}
+                        className="w-4 h-4 rounded-full bg-rose-600 hover:bg-rose-700 text-white flex items-center justify-center text-[9px] font-bold cursor-pointer ml-0.5 shadow-xs"
+                        title="Delete custom text sticker"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Actual Custom Stamp Element (Editable in-place) */}
+                <div
+                  className={`flex items-center gap-1.5 ${
+                    curStyle === "stamp"
+                      ? "px-3 py-1 rounded-lg border-2 border-dashed font-black uppercase tracking-wider shadow-md backdrop-blur-xs bg-white/95"
+                      : curStyle === "badge"
+                      ? "px-3 py-0.5 rounded-full border-2 font-bold uppercase tracking-wider shadow-sm backdrop-blur-xs bg-white/95"
+                      : curStyle === "watermark"
+                      ? "p-2 font-black uppercase tracking-widest opacity-25 select-none"
+                      : "px-2 py-0.5 font-bold"
+                  }`}
+                  style={{
+                    borderColor: curColor,
+                    color: curColor,
+                    fontSize: `${curSize}px`,
+                    fontWeight: isBold ? 800 : 500,
                   }}
-                  className="w-3.5 h-3.5 rounded-full bg-rose-500 text-white flex items-center justify-center text-[8px] hover:bg-rose-700 cursor-pointer ml-1"
-                  title="Remove Stamp"
                 >
-                  ✕
-                </button>
-              )}
-            </motion.div>
-          ))}
+                  <EditableText
+                    value={stamp.text}
+                    onChange={(val) => onCustomStampUpdate?.(stamp.id, { text: val })}
+                    interactive={interactive}
+                    placeholder="Enter custom text..."
+                    className="outline-none"
+                  />
+                </div>
+              </motion.div>
+            )
+          })}
 
           {/* PAGE CONTENT (Top to mid sections) */}
           <div className="flex flex-col gap-2 shrink-0">

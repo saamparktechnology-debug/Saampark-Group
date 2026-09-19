@@ -172,6 +172,7 @@ export interface Company {
   cin?: string
   gstin?: string
   pan?: string
+  msme_reg?: string
   // Address & Contact Information
   address?: string
   city?: string

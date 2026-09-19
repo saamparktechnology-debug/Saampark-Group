@@ -12,6 +12,7 @@ export interface Company {
   gstin?: string
   pan?: string
   cin?: string
+  msme_reg?: string
   address?: string
   phone?: string
   email?: string
