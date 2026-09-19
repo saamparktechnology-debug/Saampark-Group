@@ -237,6 +237,7 @@ export default function BranchesMain() {
     setEditingBranch(null)
     setBranchCompanyId(activeCompanyId || (companies[0]?.id || "tech"))
     setBranchTab("basic")
+    setBranchBankProfileTab("gst")
     setBranchForm({
       name: "",
       code: `BR-${Math.floor(100 + Math.random() * 900)}`,
@@ -272,6 +273,23 @@ export default function BranchesMain() {
       upi_id: "",
       payment_qr_url: "",
 
+      // Dual GST and Non-GST Bank Profiles for Branch
+      gst_bank_name: "",
+      gst_account_holder: "",
+      gst_account_number: "",
+      gst_ifsc_code: "",
+      gst_bank_branch: "",
+      gst_upi_id: "",
+      gst_payment_qr_url: "",
+
+      nongst_bank_name: "",
+      nongst_account_holder: "",
+      nongst_account_number: "",
+      nongst_ifsc_code: "",
+      nongst_bank_branch: "",
+      nongst_upi_id: "",
+      nongst_payment_qr_url: "",
+
       signatory_name: user?.name || "Authorized Signatory",
       signatory_designation: "Branch Manager",
       signature_image_url: "",
@@ -286,6 +304,7 @@ export default function BranchesMain() {
     setEditingBranch(b)
     setBranchCompanyId(b.companyId || activeCompanyId || "tech")
     setBranchTab("basic")
+    setBranchBankProfileTab("gst")
     setBranchForm({
       name: b.name || "",
       code: b.code || "",
@@ -415,6 +434,7 @@ export default function BranchesMain() {
     setSubBranchCompanyId(parent?.companyId || activeCompanyId || "tech")
     setSubBranchParentBranchId(defaultParent)
     setSubBranchTab("basic")
+    setSubBranchBankProfileTab("gst")
     setSubBranchForm({
       name: "",
       code: `SB-${Math.floor(100 + Math.random() * 900)}`,
@@ -443,8 +463,26 @@ export default function BranchesMain() {
       account_holder: "",
       account_number: "",
       ifsc_code: "",
+      bank_branch: "",
       upi_id: "",
       payment_qr_url: "",
+
+      // Dual GST and Non-GST Bank Profiles for Sub-Branch
+      gst_bank_name: "",
+      gst_account_holder: "",
+      gst_account_number: "",
+      gst_ifsc_code: "",
+      gst_bank_branch: "",
+      gst_upi_id: "",
+      gst_payment_qr_url: "",
+
+      nongst_bank_name: "",
+      nongst_account_holder: "",
+      nongst_account_number: "",
+      nongst_ifsc_code: "",
+      nongst_bank_branch: "",
+      nongst_upi_id: "",
+      nongst_payment_qr_url: "",
 
       signatory_name: "Partner Signatory",
       signatory_designation: "Franchise Partner",
