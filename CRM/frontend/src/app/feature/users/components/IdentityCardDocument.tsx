@@ -72,7 +72,7 @@ export function IdentityCardDocument({
     subBranch: subBranchName || "",
     joined: joiningDate,
   })
-  const verificationUrl = `${originUrl}/verify-member?${queryParams.toString()}`
+  const verificationUrl = `${originUrl}/public/verify-member?${queryParams.toString()}`
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=1&ecc=M&data=${encodeURIComponent(verificationUrl)}`
 
   return (

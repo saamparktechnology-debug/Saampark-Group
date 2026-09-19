@@ -335,23 +335,32 @@ function VerifyMemberContent() {
 
           {/* Card Actions Footer */}
           <div className="p-4 bg-slate-950 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
-            <button
-              type="button"
-              onClick={copyVerificationLink}
-              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
-            >
-              {copied ? <Check size={14} className="text-emerald-400" /> : <ExternalLink size={14} />}
-              <span>{copied ? "Link Copied!" : "Share Verification Link"}</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={copyVerificationLink}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                {copied ? <Check size={14} className="text-emerald-400" /> : <ExternalLink size={14} />}
+                <span>{copied ? "Link Copied!" : "Share Verification Link"}</span>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-md"
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-md"
+              >
+                <Download size={14} />
+                <span>Print Verification Slip</span>
+              </button>
+            </div>
+
+            <a
+              href="/login"
+              className="px-4 py-2 rounded-xl bg-slate-900 border border-slate-700 hover:border-emerald-500/50 hover:bg-slate-800 text-slate-300 hover:text-white font-bold transition-all flex items-center gap-1.5 shadow-xs"
             >
-              <Download size={14} />
-              <span>Print Verification Slip</span>
-            </button>
+              <span>Employee Portal Login →</span>
+            </a>
           </div>
         </motion.div>
 

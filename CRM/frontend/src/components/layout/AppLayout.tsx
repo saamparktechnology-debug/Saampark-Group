@@ -21,7 +21,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("resize", checkMobile)
   }, [])
 
-  if (pathname === "/login" || pathname?.startsWith("/public/") || pathname?.startsWith("/verify-invoice") || pathname?.startsWith("/verify-member")) {
+  const isPublicLayout = 
+    pathname === "/login" || 
+    pathname?.startsWith("/login") || 
+    pathname?.startsWith("/public") || 
+    pathname?.startsWith("/verify-invoice") || 
+    pathname?.startsWith("/verify-member") ||
+    pathname?.startsWith("/verify")
+
+  if (isPublicLayout) {
     return <>{children}</>
   }
 

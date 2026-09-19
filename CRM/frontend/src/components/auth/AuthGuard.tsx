@@ -24,7 +24,21 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
     const state = useAuthStore.getState()
     const isAuth = Boolean(state.isAuthenticated && state.user && state.user.email)
-    const isPublicPage = pathname === "/login" || pathname?.startsWith("/public/") || pathname?.startsWith("/verify-invoice") || pathname?.startsWith("/verify-member")
+    const isPublicPage = 
+      pathname === "/login" || 
+      pathname?.startsWith("/login") ||
+      pathname?.startsWith("/public") || 
+      pathname?.startsWith("/verify-invoice") || 
+      pathname?.startsWith("/verify-member") ||
+      pathname?.startsWith("/verify")
+
+    // If on a public verification page or login page, do NOT enforce session expiry or login redirects!
+    if (isPublicPage) {
+      if (isAuth && pathname === "/login") {
+        router.replace("/feature/dashboard")
+      }
+      return
+    }
 
     if (isAuth && typeof window !== "undefined") {
       const isSessionActive = sessionStorage.getItem("saampark_session_active") === "true"
@@ -36,10 +50,8 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       }
     }
 
-    if (!isAuth && !isPublicPage) {
+    if (!isAuth) {
       router.replace("/login")
-    } else if (isAuth && pathname === "/login") {
-      router.replace("/feature/dashboard")
     }
   }, [isAuthenticated, user, pathname, router, isMounted])
 
@@ -182,10 +194,24 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   }, [isMounted, user?.id, user?.email])
 
   // Prevent rendering protected content before hydration completes
-  if (!isMounted) return null
+  if (!isMounted) {
+    if (typeof window !== "undefined") {
+      const p = window.location.pathname.toLowerCase()
+      if (p === "/login" || p.startsWith("/login") || p.startsWith("/public") || p.startsWith("/verify-invoice") || p.startsWith("/verify-member") || p.startsWith("/verify")) {
+        return <>{children}</>
+      }
+    }
+    return null
+  }
 
   // If on login or public unauthenticated verification page, render directly
-  const isPublicPage = pathname === "/login" || pathname?.startsWith("/public") || pathname?.startsWith("/verify-invoice") || pathname?.startsWith("/verify-member")
+  const isPublicPage = 
+    pathname === "/login" || 
+    pathname?.startsWith("/login") || 
+    pathname?.startsWith("/public") || 
+    pathname?.startsWith("/verify-invoice") || 
+    pathname?.startsWith("/verify-member") ||
+    pathname?.startsWith("/verify")
   if (isPublicPage) return <>{children}</>
 
   // If not authenticated and not on public page, render nothing while redirecting
