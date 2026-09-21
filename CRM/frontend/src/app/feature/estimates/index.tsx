@@ -4,7 +4,7 @@ import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
   FileText, Plus, Search, Edit, Trash2, X, Send, 
-  Printer, UserCheck, Mail, Building2, Phone, Sparkles 
+  Printer, UserCheck, Mail, Building2, Phone, Sparkles, ArrowRight
 } from "lucide-react"
 import { useAuthStore, getCompanyFullName, getCompanyLogoUrl } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
@@ -13,6 +13,7 @@ import { getClients } from "@/app/feature/clients/services/clientService"
 import { createNotification } from "@/services/notificationService"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
 import { DocumentStudioModal } from "@/components/documents/DocumentStudioModal"
+import { addInvoice } from "@/app/feature/sales/invoices/services/invoiceService"
 
 interface LineItem { 
   id: string
@@ -140,8 +141,9 @@ export default function EstimatesMain() {
     })
   }, [estimates, activeCompanyId, activeBranchId, branches, searchQuery, statusFilter, user])
 
+  const [taxScheme, setTaxScheme] = React.useState<"gst" | "nongst">("gst")
   const subtotal = items.reduce((s, i) => s + (i.quantity * i.unitPrice), 0)
-  const tax = Math.round(subtotal * 0.18)
+  const tax = taxScheme === "nongst" ? 0 : Math.round(subtotal * 0.18)
   const grandTotal = subtotal + tax
 
   const handleItemChange = (id: string, field: string, value: any) => {
@@ -172,6 +174,7 @@ export default function EstimatesMain() {
 
   const openAddModal = () => { 
     setEditingItem(null)
+    setTaxScheme("gst")
     setRecipientMode("client")
     setSelectedClientId("")
     setForm({ 
@@ -192,6 +195,7 @@ export default function EstimatesMain() {
 
   const openEditModal = (item: Estimate) => { 
     setEditingItem(item)
+    setTaxScheme((item as any).taxType === "nongst" || (item as any).isNonGst ? "nongst" : "gst")
     setRecipientMode(item.customerEmail ? "client" : "custom")
     setForm({ 
       number: item.number, 
@@ -212,12 +216,56 @@ export default function EstimatesMain() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.customer.trim()) return
-    const data = { ...form, items, subtotal, tax, total: grandTotal, companyId: activeCompanyId }
+    const data = { 
+      ...form, 
+      taxType: taxScheme,
+      isNonGst: taxScheme === "nongst",
+      items, 
+      subtotal, 
+      tax, 
+      total: grandTotal, 
+      companyId: activeCompanyId 
+    }
     await executeWithFeedback(async () => {
       if (editingItem) { await EstimateService.update(editingItem.id, data) } else { await EstimateService.create(data) }
     }, { actionType: editingItem ? "update" : "create", successTitle: editingItem ? "Estimate Updated" : "Estimate Created" })
     setIsModalOpen(false)
     loadData()
+  }
+
+  const handleConvertToInvoice = async (estimate: Estimate) => {
+    try {
+      const isNonGst = Boolean((estimate as any).isNonGst || (estimate as any).taxType === "nongst")
+      const invoiceData = {
+        client: estimate.customer,
+        clientEmail: estimate.customerEmail,
+        clientPhone: estimate.customerPhone,
+        clientAddress: estimate.customerAddress,
+        totalInvoiced: estimate.total,
+        paymentReceived: 0,
+        due: estimate.total,
+        paymentStatus: "Unpaid",
+        invoiceDate: new Date().toISOString().split("T")[0],
+        dueDate: estimate.validTill || new Date(Date.now() + 15 * 86400000).toISOString().split("T")[0],
+        taxType: isNonGst ? "nongst" : "gst",
+        isNonGst: isNonGst,
+        tax: estimate.tax || 0,
+        items: (estimate.items || []).map(it => ({
+          id: it.id,
+          serviceName: it.name,
+          qty: it.quantity,
+          rate: it.unitPrice,
+          totalAmount: it.total,
+        })),
+        companyId: estimate.companyId || activeCompanyId,
+      }
+      await addInvoice(invoiceData as any)
+      alert(`✅ Converted Estimate ${estimate.number} to a new Sales Invoice successfully!`)
+      setViewingItem(null)
+    } catch (err: any) {
+      console.error("Convert to invoice error:", err)
+      alert("Failed to convert estimate to invoice: " + (err?.message || "Unknown error"))
+    }
   }
 
   const handleDelete = async () => {
@@ -502,10 +550,37 @@ export default function EstimatesMain() {
                 </div>
 
                 {/* Subtotal, Tax, Total */}
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-800 rounded-lg flex justify-end">
+                <div className="p-3 bg-zinc-50 dark:bg-zinc-800 rounded-lg flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-zinc-600 dark:text-zinc-400">Scheme:</span>
+                    <button
+                      type="button"
+                      onClick={() => setTaxScheme("gst")}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        taxScheme === "gst" 
+                          ? "bg-blue-600 text-white shadow-xs" 
+                          : "bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300"
+                      }`}
+                    >
+                      GST (18%)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTaxScheme("nongst")}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        taxScheme === "nongst" 
+                          ? "bg-blue-600 text-white shadow-xs" 
+                          : "bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300"
+                      }`}
+                    >
+                      Non-GST (0%)
+                    </button>
+                  </div>
                   <div className="w-64 space-y-1 text-right text-xs">
                     <div className="flex justify-between"><span>Subtotal:</span><span className="font-semibold font-mono">₹{subtotal.toLocaleString("en-IN")}</span></div>
-                    <div className="flex justify-between"><span>Estimated GST (18%):</span><span className="font-semibold font-mono">₹{tax.toLocaleString("en-IN")}</span></div>
+                    {taxScheme === "gst" && (
+                      <div className="flex justify-between"><span>Estimated GST (18%):</span><span className="font-semibold font-mono">₹{tax.toLocaleString("en-IN")}</span></div>
+                    )}
                     <div className="flex justify-between text-sm font-bold text-blue-600 pt-1 border-t border-zinc-200 dark:border-zinc-700"><span>Grand Total:</span><span>₹{grandTotal.toLocaleString("en-IN")}</span></div>
                   </div>
                 </div>
@@ -599,6 +674,12 @@ export default function EstimatesMain() {
               <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 shrink-0 print:hidden">
                 <span className="font-bold text-sm">Commercial Estimate: {viewingItem.number}</span>
                 <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => handleConvertToInvoice(viewingItem)} 
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-sm transition-colors cursor-pointer"
+                  >
+                    <ArrowRight size={14} /><span>Convert to Invoice</span>
+                  </button>
                   <button onClick={() => window.print()} className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm transition-colors cursor-pointer">
                     <Printer size={14} /><span>Print / PDF</span>
                   </button>
@@ -690,7 +771,9 @@ export default function EstimatesMain() {
 
                   <div className="w-64 space-y-1.5 text-right text-xs">
                     <div className="flex justify-between"><span>Subtotal:</span><span className="font-semibold font-mono">₹{(viewingItem.subtotal || 0).toLocaleString("en-IN")}</span></div>
-                    <div className="flex justify-between"><span>GST (18%):</span><span className="font-semibold font-mono">₹{(viewingItem.tax || 0).toLocaleString("en-IN")}</span></div>
+                    {(!((viewingItem as any).isNonGst || (viewingItem as any).taxType === "nongst")) && (
+                      <div className="flex justify-between"><span>GST (18%):</span><span className="font-semibold font-mono">₹{(viewingItem.tax || 0).toLocaleString("en-IN")}</span></div>
+                    )}
                     <div className="flex justify-between text-base font-black text-blue-600 dark:text-blue-400 pt-2 border-t-2 border-zinc-900 dark:border-zinc-100">
                       <span>Grand Total:</span><span>₹{(viewingItem.total || 0).toLocaleString("en-IN")}</span>
                     </div>

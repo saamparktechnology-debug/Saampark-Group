@@ -227,13 +227,48 @@ export const renewSubscription = async (
   id: string, 
   customNextDate?: string, 
   generateInvoice: boolean = true,
-  companyId?: string
+  companyId?: string,
+  paymentDetails?: {
+    isPaid?: boolean
+    paymentMethod?: string
+    transactionRef?: string
+  }
 ): Promise<Subscription | null> => {
   const allSubs = await getSubscriptions(companyId)
   const sub = allSubs.find(s => String(s.id).toLowerCase().trim() === String(id).toLowerCase().trim())
   if (!sub) return null
 
   const nextDate = customNextDate || calculateNextCycleDate(sub.nextBillingDate || new Date().toISOString(), sub.billingCycle, sub.customDaysCount)
+  const isPaid = Boolean(paymentDetails?.isPaid)
+  const isNonGst = Boolean(sub.isNonGst || sub.taxType === "nongst" || sub.gstRate === 0)
+  const numAmt = sub.numericAmount || (typeof sub.amount === "number" ? sub.amount : parseInt(String(sub.amount || "0").replace(/[^0-9]/g, ""))) || 0
+  const gstAmt = isNonGst ? 0 : Math.round(numAmt * 0.18)
+  const totalInvoiced = numAmt + gstAmt
+  const formattedTotal = `₹${totalInvoiced.toLocaleString("en-IN")}`
+
+  let receipt: any = null
+  if (isPaid) {
+    receipt = {
+      receiptNumber: `REC-REN-${Date.now().toString().slice(-6)}`,
+      date: new Date().toISOString().split("T")[0],
+      subscriptionId: sub.id,
+      clientName: sub.clientName,
+      clientEmail: sub.clientEmail,
+      clientPhone: sub.clientPhone,
+      clientAddress: (sub as any).clientAddress,
+      planName: sub.planName,
+      billingCycle: sub.billingCycle,
+      periodStart: sub.nextBillingDate || new Date().toISOString().split("T")[0],
+      periodEnd: nextDate,
+      baseAmount: numAmt,
+      taxAmount: gstAmt,
+      totalAmount: totalInvoiced,
+      isNonGst: isNonGst,
+      paymentMethod: paymentDetails?.paymentMethod || "UPI Transfer",
+      transactionRef: paymentDetails?.transactionRef,
+      companyId: companyId || sub.companyId || "tech",
+    }
+  }
 
   const updated = await updateSubscription(id, {
     status: "Active",
@@ -241,36 +276,35 @@ export const renewSubscription = async (
     nextBillingDate: nextDate,
   }, companyId)
 
-  // Auto-generate invoice for next renewal cycle if requested
+  // Auto-generate invoice for renewal cycle if requested
   if (generateInvoice) {
     try {
       const { addInvoice } = await import("@/app/feature/sales/invoices/services/invoiceService")
-      const numAmt = sub.numericAmount || parseInt(String(sub.amount).replace(/[^0-9]/g, "")) || 0
-      const gstAmt = Math.round(numAmt * 0.18)
-      const totalInvoiced = numAmt + gstAmt
-
       await addInvoice({
         client: sub.clientName,
         clientEmail: sub.clientEmail,
-        project: `${sub.planName} (Renewal)`,
+        project: `${sub.planName} (Renewal ${isPaid ? '— Paid' : ''})`,
         billDate: new Date().toISOString().split("T")[0],
         dueDate: nextDate,
         baseAmount: numAmt,
-        gstRate: 18,
+        gstRate: isNonGst ? 0 : 18,
         gstAmount: gstAmt,
-        totalInvoiced: `₹${totalInvoiced.toLocaleString("en-IN")}`,
-        paymentReceived: "₹0",
-        due: `₹${totalInvoiced.toLocaleString("en-IN")}`,
-        status: "Not paid",
+        taxType: isNonGst ? "nongst" : "gst",
+        isNonGst: isNonGst,
+        totalInvoiced: formattedTotal,
+        paymentReceived: isPaid ? formattedTotal : "₹0",
+        due: isPaid ? "₹0" : formattedTotal,
+        status: isPaid ? "Fully paid" : "Not paid",
+        paymentStatus: isPaid ? "Paid" : "Unpaid",
         items: [
           {
             id: `line_${Date.now()}`,
-            serviceName: `${sub.planName} - ${sub.billingCycle} Retainer`,
+            serviceName: `${sub.planName} - ${sub.billingCycle} Retainer Renewal`,
             sacCode: "998315",
             qty: 1,
             unit: sub.billingCycle,
             rate: numAmt,
-            gstRate: 18,
+            gstRate: isNonGst ? 0 : 18,
             gstAmount: gstAmt,
             totalAmount: totalInvoiced,
           }
@@ -281,7 +315,47 @@ export const renewSubscription = async (
     }
   }
 
+  if (updated && receipt) {
+    (updated as any).receipt = receipt
+  }
+
   return updated
+}
+
+export const checkAndSendSubscriptionOverdueReminders = async (
+  companyId?: string
+): Promise<{ sentCount: number; overdueCount: number }> => {
+  const allSubs = await getSubscriptions(companyId)
+  const { calculateOverdueDetails } = await import("../types")
+  const { createNotification } = await import("@/services/notificationService")
+
+  let sentCount = 0
+  let overdueCount = 0
+
+  for (const sub of allSubs) {
+    if (sub.status === "Canceled") continue
+    const overdueInfo = calculateOverdueDetails(sub)
+    if (overdueInfo.isOverdue) {
+      overdueCount++
+      const emailSent = await sendSubscriptionReminder(sub.id, companyId)
+      if (emailSent) sentCount++
+
+      try {
+        await createNotification({
+          title: `Overdue Subscription: ${sub.planName}`,
+          message: `Subscription for ${sub.clientName} is ${overdueInfo.daysOverdue} days overdue (Due: ${sub.nextBillingDate}). Total due today: ₹${overdueInfo.totalDueToday.toLocaleString("en-IN")}.`,
+          type: "invoice",
+          targetEmail: sub.clientEmail,
+          linkUrl: `/feature/subscriptions`,
+          sendEmailNotification: false,
+        })
+      } catch (e) {
+        console.warn("Notification error:", e)
+      }
+    }
+  }
+
+  return { sentCount, overdueCount }
 }
 
 export const sendSubscriptionReminder = async (id: string, companyId?: string): Promise<boolean> => {

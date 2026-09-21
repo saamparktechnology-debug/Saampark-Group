@@ -7,7 +7,7 @@ import {
   Award, Sparkles, UserCheck, Briefcase, FileText, QrCode, CreditCard, 
   CheckCircle2, Layers, Check
 } from "lucide-react"
-import { InvoiceItem, InvoiceLineItem } from "../services/invoiceService"
+import { InvoiceItem, InvoiceLineItem, parseCurrencyNumber } from "../services/invoiceService"
 import { CompanyPaymentSettings } from "@/app/feature/settings/services/companyPaymentService"
 import { ClientItem } from "@/app/feature/clients/types"
 import { useAuthStore, Company, Branch, SubBranch, DEFAULT_COMPANIES, getCompanyLogoUrl } from "@/store/useAuthStore"
@@ -579,7 +579,7 @@ export function OfficialInvoiceDocument({
     ? invoice.discount 
     : (invoice.discountsList ? invoice.discountsList.reduce((sum, d) => sum + (d.amount || 0), 0) : 0)
   
-  const parsedInvoiced = parseInt((invoice.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
+  const parsedInvoiced = parseCurrencyNumber(invoice.totalInvoiced)
 
   const baseNum = invoice.baseAmount !== undefined && invoice.baseAmount > 0
     ? invoice.baseAmount
@@ -595,10 +595,10 @@ export function OfficialInvoiceDocument({
   const sgstAmt = gstAmt - cgstAmt
   const totalVal = taxableBase + gstAmt
 
-  const rawReceived = parseInt((invoice.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
+  const rawReceived = parseCurrencyNumber(invoice.paymentReceived)
   const parsedReceived = Math.min(rawReceived, totalVal)
   const parsedDue = invoice.due !== undefined 
-    ? Math.min(parseInt(String(invoice.due).replace(/[^0-9]/g, "")) || 0, Math.max(0, totalVal - parsedReceived))
+    ? Math.min(parseCurrencyNumber(invoice.due), Math.max(0, totalVal - parsedReceived))
     : Math.max(0, totalVal - parsedReceived)
 
   const isFullyPaid = invoice.status === "Fully paid" || invoice.status === "Credited" || (parsedDue === 0 && parsedReceived > 0)

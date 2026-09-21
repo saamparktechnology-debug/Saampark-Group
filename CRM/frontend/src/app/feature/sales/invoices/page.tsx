@@ -48,8 +48,13 @@ import {
   updateInvoiceStatus, 
   markPaymentCompleted,
   recordPartialPayment,
-  sendPaymentReminder 
+  sendPaymentReminder,
+  parseCurrencyNumber,
+  isInvoiceOverdue,
+  getInvoiceDaysOverdue,
+  checkAndSendOverdueReminders
 } from "./services/invoiceService"
+import { isMatchingCompany } from "@/store/useAuthStore"
 import { InvoiceModal } from "./components/InvoiceModal"
 import { DocumentStudioModal } from "@/components/documents/DocumentStudioModal"
 import { getClients, saveStoredClient } from "@/app/feature/clients/services/clientService"
@@ -79,7 +84,7 @@ function InvoicesPageContent() {
   const clientNameNorm = (user?.name || "").toLowerCase().trim()
 
   const [invoices, setInvoices] = React.useState<InvoiceItem[]>([])
-  const [activeTab, setActiveTab] = React.useState<"all" | InvoiceStatus>("all")
+  const [activeTab, setActiveTab] = React.useState<"all" | InvoiceStatus | "overdue">("all")
   const [searchQuery, setSearchQuery] = React.useState("")
   const [selectedInvoice, setSelectedInvoice] = React.useState<InvoiceItem | null>(null)
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = React.useState(false)
@@ -327,7 +332,7 @@ function InvoicesPageContent() {
     setEditDueDate(inv.dueDate || "")
     setEditStatus(inv.status || "Not paid")
     
-    const recNum = parseInt((inv.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
+    const recNum = parseCurrencyNumber(inv.paymentReceived)
     setEditPaymentReceived(recNum > 0 ? recNum : "")
 
     if (inv.items && inv.items.length > 0) {
@@ -346,7 +351,7 @@ function InvoicesPageContent() {
         gstRate: isNonGst ? 0 : (it.gstRate !== undefined ? it.gstRate : 18),
       })))
     } else {
-      const baseNum = inv.baseAmount || parseInt((inv.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
+      const baseNum = inv.baseAmount || parseCurrencyNumber(inv.totalInvoiced)
       setEditServiceItems([{
         id: `svc_${Date.now()}`,
         serviceName: inv.project || "Custom Service",
@@ -619,7 +624,7 @@ function InvoicesPageContent() {
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [activeCompanyId, activeBranchId])
 
   React.useEffect(() => {
     loadInvoices(true)
@@ -637,7 +642,25 @@ function InvoicesPageContent() {
       window.removeEventListener("saampark_branch_switched", handleReload)
       window.removeEventListener("saampark_invoices_updated", handleReload)
     }
-  }, [loadInvoices])
+  }, [loadInvoices, activeCompanyId, activeBranchId])
+
+  const [isSendingOverdueBatch, setIsSendingOverdueBatch] = React.useState(false)
+  const handleBatchOverdueReminders = async () => {
+    setIsSendingOverdueBatch(true)
+    await executeWithFeedback(async () => {
+      const res = await checkAndSendOverdueReminders(activeCompanyId || "all")
+      await loadInvoices(false)
+      return res
+    }, {
+      actionType: "process",
+      loadingTitle: "Checking & Sending Overdue Reminders...",
+      loadingMsg: "Scanning ledger and dispatching urgent payment notifications...",
+      successTitle: "Overdue Reminders Processed",
+      successMsg: "Payment notifications and reminders dispatched to overdue clients.",
+      errorTitle: "Reminder Failed",
+    })
+    setIsSendingOverdueBatch(false)
+  }
 
 
   // Direct QR Code Scan to View Handler (?view=INV...)
@@ -1141,28 +1164,38 @@ function InvoicesPageContent() {
     if (isClientRole) {
       filtered = filtered.filter((i) => isRecordAssignedToClient(i, user))
     } else {
-      if (userComp && userComp !== "all" && !user?.branchId) {
+      if (userComp && userComp !== "all") {
         filtered = filtered.filter((i) => {
           const iComp = (i.companyId || (i as any).company || "tech").toLowerCase().trim()
-          return iComp === userComp || (userComp === "tech" && !i.companyId)
+          return isMatchingCompany({ id: iComp, slug: iComp } as any, userComp)
         })
       }
       if (targetBranch && targetBranch !== "all") {
         filtered = filtered.filter((i) => checkBranch(i))
       }
     }
+
+    if (activeTab === "overdue") {
+      filtered = filtered.filter(isInvoiceOverdue)
+    } else if (activeTab !== "all") {
+      filtered = filtered.filter((i) => i.status === activeTab)
+    }
+
     return filtered
-  }, [invoices, isClientRole, clientEmailNorm, clientNameNorm, activeCompanyId, activeBranchId, branches, user?.companyId, user?.branchId])
+  }, [invoices, isClientRole, clientEmailNorm, clientNameNorm, activeCompanyId, activeBranchId, branches, user?.companyId, user?.branchId, activeTab])
 
   // Summary Metrics based on displayed invoices
-  const totalInvoicedNum = displayedInvoices.reduce((sum, i) => sum + (parseInt((i.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0), 0)
+  const totalInvoicedNum = displayedInvoices.reduce((sum, i) => sum + parseCurrencyNumber(i.totalInvoiced), 0)
   const totalReceivedNum = displayedInvoices.reduce((sum, i) => {
-    const inv = parseInt((i.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
-    const rec = parseInt((i.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
+    const inv = parseCurrencyNumber(i.totalInvoiced)
+    const rec = parseCurrencyNumber(i.paymentReceived)
     return sum + Math.min(rec, inv)
   }, 0)
-  const totalDueNum = displayedInvoices.reduce((sum, i) => sum + (parseInt((i.due || "0").replace(/[^0-9]/g, "")) || 0), 0)
+  const totalDueNum = displayedInvoices.reduce((sum, i) => sum + parseCurrencyNumber(i.due), 0)
   const pendingCount = displayedInvoices.filter(i => i.status === "Not paid" || i.status === "Payment Pending" || i.status === "Partially paid").length
+  const overdueCount = React.useMemo(() => {
+    return invoices.filter(isInvoiceOverdue).length
+  }, [invoices])
 
   const columns: ColumnDef<InvoiceItem>[] = [
     {
@@ -1219,7 +1252,23 @@ function InvoicesPageContent() {
     {
       accessorKey: "dueDate",
       header: "Due date",
-      cell: ({ row }) => <div className="text-red-600 dark:text-red-400 text-xs font-mono font-bold">{row.getValue("dueDate")}</div>,
+      cell: ({ row }) => {
+        const inv = row.original
+        const overdue = isInvoiceOverdue(inv)
+        const days = overdue ? getInvoiceDaysOverdue(inv.dueDate) : 0
+        return (
+          <div className="space-y-0.5">
+            <div className={`text-xs font-mono font-bold ${overdue ? "text-rose-600 dark:text-rose-400" : "text-zinc-600 dark:text-zinc-400"}`}>
+              {inv.dueDate || "-"}
+            </div>
+            {overdue && (
+              <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-300 dark:border-rose-800">
+                Overdue ({days}d)
+              </span>
+            )}
+          </div>
+        )
+      },
     },
     {
       accessorKey: "totalInvoiced",
@@ -1230,8 +1279,8 @@ function InvoicesPageContent() {
       accessorKey: "paymentReceived",
       header: "Paid",
       cell: ({ row }) => {
-        const inv = parseInt((row.original.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
-        const rec = parseInt((row.original.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
+        const inv = parseCurrencyNumber(row.original.totalInvoiced)
+        const rec = parseCurrencyNumber(row.original.paymentReceived)
         const capped = Math.min(rec, inv)
         return <div className="text-emerald-600 dark:text-emerald-400 font-semibold">₹{capped.toLocaleString("en-IN")}</div>
       },
@@ -1240,25 +1289,34 @@ function InvoicesPageContent() {
       accessorKey: "due",
       header: "Due",
       cell: ({ row }) => {
-        const dueVal = row.getValue("due") as string
-        const hasDue = dueVal && dueVal !== "₹0"
-        return <div className={`font-semibold ${hasDue ? 'text-amber-600 dark:text-amber-400' : 'text-zinc-400'}`}>{dueVal || "₹0"}</div>
+        const dueNum = parseCurrencyNumber(row.original.due)
+        const hasDue = dueNum > 0
+        return <div className={`font-semibold ${hasDue ? 'text-amber-600 dark:text-amber-400' : 'text-zinc-400'}`}>{hasDue ? `₹${dueNum.toLocaleString("en-IN")}` : "₹0"}</div>
       },
     },
     {
       accessorKey: "status",
       header: "Status",
       cell: ({ row }) => {
+        const inv = row.original
         const status = row.getValue("status") as InvoiceStatus
+        const overdue = isInvoiceOverdue(inv)
         let colorClass = "bg-zinc-100 text-zinc-600 border-zinc-200"
         if (status === "Fully paid") colorClass = "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
         if (status === "Not paid") colorClass = "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800"
         if (status === "Partially paid" || status === "Payment Pending") colorClass = "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800"
         
         return (
-          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border ${colorClass}`}>
-            {status}
-          </span>
+          <div className="flex flex-col gap-1 items-start">
+            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border ${colorClass}`}>
+              {status}
+            </span>
+            {overdue && (
+              <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold uppercase tracking-wider bg-rose-600 text-white animate-pulse">
+                Overdue
+              </span>
+            )}
+          </div>
         )
       },
     },
@@ -1434,6 +1492,19 @@ function InvoicesPageContent() {
             <span>Print</span>
           </button>
 
+          {!isClientRole && overdueCount > 0 && (
+            <button
+              type="button"
+              disabled={isSendingOverdueBatch}
+              onClick={handleBatchOverdueReminders}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-800 rounded-lg hover:bg-rose-100 transition-colors shadow-2xs cursor-pointer animate-pulse"
+              title="Automatically dispatch payment reminders to all clients with overdue balances"
+            >
+              <BellRing size={13} className="text-rose-600" />
+              <span>Auto Remind Overdue ({overdueCount})</span>
+            </button>
+          )}
+
           {canAddInvoice && (
             <button
               type="button"
@@ -1491,7 +1562,49 @@ function InvoicesPageContent() {
       </div>
 
       {/* ---------------- TABLE CONTAINER ---------------- */}
-      <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl p-6 shadow-2xs">
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl p-6 shadow-2xs space-y-4">
+        {/* Filter Tabs Bar */}
+        <div className="flex items-center gap-1.5 border-b border-zinc-100 dark:border-zinc-800 pb-3 overflow-x-auto text-xs">
+          <button
+            type="button"
+            onClick={() => setActiveTab("all")}
+            className={`px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer whitespace-nowrap ${activeTab === "all" ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-2xs" : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800"}`}
+          >
+            All Invoices ({invoices.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("Fully paid")}
+            className={`px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer whitespace-nowrap ${activeTab === "Fully paid" ? "bg-emerald-600 text-white shadow-2xs" : "text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/50"}`}
+          >
+            Fully Paid ({invoices.filter(i => i.status === "Fully paid").length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("Partially paid")}
+            className={`px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer whitespace-nowrap ${activeTab === "Partially paid" ? "bg-amber-600 text-white shadow-2xs" : "text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/50"}`}
+          >
+            Partially Paid ({invoices.filter(i => i.status === "Partially paid").length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("Not paid")}
+            className={`px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer whitespace-nowrap ${activeTab === "Not paid" ? "bg-rose-600 text-white shadow-2xs" : "text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50"}`}
+          >
+            Unpaid ({invoices.filter(i => i.status === "Not paid" || i.status === "Payment Pending").length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("overdue")}
+            className={`px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${activeTab === "overdue" ? "bg-rose-700 text-white shadow-2xs" : "text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50"}`}
+          >
+            <span>Overdue</span>
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${activeTab === "overdue" ? "bg-white text-rose-800" : "bg-rose-100 text-rose-900 dark:bg-rose-900 dark:text-rose-200"}`}>
+              {overdueCount}
+            </span>
+          </button>
+        </div>
+
         {isLoading ? (
           <ThreeDotLoader text="Loading tax invoices & payments..." fullScreen={false} />
         ) : (

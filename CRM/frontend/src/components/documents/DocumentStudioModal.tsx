@@ -68,7 +68,11 @@ export function DocumentStudioModal({
   } = useAuthStore()
 
   // 1. Core Document Setup
-  const [docScheme, setDocScheme] = React.useState<"gst" | "nongst">("gst")
+  const [docScheme, setDocScheme] = React.useState<"gst" | "nongst">(() => {
+    if (initialData?.taxType === "nongst" || initialData?.isNonGst) return "nongst"
+    if (initialData?.taxType === "gst") return "gst"
+    return "gst"
+  })
   const [companyId, setCompanyId] = React.useState<string>(activeCompanyId || "tech")
   const [branchId, setBranchId] = React.useState<string>(activeBranchId || "")
   const [subBranchId, setSubBranchId] = React.useState<string>("")
@@ -325,8 +329,8 @@ export function DocumentStudioModal({
     const randPart = Math.floor(1000 + Math.random() * 9000)
     
     let prefix = "INV"
-    if (mode === "quotation") prefix = "QT"
-    else if (mode === "estimate") prefix = "EST"
+    if (mode === "quotation") prefix = scheme === "nongst" ? "NGQT" : "QT"
+    else if (mode === "estimate") prefix = scheme === "nongst" ? "NGEST" : "EST"
     else if (scheme === "nongst") prefix = "NGINV"
     
     setDocNumber(`${prefix}-${datePart}-${randPart}`)
@@ -335,11 +339,18 @@ export function DocumentStudioModal({
   const handleSchemeChange = (scheme: "gst" | "nongst") => {
     setDocScheme(scheme)
     generateDocNumber(scheme)
-    setItems(prev => prev.map(it => ({
-      ...it,
-      gstRate: scheme === "gst" ? 18 : 0,
-      totalAmount: scheme === "gst" ? Math.round((it.rate * (it.qty || 1)) * 1.18) : (it.rate * (it.qty || 1))
-    })))
+    setItems(prev => prev.map(it => {
+      const rate = typeof it.rate === "number" ? it.rate : 0
+      const qty = it.qty > 0 ? it.qty : 1
+      const base = rate * qty
+      const gst = scheme === "gst" ? 18 : 0
+      return {
+        ...it,
+        gstRate: gst,
+        gstAmount: Math.round(base * (gst / 100)),
+        totalAmount: base + Math.round(base * (gst / 100))
+      }
+    }))
   }
 
   const handleSelectClient = (c: ClientItem) => {
@@ -356,7 +367,7 @@ export function DocumentStudioModal({
 
   // Add line item
   const handleAddItem = (preset?: typeof SERVICE_PRESETS[0]) => {
-    const isGstActive = mode === "invoice" && docScheme === "gst"
+    const isGstActive = docScheme === "gst"
     const newItem: InvoiceLineItem = {
       id: `item_${Date.now()}_${Math.random()}`,
       serviceName: preset?.name || "",
@@ -388,7 +399,7 @@ export function DocumentStudioModal({
       const rate = typeof updated.rate === "number" ? updated.rate : 0
       const qty = updated.qty > 0 ? updated.qty : 1
       const base = rate * qty
-      const isGstActive = mode === "invoice" && docScheme === "gst"
+      const isGstActive = docScheme === "gst"
       const gst = isGstActive ? (typeof updated.gstRate === "number" ? updated.gstRate : 18) : 0
       updated.totalAmount = base + Math.round(base * (gst / 100))
       return updated
@@ -399,12 +410,7 @@ export function DocumentStudioModal({
   const handleAddDeliverable = () => {
     setDeliverables(prev => [
       ...prev,
-      {
-        id: `del_${Date.now()}`,
-        title: "New Scope Module / Milestone",
-        description: "Specify deliverables, functionality, and handover criteria.",
-        duration: "1-2 Weeks"
-      }
+      { id: `del_${Date.now()}`, title: "", description: "", duration: "1-2 Weeks" }
     ])
   }
 
@@ -434,13 +440,13 @@ export function DocumentStudioModal({
   const taxableBase = Math.max(0, calculatedSubtotal - calculatedDiscount + numSetupCharge)
 
   const calculatedGst = React.useMemo(() => {
-    if (mode !== "invoice" || docScheme === "nongst") return 0
+    if (docScheme === "nongst") return 0
     return items.reduce((sum, it) => {
       const base = (it.rate || 0) * (it.qty || 1)
       const rate = it.gstRate !== undefined ? it.gstRate : 18
       return sum + Math.round(base * (rate / 100))
     }, 0)
-  }, [items, docScheme, mode])
+  }, [items, docScheme])
 
   const grandTotal = taxableBase + calculatedGst
 
@@ -536,7 +542,9 @@ export function DocumentStudioModal({
           notes: notes,
           terms: terms,
           subtotal: taxableBase,
-          tax: 0,
+          taxType: docScheme,
+          isNonGst: docScheme === "nongst",
+          tax: docScheme === "gst" ? calculatedGst : 0,
           total: grandTotal,
           status: "Draft",
           companyId: companyId,
@@ -548,6 +556,8 @@ export function DocumentStudioModal({
             sac: it.sacCode,
             quantity: it.qty,
             unitPrice: it.rate,
+            gstRate: docScheme === "gst" ? 18 : 0,
+            gstAmount: docScheme === "gst" ? Math.round((it.rate * it.qty) * 0.18) : 0,
             total: it.totalAmount || (it.rate * it.qty)
           }))
         }
@@ -568,7 +578,9 @@ export function DocumentStudioModal({
           notes: notes,
           terms: terms,
           subtotal: taxableBase,
-          tax: 0,
+          taxType: docScheme,
+          isNonGst: docScheme === "nongst",
+          tax: docScheme === "gst" ? calculatedGst : 0,
           total: grandTotal,
           status: "Draft",
           companyId: companyId,
@@ -580,6 +592,8 @@ export function DocumentStudioModal({
             sac: it.sacCode,
             quantity: it.qty,
             unitPrice: it.rate,
+            gstRate: docScheme === "gst" ? 18 : 0,
+            gstAmount: docScheme === "gst" ? Math.round((it.rate * it.qty) * 0.18) : 0,
             total: it.totalAmount || (it.rate * it.qty)
           }))
         }
@@ -785,6 +799,43 @@ export function DocumentStudioModal({
                     <span className="font-extrabold text-zinc-800 dark:text-zinc-200 block border-b border-zinc-200 dark:border-zinc-700/60 pb-2 text-xs">
                       Project Proposal Overview &amp; Timeline
                     </span>
+
+                    {/* Proposal Taxation Scheme (GST 18% vs Non-GST 0%) */}
+                    <div>
+                      <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1.5">Taxation Scheme *</label>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => handleSchemeChange("gst")}
+                          className={`p-2.5 rounded-xl border-2 text-left cursor-pointer transition-all flex items-center gap-2.5 ${
+                            docScheme === "gst" 
+                              ? "border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/30 font-bold text-indigo-950 dark:text-indigo-200" 
+                              : "border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800/50 text-zinc-600 dark:text-zinc-400"
+                          }`}
+                        >
+                          <Building2 size={15} className={docScheme === "gst" ? "text-indigo-600" : "text-zinc-400"} />
+                          <div>
+                            <div className="text-xs">GST Proposal (18%)</div>
+                            <div className="text-[9.5px] opacity-75 font-normal">Adds standard GST &amp; HSN codes</div>
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSchemeChange("nongst")}
+                          className={`p-2.5 rounded-xl border-2 text-left cursor-pointer transition-all flex items-center gap-2.5 ${
+                            docScheme === "nongst" 
+                              ? "border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/30 font-bold text-indigo-950 dark:text-indigo-200" 
+                              : "border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800/50 text-zinc-600 dark:text-zinc-400"
+                          }`}
+                        >
+                          <FileText size={15} className={docScheme === "nongst" ? "text-indigo-600" : "text-zinc-400"} />
+                          <div>
+                            <div className="text-xs">Non-GST Commercial (0%)</div>
+                            <div className="text-[9.5px] opacity-75 font-normal">Commercial bill / No tax added</div>
+                          </div>
+                        </button>
+                      </div>
+                    </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                       <div>
@@ -1169,6 +1220,43 @@ export function DocumentStudioModal({
                     <span className="font-extrabold text-zinc-800 dark:text-zinc-200 block border-b border-zinc-200 dark:border-zinc-700/60 pb-2 text-xs">
                       Estimate Identity &amp; Client Overview
                     </span>
+
+                    {/* Estimate Taxation Scheme (GST 18% vs Non-GST 0%) */}
+                    <div>
+                      <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1.5">Taxation Scheme *</label>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => handleSchemeChange("gst")}
+                          className={`p-2.5 rounded-xl border-2 text-left cursor-pointer transition-all flex items-center gap-2.5 ${
+                            docScheme === "gst" 
+                              ? "border-amber-600 bg-amber-50/50 dark:bg-amber-950/30 font-bold text-amber-950 dark:text-amber-200" 
+                              : "border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800/50 text-zinc-600 dark:text-zinc-400"
+                          }`}
+                        >
+                          <Building2 size={15} className={docScheme === "gst" ? "text-amber-600" : "text-zinc-400"} />
+                          <div>
+                            <div className="text-xs">GST Estimate (18%)</div>
+                            <div className="text-[9.5px] opacity-75 font-normal">Includes GST calculations</div>
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSchemeChange("nongst")}
+                          className={`p-2.5 rounded-xl border-2 text-left cursor-pointer transition-all flex items-center gap-2.5 ${
+                            docScheme === "nongst" 
+                              ? "border-amber-600 bg-amber-50/50 dark:bg-amber-950/30 font-bold text-amber-950 dark:text-amber-200" 
+                              : "border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800/50 text-zinc-600 dark:text-zinc-400"
+                          }`}
+                        >
+                          <Calculator size={15} className={docScheme === "nongst" ? "text-amber-600" : "text-zinc-400"} />
+                          <div>
+                            <div className="text-xs">Non-GST Estimate (0%)</div>
+                            <div className="text-[9.5px] opacity-75 font-normal">Commercial estimate / 0% tax</div>
+                          </div>
+                        </button>
+                      </div>
+                    </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                       <div>

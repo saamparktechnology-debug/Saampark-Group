@@ -6,7 +6,7 @@ import {
   Plus, Download, CreditCard, RefreshCw, X, Send, 
   CheckCircle2, DollarSign, Clock, AlertCircle, Sparkles, 
   Calendar, Layers, FileText, ChevronRight, Package, Check,
-  QrCode, Building2, ShieldCheck, ArrowUpRight, User, Percent, Pencil, Search
+  QrCode, Building2, ShieldCheck, ArrowUpRight, User, Percent, Pencil, Search, Bell
 } from "lucide-react"
 
 import { Button } from "@/components/ui/Button"
@@ -18,7 +18,8 @@ import {
   SubscriptionKPIs, 
   SubscriptionType, 
   PRESET_PACKAGE_TIERS,
-  PackageTier 
+  PackageTier,
+  calculateOverdueDetails
 } from "./types"
 import { 
   getSubscriptions, 
@@ -28,10 +29,12 @@ import {
   sendSubscriptionReminder, 
   updateSubscription,
   calculateNextCycleDate,
-  generateSubscriptionInvoice 
+  generateSubscriptionInvoice,
+  checkAndSendSubscriptionOverdueReminders
 } from "./services/subscriptionService"
 import { SubscriptionList } from "./components/SubscriptionList"
 import { RenewSubscriptionModal } from "./components/RenewSubscriptionModal"
+import { RenewReceiptModal, RenewReceiptData } from "./components/RenewReceiptModal"
 import { EditSubscriptionModal } from "./components/EditSubscriptionModal"
 import { ClientSubscriptionLedgerModal } from "./components/ClientSubscriptionLedgerModal"
 import { InvoiceModal } from "@/app/feature/sales/invoices/components/InvoiceModal"
@@ -126,6 +129,8 @@ export default function SubscriptionsMain() {
   // Tax & Overdue Late Fee Configuration
   const [subTaxType, setSubTaxType] = React.useState<"gst" | "nongst">("gst")
   const [dailyLateFeeInput, setDailyLateFeeInput] = React.useState<number | "">(0)
+  const [activeReceipt, setActiveReceipt] = React.useState<RenewReceiptData | null>(null)
+  const [isSendingOverdueReminders, setIsSendingOverdueReminders] = React.useState(false)
 
   const showToast = (msg: string) => {
     setToastMessage(msg)
@@ -567,15 +572,75 @@ export default function SubscriptionsMain() {
     }
   }
 
+  const overdueSubscriptions = React.useMemo(() => {
+    return subscriptions.filter(s => s.status !== "Canceled" && calculateOverdueDetails(s).isOverdue)
+  }, [subscriptions])
+  const overdueCount = overdueSubscriptions.length
+
+  const handleAutoRemindOverdue = async () => {
+    if (overdueCount === 0) {
+      alert("No overdue subscriptions found for this view.")
+      return
+    }
+    if (!confirm(`Send automated overdue renewal reminders to ${overdueCount} overdue subscriber(s)?`)) return
+
+    setIsSendingOverdueReminders(true)
+    try {
+      const res = await checkAndSendSubscriptionOverdueReminders(activeCompanyId || "tech")
+      showToast(`📢 Sent ${res.sentCount} overdue reminder(s) successfully!`)
+      loadData(false)
+    } catch (err) {
+      alert("Failed to send overdue reminders.")
+    } finally {
+      setIsSendingOverdueReminders(false)
+    }
+  }
+
+  const handleViewRenewReceipt = (sub: Subscription) => {
+    const isNonGst = Boolean(sub.isNonGst || sub.taxType === "nongst" || sub.gstRate === 0)
+    const numAmt = sub.numericAmount || (typeof sub.amount === "number" ? sub.amount : parseInt(String(sub.amount || "0").replace(/[^0-9]/g, ""))) || 0
+    const gstAmt = isNonGst ? 0 : Math.round(numAmt * 0.18)
+    const totalAmt = numAmt + gstAmt
+
+    const receipt: RenewReceiptData = {
+      receiptNumber: `REC-REN-${sub.id.replace(/[^a-zA-Z0-9]/g, "").slice(-6).toUpperCase() || Date.now().toString().slice(-6)}`,
+      date: sub.lastRenewedDate || sub.startDate || new Date().toISOString().split("T")[0],
+      subscriptionId: sub.id,
+      clientName: sub.clientName,
+      clientEmail: sub.clientEmail,
+      clientPhone: sub.clientPhone,
+      clientAddress: (sub as any).clientAddress,
+      planName: sub.planName,
+      billingCycle: sub.billingCycle,
+      periodStart: sub.startDate || new Date().toISOString().split("T")[0],
+      periodEnd: sub.nextBillingDate,
+      baseAmount: numAmt,
+      taxAmount: gstAmt,
+      totalAmount: totalAmt,
+      isNonGst: isNonGst,
+      paymentMethod: "UPI / Bank Remittance",
+      companyId: sub.companyId || activeCompanyId || "tech",
+    }
+    setActiveReceipt(receipt)
+  }
+
   const handleRenewSubscriptionConfirm = async (
     id: string,
     nextDate: string,
-    generateInvoice: boolean
+    generateInvoice: boolean,
+    paymentDetails?: {
+      isPaid: boolean
+      paymentMethod: string
+      transactionRef?: string
+    }
   ) => {
-    const res = await renewSubscription(id, nextDate, generateInvoice, activeCompanyId || "tech")
+    const res = await renewSubscription(id, nextDate, generateInvoice, activeCompanyId || "tech", paymentDetails)
     if (res) {
       showToast(`🎉 Contract renewed until ${nextDate}! ${generateInvoice ? "Tax Invoice generated." : ""}`)
       loadData(false)
+      if ((res as any).receipt) {
+        setActiveReceipt((res as any).receipt)
+      }
     }
   }
 
@@ -596,11 +661,17 @@ export default function SubscriptionsMain() {
     setIsClientPayProcessing(true)
     try {
       const nextDate = calculateNextCycleDate(clientPayingSub.nextBillingDate, clientPayingSub.billingCycle, clientPayingSub.customDaysCount)
-      const res = await renewSubscription(clientPayingSub.id, nextDate, true, activeCompanyId || "tech")
+      const res = await renewSubscription(clientPayingSub.id, nextDate, true, activeCompanyId || "tech", {
+        isPaid: true,
+        paymentMethod: "Online Payment Checkout",
+      })
       if (res) {
         showToast(`🎉 Payment of ${clientPayingSub.amount} received! Subscription renewed until ${nextDate}.`)
         setClientPayingSub(null)
         loadData(false)
+        if ((res as any).receipt) {
+          setActiveReceipt((res as any).receipt)
+        }
       }
     } catch (err) {
       alert("Payment failed. Please try again.")
@@ -700,6 +771,18 @@ export default function SubscriptionsMain() {
           >
             PDF Print
           </Button>
+
+          {overdueCount > 0 && !isClient && (
+            <button
+              type="button"
+              onClick={handleAutoRemindOverdue}
+              disabled={isSendingOverdueReminders}
+              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-700 hover:to-amber-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-rose-600/20 cursor-pointer disabled:opacity-50 transition-all"
+            >
+              <Bell size={13} className={isSendingOverdueReminders ? "animate-bounce" : ""} />
+              <span>{isSendingOverdueReminders ? "Dispatching..." : `Auto Remind Overdue (${overdueCount})`}</span>
+            </button>
+          )}
 
           {canAddSubscription && !isClient && (
             <Button size="sm" leftIcon={<Plus size={14} />} onClick={() => setIsAddSubModalOpen(true)}>
@@ -944,6 +1027,7 @@ export default function SubscriptionsMain() {
           onToggleAutoRenew={handleToggleAutoRenew}
           onClientPayNow={(sub) => setClientPayingSub(sub)}
           onGenerateInvoice={handleGenerateSubscriptionInvoice}
+          onViewReceipt={handleViewRenewReceipt}
           onSelectClient={(cName, sub) => {
             setSelectedLedgerClient(cName)
             setSelectedLedgerEmail(sub.clientEmail)
@@ -959,6 +1043,13 @@ export default function SubscriptionsMain() {
         subscription={renewingSubscription}
         onClose={() => setRenewingSubscription(null)}
         onConfirm={handleRenewSubscriptionConfirm}
+      />
+
+      {/* ── MODAL 1.5: RENEW RECEIPT MODAL ── */}
+      <RenewReceiptModal
+        isOpen={Boolean(activeReceipt)}
+        receipt={activeReceipt}
+        onClose={() => setActiveReceipt(null)}
       />
 
       {/* ── MODAL 2: CLIENT "PAY NOW / RENEW" INTERACTIVE MODAL ── */}

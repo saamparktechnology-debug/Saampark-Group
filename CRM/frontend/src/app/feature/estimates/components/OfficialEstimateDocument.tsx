@@ -244,9 +244,14 @@ export function OfficialEstimateDocument({
     : activeCompany?.stamp_image_url)?.trim() || ""
 
   // Financial Computations
+  const isNonGst = Boolean(
+    (estimate as any).isNonGst || 
+    (estimate as any).taxType === "nongst" || 
+    (estimate.gstRate === 0 && (estimate.gstAmount === 0 || !estimate.gstAmount))
+  )
   const subtotal = estimate.subtotal || 0
-  const gstRate = estimate.gstRate || 18
-  const gstAmount = estimate.gstAmount || Math.round(subtotal * (gstRate / 100))
+  const gstRate = isNonGst ? 0 : (estimate.gstRate !== undefined ? estimate.gstRate : 18)
+  const gstAmount = isNonGst ? 0 : (estimate.gstAmount !== undefined ? estimate.gstAmount : Math.round(subtotal * (gstRate / 100)))
   const grandTotal = estimate.totalAmount || (subtotal + gstAmount)
   const cgst = Math.round(gstAmount / 2)
   const sgst = gstAmount - cgst
@@ -477,7 +482,7 @@ export function OfficialEstimateDocument({
           <div className={`w-full sm:w-60 rounded-2xl ${theme.cardHeaderGradient} text-white p-3.5 shadow-md shrink-0 flex flex-col self-start space-y-2.5`}>
             <div className="flex items-center justify-between border-b border-white/20 pb-2">
               <span className="font-black text-xs tracking-wider uppercase">
-                OFFICIAL ESTIMATE
+                {isNonGst ? "COMMERCIAL ESTIMATE (NON-GST)" : "OFFICIAL GST ESTIMATE"}
               </span>
               <span className={`px-2 py-0.5 rounded-full text-[9px] font-black tracking-wider uppercase ${
                 estimate.status === "Accepted" 
@@ -675,17 +680,21 @@ export function OfficialEstimateDocument({
           <div className="sm:col-span-5 space-y-2 text-xs">
             <div className="p-4 rounded-xl border border-zinc-200 bg-zinc-50 space-y-2">
               <div className="flex justify-between text-zinc-600">
-                <span>Taxable Value (Subtotal):</span>
+                <span>{isNonGst ? "Commercial Scope Subtotal:" : "Taxable Value (Subtotal):"}</span>
                 <span className="font-mono font-semibold text-zinc-900">₹{subtotal.toLocaleString("en-IN")}</span>
               </div>
-              <div className="flex justify-between text-zinc-600">
-                <span>Central GST (CGST 9%):</span>
-                <span className="font-mono font-semibold text-zinc-900">₹{cgst.toLocaleString("en-IN")}</span>
-              </div>
-              <div className="flex justify-between text-zinc-600">
-                <span>State GST (SGST 9%):</span>
-                <span className="font-mono font-semibold text-zinc-900">₹{sgst.toLocaleString("en-IN")}</span>
-              </div>
+              {!isNonGst && (
+                <>
+                  <div className="flex justify-between text-zinc-600">
+                    <span>Central GST (CGST {gstRate / 2}%):</span>
+                    <span className="font-mono font-semibold text-zinc-900">₹{cgst.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="flex justify-between text-zinc-600">
+                    <span>State GST (SGST {gstRate / 2}%):</span>
+                    <span className="font-mono font-semibold text-zinc-900">₹{sgst.toLocaleString("en-IN")}</span>
+                  </div>
+                </>
+              )}
               <div className="border-t-2 border-teal-700 pt-2 flex justify-between items-center text-sm font-black text-zinc-950">
                 <span className="uppercase text-xs tracking-wide">Total Estimated Value:</span>
                 <span className="text-base text-teal-800 font-mono font-black">₹{grandTotal.toLocaleString("en-IN")}</span>
@@ -693,8 +702,8 @@ export function OfficialEstimateDocument({
             </div>
 
             <div className="p-3 rounded-xl bg-amber-50/80 border border-amber-200 text-[11px] text-amber-900 leading-snug">
-              <span className="font-bold block mb-0.5">Commercial Billing Milestones:</span>
-              <span>50% mobilization advance upon quote sign-off. Balance 50% upon milestone deliverables completion and UAT signoff.</span>
+              <span className="font-bold block mb-0.5">Commercial Billing Notice:</span>
+              <span>{isNonGst ? "Non-GST Commercial Estimate (0% Tax). 50% mobilization advance upon sign-off." : "50% mobilization advance upon quote sign-off. Balance 50% upon milestone deliverables completion and UAT signoff."}</span>
             </div>
           </div>
         </div>

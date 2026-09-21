@@ -13,7 +13,12 @@ interface RenewSubscriptionModalProps {
   onConfirm: (
     subscriptionId: string,
     nextDate: string,
-    generateInvoice: boolean
+    generateInvoice: boolean,
+    paymentDetails?: {
+      isPaid: boolean
+      paymentMethod: string
+      transactionRef?: string
+    }
   ) => Promise<void>
 }
 
@@ -25,6 +30,9 @@ export function RenewSubscriptionModal({
 }: RenewSubscriptionModalProps) {
   const [nextDate, setNextDate] = React.useState("")
   const [generateInvoice, setGenerateInvoice] = React.useState(true)
+  const [isPaid, setIsPaid] = React.useState(true)
+  const [paymentMethod, setPaymentMethod] = React.useState("UPI Transfer")
+  const [transactionRef, setTransactionRef] = React.useState("")
   const [isSubmitting, setIsSubmitting] = React.useState(false)
 
   React.useEffect(() => {
@@ -36,6 +44,9 @@ export function RenewSubscriptionModal({
       )
       setNextDate(calculated)
       setGenerateInvoice(true)
+      setIsPaid(true)
+      setPaymentMethod("UPI Transfer")
+      setTransactionRef("")
     }
   }, [subscription])
 
@@ -50,7 +61,11 @@ export function RenewSubscriptionModal({
 
     setIsSubmitting(true)
     try {
-      await onConfirm(subscription.id, nextDate, generateInvoice)
+      await onConfirm(subscription.id, nextDate, generateInvoice, {
+        isPaid,
+        paymentMethod,
+        transactionRef: transactionRef.trim() || undefined
+      })
       onClose()
     } finally {
       setIsSubmitting(false)
@@ -128,10 +143,64 @@ export function RenewSubscriptionModal({
                 Auto-generate Tax Invoice for Renewal
               </span>
               <span className="text-[11px] text-zinc-500 block">
-                Creates a new official GST / Tax Invoice in the Invoices section and marks it as pending collection.
+                Creates a new official GST / Tax Invoice in the Invoices section.
               </span>
             </div>
           </label>
+
+          {/* Payment Received & Renew Receipt Section */}
+          <div className="p-3.5 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-900/40 space-y-3">
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isPaid}
+                onChange={(e) => setIsPaid(e.target.checked)}
+                className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500"
+              />
+              <div>
+                <span className="font-bold text-emerald-950 dark:text-emerald-200 block">
+                  Payment Received Now (Issue Official Renewal Receipt)
+                </span>
+                <span className="text-[10.5px] text-emerald-700/80 dark:text-emerald-400 block">
+                  Marks the invoice as fully paid and issues an official printable/downloadable renewal receipt.
+                </span>
+              </div>
+            </label>
+
+            {isPaid && (
+              <div className="pt-2 border-t border-emerald-200 dark:border-emerald-900/40 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-[10.5px] font-bold text-emerald-900 dark:text-emerald-300 mb-1">
+                    Payment Method *
+                  </label>
+                  <select
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-800 border border-emerald-200 dark:border-zinc-700 rounded-lg text-xs font-semibold"
+                  >
+                    <option value="UPI Transfer">⚡ UPI Transfer (GPay / PhonePe / Paytm)</option>
+                    <option value="Bank NEFT/RTGS">🏦 Direct Bank NEFT / RTGS</option>
+                    <option value="Net Banking">🌐 Corporate Net Banking</option>
+                    <option value="Debit/Credit Card">💳 Debit / Credit Card</option>
+                    <option value="Cash Deposit">💵 Direct Cash Remittance</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10.5px] font-bold text-emerald-900 dark:text-emerald-300 mb-1">
+                    Txn / Reference ID (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={transactionRef}
+                    onChange={(e) => setTransactionRef(e.target.value)}
+                    placeholder="e.g. UPI/4201948123"
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-800 border border-emerald-200 dark:border-zinc-700 rounded-lg text-xs font-mono"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
             <button

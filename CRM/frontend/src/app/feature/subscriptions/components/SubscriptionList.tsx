@@ -19,6 +19,7 @@ interface SubscriptionListProps {
   onToggleAutoRenew: (sub: Subscription) => void
   onClientPayNow?: (sub: Subscription) => void
   onGenerateInvoice?: (sub: Subscription) => Promise<void>
+  onViewReceipt?: (sub: Subscription) => void
   onSelectClient?: (clientName: string, sub: Subscription) => void
   canEdit?: boolean
   canDelete?: boolean
@@ -33,6 +34,7 @@ export function SubscriptionList({
   onToggleAutoRenew,
   onClientPayNow,
   onGenerateInvoice,
+  onViewReceipt,
   onSelectClient,
   canEdit,
   canDelete,
@@ -61,6 +63,8 @@ export function SubscriptionList({
         matchesStatus = s.status === "Active"
       } else if (statusFilter === "due") {
         matchesStatus = s.status === "Past Due" || s.status === "Expiring Soon"
+      } else if (statusFilter === "overdue") {
+        matchesStatus = calculateOverdueDetails(s).isOverdue
       } else if (statusFilter === "canceled") {
         matchesStatus = s.status === "Canceled"
       }
@@ -84,7 +88,20 @@ export function SubscriptionList({
     }
   }
 
-  const getStatusBadge = (status: SubscriptionStatus) => {
+  const getStatusBadge = (sub: Subscription) => {
+    const overdue = calculateOverdueDetails(sub)
+    if (overdue.isOverdue) {
+      return (
+        <div className="flex flex-col items-center gap-0.5">
+          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300 border-rose-300 dark:border-rose-800 animate-pulse">
+            ⚠️ Overdue
+          </span>
+          <span className="text-[9px] font-mono text-rose-600 font-bold">+{overdue.daysOverdue}d</span>
+        </div>
+      )
+    }
+
+    const status = sub.status
     let style = "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800"
     if (status === "Past Due") {
       style = "bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300 border-rose-300 dark:border-rose-800 animate-pulse"
@@ -173,6 +190,7 @@ export function SubscriptionList({
               { id: "all", label: "All" },
               { id: "active", label: "Active" },
               { id: "due", label: "Due / Expiring" },
+              { id: "overdue", label: "⚠️ Overdue" },
               { id: "canceled", label: "Cancelled" },
             ].map((tab) => (
               <button
@@ -380,7 +398,7 @@ export function SubscriptionList({
 
                         {/* Status */}
                         <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                          {getStatusBadge(sub.status)}
+                          {getStatusBadge(sub)}
                         </td>
 
                         {/* Action Buttons */}
@@ -408,6 +426,18 @@ export function SubscriptionList({
                                   >
                                     <Send size={11} />
                                     <span>{sendingReminderId === sub.id ? "Sending..." : "Reminder"}</span>
+                                  </button>
+                                )}
+
+                                {onViewReceipt && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onViewReceipt(sub)}
+                                    className="px-2 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 hover:bg-amber-100 border border-amber-200 dark:border-amber-800 font-bold text-[11px] flex items-center gap-1 transition-colors cursor-pointer"
+                                    title="View Official Renew Receipt"
+                                  >
+                                    <FileText size={11} />
+                                    <span>Receipt</span>
                                   </button>
                                 )}
 

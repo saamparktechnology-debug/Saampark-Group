@@ -177,6 +177,54 @@ export const generateInvoiceNumber = (
   return `${prefix}${seqStr}`
 }
 
+export function parseCurrencyNumber(val: any): number {
+  if (typeof val === "number") return isNaN(val) ? 0 : val
+  if (!val) return 0
+  const cleaned = String(val).replace(/[^0-9.-]/g, "")
+  const parsed = parseFloat(cleaned)
+  return isNaN(parsed) ? 0 : Math.round(parsed)
+}
+
+export function parseInvoiceDateTimestamp(dateStr?: string): number | null {
+  if (!dateStr || dateStr === "-" || dateStr === "") return null
+  const dmy = String(dateStr).trim().match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/)
+  if (dmy) {
+    return new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1])).getTime()
+  }
+  const ymd = String(dateStr).trim().match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/)
+  if (ymd) {
+    return new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3])).getTime()
+  }
+  const parsed = Date.parse(dateStr)
+  return isNaN(parsed) ? null : parsed
+}
+
+export function isInvoiceOverdue(invoice: InvoiceItem): boolean {
+  if (!invoice.dueDate || invoice.status === "Fully paid" || invoice.status === "Credited") {
+    return false
+  }
+  const dueAmt = parseCurrencyNumber(invoice.due || invoice.totalInvoiced)
+  if (dueAmt <= 0) return false
+
+  const dueTime = parseInvoiceDateTimestamp(invoice.dueDate)
+  if (!dueTime) return false
+
+  const todayStart = new Date()
+  todayStart.setHours(0, 0, 0, 0)
+  return dueTime < todayStart.getTime()
+}
+
+export function getInvoiceDaysOverdue(dueDateStr?: string): number {
+  if (!dueDateStr) return 0
+  const dueTime = parseInvoiceDateTimestamp(dueDateStr)
+  if (!dueTime) return 0
+  const todayStart = new Date()
+  todayStart.setHours(0, 0, 0, 0)
+  const diffMs = todayStart.getTime() - dueTime
+  if (diffMs <= 0) return 0
+  return Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+}
+
 export const getInvoices = async (companyId?: string): Promise<InvoiceItem[]> => {
   let targetComp = companyId
   if (!targetComp && typeof window !== "undefined") {
@@ -186,10 +234,23 @@ export const getInvoices = async (companyId?: string): Promise<InvoiceItem[]> =>
     } catch {}
   }
 
+  const defaultCompanies = [
+    "all", "tech", "infotech", "fashion", "digital", "consultancy", 
+    "jewellers", "saampark-ai-solutions", "print", "print-space", "saampark-print-space"
+  ]
+  let dynamicCompanies: string[] = []
+  if (typeof window !== "undefined") {
+    try {
+      const { useAuthStore } = require("@/store/useAuthStore")
+      const storeComps = useAuthStore.getState().companies || []
+      dynamicCompanies = storeComps.flatMap((c: any) => [c.id, c.slug]).filter(Boolean)
+    } catch {}
+  }
+  const allKnown = Array.from(new Set([...defaultCompanies, ...dynamicCompanies]))
+
   if (!targetComp || targetComp === "all") {
-    const knownCompanies = ["all", "tech", "infotech", "fashion", "digital", "consultancy", "jewellers", "saampark-ai-solutions"]
     const results = await Promise.all(
-      knownCompanies.map(c => fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], c).catch(() => []))
+      allKnown.map(c => fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], c).catch(() => []))
     )
     const map = new Map<string, InvoiceItem>()
     for (const list of results) {
@@ -201,21 +262,20 @@ export const getInvoices = async (companyId?: string): Promise<InvoiceItem[]> =>
   }
 
   const { isMatchingCompany } = await import("@/store/useAuthStore")
-  const scopedData = await fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], targetComp)
-  const allMaster = await fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], "all").catch(() => [])
+  // Query all known to guarantee cross-company or alias invoices are never missed
+  const results = await Promise.all(
+    allKnown.map(c => fetchModuleDataFromDB<InvoiceItem[]>("invoices", [], c).catch(() => []))
+  )
 
   const map = new Map<string, InvoiceItem>()
-  for (const inv of (Array.isArray(allMaster) ? allMaster : [])) {
-    if (inv && inv.id) {
-      const invComp = inv.companyId || (inv as any).company || "tech"
-      if (isMatchingCompany({ id: invComp, slug: invComp } as any, targetComp)) {
-        map.set(String(inv.id).toUpperCase().trim(), inv)
+  for (const list of results) {
+    for (const inv of (Array.isArray(list) ? list : [])) {
+      if (inv && inv.id) {
+        const invComp = inv.companyId || (inv as any).company || "tech"
+        if (isMatchingCompany({ id: invComp, slug: invComp } as any, targetComp)) {
+          map.set(String(inv.id).toUpperCase().trim(), inv)
+        }
       }
-    }
-  }
-  for (const inv of (Array.isArray(scopedData) ? scopedData : [])) {
-    if (inv && inv.id) {
-      map.set(String(inv.id).toUpperCase().trim(), { ...inv, companyId: inv.companyId || targetComp })
     }
   }
 
@@ -314,13 +374,13 @@ export const addInvoice = async (invoice: Omit<InvoiceItem, "id"> & { id?: strin
              (c.name && c.name.toLowerCase().trim() === newInvoice.client.toLowerCase().trim())
       )
       if (existingClient) {
-        const invAmt = parseInt((newInvoice.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
-        const recAmt = parseInt((newInvoice.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
-        const dueAmt = parseInt((newInvoice.due || "0").replace(/[^0-9]/g, "")) || 0
+        const invAmt = parseCurrencyNumber(newInvoice.totalInvoiced)
+        const recAmt = parseCurrencyNumber(newInvoice.paymentReceived)
+        const dueAmt = parseCurrencyNumber(newInvoice.due)
 
-        const curInv = parseInt((existingClient.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
-        const curRec = parseInt((existingClient.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
-        const curDue = parseInt((existingClient.due || "0").replace(/[^0-9]/g, "")) || 0
+        const curInv = parseCurrencyNumber(existingClient.totalInvoiced)
+        const curRec = parseCurrencyNumber(existingClient.paymentReceived)
+        const curDue = parseCurrencyNumber(existingClient.due)
 
         saveStoredClient({
           ...existingClient,
@@ -409,9 +469,9 @@ export const updateInvoice = async (
         (inv.client && inv.client.toLowerCase().trim() === c.name.toLowerCase().trim()) ||
         (inv.clientEmail && c.email && inv.clientEmail.toLowerCase().trim() === c.email.toLowerCase().trim())
       )
-      const sumInvoiced = clientInvoices.reduce((sum: number, i: InvoiceItem) => sum + (parseInt((i.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0), 0)
-      const sumReceived = clientInvoices.reduce((sum: number, i: InvoiceItem) => sum + (parseInt((i.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0), 0)
-      const sumDue = clientInvoices.reduce((sum: number, i: InvoiceItem) => sum + (parseInt((i.due || "0").replace(/[^0-9]/g, "")) || 0), 0)
+      const sumInvoiced = clientInvoices.reduce((sum: number, i: InvoiceItem) => sum + parseCurrencyNumber(i.totalInvoiced), 0)
+      const sumReceived = clientInvoices.reduce((sum: number, i: InvoiceItem) => sum + parseCurrencyNumber(i.paymentReceived), 0)
+      const sumDue = clientInvoices.reduce((sum: number, i: InvoiceItem) => sum + parseCurrencyNumber(i.due), 0)
 
       await saveStoredClient({
         ...c,
@@ -430,7 +490,36 @@ export const updateInvoice = async (
     window.dispatchEvent(new Event("storage"))
   }
 
-  return updatedInvoice
+  return finalInvoice
+}
+
+export const checkAndSendOverdueReminders = async (
+  companyId?: string
+): Promise<{ dispatchedCount: number; overdueCount: number; overdueInvoices: InvoiceItem[] }> => {
+  const invoices = await getInvoices(companyId)
+  const overdueList = invoices.filter(isInvoiceOverdue)
+  let dispatched = 0
+
+  for (const inv of overdueList) {
+    const lastSent = (inv as any).lastOverdueReminderSent 
+      ? new Date((inv as any).lastOverdueReminderSent).getTime() 
+      : 0
+    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000
+    if (lastSent < oneDayAgo && inv.clientEmail) {
+      try {
+        await sendPaymentReminder(inv.id)
+        await updateInvoice({
+          ...inv,
+          lastOverdueReminderSent: new Date().toISOString(),
+        } as any, companyId)
+        dispatched++
+      } catch (err) {
+        console.warn(`Could not dispatch overdue reminder for ${inv.id}:`, err)
+      }
+    }
+  }
+
+  return { dispatchedCount: dispatched, overdueCount: overdueList.length, overdueInvoices: overdueList }
 }
 
 export const updateInvoiceStatus = async (
@@ -715,9 +804,9 @@ export const deleteInvoice = async (id: string, companyId?: string): Promise<boo
   )
 
   if (target) {
-    const targetTotal = parseInt((target.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
-    const targetReceived = parseInt((target.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
-    const targetDue = parseInt((target.due || "0").replace(/[^0-9]/g, "")) || 0
+    const targetTotal = parseCurrencyNumber(target.totalInvoiced)
+    const targetReceived = parseCurrencyNumber(target.paymentReceived)
+    const targetDue = parseCurrencyNumber(target.due)
     const targetProjectNorm = (target.project || "").toLowerCase().trim()
     const targetClientNorm = (target.client || "").toLowerCase().trim()
 

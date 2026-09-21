@@ -278,9 +278,14 @@ export function OfficialQuotationDocument({
     : activeCompany?.stamp_image_url)?.trim() || ""
 
   // Financial Computations
+  const isNonGst = Boolean(
+    (quotation as any).isNonGst || 
+    (quotation as any).taxType === "nongst" || 
+    ((quotation.tax === 0 || (quotation as any).taxType === "nongst") && quotation.subtotal && quotation.subtotal === quotation.total)
+  )
   const grandTotal = quotation.total || 0
-  const subtotal = quotation.subtotal !== undefined ? quotation.subtotal : Math.round(grandTotal / 1.18)
-  const gstAmount = quotation.tax !== undefined ? quotation.tax : (grandTotal - subtotal)
+  const subtotal = quotation.subtotal !== undefined ? quotation.subtotal : (isNonGst ? grandTotal : Math.round(grandTotal / 1.18))
+  const gstAmount = isNonGst ? 0 : (quotation.tax !== undefined ? quotation.tax : (grandTotal - subtotal))
   const cgst = Math.round(gstAmount / 2)
   const sgst = gstAmount - cgst
 
@@ -508,7 +513,7 @@ export function OfficialQuotationDocument({
           <div className={`w-full sm:w-60 rounded-2xl ${theme.cardHeaderGradient} text-white p-3.5 shadow-md shrink-0 flex flex-col self-start space-y-2.5`}>
             <div className="flex items-center justify-between border-b border-white/20 pb-2">
               <span className="font-black text-xs tracking-wider uppercase">
-                COMMERCIAL QUOTATION
+                {isNonGst ? "COMMERCIAL QUOTATION (NON-GST)" : "TAX QUOTATION & PROPOSAL"}
               </span>
               <span className={`px-2 py-0.5 rounded-full text-[9px] font-black tracking-wider uppercase ${
                 quotation.status === "Accepted" 
@@ -702,17 +707,21 @@ export function OfficialQuotationDocument({
           <div className="sm:col-span-5 space-y-2 text-xs">
             <div className="p-4 rounded-xl border border-zinc-200 bg-zinc-50 space-y-2">
               <div className="flex justify-between text-zinc-600">
-                <span>Taxable Value (Subtotal):</span>
+                <span>{isNonGst ? "Commercial Scope Subtotal:" : "Taxable Value (Subtotal):"}</span>
                 <span className="font-mono font-semibold text-zinc-900">₹{subtotal.toLocaleString("en-IN")}</span>
               </div>
-              <div className="flex justify-between text-zinc-600">
-                <span>Central GST (CGST 9%):</span>
-                <span className="font-mono font-semibold text-zinc-900">₹{cgst.toLocaleString("en-IN")}</span>
-              </div>
-              <div className="flex justify-between text-zinc-600">
-                <span>State GST (SGST 9%):</span>
-                <span className="font-mono font-semibold text-zinc-900">₹{sgst.toLocaleString("en-IN")}</span>
-              </div>
+              {!isNonGst && (
+                <>
+                  <div className="flex justify-between text-zinc-600">
+                    <span>Central GST (CGST 9%):</span>
+                    <span className="font-mono font-semibold text-zinc-900">₹{cgst.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="flex justify-between text-zinc-600">
+                    <span>State GST (SGST 9%):</span>
+                    <span className="font-mono font-semibold text-zinc-900">₹{sgst.toLocaleString("en-IN")}</span>
+                  </div>
+                </>
+              )}
               <div className="border-t-2 border-teal-700 pt-2 flex justify-between items-center text-sm font-black text-zinc-950">
                 <span className="uppercase text-xs tracking-wide">Total Quotation Value:</span>
                 <span className="text-base text-teal-800 font-mono font-black">₹{grandTotal.toLocaleString("en-IN")}</span>
@@ -721,7 +730,7 @@ export function OfficialQuotationDocument({
 
             <div className="p-3 rounded-xl bg-amber-50/80 border border-amber-200 text-[11px] text-amber-900 leading-snug">
               <span className="font-bold block mb-0.5">Commercial Notice:</span>
-              <span>Quoted prices are inclusive of 18% GST and standard SLA. Valid for 30 calendar days from issue date.</span>
+              <span>{isNonGst ? "Commercial Bill of Supply / Non-GST Quotation. Valid for 30 calendar days from issue date." : "Quoted prices are inclusive of 18% GST and standard SLA. Valid for 30 calendar days from issue date."}</span>
             </div>
           </div>
         </div>
