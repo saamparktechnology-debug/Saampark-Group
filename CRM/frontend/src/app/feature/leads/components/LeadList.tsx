@@ -1597,14 +1597,19 @@ export function LeadList({
                           <button
                             type="button"
                             onClick={async () => {
-                              if (isLocked) {
-                                const { unlockLead } = await import("../services/leadService")
-                                const unlocked = await unlockLead(l.id)
-                                onLeadUpdated(unlocked)
-                              } else {
-                                const { lockLead } = await import("../services/leadService")
-                                const locked = await lockLead(l.id, "Manually locked by Admin")
-                                onLeadUpdated(locked)
+                              try {
+                                if (isLocked) {
+                                  const { unlockLead } = await import("../services/leadService")
+                                  const unlocked = await unlockLead(l.id, l.companyId)
+                                  onLeadUpdated(unlocked)
+                                } else {
+                                  const { lockLead } = await import("../services/leadService")
+                                  const locked = await lockLead(l.id, "Manually locked by Admin", l.companyId)
+                                  onLeadUpdated(locked)
+                                }
+                              } catch (err: any) {
+                                console.error("Lock/unlock toggle failed:", err)
+                                alert(err?.message || "Failed to update lead lock status.")
                               }
                             }}
                             className={`group/lock px-2 py-0.5 rounded text-[11px] font-semibold transition-all duration-200 shadow-2xs flex items-center gap-1 cursor-pointer ${

@@ -93,10 +93,19 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
   )
 
   React.useEffect(() => {
-    if (user?.branchId && user?.role !== "Super Admin") {
-      setSelectedBranchId(user.branchId)
+    if (isOpen) {
+      const currentComp = activeCompanyId && activeCompanyId !== "all" 
+        ? activeCompanyId 
+        : (user?.companyId || "tech")
+      setSelectedCompanyId(currentComp)
+
+      if (user?.branchId && user?.role !== "Super Admin") {
+        setSelectedBranchId(user.branchId)
+      } else {
+        setSelectedBranchId(activeBranchId || "")
+      }
     }
-  }, [user?.branchId, user?.role, isOpen])
+  }, [isOpen, activeCompanyId, activeBranchId, user?.companyId, user?.branchId, user?.role])
 
   const availableBranches = React.useMemo(() => {
     if (!branches || !Array.isArray(branches)) return []
@@ -248,8 +257,9 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
     const finalReminderDate = isNoReminder ? "None" : (reminderDate || "None")
     const finalReminderTime = (isNoReminder || finalReminderDate === "None") ? "None" : (reminderTime || "11:30 AM")
 
-    const finalCompanyId = isSuperOrAdmin ? (selectedCompanyId || "tech") : (activeCompanyId || user?.companyId || "tech")
-    const finalBranchId = isSuperOrAdmin ? (selectedBranchId.trim() ? selectedBranchId : undefined) : (activeBranchId || user?.branchId || undefined)
+    const finalCompanyId = isSuperOrAdmin ? (selectedCompanyId || activeCompanyId || "tech") : (activeCompanyId || user?.companyId || "tech")
+    const cleanBranchId = selectedBranchId.trim() || activeBranchId || user?.branchId || ""
+    const finalBranchId = cleanBranchId || undefined
     const currentBranchObj = finalBranchId ? branches.find(b => b.id === finalBranchId) : undefined
     const finalBranchName = currentBranchObj?.name || (finalBranchId ? user?.branchName : undefined)
 
@@ -295,12 +305,13 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
         relatedTo: relatedTo.trim() || undefined,
         labels: user?.role !== "Super Admin" && user?.role !== "Admin" ? ["My Leads", "Call this week"] : ["Call this week"],
         createdAt: `${new Date().toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' })}`,
-      })
+      }, finalCompanyId)
 
       onLeadAdded(created)
       onClose()
-    } catch (err) {
-      console.error(err)
+    } catch (err: any) {
+      console.error("Failed to create lead:", err)
+      alert(err?.message || "Failed to create lead. Please check network or required fields.")
     } finally {
       setIsSubmitting(false)
     }

@@ -185,18 +185,25 @@ export const getLeads = async (companyId?: string): Promise<Lead[]> => {
   let list: Lead[] = []
 
   if (effectiveComp === "all") {
-    const knownCompanies = ["all", "tech", "digital", "saampark-ai-solutions", "fashion", "infotech"]
+    const allData = await fetchModuleDataFromDB<Lead[]>("leads", [], "all").catch(() => [])
+    const map = new Map<string, Lead>()
+    for (const l of (Array.isArray(allData) ? allData : [])) {
+      if (l && l.id) {
+        map.set(String(l.id).toLowerCase().trim(), l)
+      }
+    }
+    const knownCompanies = ["tech", "consultancy", "digital", "saampark-ai-solutions", "fashion", "print"]
     const results = await Promise.all(
       knownCompanies.map(c => fetchModuleDataFromDB<Lead[]>("leads", [], c).catch(() => []))
     )
-    const map = new Map<string, Lead>()
     for (let i = 0; i < results.length; i++) {
-      const cScope = knownCompanies[i]
       const items = Array.isArray(results[i]) ? results[i] : []
       for (const l of items) {
         if (l && l.id) {
-          const lCompany = l.companyId || (cScope !== "all" ? cScope : "tech")
-          map.set(String(l.id).toLowerCase().trim(), { ...l, companyId: lCompany })
+          const lId = String(l.id).toLowerCase().trim()
+          if (!map.has(lId)) {
+            map.set(lId, { ...l, companyId: l.companyId || knownCompanies[i] })
+          }
         }
       }
     }
@@ -207,6 +214,15 @@ export const getLeads = async (companyId?: string): Promise<Lead[]> => {
     for (const l of (Array.isArray(scopedData) ? scopedData : [])) {
       if (l && l.id) {
         map.set(String(l.id).toLowerCase().trim(), { ...l, companyId: l.companyId || effectiveComp })
+      }
+    }
+    const allData = await fetchModuleDataFromDB<Lead[]>("leads", [], "all").catch(() => [])
+    for (const l of (Array.isArray(allData) ? allData : [])) {
+      if (l && l.id && String(l.companyId || "").toLowerCase().trim() === effectiveComp.toLowerCase().trim()) {
+        const lId = String(l.id).toLowerCase().trim()
+        if (!map.has(lId)) {
+          map.set(lId, l)
+        }
       }
     }
     list = Array.from(map.values())
@@ -267,7 +283,7 @@ export const getLeads = async (companyId?: string): Promise<Lead[]> => {
   })
 
   if (hasChanges) {
-    saveModuleDataToDB("leads", processed, companyId)
+    saveModuleDataToDB("leads", processed, effectiveComp !== "all" ? effectiveComp : undefined).catch(() => {})
   }
 
   // Client Isolation: If client user, only return their private leads.
@@ -281,15 +297,21 @@ export const getLeads = async (companyId?: string): Promise<Lead[]> => {
   }
 
   if (currentUser?.role === "Clients") {
-    return processed.filter(l => 
-      l.isClientPrivate === true && 
-      (l.createdById === currentUser.id || l.createdByEmail === currentUser.email || (l as any).clientOwnerId === currentUser.id)
-    )
+    const cId = String(currentUser.id || "").toLowerCase().trim()
+    const cEmail = (currentUser.email || "").toLowerCase().trim()
+    return processed.filter((l) => {
+      const leadCreatorId = String(l.createdById || "").toLowerCase().trim()
+      const leadCreatorEmail = (l.createdByEmail || "").toLowerCase().trim()
+      const leadCreatedBy = (l.createdBy || "").toLowerCase().trim()
+      return (
+        (cId && leadCreatorId === cId) ||
+        (cEmail && leadCreatorEmail === cEmail) ||
+        (cEmail && leadCreatedBy === cEmail)
+      )
+    })
   }
 
-  // Super Admin / Admin / Teams: strictly hide client private leads
-  const visibleToAdmins = processed.filter(l => !l.isClientPrivate)
-  return visibleToAdmins
+  return processed.filter((l) => (l as any).isClientPrivate !== true && l.createdByRole !== "Clients")
 }
 
 export async function checkAndAutoConvertLeadToClient(lead: Lead, companyId?: string): Promise<void> {
@@ -350,58 +372,65 @@ export async function checkAndAutoConvertLeadToClient(lead: Lead, companyId?: st
 }
 
 export const addLead = async (leadData: Omit<Lead, "id">, companyId?: string): Promise<Lead> => {
-  const current = await fetchModuleDataFromDB<Lead[]>("leads", [], companyId)
-  
-  let activeBranch: string | undefined = undefined
+  let authState: any = null
   if (typeof window !== "undefined") {
     try {
       const { useAuthStore } = require("@/store/useAuthStore")
-      activeBranch = useAuthStore.getState().activeBranchId || useAuthStore.getState().user?.branchId || undefined
+      authState = useAuthStore.getState()
     } catch {}
   }
+  const targetComp = companyId || leadData.companyId || authState?.activeCompanyId || "tech"
+  const effComp = (targetComp && targetComp !== "all") ? targetComp : "tech"
+
+  const current = await fetchModuleDataFromDB<Lead[]>("leads", [], effComp).catch(() => [])
 
   // Unique collision-free ID generation
   const timestamp = Date.now()
   const randomSuffix = Math.random().toString(36).substring(2, 6)
   const newId = `lead_${timestamp}_${randomSuffix}`
   
-  let currentUser: any = null
-  if (typeof window !== "undefined") {
-    try {
-      const { useAuthStore } = require("@/store/useAuthStore")
-      currentUser = useAuthStore.getState().user
-    } catch {}
-  }
-
+  const currentUser = authState?.user
   const isClientRole = currentUser?.role === "Clients"
 
   const newLead: Lead = {
     ...leadData,
     id: newId,
-    branchId: (leadData as any).branchId || activeBranch || undefined,
+    companyId: effComp,
+    branchId: leadData.branchId || authState?.activeBranchId || authState?.user?.branchId || undefined,
     createdAt: leadData.createdAt || `${new Date().toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' })}`,
     service: leadData.service !== undefined ? leadData.service : "",
     source: leadData.source || "Social Media",
     reminderDate: leadData.reminderDate || "None",
     reminderNotes: leadData.reminderNotes || "",
-    caller: leadData.caller || leadData.owner || (isClientRole ? (currentUser.name || "Client") : "Team"),
+    caller: leadData.caller || leadData.owner || (isClientRole ? (currentUser?.name || "Client") : "Team"),
     isLocked: false,
     isClientPrivate: isClientRole ? true : (leadData.isClientPrivate || false),
-    createdById: isClientRole ? currentUser.id : leadData.createdById,
-    createdByEmail: isClientRole ? currentUser.email : leadData.createdByEmail,
+    createdById: isClientRole ? currentUser?.id : leadData.createdById,
+    createdByEmail: isClientRole ? currentUser?.email : leadData.createdByEmail,
     createdByRole: isClientRole ? "Clients" : leadData.createdByRole,
   }
   const updated = [newLead, ...current.filter((l) => l.id !== newId)]
-  await saveModuleDataToDB("leads", updated, companyId)
+  await saveModuleDataToDB("leads", updated, effComp)
+
+  // Also update "all" aggregation
+  const allCurrent = await fetchModuleDataFromDB<Lead[]>("leads", [], "all").catch(() => [])
+  const updatedAll = [newLead, ...allCurrent.filter(l => l.id !== newId)]
+  await saveModuleDataToDB("leads", updatedAll, "all").catch(() => {})
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+    window.dispatchEvent(new Event("storage"))
+  }
+
   syncLeadReminderTask(newLead)
-  checkAndAutoConvertLeadToClient(newLead, companyId)
+  checkAndAutoConvertLeadToClient(newLead, effComp)
 
   recordActivityLog({
     type: "lead",
     module: "Leads",
     action: "New Lead Created",
     description: `New lead "${newLead.name}" registered for ${newLead.service || "General Inquiry"}`,
-    companyId: newLead.companyId || companyId,
+    companyId: newLead.companyId,
     branchId: newLead.branchId,
     details: `Source: ${newLead.source || "Direct"} | Value: ${newLead.value || "₹0"} | Caller: ${newLead.caller || "Team"}`
   }).catch(() => {})
@@ -410,23 +439,44 @@ export const addLead = async (leadData: Omit<Lead, "id">, companyId?: string): P
 }
 
 export const updateLead = async (id: string, updates: Partial<Lead>, userRole?: string, companyId?: string): Promise<Lead> => {
-  const current = await fetchModuleDataFromDB<Lead[]>("leads", [], companyId)
-  let idx = current.findIndex((l) => l.id === id)
-  let target = idx !== -1 ? current[idx] : null
+  let authState: any = null
+  if (typeof window !== "undefined") {
+    try {
+      const { useAuthStore } = require("@/store/useAuthStore")
+      authState = useAuthStore.getState()
+    } catch {}
+  }
+  const isSuperOrAdmin = userRole === "Super Admin" || userRole === "Admin" || authState?.user?.role === "Super Admin" || authState?.user?.role === "Admin"
 
-  // Fallback search across all leads if not found in current company partition
+  // Find target lead across specified company or all partitions
+  let target: Lead | null = null
+  let foundComp: string | undefined = companyId
+
+  if (companyId && companyId !== "all") {
+    const scopedList = await fetchModuleDataFromDB<Lead[]>("leads", [], companyId).catch(() => [])
+    target = scopedList.find(l => l.id === id) || null
+  }
+
   if (!target) {
     const allLeads = await fetchModuleDataFromDB<Lead[]>("leads", [], "all").catch(() => [])
-    const found = allLeads.find(l => l.id === id)
-    if (found) {
-      target = found
+    target = allLeads.find(l => l.id === id) || null
+    if (target) foundComp = target.companyId
+  }
+
+  if (!target) {
+    for (const c of ["tech", "consultancy", "digital", "saampark-ai-solutions", "print"]) {
+      const cList = await fetchModuleDataFromDB<Lead[]>("leads", [], c).catch(() => [])
+      const found = cList.find(l => l.id === id)
+      if (found) {
+        target = found
+        foundComp = c
+        break
+      }
     }
   }
 
   if (!target) throw new Error("Lead not found")
 
-  const isSuperOrAdmin = userRole === "Super Admin" || userRole === "Admin"
-  
   const finalStatus = updates.status !== undefined ? updates.status : target.status
   const statusLower = (finalStatus || "").toLowerCase().trim()
   const isWonOrLost = statusLower === "won" || statusLower === "lost"
@@ -438,36 +488,37 @@ export const updateLead = async (id: string, updates: Partial<Lead>, userRole?: 
 
   const finalReminderDate = updates.reminderDate !== undefined ? updates.reminderDate : target.reminderDate
 
-  let nextIsLocked = updates.isLocked !== undefined ? updates.isLocked : target.isLocked
-  let nextReason = updates.lockedReason !== undefined ? updates.lockedReason : target.lockedReason
+  let nextIsLocked = target.isLocked
+  let nextReason = target.lockedReason
 
-  // 1. Won leads are LOCKED by default (finalized deal)
-  if (statusLower === "won") {
-    if (updates.isLocked === false) {
-      nextIsLocked = false
-      nextReason = "Manually unlocked by Admin"
-    } else {
-      nextIsLocked = true
-      nextReason = "Won: Lead is finalized and converted to Client."
-    }
+  // Priority order for lock status:
+  if (updates.isLocked === false) {
+    // Explicit Admin Unlock ALWAYS clears lock
+    nextIsLocked = false
+    nextReason = undefined
+  } else if (updates.isLocked === true) {
+    // Explicit Admin Lock ALWAYS locks
+    nextIsLocked = true
+    nextReason = updates.lockedReason || "Manually locked by Admin"
+  } else if (statusLower === "won") {
+    nextIsLocked = true
+    nextReason = "Won: Lead is finalized and converted to Client."
   } else if (statusLower === "lost") {
-    if (updates.isLocked !== true) {
-      nextIsLocked = false
-      nextReason = undefined
-    }
-  } else if (finalReminderDate && !isReminderDateOverdue(finalReminderDate)) {
-    // 2. If reminder date is set to a future / valid date, unlock
-    if (updates.isLocked !== true) {
-      nextIsLocked = false
-      nextReason = undefined
-    }
-  } else if (isReminderDateOverdue(finalReminderDate)) {
-    // 3. If reminder date is expired/overdue, lock at end of date
+    nextIsLocked = false
+    nextReason = undefined
+  } else if (target.isLocked && target.lockedReason?.includes("Manually locked")) {
+    // Retain manual lock unless explicitly unlocked
+    nextIsLocked = true
+    nextReason = target.lockedReason
+  } else if (finalReminderDate && isReminderDateOverdue(finalReminderDate)) {
     nextIsLocked = true
     nextReason = "Overdue: Lead reminder date expired."
+  } else if (finalReminderDate && !isReminderDateOverdue(finalReminderDate)) {
+    nextIsLocked = false
+    nextReason = undefined
   }
 
-  const oldCompanyId = (target.companyId || companyId || "tech").toLowerCase().trim()
+  const oldCompanyId = (target.companyId || foundComp || "tech").toLowerCase().trim()
   const newCompanyId = (updates.companyId || oldCompanyId).toLowerCase().trim()
 
   const updatedLead: Lead = {
@@ -478,26 +529,27 @@ export const updateLead = async (id: string, updates: Partial<Lead>, userRole?: 
     lockedReason: nextReason,
   }
 
-  // Cross-Company Transfer: If company changed, immediately remove from old and add to new
+  // Save to new company
+  const newList = await fetchModuleDataFromDB<Lead[]>("leads", [], newCompanyId).catch(() => [])
+  const updatedNew = [updatedLead, ...newList.filter(l => l.id !== id)]
+  await saveModuleDataToDB("leads", updatedNew, newCompanyId)
+
+  // If company changed, clean up from old company
   if (newCompanyId !== oldCompanyId) {
     const oldList = await fetchModuleDataFromDB<Lead[]>("leads", [], oldCompanyId).catch(() => [])
     const filteredOld = oldList.filter(l => l.id !== id)
     await saveModuleDataToDB("leads", filteredOld, oldCompanyId)
-
-    const newList = await fetchModuleDataFromDB<Lead[]>("leads", [], newCompanyId).catch(() => [])
-    const updatedNew = [updatedLead, ...newList.filter(l => l.id !== id)]
-    await saveModuleDataToDB("leads", updatedNew, newCompanyId)
-  } else {
-    const targetComp = companyId || newCompanyId
-    const currentList = await fetchModuleDataFromDB<Lead[]>("leads", [], targetComp).catch(() => [])
-    const updatedList = [updatedLead, ...currentList.filter(l => l.id !== id)]
-    await saveModuleDataToDB("leads", updatedList, targetComp)
   }
 
   // Update in "all" aggregation
   const allList = await fetchModuleDataFromDB<Lead[]>("leads", [], "all").catch(() => [])
   const updatedAll = [updatedLead, ...allList.filter(l => l.id !== id)]
   await saveModuleDataToDB("leads", updatedAll, "all")
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+    window.dispatchEvent(new Event("storage"))
+  }
 
   syncLeadReminderTask(updatedLead)
   checkAndAutoConvertLeadToClient(updatedLead, newCompanyId)
@@ -578,7 +630,10 @@ export const deleteLead = async (id: string, companyId?: string): Promise<boolea
 export const unlockLead = async (id: string, companyId?: string): Promise<Lead> => {
   const tomorrow = new Date()
   tomorrow.setDate(tomorrow.getDate() + 1)
-  const formattedTomorrow = tomorrow.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' })
+  const d = String(tomorrow.getDate()).padStart(2, "0")
+  const m = MONTH_NAMES_SHORT[tomorrow.getMonth()]
+  const y = tomorrow.getFullYear()
+  const formattedTomorrow = `${d} ${m} ${y}`
 
   return updateLead(
     id,

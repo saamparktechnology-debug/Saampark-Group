@@ -614,7 +614,7 @@ export function LeadKanban({
       }
       const previousStatus = targetLead.status
       try {
-        const updated = await updateLead(leadId, { status: newStatus }, user?.role)
+        const updated = await updateLead(leadId, { status: newStatus }, user?.role, targetLead.companyId)
         onLeadUpdated(updated)
         setMoveToast({
           visible: true,
@@ -1599,56 +1599,63 @@ export function LeadKanban({
                               </button>
                             )}
 
-                            {/* Admin Manual Lock Button (Shown for Unlocked Cards) */}
-                            {isSuperAdminOrAdmin && !isLocked && (
+                              {isSuperAdminOrAdmin && !isLocked && (
+                                <button
+                                  type="button"
+                                  onMouseDown={(e) => e.stopPropagation()}
+                                  onClick={async (e) => {
+                                    e.stopPropagation()
+                                    try {
+                                      const { lockLead } = await import("../services/leadService")
+                                      const locked = await lockLead(l.id, "Manually locked by Admin", l.companyId)
+                                      onLeadUpdated(locked)
+                                    } catch (err: any) {
+                                      alert(err?.message || "Failed to lock lead.")
+                                    }
+                                  }}
+                                  className="w-7 h-7 min-w-[28px] min-h-[28px] rounded-lg bg-zinc-100 hover:bg-rose-100 text-zinc-600 hover:text-rose-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-rose-950 dark:hover:text-rose-300 flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-2xs group/kblock"
+                                  title="Admin Manual Lock Lead"
+                                >
+                                  <Unlock size={13} className="group-hover/kblock:rotate-[-18deg] transition-transform duration-300 pointer-events-none" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Prominent Overlay Badge for Locked Cards */}
+                        {isLocked && (
+                          <div className="absolute inset-0 z-20 bg-rose-950/25 backdrop-blur-[2px] rounded-xl flex flex-col items-center justify-center p-2 text-center border-2 border-rose-500/80 shadow-md">
+                            <div className="bg-rose-600 text-white font-extrabold text-xs px-3 py-1 rounded-lg shadow-sm flex items-center gap-1.5 mb-1">
+                              <Lock size={12} className="animate-pulse" />
+                              <span>LEAD IS LOCKED</span>
+                            </div>
+                            <p className="text-[10px] text-rose-900 dark:text-rose-100 font-semibold px-2">
+                              {l.lockedReason || "SLA Missed - Untouchable by telecaller"}
+                            </p>
+
+                            {/* Admin Unlock Button */}
+                            {isSuperAdminOrAdmin && (
                               <button
                                 type="button"
-                                onMouseDown={(e) => e.stopPropagation()}
                                 onClick={async (e) => {
                                   e.stopPropagation()
-                                  const { lockLead } = await import("../services/leadService")
-                                  const locked = await lockLead(l.id, "Manually locked by Admin")
-                                  onLeadUpdated(locked)
+                                  try {
+                                    const { unlockLead } = await import("../services/leadService")
+                                    const unlocked = await unlockLead(l.id, l.companyId)
+                                    onLeadUpdated(unlocked)
+                                  } catch (err: any) {
+                                    alert(err?.message || "Failed to unlock lead.")
+                                  }
                                 }}
-                                className="w-7 h-7 min-w-[28px] min-h-[28px] rounded-lg bg-zinc-100 hover:bg-rose-100 text-zinc-600 hover:text-rose-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-rose-950 dark:hover:text-rose-300 flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-2xs group/kblock"
-                                title="Admin Manual Lock Lead"
+                                className="group/kunlock mt-2 bg-white text-rose-700 hover:bg-rose-50 font-bold text-xs px-3 py-1.5 rounded-lg transition-all shadow-md flex items-center gap-1.5 cursor-pointer hover:scale-105"
                               >
-                                <Unlock size={13} className="group-hover/kblock:rotate-[-18deg] transition-transform duration-300 pointer-events-none" />
+                                <Unlock size={12} className="group-hover/kunlock:rotate-[-18deg] transition-transform duration-300" />
+                                <span>Admin Unlock Lead</span>
                               </button>
                             )}
                           </div>
-                        </div>
-                      </div>
-
-                      {/* Prominent Overlay Badge for Locked Cards */}
-                      {isLocked && (
-                        <div className="absolute inset-0 z-20 bg-rose-950/25 backdrop-blur-[2px] rounded-xl flex flex-col items-center justify-center p-2 text-center border-2 border-rose-500/80 shadow-md">
-                          <div className="bg-rose-600 text-white font-extrabold text-xs px-3 py-1 rounded-lg shadow-sm flex items-center gap-1.5 mb-1">
-                            <Lock size={12} className="animate-pulse" />
-                            <span>LEAD IS LOCKED</span>
-                          </div>
-                          <p className="text-[10px] text-rose-900 dark:text-rose-100 font-semibold px-2">
-                            {l.lockedReason || "SLA Missed - Untouchable by telecaller"}
-                          </p>
-
-                          {/* Admin Unlock Button */}
-                          {isSuperAdminOrAdmin && (
-                            <button
-                              type="button"
-                              onClick={async (e) => {
-                                e.stopPropagation()
-                                const { unlockLead } = await import("../services/leadService")
-                                const unlocked = await unlockLead(l.id)
-                                onLeadUpdated(unlocked)
-                              }}
-                              className="group/kunlock mt-2 bg-white text-rose-700 hover:bg-rose-50 font-bold text-xs px-3 py-1.5 rounded-lg transition-all shadow-md flex items-center gap-1.5 cursor-pointer hover:scale-105"
-                            >
-                              <Unlock size={12} className="group-hover/kunlock:rotate-[-18deg] transition-transform duration-300" />
-                              <span>Admin Unlock Lead</span>
-                            </button>
-                          )}
-                        </div>
-                      )}
+                        )}
                     </div>
                   )
                 })}

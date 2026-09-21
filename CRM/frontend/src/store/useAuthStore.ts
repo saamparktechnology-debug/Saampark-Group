@@ -553,7 +553,8 @@ export const useAuthStore = create<AuthState>()(
           const getCanonicalKey = (c: Partial<Company>) => {
             const canon = getCanonicalCompanyId(c.slug || c.id || (c as any)?.numeric_id || c.name)
             if (canon === 'consultancy' || canon.includes('consult')) return 'consultancy'
-            return 'tech'
+            if (canon === 'tech' || canon === '1' || canon.includes('tech') || canon.includes('research')) return 'tech'
+            return String(c.id || c.slug || 'tech').toLowerCase().trim()
           }
 
           // 1. First add DEFAULT_COMPANIES as baseline
@@ -652,7 +653,17 @@ export const useAuthStore = create<AuthState>()(
             logo_url: (rawConsult.logo_url && rawConsult.logo_url !== '/saampark-logo.png') ? rawConsult.logo_url : '',
           }
 
-          const combined = [sanitizedTech, sanitizedConsult] as Company[]
+          const combined: Company[] = [sanitizedTech, sanitizedConsult]
+          map.forEach((comp, key) => {
+            if (key !== 'tech' && key !== 'consultancy') {
+              combined.push({
+                ...comp,
+                id: comp.id || key,
+                slug: comp.slug || key,
+                name: (comp.name && comp.name.trim() !== '') ? comp.name : getCompanyFullName(comp),
+              })
+            }
+          })
 
           set({ companies: combined })
           return combined
@@ -1237,47 +1248,7 @@ export const useAuthStore = create<AuthState>()(
         return true
       },
 
-      switchSubBranch: (subBranchId: string | null) => {
-        set({ activeSubBranchId: subBranchId })
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('saampark_subbranch_switched', { detail: { subBranchId } }))
-        }
-      },
 
-      switchBranch: (branchId: string | null) => {
-        const { user } = get()
-        if (!user) return
-
-        let rawBranchIds = user.branchIds || (user as any).branch_ids
-        let userBranchIds: string[] = []
-        if (typeof rawBranchIds === 'string') {
-          try { userBranchIds = JSON.parse(rawBranchIds) } catch { userBranchIds = [rawBranchIds] }
-        } else if (Array.isArray(rawBranchIds)) {
-          userBranchIds = rawBranchIds
-        }
-        if (userBranchIds.length === 0 && user.branchId) {
-          userBranchIds = [user.branchId]
-        }
-
-        const isSuperAdmin = user.role === 'Super Admin'
-        const hasNoBranchRestriction = userBranchIds.length === 0
-
-        const canSwitch =
-          isSuperAdmin ||
-          hasNoBranchRestriction ||
-          (!branchId && (userBranchIds.length > 1 || user.role === 'Admin')) ||
-          (branchId && userBranchIds.some(id => String(id).toLowerCase().trim() === String(branchId).toLowerCase().trim()))
-
-        if (canSwitch) {
-          invalidateModuleCache()
-          set({ activeBranchId: branchId })
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('saampark_branch_switched', { detail: branchId }))
-            window.dispatchEvent(new CustomEvent('saampark_data_synced'))
-            window.dispatchEvent(new Event('storage'))
-          }
-        }
-      },
 
       loginAs: (role: Role | string, customUser?: Partial<User>) => {
         let normalizedRole: Role = 'Teams'
@@ -1528,8 +1499,10 @@ export const useAuthStore = create<AuthState>()(
           ? user.companyIds.map(id => String(id).toLowerCase().trim())
           : [String(user.companyId || 'tech').toLowerCase().trim()]
 
+        const isAdminOrSuper = isSuperAdmin || user.role === 'Admin'
+
         const canSwitch =
-          isSuperAdmin ||
+          isAdminOrSuper ||
           userCompIds.includes(targetNorm) ||
           (matchedComp && userCompIds.includes(String(matchedComp.id).toLowerCase().trim())) ||
           (matchedComp?.slug && userCompIds.includes(String(matchedComp.slug).toLowerCase().trim())) ||
@@ -1538,9 +1511,9 @@ export const useAuthStore = create<AuthState>()(
         if (canSwitch) {
           invalidateModuleCache()
 
-          // If Super Admin, ensure companyIds includes this company so session sync doesn't reset it
+          // If Super Admin or Admin, ensure companyIds includes this company so session sync doesn't reset it
           let updatedCompanyIds = user.companyIds || [effectiveId]
-          if (isSuperAdmin && !updatedCompanyIds.includes(effectiveId)) {
+          if (isAdminOrSuper && !updatedCompanyIds.includes(effectiveId)) {
             updatedCompanyIds = [...updatedCompanyIds, effectiveId]
           }
 
@@ -1553,6 +1526,7 @@ export const useAuthStore = create<AuthState>()(
           set({
             activeCompanyId: effectiveId,
             activeBranchId: null,
+            activeSubBranchId: null,
             user: updatedUser,
           })
 
@@ -1572,6 +1546,40 @@ export const useAuthStore = create<AuthState>()(
             window.dispatchEvent(new CustomEvent('saampark_data_synced'))
             window.dispatchEvent(new Event('storage'))
           }
+        }
+      },
+
+      switchBranch: (branchId: string | null) => {
+        const { user, branches, activeCompanyId } = get()
+        if (!user) return
+
+        invalidateModuleCache()
+
+        const branchIdStr = branchId ? String(branchId) : null
+        const matchedBranch = branches.find(b => String(b.id) === branchIdStr)
+        const newCompId = matchedBranch?.companyId || (matchedBranch as any)?.company_id
+
+        set({
+          activeBranchId: branchIdStr,
+          activeSubBranchId: null,
+          ...(newCompId && activeCompanyId !== 'all' ? { activeCompanyId: String(newCompId) } : {})
+        })
+
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('saampark_branch_switched', { detail: branchIdStr }))
+          window.dispatchEvent(new CustomEvent('saampark_data_synced'))
+          window.dispatchEvent(new Event('storage'))
+        }
+      },
+
+      switchSubBranch: (subBranchId: string | null) => {
+        const subBranchIdStr = subBranchId ? String(subBranchId) : null
+        set({ activeSubBranchId: subBranchIdStr })
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('saampark_sub_branch_switched', { detail: subBranchIdStr }))
+          window.dispatchEvent(new CustomEvent('saampark_subbranch_switched', { detail: { subBranchId: subBranchIdStr } }))
+          window.dispatchEvent(new CustomEvent('saampark_data_synced'))
+          window.dispatchEvent(new Event('storage'))
         }
       },
     }),

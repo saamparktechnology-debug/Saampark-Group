@@ -91,13 +91,15 @@ export default function LeadsMain() {
     window.addEventListener("saampark_company_switched", storageHandler)
     window.addEventListener("saampark_branch_switched", storageHandler)
     window.addEventListener("saampark_data_synced", storageHandler)
+    window.addEventListener("saampark_leads_updated", storageHandler)
     return () => {
       window.removeEventListener("storage", storageHandler)
       window.removeEventListener("saampark_company_switched", storageHandler)
       window.removeEventListener("saampark_branch_switched", storageHandler)
       window.removeEventListener("saampark_data_synced", storageHandler)
+      window.removeEventListener("saampark_leads_updated", storageHandler)
     }
-  }, [])
+  }, [activeCompanyId, activeBranchId])
 
   const handleLeadAdded = (newLead: Lead) => {
     setLeads((prev) => [newLead, ...prev])

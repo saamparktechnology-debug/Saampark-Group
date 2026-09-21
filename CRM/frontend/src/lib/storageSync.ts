@@ -247,12 +247,15 @@ export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: 
         if (!targetCompany) {
           targetCompany = authState.activeCompanyId || undefined
         }
-        // Strict company assignment validation for non-Super Admin
-        if (authUser && authUser.role !== "Super Admin" && targetCompany && targetCompany !== "all") {
+        // Super Admin and Admin have access across all companies.
+        // For other roles (Teams/Clients), allow if assigned or if it matches their active company
+        const isSuperOrAdmin = authUser && (authUser.role === "Super Admin" || authUser.role === "Admin")
+        if (authUser && !isSuperOrAdmin && targetCompany && targetCompany !== "all") {
           const rawIds = authUser.companyIds || (authUser.companyId ? [authUser.companyId] : ["tech"])
           const allowedIds = (Array.isArray(rawIds) ? rawIds : [rawIds]).map((id: any) => String(id).toLowerCase().trim())
           const targetNorm = String(targetCompany).toLowerCase().trim()
-          const isAllowed = allowedIds.some((id: string) => id === targetNorm)
+          const activeNorm = String(authState.activeCompanyId || "").toLowerCase().trim()
+          const isAllowed = allowedIds.some((id: string) => id === targetNorm) || targetNorm === activeNorm
           if (!isAllowed) {
             console.warn(`Access denied: User ${authUser.email} cannot access unassigned company ${targetCompany}`)
             return (Array.isArray(fallbackData) ? [] : fallbackData) as any
@@ -334,11 +337,13 @@ export async function saveModuleDataToDB<T>(moduleKey: string, data: T, companyI
         if (!targetCompany) {
           targetCompany = authState.activeCompanyId || undefined
         }
-        if (authUser && authUser.role !== "Super Admin" && targetCompany && targetCompany !== "all") {
+        const isSuperOrAdmin = authUser && (authUser.role === "Super Admin" || authUser.role === "Admin")
+        if (authUser && !isSuperOrAdmin && targetCompany && targetCompany !== "all") {
           const rawIds = authUser.companyIds || (authUser.companyId ? [authUser.companyId] : ["tech"])
           const allowedIds = (Array.isArray(rawIds) ? rawIds : [rawIds]).map((id: any) => String(id).toLowerCase().trim())
           const targetNorm = String(targetCompany).toLowerCase().trim()
-          const isAllowed = allowedIds.some((id: string) => id === targetNorm)
+          const activeNorm = String(authState.activeCompanyId || "").toLowerCase().trim()
+          const isAllowed = allowedIds.some((id: string) => id === targetNorm) || targetNorm === activeNorm
           if (!isAllowed) {
             console.warn(`Save denied: User ${authUser.email} cannot write to unassigned company ${targetCompany}`)
             return

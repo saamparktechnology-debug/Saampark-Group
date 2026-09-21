@@ -111,15 +111,15 @@ export function Topbar() {
             freshCompanyIds = [dbRecord.companyId || (dbRecord as any).company_id || "tech"]
           }
 
-          // If user is Admin, they can only switch between their assigned companies
-          const isSuper = isSuperUser
+          // Super Admin and Admin can switch between all companies
+          const isSuperOrAdmin = isSuperUser || user.role === "Admin"
           const currentActive = useAuthStore.getState().activeCompanyId
-          const isAllowedActive = freshCompanyIds.some(id => isMatchingCompany({ id, slug: id } as any, currentActive || ""))
-          const nextActive = isSuper
-            ? (currentActive || "all")
+          const isAllowedActive = isSuperOrAdmin || freshCompanyIds.some(id => isMatchingCompany({ id, slug: id } as any, currentActive || ""))
+          const nextActive = isSuperOrAdmin
+            ? (currentActive || (isSuperUser ? "all" : freshCompanyIds[0] || "tech"))
             : (isAllowedActive && currentActive ? currentActive : freshCompanyIds[0])
 
-          const finalCompanyIds = isSuper
+          const finalCompanyIds = isSuperOrAdmin
             ? Array.from(new Set([...freshCompanyIds, currentActive || "all", ...companies.map(c => c.id), ...companies.map(c => c.slug || "")].filter(Boolean)))
             : freshCompanyIds
 
@@ -139,7 +139,7 @@ export function Topbar() {
             try { freshPerms = JSON.parse(freshPerms) } catch {}
           }
 
-          const freshAllowedMods = isSuper ? undefined : (dbRecord.allowedModules || (freshPerms && Array.isArray(freshPerms.allowedModules) ? freshPerms.allowedModules : undefined))
+          const freshAllowedMods = isSuperUser ? undefined : (dbRecord.allowedModules || (freshPerms && Array.isArray(freshPerms.allowedModules) ? freshPerms.allowedModules : undefined))
 
           // Update usePermissionStore in real-time
           if (freshAllowedMods) {
@@ -170,7 +170,7 @@ export function Topbar() {
               allowedModules: freshAllowedMods,
               permissions: freshPerms,
             },
-            activeCompanyId: nextActive || (isSuper ? "all" : "tech"),
+            activeCompanyId: nextActive || (isSuperUser ? "all" : "tech"),
           })
         }
       } catch (err) {
@@ -240,7 +240,7 @@ export function Topbar() {
 
   // Companies this specific user has access to
   const allowedCompanies = React.useMemo(() => {
-    if (user.role === 'Super Admin') return companies
+    if (user.role === 'Super Admin' || user.role === 'Admin') return companies
     let rawCompIds = user.companyIds || (user as any).company_ids
     let userCompIds: string[] = []
     if (typeof rawCompIds === 'string') {
@@ -256,7 +256,7 @@ export function Topbar() {
 
   // Branches this specific user has access to
   const allowedBranches = React.useMemo(() => {
-    if (user.role === 'Super Admin') return branches
+    if (user.role === 'Super Admin' || user.role === 'Admin') return branches
     let rawBranchIds = user.branchIds || (user as any).branch_ids
     let userBranchIds: string[] = []
     if (typeof rawBranchIds === 'string') {

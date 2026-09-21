@@ -319,7 +319,7 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
         branchId: finalBranchId,
         branchName: finalBranchName,
         companyId: finalCompanyId,
-      }, user?.role)
+      }, user?.role, finalCompanyId)
 
       onLeadUpdated(updated)
       onClose()
@@ -333,7 +333,7 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
   const handleUnlock = async () => {
     if (!lead) return
     try {
-      const unlocked = await unlockLead(lead.id)
+      const unlocked = await unlockLead(lead.id, lead.companyId || selectedCompanyId)
       onLeadUpdated(unlocked)
       alert("Lead unlocked successfully! Caller can now update this lead.")
     } catch (err: any) {
