@@ -7,7 +7,7 @@ import {
   MapPin, Phone, Mail, Globe, Users, Briefcase, DollarSign, Building, 
   Loader2, AlertCircle, Shield, CreditCard, Award, CheckCircle2, Image,
   X, Sparkles, Eye, Landmark, QrCode, FileText, Check, ShieldCheck,
-  Columns, Maximize2, Minimize2, Split, LayoutTemplate
+  Columns, Maximize2, Minimize2, Split, LayoutTemplate, Save
 } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
@@ -253,14 +253,15 @@ export default function CompaniesMain() {
   const [branchTab, setBranchTab] = React.useState<"basic" | "tax" | "stamp" | "bank" | "preview">("basic")
   const [branchBankProfileTab, setBranchBankProfileTab] = React.useState<"gst" | "nongst">("gst")
   const [branchForm, setBranchForm] = React.useState({
-    name: "", code: "", brand_name: "", division_name: "",
+    name: "", code: "", brand_name: "", division_name: "", subtitle: "",
     logo_url: "", payment_qr_url: "",
-    gstin: "", pan: "",
+    gstin: "", pan: "", cin: "", msme_reg: "", iso_certification: "",
     signatory_name: "", signatory_designation: "", signature_image_url: "", stamp_image_url: "",
     address: "", city: "", state: "", zip: "", country: "India", phone: "", email: "", managerName: "", managerPhone: "",
     bank_name: "", account_holder: "", account_number: "", ifsc_code: "", bank_branch: "", upi_id: "",
     gst_bank_name: "", gst_account_holder: "", gst_account_number: "", gst_ifsc_code: "", gst_bank_branch: "", gst_upi_id: "", gst_payment_qr_url: "",
     nongst_bank_name: "", nongst_account_holder: "", nongst_account_number: "", nongst_ifsc_code: "", nongst_bank_branch: "", nongst_upi_id: "", nongst_payment_qr_url: "",
+    terms_conditions: "", invoice_notes: "",
     status: "active"
   })
 
@@ -274,7 +275,7 @@ export default function CompaniesMain() {
     name: "", code: "", partner_name: "", partner_phone: "", partner_email: "",
     revenue_share_pct: 0, partner_type: "Individual",
     address: "", city: "", state: "", phone: "", email: "",
-    gstin: "", pan: "",
+    gstin: "", pan: "", cin: "", msme_reg: "", subtitle: "", iso_certification: "",
     // Fallback Banking
     bank_name: "", account_holder: "", account_number: "", ifsc_code: "", bank_branch: "", upi_id: "", payment_qr_url: "",
     // GST Banking Profile
@@ -283,6 +284,7 @@ export default function CompaniesMain() {
     nongst_bank_name: "", nongst_account_holder: "", nongst_account_number: "", nongst_ifsc_code: "", nongst_bank_branch: "", nongst_upi_id: "", nongst_payment_qr_url: "",
     logo_url: "", signature_image_url: "", stamp_image_url: "",
     signatory_name: "Partner Signatory", signatory_designation: "Franchise Partner",
+    terms_conditions: "", invoice_notes: "",
     status: "active"
   })
 
@@ -570,6 +572,14 @@ export default function CompaniesMain() {
     setEditingCompany(null)
     setCompanyTab("identity")
     setCompanyBankSubTab("gst")
+    setCompanySignaturePos({ x: 0, y: 0 })
+    setCompanyStampPos({ x: 0, y: 0 })
+    setCompanyLogoScale(1)
+    setCompanyStampScale(1)
+    setCompanySignatureScale(1)
+    setCompanyCustomStamps([])
+    setCompanyZoom(100)
+    setPreviewInvoiceType("gst")
     setCompanyForm({
       name: "", brand_name: "SAAMPARK", division_name: "", subtitle: "", slug: "",
       industry: "Technology", currency: "INR", logo_url: "",
@@ -591,6 +601,14 @@ export default function CompaniesMain() {
     setEditingCompany(c)
     setCompanyTab("identity")
     setCompanyBankSubTab("gst")
+    setCompanySignaturePos(c.signature_position || { x: 0, y: 0 })
+    setCompanyStampPos(c.stamp_position || { x: 0, y: 0 })
+    setCompanyLogoScale(c.logo_scale ?? 1)
+    setCompanyStampScale(c.stamp_scale ?? 1)
+    setCompanySignatureScale(c.signature_scale ?? 1)
+    setCompanyCustomStamps(Array.isArray(c.custom_stamps) ? c.custom_stamps : [])
+    setCompanyZoom(c.zoom || 100)
+    setPreviewInvoiceType(c.preview_invoice_type || "gst")
     setCompanyForm({
       name: c.name || "", brand_name: c.brand_name || "", division_name: c.division_name || "", subtitle: c.subtitle || "", slug: c.slug || "",
       industry: c.industry || "Technology", currency: c.currency || "INR", logo_url: c.logo_url || "",
@@ -637,6 +655,14 @@ export default function CompaniesMain() {
         name: companyForm.name.trim(),
         slug: companyForm.slug.trim() || generateSlug(companyForm.name.trim()),
         currency_symbol: cur?.symbol || "₹",
+        signature_position: companySignaturePos,
+        stamp_position: companyStampPos,
+        logo_scale: companyLogoScale,
+        stamp_scale: companyStampScale,
+        signature_scale: companySignatureScale,
+        custom_stamps: companyCustomStamps,
+        zoom: companyZoom,
+        preview_invoice_type: previewInvoiceType,
       }
 
       if (editingCompany) {
@@ -678,15 +704,27 @@ export default function CompaniesMain() {
     setBranchCompanyId(companyId)
     setBranchTab("basic")
     setBranchBankProfileTab("gst")
+    setBranchSignaturePos({ x: 0, y: 0 })
+    setBranchStampPos({ x: 0, y: 0 })
+    setBranchLogoScale(1)
+    setBranchStampScale(1)
+    setBranchSignatureScale(1)
+    setBranchCustomStamps([])
+    setBranchZoom(100)
+    setPreviewInvoiceType("gst")
     setBranchForm({
       name: "Salt Lake Technology Center Branch",
       code: `STR-BR-${Math.floor(100 + Math.random() * 900)}`,
       brand_name: "SAAMPARK",
       division_name: "Operations",
+      subtitle: "",
       logo_url: "",
       payment_qr_url: "",
       gstin: "19AAECS1234F1Z8",
       pan: "AAECS1234F",
+      cin: "",
+      msme_reg: "",
+      iso_certification: "",
       signatory_name: "Supriya Kumar",
       signatory_designation: "Branch Manager",
       signature_image_url: "",
@@ -722,6 +760,8 @@ export default function CompaniesMain() {
       nongst_bank_branch: "Salt Lake Main",
       nongst_upi_id: "saampark.nongst@hdfcbank",
       nongst_payment_qr_url: "",
+      terms_conditions: "",
+      invoice_notes: "",
       status: "active"
     })
     setShowBranchModal(true)
@@ -732,10 +772,18 @@ export default function CompaniesMain() {
     setBranchCompanyId(b.company_id || b.companyId)
     setBranchTab("basic")
     setBranchBankProfileTab("gst")
+    setBranchSignaturePos(b.signature_position || { x: 0, y: 0 })
+    setBranchStampPos(b.stamp_position || { x: 0, y: 0 })
+    setBranchLogoScale(b.logo_scale ?? 1)
+    setBranchStampScale(b.stamp_scale ?? 1)
+    setBranchSignatureScale(b.signature_scale ?? 1)
+    setBranchCustomStamps(Array.isArray(b.custom_stamps) ? b.custom_stamps : [])
+    setBranchZoom(b.zoom || 100)
+    setPreviewInvoiceType(b.preview_invoice_type || "gst")
     setBranchForm({
-      name: b.name || "", code: b.code || "", brand_name: b.brand_name || "", division_name: b.division_name || "",
+      name: b.name || "", code: b.code || "", brand_name: b.brand_name || "", division_name: b.division_name || "", subtitle: b.subtitle || "",
       logo_url: b.logo_url || "", payment_qr_url: b.payment_qr_url || "",
-      gstin: b.gstin || "", pan: b.pan || "",
+      gstin: b.gstin || "", pan: b.pan || "", cin: b.cin || "", msme_reg: b.msme_reg || "", iso_certification: b.iso_certification || "",
       signatory_name: b.signatory_name || "Authorized Signatory", signatory_designation: b.signatory_designation || "Branch Manager", signature_image_url: b.signature_image_url || "", stamp_image_url: b.stamp_image_url || "",
       address: b.address || "", city: b.city || "", state: b.state || "", zip: b.zip || "", country: b.country || "India", phone: b.phone || "", email: b.email || "", managerName: b.managerName || "", managerPhone: b.managerPhone || "",
       bank_name: b.bank_name || b.bankDetails?.bankName || "", account_holder: b.account_holder || b.bankDetails?.accountHolder || "", account_number: b.account_number || b.bankDetails?.accountNumber || "", ifsc_code: b.ifsc_code || b.bankDetails?.ifscCode || "", bank_branch: b.bank_branch || "", upi_id: b.upi_id || b.bankDetails?.upiId || "",
@@ -753,6 +801,8 @@ export default function CompaniesMain() {
       nongst_bank_branch: b.nongst_bank_branch || b.bank_branch || "",
       nongst_upi_id: b.nongst_upi_id || b.upi_id || b.bankDetails?.upiId || "",
       nongst_payment_qr_url: b.nongst_payment_qr_url || b.payment_qr_url || "",
+      terms_conditions: b.terms_conditions || "",
+      invoice_notes: b.invoice_notes || "",
       status: b.status || "active"
     })
     setShowBranchModal(true)
@@ -781,6 +831,14 @@ export default function CompaniesMain() {
         code: branchForm.code.trim().toUpperCase(),
         companyId: branchCompanyId,
         company_id: branchCompanyId,
+        signature_position: branchSignaturePos,
+        stamp_position: branchStampPos,
+        logo_scale: branchLogoScale,
+        stamp_scale: branchStampScale,
+        signature_scale: branchSignatureScale,
+        custom_stamps: branchCustomStamps,
+        zoom: branchZoom,
+        preview_invoice_type: previewInvoiceType,
         // Base fallback banking
         bank_name: (branchForm.gst_bank_name || branchForm.bank_name || branchForm.nongst_bank_name).trim(),
         account_holder: (branchForm.gst_account_holder || branchForm.account_holder || branchForm.nongst_account_holder).trim(),
@@ -828,6 +886,14 @@ export default function CompaniesMain() {
     setSubBranchCompanyId(companyId)
     setSubBranchTab("partner")
     setSubBranchBankProfileTab("gst")
+    setSubBranchSignaturePos({ x: 0, y: 0 })
+    setSubBranchStampPos({ x: 0, y: 0 })
+    setSubBranchLogoScale(1)
+    setSubBranchStampScale(1)
+    setSubBranchSignatureScale(1)
+    setSubBranchCustomStamps([])
+    setSubBranchZoom(100)
+    setPreviewInvoiceType("gst")
     setSubBranchForm({
       name: "Durgapur City Center Sub-Branch",
       code: `SB-DUR-${Math.floor(100 + Math.random() * 900)}`,
@@ -843,6 +909,10 @@ export default function CompaniesMain() {
       email: "durgapur.franchise@saamparktechnology.com",
       gstin: "19BBCCS5678G1Z2",
       pan: "BBCCS5678G",
+      cin: "",
+      msme_reg: "",
+      subtitle: "",
+      iso_certification: "",
       // Fallback Banking
       bank_name: "State Bank of India",
       account_holder: "Saampark Durgapur Franchise",
@@ -872,6 +942,8 @@ export default function CompaniesMain() {
       stamp_image_url: "",
       signatory_name: "Debabrata Mukherjee",
       signatory_designation: "Franchise Partner",
+      terms_conditions: "",
+      invoice_notes: "",
       status: "active"
     })
     setShowSubBranchModal(true)
@@ -883,6 +955,14 @@ export default function CompaniesMain() {
     setSubBranchCompanyId(sb.company_id)
     setSubBranchTab("partner")
     setSubBranchBankProfileTab("gst")
+    setSubBranchSignaturePos(sb.signature_position || { x: 0, y: 0 })
+    setSubBranchStampPos(sb.stamp_position || { x: 0, y: 0 })
+    setSubBranchLogoScale(sb.logo_scale ?? 1)
+    setSubBranchStampScale(sb.stamp_scale ?? 1)
+    setSubBranchSignatureScale(sb.signature_scale ?? 1)
+    setSubBranchCustomStamps(Array.isArray(sb.custom_stamps) ? sb.custom_stamps : [])
+    setSubBranchZoom(sb.zoom || 100)
+    setPreviewInvoiceType(sb.preview_invoice_type || "gst")
     setSubBranchForm({
       name: sb.name || "", 
       code: sb.code || "", 
@@ -898,6 +978,10 @@ export default function CompaniesMain() {
       email: sb.email || "",
       gstin: sb.gstin || "", 
       pan: sb.pan || "", 
+      cin: sb.cin || "",
+      msme_reg: sb.msme_reg || "",
+      subtitle: sb.subtitle || "",
+      iso_certification: sb.iso_certification || "",
       // Base Banking
       bank_name: sb.bank_name || sb.bankDetails?.bankName || "", 
       account_holder: sb.account_holder || sb.bankDetails?.accountHolder || "",
@@ -927,6 +1011,8 @@ export default function CompaniesMain() {
       stamp_image_url: sb.stamp_image_url || "", 
       signatory_name: sb.signatory_name || "Partner Signatory", 
       signatory_designation: sb.signatory_designation || "Franchise Partner",
+      terms_conditions: sb.terms_conditions || "",
+      invoice_notes: sb.invoice_notes || "",
       status: sb.status || "active"
     })
     setShowSubBranchModal(true)
@@ -959,6 +1045,14 @@ export default function CompaniesMain() {
         code: subBranchForm.code.trim().toUpperCase(),
         revenue_share_pct: Number(subBranchForm.revenue_share_pct),
         revenueSharePct: Number(subBranchForm.revenue_share_pct),
+        signature_position: subBranchSignaturePos,
+        stamp_position: subBranchStampPos,
+        logo_scale: subBranchLogoScale,
+        stamp_scale: subBranchStampScale,
+        signature_scale: subBranchSignatureScale,
+        custom_stamps: subBranchCustomStamps,
+        zoom: subBranchZoom,
+        preview_invoice_type: previewInvoiceType,
         // Base fallback banking
         bank_name: (subBranchForm.gst_bank_name || subBranchForm.bank_name || subBranchForm.nongst_bank_name).trim(),
         account_holder: (subBranchForm.gst_account_holder || subBranchForm.account_holder || subBranchForm.nongst_account_holder).trim(),
@@ -1750,6 +1844,17 @@ export default function CompaniesMain() {
                         >
                           Reset Drag
                         </button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={saveCompany}
+                          disabled={saving}
+                          className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold h-7 px-3 text-xs gap-1 shadow-sm shrink-0 ml-auto"
+                          title="Save preview layout, signature/stamp positions, and live canvas modifications"
+                        >
+                          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                          {saving ? "Saving..." : "Save Preview"}
+                        </Button>
                       </div>
                     </div>
 
@@ -2334,6 +2439,17 @@ export default function CompaniesMain() {
                         >
                           Reset Drag
                         </button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={saveBranch}
+                          disabled={saving}
+                          className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold h-7 px-3 text-xs gap-1 shadow-sm shrink-0 ml-auto"
+                          title="Save preview layout, signature/stamp positions, and live canvas modifications for this branch"
+                        >
+                          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                          {saving ? "Saving..." : "Save Preview"}
+                        </Button>
                       </div>
                     </div>
 
@@ -2410,8 +2526,8 @@ export default function CompaniesMain() {
                                 received: 0,
                                 due: previewInvoiceType === "gst" ? 17700 : 15000,
                                 dueAmount: previewInvoiceType === "gst" ? 17700 : 15000,
-                                terms: pComp?.terms_conditions || "1. Payment is due within statutory terms.\n2. Goods & Services once delivered are subject to project sign-off.\n3. Disputed items must be notified within 7 days.",
-                                notes: pComp?.invoice_notes || "Thank you for your business."
+                                terms: branchForm.terms_conditions || pComp?.terms_conditions || "1. Payment is due within statutory terms.\n2. Goods & Services once delivered are subject to project sign-off.\n3. Disputed items must be notified within 7 days.",
+                                notes: branchForm.invoice_notes || pComp?.invoice_notes || "Thank you for your business."
                               } as any}
                               companyDetails={pComp}
                               activeBranch={{
@@ -2940,6 +3056,17 @@ export default function CompaniesMain() {
                         >
                           Reset Drag
                         </button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={saveSubBranch}
+                          disabled={saving}
+                          className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold h-7 px-3 text-xs gap-1 shadow-sm shrink-0 ml-auto"
+                          title="Save preview layout, signature/stamp positions, and live canvas modifications for this sub-branch"
+                        >
+                          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                          {saving ? "Saving..." : "Save Preview"}
+                        </Button>
                       </div>
                     </div>
 
@@ -3019,8 +3146,8 @@ export default function CompaniesMain() {
                                 received: 0,
                                 due: previewInvoiceType === "gst" ? 17700 : 15000,
                                 dueAmount: previewInvoiceType === "gst" ? 17700 : 15000,
-                                terms: pComp?.terms_conditions || "1. Payment is due within statutory terms.\n2. Goods & Services once delivered are subject to project sign-off.\n3. Disputed items must be notified within 7 days.",
-                                notes: pComp?.invoice_notes || "Thank you for your business."
+                                terms: subBranchForm.terms_conditions || pBranch?.terms_conditions || pComp?.terms_conditions || "1. Payment is due within statutory terms.\n2. Goods & Services once delivered are subject to project sign-off.\n3. Disputed items must be notified within 7 days.",
+                                notes: subBranchForm.invoice_notes || pBranch?.invoice_notes || pComp?.invoice_notes || "Thank you for your business."
                               } as any}
                               companyDetails={pComp}
                               activeBranch={pBranch}

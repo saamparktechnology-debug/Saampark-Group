@@ -82,6 +82,16 @@ export interface Branch {
   terms_conditions?: string
   invoice_notes?: string
   quotation_notes?: string
+  signature_position?: { x: number; y: number }
+  stamp_position?: { x: number; y: number }
+  logo_position?: { x: number; y: number }
+  logo_scale?: number
+  stamp_scale?: number
+  signature_scale?: number
+  custom_stamps?: any[]
+  zoom?: number
+  preview_scale?: string
+  preview_invoice_type?: string
   status: 'Active' | 'Inactive'
   createdAt?: string
 }
@@ -152,6 +162,18 @@ export interface SubBranch {
   nongst_payment_qr_url?: string
   terms_conditions?: string
   invoice_notes?: string
+  quotation_notes?: string
+  iso_certification?: string
+  signature_position?: { x: number; y: number }
+  stamp_position?: { x: number; y: number }
+  logo_position?: { x: number; y: number }
+  logo_scale?: number
+  stamp_scale?: number
+  signature_scale?: number
+  custom_stamps?: any[]
+  zoom?: number
+  preview_scale?: string
+  preview_invoice_type?: string
   status: 'Active' | 'Inactive'
   createdAt?: string
 }
@@ -206,14 +228,24 @@ export interface Company {
   nongst_bank_branch?: string
   nongst_upi_id?: string
   nongst_payment_qr_url?: string
-  // Invoice Customization
   terms_conditions?: string
   invoice_notes?: string
   quotation_notes?: string
+  iso_certification?: string
   signatory_name?: string
   signatory_designation?: string
   signature_image_url?: string
   stamp_image_url?: string
+  signature_position?: { x: number; y: number }
+  stamp_position?: { x: number; y: number }
+  logo_position?: { x: number; y: number }
+  logo_scale?: number
+  stamp_scale?: number
+  signature_scale?: number
+  custom_stamps?: any[]
+  zoom?: number
+  preview_scale?: string
+  preview_invoice_type?: string
   // SMTP / Email Dispatch Credentials (Per Company)
   smtp_host?: string
   smtp_port?: string | number

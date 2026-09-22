@@ -49,6 +49,16 @@ export interface Company {
   invoice_notes?: string
   quotation_notes?: string
   iso_certification?: string
+  signature_position?: { x: number; y: number }
+  stamp_position?: { x: number; y: number }
+  logo_position?: { x: number; y: number }
+  logo_scale?: number
+  stamp_scale?: number
+  signature_scale?: number
+  custom_stamps?: any[]
+  zoom?: number
+  preview_scale?: string
+  preview_invoice_type?: string
 }
 
 export interface Branch {
@@ -103,6 +113,19 @@ export interface Branch {
   nongst_bank_branch?: string
   nongst_upi_id?: string
   nongst_payment_qr_url?: string
+  cin?: string
+  msme_reg?: string
+  subtitle?: string
+  signature_position?: { x: number; y: number }
+  stamp_position?: { x: number; y: number }
+  logo_position?: { x: number; y: number }
+  logo_scale?: number
+  stamp_scale?: number
+  signature_scale?: number
+  custom_stamps?: any[]
+  zoom?: number
+  preview_scale?: string
+  preview_invoice_type?: string
 }
 
 export interface SubBranch {
@@ -124,6 +147,13 @@ export interface SubBranch {
   email?: string
   gstin?: string
   pan?: string
+  cin?: string
+  msme_reg?: string
+  subtitle?: string
+  iso_certification?: string
+  terms_conditions?: string
+  invoice_notes?: string
+  quotation_notes?: string
   bank_name?: string
   account_number?: string
   ifsc_code?: string
@@ -148,4 +178,15 @@ export interface SubBranch {
   nongst_payment_qr_url?: string
   signatory_name?: string
   signatory_designation?: string
+  signature_position?: { x: number; y: number }
+  stamp_position?: { x: number; y: number }
+  logo_position?: { x: number; y: number }
+  logo_scale?: number
+  stamp_scale?: number
+  signature_scale?: number
+  custom_stamps?: any[]
+  zoom?: number
+  preview_scale?: string
+  preview_invoice_type?: string
 }
+

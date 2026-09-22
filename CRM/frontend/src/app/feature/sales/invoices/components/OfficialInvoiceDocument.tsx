@@ -89,7 +89,7 @@ export function EditableText({
 
   if (!interactive) {
     const Tag = as
-    return <Tag className={className}>{value || placeholder}</Tag>
+    return <Tag className={className}>{value || ""}</Tag>
   }
 
   const Tag = as
@@ -183,19 +183,19 @@ export function OfficialInvoiceDocument({
   companyDetails,
   paySettings,
   interactive = false,
-  logoPosition = { x: 0, y: 0 },
+  logoPosition: propLogoPosition,
   onLogoPositionChange,
-  logoScale = 1,
+  logoScale: propLogoScale,
   onLogoScaleChange,
-  stampPosition = { x: 0, y: 0 },
+  stampPosition: propStampPosition,
   onStampPositionChange,
-  stampScale = 1,
+  stampScale: propStampScale,
   onStampScaleChange,
-  signaturePosition = { x: 0, y: 0 },
+  signaturePosition: propSignaturePosition,
   onSignaturePositionChange,
-  signatureScale = 1,
+  signatureScale: propSignatureScale,
   onSignatureScaleChange,
-  customStamps = [],
+  customStamps: propCustomStamps,
   onCustomStampMove,
   onCustomStampUpdate,
   onRemoveCustomStamp,
@@ -316,9 +316,25 @@ export function OfficialInvoiceDocument({
     }) || activeBranch || null
   }, [propActiveBranch, activeBranch, propActiveSubBranch, activeSubBranch, invoice.branchId, (invoice as any).branch_id, branches])
 
-  // ── Unified Entity Resolution (Specific Issuing Entity Priority) ──
   const isSubBranchIssued = Boolean(activeSubBranch)
   const isBranchIssued = Boolean(activeBranch) && !isSubBranchIssued
+  const activeEntity = isSubBranchIssued ? activeSubBranch : isBranchIssued ? activeBranch : activeCompany
+
+  const entitySigPos = (activeEntity as any)?.signature_position
+  const entityStampPos = (activeEntity as any)?.stamp_position
+  const entityLogoPos = (activeEntity as any)?.logo_position
+  const entityLogoScale = (activeEntity as any)?.logo_scale
+  const entityStampScale = (activeEntity as any)?.stamp_scale
+  const entitySigScale = (activeEntity as any)?.signature_scale
+  const entityCustomStamps = (activeEntity as any)?.custom_stamps
+
+  const logoPosition = propLogoPosition ?? entityLogoPos ?? { x: 0, y: 0 }
+  const logoScale = propLogoScale ?? entityLogoScale ?? 1
+  const stampPosition = propStampPosition ?? entityStampPos ?? { x: 0, y: 0 }
+  const stampScale = propStampScale ?? entityStampScale ?? 1
+  const signaturePosition = propSignaturePosition ?? entitySigPos ?? { x: 0, y: 0 }
+  const signatureScale = propSignatureScale ?? entitySigScale ?? 1
+  const customStamps: CustomTextStamp[] = (propCustomStamps && propCustomStamps.length > 0) ? propCustomStamps : (entityCustomStamps || [])
 
   const resolvedBrandName = activeSubBranch?.brand_name || activeSubBranch?.name || activeBranch?.brand_name || activeCompany?.brand_name || activeCompany?.name || "SAAMPARK"
   const resolvedDivisionName = (activeSubBranch?.division_name && activeSubBranch.division_name.trim()) 
@@ -751,7 +767,10 @@ export function OfficialInvoiceDocument({
   const hasBankDetails = Boolean(resolvedBankName || resolvedAccountNumber)
   const hasUpiDetails = Boolean(resolvedUpiId || customPaymentQrUrl)
   const hasContactInfo = Boolean(resolvedPhone || resolvedWebsite || resolvedEmail)
-  const hasLegalIds = Boolean(resolvedCin || (isGstInvoice && resolvedGstin) || resolvedPan || interactive)
+  const hasCin = Boolean(resolvedCin && resolvedCin.trim() && resolvedCin.trim().toLowerCase() !== "none" && resolvedCin.trim() !== "-")
+  const hasGstin = Boolean(isGstInvoice && resolvedGstin && resolvedGstin.trim() && resolvedGstin.trim().toLowerCase() !== "none" && resolvedGstin.trim() !== "-")
+  const hasPan = Boolean(resolvedPan && resolvedPan.trim() && resolvedPan.trim().toLowerCase() !== "none" && resolvedPan.trim() !== "-")
+  const hasLegalIds = Boolean(hasCin || hasGstin || hasPan)
 
 
 
@@ -882,10 +901,10 @@ export function OfficialInvoiceDocument({
             )}
           </div>
 
-          {/* Legal IDs: CIN, GSTIN (GST Only), PAN - All labels & numbers 100% editable */}
+          {/* Legal IDs: CIN, GSTIN (GST Only), PAN - Strictly render only when values are provided */}
           {hasLegalIds && (
             <p className="text-[10px] sm:text-[10.5px] font-semibold text-zinc-600 font-mono pt-1 flex items-center gap-2.5 flex-wrap">
-              {(resolvedCin || interactive) && (
+              {hasCin && (
                 <span className="inline-flex items-center gap-1">
                   <EditableText
                     value="CIN:"
@@ -902,9 +921,9 @@ export function OfficialInvoiceDocument({
                   />
                 </span>
               )}
-              {(isGstInvoice && (resolvedGstin || interactive)) && (
+              {hasGstin && (
                 <span className="inline-flex items-center gap-1">
-                  {(resolvedCin || interactive) ? <span className="text-zinc-300 mr-0.5">|</span> : null}
+                  {hasCin ? <span className="text-zinc-300 mr-0.5">|</span> : null}
                   <EditableText
                     value="GSTIN:"
                     interactive={interactive}
@@ -920,9 +939,9 @@ export function OfficialInvoiceDocument({
                   />
                 </span>
               )}
-              {(resolvedPan || interactive) && (
+              {hasPan && (
                 <span className="inline-flex items-center gap-1">
-                  {((resolvedCin || (isGstInvoice && resolvedGstin)) || interactive) ? <span className="text-zinc-300 mr-0.5">|</span> : null}
+                  {(hasCin || hasGstin) ? <span className="text-zinc-300 mr-0.5">|</span> : null}
                   <EditableText
                     value="PAN:"
                     interactive={interactive}
@@ -1939,7 +1958,7 @@ export function OfficialInvoiceDocument({
           className="a4-page bg-white text-zinc-900 font-sans p-5 sm:p-6 text-xs shadow-2xl border border-zinc-200/90 rounded-2xl w-full max-w-[794px] min-h-[1080px] mx-auto relative flex flex-col justify-between gap-3 sm:gap-3.5 overflow-visible print:w-[210mm] print:max-w-[210mm] print:h-[282mm] print:min-h-[282mm] print:max-h-[282mm] print:p-[6mm_8mm] print:gap-2 print:m-0 print:shadow-none print:border-none print:rounded-none page-break-after"
         >
           {/* Draggable Custom Text Stamps / Badges Overlay (on page 1) */}
-          {pg.isFirstPage && customStamps && customStamps.map(stamp => {
+          {pg.isFirstPage && customStamps && customStamps.map((stamp: CustomTextStamp) => {
             const curSize = stamp.fontSize || 12
             const curRot = stamp.rotation ?? (stamp.bgStyle === "stamp" ? -12 : 0)
             const curStyle = stamp.bgStyle || "stamp"
