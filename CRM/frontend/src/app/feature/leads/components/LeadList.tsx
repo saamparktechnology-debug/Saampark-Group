@@ -378,16 +378,30 @@ export function LeadList({
       if (effectiveBranch === "unassigned") {
         if (l.branchId || l.assignedBranchId || l.branchName || l.assignedBranchName) return false
       } else {
-        const targetBranchObj = branches.find(b => b.id === effectiveBranch || b.name.toLowerCase() === effectiveBranch.toLowerCase())
+        const targetStr = String(effectiveBranch).toLowerCase().trim()
+        const targetBranchObj = branches.find(b => 
+          String(b.id).toLowerCase().trim() === targetStr || 
+          String(b.code || "").toLowerCase().trim() === targetStr || 
+          b.name.toLowerCase().trim() === targetStr
+        )
         const targetBranchId = String(targetBranchObj?.id || effectiveBranch).toLowerCase().trim()
+        const targetBranchCode = String(targetBranchObj?.code || "").toLowerCase().trim()
         const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
 
         const lBranch = String(l.branchId || l.assignedBranchId || (l as any).branch_id || "").toLowerCase().trim()
         const lBranchName = String(l.branchName || l.assignedBranchName || (l as any).branch_name || "").toLowerCase().trim()
 
         const bMatch =
-          (lBranch && (lBranch === targetBranchId || (targetBranchName && lBranch === targetBranchName))) ||
-          (lBranchName && (lBranchName === targetBranchName || lBranchName === targetBranchId))
+          (lBranch && (
+            lBranch === targetBranchId || 
+            (targetBranchCode && lBranch === targetBranchCode) || 
+            (targetBranchName && lBranch === targetBranchName)
+          )) ||
+          (lBranchName && (
+            lBranchName === targetBranchName || 
+            lBranchName === targetBranchId || 
+            (targetBranchCode && lBranchName === targetBranchCode)
+          ))
 
         if (!bMatch) return false
       }
@@ -486,7 +500,7 @@ export function LeadList({
       setSelectedLeadIds([])
       setIsTransferModalOpen(false)
       if (updated.length > 0 && onLeadUpdated) {
-        onLeadUpdated(updated[0])
+        updated.forEach((ul) => onLeadUpdated(ul))
       }
     } catch (err) {
       console.error("Error transferring leads to branch:", err)
@@ -1614,20 +1628,20 @@ export function LeadList({
                             }}
                             className={`group/lock px-2 py-0.5 rounded text-[11px] font-semibold transition-all duration-200 shadow-2xs flex items-center gap-1 cursor-pointer ${
                               isLocked
-                                ? "bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-300 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800"
-                                : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 hover:text-zinc-900 border border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700"
+                                ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800"
+                                : "bg-zinc-100 text-zinc-600 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300 border border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700"
                             }`}
                             title={isLocked ? "Lead is Locked. Click to Unlock" : "Lead is Unlocked. Click to Lock"}
                           >
                             {isLocked ? (
                               <>
-                                <Lock size={12} className="text-rose-600 dark:text-rose-400 group-hover/lock:scale-110 transition-transform duration-300" />
-                                <span className="text-rose-600 dark:text-rose-400 font-bold">Lock</span>
+                                <Unlock size={12} className="text-emerald-600 dark:text-emerald-400 group-hover/lock:scale-110 group-hover/lock:rotate-[-18deg] transition-transform duration-300" />
+                                <span className="text-emerald-700 dark:text-emerald-400 font-bold">Unlock</span>
                               </>
                             ) : (
                               <>
-                                <Unlock size={12} className="text-zinc-500 group-hover/lock:rotate-[-18deg] group-hover/lock:scale-110 transition-transform duration-300" />
-                                <span>Unlock</span>
+                                <Lock size={12} className="text-zinc-500 group-hover/lock:text-rose-600 group-hover/lock:scale-110 transition-transform duration-300" />
+                                <span>Lock</span>
                               </>
                             )}
                           </button>

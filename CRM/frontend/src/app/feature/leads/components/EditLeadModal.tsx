@@ -281,10 +281,17 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
     const finalReminderDate = isNoReminder ? "None" : (reminderDate || "None")
     const finalReminderTime = (isNoReminder || finalReminderDate === "None") ? "None" : (reminderTime || "11:30 AM")
 
-    const finalCompanyId = isSuperOrAdmin ? (selectedCompanyId || "tech") : (lead.companyId || activeCompanyId || user?.companyId || "tech")
-    const finalBranchId = isSuperOrAdmin ? (selectedBranchId.trim() ? selectedBranchId : undefined) : (lead.branchId || undefined)
-    const currentBranchObj = finalBranchId ? branches.find(b => b.id === finalBranchId) : undefined
-    const finalBranchName = currentBranchObj?.name || (finalBranchId ? user?.branchName : undefined)
+    const cleanBranchId = selectedBranchId.trim()
+    const targetBranchObj = cleanBranchId ? branches.find(b => 
+      String(b.id).toLowerCase().trim() === cleanBranchId.toLowerCase() ||
+      String(b.code || "").toLowerCase().trim() === cleanBranchId.toLowerCase() ||
+      b.name.toLowerCase().trim() === cleanBranchId.toLowerCase()
+    ) : undefined
+
+    const finalBranchId = targetBranchObj ? String(targetBranchObj.id) : (cleanBranchId || undefined)
+    const finalBranchName = targetBranchObj?.name || (finalBranchId ? user?.branchName : undefined)
+    const branchCompId = targetBranchObj?.companyId || (targetBranchObj as any)?.company_id
+    const finalCompanyId = branchCompId || (isSuperOrAdmin ? (selectedCompanyId || "tech") : (lead.companyId || activeCompanyId || user?.companyId || "tech"))
 
     setIsSubmitting(true)
     try {
@@ -336,6 +343,7 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
       const unlocked = await unlockLead(lead.id, lead.companyId || selectedCompanyId)
       onLeadUpdated(unlocked)
       alert("Lead unlocked successfully! Caller can now update this lead.")
+      onClose()
     } catch (err: any) {
       alert(err?.message || "Failed to unlock lead")
     }

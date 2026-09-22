@@ -220,8 +220,20 @@ export const getLeads = async (companyId?: string): Promise<Lead[]> => {
     for (const l of (Array.isArray(allData) ? allData : [])) {
       if (l && l.id && String(l.companyId || "").toLowerCase().trim() === effectiveComp.toLowerCase().trim()) {
         const lId = String(l.id).toLowerCase().trim()
-        if (!map.has(lId)) {
+        const existing = map.get(lId)
+        if (!existing) {
           map.set(lId, l)
+        } else {
+          map.set(lId, {
+            ...existing,
+            ...l,
+            branchId: l.branchId !== undefined ? l.branchId : existing.branchId,
+            branchName: l.branchName !== undefined ? l.branchName : existing.branchName,
+            assignedBranchId: l.assignedBranchId !== undefined ? l.assignedBranchId : existing.assignedBranchId,
+            assignedBranchName: l.assignedBranchName !== undefined ? l.assignedBranchName : existing.assignedBranchName,
+            isLocked: l.isLocked !== undefined ? l.isLocked : existing.isLocked,
+            lockedReason: l.lockedReason !== undefined ? l.lockedReason : existing.lockedReason,
+          })
         }
       }
     }
@@ -262,7 +274,8 @@ export const getLeads = async (companyId?: string): Promise<Lead[]> => {
 
     // 2. Active leads: check if reminder date is overdue (passed end of date 23:59:59)
     const overdue = isReminderDateOverdue(lead.reminderDate)
-    if (overdue && !lead.isLocked) {
+    const isExplicitlyUnlocked = lead.lockedReason?.includes("Unlocked") || (lead as any).unlockedByAdmin === true
+    if (overdue && !lead.isLocked && !isExplicitlyUnlocked) {
       hasChanges = true
       return {
         ...lead,
@@ -628,27 +641,50 @@ export const deleteLead = async (id: string, companyId?: string): Promise<boolea
 }
 
 export const unlockLead = async (id: string, companyId?: string): Promise<Lead> => {
-  const tomorrow = new Date()
-  tomorrow.setDate(tomorrow.getDate() + 1)
-  const d = String(tomorrow.getDate()).padStart(2, "0")
-  const m = MONTH_NAMES_SHORT[tomorrow.getMonth()]
-  const y = tomorrow.getFullYear()
-  const formattedTomorrow = `${d} ${m} ${y}`
+  let targetComp = companyId
+  const allLeads = await fetchModuleDataFromDB<Lead[]>("leads", [], "all").catch(() => [])
+  const lead = allLeads.find(l => String(l.id).toLowerCase().trim() === String(id).toLowerCase().trim())
+  if (lead?.companyId) {
+    targetComp = lead.companyId
+  }
+
+  const updates: Partial<Lead> & { unlockedByAdmin?: boolean } = {
+    isLocked: false,
+    lockedReason: "Unlocked by Admin",
+    unlockedByAdmin: true,
+  }
+
+  // If reminder date was actually overdue, advance it to tomorrow so SLA has time
+  if (lead?.reminderDate && isReminderDateOverdue(lead.reminderDate)) {
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    const d = String(tomorrow.getDate()).padStart(2, "0")
+    const m = MONTH_NAMES_SHORT[tomorrow.getMonth()]
+    const y = tomorrow.getFullYear()
+    updates.reminderDate = `${d} ${m} ${y}`
+  }
+
+  return updateLead(id, updates as any, "Super Admin", targetComp)
+}
+
+export const lockLead = async (id: string, reason?: string, companyId?: string): Promise<Lead> => {
+  let targetComp = companyId
+  const allLeads = await fetchModuleDataFromDB<Lead[]>("leads", [], "all").catch(() => [])
+  const lead = allLeads.find(l => String(l.id).toLowerCase().trim() === String(id).toLowerCase().trim())
+  if (lead?.companyId) {
+    targetComp = lead.companyId
+  }
 
   return updateLead(
     id,
     {
-      isLocked: false,
-      lockedReason: undefined,
-      reminderDate: formattedTomorrow,
-    },
+      isLocked: true,
+      lockedReason: reason || "Manually locked by Admin",
+      unlockedByAdmin: false,
+    } as any,
     "Super Admin",
-    companyId
+    targetComp
   )
-}
-
-export const lockLead = async (id: string, reason?: string, companyId?: string): Promise<Lead> => {
-  return updateLead(id, { isLocked: true, lockedReason: reason || "Manually locked by Admin" }, "Super Admin", companyId)
 }
 
 export const transferLeadsToBranch = async (
@@ -659,57 +695,96 @@ export const transferLeadsToBranch = async (
   transferredByRole: string = "Admin",
   companyId?: string
 ): Promise<Lead[]> => {
-  const current = await fetchModuleDataFromDB<Lead[]>("leads", [], companyId)
-  const idSet = new Set(leadIds.map(id => String(id)))
+  const idSet = new Set(leadIds.map(id => String(id).toLowerCase().trim()))
   const nowFormatted = new Date().toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' })
 
-  const updated = current.map(lead => {
-    if (idSet.has(String(lead.id))) {
-      return {
-        ...lead,
-        branchId,
-        branchName,
-        assignedBranchId: branchId,
-        assignedBranchName: branchName,
-        transferredBy,
-        transferredByRole,
-        transferredAt: nowFormatted,
-      }
-    }
-    return lead
-  })
+  // Find destination branch details flexibly by ID, code, or name
+  let branches: any[] = []
+  try {
+    const { useAuthStore } = require("@/store/useAuthStore")
+    branches = useAuthStore.getState().branches || []
+  } catch {}
 
-  await saveModuleDataToDB("leads", updated, companyId)
+  const targetBranch = branches.find(b => 
+    String(b.id).toLowerCase().trim() === String(branchId).toLowerCase().trim() ||
+    String(b.code || "").toLowerCase().trim() === String(branchId).toLowerCase().trim() ||
+    (b.name && b.name.toLowerCase().trim() === branchName.toLowerCase().trim())
+  )
 
-  // Also sync in master 'all' scope
-  const master = await fetchModuleDataFromDB<Lead[]>("leads", [], "all")
+  const effectiveBranchId = String(targetBranch?.id || branchId)
+  const effectiveBranchName = targetBranch?.name || branchName
+  const targetBranchCompanyId = (targetBranch?.companyId || targetBranch?.company_id || "").toLowerCase().trim()
+
+  // Load all master leads
+  const master = await fetchModuleDataFromDB<Lead[]>("leads", [], "all").catch(() => [])
+  const updatedLeads: Lead[] = []
+
   const masterUpdated = master.map(lead => {
-    if (idSet.has(String(lead.id))) {
-      return {
+    if (idSet.has(String(lead.id).toLowerCase().trim())) {
+      const finalComp = targetBranchCompanyId || lead.companyId || (companyId && companyId !== "all" ? companyId : "tech")
+      const updatedItem: Lead = {
         ...lead,
-        branchId,
-        branchName,
-        assignedBranchId: branchId,
-        assignedBranchName: branchName,
+        branchId: effectiveBranchId,
+        branchName: effectiveBranchName,
+        assignedBranchId: effectiveBranchId,
+        assignedBranchName: effectiveBranchName,
+        companyId: finalComp,
         transferredBy,
         transferredByRole,
         transferredAt: nowFormatted,
       }
+      updatedLeads.push(updatedItem)
+      return updatedItem
     }
     return lead
   })
+
   await saveModuleDataToDB("leads", masterUpdated, "all")
+
+  // Also sync per-company stores for all touched companies
+  const touchedCompanies = new Set<string>()
+  if (companyId && companyId !== "all") touchedCompanies.add(companyId.toLowerCase().trim())
+  if (targetBranchCompanyId && targetBranchCompanyId !== "all") touchedCompanies.add(targetBranchCompanyId)
+  updatedLeads.forEach(l => {
+    if (l.companyId && l.companyId !== "all") touchedCompanies.add(l.companyId.toLowerCase().trim())
+  })
+  touchedCompanies.add("tech")
+
+  for (const c of Array.from(touchedCompanies)) {
+    const cList = await fetchModuleDataFromDB<Lead[]>("leads", [], c).catch(() => [])
+    const cMap = new Map<string, Lead>()
+    for (const l of cList) {
+      if (l && l.id) cMap.set(String(l.id).toLowerCase().trim(), l)
+    }
+    for (const ul of updatedLeads) {
+      const ulId = String(ul.id).toLowerCase().trim()
+      const ulComp = (ul.companyId || "tech").toLowerCase().trim()
+      if (ulComp === c) {
+        cMap.set(ulId, ul)
+      } else {
+        // If moved to a different company, remove from old company
+        cMap.delete(ulId)
+      }
+    }
+    await saveModuleDataToDB("leads", Array.from(cMap.values()), c).catch(() => {})
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("storage"))
+    window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+    window.dispatchEvent(new CustomEvent("saampark_leads_updated"))
+  }
 
   recordActivityLog({
     type: "lead",
     module: "Leads",
     action: "Leads Transferred to Branch",
-    description: `${leadIds.length} lead(s) transferred to branch "${branchName}" by ${transferredBy}`,
-    companyId,
-    branchId,
-    branchName,
+    description: `${leadIds.length} lead(s) transferred to branch "${effectiveBranchName}" by ${transferredBy}`,
+    companyId: targetBranchCompanyId || companyId,
+    branchId: effectiveBranchId,
+    branchName: effectiveBranchName,
   }).catch(() => {})
 
-  return updated.filter(l => idSet.has(String(l.id)))
+  return updatedLeads
 }
 

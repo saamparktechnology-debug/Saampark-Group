@@ -257,11 +257,17 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
     const finalReminderDate = isNoReminder ? "None" : (reminderDate || "None")
     const finalReminderTime = (isNoReminder || finalReminderDate === "None") ? "None" : (reminderTime || "11:30 AM")
 
-    const finalCompanyId = isSuperOrAdmin ? (selectedCompanyId || activeCompanyId || "tech") : (activeCompanyId || user?.companyId || "tech")
-    const cleanBranchId = selectedBranchId.trim() || activeBranchId || user?.branchId || ""
-    const finalBranchId = cleanBranchId || undefined
-    const currentBranchObj = finalBranchId ? branches.find(b => b.id === finalBranchId) : undefined
-    const finalBranchName = currentBranchObj?.name || (finalBranchId ? user?.branchName : undefined)
+    const cleanBranchId = selectedBranchId.trim()
+    const targetBranchObj = cleanBranchId ? branches.find(b => 
+      String(b.id).toLowerCase().trim() === cleanBranchId.toLowerCase() ||
+      String(b.code || "").toLowerCase().trim() === cleanBranchId.toLowerCase() ||
+      b.name.toLowerCase().trim() === cleanBranchId.toLowerCase()
+    ) : undefined
+
+    const finalBranchId = targetBranchObj ? String(targetBranchObj.id) : (cleanBranchId || undefined)
+    const finalBranchName = targetBranchObj?.name || (finalBranchId ? user?.branchName : undefined)
+    const branchCompId = targetBranchObj?.companyId || (targetBranchObj as any)?.company_id
+    const finalCompanyId = branchCompId || (isSuperOrAdmin ? (selectedCompanyId || activeCompanyId || "tech") : (activeCompanyId || user?.companyId || "tech"))
 
     setIsSubmitting(true)
     try {

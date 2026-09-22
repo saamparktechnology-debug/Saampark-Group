@@ -536,16 +536,30 @@ export function LeadKanban({
       if (effectiveBranch === "unassigned") {
         if (l.branchId || l.assignedBranchId || l.branchName || l.assignedBranchName) return false
       } else {
-        const targetBranchObj = branches.find(b => b.id === effectiveBranch || b.name.toLowerCase() === effectiveBranch.toLowerCase())
+        const targetStr = String(effectiveBranch).toLowerCase().trim()
+        const targetBranchObj = branches.find(b => 
+          String(b.id).toLowerCase().trim() === targetStr || 
+          String(b.code || "").toLowerCase().trim() === targetStr || 
+          b.name.toLowerCase().trim() === targetStr
+        )
         const targetBranchId = String(targetBranchObj?.id || effectiveBranch).toLowerCase().trim()
+        const targetBranchCode = String(targetBranchObj?.code || "").toLowerCase().trim()
         const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
 
         const lBranch = String(l.branchId || l.assignedBranchId || (l as any).branch_id || "").toLowerCase().trim()
         const lBranchName = String(l.branchName || l.assignedBranchName || (l as any).branch_name || "").toLowerCase().trim()
 
         const bMatch =
-          (lBranch && (lBranch === targetBranchId || (targetBranchName && lBranch === targetBranchName))) ||
-          (lBranchName && (lBranchName === targetBranchName || lBranchName === targetBranchId))
+          (lBranch && (
+            lBranch === targetBranchId || 
+            (targetBranchCode && lBranch === targetBranchCode) || 
+            (targetBranchName && lBranch === targetBranchName)
+          )) ||
+          (lBranchName && (
+            lBranchName === targetBranchName || 
+            lBranchName === targetBranchId || 
+            (targetBranchCode && lBranchName === targetBranchCode)
+          ))
 
         if (!bMatch) return false
       }
@@ -1616,7 +1630,7 @@ export function LeadKanban({
                                   className="w-7 h-7 min-w-[28px] min-h-[28px] rounded-lg bg-zinc-100 hover:bg-rose-100 text-zinc-600 hover:text-rose-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-rose-950 dark:hover:text-rose-300 flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-2xs group/kblock"
                                   title="Admin Manual Lock Lead"
                                 >
-                                  <Unlock size={13} className="group-hover/kblock:rotate-[-18deg] transition-transform duration-300 pointer-events-none" />
+                                  <Lock size={13} className="group-hover/kblock:scale-110 transition-transform duration-300 pointer-events-none" />
                                 </button>
                               )}
                             </div>

@@ -69,6 +69,10 @@ export default function LeadsMain() {
   const [isLoading, setIsLoading] = React.useState(true)
 
   React.useEffect(() => {
+    // Ensure all fresh branches and companies are loaded in store
+    useAuthStore.getState().fetchBranches?.().catch(() => {})
+    useAuthStore.getState().fetchCompanies?.().catch(() => {})
+
     const fetchFreshLeads = async (showLoading = false) => {
       if (showLoading) setIsLoading(true)
       try {
@@ -179,6 +183,35 @@ export default function LeadsMain() {
     // activeBranchId takes priority; fall back to user's assigned branch only for non-admin
     const targetBranch = freshBranchId || (isSuperOrAdmin ? null : freshUser?.branchId)
 
+    const matchLeadBranch = (l: Lead, bTarget: string | null) => {
+      if (!bTarget || bTarget === "all") return true
+      const lBranch = String(l.branchId || (l as any).assignedBranchId || (l as any).branch_id || "").toLowerCase().trim()
+      const lBranchName = String(l.branchName || (l as any).assignedBranchName || (l as any).branch_name || "").toLowerCase().trim()
+      const targetStr = String(bTarget).toLowerCase().trim()
+
+      const targetBranchObj = freshBranches.find(b => 
+        String(b.id).toLowerCase().trim() === targetStr || 
+        String(b.code || "").toLowerCase().trim() === targetStr || 
+        b.name.toLowerCase().trim() === targetStr
+      )
+      const targetBranchId = String(targetBranchObj?.id || bTarget).toLowerCase().trim()
+      const targetBranchCode = String(targetBranchObj?.code || "").toLowerCase().trim()
+      const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
+
+      return Boolean(
+        (lBranch && (
+          lBranch === targetBranchId ||
+          (targetBranchCode && lBranch === targetBranchCode) ||
+          (targetBranchName && lBranch === targetBranchName)
+        )) ||
+        (lBranchName && (
+          lBranchName === targetBranchName ||
+          lBranchName === targetBranchId ||
+          (targetBranchCode && lBranchName === targetBranchCode)
+        ))
+      )
+    }
+
     // Admins see all leads across companies and branches (or scoped to their assigned branch)
     if (isSuperOrAdmin) {
       return leads.filter((l) => {
@@ -192,18 +225,7 @@ export default function LeadsMain() {
         }
 
         if (targetBranch && targetBranch !== "all") {
-          const lBranch = String(l.branchId || (l as any).assignedBranchId || (l as any).branch_id || "").toLowerCase().trim()
-          const lBranchName = String(l.branchName || (l as any).assignedBranchName || (l as any).branch_name || "").toLowerCase().trim()
-          const targetBranchObj = freshBranches.find(b => b.id === targetBranch || b.name.toLowerCase() === targetBranch.toLowerCase())
-          const targetBranchId = String(targetBranchObj?.id || targetBranch).toLowerCase().trim()
-          const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
-
-          // Strict: if branch filter is active, lead MUST have a matching branchId/name
-          const isBranchMatch =
-            (lBranch && (lBranch === targetBranchId || (targetBranchName && lBranch === targetBranchName))) ||
-            (lBranchName && (lBranchName === targetBranchName || lBranchName === targetBranchId))
-
-          if (!isBranchMatch) return false
+          if (!matchLeadBranch(l, targetBranch)) return false
         }
 
         return true
@@ -222,19 +244,7 @@ export default function LeadsMain() {
         const cEmail = ((l as any).createdByEmail || "").toLowerCase().trim()
         const createdBy = (l.createdBy || "").toLowerCase().trim()
 
-        if (targetBranch) {
-          const lBranch = String(l.branchId || (l as any).assignedBranchId || (l as any).branch_id || "").toLowerCase().trim()
-          const lBranchName = String(l.branchName || (l as any).assignedBranchName || (l as any).branch_name || "").toLowerCase().trim()
-          const targetBranchObj = freshBranches.find(b => b.id === targetBranch || b.name.toLowerCase() === targetBranch.toLowerCase())
-          const targetBranchId = String(targetBranchObj?.id || targetBranch).toLowerCase().trim()
-          const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
-
-          const isBranchMatch =
-            (lBranch && (lBranch === targetBranchId || (targetBranchName && lBranch === targetBranchName))) ||
-            (lBranchName && (lBranchName === targetBranchName || lBranchName === targetBranchId))
-
-          if (!isBranchMatch) return false
-        }
+        if (targetBranch && !matchLeadBranch(l, targetBranch)) return false
 
         return (
           (uId && cId === uId) ||
@@ -253,19 +263,7 @@ export default function LeadsMain() {
         return false
       }
 
-      if (targetBranch) {
-        const lBranch = String(l.branchId || (l as any).assignedBranchId || (l as any).branch_id || "").toLowerCase().trim()
-        const lBranchName = String(l.branchName || (l as any).assignedBranchName || (l as any).branch_name || "").toLowerCase().trim()
-        const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === targetBranch.toLowerCase())
-        const targetBranchId = String(targetBranchObj?.id || targetBranch).toLowerCase().trim()
-        const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
-
-        const isBranchMatch =
-          (lBranch && (lBranch === targetBranchId || (targetBranchName && lBranch === targetBranchName))) ||
-          (lBranchName && (lBranchName === targetBranchName || lBranchName === targetBranchId))
-
-        if (!isBranchMatch) return false
-      }
+      if (targetBranch && !matchLeadBranch(l, targetBranch)) return false
 
       const caller = (l.caller || "").toLowerCase().trim()
       const owner = (l.owner || "").toLowerCase().trim()
