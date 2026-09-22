@@ -104,6 +104,49 @@ export function isReminderDateOverdue(dateStr?: string): boolean {
   return now.getTime() > parsed.getTime()
 }
 
+export function isLeadClientPrivate(lead?: Lead | null): boolean {
+  if (!lead) return false
+  const role = (lead.createdByRole || "").toLowerCase().trim()
+  return (lead as any).isClientPrivate === true || role === "clients" || role === "client"
+}
+
+export function canUserUnlockLead(user: any, lead?: Lead | null): boolean {
+  if (!user || !lead) return false
+  const userRole = (user.role || "").trim()
+  const isSuperAdmin = userRole === "Super Admin"
+
+  // If lead was added by a client:
+  if (isLeadClientPrivate(lead)) {
+    // 1. Super Admin has full overarching authority
+    if (isSuperAdmin) return true
+
+    // 2. ONLY the specific client who created this lead can unlock it
+    if (userRole === "Clients" || userRole === "Client") {
+      const uId = String(user.id || "").toLowerCase().trim()
+      const uEmail = (user.email || "").toLowerCase().trim()
+      const uName = (user.name || "").toLowerCase().trim()
+
+      const cId = String(lead.createdById || "").toLowerCase().trim()
+      const cEmail = (lead.createdByEmail || "").toLowerCase().trim()
+      const cName = (lead.createdByName || lead.createdBy || "").toLowerCase().trim()
+
+      if (uId && cId && uId === cId) return true
+      if (uEmail && cEmail && uEmail === cEmail) return true
+      if (uName && cName && uName === cName) return true
+    }
+
+    // Admins, telecallers, other clients, teams CANNOT unlock client leads
+    return false
+  }
+
+  // Standard company lead (not added by client): Super Admin and Admin can unlock
+  return userRole === "Super Admin" || userRole === "Admin"
+}
+
+export function canUserLockLead(user: any, lead?: Lead | null): boolean {
+  return canUserUnlockLead(user, lead)
+}
+
 export async function syncLeadReminderTask(lead: Lead): Promise<void> {
   if (!lead || !lead.name) return
   const rDate = (lead.reminderDate || "").toString().toLowerCase().trim()
@@ -233,6 +276,12 @@ export const getLeads = async (companyId?: string): Promise<Lead[]> => {
             assignedBranchName: l.assignedBranchName !== undefined ? l.assignedBranchName : existing.assignedBranchName,
             isLocked: l.isLocked !== undefined ? l.isLocked : existing.isLocked,
             lockedReason: l.lockedReason !== undefined ? l.lockedReason : existing.lockedReason,
+            isExplicitlyUnlocked: (l as any).isExplicitlyUnlocked !== undefined ? (l as any).isExplicitlyUnlocked : (existing as any).isExplicitlyUnlocked,
+            unlockedByAdmin: (l as any).unlockedByAdmin !== undefined ? (l as any).unlockedByAdmin : (existing as any).unlockedByAdmin,
+            unlockedByClient: (l as any).unlockedByClient !== undefined ? (l as any).unlockedByClient : (existing as any).unlockedByClient,
+            unlockedBy: (l as any).unlockedBy !== undefined ? (l as any).unlockedBy : (existing as any).unlockedBy,
+            unlockedByRole: (l as any).unlockedByRole !== undefined ? (l as any).unlockedByRole : (existing as any).unlockedByRole,
+            unlockedAt: (l as any).unlockedAt !== undefined ? (l as any).unlockedAt : (existing as any).unlockedAt,
           })
         }
       }
@@ -272,10 +321,22 @@ export const getLeads = async (companyId?: string): Promise<Lead[]> => {
       return lead
     }
 
-    // 2. Active leads: check if reminder date is overdue (passed end of date 23:59:59)
+    // 2. Explicitly unlocked leads MUST STAY UNLOCKED:
+    const isExplicitlyUnlocked =
+      lead.isLocked === false && (
+        (lead as any).isExplicitlyUnlocked === true ||
+        lead.lockedReason?.includes("Unlocked") ||
+        (lead as any).unlockedByAdmin === true ||
+        (lead as any).unlockedByClient === true
+      )
+
+    if (isExplicitlyUnlocked) {
+      return lead
+    }
+
+    // 3. Active leads: check if reminder date is overdue (passed end of date 23:59:59)
     const overdue = isReminderDateOverdue(lead.reminderDate)
-    const isExplicitlyUnlocked = lead.lockedReason?.includes("Unlocked") || (lead as any).unlockedByAdmin === true
-    if (overdue && !lead.isLocked && !isExplicitlyUnlocked) {
+    if (overdue && !lead.isLocked) {
       hasChanges = true
       return {
         ...lead,
@@ -451,15 +512,21 @@ export const addLead = async (leadData: Omit<Lead, "id">, companyId?: string): P
   return newLead
 }
 
-export const updateLead = async (id: string, updates: Partial<Lead>, userRole?: string, companyId?: string): Promise<Lead> => {
-  let authState: any = null
-  if (typeof window !== "undefined") {
+export const updateLead = async (id: string, updates: Partial<Lead>, userRole?: string | any, companyId?: string): Promise<Lead> => {
+  let currentUserObj: any = typeof userRole === "object" && userRole !== null ? userRole : null
+  const effectiveRole = typeof userRole === "string" ? userRole : (currentUserObj?.role || "Super Admin")
+
+  if (!currentUserObj && typeof window !== "undefined") {
     try {
       const { useAuthStore } = require("@/store/useAuthStore")
-      authState = useAuthStore.getState()
+      currentUserObj = useAuthStore.getState().user
     } catch {}
   }
-  const isSuperOrAdmin = userRole === "Super Admin" || userRole === "Admin" || authState?.user?.role === "Super Admin" || authState?.user?.role === "Admin"
+  const isSuperOrAdmin =
+    effectiveRole === "Super Admin" ||
+    effectiveRole === "Admin" ||
+    currentUserObj?.role === "Super Admin" ||
+    currentUserObj?.role === "Admin"
 
   // Find target lead across specified company or all partitions
   let target: Lead | null = null
@@ -494,8 +561,18 @@ export const updateLead = async (id: string, updates: Partial<Lead>, userRole?: 
   const statusLower = (finalStatus || "").toLowerCase().trim()
   const isWonOrLost = statusLower === "won" || statusLower === "lost"
 
-  // Prevent callers/teams from updating a locked lead unless being explicitly unlocked by Admin or moving to Won/Lost
-  if (target.isLocked && !isSuperOrAdmin && updates.isLocked !== false && !isWonOrLost) {
+  const isClientCreator =
+    currentUserObj &&
+    isLeadClientPrivate(target) &&
+    canUserUnlockLead(currentUserObj, target)
+
+  const isAllowedToEditLocked = isSuperOrAdmin || isClientCreator
+
+  // Prevent callers/teams from updating a locked lead unless being explicitly unlocked or moving to Won/Lost
+  if (target.isLocked && !isAllowedToEditLocked && updates.isLocked !== false && !isWonOrLost) {
+    if (isLeadClientPrivate(target)) {
+      throw new Error("This lead was added by a client and is locked. Only that specific client (or Super Admin) can unlock or edit it.")
+    }
     throw new Error("This lead is locked due to missing daily updates. Only an Admin or Super Admin can unlock it.")
   }
 
@@ -503,32 +580,44 @@ export const updateLead = async (id: string, updates: Partial<Lead>, userRole?: 
 
   let nextIsLocked = target.isLocked
   let nextReason = target.lockedReason
+  let nextIsExplicitlyUnlocked = (target as any).isExplicitlyUnlocked
 
   // Priority order for lock status:
   if (updates.isLocked === false) {
-    // Explicit Admin Unlock ALWAYS clears lock
+    // Explicit Unlock ALWAYS clears lock and preserves unlock reason
     nextIsLocked = false
-    nextReason = undefined
+    nextReason = updates.lockedReason || "Unlocked"
+    nextIsExplicitlyUnlocked = true
   } else if (updates.isLocked === true) {
-    // Explicit Admin Lock ALWAYS locks
+    // Explicit Lock ALWAYS locks
     nextIsLocked = true
-    nextReason = updates.lockedReason || "Manually locked by Admin"
+    nextReason = updates.lockedReason || (isClientCreator ? "Manually locked by Client" : "Manually locked by Admin")
+    nextIsExplicitlyUnlocked = false
   } else if (statusLower === "won") {
     nextIsLocked = true
     nextReason = "Won: Lead is finalized and converted to Client."
+    nextIsExplicitlyUnlocked = false
   } else if (statusLower === "lost") {
     nextIsLocked = false
     nextReason = undefined
+    nextIsExplicitlyUnlocked = false
   } else if (target.isLocked && target.lockedReason?.includes("Manually locked")) {
     // Retain manual lock unless explicitly unlocked
     nextIsLocked = true
     nextReason = target.lockedReason
+    nextIsExplicitlyUnlocked = false
+  } else if (target.isLocked === false && (nextIsExplicitlyUnlocked || target.lockedReason?.includes("Unlocked"))) {
+    // Retain unlocked state! Never auto-relock a lead that was unlocked!
+    nextIsLocked = false
+    nextReason = target.lockedReason || "Unlocked"
   } else if (finalReminderDate && isReminderDateOverdue(finalReminderDate)) {
     nextIsLocked = true
     nextReason = "Overdue: Lead reminder date expired."
+    nextIsExplicitlyUnlocked = false
   } else if (finalReminderDate && !isReminderDateOverdue(finalReminderDate)) {
     nextIsLocked = false
     nextReason = undefined
+    nextIsExplicitlyUnlocked = false
   }
 
   const oldCompanyId = (target.companyId || foundComp || "tech").toLowerCase().trim()
@@ -540,6 +629,7 @@ export const updateLead = async (id: string, updates: Partial<Lead>, userRole?: 
     companyId: newCompanyId,
     isLocked: nextIsLocked,
     lockedReason: nextReason,
+    isExplicitlyUnlocked: nextIsExplicitlyUnlocked,
   }
 
   // Save to new company
@@ -640,49 +730,139 @@ export const deleteLead = async (id: string, companyId?: string): Promise<boolea
   return true
 }
 
-export const unlockLead = async (id: string, companyId?: string): Promise<Lead> => {
-  let targetComp = companyId
+export const unlockLead = async (
+  id: string,
+  userOrCompanyId?: any,
+  companyIdParam?: string
+): Promise<Lead> => {
+  let currentUser: any = null
+  let targetComp: string | undefined = undefined
+
+  if (typeof userOrCompanyId === "object" && userOrCompanyId !== null) {
+    currentUser = userOrCompanyId
+    targetComp = companyIdParam
+  } else if (typeof userOrCompanyId === "string") {
+    if (userOrCompanyId === "Super Admin" || userOrCompanyId === "Admin") {
+      currentUser = { role: userOrCompanyId }
+      targetComp = companyIdParam
+    } else {
+      targetComp = userOrCompanyId
+    }
+  }
+
+  if (!currentUser && typeof window !== "undefined") {
+    try {
+      const { useAuthStore } = require("@/store/useAuthStore")
+      currentUser = useAuthStore.getState().user
+    } catch {}
+  }
+
   const allLeads = await fetchModuleDataFromDB<Lead[]>("leads", [], "all").catch(() => [])
-  const lead = allLeads.find(l => String(l.id).toLowerCase().trim() === String(id).toLowerCase().trim())
+  const compLeads = targetComp ? await fetchModuleDataFromDB<Lead[]>("leads", [], targetComp).catch(() => []) : []
+  const lead =
+    allLeads.find(l => String(l.id).toLowerCase().trim() === String(id).toLowerCase().trim()) ||
+    compLeads.find(l => String(l.id).toLowerCase().trim() === String(id).toLowerCase().trim())
+
   if (lead?.companyId) {
     targetComp = lead.companyId
   }
 
-  const updates: Partial<Lead> & { unlockedByAdmin?: boolean } = {
+  if (currentUser && lead && !canUserUnlockLead(currentUser, lead)) {
+    if (isLeadClientPrivate(lead)) {
+      throw new Error("This lead was created by a client. Only that specific client (or Super Admin) can unlock it.")
+    }
+    throw new Error("Only Administrators can unlock this lead.")
+  }
+
+  const isClient = (currentUser?.role || "").toLowerCase().includes("client")
+  const unlockReason = isClient ? "Unlocked by Client" : "Unlocked by Admin"
+
+  // Advance reminder date to tomorrow in DD MMM YYYY format so SLA has ample time
+  const tomorrow = new Date()
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  const d = String(tomorrow.getDate()).padStart(2, "0")
+  const m = MONTH_NAMES_SHORT[tomorrow.getMonth()]
+  const y = tomorrow.getFullYear()
+  const futureReminderDate = `${d} ${m} ${y}`
+
+  const updates: Partial<Lead> & Record<string, any> = {
     isLocked: false,
-    lockedReason: "Unlocked by Admin",
-    unlockedByAdmin: true,
+    lockedReason: unlockReason,
+    isExplicitlyUnlocked: true,
+    unlockedByAdmin: !isClient,
+    unlockedByClient: isClient,
+    unlockedBy: currentUser?.name || currentUser?.email || (isClient ? "Client" : "Admin"),
+    unlockedByRole: currentUser?.role || (isClient ? "Clients" : "Admin"),
+    unlockedById: currentUser?.id ? String(currentUser.id) : undefined,
+    unlockedAt: new Date().toISOString(),
   }
 
-  // If reminder date was actually overdue, advance it to tomorrow so SLA has time
-  if (lead?.reminderDate && isReminderDateOverdue(lead.reminderDate)) {
-    const tomorrow = new Date()
-    tomorrow.setDate(tomorrow.getDate() + 1)
-    const d = String(tomorrow.getDate()).padStart(2, "0")
-    const m = MONTH_NAMES_SHORT[tomorrow.getMonth()]
-    const y = tomorrow.getFullYear()
-    updates.reminderDate = `${d} ${m} ${y}`
+  // If reminder date is overdue or missing, advance it to tomorrow so SLA has plenty of time
+  if (!lead?.reminderDate || isReminderDateOverdue(lead.reminderDate)) {
+    updates.reminderDate = futureReminderDate
   }
 
-  return updateLead(id, updates as any, "Super Admin", targetComp)
+  return updateLead(id, updates as any, currentUser || "Super Admin", targetComp)
 }
 
-export const lockLead = async (id: string, reason?: string, companyId?: string): Promise<Lead> => {
-  let targetComp = companyId
+export const lockLead = async (
+  id: string,
+  reason?: string,
+  userOrCompanyId?: any,
+  companyIdParam?: string
+): Promise<Lead> => {
+  let currentUser: any = null
+  let targetComp: string | undefined = undefined
+
+  if (typeof userOrCompanyId === "object" && userOrCompanyId !== null) {
+    currentUser = userOrCompanyId
+    targetComp = companyIdParam
+  } else if (typeof userOrCompanyId === "string") {
+    if (userOrCompanyId === "Super Admin" || userOrCompanyId === "Admin") {
+      currentUser = { role: userOrCompanyId }
+      targetComp = companyIdParam
+    } else {
+      targetComp = userOrCompanyId
+    }
+  }
+
+  if (!currentUser && typeof window !== "undefined") {
+    try {
+      const { useAuthStore } = require("@/store/useAuthStore")
+      currentUser = useAuthStore.getState().user
+    } catch {}
+  }
+
   const allLeads = await fetchModuleDataFromDB<Lead[]>("leads", [], "all").catch(() => [])
-  const lead = allLeads.find(l => String(l.id).toLowerCase().trim() === String(id).toLowerCase().trim())
+  const compLeads = targetComp ? await fetchModuleDataFromDB<Lead[]>("leads", [], targetComp).catch(() => []) : []
+  const lead =
+    allLeads.find(l => String(l.id).toLowerCase().trim() === String(id).toLowerCase().trim()) ||
+    compLeads.find(l => String(l.id).toLowerCase().trim() === String(id).toLowerCase().trim())
+
   if (lead?.companyId) {
     targetComp = lead.companyId
   }
+
+  if (currentUser && lead && !canUserLockLead(currentUser, lead)) {
+    if (isLeadClientPrivate(lead)) {
+      throw new Error("This lead was created by a client. Only that specific client (or Super Admin) can lock it.")
+    }
+    throw new Error("You do not have permission to lock this lead.")
+  }
+
+  const isClient = (currentUser?.role || "").toLowerCase().includes("client")
+  const defaultReason = isClient ? "Manually locked by Client" : "Manually locked by Admin"
 
   return updateLead(
     id,
     {
       isLocked: true,
-      lockedReason: reason || "Manually locked by Admin",
+      lockedReason: reason || defaultReason,
+      isExplicitlyUnlocked: false,
       unlockedByAdmin: false,
+      unlockedByClient: false,
     } as any,
-    "Super Admin",
+    currentUser || "Super Admin",
     targetComp
   )
 }

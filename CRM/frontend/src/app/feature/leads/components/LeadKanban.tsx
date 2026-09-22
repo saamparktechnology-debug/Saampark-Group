@@ -28,7 +28,7 @@ import {
 } from "lucide-react"
 import { Lead, LeadStatus } from "../types"
 import { LeadFiltersDropdown } from "./LeadFiltersDropdown"
-import { updateLead, parseLeadDate, formatLeadReminderDate } from "../services/leadService"
+import { updateLead, parseLeadDate, formatLeadReminderDate, canUserUnlockLead, isLeadClientPrivate } from "../services/leadService"
 import { LabelItem } from "./ManageLabelsModal"
 import { WhatsAppTemplateModal } from "./WhatsAppTemplateModal"
 import { CallOutcomeModal } from "./CallOutcomeModal"
@@ -621,14 +621,15 @@ export function LeadKanban({
     if (!leadId) return
     const targetLead = leads.find((l) => l.id === leadId)
     if (targetLead && targetLead.status !== newStatus) {
-      if (targetLead.isLocked && !isSuperAdminOrAdmin && newStatus !== "Won" && newStatus !== "Lost") {
-        alert("🔒 This lead is locked due to missed SLA and cannot be moved.")
+      const canUnlock = canUserUnlockLead(user, targetLead)
+      if (targetLead.isLocked && !canUnlock && newStatus !== "Won" && newStatus !== "Lost") {
+        alert("🔒 This lead is locked and cannot be moved.")
         setDraggedLeadId(null)
         return
       }
       const previousStatus = targetLead.status
       try {
-        const updated = await updateLead(leadId, { status: newStatus }, user?.role, targetLead.companyId)
+        const updated = await updateLead(leadId, { status: newStatus }, user, targetLead.companyId)
         onLeadUpdated(updated)
         setMoveToast({
           visible: true,
@@ -1613,7 +1614,7 @@ export function LeadKanban({
                               </button>
                             )}
 
-                              {isSuperAdminOrAdmin && !isLocked && (
+                              {canUserUnlockLead(user, l) && !isLocked && (
                                 <button
                                   type="button"
                                   onMouseDown={(e) => e.stopPropagation()}
@@ -1621,14 +1622,14 @@ export function LeadKanban({
                                     e.stopPropagation()
                                     try {
                                       const { lockLead } = await import("../services/leadService")
-                                      const locked = await lockLead(l.id, "Manually locked by Admin", l.companyId)
+                                      const locked = await lockLead(l.id, undefined, user, l.companyId)
                                       onLeadUpdated(locked)
                                     } catch (err: any) {
                                       alert(err?.message || "Failed to lock lead.")
                                     }
                                   }}
                                   className="w-7 h-7 min-w-[28px] min-h-[28px] rounded-lg bg-zinc-100 hover:bg-rose-100 text-zinc-600 hover:text-rose-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-rose-950 dark:hover:text-rose-300 flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-2xs group/kblock"
-                                  title="Admin Manual Lock Lead"
+                                  title={user?.role === "Clients" ? "Lock Lead" : "Admin Manual Lock Lead"}
                                 >
                                   <Lock size={13} className="group-hover/kblock:scale-110 transition-transform duration-300 pointer-events-none" />
                                 </button>
@@ -1648,15 +1649,15 @@ export function LeadKanban({
                               {l.lockedReason || "SLA Missed - Untouchable by telecaller"}
                             </p>
 
-                            {/* Admin Unlock Button */}
-                            {isSuperAdminOrAdmin && (
+                            {/* Unlock Button or Informational Badge */}
+                            {canUserUnlockLead(user, l) ? (
                               <button
                                 type="button"
                                 onClick={async (e) => {
                                   e.stopPropagation()
                                   try {
                                     const { unlockLead } = await import("../services/leadService")
-                                    const unlocked = await unlockLead(l.id, l.companyId)
+                                    const unlocked = await unlockLead(l.id, user, l.companyId)
                                     onLeadUpdated(unlocked)
                                   } catch (err: any) {
                                     alert(err?.message || "Failed to unlock lead.")
@@ -1665,8 +1666,12 @@ export function LeadKanban({
                                 className="group/kunlock mt-2 bg-white text-rose-700 hover:bg-rose-50 font-bold text-xs px-3 py-1.5 rounded-lg transition-all shadow-md flex items-center gap-1.5 cursor-pointer hover:scale-105"
                               >
                                 <Unlock size={12} className="group-hover/kunlock:rotate-[-18deg] transition-transform duration-300" />
-                                <span>Admin Unlock Lead</span>
+                                <span>{user?.role === "Clients" ? "Unlock My Lead" : "Admin Unlock Lead"}</span>
                               </button>
+                            ) : (
+                              <p className="mt-2 text-[10px] font-bold text-rose-200 bg-rose-900/60 px-2 py-1 rounded-md">
+                                {isLeadClientPrivate(l) ? "Only creator client can unlock" : "Only Admin can unlock"}
+                              </p>
                             )}
                           </div>
                         )}

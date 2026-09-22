@@ -46,6 +46,13 @@ export interface Lead {
   currency?: string
   isLocked?: boolean
   lockedReason?: string
+  isExplicitlyUnlocked?: boolean
+  unlockedBy?: string
+  unlockedByRole?: string
+  unlockedById?: string
+  unlockedAt?: string
+  unlockedByAdmin?: boolean
+  unlockedByClient?: boolean
   assignedTo?: string
   assigned_to?: string | number
   createdById?: string

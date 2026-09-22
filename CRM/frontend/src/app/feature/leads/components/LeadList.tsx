@@ -28,7 +28,7 @@ import {
 } from "lucide-react"
 import { Lead } from "../types"
 import { LeadFiltersDropdown } from "./LeadFiltersDropdown"
-import { formatLeadReminderDate, transferLeadsToBranch, parseLeadDate } from "../services/leadService"
+import { formatLeadReminderDate, transferLeadsToBranch, parseLeadDate, canUserUnlockLead, isLeadClientPrivate } from "../services/leadService"
 import { LabelItem } from "./ManageLabelsModal"
 import { LabelSelectorPopover } from "./LabelSelectorPopover"
 import { WhatsAppTemplateModal } from "./WhatsAppTemplateModal"
@@ -1606,19 +1606,19 @@ export function LeadList({
                           </button>
                         )}
 
-                        {/* Lock / Unlock Toggle Button for Admin */}
-                        {isSuperAdminOrAdmin && (
+                        {/* Lock / Unlock Toggle Button */}
+                        {canUserUnlockLead(user, l) && (
                           <button
                             type="button"
                             onClick={async () => {
                               try {
                                 if (isLocked) {
                                   const { unlockLead } = await import("../services/leadService")
-                                  const unlocked = await unlockLead(l.id, l.companyId)
+                                  const unlocked = await unlockLead(l.id, user, l.companyId)
                                   onLeadUpdated(unlocked)
                                 } else {
                                   const { lockLead } = await import("../services/leadService")
-                                  const locked = await lockLead(l.id, "Manually locked by Admin", l.companyId)
+                                  const locked = await lockLead(l.id, undefined, user, l.companyId)
                                   onLeadUpdated(locked)
                                 }
                               } catch (err: any) {

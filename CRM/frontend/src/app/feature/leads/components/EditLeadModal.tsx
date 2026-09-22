@@ -3,7 +3,7 @@
 import * as React from "react"
 import { X, Plus, Check, Calendar, Clock, Wrench, FileText, User as UserIcon, Trash2, MapPin, Building, Info } from "lucide-react"
 import { Lead, LeadStatus, LeadType } from "../types"
-import { updateLead, unlockLead, parseLeadDate, formatLeadReminderDate, MONTH_NAMES_SHORT } from "../services/leadService"
+import { updateLead, unlockLead, parseLeadDate, formatLeadReminderDate, MONTH_NAMES_SHORT, canUserUnlockLead, isLeadClientPrivate } from "../services/leadService"
 import { useAuthStore } from "@/store/useAuthStore"
 
 // Helper to convert date string to "YYYY-MM-DD" for input[type="date"] (Zero UTC Timezone Shift)
@@ -340,9 +340,9 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
   const handleUnlock = async () => {
     if (!lead) return
     try {
-      const unlocked = await unlockLead(lead.id, lead.companyId || selectedCompanyId)
+      const unlocked = await unlockLead(lead.id, user, lead.companyId || selectedCompanyId)
       onLeadUpdated(unlocked)
-      alert("Lead unlocked successfully! Caller can now update this lead.")
+      alert("Lead unlocked successfully! Updates can now be saved.")
       onClose()
     } catch (err: any) {
       alert(err?.message || "Failed to unlock lead")
@@ -385,16 +385,18 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
                 <p className="text-[11px] opacity-90">{lead.lockedReason || "Daily status or reminder date update missed."}</p>
               </div>
             </div>
-            {isSuperOrAdmin ? (
+            {canUserUnlockLead(user, lead) ? (
               <button
                 type="button"
                 onClick={handleUnlock}
-                className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-md font-bold shadow-sm transition-colors text-xs whitespace-nowrap"
+                className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-md font-bold shadow-sm transition-colors text-xs whitespace-nowrap cursor-pointer"
               >
-                🔓 Unlock Lead
+                🔓 {user?.role === "Clients" ? "Unlock My Lead" : "Unlock Lead"}
               </button>
             ) : (
-              <span className="font-semibold italic text-[11px]">Only Admin can unlock</span>
+              <span className="font-semibold italic text-[11px]">
+                {isLeadClientPrivate(lead) ? "Only the creator client can unlock this lead" : "Only Admin can unlock"}
+              </span>
             )}
           </div>
         )}
