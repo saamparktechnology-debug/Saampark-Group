@@ -287,40 +287,7 @@ export function DocumentStudioModal({
     "1. Payment is due within statutory terms.\n2. Goods & Services once delivered are subject to project sign-off.\n3. Disputed items must be notified within 7 days."
   )
 
-  // Load clients, branches, team members & initialize document numbers
-  React.useEffect(() => {
-    if (isOpen) {
-      fetchCompanies?.()
-      fetchBranches?.()
-      fetchSubBranches?.()
-
-      UserService.getTeamMembers().then(users => {
-        if (Array.isArray(users)) {
-          const nonClients = users.filter((u: any) => !((u.role || u.role_name || "").toLowerCase().includes("client")))
-          setAvailableTeamMembers(nonClients.map((u: any) => ({
-            ...u,
-            name: u.name || u.full_name || u.fullName || u.username || u.email || "Team Member",
-            role: u.role || u.role_name || u.roleName || "Team Member"
-          })))
-        }
-      }).catch(() => {})
-
-      getClients("all").then(cl => {
-        setAllClients(cl)
-        if (prefilledClient) {
-          handleSelectClient(prefilledClient)
-        } else if (cl.length > 0 && !selectedClient) {
-          handleSelectClient(cl[0])
-        }
-      }).catch(() => {})
-
-      if (!docNumber) {
-        generateDocNumber(mode === "invoice" ? docScheme : "nongst")
-      }
-    }
-  }, [isOpen, prefilledClient])
-
-  // Generate document number
+  // Generate document number helper
   const generateDocNumber = (scheme: "gst" | "nongst", targetDate?: string) => {
     const rawD = targetDate || issueDate
     const d = rawD ? new Date(rawD) : new Date()
@@ -333,24 +300,9 @@ export function DocumentStudioModal({
     else if (mode === "estimate") prefix = scheme === "nongst" ? "NGEST" : "EST"
     else if (scheme === "nongst") prefix = "NGINV"
     
-    setDocNumber(`${prefix}-${datePart}-${randPart}`)
-  }
-
-  const handleSchemeChange = (scheme: "gst" | "nongst") => {
-    setDocScheme(scheme)
-    generateDocNumber(scheme)
-    setItems(prev => prev.map(it => {
-      const rate = typeof it.rate === "number" ? it.rate : 0
-      const qty = it.qty > 0 ? it.qty : 1
-      const base = rate * qty
-      const gst = scheme === "gst" ? 18 : 0
-      return {
-        ...it,
-        gstRate: gst,
-        gstAmount: Math.round(base * (gst / 100)),
-        totalAmount: base + Math.round(base * (gst / 100))
-      }
-    }))
+    const gen = `${prefix}-${datePart}-${randPart}`
+    setDocNumber(gen)
+    return gen
   }
 
   const handleSelectClient = (c: ClientItem) => {
@@ -363,6 +315,218 @@ export function DocumentStudioModal({
     setClientState(c.state || "")
     setClientGst(c.gstNumber || c.vatNumber || "")
     setIsClientSearchOpen(false)
+  }
+
+  // Load clients, branches, team members & sync document state with initialData or blank state
+  React.useEffect(() => {
+    if (!isOpen) return
+
+    fetchCompanies?.()
+    fetchBranches?.()
+    fetchSubBranches?.()
+
+    UserService.getTeamMembers().then(users => {
+      if (Array.isArray(users)) {
+        const nonClients = users.filter((u: any) => !((u.role || u.role_name || "").toLowerCase().includes("client")))
+        setAvailableTeamMembers(nonClients.map((u: any) => ({
+          ...u,
+          name: u.name || u.full_name || u.fullName || u.username || u.email || "Team Member",
+          role: u.role || u.role_name || u.roleName || "Team Member"
+        })))
+      }
+    }).catch(() => {})
+
+    getClients("all").then(cl => {
+      setAllClients(cl)
+
+      if (initialData) {
+        const initClient = String(initialData.client || initialData.customer || initialData.clientName || "").trim()
+        const initEmail = initialData.clientEmail || initialData.customerEmail || ""
+        const initPhone = initialData.clientPhone || initialData.customerPhone || ""
+        const initAddress = initialData.clientAddress || initialData.customerAddress || ""
+        const initCity = initialData.clientCity || ""
+        const initState = initialData.clientState || ""
+        const initGst = initialData.clientGstin || initialData.clientGst || ""
+
+        const match = initClient 
+          ? cl.find(c => c.name.toLowerCase().trim() === initClient.toLowerCase().trim())
+          : null
+
+        if (match) {
+          setSelectedClient(match)
+          setClientMode("select")
+          setClientName(match.name)
+          setClientEmail(initEmail || match.email || "")
+          setClientPhone(initPhone || match.phone || "")
+          setClientAddress(initAddress || match.address || "")
+          setClientCity(initCity || match.city || "")
+          setClientState(initState || match.state || "")
+          setClientGst(initGst || match.gstNumber || match.vatNumber || "")
+        } else if (initClient) {
+          setSelectedClient(null)
+          setClientMode("custom")
+          setClientName(initClient)
+          setClientEmail(initEmail)
+          setClientPhone(initPhone)
+          setClientAddress(initAddress)
+          setClientCity(initCity)
+          setClientState(initState)
+          setClientGst(initGst)
+        } else {
+          setSelectedClient(null)
+          setClientMode("select")
+          setClientName("")
+          setClientEmail("")
+          setClientPhone("")
+          setClientAddress("")
+          setClientCity("")
+          setClientState("")
+          setClientGst("")
+        }
+      } else if (prefilledClient) {
+        handleSelectClient(prefilledClient)
+      } else {
+        // Clean blank state for new document creation - never auto-select cl[0]
+        setSelectedClient(null)
+        setClientMode("select")
+        setClientName("")
+        setClientEmail("")
+        setClientPhone("")
+        setClientAddress("")
+        setClientCity("")
+        setClientState("")
+        setClientGst("")
+      }
+    }).catch(() => {})
+
+    if (initialData) {
+      const isNonGst = initialData.taxType === "nongst" || initialData.isNonGst || String(initialData.id || "").toUpperCase().startsWith("NGINV") || (initialData.gstRate === 0 && (!initialData.items || initialData.items.every((it: any) => !it.gstRate || it.gstRate === 0)))
+      const resolvedScheme = isNonGst ? "nongst" : "gst"
+      setDocScheme(resolvedScheme)
+      setCompanyId(initialData.companyId || activeCompanyId || "tech")
+      setBranchId(initialData.branchId || (initialData as any).branch_id || "")
+      setSubBranchId(initialData.subBranchId || (initialData as any).sub_branch_id || "")
+      setDocNumber(initialData.id || initialData.invoiceNumber || initialData.number || "")
+
+      if (initialData.invoiceDate || initialData.billDate || initialData.date) {
+        const raw = String(initialData.invoiceDate || initialData.billDate || initialData.date).trim()
+        if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
+          setIssueDate(raw.slice(0, 10))
+        } else {
+          const dmy = raw.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/)
+          if (dmy) setIssueDate(`${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}`)
+        }
+      }
+
+      if (initialData.dueDate || initialData.validTill) {
+        const raw = String(initialData.dueDate || initialData.validTill).trim()
+        if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
+          setDueDate(raw.slice(0, 10))
+        } else {
+          const dmy = raw.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/)
+          if (dmy) setDueDate(`${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}`)
+        }
+      }
+
+      setProjectTitle(initialData.project || initialData.projectTitle || "")
+      if (initialData.overview) setProjectOverview(initialData.overview)
+      if (initialData.timeline) setProjectTimeline(initialData.timeline)
+      if (initialData.turnaroundTime) setTurnaroundTime(initialData.turnaroundTime)
+      if (initialData.deliverables && Array.isArray(initialData.deliverables)) setDeliverables(initialData.deliverables)
+      if (initialData.scopeInclusions) setScopeInclusions(initialData.scopeInclusions)
+      if (initialData.scopeExclusions) setScopeExclusions(initialData.scopeExclusions)
+      if (initialData.paymentMilestones && Array.isArray(initialData.paymentMilestones)) setPaymentMilestones(initialData.paymentMilestones)
+
+      if (initialData.items && Array.isArray(initialData.items) && initialData.items.length > 0) {
+        setItems(initialData.items.map((it: any) => ({
+          id: it.id || `item_${Date.now()}_${Math.random()}`,
+          serviceName: it.serviceName || it.name || it.description || "Service",
+          sacCode: it.sacCode || it.sac || (resolvedScheme === "gst" ? "998313" : ""),
+          qty: it.qty || it.quantity || 1,
+          unit: it.unit || "Project",
+          rate: it.rate !== undefined ? it.rate : (it.unitPrice !== undefined ? it.unitPrice : 0),
+          gstRate: resolvedScheme === "gst" ? (it.gstRate !== undefined ? it.gstRate : 18) : 0,
+          gstAmount: it.gstAmount || 0,
+          charges: it.charges || [],
+          totalAmount: it.totalAmount || it.total || (it.rate * (it.qty || 1)),
+        })))
+      } else {
+        const baseNum = initialData.baseAmount || initialData.subtotal || 0
+        setItems([{
+          id: `item_${Date.now()}`,
+          serviceName: initialData.project || "Custom Service",
+          sacCode: resolvedScheme === "gst" ? "998313" : "",
+          qty: 1,
+          unit: "Project",
+          rate: baseNum,
+          gstRate: resolvedScheme === "gst" ? 18 : 0,
+          gstAmount: 0,
+          charges: [],
+          totalAmount: baseNum,
+        }])
+      }
+
+      setDiscountValue(initialData.discount !== undefined ? initialData.discount : "")
+      setSetupCharge(initialData.setupCharge !== undefined ? initialData.setupCharge : "")
+      if (initialData.notes) setNotes(initialData.notes)
+      if (initialData.terms) setTerms(initialData.terms)
+
+      if (initialData.assignedMembers && Array.isArray(initialData.assignedMembers) && initialData.assignedMembers.length > 0) {
+        setAssignedMembers(initialData.assignedMembers)
+      } else if (initialData.assignedMemberId) {
+        setAssignedMembers([{
+          memberId: initialData.assignedMemberId,
+          memberName: initialData.assignedMemberName || "Team Member",
+          memberRole: initialData.assignedMemberRole || "Team Member",
+          memberAvatar: initialData.assignedMemberAvatar,
+          payoutType: initialData.memberPayoutType || "percentage",
+          payoutValue: initialData.memberPayoutValue !== undefined ? initialData.memberPayoutValue : (initialData.memberSharePct !== undefined ? initialData.memberSharePct : 50),
+        }])
+      } else {
+        setAssignedMembers([])
+      }
+    } else {
+      setCompanyId(activeCompanyId || "tech")
+      setBranchId(activeBranchId || "")
+      setSubBranchId("")
+      generateDocNumber(docScheme)
+      setItems([
+        {
+          id: `item_${Date.now()}`,
+          serviceName: mode === "quotation" ? "Enterprise Software Design & Cloud Architecture" : "Custom Enterprise Consulting & Development",
+          sacCode: mode === "invoice" ? "998313" : "",
+          qty: 1,
+          unit: "Project",
+          rate: mode === "quotation" ? 45000 : 25000,
+          gstRate: mode === "invoice" && docScheme === "gst" ? 18 : 0,
+          gstAmount: 0,
+          charges: [],
+          totalAmount: mode === "quotation" ? 45000 : 25000
+        }
+      ])
+      setDiscountValue("")
+      setSetupCharge("")
+      setAssignedMembers([])
+    }
+  }, [isOpen, initialData, prefilledClient])
+
+  const handleSchemeChange = (scheme: "gst" | "nongst") => {
+    setDocScheme(scheme)
+    if (!initialData?.id) {
+      generateDocNumber(scheme)
+    }
+    setItems(prev => prev.map(it => {
+      const rate = typeof it.rate === "number" ? it.rate : 0
+      const qty = it.qty > 0 ? it.qty : 1
+      const base = rate * qty
+      const gst = scheme === "gst" ? (it.gstRate || 18) : 0
+      return {
+        ...it,
+        gstRate: gst,
+        gstAmount: Math.round(base * (gst / 100)),
+        totalAmount: base + Math.round(base * (gst / 100))
+      }
+    }))
   }
 
   // Add line item

@@ -711,20 +711,15 @@ function InvoicesPageContent() {
       setCustomClientAddress("")
       setCustomClientCity("")
       setCustomClientGst("")
+      setClientName("")
+      setClientEmail("")
+      setClientPhone("")
+      setClientAddress("")
+      setClientCity("")
+      setClientState("")
+      setClientGst("")
       getClients().then((clients) => {
         setAvailableClients(clients)
-        if (clients.length > 0) {
-          const first = clients[0]
-          setClientName(first.name)
-          setClientEmail(first.email || "")
-          setClientPhone(first.phone || "")
-          setClientAddress(first.address || "")
-          setClientCity(first.city || "")
-          setClientState(first.state || "")
-          setClientGst(first.gstNumber || first.vatNumber || "")
-        } else {
-          setClientSelectionMode("custom")
-        }
       }).catch(() => {})
 
       getProjects().then(projs => {

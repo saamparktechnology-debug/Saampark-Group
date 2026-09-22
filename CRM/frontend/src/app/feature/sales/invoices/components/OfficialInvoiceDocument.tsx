@@ -1280,29 +1280,36 @@ export function OfficialInvoiceDocument({
           />
         </div>
         <EditableText
-          value={invoice.client}
+          value={invoice.client || "Client Name"}
           interactive={interactive}
           className="font-black text-xs sm:text-sm text-zinc-900 leading-tight block"
         />
+        {(invoice.clientEmail || invoice.clientPhone || clientDetails?.email || clientDetails?.phone) && (
+          <p className="text-[9.5px] text-zinc-500 font-mono">
+            {[invoice.clientEmail || clientDetails?.email, invoice.clientPhone || clientDetails?.phone].filter(Boolean).join(" • ")}
+          </p>
+        )}
         <p className="text-[9.5px] text-zinc-600 leading-tight">
           <EditableText value="Address:" interactive={interactive} className="font-bold mr-1" />
           <EditableText
-            value={clientDetails?.address || (invoice.clientEmail ? `${clientDetails?.address || 'Corporate Center'}` : 'Head Office')}
+            value={invoice.clientAddress || clientDetails?.address || "Address not specified"}
             interactive={interactive}
           />
         </p>
-        <p className="text-[9.5px] text-zinc-600 flex items-center gap-1">
-          <MapPin size={9} className="text-zinc-500 shrink-0" />
-          <EditableText value="Location:" interactive={interactive} className="font-bold mr-1" />
-          <EditableText
-            value={clientDetails?.city || clientDetails?.state || (activeCompany?.city ? `${activeCompany.city}, ${activeCompany?.state || ''}` : activeCompany?.state || 'West Bengal')}
-            interactive={interactive}
-          />
-        </p>
-        {isGstInvoice && clientDetails?.gstNumber && (
+        {(invoice.clientCity || invoice.clientState || clientDetails?.city || clientDetails?.state) && (
+          <p className="text-[9.5px] text-zinc-600 flex items-center gap-1">
+            <MapPin size={9} className="text-zinc-500 shrink-0" />
+            <EditableText value="Location:" interactive={interactive} className="font-bold mr-1" />
+            <EditableText
+              value={[invoice.clientCity, invoice.clientState].filter(Boolean).join(", ") || [clientDetails?.city, clientDetails?.state].filter(Boolean).join(", ")}
+              interactive={interactive}
+            />
+          </p>
+        )}
+        {isGstInvoice && (invoice.clientGstin || clientDetails?.gstNumber || clientDetails?.vatNumber) && (
           <p className="text-[9px] font-mono font-bold text-zinc-800">
             <EditableText value="Client GSTIN:" interactive={interactive} className="font-bold mr-1 font-sans" />
-            <EditableText value={clientDetails.gstNumber} interactive={interactive} />
+            <EditableText value={invoice.clientGstin || clientDetails?.gstNumber || clientDetails?.vatNumber} interactive={interactive} />
           </p>
         )}
       </div>
