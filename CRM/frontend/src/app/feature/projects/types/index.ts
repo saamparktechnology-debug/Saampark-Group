@@ -1,0 +1,88 @@
+export type ProjectType = "Client Project" | "Internal Project"
+export type ProjectStatus = "Payment Pending" | "Open" | "In Progress" | "Completed" | "Hold" | "Finished" | "Cancelled"
+
+export interface ProjectMember {
+  id: string
+  name: string
+  role: string
+  avatar?: string
+  email?: string
+  sharePercentage?: number // Revenue share percentage against this project (e.g. 15 for 15%)
+  payoutType?: "percentage" | "fixed"
+  payoutValue?: number
+  payoutAmount?: number
+}
+
+export interface ProjectMilestone {
+  id: string
+  title: string
+  stage: "Frontend" | "Backend" | "Design" | "Testing" | "Deployment" | "Credentials" | "Custom"
+  status: "Completed" | "In Progress" | "Pending" | "Hold"
+  notes?: string
+  credentials?: string
+  updatedBy?: string
+  updatedAt?: string
+}
+
+export interface TaskBreakdown {
+  todo: number
+  inProgress: number
+  review: number
+  done: number
+}
+
+export interface ActivityItem {
+  id: string
+  user: string
+  timestamp: string
+  action: string
+  title: string
+  badge?: string
+}
+
+export interface Project {
+  id: string
+  title: string
+  projectType: ProjectType
+  client: string
+  price: string
+  startDate: string
+  deadline: string
+  progress: number
+  status: ProjectStatus
+  labels: string[]
+  description?: string
+  starred?: boolean
+  totalHours?: number
+  paymentStatus?: "Payment Pending" | "Paid" | "Advance Received" | "Partially Paid"
+  paymentStructure?: "Full" | "Advance + Part Payment"
+  advanceAmount?: number
+  dueAmount?: number
+  installmentsCount?: number
+  installmentAmount?: number
+  subscriptionId?: string
+  baseAmount?: number
+  setupCharge?: number
+  discount?: number
+  gstRate?: number
+  gstAmount?: number
+  totalAmount?: number
+  items?: any[]
+  discountsList?: any[]
+  billedBy?: string
+  clientId?: string
+  createdById?: string
+  createdByEmail?: string
+  members?: ProjectMember[]
+  milestones?: ProjectMilestone[]
+  taskBreakdown?: TaskBreakdown
+  activityLogs?: ActivityItem[]
+  companyId?: string
+  branchId?: string
+  branchName?: string
+  branchCode?: string
+  subBranchId?: string
+  subBranchName?: string
+  subBranchCode?: string
+}
+

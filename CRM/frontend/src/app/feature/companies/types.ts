@@ -1,0 +1,192 @@
+export interface Company {
+  id: string
+  name: string
+  slug: string
+  brand_name?: string
+  division_name?: string
+  subtitle?: string
+  industry?: string
+  currency?: string
+  currency_symbol?: string
+  logo_url?: string
+  gstin?: string
+  pan?: string
+  cin?: string
+  msme_reg?: string
+  address?: string
+  phone?: string
+  email?: string
+  website?: string
+  status?: string
+  member_count?: number
+  created_at?: string
+  bank_name?: string
+  account_holder?: string
+  account_number?: string
+  ifsc_code?: string
+  bank_branch?: string
+  upi_id?: string
+  payment_qr_url?: string
+  gst_bank_name?: string
+  gst_account_holder?: string
+  gst_account_number?: string
+  gst_ifsc_code?: string
+  gst_bank_branch?: string
+  gst_upi_id?: string
+  gst_payment_qr_url?: string
+  nongst_bank_name?: string
+  nongst_account_holder?: string
+  nongst_account_number?: string
+  nongst_ifsc_code?: string
+  nongst_bank_branch?: string
+  nongst_upi_id?: string
+  nongst_payment_qr_url?: string
+  signatory_name?: string
+  signatory_designation?: string
+  signature_image_url?: string
+  stamp_image_url?: string
+  terms_conditions?: string
+  invoice_notes?: string
+  quotation_notes?: string
+  iso_certification?: string
+  signature_position?: { x: number; y: number }
+  stamp_position?: { x: number; y: number }
+  logo_position?: { x: number; y: number }
+  logo_scale?: number
+  stamp_scale?: number
+  signature_scale?: number
+  custom_stamps?: any[]
+  zoom?: number
+  preview_scale?: string
+  preview_invoice_type?: string
+}
+
+export interface Branch {
+  id: string
+  company_id: string
+  companyId?: string
+  name: string
+  code?: string
+  brand_name?: string
+  division_name?: string
+  logo_url?: string
+  address?: string
+  city?: string
+  state?: string
+  zip?: string
+  country?: string
+  phone?: string
+  email?: string
+  manager_name?: string
+  managerName?: string
+  managerPhone?: string
+  status?: string
+  sub_branch_count?: number
+  user_count?: number
+  gstin?: string
+  pan?: string
+  signatory_name?: string
+  signatory_designation?: string
+  signature_image_url?: string
+  stamp_image_url?: string
+  iso_certification?: string
+  terms_conditions?: string
+  invoice_notes?: string
+  bank_name?: string
+  account_holder?: string
+  account_number?: string
+  ifsc_code?: string
+  bank_branch?: string
+  upi_id?: string
+  payment_qr_url?: string
+  gst_bank_name?: string
+  gst_account_holder?: string
+  gst_account_number?: string
+  gst_ifsc_code?: string
+  gst_bank_branch?: string
+  gst_upi_id?: string
+  gst_payment_qr_url?: string
+  nongst_bank_name?: string
+  nongst_account_holder?: string
+  nongst_account_number?: string
+  nongst_ifsc_code?: string
+  nongst_bank_branch?: string
+  nongst_upi_id?: string
+  nongst_payment_qr_url?: string
+  cin?: string
+  msme_reg?: string
+  subtitle?: string
+  signature_position?: { x: number; y: number }
+  stamp_position?: { x: number; y: number }
+  logo_position?: { x: number; y: number }
+  logo_scale?: number
+  stamp_scale?: number
+  signature_scale?: number
+  custom_stamps?: any[]
+  zoom?: number
+  preview_scale?: string
+  preview_invoice_type?: string
+}
+
+export interface SubBranch {
+  id: string
+  branch_id: string
+  company_id: string
+  name: string
+  code?: string
+  partner_name?: string
+  partner_phone?: string
+  partner_email?: string
+  revenue_share_pct?: number
+  partner_type?: string
+  status?: string
+  address?: string
+  city?: string
+  state?: string
+  phone?: string
+  email?: string
+  gstin?: string
+  pan?: string
+  cin?: string
+  msme_reg?: string
+  subtitle?: string
+  iso_certification?: string
+  terms_conditions?: string
+  invoice_notes?: string
+  quotation_notes?: string
+  bank_name?: string
+  account_number?: string
+  ifsc_code?: string
+  upi_id?: string
+  logo_url?: string
+  signature_image_url?: string
+  stamp_image_url?: string
+  payment_qr_url?: string
+  gst_bank_name?: string
+  gst_account_holder?: string
+  gst_account_number?: string
+  gst_ifsc_code?: string
+  gst_bank_branch?: string
+  gst_upi_id?: string
+  gst_payment_qr_url?: string
+  nongst_bank_name?: string
+  nongst_account_holder?: string
+  nongst_account_number?: string
+  nongst_ifsc_code?: string
+  nongst_bank_branch?: string
+  nongst_upi_id?: string
+  nongst_payment_qr_url?: string
+  signatory_name?: string
+  signatory_designation?: string
+  signature_position?: { x: number; y: number }
+  stamp_position?: { x: number; y: number }
+  logo_position?: { x: number; y: number }
+  logo_scale?: number
+  stamp_scale?: number
+  signature_scale?: number
+  custom_stamps?: any[]
+  zoom?: number
+  preview_scale?: string
+  preview_invoice_type?: string
+}
+
