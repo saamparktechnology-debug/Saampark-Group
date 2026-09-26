@@ -25,12 +25,15 @@ export interface CustomTextStamp {
   y: number
 }
 
+export const TextEditContext = React.createContext<boolean>(false)
+
 interface OfficialInvoiceDocumentProps {
   invoice: InvoiceItem
   clientDetails?: ClientItem | null
   companyDetails?: Company | null
   paySettings?: CompanyPaymentSettings
   interactive?: boolean
+  allowTextEdit?: boolean
   logoPosition?: { x: number; y: number }
   onLogoPositionChange?: (pos: { x: number; y: number }) => void
   logoScale?: number
@@ -71,7 +74,7 @@ export function EditableText({
   className = "",
   placeholder = "",
   as = "span",
-  interactive = false,
+  interactive: propInteractive,
   fieldKey,
 }: {
   value?: string | null
@@ -82,12 +85,15 @@ export function EditableText({
   interactive?: boolean
   fieldKey?: string
 }) {
+  const contextAllowTextEdit = React.useContext(TextEditContext)
+  const isActuallyInteractive = (propInteractive ?? false) && contextAllowTextEdit
+
   const [internalVal, setInternalVal] = React.useState(value ?? "")
   React.useEffect(() => {
     setInternalVal(value ?? "")
   }, [value])
 
-  if (!interactive) {
+  if (!isActuallyInteractive) {
     const Tag = as
     return <Tag className={className}>{value || ""}</Tag>
   }
@@ -183,6 +189,7 @@ export function OfficialInvoiceDocument({
   companyDetails,
   paySettings,
   interactive = false,
+  allowTextEdit = false,
   logoPosition: propLogoPosition,
   onLogoPositionChange,
   logoScale: propLogoScale,
@@ -208,6 +215,8 @@ export function OfficialInvoiceDocument({
   activeBranch: propActiveBranch,
   activeSubBranch: propActiveSubBranch,
 }: OfficialInvoiceDocumentProps) {
+  const isTextEditable = Boolean(interactive && allowTextEdit)
+
   const { 
     companies, 
     branches, 

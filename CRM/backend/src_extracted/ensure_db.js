@@ -57,21 +57,29 @@ async function main() {
       'Skipping dump import so your existing data is preserved.'
     );
   } else {
+    const crmDbCompletePath = path.join(__dirname, '..', '..', 'database', 'crm_db_complete.sql');
     const dumpDir = path.join(__dirname, '..', 'dump_extracted', 'Dump20260814');
-    if (!fs.existsSync(dumpDir)) {
-      console.error('[FATAL] Dump folder not found: ' + dumpDir);
+
+    if (fs.existsSync(crmDbCompletePath)) {
+      console.log('Empty database detected — importing complete database dump from database/crm_db_complete.sql ...');
+      const sql = fs.readFileSync(crmDbCompletePath, 'utf-8');
+      await conn.query(sql);
+      console.log('Database dump import complete.');
+    } else if (fs.existsSync(dumpDir)) {
+      const files = fs.readdirSync(dumpDir).filter((f) => f.endsWith('.sql')).sort();
+      console.log(`Empty database detected — importing ${files.length} dump files...`);
+      for (const f of files) {
+        const sql = fs.readFileSync(path.join(dumpDir, f), 'utf-8');
+        if (sql.trim()) {
+          await conn.query(sql);
+          console.log('  imported ' + f);
+        }
+      }
+      console.log('Dump import complete.');
+    } else {
+      console.error('[FATAL] Neither database/crm_db_complete.sql nor dump folder was found.');
       process.exit(1);
     }
-    const files = fs.readdirSync(dumpDir).filter((f) => f.endsWith('.sql')).sort();
-    console.log(`Empty database detected — importing ${files.length} dump files...`);
-    for (const f of files) {
-      const sql = fs.readFileSync(path.join(dumpDir, f), 'utf-8');
-      if (sql.trim()) {
-        await conn.query(sql);
-        console.log('  imported ' + f);
-      }
-    }
-    console.log('Dump import complete.');
   }
 
   await conn.end();
