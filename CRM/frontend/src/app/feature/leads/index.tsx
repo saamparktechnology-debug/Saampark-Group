@@ -25,7 +25,7 @@ export const INITIAL_LABELS: LabelItem[] = [
 ]
 
 export default function LeadsMain() {
-  const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
+  const { user, activeCompanyId, activeBranchId, activeSubBranchId, branches, subBranches } = useAuthStore()
   const [leads, setLeads] = React.useState<Lead[]>([])
   const [activeViewTab, setActiveViewTab] = React.useState<"list" | "kanban">("list")
   const [availableLabels, setAvailableLabels] = React.useState<LabelItem[]>(INITIAL_LABELS)
@@ -94,16 +94,20 @@ export default function LeadsMain() {
     window.addEventListener("storage", storageHandler)
     window.addEventListener("saampark_company_switched", storageHandler)
     window.addEventListener("saampark_branch_switched", storageHandler)
+    window.addEventListener("saampark_sub_branch_switched", storageHandler)
+    window.addEventListener("saampark_subbranch_switched", storageHandler)
     window.addEventListener("saampark_data_synced", storageHandler)
     window.addEventListener("saampark_leads_updated", storageHandler)
     return () => {
       window.removeEventListener("storage", storageHandler)
       window.removeEventListener("saampark_company_switched", storageHandler)
       window.removeEventListener("saampark_branch_switched", storageHandler)
+      window.removeEventListener("saampark_sub_branch_switched", storageHandler)
+      window.removeEventListener("saampark_subbranch_switched", storageHandler)
       window.removeEventListener("saampark_data_synced", storageHandler)
       window.removeEventListener("saampark_leads_updated", storageHandler)
     }
-  }, [activeCompanyId, activeBranchId])
+  }, [activeCompanyId, activeBranchId, activeSubBranchId])
 
   const handleLeadAdded = (newLead: Lead) => {
     setLeads((prev) => [newLead, ...prev])
@@ -177,11 +181,19 @@ export default function LeadsMain() {
 
   const visibleLeads = React.useMemo(() => {
     if (!user) return []
-    // Read fresh from store to avoid stale closure after company/branch switch
-    const { activeCompanyId: freshCompanyId, activeBranchId: freshBranchId, branches: freshBranches, user: freshUser } = useAuthStore.getState()
+    // Read fresh from store to avoid stale closure after company/branch/sub-branch switch
+    const { 
+      activeCompanyId: freshCompanyId, 
+      activeBranchId: freshBranchId, 
+      activeSubBranchId: freshSubBranchId, 
+      branches: freshBranches, 
+      subBranches: freshSubBranches, 
+      user: freshUser 
+    } = useAuthStore.getState()
     const userComp = (freshCompanyId || freshUser?.companyId || "").toLowerCase().trim()
     // activeBranchId takes priority; fall back to user's assigned branch only for non-admin
     const targetBranch = freshBranchId || (isSuperOrAdmin ? null : freshUser?.branchId)
+    const targetSubBranch = freshSubBranchId || (isSuperOrAdmin ? null : freshUser?.subBranchId)
 
     const matchLeadBranch = (l: Lead, bTarget: string | null) => {
       if (!bTarget || bTarget === "all") return true
@@ -212,7 +224,36 @@ export default function LeadsMain() {
       )
     }
 
-    // Admins see all leads across companies and branches (or scoped to their assigned branch)
+    const matchLeadSubBranch = (l: Lead, sbTarget: string | null) => {
+      if (!sbTarget || sbTarget === "all") return true
+      const lSubBranch = String((l as any).subBranchId || (l as any).sub_branch_id || (l as any).assignedSubBranchId || "").toLowerCase().trim()
+      const lSubBranchName = String((l as any).subBranchName || (l as any).sub_branch_name || (l as any).assignedSubBranchName || "").toLowerCase().trim()
+      const targetStr = String(sbTarget).toLowerCase().trim()
+
+      const targetSbObj = freshSubBranches?.find(sb =>
+        String(sb.id).toLowerCase().trim() === targetStr ||
+        String(sb.code || "").toLowerCase().trim() === targetStr ||
+        sb.name.toLowerCase().trim() === targetStr
+      )
+      const targetSbId = String(targetSbObj?.id || sbTarget).toLowerCase().trim()
+      const targetSbCode = String(targetSbObj?.code || "").toLowerCase().trim()
+      const targetSbName = targetSbObj?.name?.toLowerCase().trim() || ""
+
+      return Boolean(
+        (lSubBranch && (
+          lSubBranch === targetSbId ||
+          (targetSbCode && lSubBranch === targetSbCode) ||
+          (targetSbName && lSubBranch === targetSbName)
+        )) ||
+        (lSubBranchName && (
+          lSubBranchName === targetSbName ||
+          lSubBranchName === targetSbId ||
+          (targetSbCode && lSubBranchName === targetSbCode)
+        ))
+      )
+    }
+
+    // Admins see all leads across companies and branches (or scoped to their assigned branch / sub-branch)
     if (isSuperOrAdmin) {
       return leads.filter((l) => {
         const isClientPrivate = (l as any).isClientPrivate === true || l.createdByRole === "Clients"
@@ -226,6 +267,10 @@ export default function LeadsMain() {
 
         if (targetBranch && targetBranch !== "all") {
           if (!matchLeadBranch(l, targetBranch)) return false
+        }
+
+        if (targetSubBranch && targetSubBranch !== "all") {
+          if (!matchLeadSubBranch(l, targetSubBranch)) return false
         }
 
         return true
@@ -245,6 +290,7 @@ export default function LeadsMain() {
         const createdBy = (l.createdBy || "").toLowerCase().trim()
 
         if (targetBranch && !matchLeadBranch(l, targetBranch)) return false
+        if (targetSubBranch && !matchLeadSubBranch(l, targetSubBranch)) return false
 
         return (
           (uId && cId === uId) ||
@@ -264,6 +310,7 @@ export default function LeadsMain() {
       }
 
       if (targetBranch && !matchLeadBranch(l, targetBranch)) return false
+      if (targetSubBranch && !matchLeadSubBranch(l, targetSubBranch)) return false
 
       const caller = (l.caller || "").toLowerCase().trim()
       const owner = (l.owner || "").toLowerCase().trim()
@@ -311,7 +358,7 @@ export default function LeadsMain() {
         isCreator
       )
     })
-  }, [leads, user, isSuperOrAdmin, activeCompanyId, activeBranchId, branches])
+  }, [leads, user, isSuperOrAdmin, activeCompanyId, activeBranchId, activeSubBranchId, branches, subBranches])
 
   if (isLoading) {
     return <ThreeDotLoader text="Loading leads & opportunities..." fullScreen={false} />

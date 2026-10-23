@@ -74,9 +74,10 @@ export default function ClientsMain() {
     if (showLoading) setIsLoading(true)
     try {
       // Always read fresh from store — avoids stale closure after company/branch switch
-      const { activeCompanyId: freshCompanyId, activeBranchId: freshBranchId, branches: freshBranches, user: freshUser } = useAuthStore.getState()
+      const { activeCompanyId: freshCompanyId, activeBranchId: freshBranchId, activeSubBranchId: freshSubBranchId, branches: freshBranches, subBranches: freshSubBranches, user: freshUser } = useAuthStore.getState()
       const targetComp = (freshCompanyId || freshUser?.companyId || "").toLowerCase().trim()
       const targetBranch = freshBranchId || (freshUser?.role !== "Super Admin" && freshUser?.role !== "Admin" ? freshUser?.branchId : null)
+      const targetSubBranch = freshSubBranchId || (freshUser?.role !== "Super Admin" && freshUser?.role !== "Admin" ? freshUser?.subBranchId : null)
 
       const targetBranchObj = freshBranches.find(b => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
       const targetBranchId = String(targetBranchObj?.id || targetBranch || "").toLowerCase().trim()
@@ -94,6 +95,22 @@ export default function ClientsMain() {
                uBranchIds.includes(targetBranchId)
       }
 
+      const targetSubBranchObj = (freshSubBranches || []).find(sb => sb.id === targetSubBranch || sb.name.toLowerCase() === (targetSubBranch || "").toLowerCase())
+      const targetSubBranchId = String(targetSubBranchObj?.id || targetSubBranch || "").toLowerCase().trim()
+      const targetSubBranchName = targetSubBranchObj?.name?.toLowerCase().trim() || ""
+
+      const checkSubBranch = (c: any) => {
+        if (!targetSubBranch || targetSubBranch === "all") return true
+        const cSubBranch = String(c.subBranchId || c.sub_branch_id || "").toLowerCase().trim()
+        const cSubBranchName = String(c.subBranchName || c.sub_branch_name || "").toLowerCase().trim()
+        const uSubBranchIds = (c.subBranchIds && c.subBranchIds.length > 0)
+          ? c.subBranchIds.map((id: any) => String(id).toLowerCase().trim())
+          : []
+        return (cSubBranch && (cSubBranch === targetSubBranchId || (targetSubBranchName && cSubBranch === targetSubBranchName))) ||
+               (cSubBranchName && (cSubBranchName === targetSubBranchName || cSubBranchName === targetSubBranchId)) ||
+               uSubBranchIds.includes(targetSubBranchId)
+      }
+
       const allUsers = await getUsers("all")
       const clientUsers = allUsers.filter((u) => {
         if (u.role !== "Clients") return false
@@ -104,6 +121,9 @@ export default function ClientsMain() {
           if (!uCompIds.includes(targetComp)) return false
         }
         if (targetBranch && !checkBranch(u)) {
+          return false
+        }
+        if (targetSubBranch && !checkSubBranch(u)) {
           return false
         }
         return true
@@ -127,6 +147,9 @@ export default function ClientsMain() {
       }
       if (targetBranch && targetBranch !== "all") {
         storedClients = storedClients.filter(c => checkBranch(c))
+      }
+      if (targetSubBranch && targetSubBranch !== "all") {
+        storedClients = storedClients.filter(c => checkSubBranch(c))
       }
 
       const userClientsMap = new Map<string, ClientItem>()
@@ -313,6 +336,8 @@ export default function ClientsMain() {
     window.addEventListener("saampark_clients_updated", handleStorage)
     window.addEventListener("saampark_company_switched", handleStorage)
     window.addEventListener("saampark_branch_switched", handleStorage)
+    window.addEventListener("saampark_sub_branch_switched", handleStorage)
+    window.addEventListener("saampark_subbranch_switched", handleStorage)
 
     return () => {
       window.removeEventListener("storage", handleStorage)
@@ -320,6 +345,8 @@ export default function ClientsMain() {
       window.removeEventListener("saampark_clients_updated", handleStorage)
       window.removeEventListener("saampark_company_switched", handleStorage)
       window.removeEventListener("saampark_branch_switched", handleStorage)
+      window.removeEventListener("saampark_sub_branch_switched", handleStorage)
+      window.removeEventListener("saampark_subbranch_switched", handleStorage)
     }
   }, [loadClientData])
 

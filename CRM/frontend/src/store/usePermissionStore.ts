@@ -69,6 +69,7 @@ export interface ModuleActionFlags {
   add: boolean
   edit: boolean
   delete: boolean
+  lockUnlock?: boolean // Sub-permission for locking and unlocking leads
   [key: string]: boolean | undefined
 }
 
@@ -165,6 +166,7 @@ export const DEFAULT_FULL_ACTIONS: ModuleActionFlags = {
   add: true,
   edit: true,
   delete: true,
+  lockUnlock: true,
 }
 
 export const DEFAULT_VIEW_ONLY_ACTIONS: ModuleActionFlags = {
@@ -172,6 +174,7 @@ export const DEFAULT_VIEW_ONLY_ACTIONS: ModuleActionFlags = {
   add: false,
   edit: false,
   delete: false,
+  lockUnlock: false,
 }
 
 export const DEFAULT_NO_ACTIONS: ModuleActionFlags = {
@@ -179,6 +182,7 @@ export const DEFAULT_NO_ACTIONS: ModuleActionFlags = {
   add: false,
   edit: false,
   delete: false,
+  lockUnlock: false,
 }
 
 // Role normalization helper
@@ -212,13 +216,15 @@ export const DEFAULT_ROLE_ACTION_PERMISSIONS: Record<Role, Record<string, Module
   'Super Admin': (() => {
     const init: Record<string, ModuleActionFlags> = {}
     CONFIGURABLE_MODULES.forEach((m) => { init[m] = { ...DEFAULT_FULL_ACTIONS } })
+    init['Leads'] = { view: true, add: true, edit: true, delete: true, lockUnlock: true }
     return init
   })(),
   'Admin': (() => {
     const init: Record<string, ModuleActionFlags> = {}
     CONFIGURABLE_MODULES.forEach((m) => {
-      init[m] = { view: true, add: true, edit: true, delete: true }
+      init[m] = { view: true, add: true, edit: true, delete: true, lockUnlock: false }
     })
+    init['Leads'] = { view: true, add: true, edit: true, delete: true, lockUnlock: true }
     return init
   })(),
   'Teams': (() => {
@@ -230,8 +236,10 @@ export const DEFAULT_ROLE_ACTION_PERMISSIONS: Record<Role, Record<string, Module
         add: !isRestricted,
         edit: !isRestricted,
         delete: false,
+        lockUnlock: false,
       }
     })
+    init['Leads'] = { view: true, add: true, edit: true, delete: false, lockUnlock: false }
     return init
   })(),
   'Clients': (() => {
@@ -244,8 +252,10 @@ export const DEFAULT_ROLE_ACTION_PERMISSIONS: Record<Role, Record<string, Module
         add: ['Tickets', 'Messages', 'Leads'].includes(m),
         edit: ['Tickets', 'Leads'].includes(m),
         delete: false,
+        lockUnlock: false,
       }
     })
+    init['Leads'] = { view: true, add: true, edit: true, delete: false, lockUnlock: false }
     return init
   })(),
 }
@@ -256,6 +266,8 @@ interface PermissionState {
   userPermissions: Record<string, ModuleName[]>
   userActionPermissions: Record<string, Record<string, ModuleActionFlags>>
   companyEnabledModules: Record<string, string[]>
+  branchEnabledModules: Record<string, string[]>
+  subBranchEnabledModules: Record<string, string[]>
   
   // Actions
   fetchRolePermissions: () => Promise<void>
@@ -266,12 +278,16 @@ interface PermissionState {
   setUserModuleAction: (userId: string, moduleName: ModuleName, action: ActionType, value: boolean) => void
   setUserAllModuleActions: (userId: string, matrix: Record<string, ModuleActionFlags>) => void
   setCompanyEnabledModules: (companyId: string, modules: string[]) => void
+  setBranchEnabledModules: (branchId: string, modules: string[]) => void
+  setSubBranchEnabledModules: (subBranchId: string, modules: string[]) => void
   resetToDefaults: () => void
   
   // Helpers
   isModuleAllowed: (user: User | null, moduleName: string) => boolean
   isCompanyModuleAllowed: (companyId: string | null | undefined, moduleName: string) => boolean
+  isEntityModuleAllowed: (companyId: string | null | undefined, branchId: string | null | undefined, subBranchId: string | null | undefined, moduleName: string) => boolean
   getEnabledModulesForCompany: (companyId: string | null | undefined) => string[]
+  getEnabledModulesForEntity: (type: 'company' | 'branch' | 'subbranch', id: string) => string[]
   getModulesForUser: (user: User | null) => ModuleName[]
   getUserModuleActions: (user: User | null, moduleName: string) => ModuleActionFlags
   canPerformAction: (user: User | null, moduleName: string, action: ActionType) => boolean
@@ -288,6 +304,8 @@ export const usePermissionStore = create<PermissionState>()(
         tech: [...ALL_APP_MODULES],
         consultancy: [...ALL_APP_MODULES],
       },
+      branchEnabledModules: {},
+      subBranchEnabledModules: {},
 
       fetchRolePermissions: async () => {
         try {
@@ -428,6 +446,57 @@ export const usePermissionStore = create<PermissionState>()(
             [canonKey]: modules,
           }
         }))
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("saampark_entity_permissions_updated"))
+          window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+        }
+      },
+
+      setBranchEnabledModules: (branchId: string, modules: string[]) => {
+        const bKey = String(branchId || '').toLowerCase().trim()
+        set((state) => ({
+          branchEnabledModules: {
+            ...state.branchEnabledModules,
+            [branchId]: modules,
+            [bKey]: modules,
+          }
+        }))
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("saampark_entity_permissions_updated"))
+          window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+        }
+      },
+
+      setSubBranchEnabledModules: (subBranchId: string, modules: string[]) => {
+        const sbKey = String(subBranchId || '').toLowerCase().trim()
+        set((state) => ({
+          subBranchEnabledModules: {
+            ...state.subBranchEnabledModules,
+            [subBranchId]: modules,
+            [sbKey]: modules,
+          }
+        }))
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("saampark_entity_permissions_updated"))
+          window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+        }
+      },
+
+      getEnabledModulesForEntity: (type: 'company' | 'branch' | 'subbranch', id: string): string[] => {
+        if (!id || id === 'all') return [...ALL_APP_MODULES]
+        const state = get()
+        const normId = String(id).toLowerCase().trim()
+        if (type === 'company') {
+          const canonKey = (normId.includes('consult') || normId === '2') ? 'consultancy' : (normId.includes('tech') || normId === '1' ? 'tech' : normId)
+          return state.companyEnabledModules?.[canonKey] || state.companyEnabledModules?.[id] || [...ALL_APP_MODULES]
+        }
+        if (type === 'branch') {
+          return state.branchEnabledModules?.[id] || state.branchEnabledModules?.[normId] || [...ALL_APP_MODULES]
+        }
+        if (type === 'subbranch') {
+          return state.subBranchEnabledModules?.[id] || state.subBranchEnabledModules?.[normId] || [...ALL_APP_MODULES]
+        }
+        return [...ALL_APP_MODULES]
       },
 
       getEnabledModulesForCompany: (companyId: string | null | undefined): string[] => {
@@ -443,17 +512,14 @@ export const usePermissionStore = create<PermissionState>()(
       },
 
       isCompanyModuleAllowed: (companyId: string | null | undefined, moduleName: string): boolean => {
-        if (!companyId || companyId === 'all') return true
+        return get().isEntityModuleAllowed(companyId, undefined, undefined, moduleName)
+      },
+
+      isEntityModuleAllowed: (companyId: string | null | undefined, branchId: string | null | undefined, subBranchId: string | null | undefined, moduleName: string): boolean => {
         const mKey = String(moduleName || '').toLowerCase().trim()
-        if (mKey === 'dashboard' || mKey === 'companies' || mKey === 'settings') return true
+        if (mKey === 'dashboard' || mKey === 'companies' || mKey === 'settings' || mKey === 'general settings') return true
 
         const state = get()
-        const cKey = String(companyId).toLowerCase().trim()
-        const canonKey = (cKey.includes('consult') || cKey === '2') ? 'consultancy' : (cKey.includes('tech') || cKey === '1' ? 'tech' : cKey)
-        const enabled = state.companyEnabledModules?.[canonKey] || state.companyEnabledModules?.[companyId]
-        if (!enabled || !Array.isArray(enabled) || enabled.length === 0) {
-          return true
-        }
 
         const ALIAS_MAP: Record<string, string> = {
           'sales': 'Invoices',
@@ -469,14 +535,43 @@ export const usePermissionStore = create<PermissionState>()(
           'crm': 'Leads',
           'organisation': 'Companies',
           'hr & employees': 'Teams',
-          'support': 'Tickets'
+          'support': 'Tickets',
+          'general settings': 'Settings',
+          'approvals': 'Approvals'
         }
         const resolvedName = (ALIAS_MAP[mKey] || mKey).toLowerCase().trim()
 
-        return enabled.some(m => {
-          const modNorm = String(m).toLowerCase().trim()
-          return modNorm === mKey || modNorm === resolvedName || (ALIAS_MAP[modNorm] && ALIAS_MAP[modNorm].toLowerCase() === mKey)
-        })
+        const checkList = (list?: string[]): boolean => {
+          if (!list || !Array.isArray(list) || list.length === 0) return true
+          return list.some(m => {
+            const modNorm = String(m).toLowerCase().trim()
+            return modNorm === mKey || modNorm === resolvedName || (ALIAS_MAP[modNorm] && ALIAS_MAP[modNorm].toLowerCase() === mKey)
+          })
+        }
+
+        // 1. Sub-Branch level check
+        if (subBranchId && subBranchId !== 'all') {
+          const sbNorm = String(subBranchId).toLowerCase().trim()
+          const sbList = state.subBranchEnabledModules?.[subBranchId] || state.subBranchEnabledModules?.[sbNorm]
+          if (sbList && !checkList(sbList)) return false
+        }
+
+        // 2. Branch level check
+        if (branchId && branchId !== 'all') {
+          const bNorm = String(branchId).toLowerCase().trim()
+          const bList = state.branchEnabledModules?.[branchId] || state.branchEnabledModules?.[bNorm]
+          if (bList && !checkList(bList)) return false
+        }
+
+        // 3. Company level check
+        if (companyId && companyId !== 'all') {
+          const cKey = String(companyId).toLowerCase().trim()
+          const canonKey = (cKey.includes('consult') || cKey === '2') ? 'consultancy' : (cKey.includes('tech') || cKey === '1' ? 'tech' : cKey)
+          const cList = state.companyEnabledModules?.[canonKey] || state.companyEnabledModules?.[companyId]
+          if (cList && !checkList(cList)) return false
+        }
+
+        return true
       },
 
       resetToDefaults: () => {
@@ -521,7 +616,8 @@ export const usePermissionStore = create<PermissionState>()(
           'crm': 'Leads',
           'organisation': 'Companies',
           'hr & employees': 'Teams',
-          'support': 'Tickets'
+          'support': 'Tickets',
+          'general settings': 'Settings'
         }
         const resolvedName = (ALIAS_MAP[mKey] || mKey).toLowerCase().trim()
 
@@ -675,10 +771,11 @@ export const usePermissionStore = create<PermissionState>()(
               add: Boolean(flags.view && flags.add),
               edit: Boolean(flags.view && flags.edit),
               delete: Boolean(flags.view && flags.delete),
+              lockUnlock: Boolean(flags.view && (flags.lockUnlock ?? (normRole === 'Admin'))),
             }
           }
           // If custom matrix exists but module not listed, access is completely denied
-          return { view: false, add: false, edit: false, delete: false }
+          return { view: false, add: false, edit: false, delete: false, lockUnlock: false }
         }
 
         // If user has allowedModules list override:
@@ -699,7 +796,7 @@ export const usePermissionStore = create<PermissionState>()(
             return mNorm === mKey || mNorm === resolvedName
           })
           if (!isAllowed) {
-            return { view: false, add: false, edit: false, delete: false }
+            return { view: false, add: false, edit: false, delete: false, lockUnlock: false }
           }
         }
 
@@ -715,16 +812,20 @@ export const usePermissionStore = create<PermissionState>()(
           }
         }
 
-        return { view: false, add: false, edit: false, delete: false }
+        return { view: false, add: false, edit: false, delete: false, lockUnlock: false }
       },
 
-      canPerformAction: (user: User | null, moduleName: string, action: ActionType): boolean => {
+      canPerformAction: (user: User | null, moduleName: string, action: ActionType | 'lockUnlock'): boolean => {
         if (!user) return false
         const normRole = normalizeRole(user.role)
         if (normRole === 'Super Admin') return true
 
         const actions = get().getUserModuleActions(user, moduleName)
         if (!actions.view) return false
+
+        if (action === 'lockUnlock') {
+          return Boolean(actions.lockUnlock)
+        }
 
         return Boolean(actions[action])
       }

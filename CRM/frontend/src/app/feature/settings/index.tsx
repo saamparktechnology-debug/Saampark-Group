@@ -33,8 +33,9 @@ import {
   CompanyPaymentSettings,
   DEFAULT_COMPANY_PAYMENT_SETTINGS 
 } from "./services/companyPaymentService"
+import { EntityModulePermissionsTab } from "./components/EntityModulePermissionsTab"
 
-type SettingsTab = "profile" | "kyc" | "payments" | "company" | "smtp" | "theme"
+type SettingsTab = "profile" | "kyc" | "payments" | "entity-permissions" | "company" | "smtp" | "theme"
 
 export default function SettingsMain() {
   const { user, loginAs, companies, updateCompany, fetchCompanies } = useAuthStore()
@@ -877,6 +878,7 @@ export default function SettingsMain() {
     }
     if (isSuperAdmin) {
       base.push(
+        { id: "entity-permissions", label: "🏢 Entity Module Permissions", icon: Building2 },
         { id: "company", label: "Workspace Branding", icon: Settings },
         { id: "smtp", label: "Email / SMTP Setup", icon: Mail }
       )
@@ -2115,6 +2117,11 @@ export default function SettingsMain() {
             </div>
           </form>
         </div>
+      )}
+
+      {/* ── TAB: ENTITY MODULE PERMISSIONS (SUPER ADMIN ONLY) ── */}
+      {activeTab === "entity-permissions" && isSuperAdmin && (
+        <EntityModulePermissionsTab />
       )}
 
       {/* ── TAB: THEME ────────────────────────────────────────────────────── */}

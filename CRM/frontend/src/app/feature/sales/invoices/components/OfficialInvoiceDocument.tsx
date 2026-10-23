@@ -395,14 +395,11 @@ export function OfficialInvoiceDocument({
     "SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED"
   ).trim()
 
-  // Default fallback values if company / branch hasn't configured bank details yet
-  const defaultBankFallback = {
-    bankName: "ICICI Bank Ltd",
-    accountHolder: fullRegisteredCompanyName || "SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED",
-    accountNumber: "123405009876",
-    ifscCode: "ICIC0001234",
-    bankBranch: "Sector V, Kolkata",
-    upiId: "saampark@icici",
+  // Helper to validate non-empty string fields
+  const isValidField = (val?: string | null): boolean => {
+    if (!val) return false
+    const s = String(val).trim().toLowerCase()
+    return s !== "" && s !== "none" && s !== "-" && s !== "null" && s !== "undefined"
   }
 
   // Parent Company baseline values
@@ -410,8 +407,8 @@ export function OfficialInvoiceDocument({
   const companyNonGstUpi = (companyDetails?.nongst_upi_id || activeCompany?.nongst_upi_id || (companyDetails as any)?.upi_id || activeCompany?.upi_id || paySettings?.upiId || "")?.trim()
   const companyUpi = isGstInvoice ? companyGstUpi : companyNonGstUpi
 
-  const companyGstHolder = (companyDetails?.gst_account_holder || activeCompany?.gst_account_holder || (companyDetails as any)?.account_holder || activeCompany?.account_holder || paySettings?.accountHolderName || fullRegisteredCompanyName || "")?.trim()
-  const companyNonGstHolder = (companyDetails?.nongst_account_holder || activeCompany?.nongst_account_holder || (companyDetails as any)?.account_holder || activeCompany?.account_holder || paySettings?.accountHolderName || fullRegisteredCompanyName || "")?.trim()
+  const companyGstHolder = (companyDetails?.gst_account_holder || activeCompany?.gst_account_holder || (companyDetails as any)?.account_holder || activeCompany?.account_holder || paySettings?.accountHolderName || "")?.trim()
+  const companyNonGstHolder = (companyDetails?.nongst_account_holder || activeCompany?.nongst_account_holder || (companyDetails as any)?.account_holder || activeCompany?.account_holder || paySettings?.accountHolderName || "")?.trim()
   const companyHolder = isGstInvoice ? companyGstHolder : companyNonGstHolder
 
   const companyGstBank = (companyDetails?.gst_bank_name || activeCompany?.gst_bank_name || (companyDetails as any)?.bank_name || activeCompany?.bank_name || paySettings?.bankName || "")?.trim()
@@ -430,66 +427,72 @@ export function OfficialInvoiceDocument({
   const companyNonGstBranch = (companyDetails?.nongst_bank_branch || activeCompany?.nongst_bank_branch || (companyDetails as any)?.bank_branch || activeCompany?.bank_branch || paySettings?.branch || "")?.trim()
   const companyBranch = isGstInvoice ? companyGstBranch : companyNonGstBranch
 
-  // Bank & UPI details resolved specifically for issuing entity with strict company fallback
+  // Bank & UPI details resolved specifically for issuing entity. If left gap / blank, resolves cleanly to "" without fake fallbacks
   const resolvedUpiId = (
-    overrideBankDetails?.upiId ||
-    (isSubBranchIssued 
-      ? (isGstInvoice ? (activeSubBranch?.gst_upi_id || activeSubBranch?.upi_id || activeBranch?.gst_upi_id || activeBranch?.upi_id || companyUpi) : (activeSubBranch?.nongst_upi_id || activeSubBranch?.upi_id || activeBranch?.nongst_upi_id || activeBranch?.upi_id || companyUpi))
-      : isBranchIssued 
-      ? (isGstInvoice ? (activeBranch?.gst_upi_id || activeBranch?.upi_id || companyUpi) : (activeBranch?.nongst_upi_id || activeBranch?.upi_id || companyUpi))
-      : companyUpi
-    )
-  )?.trim() || activeCompany?.upi_id || defaultBankFallback.upiId
+    overrideBankDetails?.upiId !== undefined
+      ? overrideBankDetails.upiId
+      : (isSubBranchIssued 
+          ? (isGstInvoice ? (activeSubBranch?.gst_upi_id || activeSubBranch?.upi_id || activeBranch?.gst_upi_id || activeBranch?.upi_id || companyUpi) : (activeSubBranch?.nongst_upi_id || activeSubBranch?.upi_id || activeBranch?.nongst_upi_id || activeBranch?.upi_id || companyUpi))
+          : isBranchIssued 
+          ? (isGstInvoice ? (activeBranch?.gst_upi_id || activeBranch?.upi_id || companyUpi) : (activeBranch?.nongst_upi_id || activeBranch?.upi_id || companyUpi))
+          : companyUpi
+        )
+  )?.trim() || activeCompany?.upi_id?.trim() || ""
 
   const resolvedAccountHolder = (
-    overrideBankDetails?.accountHolder ||
-    (isSubBranchIssued 
-      ? (isGstInvoice ? (activeSubBranch?.gst_account_holder || activeSubBranch?.account_holder || activeBranch?.gst_account_holder || activeBranch?.account_holder || companyHolder) : (activeSubBranch?.nongst_account_holder || activeSubBranch?.account_holder || activeBranch?.nongst_account_holder || activeBranch?.account_holder || companyHolder))
-      : isBranchIssued 
-      ? (isGstInvoice ? (activeBranch?.gst_account_holder || activeBranch?.account_holder || companyHolder) : (activeBranch?.nongst_account_holder || activeBranch?.account_holder || companyHolder))
-      : companyHolder
-    )
-  )?.trim() || fullRegisteredCompanyName || defaultBankFallback.accountHolder
+    overrideBankDetails?.accountHolder !== undefined
+      ? overrideBankDetails.accountHolder
+      : (isSubBranchIssued 
+          ? (isGstInvoice ? (activeSubBranch?.gst_account_holder || activeSubBranch?.account_holder || activeBranch?.gst_account_holder || activeBranch?.account_holder || companyHolder) : (activeSubBranch?.nongst_account_holder || activeSubBranch?.account_holder || activeBranch?.nongst_account_holder || activeBranch?.account_holder || companyHolder))
+          : isBranchIssued 
+          ? (isGstInvoice ? (activeBranch?.gst_account_holder || activeBranch?.account_holder || companyHolder) : (activeBranch?.nongst_account_holder || activeBranch?.account_holder || companyHolder))
+          : companyHolder
+        )
+  )?.trim() || ""
 
   const resolvedBankName = (
-    overrideBankDetails?.bankName ||
-    (isSubBranchIssued 
-      ? (isGstInvoice ? (activeSubBranch?.gst_bank_name || activeSubBranch?.bank_name || activeBranch?.gst_bank_name || activeBranch?.bank_name || companyBank) : (activeSubBranch?.nongst_bank_name || activeSubBranch?.bank_name || activeBranch?.nongst_bank_name || activeBranch?.bank_name || companyBank))
-      : isBranchIssued 
-      ? (isGstInvoice ? (activeBranch?.gst_bank_name || activeBranch?.bank_name || companyBank) : (activeBranch?.nongst_bank_name || activeBranch?.bank_name || companyBank))
-      : companyBank
-    )
-  )?.trim() || activeCompany?.bank_name || defaultBankFallback.bankName
+    overrideBankDetails?.bankName !== undefined
+      ? overrideBankDetails.bankName
+      : (isSubBranchIssued 
+          ? (isGstInvoice ? (activeSubBranch?.gst_bank_name || activeSubBranch?.bank_name || activeBranch?.gst_bank_name || activeBranch?.bank_name || companyBank) : (activeSubBranch?.nongst_bank_name || activeSubBranch?.bank_name || activeBranch?.nongst_bank_name || activeBranch?.bank_name || companyBank))
+          : isBranchIssued 
+          ? (isGstInvoice ? (activeBranch?.gst_bank_name || activeBranch?.bank_name || companyBank) : (activeBranch?.nongst_bank_name || activeBranch?.bank_name || companyBank))
+          : companyBank
+        )
+  )?.trim() || activeCompany?.bank_name?.trim() || ""
 
   const resolvedAccountNumber = (
-    overrideBankDetails?.accountNumber ||
-    (isSubBranchIssued 
-      ? (isGstInvoice ? (activeSubBranch?.gst_account_number || activeSubBranch?.account_number || activeBranch?.gst_account_number || activeBranch?.account_number || companyAccNum) : (activeSubBranch?.nongst_account_number || activeSubBranch?.account_number || activeBranch?.nongst_account_number || activeBranch?.account_number || companyAccNum))
-      : isBranchIssued 
-      ? (isGstInvoice ? (activeBranch?.gst_account_number || activeBranch?.account_number || companyAccNum) : (activeBranch?.nongst_account_number || activeBranch?.account_number || companyAccNum))
-      : companyAccNum
-    )
-  )?.trim() || activeCompany?.account_number || defaultBankFallback.accountNumber
+    overrideBankDetails?.accountNumber !== undefined
+      ? overrideBankDetails.accountNumber
+      : (isSubBranchIssued 
+          ? (isGstInvoice ? (activeSubBranch?.gst_account_number || activeSubBranch?.account_number || activeBranch?.gst_account_number || activeBranch?.account_number || companyAccNum) : (activeSubBranch?.nongst_account_number || activeSubBranch?.account_number || activeBranch?.nongst_account_number || activeBranch?.account_number || companyAccNum))
+          : isBranchIssued 
+          ? (isGstInvoice ? (activeBranch?.gst_account_number || activeBranch?.account_number || companyAccNum) : (activeBranch?.nongst_account_number || activeBranch?.account_number || companyAccNum))
+          : companyAccNum
+        )
+  )?.trim() || activeCompany?.account_number?.trim() || ""
 
   const resolvedIfscCode = (
-    overrideBankDetails?.ifscCode ||
-    (isSubBranchIssued 
-      ? (isGstInvoice ? (activeSubBranch?.gst_ifsc_code || activeSubBranch?.ifsc_code || activeBranch?.gst_ifsc_code || activeBranch?.ifsc_code || companyIfsc) : (activeSubBranch?.nongst_ifsc_code || activeSubBranch?.ifsc_code || activeBranch?.nongst_ifsc_code || activeBranch?.ifsc_code || companyIfsc))
-      : isBranchIssued 
-      ? (isGstInvoice ? (activeBranch?.gst_ifsc_code || activeBranch?.ifsc_code || companyIfsc) : (activeBranch?.nongst_ifsc_code || activeBranch?.ifsc_code || companyIfsc))
-      : companyIfsc
-    )
-  )?.trim() || activeCompany?.ifsc_code || defaultBankFallback.ifscCode
+    overrideBankDetails?.ifscCode !== undefined
+      ? overrideBankDetails.ifscCode
+      : (isSubBranchIssued 
+          ? (isGstInvoice ? (activeSubBranch?.gst_ifsc_code || activeSubBranch?.ifsc_code || activeBranch?.gst_ifsc_code || activeBranch?.ifsc_code || companyIfsc) : (activeSubBranch?.nongst_ifsc_code || activeSubBranch?.ifsc_code || activeBranch?.nongst_ifsc_code || activeBranch?.ifsc_code || companyIfsc))
+          : isBranchIssued 
+          ? (isGstInvoice ? (activeBranch?.gst_ifsc_code || activeBranch?.ifsc_code || companyIfsc) : (activeBranch?.nongst_ifsc_code || activeBranch?.ifsc_code || companyIfsc))
+          : companyIfsc
+        )
+  )?.trim() || activeCompany?.ifsc_code?.trim() || ""
 
   const resolvedBankBranch = (
-    overrideBankDetails?.bankBranch ||
-    (isSubBranchIssued 
-      ? (isGstInvoice ? (activeSubBranch?.gst_bank_branch || activeSubBranch?.bank_branch || activeBranch?.gst_bank_branch || activeBranch?.bank_branch || companyBranch) : (activeSubBranch?.nongst_bank_branch || activeSubBranch?.bank_branch || activeBranch?.nongst_bank_branch || activeBranch?.bank_branch || companyBranch))
-      : isBranchIssued 
-      ? (isGstInvoice ? (activeBranch?.gst_bank_branch || activeBranch?.bank_branch || companyBranch) : (activeBranch?.nongst_bank_branch || activeBranch?.bank_branch || companyBranch))
-      : companyBranch
-    )
-  )?.trim() || activeCompany?.bank_branch || defaultBankFallback.bankBranch
+    overrideBankDetails?.bankBranch !== undefined
+      ? overrideBankDetails.bankBranch
+      : (isSubBranchIssued 
+          ? (isGstInvoice ? (activeSubBranch?.gst_bank_branch || activeSubBranch?.bank_branch || activeBranch?.gst_bank_branch || activeBranch?.bank_branch || companyBranch) : (activeSubBranch?.nongst_bank_branch || activeSubBranch?.bank_branch || activeBranch?.nongst_bank_branch || activeBranch?.bank_branch || companyBranch))
+          : isBranchIssued 
+          ? (isGstInvoice ? (activeBranch?.gst_bank_branch || activeBranch?.bank_branch || companyBranch) : (activeBranch?.nongst_bank_branch || activeBranch?.bank_branch || companyBranch))
+          : companyBranch
+        )
+  )?.trim() || activeCompany?.bank_branch?.trim() || ""
 
   // Signatory & Stamp URLs (Strict to issuing entity with seamless cascade to parent Company)
   const companySignatureFallback = (
@@ -773,12 +776,23 @@ export function OfficialInvoiceDocument({
   const totalPages = paginatedPages.length
 
   const hasDue = parsedDue > 0
-  const hasBankDetails = Boolean(resolvedBankName || resolvedAccountNumber)
-  const hasUpiDetails = Boolean(resolvedUpiId || customPaymentQrUrl)
-  const hasContactInfo = Boolean(resolvedPhone || resolvedWebsite || resolvedEmail)
-  const hasCin = Boolean(resolvedCin && resolvedCin.trim() && resolvedCin.trim().toLowerCase() !== "none" && resolvedCin.trim() !== "-")
-  const hasGstin = Boolean(isGstInvoice && resolvedGstin && resolvedGstin.trim() && resolvedGstin.trim().toLowerCase() !== "none" && resolvedGstin.trim() !== "-")
-  const hasPan = Boolean(resolvedPan && resolvedPan.trim() && resolvedPan.trim().toLowerCase() !== "none" && resolvedPan.trim() !== "-")
+  const hasBankName = isValidField(resolvedBankName)
+  const hasAccountNum = isValidField(resolvedAccountNumber)
+  const hasIfsc = isValidField(resolvedIfscCode)
+  const hasAccountHolder = isValidField(resolvedAccountHolder) && Boolean(hasAccountNum || hasBankName || hasIfsc)
+  const hasBankBranch = isValidField(resolvedBankBranch) && Boolean(hasAccountNum || hasBankName || hasIfsc)
+  const hasUpiId = isValidField(resolvedUpiId)
+  const hasQr = Boolean(customPaymentQrUrl && customPaymentQrUrl.trim() && customPaymentQrUrl !== "none" && (hasUpiId || hasAccountNum || hasBankName))
+
+  const hasAnyBankInfo = Boolean(hasAccountNum || hasBankName || hasIfsc)
+  const hasUpiDetails = Boolean(hasUpiId || (hasQr && hasUpiId))
+  const hasAnyPaymentInfo = Boolean(hasAnyBankInfo || hasUpiDetails || hasQr)
+  const hasBankDetails = hasAnyBankInfo
+
+  const hasContactInfo = Boolean(isValidField(resolvedPhone) || isValidField(resolvedWebsite) || isValidField(resolvedEmail))
+  const hasCin = isValidField(resolvedCin)
+  const hasGstin = Boolean(isGstInvoice && isValidField(resolvedGstin))
+  const hasPan = isValidField(resolvedPan)
   const hasLegalIds = Boolean(hasCin || hasGstin || hasPan)
 
 
@@ -970,19 +984,15 @@ export function OfficialInvoiceDocument({
           )}
 
           {/* Address & Contact Row */}
-          {(resolvedAddress || hasContactInfo || interactive) && (
+          {(isValidField(resolvedAddress) || hasContactInfo) && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1 text-[10px] text-zinc-700 pt-1">
-              {(resolvedAddress || interactive) ? (
+              {isValidField(resolvedAddress) ? (
                 <div className="flex items-start gap-1.5">
                   <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0 mt-0.5`}>
                     <MapPin size={9} />
                   </span>
                   <div className="leading-tight flex-1">
-                    <EditableText
-                      value="Office:"
-                      interactive={interactive}
-                      className="text-zinc-900 block text-[9.5px] font-bold"
-                    />
+                    <span className="text-zinc-900 block text-[9.5px] font-bold">Office:</span>
                     <EditableText
                       value={resolvedAddress}
                       onChange={(val) => onFieldChange?.("address", val)}
@@ -995,9 +1005,9 @@ export function OfficialInvoiceDocument({
                 </div>
               ) : <div />}
 
-              {(hasContactInfo || interactive) && (
+              {hasContactInfo && (
                 <div className="space-y-1">
-                  {(resolvedPhone || interactive) && (
+                  {isValidField(resolvedPhone) && (
                     <p className="flex items-center gap-1.5">
                       <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
                         <Phone size={8.5} />
@@ -1012,7 +1022,7 @@ export function OfficialInvoiceDocument({
                       />
                     </p>
                   )}
-                  {(resolvedEmail || interactive) && (
+                  {isValidField(resolvedEmail) && (
                     <p className="flex items-center gap-1.5">
                       <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
                         <Mail size={8.5} />
@@ -1027,7 +1037,7 @@ export function OfficialInvoiceDocument({
                       />
                     </p>
                   )}
-                  {(resolvedWebsite || interactive) && (
+                  {isValidField(resolvedWebsite) && (
                     <p className="flex items-center gap-1.5">
                       <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
                         <Globe size={8.5} />
@@ -1298,14 +1308,16 @@ export function OfficialInvoiceDocument({
             {[invoice.clientEmail || clientDetails?.email, invoice.clientPhone || clientDetails?.phone].filter(Boolean).join(" • ")}
           </p>
         )}
-        <p className="text-[9.5px] text-zinc-600 leading-tight">
-          <EditableText value="Address:" interactive={interactive} className="font-bold mr-1" />
-          <EditableText
-            value={invoice.clientAddress || clientDetails?.address || "Address not specified"}
-            interactive={interactive}
-          />
-        </p>
-        {(invoice.clientCity || invoice.clientState || clientDetails?.city || clientDetails?.state) && (
+        {isValidField(invoice.clientAddress || clientDetails?.address) && (
+          <p className="text-[9.5px] text-zinc-600 leading-tight">
+            <EditableText value="Address:" interactive={interactive} className="font-bold mr-1" />
+            <EditableText
+              value={invoice.clientAddress || clientDetails?.address}
+              interactive={interactive}
+            />
+          </p>
+        )}
+        {isValidField([invoice.clientCity, invoice.clientState].filter(Boolean).join(", ") || [clientDetails?.city, clientDetails?.state].filter(Boolean).join(", ")) && (
           <p className="text-[9.5px] text-zinc-600 flex items-center gap-1">
             <MapPin size={9} className="text-zinc-500 shrink-0" />
             <EditableText value="Location:" interactive={interactive} className="font-bold mr-1" />
@@ -1315,10 +1327,16 @@ export function OfficialInvoiceDocument({
             />
           </p>
         )}
-        {isGstInvoice && (invoice.clientGstin || clientDetails?.gstNumber || clientDetails?.vatNumber) && (
+        {isGstInvoice && isValidField(invoice.clientGstin || clientDetails?.gstNumber || clientDetails?.vatNumber) && (
           <p className="text-[9px] font-mono font-bold text-zinc-800">
             <EditableText value="Client GSTIN:" interactive={interactive} className="font-bold mr-1 font-sans" />
             <EditableText value={invoice.clientGstin || clientDetails?.gstNumber || clientDetails?.vatNumber} interactive={interactive} />
+          </p>
+        )}
+        {isValidField((clientDetails as any)?.panNumber || (invoice as any)?.clientPan) && (
+          <p className="text-[9px] font-mono font-bold text-zinc-800">
+            <EditableText value="Client PAN:" interactive={interactive} className="font-bold mr-1 font-sans" />
+            <EditableText value={(invoice as any)?.clientPan || (clientDetails as any)?.panNumber} interactive={interactive} />
           </p>
         )}
       </div>
@@ -1510,121 +1528,134 @@ export function OfficialInvoiceDocument({
             />
           </div>
 
-          {/* Card 2: BANK & UPI PAYMENT DETAILS (Always visible, prominent, and scannable) */}
-          <div className={`p-2.5 sm:p-3 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-2 shadow-2xs flex-1 flex flex-col justify-between`}>
-            <div className="flex items-center justify-between border-b border-zinc-200/80 dark:border-zinc-700/60 pb-1">
-              <span className="font-black text-[9.5px] uppercase tracking-wider text-zinc-800 dark:text-zinc-200 flex items-center gap-1">
-                <Landmark size={12} className={theme.primaryText} />
-                <EditableText value="BANK & UPI PAYMENT DETAILS" interactive={interactive} />
-              </span>
-              <EditableText
-                value="Instant Settlement"
-                interactive={interactive}
-                className="text-[7.5px] font-black px-1.5 py-0.2 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700"
-              />
-            </div>
-
-            <div className="grid grid-cols-12 gap-2.5 items-center">
-              {/* Left side of card: UPI QR Code & Instant Scan */}
-              <div className="col-span-4 flex flex-col items-center justify-center text-center space-y-1">
-                {customPaymentQrUrl && (
-                  <div className="bg-white p-1.5 rounded-xl border border-zinc-300 shadow-2xs shrink-0">
-                    <img 
-                      src={customPaymentQrUrl} 
-                      alt="UPI Payment QR Code" 
-                      className="w-16 h-16 object-contain" 
-                      style={{ imageRendering: 'pixelated' }}
-                    />
-                  </div>
-                )}
+          {/* Card 2: BANK & UPI PAYMENT DETAILS (Renders ONLY if bank or UPI details are entered. If gap/blank, completely blank!) */}
+          {hasAnyPaymentInfo && (
+            <div className={`p-2.5 sm:p-3 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-2 shadow-2xs flex-1 flex flex-col justify-between`}>
+              <div className="flex items-center justify-between border-b border-zinc-200/80 dark:border-zinc-700/60 pb-1">
+                <span className="font-black text-[9.5px] uppercase tracking-wider text-zinc-800 dark:text-zinc-200 flex items-center gap-1">
+                  <Landmark size={12} className={theme.primaryText} />
+                  <EditableText 
+                    value={hasAnyBankInfo && hasUpiDetails ? "BANK & UPI PAYMENT DETAILS" : hasAnyBankInfo ? "BANK PAYMENT DETAILS" : "UPI PAYMENT DETAILS"} 
+                    interactive={interactive} 
+                  />
+                </span>
                 <EditableText
-                  value="SCAN TO PAY"
+                  value="Instant Settlement"
                   interactive={interactive}
-                  className="text-[7.5px] font-black text-zinc-600 dark:text-zinc-400 uppercase tracking-tight block"
+                  className="text-[7.5px] font-black px-1.5 py-0.2 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700"
                 />
               </div>
 
-              {/* Right side of card: Direct Bank Account & UPI Details */}
-              <div className="col-span-8 space-y-1 text-[9px] text-zinc-700 dark:text-zinc-300">
-                {(resolvedBankName || interactive) && (
-                  <div className="flex justify-between items-center gap-1">
-                    <EditableText value="Bank:" interactive={interactive} className="text-zinc-500 font-medium shrink-0" />
+              <div className={`grid ${hasQr ? "grid-cols-12" : "grid-cols-1"} gap-2.5 items-center`}>
+                {/* Left side of card: UPI QR Code & Instant Scan (only if QR exists) */}
+                {hasQr && (
+                  <div className="col-span-4 flex flex-col items-center justify-center text-center space-y-1">
+                    <div className="bg-white p-1.5 rounded-xl border border-zinc-300 shadow-2xs shrink-0">
+                      <img 
+                        src={customPaymentQrUrl} 
+                        alt="UPI Payment QR Code" 
+                        className="w-16 h-16 object-contain" 
+                        style={{ imageRendering: 'pixelated' }}
+                      />
+                    </div>
                     <EditableText
-                      value={resolvedBankName}
-                      onChange={(val) => onFieldChange?.("bank_name", val)}
+                      value="SCAN TO PAY"
                       interactive={interactive}
-                      fieldKey="bank_name"
-                      placeholder="Bank name..."
-                      className="text-zinc-900 dark:text-zinc-100 font-bold truncate text-right flex-1"
+                      className="text-[7.5px] font-black text-zinc-600 dark:text-zinc-400 uppercase tracking-tight block"
                     />
                   </div>
                 )}
-                {(resolvedAccountNumber || interactive) && (
-                  <div className="flex justify-between items-center gap-1 font-mono">
-                    <EditableText value="A/C No:" interactive={interactive} className="text-zinc-500 font-medium font-sans shrink-0" />
-                    <EditableText
-                      value={resolvedAccountNumber}
-                      onChange={(val) => onFieldChange?.("account_number", val)}
-                      interactive={interactive}
-                      fieldKey="account_number"
-                      placeholder="Account number..."
-                      className="text-zinc-900 dark:text-zinc-100 font-extrabold text-right flex-1"
-                    />
-                  </div>
-                )}
-                {(resolvedIfscCode || interactive) && (
-                  <div className="flex justify-between items-center gap-1 font-mono">
-                    <EditableText value="IFSC:" interactive={interactive} className="text-zinc-500 font-medium font-sans shrink-0" />
-                    <EditableText
-                      value={resolvedIfscCode}
-                      onChange={(val) => onFieldChange?.("ifsc_code", val)}
-                      interactive={interactive}
-                      fieldKey="ifsc_code"
-                      placeholder="IFSC code..."
-                      className="text-zinc-900 dark:text-zinc-100 font-extrabold uppercase text-right flex-1"
-                    />
-                  </div>
-                )}
-                {(resolvedAccountHolder || interactive) && (
-                  <div className="flex justify-between items-center gap-1">
-                    <EditableText value="A/C Name:" interactive={interactive} className="text-zinc-500 font-medium shrink-0" />
-                    <EditableText
-                      value={resolvedAccountHolder}
-                      onChange={(val) => onFieldChange?.("account_holder", val)}
-                      interactive={interactive}
-                      fieldKey="account_holder"
-                      placeholder="A/C holder..."
-                      className="text-zinc-900 dark:text-zinc-100 font-bold truncate text-right flex-1"
-                    />
-                  </div>
-                )}
-                {(resolvedUpiId || interactive) && (
-                  <div className="flex justify-between items-center gap-1 pt-0.5 border-t border-zinc-200/60 dark:border-zinc-700/50 font-mono">
-                    <EditableText value="UPI ID:" interactive={interactive} className="text-zinc-500 font-medium font-sans shrink-0" />
-                    <EditableText
-                      value={resolvedUpiId}
-                      onChange={(val) => onFieldChange?.("upi_id", val)}
-                      interactive={interactive}
-                      fieldKey="upi_id"
-                      placeholder="UPI ID..."
-                      className="text-indigo-700 dark:text-indigo-300 font-black truncate bg-indigo-50 dark:bg-indigo-950/60 px-1 py-0.2 rounded border border-indigo-200 dark:border-indigo-800 text-right flex-1"
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
 
-            {/* Payment App Badges */}
-            <div className="flex items-center justify-between gap-1 pt-0.5 border-t border-zinc-200/70 dark:border-zinc-700/60 text-[7px] font-bold text-zinc-500">
-              <EditableText value="Accepted:" interactive={interactive} className="uppercase text-[7px] font-extrabold text-zinc-400" />
-              <div className="flex items-center gap-1">
-                <EditableText value="GPay" interactive={interactive} className="px-1.5 py-0.2 rounded bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300" />
-                <EditableText value="PhonePe" interactive={interactive} className="px-1.5 py-0.2 rounded bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300" />
-                <EditableText value="Paytm" interactive={interactive} className="px-1.5 py-0.2 rounded bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300" />
-                <EditableText value="NEFT/IMPS" interactive={interactive} className="px-1.5 py-0.2 rounded bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300" />
+                {/* Right side of card: Direct Bank Account & UPI Details */}
+                <div className={`${hasQr ? "col-span-8" : "w-full"} space-y-1 text-[9px] text-zinc-700 dark:text-zinc-300`}>
+                  {hasBankName && (
+                    <div className="flex justify-between items-center gap-1">
+                      <span className="text-zinc-500 font-medium shrink-0">Bank:</span>
+                      <EditableText
+                        value={resolvedBankName}
+                        onChange={(val) => onFieldChange?.("bank_name", val)}
+                        interactive={interactive}
+                        fieldKey="bank_name"
+                        placeholder="Bank name..."
+                        className="text-zinc-900 dark:text-zinc-100 font-bold truncate text-right flex-1"
+                      />
+                    </div>
+                  )}
+                  {hasAccountNum && (
+                    <div className="flex justify-between items-center gap-1 font-mono">
+                      <span className="text-zinc-500 font-medium font-sans shrink-0">A/C No:</span>
+                      <EditableText
+                        value={resolvedAccountNumber}
+                        onChange={(val) => onFieldChange?.("account_number", val)}
+                        interactive={interactive}
+                        fieldKey="account_number"
+                        placeholder="Account number..."
+                        className="text-zinc-900 dark:text-zinc-100 font-extrabold text-right flex-1"
+                      />
+                    </div>
+                  )}
+                  {hasIfsc && (
+                    <div className="flex justify-between items-center gap-1 font-mono">
+                      <span className="text-zinc-500 font-medium font-sans shrink-0">IFSC:</span>
+                      <EditableText
+                        value={resolvedIfscCode}
+                        onChange={(val) => onFieldChange?.("ifsc_code", val)}
+                        interactive={interactive}
+                        fieldKey="ifsc_code"
+                        placeholder="IFSC code..."
+                        className="text-zinc-900 dark:text-zinc-100 font-extrabold uppercase text-right flex-1"
+                      />
+                    </div>
+                  )}
+                  {hasAccountHolder && (
+                    <div className="flex justify-between items-center gap-1">
+                      <span className="text-zinc-500 font-medium shrink-0">A/C Name:</span>
+                      <EditableText
+                        value={resolvedAccountHolder}
+                        onChange={(val) => onFieldChange?.("account_holder", val)}
+                        interactive={interactive}
+                        fieldKey="account_holder"
+                        placeholder="A/C holder..."
+                        className="text-zinc-900 dark:text-zinc-100 font-bold truncate text-right flex-1"
+                      />
+                    </div>
+                  )}
+                  {hasUpiId && (
+                    <div className="flex justify-between items-center gap-1 pt-0.5 border-t border-zinc-200/60 dark:border-zinc-700/50 font-mono">
+                      <span className="text-zinc-500 font-medium font-sans shrink-0">UPI ID:</span>
+                      <EditableText
+                        value={resolvedUpiId}
+                        onChange={(val) => onFieldChange?.("upi_id", val)}
+                        interactive={interactive}
+                        fieldKey="upi_id"
+                        placeholder="UPI ID..."
+                        className="text-indigo-700 dark:text-indigo-300 font-black truncate bg-indigo-50 dark:bg-indigo-950/60 px-1 py-0.2 rounded border border-indigo-200 dark:border-indigo-800 text-right flex-1"
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
+
+              {/* Payment App Badges */}
+              {(hasUpiDetails || hasAnyBankInfo) && (
+                <div className="flex items-center justify-between gap-1 pt-0.5 border-t border-zinc-200/70 dark:border-zinc-700/60 text-[7px] font-bold text-zinc-500">
+                  <EditableText value="Accepted:" interactive={interactive} className="uppercase text-[7px] font-extrabold text-zinc-400" />
+                  <div className="flex items-center gap-1">
+                    {hasUpiDetails && (
+                      <>
+                        <EditableText value="GPay" interactive={interactive} className="px-1.5 py-0.2 rounded bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300" />
+                        <EditableText value="PhonePe" interactive={interactive} className="px-1.5 py-0.2 rounded bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300" />
+                        <EditableText value="Paytm" interactive={interactive} className="px-1.5 py-0.2 rounded bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300" />
+                      </>
+                    )}
+                    {hasAnyBankInfo && (
+                      <EditableText value="NEFT/IMPS" interactive={interactive} className="px-1.5 py-0.2 rounded bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300" />
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
+          )}
         </div>
 
         {/* Right 6 Columns: Financial Computation Matrix */}

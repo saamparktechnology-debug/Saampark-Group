@@ -71,7 +71,7 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { getUsers } from "@/app/feature/users/services/userService"
 
 export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps) {
-  const { user, companies, activeCompanyId, activeBranchId, branches } = useAuthStore()
+  const { user, companies, activeCompanyId, activeBranchId, activeSubBranchId, branches, subBranches } = useAuthStore()
   const isSuperOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
 
   const allowedCompanies = React.useMemo(() => {
@@ -269,6 +269,10 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
     const branchCompId = targetBranchObj?.companyId || (targetBranchObj as any)?.company_id
     const finalCompanyId = branchCompId || (isSuperOrAdmin ? (selectedCompanyId || activeCompanyId || "tech") : (activeCompanyId || user?.companyId || "tech"))
 
+    const finalSubBranchId = activeSubBranchId && activeSubBranchId !== "all" ? activeSubBranchId : (user?.subBranchId || undefined)
+    const targetSubBranchObj = finalSubBranchId ? subBranches?.find(sb => String(sb.id).toLowerCase().trim() === String(finalSubBranchId).toLowerCase().trim()) : undefined
+    const finalSubBranchName = targetSubBranchObj?.name || user?.subBranchName || undefined
+
     setIsSubmitting(true)
     try {
       const created = await addLead({
@@ -294,6 +298,8 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
         createdByRole: user?.role || "Teams",
         branchId: finalBranchId,
         branchName: finalBranchName,
+        subBranchId: finalSubBranchId,
+        subBranchName: finalSubBranchName,
         companyId: finalCompanyId,
         isClientPrivate: user?.role === "Clients",
         ownerAvatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${companyName}`,

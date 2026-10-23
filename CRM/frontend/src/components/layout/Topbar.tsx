@@ -5,14 +5,14 @@ import { motion, AnimatePresence } from "framer-motion"
 import { 
   Menu, CheckSquare, LayoutGrid, Briefcase, Monitor, Calendar, Command, CheckCircle, Check,
   Search, Plus, Clock, Bell, Mail,
-  Settings, LogOut, User, Sun, Moon, X, Building2, GitBranch, CreditCard, MapPin
+  Settings, LogOut, User, Sun, Moon, X, Building2, GitBranch, CreditCard, MapPin, ChevronRight
 } from "lucide-react"
 import { useTheme } from "next-themes"
 import Link from "next/link"
 
 import { Button } from "../ui/Button"
 import { useUIStore } from "@/store/useUIStore"
-import { useAuthStore, COMPANIES, getCompanyLogoUrl, getCompanyFullName, isMatchingCompany } from "@/store/useAuthStore"
+import { useAuthStore, COMPANIES, getCompanyLogoUrl, getCompanyFullName, isMatchingCompany, getUserEntityScope } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 
 // Quick-Add Dropdown options with module keys
@@ -51,6 +51,11 @@ export function Topbar() {
   const [showNotifications, setShowNotifications] = React.useState(false)
   const [showCompanyMenu, setShowCompanyMenu] = React.useState(false)
   const [notifications, setNotifications] = React.useState<any[]>([])
+  
+  // Hierarchical Stepped Switcher state
+  const [drillStep, setDrillStep] = React.useState<'company' | 'branch' | 'subbranch'>('company')
+  const [selectedCompanyForDrill, setSelectedCompanyForDrill] = React.useState<any>(null)
+  const [selectedBranchForDrill, setSelectedBranchForDrill] = React.useState<any>(null)
 
   const visibleQuickAddOptions = React.useMemo(() => {
     if (!user) return []
@@ -238,38 +243,28 @@ export function Topbar() {
 
   if (!user) return null
 
+  // Resolve hierarchical user entity scope (Company -> Branch -> Sub-Branch)
+  const userScope = React.useMemo(() => {
+    return getUserEntityScope(user, companies, branches, subBranches)
+  }, [user, companies, branches, subBranches])
+
   // Companies this specific user has access to
   const allowedCompanies = React.useMemo(() => {
-    if (user.role === 'Super Admin' || user.role === 'Admin') return companies
-    let rawCompIds = user.companyIds || (user as any).company_ids
-    let userCompIds: string[] = []
-    if (typeof rawCompIds === 'string') {
-      try { userCompIds = JSON.parse(rawCompIds) } catch { userCompIds = [rawCompIds] }
-    } else if (Array.isArray(rawCompIds)) {
-      userCompIds = rawCompIds
-    }
-    if (userCompIds.length === 0) {
-      userCompIds = [user.companyId || 'tech']
-    }
-    return companies.filter(c => userCompIds.some(id => isMatchingCompany(c, id)))
-  }, [user.companyIds, user.companyId, (user as any).company_ids, user.role, companies])
+    if (userScope.isSuperAdmin) return companies
+    return companies.filter(c => userScope.allowedCompanyIds.some(id => isMatchingCompany(c, id)))
+  }, [userScope, companies])
 
   // Branches this specific user has access to
   const allowedBranches = React.useMemo(() => {
-    if (user.role === 'Super Admin' || user.role === 'Admin') return branches
-    let rawBranchIds = user.branchIds || (user as any).branch_ids
-    let userBranchIds: string[] = []
-    if (typeof rawBranchIds === 'string') {
-      try { userBranchIds = JSON.parse(rawBranchIds) } catch { userBranchIds = [rawBranchIds] }
-    } else if (Array.isArray(rawBranchIds)) {
-      userBranchIds = rawBranchIds
-    }
-    if (userBranchIds.length === 0 && user.branchId) {
-      userBranchIds = [user.branchId]
-    }
-    if (userBranchIds.length === 0) return branches
-    return branches.filter(b => userBranchIds.some(id => String(id).toLowerCase().trim() === String(b.id).toLowerCase().trim()))
-  }, [user.branchIds, user.branchId, (user as any).branch_ids, user.role, branches])
+    if (userScope.isSuperAdmin) return branches
+    return branches.filter(b => userScope.allowedBranchIds.some(id => String(id).toLowerCase().trim() === String(b.id).toLowerCase().trim()))
+  }, [userScope, branches])
+
+  // Sub-Branches this specific user has access to
+  const allowedSubBranches = React.useMemo(() => {
+    if (userScope.isSuperAdmin) return subBranches
+    return subBranches.filter(sb => userScope.allowedSubBranchIds.some(id => String(id).toLowerCase().trim() === String(sb.id).toLowerCase().trim()))
+  }, [userScope, subBranches])
 
   const isSuperAdmin = user.role === 'Super Admin'
   const isAllCompanies = isSuperAdmin && (!activeCompanyId || activeCompanyId === 'all')
@@ -284,8 +279,9 @@ export function Topbar() {
   const activeCompanyName = isAllCompanies ? "SAAMPARK GROUP" : (activeCompany ? getCompanyFullName(activeCompany) : "SAAMPARK GROUP")
   const activeCompanyLogo = isAllCompanies ? null : (activeCompany ? getCompanyLogoUrl(activeCompany) : null)
   const activeBranch = branches.find(b => b.id === activeBranchId)
+  const activeSubBranch = subBranches.find(sb => sb.id === activeSubBranchId)
 
-  const canSwitchEntities = isSuperAdmin || allowedCompanies.length > 1 || allowedBranches.length > 1 || (allowedBranches.length > 0 && branches.length > 0 && user.role !== 'Clients')
+  const canSwitchEntities = userScope.isSuperAdmin || (userScope.scopeLevel !== 'subbranch' && (allowedCompanies.length > 1 || allowedBranches.length > 1 || allowedSubBranches.length > 0))
 
   return (
     <header
@@ -308,6 +304,17 @@ export function Topbar() {
           <button
             type="button"
             onClick={() => {
+              if (activeCompany && !isAllCompanies) {
+                setSelectedCompanyForDrill(activeCompany)
+                if (activeBranch) {
+                  setSelectedBranchForDrill(activeBranch)
+                  setDrillStep('branch')
+                } else {
+                  setDrillStep('company')
+                }
+              } else {
+                setDrillStep('company')
+              }
               setShowCompanyMenu(prev => !prev)
               setShowQuickAdd(false)
               setShowNotifications(false)
@@ -342,9 +349,11 @@ export function Topbar() {
               <span className="text-[10px] text-slate-500 dark:text-slate-400 block truncate">
                 {isAllCompanies
                   ? "All Companies (Group View)"
-                  : (activeBranch
-                    ? `${activeBranch.name}`
-                    : "All Branches / Main HQ")}
+                  : (activeSubBranch
+                    ? `${activeBranch?.name || 'Branch'} • ${activeSubBranch.name}`
+                    : (activeBranch
+                      ? `${activeBranch.name}`
+                      : "Company HQ (All Branches)"))}
               </span>
             </div>
 
@@ -368,176 +377,333 @@ export function Topbar() {
                 className="absolute left-0 top-full mt-2 w-80 sm:w-96 modal-3d-dialog overflow-hidden z-50 flex flex-col max-h-[82vh]"
               >
                 {/* Dropdown Header */}
-                <div className="p-3.5 border-b border-slate-100 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-800/40 flex items-center justify-between">
+                <div className="p-3.5 border-b border-border bg-muted/40 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Building2 size={16} className="text-blue-600" />
-                    <span className="font-bold text-xs text-slate-900 dark:text-white">Active Enterprise Workspace</span>
+                    <span className="font-bold text-xs text-foreground">
+                      {drillStep === 'company' && "Step 1: Select Company"}
+                      {drillStep === 'branch' && `Step 2: Branches of ${selectedCompanyForDrill?.brand_name || selectedCompanyForDrill?.name}`}
+                      {drillStep === 'subbranch' && `Step 3: Sub-Branches of ${selectedBranchForDrill?.name}`}
+                    </span>
                   </div>
                   <button
                     onClick={() => setShowCompanyMenu(false)}
-                    className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer"
+                    className="text-muted-foreground hover:text-foreground p-1 rounded-lg hover:bg-muted cursor-pointer"
                   >
                     <X size={15} />
                   </button>
                 </div>
 
-                {/* Scrollable list */}
-                <div className="p-3 space-y-2 overflow-y-auto flex-1 scrollbar-hide">
-                  {/* Super Admin 'All Companies' Option */}
-                  {isSuperAdmin && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        switchCompany("all")
-                        switchBranch(null)
-                        switchSubBranch(null)
-                        setShowCompanyMenu(false)
-                      }}
-                      className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                        isAllCompanies
-                          ? "bg-blue-50/90 dark:bg-blue-950/70 border-blue-500/50 shadow-xs"
-                          : "bg-slate-50/60 dark:bg-zinc-800/40 border-slate-200/80 dark:border-zinc-700/60 hover:bg-slate-100 dark:hover:bg-zinc-800"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 font-black text-xs shadow-xs">
-                          🏢
-                        </div>
-                        <div className="truncate">
-                          <p className="font-bold text-xs text-slate-900 dark:text-white truncate">
-                            All Companies (Group View)
-                          </p>
-                          <p className="text-[10px] text-slate-400 truncate">
-                            Consolidated multi-company analytics & overview
-                          </p>
-                        </div>
-                      </div>
-                      {isAllCompanies && (
-                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-600 text-white shadow-xs">
-                          ✓ Active
-                        </span>
-                      )}
-                    </button>
-                  )}
-
-                  {/* The 3 Companies List */}
-                  {allowedCompanies.map(comp => {
-                    const isCurrent = !isAllCompanies && isMatchingCompany(comp, activeCompanyId || activeCompany?.id || activeCompany?.slug)
-                    const compFullName = getCompanyFullName(comp)
-                    const compLogoUrl = getCompanyLogoUrl(comp)
-                    const compBranches = allowedBranches.filter(b => isMatchingCompany(comp, b.companyId || (b as any).company_id))
-
-                    return (
-                      <div
-                        key={comp.id}
-                        className={`rounded-xl border overflow-hidden transition-all ${
-                          isCurrent
-                            ? "bg-blue-50/40 dark:bg-blue-950/30 border-blue-500/40 shadow-2xs"
-                            : "bg-slate-50/40 dark:bg-zinc-800/30 border-slate-200/70 dark:border-zinc-800"
+                {/* Level 1: Companies */}
+                {drillStep === 'company' && (
+                  <div className="p-3 space-y-2 overflow-y-auto flex-1 scrollbar-hide">
+                    {isSuperAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          switchCompany("all")
+                          switchBranch(null)
+                          switchSubBranch(null)
+                          setShowCompanyMenu(false)
+                        }}
+                        className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                          isAllCompanies
+                            ? "bg-blue-50/90 dark:bg-blue-950/70 border-blue-500/50 shadow-xs"
+                            : "bg-surface border-border hover:bg-surface-hover"
                         }`}
                       >
-                        {/* Company Row */}
-                        <div className="p-2.5 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 font-black text-xs shadow-xs">
+                            🏢
+                          </div>
+                          <div className="truncate">
+                            <p className="font-bold text-xs text-foreground truncate">
+                              All Companies (Group View)
+                            </p>
+                            <p className="text-[10px] text-muted-foreground truncate">
+                              Consolidated multi-company analytics
+                            </p>
+                          </div>
+                        </div>
+                        {isAllCompanies && (
+                          <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-600 text-white shadow-xs">
+                            ✓ Active
+                          </span>
+                        )}
+                      </button>
+                    )}
+
+                    <p className="text-[10px] uppercase font-bold text-muted-foreground px-1 pt-1">
+                      Choose Company to access its Branches:
+                    </p>
+
+                    {allowedCompanies.map(comp => {
+                      const isCurrent = !isAllCompanies && isMatchingCompany(comp, activeCompanyId || activeCompany?.id || activeCompany?.slug)
+                      const compFullName = getCompanyFullName(comp)
+                      const compLogoUrl = getCompanyLogoUrl(comp)
+
+                      return (
+                        <div
+                          key={comp.id}
+                          onClick={() => {
+                            switchCompany(comp.id)
+                            setSelectedCompanyForDrill(comp)
+                            setDrillStep('branch')
+                          }}
+                          className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                            isCurrent
+                              ? "bg-blue-50/50 dark:bg-blue-950/40 border-blue-500/50 shadow-2xs"
+                              : "bg-surface border-border hover:bg-surface-hover hover:border-slate-300 dark:hover:border-zinc-700"
+                          }`}
+                        >
                           <div className="flex items-center gap-2.5 min-w-0 flex-1">
                             {compLogoUrl ? (
                               <img
                                 src={compLogoUrl}
                                 alt={compFullName}
-                                className="w-7 h-7 rounded-lg object-contain shrink-0 bg-white dark:bg-zinc-900 p-0.5 border border-slate-200 dark:border-zinc-700"
+                                className="w-8 h-8 rounded-lg object-contain shrink-0 bg-white dark:bg-zinc-900 p-0.5 border border-border"
                               />
                             ) : (
-                              <div className="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-950 text-blue-600 flex items-center justify-center text-sm shrink-0 border border-blue-200 dark:border-blue-900">
+                              <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950 text-blue-600 flex items-center justify-center text-sm shrink-0 border border-blue-200 dark:border-blue-900">
                                 {comp.logo || "🏢"}
                               </div>
                             )}
                             <div className="truncate">
-                              <p className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                              <p className="font-bold text-xs text-foreground truncate">
                                 {compFullName}
                               </p>
                               {comp.subtitle && (
-                                <p className="text-[9.5px] text-slate-400 truncate">
+                                <p className="text-[9.5px] text-muted-foreground truncate">
                                   {comp.subtitle}
                                 </p>
                               )}
                             </div>
                           </div>
 
-                          <button
-                            type="button"
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {isCurrent && !activeBranchId && (
+                              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-600 text-white shadow-xs">
+                                ✓ HQ Active
+                              </span>
+                            )}
+                            <span className="text-[11px] font-bold text-primary flex items-center gap-0.5">
+                              <span>Select Branches</span>
+                              <ChevronRight size={14} />
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* Level 2: Branches for Selected Company */}
+                {drillStep === 'branch' && selectedCompanyForDrill && (
+                  <div className="p-3 space-y-2 overflow-y-auto flex-1 scrollbar-hide">
+                    <div className="flex items-center justify-between pb-1.5 border-b border-border">
+                      <button
+                        type="button"
+                        onClick={() => setDrillStep('company')}
+                        className="text-xs font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        ← Change Company
+                      </button>
+                      <span className="text-[10px] font-bold text-muted-foreground truncate max-w-[180px]">
+                        {selectedCompanyForDrill.name}
+                      </span>
+                    </div>
+
+                    {userScope.canAccessCompanyHq && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          switchBranch(null)
+                          switchSubBranch(null)
+                          setShowCompanyMenu(false)
+                        }}
+                        className={`w-full p-2.5 rounded-xl border text-left flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                          !activeBranchId
+                            ? "bg-blue-600 text-white font-bold shadow-xs"
+                            : "bg-surface border-border hover:bg-surface-hover text-foreground"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Building2 size={15} />
+                          <div>
+                            <p className="font-bold text-xs">Stay at Company Headquarters</p>
+                            <p className={`text-[10px] ${!activeBranchId ? "text-blue-100" : "text-muted-foreground"}`}>
+                              Access all branch data at corporate HQ level
+                            </p>
+                          </div>
+                        </div>
+                        {!activeBranchId && <span className="text-xs">✓ Active</span>}
+                      </button>
+                    )}
+
+                    <p className="text-[10px] uppercase font-bold text-muted-foreground px-1 pt-2">
+                      Branches ({allowedBranches.filter(b => isMatchingCompany(selectedCompanyForDrill, b.companyId || (b as any).company_id)).length}):
+                    </p>
+
+                    {allowedBranches.filter(b => isMatchingCompany(selectedCompanyForDrill, b.companyId || (b as any).company_id)).length === 0 ? (
+                      <p className="text-xs text-muted-foreground p-3 text-center">No branches accessible for this company.</p>
+                    ) : (
+                      allowedBranches.filter(b => isMatchingCompany(selectedCompanyForDrill, b.companyId || (b as any).company_id)).map(b => {
+                        const isBranchActive = activeBranchId === b.id
+                        const branchSubs = allowedSubBranches.filter(sb => String(sb.parentBranchId) === String(b.id))
+
+                        return (
+                          <div
+                            key={b.id}
                             onClick={() => {
-                              switchCompany(comp.id)
-                              switchBranch(null)
-                              switchSubBranch(null)
-                              setShowCompanyMenu(false)
+                              switchBranch(b.id)
+                              if (branchSubs.length > 0) {
+                                setSelectedBranchForDrill(b)
+                                setDrillStep('subbranch')
+                              } else {
+                                setShowCompanyMenu(false)
+                              }
                             }}
-                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all shrink-0 cursor-pointer ${
-                              isCurrent && !activeBranchId
-                                ? "bg-blue-600 text-white shadow-xs"
-                                : "bg-slate-200/80 hover:bg-slate-300 dark:bg-zinc-700 dark:hover:bg-zinc-600 text-slate-700 dark:text-zinc-200"
+                            className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                              isBranchActive
+                                ? "bg-amber-500/15 border-amber-500/50 shadow-2xs"
+                                : "bg-surface border-border hover:bg-surface-hover"
                             }`}
                           >
-                            {isCurrent && !activeBranchId ? "✓ HQ Active" : "Select HQ"}
-                          </button>
-                        </div>
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <MapPin size={15} className="text-amber-500 shrink-0" />
+                              <div className="truncate">
+                                <p className="font-bold text-xs text-foreground truncate">{b.name}</p>
+                                <p className="text-[10px] text-muted-foreground truncate">
+                                  {b.city ? `${b.city}, ${b.state || 'India'}` : (b.address || 'Operational Branch')}
+                                </p>
+                              </div>
+                            </div>
 
-                        {/* Branches List under company */}
-                        {compBranches.length > 0 && (
-                          <div className="px-2.5 pb-2.5 pt-1 border-t border-slate-200/60 dark:border-zinc-800/80 space-y-1 bg-white/60 dark:bg-zinc-900/60">
-                            <p className="text-[9.5px] uppercase font-bold text-slate-400 px-1">
-                              Operating Branches ({compBranches.length})
-                            </p>
-                            {compBranches.map(b => {
-                              const isBranchActive = isCurrent && activeBranchId === b.id
-                              return (
-                                <div
-                                  key={b.id}
-                                  className="flex items-center justify-between p-1.5 rounded-lg bg-slate-100/70 dark:bg-zinc-800/60 text-xs"
-                                >
-                                  <div className="flex items-center gap-1.5 min-w-0">
-                                    <MapPin size={12} className="text-amber-500 shrink-0" />
-                                    <span className="truncate text-slate-800 dark:text-zinc-200 font-medium">
-                                      {b.name}
-                                    </span>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      switchCompany(comp.id)
-                                      switchBranch(b.id)
-                                      switchSubBranch(null)
-                                      setShowCompanyMenu(false)
-                                    }}
-                                    className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all shrink-0 cursor-pointer ${
-                                      isBranchActive
-                                        ? "bg-amber-500 text-slate-950 font-bold"
-                                        : "bg-slate-200 dark:bg-zinc-700 text-slate-600 dark:text-zinc-300 hover:bg-slate-300"
-                                    }`}
-                                  >
-                                    {isBranchActive ? "✓ Active" : "Switch"}
-                                  </button>
-                                </div>
-                              )
-                            })}
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {branchSubs.length > 0 && (
+                                <span className="text-[9.5px] font-bold px-1.5 py-0.5 rounded-md bg-purple-500/15 text-purple-600 dark:text-purple-300 border border-purple-500/30">
+                                  {branchSubs.length} Sub-Branches
+                                </span>
+                              )}
+                              {isBranchActive ? (
+                                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-500 text-slate-950">
+                                  ✓ Active
+                                </span>
+                              ) : (
+                                <span className="text-[11px] font-bold text-primary flex items-center gap-0.5">
+                                  <span>{branchSubs.length > 0 ? "Drill Down" : "Select"}</span>
+                                  <ChevronRight size={13} />
+                                </span>
+                              )}
+                            </div>
                           </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
+                        )
+                      })
+                    )}
+                  </div>
+                )}
+
+                {/* Level 3: Sub-Branches for Selected Branch */}
+                {drillStep === 'subbranch' && selectedBranchForDrill && (
+                  <div className="p-3 space-y-2 overflow-y-auto flex-1 scrollbar-hide">
+                    <div className="flex items-center justify-between pb-1.5 border-b border-border">
+                      <button
+                        type="button"
+                        onClick={() => setDrillStep('branch')}
+                        className="text-xs font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        ← Back to Branches
+                      </button>
+                      <span className="text-[10px] font-bold text-muted-foreground truncate max-w-[180px]">
+                        {selectedBranchForDrill.name}
+                      </span>
+                    </div>
+
+                    {userScope.canAccessBranchHq && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          switchSubBranch(null)
+                          setShowCompanyMenu(false)
+                        }}
+                        className={`w-full p-2.5 rounded-xl border text-left flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                          !activeSubBranchId
+                            ? "bg-amber-500 text-slate-950 font-bold shadow-xs"
+                            : "bg-surface border-border hover:bg-surface-hover text-foreground"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <MapPin size={15} />
+                          <div>
+                            <p className="font-bold text-xs">Stay at Branch Main Office</p>
+                            <p className="text-[10px] opacity-80">
+                              Direct branch operations without partner filter
+                            </p>
+                          </div>
+                        </div>
+                        {!activeSubBranchId && <span className="text-xs">✓ Active</span>}
+                      </button>
+                    )}
+
+                    <p className="text-[10px] uppercase font-bold text-muted-foreground px-1 pt-2">
+                      Sub-Branches & Partners ({allowedSubBranches.filter(sb => String(sb.parentBranchId) === String(selectedBranchForDrill.id)).length}):
+                    </p>
+
+                    {allowedSubBranches.filter(sb => String(sb.parentBranchId) === String(selectedBranchForDrill.id)).map(sb => {
+                      const isSubActive = activeSubBranchId === sb.id
+                      return (
+                        <div
+                          key={sb.id}
+                          onClick={() => {
+                            switchSubBranch(sb.id)
+                            setShowCompanyMenu(false)
+                          }}
+                          className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                            isSubActive
+                              ? "bg-purple-500/20 border-purple-500/50 shadow-2xs"
+                              : "bg-surface border-border hover:bg-surface-hover"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <div className="w-6 h-6 rounded-lg bg-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 text-xs font-bold">
+                              🤝
+                            </div>
+                            <div className="truncate">
+                              <p className="font-bold text-xs text-foreground truncate">{sb.name}</p>
+                              <p className="text-[10px] text-muted-foreground truncate">
+                                {sb.partnerType || "Franchise Partner"} • {sb.revenueSharePct || 0}% share
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="shrink-0">
+                            {isSubActive ? (
+                              <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-purple-600 text-white">
+                                ✓ Active
+                              </span>
+                            ) : (
+                              <span className="text-[11px] font-bold text-primary">Select</span>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
 
                 {/* Footer Link */}
-                <div className="p-3 border-t border-slate-100 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-800/40 flex items-center justify-between">
+                <div className="p-3 border-t border-border bg-muted/30 flex items-center justify-between">
                   <Link
                     href="/feature/companies"
                     onClick={() => setShowCompanyMenu(false)}
-                    className="text-[11px] font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400 flex items-center gap-1"
+                    className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1"
                   >
                     <span>Manage Companies & Branches →</span>
                   </Link>
                   <button
                     type="button"
                     onClick={() => setShowCompanyMenu(false)}
-                    className="px-2.5 py-1 text-[11px] font-semibold bg-slate-200 dark:bg-zinc-700 rounded-lg text-slate-700 dark:text-zinc-200 hover:bg-slate-300 cursor-pointer"
+                    className="px-2.5 py-1 text-[11px] font-semibold bg-surface-hover hover:bg-muted rounded-lg text-foreground cursor-pointer"
                   >
                     Close
                   </button>

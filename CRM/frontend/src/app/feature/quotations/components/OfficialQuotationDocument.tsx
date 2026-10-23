@@ -35,6 +35,7 @@ export interface QuotationData {
   tax?: number
   total: number
   status: string
+  approvalStatus?: "pending" | "approved" | "rejected"
   items?: QuotationLineItem[]
   companyId?: string
   companyName?: string

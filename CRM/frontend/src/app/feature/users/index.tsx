@@ -1,8 +1,9 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
-import { Users as UsersIcon, UserPlus, ShieldCheck, UserCheck, Briefcase, Download, Lock, CheckCircle2, AlertTriangle, X, Mail, ArrowRight } from "lucide-react"
+import { Users as UsersIcon, UserPlus, ShieldCheck, UserCheck, Briefcase, Download, CheckCircle2, AlertTriangle, X, Mail, ArrowRight } from "lucide-react"
 
 import { Button } from "@/components/ui/Button"
 import { useAuthStore, isMatchingCompany, isMatchingBranch } from "@/store/useAuthStore"
@@ -12,13 +13,12 @@ import { saveModuleDataToDB } from "@/lib/storageSync"
 import { UserList } from "./components/UserList"
 import { UserModal } from "./components/UserModal"
 import { UserOverviewModal } from "./components/UserOverviewModal"
-import { ModulePermissionsModal } from "./components/ModulePermissionsModal"
-import { UserPermissionsModal } from "./components/UserPermissionsModal"
 
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { ThreeDotLoader } from "@/components/ui/ThreeDotLoader"
 
 export default function UsersMain() {
+  const router = useRouter()
   const { activeCompanyId, activeBranchId, activeSubBranchId, branches, subBranches, companies, user } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
 
@@ -26,8 +26,6 @@ export default function UsersMain() {
 
   const [users, setUsers] = React.useState<UserItem[]>([])
   const [isModalOpen, setIsModalOpen] = React.useState(false)
-  const [isPermissionsModalOpen, setIsPermissionsModalOpen] = React.useState(false)
-  const [selectedUserForPermissions, setSelectedUserForPermissions] = React.useState<UserItem | null>(null)
   const [editingUser, setEditingUser] = React.useState<UserItem | null>(null)
   const [selectedUserForOverview, setSelectedUserForOverview] = React.useState<UserItem | null>(null)
   const [isOverviewModalOpen, setIsOverviewModalOpen] = React.useState(false)
@@ -188,8 +186,6 @@ export default function UsersMain() {
   const totalAdmins = visibleUsers.filter((u) => u.role === "Super Admin" || u.role === "Admin").length
   const totalTeams = visibleUsers.filter((u) => u.role === "Teams").length
   const totalClients = visibleUsers.filter((u) => u.role === "Clients").length
-
-  const canConfigureModulePermissions = user?.role === "Super Admin" || user?.role === "Admin"
 
   const handleOpenCreateModal = () => {
     setEditingUser(null)
@@ -517,18 +513,6 @@ export default function UsersMain() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-
-          {canConfigureModulePermissions && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsPermissionsModalOpen(true)}
-              className="gap-2 border-primary/40 text-primary hover:bg-primary/10 cursor-pointer"
-            >
-              <Lock size={16} /> Module Permissions
-            </Button>
-          )}
-
           <Button variant="outline" size="sm" className="gap-2 cursor-pointer">
             <Download size={16} /> Export CSV
           </Button>
@@ -597,7 +581,9 @@ export default function UsersMain() {
           onEdit={handleOpenEditModal}
           onToggleStatus={handleToggleStatus}
           onDelete={handleDeleteUser}
-          onManageUserModules={(targetUser) => setSelectedUserForPermissions(targetUser)}
+          onManageUserModules={(targetUser) => {
+            router.push(`/feature/permissions?tab=user-permissions&userId=${targetUser.id}`)
+          }}
           onViewOverview={(targetUser) => {
             setSelectedUserForOverview(targetUser)
             setIsOverviewModalOpen(true)
@@ -630,22 +616,6 @@ export default function UsersMain() {
         onClose={() => setIsModalOpen(false)}
         onSave={handleSaveUser}
         editingUser={editingUser}
-      />
-
-      {/* Role-Level Module Access Control Modal */}
-      <UserPermissionsModal
-        isOpen={!!selectedUserForPermissions}
-        user={selectedUserForPermissions}
-        onClose={() => setSelectedUserForPermissions(null)}
-        onSaved={() => {
-          setSelectedUserForPermissions(null)
-          loadUsers()
-        }}
-      />
-
-      <ModulePermissionsModal
-        isOpen={isPermissionsModalOpen}
-        onClose={() => setIsPermissionsModalOpen(false)}
       />
 
       {/* Success / Failed Status Feedback Popup Modal */}

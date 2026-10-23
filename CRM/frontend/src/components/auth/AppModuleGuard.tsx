@@ -42,6 +42,7 @@ const PATH_TO_MODULE_MAP: Array<{ prefix: string; moduleName: string }> = [
   { prefix: "/feature/expenses", moduleName: "Expenses" },
   { prefix: "/feature/reports", moduleName: "Reports" },
   { prefix: "/feature/settings", moduleName: "Settings" },
+  { prefix: "/feature/approvals", moduleName: "Approvals" },
   { prefix: "/feature/companies", moduleName: "Companies" },
   { prefix: "/feature/branches", moduleName: "Branches" },
   { prefix: "/feature/departments", moduleName: "Departments" },
@@ -52,8 +53,8 @@ const PATH_TO_MODULE_MAP: Array<{ prefix: string; moduleName: string }> = [
 export function AppModuleGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, activeCompanyId, switchCompany, isAuthenticated } = useAuthStore()
-  const { isModuleAllowed } = usePermissionStore()
+  const { user, activeCompanyId, activeBranchId, activeSubBranchId, switchCompany, isAuthenticated } = useAuthStore()
+  const { isModuleAllowed, isEntityModuleAllowed } = usePermissionStore()
   const [mounted, setMounted] = React.useState(false)
 
   React.useEffect(() => {
@@ -99,8 +100,25 @@ export function AppModuleGuard({ children }: { children: React.ReactNode }) {
 
   // Verify user has permission to view this module
   let allowed = isModuleAllowed(user, matched.moduleName)
-  if (matched.moduleName === "Activity Logs") {
+  if (matched.moduleName === "Approvals") {
     allowed = user.role === "Super Admin" || user.role === "Admin"
+  } else if (matched.moduleName === "Activity Logs") {
+    allowed = user.role === "Super Admin" || user.role === "Admin"
+  }
+
+  // Entity-level module restriction (Company -> Branch -> Sub-Branch)
+  let entityDisabled = false
+  if (allowed && matched.moduleName !== "Dashboard" && matched.moduleName !== "Settings") {
+    const isEntityAllowed = isEntityModuleAllowed(activeCompanyId, activeBranchId, activeSubBranchId, matched.moduleName)
+    if (!isEntityAllowed) {
+      // Super admin retains access to essential governance tools
+      if (user.role === "Super Admin" && ["Companies", "Branches", "Settings", "Permissions", "Users", "Activity Logs"].includes(matched.moduleName)) {
+        // allowed
+      } else {
+        allowed = false
+        entityDisabled = true
+      }
+    }
   }
 
   if (!allowed) {
@@ -117,15 +135,23 @@ export function AppModuleGuard({ children }: { children: React.ReactNode }) {
 
           <div className="space-y-2">
             <span className="inline-block px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
-              {user.role} Access Restricted
+              {entityDisabled ? "Entity Module Disabled" : `${user.role} Access Restricted`}
             </span>
             <h2 className="text-xl font-black text-zinc-900 dark:text-zinc-100">
-              Module Permission Required
+              {entityDisabled ? "Module Disabled For Selected Entity" : "Module Permission Required"}
             </h2>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-              Your account does not have permission to access the{" "}
-              <strong className="text-zinc-800 dark:text-zinc-200 font-semibold">{matched.moduleName}</strong> module.
-              Please contact your administrator if you require access to this section.
+              {entityDisabled ? (
+                <>
+                  The <strong className="text-zinc-800 dark:text-zinc-200 font-semibold">{matched.moduleName}</strong> module has been disabled for this company or branch by the Super Admin in Workspace Settings.
+                </>
+              ) : (
+                <>
+                  Your account does not have permission to access the{" "}
+                  <strong className="text-zinc-800 dark:text-zinc-200 font-semibold">{matched.moduleName}</strong> module.
+                  Please contact your administrator if you require access to this section.
+                </>
+              )}
             </p>
           </div>
 

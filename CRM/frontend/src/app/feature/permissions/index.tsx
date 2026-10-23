@@ -130,6 +130,20 @@ export default function PermissionsMain() {
     loadUsersList()
   }, [loadRoles, loadUsersList])
 
+  React.useEffect(() => {
+    if (typeof window === "undefined") return
+    const params = new URLSearchParams(window.location.search)
+    const tabParam = params.get("tab") as Tab | null
+    const userParam = params.get("userId")
+    if (tabParam && ["permissions", "user-permissions", "roles", "custom-roles"].includes(tabParam)) {
+      setActiveTab(tabParam)
+    }
+    if (userParam) {
+      setSelectedUserId(userParam)
+      if (!tabParam) setActiveTab("user-permissions")
+    }
+  }, [])
+
   // Filter users strictly matching active company / branch
   const visibleUsersList = React.useMemo(() => {
     if (!usersList || usersList.length === 0) return []
@@ -202,13 +216,17 @@ export default function PermissionsMain() {
   // Sync selectedUserId
   React.useEffect(() => {
     if (visibleUsersList.length > 0) {
-      if (!selectedUserId || !visibleUsersList.some(u => u.id === selectedUserId)) {
+      if (!selectedUserId || (!visibleUsersList.some(u => u.id === selectedUserId) && !usersList.some(u => u.id === selectedUserId))) {
         setSelectedUserId(visibleUsersList[0].id)
+      }
+    } else if (usersList.length > 0) {
+      if (!selectedUserId || !usersList.some(u => u.id === selectedUserId)) {
+        setSelectedUserId(usersList[0].id)
       }
     } else {
       setSelectedUserId("")
     }
-  }, [visibleUsersList, selectedUserId])
+  }, [visibleUsersList, usersList, selectedUserId])
 
   // Load role matrix from backend
   React.useEffect(() => {
@@ -228,6 +246,9 @@ export default function PermissionsMain() {
           ACTIONS.forEach(a => { 
             filled[m][a.key] = sourceMatrix[m]?.[a.key] ?? (selectedRole === 'Super Admin')
           })
+          if (m === "Leads") {
+            filled[m]["lockUnlock"] = sourceMatrix[m]?.lockUnlock ?? (selectedRole === 'Super Admin' || selectedRole === 'Admin')
+          }
         })
         if (isMounted) setPermissionMatrix(filled)
       } catch {
@@ -238,6 +259,9 @@ export default function PermissionsMain() {
           ACTIONS.forEach(a => { 
             filled[m][a.key] = fallbackMatrix[m]?.[a.key] ?? (selectedRole === 'Super Admin')
           })
+          if (m === "Leads") {
+            filled[m]["lockUnlock"] = fallbackMatrix[m]?.lockUnlock ?? (selectedRole === 'Super Admin' || selectedRole === 'Admin')
+          }
         })
         if (isMounted) setPermissionMatrix(filled)
       } finally {
@@ -270,6 +294,9 @@ export default function PermissionsMain() {
           ACTIONS.forEach(a => { 
             filled[m][a.key] = sourceMatrix[m]?.[a.key] ?? (userRole === 'Super Admin')
           })
+          if (m === "Leads") {
+            filled[m]["lockUnlock"] = sourceMatrix[m]?.lockUnlock ?? (userRole === 'Super Admin' || userRole === 'Admin')
+          }
         })
         if (isMounted) setUserPermissionMatrix(filled)
       } catch {
@@ -282,6 +309,9 @@ export default function PermissionsMain() {
           ACTIONS.forEach(a => { 
             filled[m][a.key] = roleMatrix[m]?.[a.key] ?? (userRole === 'Super Admin')
           })
+          if (m === "Leads") {
+            filled[m]["lockUnlock"] = roleMatrix[m]?.lockUnlock ?? (userRole === 'Super Admin' || userRole === 'Admin')
+          }
         })
         if (isMounted) setUserPermissionMatrix(filled)
       } finally {
@@ -332,6 +362,9 @@ export default function PermissionsMain() {
     const allChecked = ACTIONS.every(a => row[a.key])
     const newRow: Record<string, boolean> = {}
     ACTIONS.forEach(a => { newRow[a.key] = !allChecked })
+    if (module === "Leads") {
+      newRow["lockUnlock"] = !allChecked
+    }
 
     if (isUser) {
       setUserPermissionMatrix(prev => ({ ...prev, [module]: newRow }))
@@ -355,6 +388,9 @@ export default function PermissionsMain() {
       ACTIONS.forEach(a => {
         updated[m.key][a.key] = !allEnabled
       })
+      if (m.key === "Leads") {
+        updated[m.key]["lockUnlock"] = !allEnabled
+      }
     })
 
     if (isUser) {
@@ -372,6 +408,7 @@ export default function PermissionsMain() {
         add: template === "full",
         edit: template === "full",
         delete: template === "full",
+        ...(m === "Leads" ? { lockUnlock: template === "full" } : {})
       }
     })
     if (isUser) setUserPermissionMatrix(updated)
@@ -389,6 +426,7 @@ export default function PermissionsMain() {
           add: !!permissionMatrix[m]?.add,
           edit: !!permissionMatrix[m]?.edit,
           delete: !!permissionMatrix[m]?.delete,
+          ...(m === "Leads" ? { lockUnlock: !!permissionMatrix[m]?.lockUnlock } : {})
         }
       })
 
@@ -428,6 +466,7 @@ export default function PermissionsMain() {
           add: !!userPermissionMatrix[m]?.add,
           edit: !!userPermissionMatrix[m]?.edit,
           delete: !!userPermissionMatrix[m]?.delete,
+          ...(m === "Leads" ? { lockUnlock: !!userPermissionMatrix[m]?.lockUnlock } : {})
         }
       })
 
@@ -506,6 +545,9 @@ export default function PermissionsMain() {
       ACTIONS.forEach(a => { 
         filled[m][a.key] = roleMatrix[m]?.[a.key] ?? false 
       })
+      if (m === "Leads") {
+        filled[m]["lockUnlock"] = roleMatrix[m]?.lockUnlock ?? false
+      }
     })
     setUserPermissionMatrix(filled)
   }
@@ -747,44 +789,89 @@ export default function PermissionsMain() {
                         {cat.modules.map(mod => {
                           const isAllChecked = ACTIONS.every(a => permissionMatrix[mod.key]?.[a.key])
                           return (
-                            <tr key={mod.key} className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/50 transition-colors">
-                              <td className="py-3 px-4">
-                                <div className="font-bold text-zinc-900 dark:text-zinc-100">{mod.name}</div>
-                                <div className="text-[10px] text-zinc-400 line-clamp-1">{mod.description}</div>
-                              </td>
-                              <td className="py-3 px-2 text-center">
-                                <button
-                                  type="button"
-                                  onClick={() => handleToggleRow(mod.key, false)}
-                                  className={"text-[10px] px-2 py-0.5 rounded font-medium border transition-colors cursor-pointer " + (
-                                    isAllChecked 
-                                      ? "bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-950 dark:border-blue-900 dark:text-blue-400" 
-                                      : "bg-zinc-50 border-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:border-zinc-700"
-                                  )}
-                                >
-                                  {isAllChecked ? "Clear" : "All"}
-                                </button>
-                              </td>
-                              {ACTIONS.map(a => {
-                                const checked = !!permissionMatrix[mod.key]?.[a.key]
-                                return (
-                                  <td key={a.key} className="py-3 px-3 text-center">
-                                    <button 
-                                      type="button"
-                                      onClick={() => handlePermissionToggle(mod.key, a.key)} 
-                                      title={"Toggle " + a.label + " for " + mod.name}
-                                      className={"w-6 h-6 mx-auto rounded-md border flex items-center justify-center transition-all cursor-pointer " + (
-                                        checked 
-                                          ? "bg-blue-600 border-blue-600 text-white shadow-xs" 
-                                          : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-transparent hover:border-blue-400"
-                                      )}
-                                    >
-                                      {checked && <Check size={12} strokeWidth={3} />}
-                                    </button>
+                            <React.Fragment key={mod.key}>
+                              <tr className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/50 transition-colors">
+                                <td className="py-3 px-4">
+                                  <div className="font-bold text-zinc-900 dark:text-zinc-100">{mod.name}</div>
+                                  <div className="text-[10px] text-zinc-400 line-clamp-1">{mod.description}</div>
+                                </td>
+                                <td className="py-3 px-2 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleRow(mod.key, false)}
+                                    className={"text-[10px] px-2 py-0.5 rounded font-medium border transition-colors cursor-pointer " + (
+                                      isAllChecked 
+                                        ? "bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-950 dark:border-blue-900 dark:text-blue-400" 
+                                        : "bg-zinc-50 border-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:border-zinc-700"
+                                    )}
+                                  >
+                                    {isAllChecked ? "Clear" : "All"}
+                                  </button>
+                                </td>
+                                {ACTIONS.map(a => {
+                                  const checked = !!permissionMatrix[mod.key]?.[a.key]
+                                  return (
+                                    <td key={a.key} className="py-3 px-3 text-center">
+                                      <button 
+                                        type="button"
+                                        onClick={() => handlePermissionToggle(mod.key, a.key)} 
+                                        title={"Toggle " + a.label + " for " + mod.name}
+                                        className={"w-6 h-6 mx-auto rounded-md border flex items-center justify-center transition-all cursor-pointer " + (
+                                          checked 
+                                            ? "bg-blue-600 border-blue-600 text-white shadow-xs" 
+                                            : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-transparent hover:border-blue-400"
+                                        )}
+                                      >
+                                        {checked && <Check size={12} strokeWidth={3} />}
+                                      </button>
+                                    </td>
+                                  )
+                                })}
+                              </tr>
+
+                              {mod.key === "Leads" && (
+                                <tr className="bg-amber-50/40 dark:bg-amber-950/20 border-b border-amber-200/50 dark:border-amber-900/30">
+                                  <td colSpan={ACTIONS.length + 2} className="py-2.5 px-6">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-2">
+                                        <div className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300">
+                                          <Lock size={14} />
+                                        </div>
+                                        <div>
+                                          <div className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                                            <span>Sub-Permission: Lock / Unlock Leads</span>
+                                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300">
+                                              Leads Granular Control
+                                            </span>
+                                          </div>
+                                          <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                                            Controls whether this role can lock or unlock company leads. (Client-added leads are private and locked/unlocked strictly by the specific client).
+                                          </p>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[11px] font-bold text-zinc-600 dark:text-zinc-300">
+                                          {permissionMatrix["Leads"]?.lockUnlock ? "Allowed" : "Restricted"}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => handlePermissionToggle("Leads", "lockUnlock")}
+                                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                            permissionMatrix["Leads"]?.lockUnlock ? "bg-amber-500" : "bg-zinc-300 dark:bg-zinc-700"
+                                          }`}
+                                        >
+                                          <span
+                                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                                              permissionMatrix["Leads"]?.lockUnlock ? "translate-x-4" : "translate-x-0"
+                                            }`}
+                                          />
+                                        </button>
+                                      </div>
+                                    </div>
                                   </td>
-                                )
-                              })}
-                            </tr>
+                                </tr>
+                              )}
+                            </React.Fragment>
                           )
                         })}
                       </React.Fragment>
@@ -900,44 +987,89 @@ export default function PermissionsMain() {
                           {cat.modules.map(mod => {
                             const isAllChecked = ACTIONS.every(a => userPermissionMatrix[mod.key]?.[a.key])
                             return (
-                              <tr key={mod.key} className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/50 transition-colors">
-                                <td className="py-3 px-4">
-                                  <div className="font-bold text-zinc-900 dark:text-zinc-100">{mod.name}</div>
-                                  <div className="text-[10px] text-zinc-400 line-clamp-1">{mod.description}</div>
-                                </td>
-                                <td className="py-3 px-2 text-center">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleToggleRow(mod.key, true)}
-                                    className={"text-[10px] px-2 py-0.5 rounded font-medium border transition-colors cursor-pointer " + (
-                                      isAllChecked 
-                                        ? "bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-950 dark:border-blue-900 dark:text-blue-400" 
-                                        : "bg-zinc-50 border-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:border-zinc-700"
-                                    )}
-                                  >
-                                    {isAllChecked ? "Clear" : "All"}
-                                  </button>
-                                </td>
-                                {ACTIONS.map(a => {
-                                  const checked = !!userPermissionMatrix[mod.key]?.[a.key]
-                                  return (
-                                    <td key={a.key} className="py-3 px-3 text-center">
-                                      <button 
-                                        type="button"
-                                        onClick={() => handleUserPermissionToggle(mod.key, a.key)} 
-                                        title={"Toggle " + a.label + " for " + mod.name}
-                                        className={"w-6 h-6 mx-auto rounded-md border flex items-center justify-center transition-all cursor-pointer " + (
-                                          checked 
-                                            ? "bg-blue-600 border-blue-600 text-white shadow-xs" 
-                                            : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-transparent hover:border-blue-400"
-                                        )}
-                                      >
-                                        {checked && <Check size={12} strokeWidth={3} />}
-                                      </button>
+                              <React.Fragment key={mod.key}>
+                                <tr className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/50 transition-colors">
+                                  <td className="py-3 px-4">
+                                    <div className="font-bold text-zinc-900 dark:text-zinc-100">{mod.name}</div>
+                                    <div className="text-[10px] text-zinc-400 line-clamp-1">{mod.description}</div>
+                                  </td>
+                                  <td className="py-3 px-2 text-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleRow(mod.key, true)}
+                                      className={"text-[10px] px-2 py-0.5 rounded font-medium border transition-colors cursor-pointer " + (
+                                        isAllChecked 
+                                          ? "bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-950 dark:border-blue-900 dark:text-blue-400" 
+                                          : "bg-zinc-50 border-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:border-zinc-700"
+                                      )}
+                                    >
+                                      {isAllChecked ? "Clear" : "All"}
+                                    </button>
+                                  </td>
+                                  {ACTIONS.map(a => {
+                                    const checked = !!userPermissionMatrix[mod.key]?.[a.key]
+                                    return (
+                                      <td key={a.key} className="py-3 px-3 text-center">
+                                        <button 
+                                          type="button"
+                                          onClick={() => handleUserPermissionToggle(mod.key, a.key)} 
+                                          title={"Toggle " + a.label + " for " + mod.name}
+                                          className={"w-6 h-6 mx-auto rounded-md border flex items-center justify-center transition-all cursor-pointer " + (
+                                            checked 
+                                              ? "bg-blue-600 border-blue-600 text-white shadow-xs" 
+                                              : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-transparent hover:border-blue-400"
+                                          )}
+                                        >
+                                          {checked && <Check size={12} strokeWidth={3} />}
+                                        </button>
+                                      </td>
+                                    )
+                                  })}
+                                </tr>
+
+                                {mod.key === "Leads" && (
+                                  <tr className="bg-amber-50/40 dark:bg-amber-950/20 border-b border-amber-200/50 dark:border-amber-900/30">
+                                    <td colSpan={ACTIONS.length + 2} className="py-2.5 px-6">
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                          <div className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300">
+                                            <Lock size={14} />
+                                          </div>
+                                          <div>
+                                            <div className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                                              <span>Sub-Permission: Lock / Unlock Leads</span>
+                                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300">
+                                                User Override
+                                              </span>
+                                            </div>
+                                            <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                                              Override whether this specific user can lock or unlock company leads. (Client-added leads are private and locked/unlocked strictly by the specific client).
+                                            </p>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-[11px] font-bold text-zinc-600 dark:text-zinc-300">
+                                            {userPermissionMatrix["Leads"]?.lockUnlock ? "Allowed" : "Restricted"}
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleUserPermissionToggle("Leads", "lockUnlock")}
+                                            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                              userPermissionMatrix["Leads"]?.lockUnlock ? "bg-amber-500" : "bg-zinc-300 dark:bg-zinc-700"
+                                            }`}
+                                          >
+                                            <span
+                                              className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                                                userPermissionMatrix["Leads"]?.lockUnlock ? "translate-x-4" : "translate-x-0"
+                                              }`}
+                                            />
+                                          </button>
+                                        </div>
+                                      </div>
                                     </td>
-                                  )
-                                })}
-                              </tr>
+                                  </tr>
+                                )}
+                              </React.Fragment>
                             )
                           })}
                         </React.Fragment>

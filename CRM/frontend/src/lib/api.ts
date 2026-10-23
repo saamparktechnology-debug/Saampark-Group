@@ -34,7 +34,7 @@ export function setAuthToken(token: string | null) {
   }
 }
 
-export function getActiveCompanyScope(): { companyId?: string; branchId?: string; userRole?: string; userId?: string; userEmail?: string } {
+export function getActiveCompanyScope(): { companyId?: string; branchId?: string; subBranchId?: string; userRole?: string; userId?: string; userEmail?: string } {
   if (typeof window === 'undefined') return {}
   try {
     const raw = localStorage.getItem('saampark-auth-v3')
@@ -44,6 +44,7 @@ export function getActiveCompanyScope(): { companyId?: string; branchId?: string
       return {
         companyId: state?.activeCompanyId || state?.user?.companyId,
         branchId: state?.activeBranchId || state?.user?.branchId,
+        subBranchId: state?.activeSubBranchId || state?.user?.subBranchId,
         userRole: state?.user?.role,
         userId: state?.user?.id ? String(state?.user?.id) : undefined,
         userEmail: state?.user?.email,
@@ -72,6 +73,10 @@ async function request<T = any>(endpoint: string, options: RequestInit = {}): Pr
 
   if (scope.branchId && !headers['x-branch-id']) {
     headers['x-branch-id'] = String(scope.branchId)
+  }
+
+  if (scope.subBranchId && !headers['x-sub-branch-id']) {
+    headers['x-sub-branch-id'] = String(scope.subBranchId)
   }
 
   if (scope.userRole && !headers['x-user-role']) {

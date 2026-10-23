@@ -168,15 +168,53 @@ export const addSubscription = async (sub: Omit<Subscription, "id">, companyId?:
   const numAmt = sub.numericAmount || parseInt(String(sub.amount).replace(/[^0-9]/g, "")) || 0
   const formattedAmt = sub.amount.startsWith("₹") ? sub.amount : `₹${numAmt.toLocaleString("en-IN")}`
 
+  let currentUser: any = null
+  if (typeof window !== "undefined") {
+    try {
+      const { useAuthStore } = require("@/store/useAuthStore")
+      currentUser = useAuthStore.getState().user
+    } catch {}
+  }
+  const isTeamMember = currentUser && String(currentUser.role || "").toLowerCase().trim().includes("team")
+  const approvalStatus: "pending" | "approved" | "rejected" = (sub as any).approvalStatus || (isTeamMember ? "pending" : "approved")
+  const subStatus = (isTeamMember && approvalStatus === "pending") ? ("Pending Approval" as any) : (sub.status || "Active")
+
   const newSub: Subscription = {
     ...sub,
     id: `sub_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
     amount: formattedAmt,
     numericAmount: numAmt,
+    status: subStatus,
+    approvalStatus,
     autoRenew: sub.autoRenew !== undefined ? sub.autoRenew : true,
     startDate: sub.startDate || sub.firstPaymentDate || new Date().toISOString().split("T")[0],
     firstPaymentDate: sub.firstPaymentDate || sub.startDate || new Date().toISOString().split("T")[0],
     companyId: effectiveComp,
+  }
+
+  if (isTeamMember && approvalStatus === "pending") {
+    try {
+      const { submitForApproval } = require("@/services/approvalService")
+      submitForApproval({
+        type: "subscription",
+        title: `${newSub.planName || "Subscription"} - ${newSub.clientName}`,
+        documentNumber: newSub.id,
+        documentId: newSub.id,
+        clientName: newSub.clientName,
+        clientEmail: newSub.clientEmail,
+        amount: numAmt,
+        submittedBy: {
+          id: String(currentUser.id || ""),
+          name: currentUser.name || "Team Member",
+          email: currentUser.email || "",
+          role: currentUser.role || "Teams",
+        },
+        companyId: effectiveComp,
+        branchId: (newSub as any).branchId,
+        branchName: (newSub as any).branchName,
+        dataSnapshot: newSub,
+      }).catch(() => {})
+    } catch {}
   }
 
   const updatedScoped = [newSub, ...(Array.isArray(current) ? current.filter(s => s.id !== newSub.id) : [])]

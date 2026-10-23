@@ -235,8 +235,10 @@ export function invalidateModuleCache(moduleKey?: string) {
  * Fetch module data from MySQL DB with company isolation.
  * MySQL is the single source of truth.
  */
-export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: T, companyId?: string): Promise<T> {
+export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: T, companyId?: string, branchId?: string, subBranchId?: string): Promise<T> {
   let targetCompany = companyId
+  let targetBranch = branchId
+  let targetSubBranch = subBranchId
 
   try {
     if (typeof window !== "undefined") {
@@ -246,6 +248,12 @@ export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: 
         const authUser = authState.user
         if (!targetCompany) {
           targetCompany = authState.activeCompanyId || undefined
+        }
+        if (!targetBranch) {
+          targetBranch = authState.activeBranchId || undefined
+        }
+        if (!targetSubBranch) {
+          targetSubBranch = authState.activeSubBranchId || undefined
         }
         // Super Admin and Admin have access across all companies.
         // For other roles (Teams/Clients), allow if assigned or if it matches their active company
@@ -264,7 +272,7 @@ export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: 
       } catch {}
     }
 
-    const cacheKey = `${moduleKey}_${targetCompany || "default"}`
+    const cacheKey = `${moduleKey}_${targetCompany || "default"}_${targetBranch || "all"}_${targetSubBranch || "all"}`
     const now = Date.now()
     const cached = cacheStore.get(cacheKey)
 
@@ -280,7 +288,11 @@ export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: 
       }
     }
 
-    const queryStr = targetCompany && targetCompany !== "all" ? `?company_id=${encodeURIComponent(targetCompany)}` : ""
+    const params = new URLSearchParams()
+    if (targetCompany && targetCompany !== "all") params.set("company_id", targetCompany)
+    if (targetBranch && targetBranch !== "all") params.set("branch_id", targetBranch)
+    if (targetSubBranch && targetSubBranch !== "all") params.set("sub_branch_id", targetSubBranch)
+    const queryStr = params.toString() ? `?${params.toString()}` : ""
     
     const requestPromise = api.get(`/store/${moduleKey}${queryStr}`).then((res) => {
       const isError = !res || res.status === "error" || res.error === true
@@ -326,8 +338,10 @@ export async function fetchModuleDataFromDB<T>(moduleKey: string, fallbackData: 
 /**
  * Save module data to MySQL DB — single source of truth.
  */
-export async function saveModuleDataToDB<T>(moduleKey: string, data: T, companyId?: string): Promise<void> {
+export async function saveModuleDataToDB<T>(moduleKey: string, data: T, companyId?: string, branchId?: string, subBranchId?: string): Promise<void> {
   let targetCompany = companyId
+  let targetBranch = branchId
+  let targetSubBranch = subBranchId
   try {
     if (typeof window !== "undefined") {
       try {
@@ -336,6 +350,12 @@ export async function saveModuleDataToDB<T>(moduleKey: string, data: T, companyI
         const authUser = authState.user
         if (!targetCompany) {
           targetCompany = authState.activeCompanyId || undefined
+        }
+        if (!targetBranch) {
+          targetBranch = authState.activeBranchId || undefined
+        }
+        if (!targetSubBranch) {
+          targetSubBranch = authState.activeSubBranchId || undefined
         }
         const isSuperOrAdmin = authUser && (authUser.role === "Super Admin" || authUser.role === "Admin")
         if (authUser && !isSuperOrAdmin && targetCompany && targetCompany !== "all") {
@@ -356,7 +376,9 @@ export async function saveModuleDataToDB<T>(moduleKey: string, data: T, companyI
 
     await api.post(`/store/${moduleKey}`, { 
       data, 
-      company_id: targetCompany && targetCompany !== "all" ? targetCompany : undefined 
+      company_id: targetCompany && targetCompany !== "all" ? targetCompany : undefined,
+      branch_id: targetBranch && targetBranch !== "all" ? targetBranch : undefined,
+      sub_branch_id: targetSubBranch && targetSubBranch !== "all" ? targetSubBranch : undefined
     })
 
     // Invalidate micro-cache AFTER save completes to ensure subsequent fetches retrieve fresh data

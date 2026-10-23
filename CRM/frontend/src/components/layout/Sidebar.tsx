@@ -117,19 +117,7 @@ export interface NavItem {
 
 const ALL_NAV_ITEMS: NavItem[] = [
   { name: "Dashboard", href: "/feature/dashboard", icon: LayoutDashboard },
-  {
-    name: "Organisation",
-    href: "/feature/companies",
-    icon: Building2,
-    subItems: [
-      { name: "Companies", href: "/feature/companies", icon: Building2 },
-      { name: "Branches", href: "/feature/branches", icon: GitBranch },
-      { name: "Departments", href: "/feature/team/members", icon: Users },
-      { name: "Teams", href: "/feature/teams", icon: UserCheck },
-    ]
-  },
   { name: "Users", href: "/feature/users", icon: Users },
-  { name: "Permissions", href: "/feature/permissions", icon: Shield },
   {
     name: "CRM",
     href: "/feature/leads",
@@ -157,6 +145,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
       { name: "Services & Store", href: "/feature/sales/store", icon: Package },
     ]
   },
+  { name: "Approvals", href: "/feature/approvals", icon: ShieldCheck },
   {
     name: "Subscriptions",
     href: "/feature/subscriptions",
@@ -192,7 +181,19 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { name: "Files", href: "/feature/files", icon: Folder },
   { name: "Expenses", href: "/feature/expenses", icon: Calculator },
   { name: "Reports", href: "/feature/reports", icon: BarChart3 },
-  { name: "Settings", href: "/feature/settings", icon: Settings },
+  {
+    name: "Settings",
+    href: "/feature/settings",
+    icon: Settings,
+    subItems: [
+      { name: "General Settings", href: "/feature/settings", icon: Settings },
+      { name: "Companies", href: "/feature/companies", icon: Building2 },
+      { name: "Branches", href: "/feature/branches", icon: GitBranch },
+      { name: "Departments", href: "/feature/team/members", icon: Users },
+      { name: "Teams", href: "/feature/teams", icon: UserCheck },
+      { name: "Permissions", href: "/feature/permissions", icon: Shield },
+    ]
+  },
   { name: "Activity Logs", href: "/feature/activity-logs", icon: ClipboardList },
 ]
 
@@ -266,7 +267,7 @@ export function Sidebar() {
 
   const activeCompanyName = isAllCompanies ? "SAAMPARK GROUP" : (activeCompany ? getCompanyFullName(activeCompany) : "SAAMPARK GROUP")
   const activeCompanyLogo = isAllCompanies ? null : (activeCompany ? getCompanyLogoUrl(activeCompany) : null)
-  const { isModuleAllowed, isCompanyModuleAllowed, userActionPermissions, userPermissions, companyEnabledModules } = usePermissionStore()
+  const { isModuleAllowed, isCompanyModuleAllowed, isEntityModuleAllowed, userActionPermissions, userPermissions, companyEnabledModules } = usePermissionStore()
 
   const [rawCounts, setRawCounts] = React.useState<Record<string, number>>({})
   const [visitedCounts, setVisitedCounts] = React.useState<Record<string, number>>({})
@@ -347,11 +348,21 @@ export function Sidebar() {
         ? allLeads.filter((l) => l && (l.status === "New" || (l as any).isNew === true)).length
         : 0
 
+      // 5. Pending approvals count for Admins
+      let pendingApprovalsCount = 0
+      if (user.role === "Super Admin" || user.role === "Admin") {
+        try {
+          const { getPendingApprovalsCount } = await import("@/services/approvalService")
+          pendingApprovalsCount = await getPendingApprovalsCount(targetComp)
+        } catch {}
+      }
+
       setRawCounts({
         Messages: unreadMessagesCount,
         Tickets: openTicketsCount,
         Tasks: pendingTasksCount,
         Leads: newLeadsCount,
+        Approvals: pendingApprovalsCount,
       })
     } catch {}
   }, [user, activeCompanyId])
@@ -367,12 +378,14 @@ export function Sidebar() {
     window.addEventListener("saampark_data_synced", handleCompSync)
     window.addEventListener("saampark_company_switched", handleCompSync)
     window.addEventListener("saampark_company_updated", handleCompSync)
+    window.addEventListener("saampark_entity_permissions_updated", handleCompSync)
     return () => {
       clearInterval(interval)
       window.removeEventListener("storage", handleCompSync)
       window.removeEventListener("saampark_data_synced", handleCompSync)
       window.removeEventListener("saampark_company_switched", handleCompSync)
       window.removeEventListener("saampark_company_updated", handleCompSync)
+      window.removeEventListener("saampark_entity_permissions_updated", handleCompSync)
     }
   }, [loadDynamicBadges, fetchCompanies])
 
@@ -441,6 +454,8 @@ export function Sidebar() {
     "Expenses": "Expenses",
     "Reports": "Reports",
     "Settings": "Settings",
+    "General Settings": "Settings",
+    "Approvals": "Approvals",
     "Activity Logs": "Activity Logs",
   }
 
@@ -449,18 +464,20 @@ export function Sidebar() {
     if (!u) return false
     if (name === "Dashboard") return true
 
+    if (name === "Approvals") {
+      return u.role === "Super Admin" || u.role === "Admin"
+    }
+
     const targetModule = NAV_TO_MODULE_MAP[name] || name
 
-    // Company-level module visibility restriction
-    if (activeCompanyId && activeCompanyId !== 'all') {
-      const allowedForCompany = isCompanyModuleAllowed(activeCompanyId, targetModule)
-      if (!allowedForCompany) {
-        // If Super Admin, let them see system governance (Dashboard, Companies, Branches, Settings, Permissions, Users, Activity Logs)
-        if (u.role === "Super Admin" && ["Dashboard", "Companies", "Branches", "Settings", "Permissions", "Users", "Activity Logs"].includes(targetModule)) {
-          return true
-        }
-        return false
+    // Entity-level module visibility restriction (Company -> Branch -> Sub-Branch)
+    const isEntityAllowed = isEntityModuleAllowed(activeCompanyId, activeBranchId, activeSubBranchId, targetModule)
+    if (!isEntityAllowed) {
+      // If Super Admin, let them see system governance (Dashboard, Companies, Branches, Settings, Permissions, Users, Activity Logs)
+      if (u.role === "Super Admin" && ["Dashboard", "Companies", "Branches", "Settings", "Permissions", "Users", "Activity Logs"].includes(targetModule)) {
+        return true
       }
+      return false
     }
 
     if (name === "Activity Logs") {
@@ -469,7 +486,7 @@ export function Sidebar() {
     if (u.role === "Super Admin") return true
 
     return isModuleAllowed(u, targetModule)
-  }, [isModuleAllowed, isCompanyModuleAllowed, activeCompanyId])
+  }, [isModuleAllowed, isEntityModuleAllowed, activeCompanyId, activeBranchId, activeSubBranchId])
 
 
   // Filter items strictly by individual module permissions
@@ -507,7 +524,7 @@ export function Sidebar() {
   }, [setSidebarCollapsed])
 
   const [openSubmenus, setOpenSubmenus] = React.useState<Record<string, boolean>>({
-    Organisation: false,
+    Settings: false,
     CRM: false,
     Sales: true,
     Subscriptions: false,
@@ -516,8 +533,15 @@ export function Sidebar() {
   })
 
   React.useEffect(() => {
-    if (pathname.startsWith('/feature/branches') || pathname.startsWith('/feature/companies')) {
-      setOpenSubmenus(prev => ({ ...prev, Organisation: true }))
+    if (
+      pathname.startsWith('/feature/settings') ||
+      pathname.startsWith('/feature/companies') ||
+      pathname.startsWith('/feature/branches') ||
+      pathname.startsWith('/feature/permissions') ||
+      pathname === '/feature/teams' ||
+      pathname.startsWith('/feature/teams')
+    ) {
+      setOpenSubmenus(prev => ({ ...prev, Settings: true }))
     }
     if (pathname.startsWith('/feature/leads') || pathname.startsWith('/feature/clients')) {
       setOpenSubmenus(prev => ({ ...prev, CRM: true }))

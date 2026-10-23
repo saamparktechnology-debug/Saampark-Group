@@ -1,1 +1,28 @@
+# Vercel deployment
 .vercel
+
+# Node dependencies
+node_modules/
+
+# Environment files (secrets - never commit these)
+.env
+.env.local
+.env.production
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Next.js build output
+frontend/.next/
+frontend/out/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Database exports (keep crm_db_complete.sql, exclude temp exports)
+crm-db-export.json

@@ -241,9 +241,15 @@ export default function QuotationsMain() {
 
     const assignedBranch = branches.find(b => b.id === formBranchId)
 
+    const isTeamMember = user && String(user.role || "").toLowerCase().trim().includes("team")
+    const approvalStatus: "pending" | "approved" | "rejected" = (editingItem as any)?.approvalStatus || (isTeamMember ? "pending" : "approved")
+    const quoteStatus = (isTeamMember && approvalStatus === "pending") ? "Pending Approval" : form.status
+
     const payload: QuotationData = {
       id: editingItem ? editingItem.id : `qt_${Date.now()}`,
       ...form,
+      status: quoteStatus,
+      approvalStatus,
       subtotal,
       tax,
       total: grandTotal,
@@ -253,6 +259,31 @@ export default function QuotationsMain() {
       branchId: formBranchId || undefined,
       branchName: assignedBranch?.name || undefined,
       preparedBy: user?.name || "Sales Manager"
+    }
+
+    if (isTeamMember && approvalStatus === "pending" && !editingItem) {
+      try {
+        const { submitForApproval } = await import("@/services/approvalService")
+        submitForApproval({
+          type: "quotation",
+          title: `Quotation #${payload.number} for ${payload.customer}`,
+          documentNumber: payload.number,
+          documentId: payload.id,
+          clientName: payload.customer,
+          clientEmail: payload.customerEmail,
+          amount: grandTotal,
+          submittedBy: {
+            id: String(user.id || ""),
+            name: user.name || "Team Member",
+            email: user.email || "",
+            role: user.role || "Teams",
+          },
+          companyId: activeCompanyId || "tech",
+          branchId: formBranchId || undefined,
+          branchName: assignedBranch?.name,
+          dataSnapshot: payload,
+        }).catch(() => {})
+      } catch {}
     }
 
     await executeWithFeedback(async () => {
@@ -268,8 +299,10 @@ export default function QuotationsMain() {
       actionType: editingItem ? "update" : "create",
       loadingTitle: editingItem ? "Updating Quotation..." : "Generating Quotation...",
       loadingMsg: `Saving commercial tender ${payload.number}...`,
-      successTitle: editingItem ? "Quotation Updated" : "Quotation Generated!",
-      successMsg: `Quotation ${payload.number} is ready.`,
+      successTitle: editingItem ? "Quotation Updated" : (isTeamMember ? "Submitted for Admin Approval" : "Quotation Generated!"),
+      successMsg: isTeamMember 
+        ? `Quotation ${payload.number} has been submitted for Admin approval.` 
+        : `Quotation ${payload.number} is ready.`,
     })
   }
 

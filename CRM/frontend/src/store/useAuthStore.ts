@@ -267,6 +267,11 @@ export interface User {
   branchId?: string     // Assigned specific branch
   branchIds?: string[]    // Assigned multiple branches
   branchName?: string   // Human-readable branch name
+  subBranchId?: string  // Assigned specific sub-branch
+  subBranchIds?: string[] // Assigned multiple sub-branches
+  subBranchName?: string // Human-readable sub-branch name
+  sub_branch_id?: string
+  sub_branch_name?: string
   avatar: string
   avatarUrl?: string
   phone?: string
@@ -393,6 +398,159 @@ export function isMatchingBranch(
     String(branch.name || "").toLowerCase().trim() === target ||
     String(branch.code || "").toLowerCase().trim() === target
   )
+}
+
+export interface UserEntityScope {
+  isSuperAdmin: boolean
+  scopeLevel: 'global' | 'company' | 'branch' | 'subbranch'
+  allowedCompanyIds: string[]
+  allowedBranchIds: string[]
+  allowedSubBranchIds: string[]
+  canAccessCompanyHq: boolean
+  canAccessBranchHq: boolean
+}
+
+export function getUserEntityScope(
+  user: Partial<User> | null | undefined, 
+  allCompanies: Company[] = [], 
+  allBranches: Branch[] = [], 
+  allSubBranches: SubBranch[] = []
+): UserEntityScope {
+  if (!user) {
+    return {
+      isSuperAdmin: false,
+      scopeLevel: 'subbranch',
+      allowedCompanyIds: [],
+      allowedBranchIds: [],
+      allowedSubBranchIds: [],
+      canAccessCompanyHq: false,
+      canAccessBranchHq: false,
+    }
+  }
+
+  const isSuper = user.role === 'Super Admin'
+  if (isSuper) {
+    return {
+      isSuperAdmin: true,
+      scopeLevel: 'global',
+      allowedCompanyIds: allCompanies.map(c => String(c.id)),
+      allowedBranchIds: allBranches.map(b => String(b.id)),
+      allowedSubBranchIds: allSubBranches.map(sb => String(sb.id)),
+      canAccessCompanyHq: true,
+      canAccessBranchHq: true,
+    }
+  }
+
+  // 1. Check Sub-Branch Level Scope
+  const rawSubBranchIds: string[] = []
+  if (Array.isArray((user as any).subBranchIds)) {
+    rawSubBranchIds.push(...(user as any).subBranchIds)
+  }
+  const singleSub = (user as any).subBranchId || (user as any).sub_branch_id
+  if (singleSub && !rawSubBranchIds.includes(singleSub)) {
+    rawSubBranchIds.push(singleSub)
+  }
+
+  if (rawSubBranchIds.length > 0) {
+    const matchedSubs = allSubBranches.filter(sb => 
+      rawSubBranchIds.some(id => String(id).toLowerCase().trim() === String(sb.id).toLowerCase().trim())
+    )
+    const allowedSubIds = matchedSubs.length > 0 ? matchedSubs.map(s => String(s.id)) : rawSubBranchIds
+
+    // Find parent branches
+    const parentBranchIds = Array.from(new Set(matchedSubs.map(s => String(s.parentBranchId)).filter(Boolean)))
+    // Find parent companies
+    const parentBranches = allBranches.filter(b => parentBranchIds.includes(String(b.id)))
+    const parentCompanyIds = Array.from(new Set([
+      ...parentBranches.map(b => String(b.companyId || (b as any).company_id)),
+      String(user.companyId || '')
+    ].filter(Boolean)))
+
+    return {
+      isSuperAdmin: false,
+      scopeLevel: 'subbranch',
+      allowedCompanyIds: parentCompanyIds,
+      allowedBranchIds: parentBranchIds,
+      allowedSubBranchIds: allowedSubIds,
+      canAccessCompanyHq: false,
+      canAccessBranchHq: false,
+    }
+  }
+
+  // 2. Check Branch Level Scope
+  const rawBranchIds: string[] = []
+  if (Array.isArray(user.branchIds)) {
+    rawBranchIds.push(...user.branchIds)
+  }
+  const singleBranch = user.branchId || (user as any).branch_id
+  if (singleBranch && !rawBranchIds.includes(singleBranch)) {
+    rawBranchIds.push(singleBranch)
+  }
+
+  if (rawBranchIds.length > 0) {
+    const matchedBranches = allBranches.filter(b =>
+      rawBranchIds.some(id => String(id).toLowerCase().trim() === String(b.id).toLowerCase().trim())
+    )
+    const allowedBIds = matchedBranches.length > 0 ? matchedBranches.map(b => String(b.id)) : rawBranchIds
+
+    // Find parent companies
+    const parentCompanyIds = Array.from(new Set([
+      ...matchedBranches.map(b => String(b.companyId || (b as any).company_id)),
+      String(user.companyId || '')
+    ].filter(Boolean)))
+
+    // Find all sub-branches under these allowed branches
+    const allowedSubIds = allSubBranches
+      .filter(sb => allowedBIds.includes(String(sb.parentBranchId)))
+      .map(sb => String(sb.id))
+
+    return {
+      isSuperAdmin: false,
+      scopeLevel: 'branch',
+      allowedCompanyIds: parentCompanyIds,
+      allowedBranchIds: allowedBIds,
+      allowedSubBranchIds: allowedSubIds,
+      canAccessCompanyHq: false,
+      canAccessBranchHq: true,
+    }
+  }
+
+  // 3. Company Level Scope (Default for users assigned to Company, e.g. Company Admin or Staff)
+  const rawCompanyIds: string[] = []
+  if (Array.isArray(user.companyIds)) {
+    rawCompanyIds.push(...user.companyIds)
+  }
+  if (user.companyId && !rawCompanyIds.includes(user.companyId)) {
+    rawCompanyIds.push(user.companyId)
+  }
+  if (rawCompanyIds.length === 0) {
+    rawCompanyIds.push('tech')
+  }
+
+  const matchedCompanies = allCompanies.filter(c => 
+    rawCompanyIds.some(id => isMatchingCompany(c, id))
+  )
+  const allowedCIds = matchedCompanies.length > 0 ? matchedCompanies.map(c => String(c.id)) : rawCompanyIds
+
+  // Branches belonging to these companies
+  const allowedBIds = allBranches
+    .filter(b => allowedCIds.some(cId => isMatchingCompany({ id: cId } as any, b.companyId || (b as any).company_id)))
+    .map(b => String(b.id))
+
+  // Sub-branches belonging to those branches
+  const allowedSubIds = allSubBranches
+    .filter(sb => allowedBIds.includes(String(sb.parentBranchId)))
+    .map(sb => String(sb.id))
+
+  return {
+    isSuperAdmin: false,
+    scopeLevel: 'company',
+    allowedCompanyIds: allowedCIds,
+    allowedBranchIds: allowedBIds,
+    allowedSubBranchIds: allowedSubIds,
+    canAccessCompanyHq: true,
+    canAccessBranchHq: true,
+  }
 }
 
 export const DEFAULT_COMPANIES: Company[] = [
@@ -1311,6 +1469,8 @@ export const useAuthStore = create<AuthState>()(
 
         const rawBranch = customUser?.branchId || (customUser as any)?.branch_id || undefined
         const rawBranchName = customUser?.branchName || (customUser as any)?.branch_name || undefined
+        const rawSubBranch = customUser?.subBranchId || (customUser as any)?.sub_branch_id || (customUser as any)?.subBranchIds?.[0] || undefined
+        const rawSubBranchName = customUser?.subBranchName || (customUser as any)?.sub_branch_name || undefined
 
         const user: User = {
           id: customUser?.id || `u_${Date.now()}`,
@@ -1324,6 +1484,9 @@ export const useAuthStore = create<AuthState>()(
           companyIds: assignedCompanyIds,
           branchId: rawBranch,
           branchName: rawBranchName,
+          subBranchId: rawSubBranch,
+          subBranchIds: customUser?.subBranchIds || (rawSubBranch ? [rawSubBranch] : undefined),
+          subBranchName: rawSubBranchName,
           avatar: customUser?.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${customUser?.email || normalizedRole}`,
           phone: customUser?.phone,
           allowedModules: normalizedRole === 'Super Admin' ? undefined : userAllowedMods,
@@ -1341,6 +1504,7 @@ export const useAuthStore = create<AuthState>()(
         }
 
         const activeBranchId = (normalizedRole !== 'Super Admin' && rawBranch) ? rawBranch : null
+        const activeSubBranchId = (normalizedRole !== 'Super Admin' && rawSubBranch) ? rawSubBranch : null
 
         if (typeof window !== 'undefined') {
           sessionStorage.setItem('saampark_session_active', 'true')
@@ -1352,6 +1516,7 @@ export const useAuthStore = create<AuthState>()(
           user,
           activeCompanyId,
           activeBranchId,
+          activeSubBranchId,
         })
 
         // Synchronize permissions store immediately on login
@@ -1410,6 +1575,7 @@ export const useAuthStore = create<AuthState>()(
               (resPerms && Array.isArray(resPerms.allowedModules) ? resPerms.allowedModules : undefined)
 
             const userBranch = res.user?.branch_id || res.user?.branchId || res.user?.branch || undefined
+            const userSubBranch = res.user?.sub_branch_id || res.user?.subBranchId || undefined
 
             const primaryCompany = res.user?.company_id || parsedCompanyIds[0] || 'tech'
 
@@ -1423,6 +1589,9 @@ export const useAuthStore = create<AuthState>()(
               companyIds: parsedCompanyIds,
               branchId: userBranch,
               branchName: res.user?.branch_name || res.user?.branchName || undefined,
+              subBranchId: userSubBranch,
+              subBranchIds: userSubBranch ? [userSubBranch] : undefined,
+              subBranchName: res.user?.sub_branch_name || res.user?.subBranchName || undefined,
               avatar: res.user?.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${res.user?.email || 'user'}`,
               phone: res.user?.phone,
               allowedModules: userAllowedMods,
@@ -1431,6 +1600,7 @@ export const useAuthStore = create<AuthState>()(
 
             const effectiveCompanyId = (role === 'Super Admin') ? 'all' : primaryCompany
             const initialBranchId = (role !== 'Super Admin' && userBranch) ? userBranch : null
+            const initialSubBranchId = (role !== 'Super Admin' && userSubBranch) ? userSubBranch : null
 
             if (typeof window !== 'undefined') {
               sessionStorage.setItem('saampark_session_active', 'true')
@@ -1443,6 +1613,7 @@ export const useAuthStore = create<AuthState>()(
               user: userObj,
               activeCompanyId: effectiveCompanyId,
               activeBranchId: initialBranchId,
+              activeSubBranchId: initialSubBranchId,
             })
 
             // Synchronize permissions store immediately on login
@@ -1494,7 +1665,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       switchCompany: (companyId: string) => {
-        const { user, companies } = get()
+        const { user, companies, branches, subBranches } = get()
         if (!user) return
 
         const targetNorm = String(companyId || '').toLowerCase().trim()
@@ -1511,12 +1682,18 @@ export const useAuthStore = create<AuthState>()(
             if (typeof window !== 'undefined') {
               window.dispatchEvent(new CustomEvent('saampark_company_switched', { detail: 'all' }))
               window.dispatchEvent(new CustomEvent('saampark_branch_switched', { detail: null }))
+              window.dispatchEvent(new CustomEvent('saampark_sub_branch_switched', { detail: null }))
               window.dispatchEvent(new CustomEvent('saampark_data_synced'))
               window.dispatchEvent(new Event('storage'))
             }
             return
+          } else {
+            console.warn("Only Super Admin can switch to All Companies global scope.")
+            return
           }
         }
+
+        const scope = getUserEntityScope(user, companies, branches, subBranches)
 
         const matchedComp = companies.find(c => 
           String(c.id).toLowerCase().trim() === targetNorm || 
@@ -1525,87 +1702,168 @@ export const useAuthStore = create<AuthState>()(
         )
         const effectiveId = matchedComp?.id || companyId
         
-        // Super Admin can switch to any company.
-        // Admins, Teams, Clients can switch between any company they are assigned to.
-        const userCompIds = (user.companyIds && user.companyIds.length > 0)
-          ? user.companyIds.map(id => String(id).toLowerCase().trim())
-          : [String(user.companyId || 'tech').toLowerCase().trim()]
+        // Scope Verification: User must have access to this company
+        const isAllowedCompany = isSuperAdmin || scope.allowedCompanyIds.some(id => 
+          String(id).toLowerCase().trim() === targetNorm ||
+          (matchedComp && String(id).toLowerCase().trim() === String(matchedComp.id).toLowerCase().trim()) ||
+          (matchedComp?.slug && String(id).toLowerCase().trim() === String(matchedComp.slug).toLowerCase().trim())
+        )
 
-        const isAdminOrSuper = isSuperAdmin || user.role === 'Admin'
+        if (!isAllowedCompany) {
+          console.warn(`Access denied: User does not have access to company ${effectiveId}`)
+          return
+        }
 
-        const canSwitch =
-          isAdminOrSuper ||
-          userCompIds.includes(targetNorm) ||
-          (matchedComp && userCompIds.includes(String(matchedComp.id).toLowerCase().trim())) ||
-          (matchedComp?.slug && userCompIds.includes(String(matchedComp.slug).toLowerCase().trim())) ||
-          String(user.companyId).toLowerCase().trim() === targetNorm
+        invalidateModuleCache()
 
-        if (canSwitch) {
-          invalidateModuleCache()
+        // If user is locked to a branch or sub-branch, automatically pin their active branch / sub-branch
+        let nextBranchId: string | null = null
+        let nextSubBranchId: string | null = null
 
-          // If Super Admin or Admin, ensure companyIds includes this company so session sync doesn't reset it
-          let updatedCompanyIds = user.companyIds || [effectiveId]
-          if (isAdminOrSuper && !updatedCompanyIds.includes(effectiveId)) {
-            updatedCompanyIds = [...updatedCompanyIds, effectiveId]
-          }
+        if (scope.scopeLevel === 'subbranch') {
+          nextSubBranchId = scope.allowedSubBranchIds[0] || null
+          nextBranchId = scope.allowedBranchIds[0] || null
+        } else if (scope.scopeLevel === 'branch') {
+          nextBranchId = scope.allowedBranchIds[0] || null
+        }
 
-          const updatedUser = {
-            ...user,
-            companyId: effectiveId as any,
-            companyIds: updatedCompanyIds,
-          }
+        set({
+          activeCompanyId: effectiveId,
+          activeBranchId: nextBranchId,
+          activeSubBranchId: nextSubBranchId,
+        })
 
-          set({
-            activeCompanyId: effectiveId,
-            activeBranchId: null,
-            activeSubBranchId: null,
-            user: updatedUser,
-          })
-
-          // Save updated active companyId to user account persistence
-          import('@/app/feature/users/services/userService').then(({ recordUserAccount }) => {
-            recordUserAccount({
-              ...updatedUser,
-              id: String(updatedUser.id),
-              companyId: effectiveId as any,
-              companyIds: updatedCompanyIds,
-            })
-          }).catch(() => {})
-
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('saampark_company_switched', { detail: effectiveId }))
-            window.dispatchEvent(new CustomEvent('saampark_branch_switched', { detail: null }))
-            window.dispatchEvent(new CustomEvent('saampark_data_synced'))
-            window.dispatchEvent(new Event('storage'))
-          }
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('saampark_company_switched', { detail: effectiveId }))
+          window.dispatchEvent(new CustomEvent('saampark_branch_switched', { detail: nextBranchId }))
+          window.dispatchEvent(new CustomEvent('saampark_sub_branch_switched', { detail: nextSubBranchId }))
+          window.dispatchEvent(new CustomEvent('saampark_data_synced'))
+          window.dispatchEvent(new Event('storage'))
         }
       },
 
       switchBranch: (branchId: string | null) => {
-        const { user, branches, activeCompanyId } = get()
+        const { user, companies, branches, subBranches, activeCompanyId } = get()
         if (!user) return
+
+        const scope = getUserEntityScope(user, companies, branches, subBranches)
+        const branchIdStr = branchId ? String(branchId) : null
+        
+        // If unsetting branch (trying to stay at Company Headquarters):
+        if (!branchIdStr) {
+          if (!scope.canAccessCompanyHq) {
+            console.warn("Access denied: Users assigned strictly to a branch or sub-branch cannot access company corporate headquarters.")
+            return
+          }
+          invalidateModuleCache()
+          set({
+            activeBranchId: null,
+            activeSubBranchId: null,
+          })
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('saampark_branch_switched', { detail: null }))
+            window.dispatchEvent(new CustomEvent('saampark_sub_branch_switched', { detail: null }))
+            window.dispatchEvent(new CustomEvent('saampark_data_synced'))
+            window.dispatchEvent(new Event('storage'))
+          }
+          return
+        }
+
+        // Strict Hierarchical Rule: Must be inside the Company first before switching to its branch
+        if (!activeCompanyId || activeCompanyId === 'all') {
+          console.warn("Hierarchical switching violation: You must select a specific Company before switching to a Branch.")
+          return
+        }
+
+        // Scope check: User must be allowed to access this branch
+        const isAllowedBranch = scope.isSuperAdmin || scope.allowedBranchIds.some(id => 
+          String(id).toLowerCase().trim() === branchIdStr.toLowerCase().trim()
+        )
+        if (!isAllowedBranch) {
+          console.warn(`Access denied: User does not have access to branch ${branchIdStr}`)
+          return
+        }
+
+        const matchedBranch = branches.find(b => String(b.id) === branchIdStr)
+        if (matchedBranch) {
+          const bComp = String(matchedBranch.companyId || (matchedBranch as any)?.company_id || '').toLowerCase()
+          const activeComp = String(activeCompanyId || '').toLowerCase()
+          const isMatch = isMatchingCompany({ id: bComp, slug: bComp } as any, activeCompanyId)
+          if (!isMatch) {
+            console.warn(`Hierarchical switching violation: Branch ${matchedBranch.name} does not belong to active company ${activeCompanyId}. Switch to that company first.`)
+            return
+          }
+        }
 
         invalidateModuleCache()
 
-        const branchIdStr = branchId ? String(branchId) : null
-        const matchedBranch = branches.find(b => String(b.id) === branchIdStr)
-        const newCompId = matchedBranch?.companyId || (matchedBranch as any)?.company_id
+        // If user is subbranch-scoped, pin their active sub-branch
+        let nextSubBranchId: string | null = null
+        if (scope.scopeLevel === 'subbranch') {
+          nextSubBranchId = scope.allowedSubBranchIds[0] || null
+        }
 
         set({
           activeBranchId: branchIdStr,
-          activeSubBranchId: null,
-          ...(newCompId && activeCompanyId !== 'all' ? { activeCompanyId: String(newCompId) } : {})
+          activeSubBranchId: nextSubBranchId,
         })
 
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('saampark_branch_switched', { detail: branchIdStr }))
+          window.dispatchEvent(new CustomEvent('saampark_sub_branch_switched', { detail: nextSubBranchId }))
           window.dispatchEvent(new CustomEvent('saampark_data_synced'))
           window.dispatchEvent(new Event('storage'))
         }
       },
 
       switchSubBranch: (subBranchId: string | null) => {
+        const { user, companies, branches, subBranches, activeCompanyId, activeBranchId } = get()
+        if (!user) return
+
+        const scope = getUserEntityScope(user, companies, branches, subBranches)
         const subBranchIdStr = subBranchId ? String(subBranchId) : null
+
+        // If unsetting sub-branch:
+        if (!subBranchIdStr) {
+          if (scope.scopeLevel === 'subbranch') {
+            console.warn("Access denied: Users scoped strictly to a sub-branch cannot unselect their sub-branch.")
+            return
+          }
+          set({ activeSubBranchId: null })
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('saampark_sub_branch_switched', { detail: null }))
+            window.dispatchEvent(new CustomEvent('saampark_subbranch_switched', { detail: { subBranchId: null } }))
+            window.dispatchEvent(new CustomEvent('saampark_data_synced'))
+            window.dispatchEvent(new Event('storage'))
+          }
+          return
+        }
+
+        // Strict Hierarchical Rule: Must be inside Company AND Branch before switching to a Sub-Branch
+        if (!activeCompanyId || activeCompanyId === 'all') {
+          console.warn("Hierarchical switching violation: Select Company first.")
+          return
+        }
+        if (!activeBranchId) {
+          console.warn("Hierarchical switching violation: You must select a parent Branch before switching to a Sub-Branch.")
+          return
+        }
+
+        // Scope check: User must be allowed to access this sub-branch
+        const isAllowedSub = scope.isSuperAdmin || scope.allowedSubBranchIds.some(id =>
+          String(id).toLowerCase().trim() === subBranchIdStr.toLowerCase().trim()
+        )
+        if (!isAllowedSub) {
+          console.warn(`Access denied: User does not have access to sub-branch ${subBranchIdStr}`)
+          return
+        }
+
+        const matchedSub = subBranches.find(sb => String(sb.id) === subBranchIdStr)
+        if (matchedSub && String(matchedSub.parentBranchId) !== String(activeBranchId)) {
+          console.warn(`Hierarchical switching violation: Sub-branch ${matchedSub.name} does not belong to active branch ${activeBranchId}.`)
+          return
+        }
+
         set({ activeSubBranchId: subBranchIdStr })
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('saampark_sub_branch_switched', { detail: subBranchIdStr }))
@@ -1622,6 +1880,7 @@ export const useAuthStore = create<AuthState>()(
           if (!state.activeCompanyId) {
             state.activeCompanyId = 'all'
             state.activeBranchId = null
+            state.activeSubBranchId = null
           }
         }
       },
@@ -1631,6 +1890,7 @@ export const useAuthStore = create<AuthState>()(
         user: state.user,
         activeCompanyId: state.activeCompanyId,
         activeBranchId: state.activeBranchId,
+        activeSubBranchId: state.activeSubBranchId,
       }),
     }
   )

@@ -3,7 +3,7 @@ import { getClients, saveStoredClient } from "@/app/feature/clients/services/cli
 import { sendPaymentReceiptEmailNotification, sendPaymentDueReminderEmailNotification } from "@/services/emailNotificationService"
 import { recordActivityLog } from "@/services/activityLogService"
 
-export type InvoiceStatus = "Draft" | "Partially paid" | "Fully paid" | "Not paid" | "Credited" | "Payment Pending"
+export type InvoiceStatus = "Draft" | "Partially paid" | "Fully paid" | "Not paid" | "Credited" | "Payment Pending" | "Pending Approval" | "Rejected"
 
 export interface InvoiceLineCharge {
   id: string
@@ -71,6 +71,8 @@ export interface InvoiceItem {
   paymentReceived: string
   due: string
   status: InvoiceStatus
+  approvalStatus?: "pending" | "approved" | "rejected"
+  rejectionReason?: string
   billedBy?: string
   lastReminderSent?: string
   companyId?: string
@@ -327,17 +329,52 @@ export const addInvoice = async (invoice: Omit<InvoiceItem, "id"> & { id?: strin
     } catch {}
   }
 
-  const now = new Date()
-  const billTime = invoice.billTime || now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })
-  const createdAt = invoice.createdAt || now.getTime()
+  let currentUser: any = null
+  if (typeof window !== "undefined") {
+    try {
+      const { useAuthStore } = require("@/store/useAuthStore")
+      currentUser = useAuthStore.getState().user
+    } catch {}
+  }
+  const isTeamMember = currentUser && String(currentUser.role || "").toLowerCase().trim().includes("team")
+  const approvalStatus: "pending" | "approved" | "rejected" = invoice.approvalStatus || (isTeamMember ? "pending" : "approved")
+  const invoiceStatus = (isTeamMember && approvalStatus === "pending") ? "Pending Approval" : (invoice.status || "Not paid")
 
   const newInvoice: InvoiceItem = { 
     ...invoice, 
     id: nextId,
-    billTime,
-    createdAt,
+    billTime: invoice.billTime || new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
+    createdAt: invoice.createdAt || new Date().toISOString(),
     companyId: effectiveComp,
-    branchId: invoice.branchId || activeBranch || undefined
+    branchId: invoice.branchId || activeBranch || undefined,
+    status: invoiceStatus,
+    approvalStatus,
+  }
+
+  if (isTeamMember && approvalStatus === "pending") {
+    try {
+      const { submitForApproval } = require("@/services/approvalService")
+      const rawAmt = invoice.baseAmount || parseInt(String(invoice.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
+      submitForApproval({
+        type: "invoice",
+        title: `Bill #${nextId} for ${newInvoice.client}`,
+        documentNumber: nextId,
+        documentId: nextId,
+        clientName: newInvoice.client,
+        clientEmail: newInvoice.clientEmail,
+        amount: rawAmt,
+        submittedBy: {
+          id: String(currentUser.id || ""),
+          name: currentUser.name || "Team Member",
+          email: currentUser.email || "",
+          role: currentUser.role || "Teams",
+        },
+        companyId: effectiveComp,
+        branchId: newInvoice.branchId,
+        branchName: newInvoice.branchName,
+        dataSnapshot: newInvoice,
+      }).catch(() => {})
+    } catch {}
   }
 
   const updatedScoped = [newInvoice, ...(Array.isArray(currentScoped) ? currentScoped.filter(i => String(i.id).toUpperCase().trim() !== nextId.toUpperCase().trim()) : [])]

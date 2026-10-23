@@ -1,6 +1,6 @@
 export type BillingCycle = "Daily" | "Weekly" | "Monthly" | "Quarterly" | "Half-Yearly" | "Annually" | "Custom Days"
 
-export type SubscriptionStatus = "Active" | "Expiring Soon" | "Past Due" | "Canceled" | "Trial"
+export type SubscriptionStatus = "Active" | "Expiring Soon" | "Past Due" | "Canceled" | "Cancelled" | "Trial" | "Pending Approval"
 
 export type SubscriptionType = "package" | "regular" | "emi"
 
@@ -152,6 +152,7 @@ export interface Subscription {
   planName: string
   description?: string
   status: SubscriptionStatus
+  approvalStatus?: "pending" | "approved" | "rejected"
   amount: string
   numericAmount?: number
   billingCycle: BillingCycle

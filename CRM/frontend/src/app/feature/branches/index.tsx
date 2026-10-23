@@ -24,6 +24,8 @@ export default function BranchesMain() {
   const { 
     user, 
     activeCompanyId, 
+    activeBranchId,
+    activeSubBranchId,
     companies, 
     branches, 
     subBranches, 
@@ -202,6 +204,9 @@ export default function BranchesMain() {
 
   // Filter branches
   const filteredBranches = React.useMemo(() => {
+    const freshActiveCompanyId = activeCompanyId
+    const freshActiveBranchId = (user?.role !== "Super Admin" && user?.role !== "Admin") ? (user?.branchId || activeBranchId) : activeBranchId
+
     return branches.filter(b => {
       const matchesSearch = 
         b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -211,13 +216,26 @@ export default function BranchesMain() {
         (b.gstin || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
         (b.brand_name || "").toLowerCase().includes(searchQuery.toLowerCase())
 
-      const matchesCompany = selectedCompanyFilter === "all" || isMatchingCompany({ id: b.companyId || (b as any).company_id, slug: b.companyId } as any, selectedCompanyFilter)
-      return matchesSearch && matchesCompany
+      // Company filter: prioritize active company scope unless 'all'
+      const compTarget = selectedCompanyFilter !== "all" 
+        ? selectedCompanyFilter 
+        : (freshActiveCompanyId && freshActiveCompanyId !== "all" ? freshActiveCompanyId : "all")
+
+      const matchesCompany = compTarget === "all" || isMatchingCompany({ id: b.companyId || (b as any).company_id, slug: b.companyId } as any, compTarget)
+
+      // Branch filter: if switched to a specific branch, isolate strictly to that branch!
+      const matchesBranchScope = !freshActiveBranchId || freshActiveBranchId === "all" || String(b.id) === String(freshActiveBranchId) || (b.code && b.code.toLowerCase() === String(freshActiveBranchId).toLowerCase())
+
+      return matchesSearch && matchesCompany && matchesBranchScope
     })
-  }, [branches, searchQuery, selectedCompanyFilter])
+  }, [branches, searchQuery, selectedCompanyFilter, activeCompanyId, activeBranchId, user])
 
   // Filter sub-branches
   const filteredSubBranches = React.useMemo(() => {
+    const freshActiveCompanyId = activeCompanyId
+    const freshActiveBranchId = (user?.role !== "Super Admin" && user?.role !== "Admin") ? (user?.branchId || activeBranchId) : activeBranchId
+    const freshActiveSubBranchId = (user?.role !== "Super Admin" && user?.role !== "Admin") ? (user?.subBranchId || activeSubBranchId) : activeSubBranchId
+
     return subBranches.filter(sb => {
       const matchesSearch = 
         sb.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -226,11 +244,23 @@ export default function BranchesMain() {
         (sb.partnerName || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
         (sb.partnerType || "").toLowerCase().includes(searchQuery.toLowerCase())
 
-      const matchesCompany = selectedCompanyFilter === "all" || isMatchingCompany({ id: sb.companyId || (sb as any).company_id, slug: sb.companyId } as any, selectedCompanyFilter)
-      const matchesParentBranch = selectedParentBranchFilter === "all" || String(sb.parentBranchId) === String(selectedParentBranchFilter)
-      return matchesSearch && matchesCompany && matchesParentBranch
+      const compTarget = selectedCompanyFilter !== "all" 
+        ? selectedCompanyFilter 
+        : (freshActiveCompanyId && freshActiveCompanyId !== "all" ? freshActiveCompanyId : "all")
+
+      const matchesCompany = compTarget === "all" || isMatchingCompany({ id: sb.companyId || (sb as any).company_id, slug: sb.companyId } as any, compTarget)
+
+      const branchTarget = selectedParentBranchFilter !== "all"
+        ? selectedParentBranchFilter
+        : (freshActiveBranchId && freshActiveBranchId !== "all" ? freshActiveBranchId : "all")
+
+      const matchesParentBranch = branchTarget === "all" || String(sb.parentBranchId) === String(branchTarget) || String((sb as any).branch_id) === String(branchTarget)
+
+      const matchesSubBranchScope = !freshActiveSubBranchId || freshActiveSubBranchId === "all" || String(sb.id) === String(freshActiveSubBranchId) || (sb.code && sb.code.toLowerCase() === String(freshActiveSubBranchId).toLowerCase())
+
+      return matchesSearch && matchesCompany && matchesParentBranch && matchesSubBranchScope
     })
-  }, [subBranches, searchQuery, selectedCompanyFilter, selectedParentBranchFilter])
+  }, [subBranches, searchQuery, selectedCompanyFilter, selectedParentBranchFilter, activeCompanyId, activeBranchId, activeSubBranchId, user])
 
   // ── OPEN BRANCH MODALS ─────────────────────────────────────────────
   const openAddBranch = () => {

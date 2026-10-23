@@ -115,12 +115,13 @@ export function canUserUnlockLead(user: any, lead?: Lead | null): boolean {
   const userRole = (user.role || "").trim()
   const isSuperAdmin = userRole === "Super Admin"
 
-  // If lead was added by a client:
+  // 1. If lead was added by a client:
   if (isLeadClientPrivate(lead)) {
-    // 1. Super Admin has full overarching authority
+    // Super Admin has full master governance
     if (isSuperAdmin) return true
 
-    // 2. ONLY the specific client who created this lead can unlock it
+    // The client acts as an admin for their own data:
+    // ONLY the specific client who created this lead can lock/unlock it!
     if (userRole === "Clients" || userRole === "Client") {
       const uId = String(user.id || "").toLowerCase().trim()
       const uEmail = (user.email || "").toLowerCase().trim()
@@ -135,12 +136,25 @@ export function canUserUnlockLead(user: any, lead?: Lead | null): boolean {
       if (uName && cName && uName === cName) return true
     }
 
-    // Admins, telecallers, other clients, teams CANNOT unlock client leads
+    // Admins, telecallers, other clients, teams CANNOT unlock client-private leads
     return false
   }
 
-  // Standard company lead (not added by client): Super Admin and Admin can unlock
-  return userRole === "Super Admin" || userRole === "Admin"
+  // 2. Standard company lead (not added by client):
+  if (isSuperAdmin) return true
+
+  // Check the explicit 'lockUnlock' sub-permission configured in the Permissions matrix
+  try {
+    const { usePermissionStore } = require("@/store/usePermissionStore")
+    const store = usePermissionStore.getState()
+    const actions = store.getUserModuleActions(user, "Leads")
+    if (actions.lockUnlock !== undefined) {
+      return Boolean(actions.lockUnlock)
+    }
+  } catch {}
+
+  // Fallback default: Admin can unlock
+  return userRole === "Admin"
 }
 
 export function canUserLockLead(user: any, lead?: Lead | null): boolean {
