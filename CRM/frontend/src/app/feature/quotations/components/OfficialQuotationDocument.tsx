@@ -221,31 +221,31 @@ export function OfficialQuotationDocument({
     ? (activeSubBranch?.bank_name || (activeSubBranch as any)?.bankDetails?.bankName) 
     : isBranchIssued 
     ? activeBranch?.bank_name 
-    : activeCompany?.bank_name)?.trim() || "HDFC Bank Ltd"
+    : activeCompany?.bank_name)?.trim() || ""
 
   const resolvedAccountHolder = (isSubBranchIssued 
     ? (activeSubBranch?.account_holder || (activeSubBranch as any)?.bankDetails?.accountHolder) 
     : isBranchIssued 
     ? activeBranch?.account_holder 
-    : activeCompany?.account_holder)?.trim() || resolvedBrandName
+    : activeCompany?.account_holder)?.trim() || ""
 
   const resolvedAccountNumber = (isSubBranchIssued 
     ? (activeSubBranch?.account_number || (activeSubBranch as any)?.bankDetails?.accountNumber) 
     : isBranchIssued 
     ? activeBranch?.account_number 
-    : activeCompany?.account_number)?.trim() || "50200084920194"
+    : activeCompany?.account_number)?.trim() || ""
 
   const resolvedIfscCode = (isSubBranchIssued 
     ? (activeSubBranch?.ifsc_code || (activeSubBranch as any)?.bankDetails?.ifscCode) 
     : isBranchIssued 
     ? activeBranch?.ifsc_code 
-    : activeCompany?.ifsc_code)?.trim() || "HDFC0001234"
+    : activeCompany?.ifsc_code)?.trim() || ""
 
   const resolvedBankBranch = (isSubBranchIssued 
     ? activeSubBranch?.bank_branch 
     : isBranchIssued 
     ? activeBranch?.bank_branch 
-    : activeCompany?.bank_branch)?.trim() || "Main Branch"
+    : activeCompany?.bank_branch)?.trim() || ""
 
   const resolvedUpiId = (isSubBranchIssued 
     ? (activeSubBranch?.upi_id || (activeSubBranch as any)?.bankDetails?.upiId) 
@@ -312,8 +312,33 @@ export function OfficialQuotationDocument({
     lightBorder: "border-teal-200",
   }
 
-  const hasLegalIds = Boolean(resolvedCin || resolvedGstin || resolvedPan || resolvedMsme)
-  const hasContactInfo = Boolean(resolvedPhone || resolvedWebsite || resolvedEmail)
+  // Helper to validate non-empty string fields
+  const isValidField = (val?: string | null): boolean => {
+    if (!val) return false
+    const s = String(val).trim().toLowerCase()
+    return s !== "" && s !== "none" && s !== "-" && s !== "null" && s !== "undefined"
+  }
+
+  const hasBankName = isValidField(resolvedBankName)
+  const hasAccountNum = isValidField(resolvedAccountNumber)
+  const hasIfsc = isValidField(resolvedIfscCode)
+  const hasAccountHolder = isValidField(resolvedAccountHolder)
+  const hasBankBranch = isValidField(resolvedBankBranch)
+  const hasUpi = isValidField(resolvedUpiId)
+  const hasQr = Boolean(resolvedPaymentQrUrl)
+  const hasAnyBankInfo = Boolean(hasBankName || hasAccountNum || hasIfsc || hasAccountHolder)
+  const hasAnyPaymentInfo = Boolean(hasAnyBankInfo || hasUpi || hasQr)
+
+  const hasCin = isValidField(resolvedCin)
+  const hasGstin = isValidField(resolvedGstin)
+  const hasPan = isValidField(resolvedPan)
+  const hasMsme = isValidField(resolvedMsme)
+  const hasLegalIds = Boolean(hasCin || hasGstin || hasPan || hasMsme)
+
+  const hasPhone = isValidField(resolvedPhone)
+  const hasWebsite = isValidField(resolvedWebsite)
+  const hasEmail = isValidField(resolvedEmail)
+  const hasContactInfo = Boolean(hasPhone || hasWebsite || hasEmail)
 
   return (
     <div className="official-quotation-modal-root relative flex flex-col w-full max-w-4xl mx-auto my-2 sm:my-4 bg-white text-zinc-900 rounded-2xl shadow-2xl overflow-hidden border border-zinc-200 print:border-none print:shadow-none print:my-0 print:max-w-none print:w-full">
@@ -666,42 +691,52 @@ export function OfficialQuotationDocument({
               </p>
             </div>
 
-            {/* Bank Remittance Details Box */}
-            <div className="p-4 rounded-xl border border-zinc-200 bg-zinc-50/70 space-y-2 text-[11px]">
-              <div className="flex items-center justify-between border-b border-zinc-200 pb-1.5">
-                <span className="font-bold text-zinc-900 flex items-center gap-1.5">
-                  <Landmark size={13} className="text-teal-700" />
-                  <span>Beneficiary Remittance &amp; Banking Details</span>
-                </span>
-                <span className="text-[10px] font-mono text-zinc-500">NEFT / RTGS / IMPS / UPI</span>
-              </div>
-
-              <div className="flex items-start justify-between gap-4">
-                <div className="space-y-1 flex-1">
-                  <div className="flex justify-between"><span className="text-zinc-500">Bank Name:</span> <span className="font-semibold text-zinc-900">{resolvedBankName}</span></div>
-                  <div className="flex justify-between"><span className="text-zinc-500">Account Name:</span> <span className="font-semibold text-zinc-900">{resolvedAccountHolder}</span></div>
-                  <div className="flex justify-between"><span className="text-zinc-500">Account Number:</span> <span className="font-mono font-bold text-zinc-900">{resolvedAccountNumber}</span></div>
-                  <div className="flex justify-between"><span className="text-zinc-500">IFSC Code:</span> <span className="font-mono font-bold text-teal-700">{resolvedIfscCode}</span></div>
-                  {resolvedBankBranch && (
-                    <div className="flex justify-between"><span className="text-zinc-500">Branch:</span> <span className="font-semibold text-zinc-800">{resolvedBankBranch}</span></div>
-                  )}
-                  {resolvedUpiId && (
-                    <div className="flex justify-between"><span className="text-zinc-500">UPI ID:</span> <span className="font-mono font-bold text-emerald-700">{resolvedUpiId}</span></div>
-                  )}
+            {/* Bank Remittance Details Box (Renders ONLY if bank or UPI details are entered) */}
+            {hasAnyPaymentInfo && (
+              <div className="p-4 rounded-xl border border-zinc-200 bg-zinc-50/70 space-y-2 text-[11px]">
+                <div className="flex items-center justify-between border-b border-zinc-200 pb-1.5">
+                  <span className="font-bold text-zinc-900 flex items-center gap-1.5">
+                    <Landmark size={13} className="text-teal-700" />
+                    <span>Beneficiary Remittance &amp; Banking Details</span>
+                  </span>
+                  <span className="text-[10px] font-mono text-zinc-500">NEFT / RTGS / IMPS / UPI</span>
                 </div>
 
-                {resolvedPaymentQrUrl && (
-                  <div className="text-center shrink-0">
-                    <img 
-                      src={resolvedPaymentQrUrl} 
-                      alt="UPI QR" 
-                      className="w-20 h-20 border border-zinc-200 rounded-lg p-1 bg-white mx-auto shadow-2xs" 
-                    />
-                    <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-tight block mt-1">Scan to Remit</span>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-1 flex-1">
+                    {hasBankName && (
+                      <div className="flex justify-between"><span className="text-zinc-500">Bank Name:</span> <span className="font-semibold text-zinc-900">{resolvedBankName}</span></div>
+                    )}
+                    {hasAccountHolder && (
+                      <div className="flex justify-between"><span className="text-zinc-500">Account Name:</span> <span className="font-semibold text-zinc-900">{resolvedAccountHolder}</span></div>
+                    )}
+                    {hasAccountNum && (
+                      <div className="flex justify-between"><span className="text-zinc-500">Account Number:</span> <span className="font-mono font-bold text-zinc-900">{resolvedAccountNumber}</span></div>
+                    )}
+                    {hasIfsc && (
+                      <div className="flex justify-between"><span className="text-zinc-500">IFSC Code:</span> <span className="font-mono font-bold text-teal-700">{resolvedIfscCode}</span></div>
+                    )}
+                    {hasBankBranch && (
+                      <div className="flex justify-between"><span className="text-zinc-500">Branch:</span> <span className="font-semibold text-zinc-800">{resolvedBankBranch}</span></div>
+                    )}
+                    {hasUpi && (
+                      <div className="flex justify-between"><span className="text-zinc-500">UPI ID:</span> <span className="font-mono font-bold text-emerald-700">{resolvedUpiId}</span></div>
+                    )}
                   </div>
-                )}
+
+                  {hasQr && (
+                    <div className="text-center shrink-0">
+                      <img 
+                        src={resolvedPaymentQrUrl!} 
+                        alt="UPI QR" 
+                        className="w-20 h-20 border border-zinc-200 rounded-lg p-1 bg-white mx-auto shadow-2xs" 
+                      />
+                      <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-tight block mt-1">Scan to Remit</span>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Right Column: Calculations */}

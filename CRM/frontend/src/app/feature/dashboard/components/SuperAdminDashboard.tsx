@@ -96,8 +96,10 @@ export function SuperAdminDashboard() {
     user, 
     companies, 
     branches, 
+    subBranches,
     activeCompanyId, 
     activeBranchId, 
+    activeSubBranchId,
     switchCompany, 
     switchBranch 
   } = useAuthStore()
@@ -226,10 +228,18 @@ export function SuperAdminDashboard() {
     window.addEventListener("saampark_data_synced", handleSync)
     window.addEventListener("storage", handleSync)
     window.addEventListener("saampark_activity_logged", handleSync)
+    window.addEventListener("saampark_company_switched", handleSync)
+    window.addEventListener("saampark_branch_switched", handleSync)
+    window.addEventListener("saampark_sub_branch_switched", handleSync)
+    window.addEventListener("saampark_subbranch_switched", handleSync)
     return () => {
       window.removeEventListener("saampark_data_synced", handleSync)
       window.removeEventListener("storage", handleSync)
       window.removeEventListener("saampark_activity_logged", handleSync)
+      window.removeEventListener("saampark_company_switched", handleSync)
+      window.removeEventListener("saampark_branch_switched", handleSync)
+      window.removeEventListener("saampark_sub_branch_switched", handleSync)
+      window.removeEventListener("saampark_subbranch_switched", handleSync)
     }
   }, [loadDashboardData])
 
@@ -312,28 +322,14 @@ export function SuperAdminDashboard() {
       }, 0)
       const realOut = compInvoices.reduce((s, inv) => s + parseAmt(inv.due), 0)
 
-      let fallbackRev = 0
-      let fallbackOut = 0
-      const canonId = getCanonicalCompanyId(cId)
-      if (canonId === "tech") {
-        fallbackRev = 1925000
-        fallbackOut = 640000
-      } else if (canonId === "digital") {
-        fallbackRev = 1115000
-        fallbackOut = 420000
-      } else if (canonId === "saampark-ai-solutions") {
-        fallbackRev = 659700
-        fallbackOut = 294500
-      }
-
       return {
         id: String(c.id || idx),
         name: getCompanyFullName(c),
         branches: compBranches.length,
         users: compUsers.length,
         projects: compProjects.length,
-        revenue: realRev > 0 ? realRev : fallbackRev,
-        outstanding: compInvoices.length > 0 ? realOut : fallbackOut,
+        revenue: realRev,
+        outstanding: realOut,
         percent: 0,
         color: palette[idx % palette.length]
       }
@@ -397,31 +393,14 @@ export function SuperAdminDashboard() {
       }, 0)
       const realOut = bInvoices.reduce((s, inv) => s + parseAmt(inv.due), 0)
 
-      let fallbackRev = 0
-      let fallbackOut = 0
-      const bCode = String(b.code || b.id).toLowerCase()
-      if (bCode.includes("br-1") || b.id === "br-1") {
-        fallbackRev = 1350000
-        fallbackOut = 430000
-      } else if (bCode.includes("br-2") || b.id === "br-2") {
-        fallbackRev = 575000
-        fallbackOut = 210000
-      } else if (bCode.includes("br-3") || b.id === "br-3") {
-        fallbackRev = 1115000
-        fallbackOut = 420000
-      } else if (bCode.includes("br-5") || b.id === "br-5") {
-        fallbackRev = 659700
-        fallbackOut = 294500
-      }
-
       return {
         id: String(b.id),
         name: b.name,
         companyName: compName,
         users: bUsers.length,
         projects: bProjects.length,
-        revenue: realRev > 0 ? realRev : fallbackRev,
-        outstanding: bInvoices.length > 0 ? realOut : fallbackOut
+        revenue: realRev,
+        outstanding: realOut
       }
     }).filter(Boolean) as BranchRow[]
   }, [branches, companies, dbUsers, dbProjects, dbInvoices])
@@ -442,6 +421,7 @@ export function SuperAdminDashboard() {
 
   // Scoped lists for operational widgets
   const isBranchSelected = Boolean(activeBranchId && activeBranchId !== "all")
+  const isSubBranchSelected = Boolean(activeSubBranchId && activeSubBranchId !== "all")
 
   const scopedTasks = React.useMemo(() => {
     let list = Array.isArray(dbTasks) ? dbTasks : []
@@ -455,8 +435,15 @@ export function SuperAdminDashboard() {
         return isMatchingBranch({ id: bId, code: bId } as any, activeBranchId)
       })
     }
+    if (isSubBranchSelected) {
+      list = list.filter(t => {
+        if (!t) return false
+        const sbId = String(t.subBranchId || (t as any).sub_branch_id || "").toLowerCase().trim()
+        return sbId === String(activeSubBranchId).toLowerCase().trim()
+      })
+    }
     return list
-  }, [dbTasks, activeCompanyId, activeBranchId, isBranchSelected])
+  }, [dbTasks, activeCompanyId, activeBranchId, activeSubBranchId, isBranchSelected, isSubBranchSelected])
 
   const scopedProjects = React.useMemo(() => {
     let list = Array.isArray(dbProjects) ? dbProjects : []
@@ -470,8 +457,15 @@ export function SuperAdminDashboard() {
         return isMatchingBranch({ id: bId, code: bId } as any, activeBranchId)
       })
     }
+    if (isSubBranchSelected) {
+      list = list.filter(p => {
+        if (!p) return false
+        const sbId = String(p.subBranchId || (p as any).sub_branch_id || "").toLowerCase().trim()
+        return sbId === String(activeSubBranchId).toLowerCase().trim()
+      })
+    }
     return list
-  }, [dbProjects, activeCompanyId, activeBranchId, isBranchSelected])
+  }, [dbProjects, activeCompanyId, activeBranchId, activeSubBranchId, isBranchSelected, isSubBranchSelected])
 
   const scopedInvoices = React.useMemo(() => {
     let list = Array.isArray(dbInvoices) ? dbInvoices : []
@@ -490,8 +484,15 @@ export function SuperAdminDashboard() {
         return isMatchingBranch({ id: bId, code: bId } as any, activeBranchId)
       })
     }
+    if (isSubBranchSelected) {
+      list = list.filter(inv => {
+        if (!inv) return false
+        const sbId = String(inv.subBranchId || (inv as any).sub_branch_id || "").toLowerCase().trim()
+        return sbId === String(activeSubBranchId).toLowerCase().trim()
+      })
+    }
     return list
-  }, [dbInvoices, activeCompanyId, activeBranchId, isBranchSelected])
+  }, [dbInvoices, activeCompanyId, activeBranchId, activeSubBranchId, isBranchSelected, isSubBranchSelected])
 
   const scopedExpenses = React.useMemo(() => {
     let list = Array.isArray(dbExpenses) ? dbExpenses : []
@@ -510,8 +511,15 @@ export function SuperAdminDashboard() {
         return isMatchingBranch({ id: bId, code: bId } as any, activeBranchId)
       })
     }
+    if (isSubBranchSelected) {
+      list = list.filter(exp => {
+        if (!exp) return false
+        const sbId = String(exp.subBranchId || (exp as any).sub_branch_id || "").toLowerCase().trim()
+        return sbId === String(activeSubBranchId).toLowerCase().trim()
+      })
+    }
     return list
-  }, [dbExpenses, activeCompanyId, activeBranchId, isBranchSelected])
+  }, [dbExpenses, activeCompanyId, activeBranchId, activeSubBranchId, isBranchSelected, isSubBranchSelected])
 
   const scopedOrders = React.useMemo(() => {
     let list = Array.isArray(dbOrders) ? dbOrders : []
@@ -530,8 +538,15 @@ export function SuperAdminDashboard() {
         return isMatchingBranch({ id: bId, code: bId } as any, activeBranchId)
       })
     }
+    if (isSubBranchSelected) {
+      list = list.filter(ord => {
+        if (!ord) return false
+        const sbId = String((ord as any).subBranchId || (ord as any).sub_branch_id || "").toLowerCase().trim()
+        return sbId === String(activeSubBranchId).toLowerCase().trim()
+      })
+    }
     return list
-  }, [dbOrders, activeCompanyId, activeBranchId, isBranchSelected])
+  }, [dbOrders, activeCompanyId, activeBranchId, activeSubBranchId, isBranchSelected, isSubBranchSelected])
 
   const scopedUsers = React.useMemo(() => {
     let list = Array.isArray(dbUsers) ? dbUsers : []
@@ -564,8 +579,17 @@ export function SuperAdminDashboard() {
         return isMatchingBranch({ id: bId, code: bId } as any, activeBranchId)
       })
     }
+    if (isSubBranchSelected) {
+      list = list.filter(u => {
+        if (!u) return false
+        const sbId = String(u.subBranchId || (u as any).sub_branch_id || "").toLowerCase().trim()
+        const sbIds = Array.isArray((u as any).subBranchIds) ? (u as any).subBranchIds.map((id: any) => String(id).toLowerCase().trim()) : []
+        const target = String(activeSubBranchId).toLowerCase().trim()
+        return sbId === target || sbIds.includes(target)
+      })
+    }
     return list
-  }, [dbUsers, activeCompanyId, activeBranchId, isBranchSelected])
+  }, [dbUsers, activeCompanyId, activeBranchId, activeSubBranchId, isBranchSelected, isSubBranchSelected])
 
   // Company baseline fallback for canonical companies if no user invoices yet created
   const companyBaseline = React.useMemo(() => {

@@ -28,7 +28,7 @@ import { ClientDashboard } from "./components/ClientDashboard"
 import { SuperAdminDashboard } from "./components/SuperAdminDashboard"
 
 export default function DashboardMain() {
-  const { activeCompanyId, activeBranchId, companies, branches, user } = useAuthStore()
+  const { activeCompanyId, activeBranchId, activeSubBranchId, companies, branches, subBranches, user } = useAuthStore()
   if (!user) return null
 
   // If logged in as Client, display dedicated Client Portal Dashboard
@@ -80,8 +80,9 @@ export default function DashboardMain() {
   const [liveOrders, setLiveOrders] = React.useState<OrderItem[]>([])
   const [liveExpenses, setLiveExpenses] = React.useState<any[]>([])
 
-  const targetComp = activeCompanyId || user?.companyId || "tech"
-  const targetBranch = activeBranchId || user?.branchId || null
+  const targetComp = activeCompanyId || user.companyId || "tech"
+  const targetBranch = activeBranchId || user.branchId || null
+  const targetSubBranch = activeSubBranchId || user.subBranchId || null
 
   const refreshLiveDashboard = React.useCallback(async () => {
     try {
@@ -129,6 +130,17 @@ export default function DashboardMain() {
                (bName && (bName === targetBranchName || bName === targetBranchId))
       }
 
+      const subBranchFilter = (item: any) => {
+        if (!targetSubBranch || targetSubBranch === "all") return true
+        const sbId = String(item.subBranchId || item.sub_branch_id || "").toLowerCase().trim()
+        const targetSbId = String(targetSubBranch).toLowerCase().trim()
+        if (item.subBranchIds && Array.isArray(item.subBranchIds)) {
+          const ids = item.subBranchIds.map((s: string) => String(s).toLowerCase().trim())
+          if (ids.includes(targetSbId)) return true
+        }
+        return sbId && sbId === targetSbId
+      }
+
       const userCompanyFilter = (u: any) => {
         if (!targetComp || targetComp === "all") return true
         if (u.role === "Super Admin") return true
@@ -142,14 +154,18 @@ export default function DashboardMain() {
         if (!targetBranch) return true
         if (u.role === "Super Admin") return true
         return branchFilter(u)
+      }).filter((u: any) => {
+        if (!targetSubBranch) return true
+        if (u.role === "Super Admin") return true
+        return subBranchFilter(u)
       })
 
-      const scopedTasks = cleanTasks.filter(companyFilter).filter(branchFilter)
-      const scopedProjects = cleanProjects.filter(companyFilter).filter(branchFilter)
-      const scopedLeads = cleanLeads.filter(companyFilter).filter(branchFilter)
-      const scopedInvoices = cleanInvoices.filter(companyFilter).filter(branchFilter)
-      const scopedOrders = cleanOrders.filter(companyFilter).filter(branchFilter)
-      const scopedExpenses = cleanExpenses.filter(companyFilter).filter(branchFilter)
+      const scopedTasks = cleanTasks.filter(companyFilter).filter(branchFilter).filter(subBranchFilter)
+      const scopedProjects = cleanProjects.filter(companyFilter).filter(branchFilter).filter(subBranchFilter)
+      const scopedLeads = cleanLeads.filter(companyFilter).filter(branchFilter).filter(subBranchFilter)
+      const scopedInvoices = cleanInvoices.filter(companyFilter).filter(branchFilter).filter(subBranchFilter)
+      const scopedOrders = cleanOrders.filter(companyFilter).filter(branchFilter).filter(subBranchFilter)
+      const scopedExpenses = cleanExpenses.filter(companyFilter).filter(branchFilter).filter(subBranchFilter)
 
       setRealUsers(scopedUsers)
       if (scopedUsers.length > 0 && !selectedUserEmail) {
@@ -212,6 +228,8 @@ export default function DashboardMain() {
     window.addEventListener("storage", refreshLiveDashboard)
     window.addEventListener("saampark_company_switched", refreshLiveDashboard)
     window.addEventListener("saampark_branch_switched", refreshLiveDashboard)
+    window.addEventListener("saampark_sub_branch_switched", refreshLiveDashboard)
+    window.addEventListener("saampark_subbranch_switched", refreshLiveDashboard)
     document.addEventListener("visibilitychange", handleVisibility)
 
     return () => {
@@ -219,6 +237,8 @@ export default function DashboardMain() {
       window.removeEventListener("storage", refreshLiveDashboard)
       window.removeEventListener("saampark_company_switched", refreshLiveDashboard)
       window.removeEventListener("saampark_branch_switched", refreshLiveDashboard)
+      window.removeEventListener("saampark_sub_branch_switched", refreshLiveDashboard)
+      window.removeEventListener("saampark_subbranch_switched", refreshLiveDashboard)
       document.removeEventListener("visibilitychange", handleVisibility)
     }
   }, [refreshLiveDashboard])
