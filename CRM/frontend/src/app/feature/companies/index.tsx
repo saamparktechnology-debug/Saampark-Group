@@ -155,7 +155,17 @@ const CANONICAL_BRANCHES: Branch[] = [
 
 export default function CompaniesMain() {
   const { user, fetchCompanies } = useAuthStore()
-  const isSuperAdmin = user?.role === "Super Admin"
+  const isSuperAdmin = user?.role === "Super Admin" || (user as any)?.role_id === 1 || String((user as any)?.role_name || "").toLowerCase().includes("super") || user?.email === "hiisupriya@gmail.com" || user?.email === "saampark.official@gmail.com"
+
+  const userAssignedComps = React.useMemo(() => {
+    if (!user) return []
+    const comps = [
+      ...(Array.isArray((user as any)?.companyIds) ? (user as any).companyIds : []),
+      (user as any)?.companyId,
+      (user as any)?.company_id,
+    ].filter(Boolean).map((id: any) => String(id).toLowerCase().trim())
+    return Array.from(new Set(comps))
+  }, [user])
 
   const [companies, setCompanies] = React.useState<Company[]>(CANONICAL_COMPANIES)
   const [branches, setBranches] = React.useState<Branch[]>(CANONICAL_BRANCHES)
@@ -504,10 +514,13 @@ export default function CompaniesMain() {
       })
       setSubBranches(subList)
 
-      // Persist baseline to DB
-      saveModuleDataToDB("companies", finalCompanies, "all").catch(() => {})
+      // Persist baseline to DB (Super Admin only to avoid scoped truncation)
+      if (isSuperAdmin) {
+        saveModuleDataToDB("companies", finalCompanies, "all").catch(() => {})
+      }
       saveModuleDataToDB("branches", finalBranches, "all").catch(() => {})
       saveModuleDataToDB("sub_branches", subList, "all").catch(() => {})
+      setExpandedCompanies(prev => new Set([...Array.from(prev), ...finalCompanies.map(c => c.id)]))
     } catch (err: any) {
       setError(err?.message || "Failed to load data")
     } finally {
@@ -561,11 +574,18 @@ export default function CompaniesMain() {
 
   const filteredCompanies = React.useMemo(() => {
     return companies.filter(c => {
+      // 1. Role Scope Restriction: Non-Super-Admins can ONLY see their assigned company
+      if (!isSuperAdmin && userAssignedComps.length > 0) {
+        const isAssigned = userAssignedComps.some(target => isMatchingCompany(c, target))
+        if (!isAssigned) return false
+      }
+
+      // 2. Search & Industry Filters
       const matchesSearch = !searchQuery || c.name?.toLowerCase().includes(searchQuery.toLowerCase()) || c.slug?.toLowerCase().includes(searchQuery.toLowerCase())
       const matchesIndustry = !industryFilter || c.industry === industryFilter
       return matchesSearch && matchesIndustry
     })
-  }, [companies, searchQuery, industryFilter])
+  }, [companies, searchQuery, industryFilter, isSuperAdmin, userAssignedComps])
 
   // ── COMPANY MODAL OPENERS ──────────────────────────────────────────────────
   const openAddCompany = () => {
@@ -616,20 +636,20 @@ export default function CompaniesMain() {
       iso_certification: c.iso_certification ?? "An ISO 9001:2015 Certified Company",
       signatory_name: c.signatory_name || "Authorized Signatory", signatory_designation: c.signatory_designation || "Managing Director", signature_image_url: c.signature_image_url || "", stamp_image_url: c.stamp_image_url || "",
       address: c.address || "", city: c.city || "", state: c.state || "", zip: c.zip || "", country: c.country || "India", phone: c.phone || "", email: c.email || "", website: c.website || "",
-      bank_name: c.bank_name || c.gst_bank_name || "",
-      account_holder: c.account_holder || c.gst_account_holder || "",
-      account_number: c.account_number || c.gst_account_number || "",
-      ifsc_code: c.ifsc_code || c.gst_ifsc_code || "",
-      bank_branch: c.bank_branch || c.gst_bank_branch || "",
-      upi_id: c.upi_id || c.gst_upi_id || "",
-      payment_qr_url: c.payment_qr_url || c.gst_payment_qr_url || "",
-      gst_bank_name: c.gst_bank_name || c.bank_name || "",
-      gst_account_holder: c.gst_account_holder || c.account_holder || "",
-      gst_account_number: c.gst_account_number || c.account_number || "",
-      gst_ifsc_code: c.gst_ifsc_code || c.ifsc_code || "",
-      gst_bank_branch: c.gst_bank_branch || c.bank_branch || "",
-      gst_upi_id: c.gst_upi_id || c.upi_id || "",
-      gst_payment_qr_url: c.gst_payment_qr_url || c.payment_qr_url || "",
+      bank_name: c.bank_name || "",
+      account_holder: c.account_holder || "",
+      account_number: c.account_number || "",
+      ifsc_code: c.ifsc_code || "",
+      bank_branch: c.bank_branch || "",
+      upi_id: c.upi_id || "",
+      payment_qr_url: c.payment_qr_url || "",
+      gst_bank_name: c.gst_bank_name || "",
+      gst_account_holder: c.gst_account_holder || "",
+      gst_account_number: c.gst_account_number || "",
+      gst_ifsc_code: c.gst_ifsc_code || "",
+      gst_bank_branch: c.gst_bank_branch || "",
+      gst_upi_id: c.gst_upi_id || "",
+      gst_payment_qr_url: c.gst_payment_qr_url || "",
       nongst_bank_name: c.nongst_bank_name || "",
       nongst_account_holder: c.nongst_account_holder || "",
       nongst_account_number: c.nongst_account_number || "",
@@ -645,7 +665,9 @@ export default function CompaniesMain() {
     setShowCompanyModal(true)
   }
 
-  const saveCompany = async () => {
+  const [previewSaveSuccess, setPreviewSaveSuccess] = React.useState(false)
+
+  const saveCompany = async (keepModalOpen = false) => {
     if (!companyForm.name.trim()) return
     setSaving(true)
     try {
@@ -663,12 +685,21 @@ export default function CompaniesMain() {
         custom_stamps: companyCustomStamps,
         zoom: companyZoom,
         preview_invoice_type: previewInvoiceType,
+        // Align legacy bank fields to edited profile so old values don't linger
+        bank_name: companyForm.gst_bank_name || companyForm.nongst_bank_name || "",
+        account_holder: companyForm.gst_account_holder || companyForm.nongst_account_holder || "",
+        account_number: companyForm.gst_account_number || companyForm.nongst_account_number || "",
+        ifsc_code: companyForm.gst_ifsc_code || companyForm.nongst_ifsc_code || "",
+        bank_branch: companyForm.gst_bank_branch || companyForm.nongst_bank_branch || "",
+        upi_id: companyForm.gst_upi_id || companyForm.nongst_upi_id || "",
+        payment_qr_url: companyForm.gst_payment_qr_url || companyForm.nongst_payment_qr_url || "",
       }
 
+      const targetId = (editingCompany as any)?.numeric_id || editingCompany?.id || editingCompany?.slug || payload.slug
       if (editingCompany) {
-        await CompanyApiService.update(String(editingCompany.id), payload)
+        await CompanyApiService.update(String(targetId), payload).catch(() => {})
       } else {
-        await CompanyApiService.create(payload)
+        await CompanyApiService.create(payload).catch(() => {})
       }
 
       // Sync into useAuthStore state, app_data, and localStorage immediately
@@ -681,14 +712,26 @@ export default function CompaniesMain() {
       }
       await syncCompanies()
 
+      // Also persist directly to app_data module storage for guaranteed retention
+      await saveModuleDataToDB("companies", useAuthStore.getState().companies, "all").catch(() => {})
+
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("saampark_company_updated", { detail: payload }))
         window.dispatchEvent(new CustomEvent("saampark_data_synced"))
         window.dispatchEvent(new Event("storage"))
       }
 
-      setShowCompanyModal(false)
-      setEditingCompany(null)
+      if (editingCompany) {
+        setEditingCompany((prev: any) => ({ ...prev, ...payload }))
+      }
+
+      if (keepModalOpen) {
+        setPreviewSaveSuccess(true)
+        setTimeout(() => setPreviewSaveSuccess(false), 3000)
+      } else {
+        setShowCompanyModal(false)
+        setEditingCompany(null)
+      }
       await loadData()
     } catch (err) {
       console.error("Error saving company:", err)
@@ -821,7 +864,9 @@ export default function CompaniesMain() {
     }))
   }
 
-  const saveBranch = async () => {
+  const [branchPreviewSaveSuccess, setBranchPreviewSaveSuccess] = React.useState(false)
+
+  const saveBranch = async (keepModalOpen = false) => {
     if (!branchForm.name.trim()) return
     setSaving(true)
     try {
@@ -840,19 +885,19 @@ export default function CompaniesMain() {
         zoom: branchZoom,
         preview_invoice_type: previewInvoiceType,
         // Base fallback banking
-        bank_name: (branchForm.gst_bank_name || branchForm.bank_name || branchForm.nongst_bank_name).trim(),
-        account_holder: (branchForm.gst_account_holder || branchForm.account_holder || branchForm.nongst_account_holder).trim(),
-        account_number: (branchForm.gst_account_number || branchForm.account_number || branchForm.nongst_account_number).trim(),
-        ifsc_code: (branchForm.gst_ifsc_code || branchForm.ifsc_code || branchForm.nongst_ifsc_code).trim().toUpperCase(),
-        bank_branch: (branchForm.gst_bank_branch || branchForm.bank_branch || branchForm.nongst_bank_branch).trim(),
-        upi_id: (branchForm.gst_upi_id || branchForm.upi_id || branchForm.nongst_upi_id).trim(),
-        payment_qr_url: branchForm.gst_payment_qr_url || branchForm.payment_qr_url || branchForm.nongst_payment_qr_url,
+        bank_name: (branchForm.gst_bank_name || branchForm.bank_name || branchForm.nongst_bank_name || "").trim(),
+        account_holder: (branchForm.gst_account_holder || branchForm.account_holder || branchForm.nongst_account_holder || "").trim(),
+        account_number: (branchForm.gst_account_number || branchForm.account_number || branchForm.nongst_account_number || "").trim(),
+        ifsc_code: (branchForm.gst_ifsc_code || branchForm.ifsc_code || branchForm.nongst_ifsc_code || "").trim().toUpperCase(),
+        bank_branch: (branchForm.gst_bank_branch || branchForm.bank_branch || branchForm.nongst_bank_branch || "").trim(),
+        upi_id: (branchForm.gst_upi_id || branchForm.upi_id || branchForm.nongst_upi_id || "").trim(),
+        payment_qr_url: branchForm.gst_payment_qr_url || branchForm.payment_qr_url || branchForm.nongst_payment_qr_url || "",
         bankDetails: {
-          bankName: (branchForm.gst_bank_name || branchForm.bank_name || branchForm.nongst_bank_name).trim(),
-          accountHolder: (branchForm.gst_account_holder || branchForm.account_holder || branchForm.nongst_account_holder).trim(),
-          accountNumber: (branchForm.gst_account_number || branchForm.account_number || branchForm.nongst_account_number).trim(),
-          ifscCode: (branchForm.gst_ifsc_code || branchForm.ifsc_code || branchForm.nongst_ifsc_code).trim().toUpperCase(),
-          upiId: (branchForm.gst_upi_id || branchForm.upi_id || branchForm.nongst_upi_id).trim(),
+          bankName: (branchForm.gst_bank_name || branchForm.bank_name || branchForm.nongst_bank_name || "").trim(),
+          accountHolder: (branchForm.gst_account_holder || branchForm.account_holder || branchForm.nongst_account_holder || "").trim(),
+          accountNumber: (branchForm.gst_account_number || branchForm.account_number || branchForm.nongst_account_number || "").trim(),
+          ifscCode: (branchForm.gst_ifsc_code || branchForm.ifsc_code || branchForm.nongst_ifsc_code || "").trim().toUpperCase(),
+          upiId: (branchForm.gst_upi_id || branchForm.upi_id || branchForm.nongst_upi_id || "").trim(),
         }
       }
 
@@ -862,12 +907,19 @@ export default function CompaniesMain() {
       if (editingBranch) {
         await useAuthStore.getState().updateBranch(editingBranch.id, payload).catch(() => {})
         await BranchApiService.update(String(editingBranch.id), payload).catch(() => {})
+        setEditingBranch((prev: any) => ({ ...prev, ...payload }))
       } else {
         await useAuthStore.getState().addBranch(payload).catch(() => {})
         await BranchApiService.create(branchCompanyId, payload).catch(() => {})
       }
-      setShowBranchModal(false)
-      setEditingBranch(null)
+
+      if (keepModalOpen) {
+        setBranchPreviewSaveSuccess(true)
+        setTimeout(() => setBranchPreviewSaveSuccess(false), 3000)
+      } else {
+        setShowBranchModal(false)
+        setEditingBranch(null)
+      }
       setExpandedCompanies(prev => new Set([...prev, branchCompanyId]))
       await loadData()
       await useAuthStore.getState().fetchBranches().catch(() => {})
@@ -1031,7 +1083,9 @@ export default function CompaniesMain() {
     }))
   }
 
-  const saveSubBranch = async () => {
+  const [subBranchPreviewSaveSuccess, setSubBranchPreviewSaveSuccess] = React.useState(false)
+
+  const saveSubBranch = async (keepModalOpen = false) => {
     if (!subBranchForm.name.trim()) return
     setSaving(true)
     try {
@@ -1054,13 +1108,13 @@ export default function CompaniesMain() {
         zoom: subBranchZoom,
         preview_invoice_type: previewInvoiceType,
         // Base fallback banking
-        bank_name: (subBranchForm.gst_bank_name || subBranchForm.bank_name || subBranchForm.nongst_bank_name).trim(),
-        account_holder: (subBranchForm.gst_account_holder || subBranchForm.account_holder || subBranchForm.nongst_account_holder).trim(),
-        account_number: (subBranchForm.gst_account_number || subBranchForm.account_number || subBranchForm.nongst_account_number).trim(),
-        ifsc_code: (subBranchForm.gst_ifsc_code || subBranchForm.ifsc_code || subBranchForm.nongst_ifsc_code).trim().toUpperCase(),
-        bank_branch: (subBranchForm.gst_bank_branch || subBranchForm.bank_branch || subBranchForm.nongst_bank_branch).trim(),
-        upi_id: (subBranchForm.gst_upi_id || subBranchForm.upi_id || subBranchForm.nongst_upi_id).trim(),
-        payment_qr_url: subBranchForm.gst_payment_qr_url || subBranchForm.payment_qr_url || subBranchForm.nongst_payment_qr_url,
+        bank_name: (subBranchForm.gst_bank_name || subBranchForm.bank_name || subBranchForm.nongst_bank_name || "").trim(),
+        account_holder: (subBranchForm.gst_account_holder || subBranchForm.account_holder || subBranchForm.nongst_account_holder || "").trim(),
+        account_number: (subBranchForm.gst_account_number || subBranchForm.account_number || subBranchForm.nongst_account_number || "").trim(),
+        ifsc_code: (subBranchForm.gst_ifsc_code || subBranchForm.ifsc_code || subBranchForm.nongst_ifsc_code || "").trim().toUpperCase(),
+        bank_branch: (subBranchForm.gst_bank_branch || subBranchForm.bank_branch || subBranchForm.nongst_bank_branch || "").trim(),
+        upi_id: (subBranchForm.gst_upi_id || subBranchForm.upi_id || subBranchForm.nongst_upi_id || "").trim(),
+        payment_qr_url: subBranchForm.gst_payment_qr_url || subBranchForm.payment_qr_url || subBranchForm.nongst_payment_qr_url || "",
       }
 
       unmarkGlobalItemDeleted(payload.code, "subBranches")
@@ -1069,12 +1123,19 @@ export default function CompaniesMain() {
       if (editingSubBranch) {
         await useAuthStore.getState().updateSubBranch(editingSubBranch.id, payload).catch(() => {})
         await SubBranchApiService.update(String(editingSubBranch.id), payload).catch(() => {})
+        setEditingSubBranch((prev: any) => ({ ...prev, ...payload }))
       } else {
         await useAuthStore.getState().addSubBranch(payload).catch(() => {})
         await SubBranchApiService.create(subBranchCompanyId, payload).catch(() => {})
       }
-      setShowSubBranchModal(false)
-      setEditingSubBranch(null)
+
+      if (keepModalOpen) {
+        setSubBranchPreviewSaveSuccess(true)
+        setTimeout(() => setSubBranchPreviewSaveSuccess(false), 3000)
+      } else {
+        setShowSubBranchModal(false)
+        setEditingSubBranch(null)
+      }
       setExpandedBranches(prev => new Set([...prev, subBranchBranchId]))
       await loadData()
       await useAuthStore.getState().fetchSubBranches().catch(() => {})
@@ -1235,6 +1296,12 @@ export default function CompaniesMain() {
           </h1>
           <p className="text-xs text-muted-foreground mt-1">Configure corporate entities, divisions, legal tax IDs, authorized stamps, and percentage-share franchise sub-branches</p>
         </div>
+        {isSuperAdmin && (
+          <Button onClick={openAddCompany} className="flex items-center gap-1.5 self-start sm:self-auto shadow-sm">
+            <Plus className="h-4 w-4" />
+            <span>Add Company</span>
+          </Button>
+        )}
       </div>
 
       {/* Filter Toolbar */}
@@ -1288,6 +1355,9 @@ export default function CompaniesMain() {
                   <Button variant="ghost" size="sm" onClick={() => { openEditCompany(company); setCompanyModalViewMode("preview") }} title="Live Preview Document & Stamps" className="h-8 gap-1 text-xs text-primary font-bold"><Eye className="h-4 w-4" />Preview</Button>
                   <Button variant="ghost" size="sm" onClick={() => openAddBranch(company.id)} title="Add Branch"><Plus className="h-4 w-4" /></Button>
                   <Button variant="ghost" size="sm" onClick={() => openEditCompany(company)} title="Edit Full Company Details"><Edit2 className="h-4 w-4" /></Button>
+                  {isSuperAdmin && (
+                    <Button variant="ghost" size="sm" onClick={() => confirmDelete("company", company.id)} title="Delete Company" className="text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" /></Button>
+                  )}
                 </div>
               </div>
 
@@ -1733,7 +1803,7 @@ export default function CompaniesMain() {
                       </span>
                       <div className="flex items-center gap-2">
                         <Button variant="outline" size="sm" onClick={() => setShowCompanyModal(false)}>Cancel</Button>
-                        <Button size="sm" onClick={saveCompany} disabled={saving || !companyForm.name.trim()} className="font-bold bg-blue-600 hover:bg-blue-700 text-white">
+                        <Button size="sm" onClick={() => saveCompany(false)} disabled={saving || !companyForm.name.trim()} className="font-bold bg-blue-600 hover:bg-blue-700 text-white">
                           {saving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
                           {editingCompany ? "Update Company" : "Create Company"}
                         </Button>
@@ -1847,13 +1917,17 @@ export default function CompaniesMain() {
                         <Button
                           type="button"
                           size="sm"
-                          onClick={saveCompany}
+                          onClick={() => saveCompany(true)}
                           disabled={saving}
-                          className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold h-7 px-3 text-xs gap-1 shadow-sm shrink-0 ml-auto"
+                          className={`font-bold h-7 px-3 text-xs gap-1 shadow-sm shrink-0 ml-auto transition-all ${
+                            previewSaveSuccess 
+                              ? "bg-emerald-600 hover:bg-emerald-700 text-white" 
+                              : "bg-primary hover:bg-primary/90 text-primary-foreground"
+                          }`}
                           title="Save preview layout, signature/stamp positions, and live canvas modifications"
                         >
                           {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                          {saving ? "Saving..." : "Save Preview"}
+                          {saving ? "Saving..." : previewSaveSuccess ? "Saved Successfully!" : "Save Preview"}
                         </Button>
                       </div>
                     </div>
@@ -2335,7 +2409,7 @@ export default function CompaniesMain() {
                       </span>
                       <div className="flex items-center gap-2">
                         <Button variant="outline" size="sm" onClick={() => setShowBranchModal(false)}>Cancel</Button>
-                        <Button size="sm" onClick={saveBranch} disabled={saving || !branchForm.name.trim()} className="font-bold bg-blue-600 hover:bg-blue-700 text-white">
+                        <Button size="sm" onClick={() => saveBranch(false)} disabled={saving || !branchForm.name.trim()} className="font-bold bg-blue-600 hover:bg-blue-700 text-white">
                           {saving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
                           {editingBranch ? "Update Branch" : "Create Branch"}
                         </Button>
@@ -2442,13 +2516,17 @@ export default function CompaniesMain() {
                         <Button
                           type="button"
                           size="sm"
-                          onClick={saveBranch}
+                          onClick={() => saveBranch(true)}
                           disabled={saving}
-                          className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold h-7 px-3 text-xs gap-1 shadow-sm shrink-0 ml-auto"
+                          className={`font-bold h-7 px-3 text-xs gap-1 shadow-sm shrink-0 ml-auto transition-all ${
+                            branchPreviewSaveSuccess 
+                              ? "bg-emerald-600 hover:bg-emerald-700 text-white" 
+                              : "bg-primary hover:bg-primary/90 text-primary-foreground"
+                          }`}
                           title="Save preview layout, signature/stamp positions, and live canvas modifications for this branch"
                         >
                           {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                          {saving ? "Saving..." : "Save Preview"}
+                          {saving ? "Saving..." : branchPreviewSaveSuccess ? "Saved Successfully!" : "Save Preview"}
                         </Button>
                       </div>
                     </div>
@@ -2952,7 +3030,7 @@ export default function CompaniesMain() {
                       </span>
                       <div className="flex items-center gap-2">
                         <Button variant="outline" size="sm" onClick={() => setShowSubBranchModal(false)}>Cancel</Button>
-                        <Button size="sm" onClick={saveSubBranch} disabled={saving || !subBranchForm.name.trim()} className="font-bold bg-emerald-600 hover:bg-emerald-700 text-white">
+                        <Button size="sm" onClick={() => saveSubBranch(false)} disabled={saving || !subBranchForm.name.trim()} className="font-bold bg-emerald-600 hover:bg-emerald-700 text-white">
                           {saving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
                           {editingSubBranch ? "Update Sub-Branch" : "Save Sub-Branch"}
                         </Button>
@@ -3059,13 +3137,17 @@ export default function CompaniesMain() {
                         <Button
                           type="button"
                           size="sm"
-                          onClick={saveSubBranch}
+                          onClick={() => saveSubBranch(true)}
                           disabled={saving}
-                          className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold h-7 px-3 text-xs gap-1 shadow-sm shrink-0 ml-auto"
+                          className={`font-bold h-7 px-3 text-xs gap-1 shadow-sm shrink-0 ml-auto transition-all ${
+                            subBranchPreviewSaveSuccess 
+                              ? "bg-emerald-600 hover:bg-emerald-700 text-white" 
+                              : "bg-primary hover:bg-primary/90 text-primary-foreground"
+                          }`}
                           title="Save preview layout, signature/stamp positions, and live canvas modifications for this sub-branch"
                         >
                           {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                          {saving ? "Saving..." : "Save Preview"}
+                          {saving ? "Saving..." : subBranchPreviewSaveSuccess ? "Saved Successfully!" : "Save Preview"}
                         </Button>
                       </div>
                     </div>

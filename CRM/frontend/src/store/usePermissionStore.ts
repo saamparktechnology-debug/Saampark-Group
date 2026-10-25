@@ -44,6 +44,7 @@ export const ALL_APP_MODULES = [
   'Companies',
   'Branches',
   'Departments',
+  'Approvals',
   'Users',
   'Permissions',
   'Expenses',
@@ -144,13 +145,20 @@ export const CLEAN_MODULE_CATEGORIES: Record<string, { label: string; icon: stri
       { key: "Files", name: "Files", description: "Cloud documents, attachments & vault" },
     ]
   },
-  admin: {
-    label: "Organisation & Governance",
+  company: {
+    label: "Company & Organisation Governance",
     icon: "Building2",
     modules: [
-      { key: "Companies", name: "Companies", description: "Multi-tenant company profiles and branding" },
-      { key: "Branches", name: "Branches", description: "Branch offices, locations & regional centers" },
+      { key: "Companies", name: "Companies", description: "Multi-tenant company profiles, branding & live preview studio" },
+      { key: "Branches", name: "Branches", description: "Branch offices, locations & regional franchise centers" },
       { key: "Departments", name: "Departments", description: "Corporate business units & divisions" },
+      { key: "Approvals", name: "Approvals", description: "Hierarchical document approvals (Company HQ, Branch, Sub-branch)" },
+    ]
+  },
+  admin: {
+    label: "System & Administration",
+    icon: "Shield",
+    modules: [
       { key: "Users", name: "Users", description: "User account credentials and login management" },
       { key: "Permissions", name: "Permissions", description: "Role-based access control and matrices" },
       { key: "Expenses", name: "Expenses", description: "Operating overheads, approvals & claims" },

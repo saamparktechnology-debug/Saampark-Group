@@ -9,7 +9,7 @@ import {
   AlertCircle, ExternalLink, Image as ImageIcon, Briefcase, Info,
   Landmark, Stamp, FileCheck
 } from "lucide-react"
-import { useAuthStore, Branch, SubBranch, Company, isMatchingCompany } from "@/store/useAuthStore"
+import { useAuthStore, Branch, SubBranch, Company, isMatchingCompany, getSelectableCompanies } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
 import { ImageUploadField } from "@/components/ui/ImageUploadField"
@@ -39,6 +39,10 @@ export default function BranchesMain() {
     fetchSubBranches,
     fetchCompanies
   } = useAuthStore()
+
+  const selectableCompanies = React.useMemo(() => {
+    return getSelectableCompanies(companies, activeCompanyId, user, branches, subBranches)
+  }, [companies, activeCompanyId, user, branches, subBranches])
   
   const { canPerformAction } = usePermissionStore()
 
@@ -1153,14 +1157,22 @@ export default function BranchesMain() {
                       <div className="space-y-4">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                           <div>
-                            <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Company *</label>
+                            <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1 flex items-center justify-between">
+                              <span>Company *</span>
+                              {selectableCompanies.length <= 1 && (
+                                <span className="text-[9px] text-blue-600 font-bold bg-blue-50 dark:bg-blue-950/40 px-1 py-0.2 rounded border border-blue-200 dark:border-blue-800">
+                                  🔒 Active Company
+                                </span>
+                              )}
+                            </label>
                             <select 
                               required 
                               value={branchCompanyId} 
                               onChange={(e) => setBranchCompanyId(e.target.value)}
-                              className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-medium"
+                              disabled={selectableCompanies.length <= 1}
+                              className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-medium disabled:opacity-85 disabled:cursor-not-allowed"
                             >
-                              {companies.map(c => (
+                              {selectableCompanies.map(c => (
                                 <option key={c.id} value={c.id}>{c.brand_name || c.name}</option>
                               ))}
                             </select>
@@ -1838,7 +1850,14 @@ export default function BranchesMain() {
                     <div className="space-y-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Parent Company *</label>
+                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1 flex items-center justify-between">
+                            <span>Parent Company *</span>
+                            {selectableCompanies.length <= 1 && (
+                              <span className="text-[9px] text-blue-600 font-bold bg-blue-50 dark:bg-blue-950/40 px-1 py-0.2 rounded border border-blue-200 dark:border-blue-800">
+                                🔒 Active Company
+                              </span>
+                            )}
+                          </label>
                           <select 
                             value={subBranchCompanyId} 
                             onChange={(e) => {
@@ -1847,9 +1866,10 @@ export default function BranchesMain() {
                               const matchBranch = branches.find(b => b.companyId === newCompId)
                               setSubBranchParentBranchId(matchBranch?.id || "")
                             }}
-                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-medium"
+                            disabled={selectableCompanies.length <= 1}
+                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-medium disabled:opacity-85 disabled:cursor-not-allowed"
                           >
-                            {companies.map(c => (
+                            {selectableCompanies.map(c => (
                               <option key={c.id} value={c.id}>{c.name} ({c.brand_name || "Co."})</option>
                             ))}
                           </select>

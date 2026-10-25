@@ -428,7 +428,7 @@ export function getUserEntityScope(
     }
   }
 
-  const isSuper = user.role === 'Super Admin'
+  const isSuper = user.role === 'Super Admin' || (user as any).role_id === 1 || String((user as any).role_name || '').toLowerCase().includes('super') || user.email === 'hiisupriya@gmail.com' || user.email === 'saampark.official@gmail.com'
   if (isSuper) {
     return {
       isSuperAdmin: true,
@@ -553,6 +553,40 @@ export function getUserEntityScope(
   }
 }
 
+/**
+ * Resolves the allowed company list for form selectors / dropdowns.
+ * If activeCompanyId is a specific company (not 'all' and not empty),
+ * returns ONLY that active company so users cannot choose a different company.
+ * Full company selection across all companies is ONLY allowed when activeCompanyId === 'all'.
+ */
+export function getSelectableCompanies(
+  allCompanies: Company[] = [],
+  activeCompanyId?: string | null,
+  user?: Partial<User> | null,
+  allBranches: Branch[] = [],
+  allSubBranches: SubBranch[] = []
+): Company[] {
+  // 1. If an active company is explicitly selected (and NOT "all"):
+  if (activeCompanyId && activeCompanyId !== "all") {
+    const matched = allCompanies.filter(c => isMatchingCompany(c, activeCompanyId))
+    if (matched.length > 0) return matched
+    // Fallback if not loaded yet
+    return allCompanies.slice(0, 1)
+  }
+
+  // 2. If user is restricted to specific company(ies) (non-super-admin):
+  if (user && user.role !== "Super Admin" && !(user as any).isMaster) {
+    const userScope = getUserEntityScope(user, allCompanies, allBranches, allSubBranches)
+    if (userScope && userScope.allowedCompanyIds && userScope.allowedCompanyIds.length > 0) {
+      const userMatched = allCompanies.filter(c => userScope.allowedCompanyIds.some(id => isMatchingCompany(c, id)))
+      if (userMatched.length > 0) return userMatched
+    }
+  }
+
+  // 3. Global scope ("all" / All Companies): return all companies
+  return allCompanies
+}
+
 export const DEFAULT_COMPANIES: Company[] = [
   { 
     id: 'tech', 
@@ -573,24 +607,24 @@ export const DEFAULT_COMPANIES: Company[] = [
     phone: '+91 9901518567 / +91 9901518569',
     email: 'info@saamparktechnology.com',
     website: 'www.saamparktechnology.com',
-    upi_id: 'saampark@icici',
-    gst_upi_id: 'saampark@icici',
-    nongst_upi_id: 'saampark@icici',
-    account_holder: 'SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED',
-    gst_account_holder: 'SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED',
-    nongst_account_holder: 'SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED',
-    bank_name: 'ICICI Bank Ltd',
-    gst_bank_name: 'ICICI Bank Ltd',
-    nongst_bank_name: 'ICICI Bank Ltd',
-    account_number: '123405009876',
-    gst_account_number: '123405009876',
-    nongst_account_number: '123405009876',
-    ifsc_code: 'ICIC0001234',
-    gst_ifsc_code: 'ICIC0001234',
-    nongst_ifsc_code: 'ICIC0001234',
-    bank_branch: 'Salt Lake Sector V, Kolkata',
-    gst_bank_branch: 'Salt Lake Sector V, Kolkata',
-    nongst_bank_branch: 'Salt Lake Sector V, Kolkata',
+    upi_id: '',
+    gst_upi_id: '',
+    nongst_upi_id: '',
+    account_holder: '',
+    gst_account_holder: '',
+    nongst_account_holder: '',
+    bank_name: '',
+    gst_bank_name: '',
+    nongst_bank_name: '',
+    account_number: '',
+    gst_account_number: '',
+    nongst_account_number: '',
+    ifsc_code: '',
+    gst_ifsc_code: '',
+    nongst_ifsc_code: '',
+    bank_branch: '',
+    gst_bank_branch: '',
+    nongst_bank_branch: '',
     terms_conditions: '1. E.& O.E.\n2. Total payment due to be paid within due date to avoid suspension/cancellation.\n3. Please include the invoice number in your payment notes.\n4. All disputes are subject to Paschim Medinipur jurisdiction only.\n5. For payment & refund related queries, read our Refund & Return Policy on website.',
     signatory_name: 'Authorized Signatory',
     signatory_designation: 'Managing Director'
@@ -614,24 +648,24 @@ export const DEFAULT_COMPANIES: Company[] = [
     phone: '+91 9901518570',
     email: 'consultancy@saampark.in',
     website: 'www.saampark.in',
-    upi_id: 'saamparkconsult@icici',
-    gst_upi_id: 'saamparkconsult@icici',
-    nongst_upi_id: 'saamparkconsult@icici',
-    account_holder: 'SAAMPARK CONSULTANCY SERVICE',
-    gst_account_holder: 'SAAMPARK CONSULTANCY SERVICE',
-    nongst_account_holder: 'SAAMPARK CONSULTANCY SERVICE',
-    bank_name: 'HDFC Bank Ltd',
-    gst_bank_name: 'HDFC Bank Ltd',
-    nongst_bank_name: 'HDFC Bank Ltd',
-    account_number: '50200084920194',
-    gst_account_number: '50200084920194',
-    nongst_account_number: '50200084920194',
-    ifsc_code: 'HDFC0001234',
-    gst_ifsc_code: 'HDFC0001234',
-    nongst_ifsc_code: 'HDFC0001234',
-    bank_branch: 'Bidhannagar Branch, Kolkata',
-    gst_bank_branch: 'Bidhannagar Branch, Kolkata',
-    nongst_bank_branch: 'Bidhannagar Branch, Kolkata',
+    upi_id: '',
+    gst_upi_id: '',
+    nongst_upi_id: '',
+    account_holder: '',
+    gst_account_holder: '',
+    nongst_account_holder: '',
+    bank_name: '',
+    gst_bank_name: '',
+    nongst_bank_name: '',
+    account_number: '',
+    gst_account_number: '',
+    nongst_account_number: '',
+    ifsc_code: '',
+    gst_ifsc_code: '',
+    nongst_ifsc_code: '',
+    bank_branch: '',
+    gst_bank_branch: '',
+    nongst_bank_branch: '',
     terms_conditions: '1. All consulting engagements are initiated following signed scope of work.\n2. Retainer fees are payable in advance.\n3. All disputes are subject to Kolkata jurisdiction only.',
     signatory_name: 'Authorized Signatory',
     signatory_designation: 'Consulting Director'
@@ -1082,8 +1116,11 @@ export const useAuthStore = create<AuthState>()(
 
       updateCompany: async (companyId: string, updates: Partial<Company>) => {
         const { user, companies } = get()
-        if (user?.role !== 'Super Admin') {
-          throw new Error('Only Super Admin can modify company details.')
+        const isSuperAdmin = user?.role === 'Super Admin' || (user as any)?.role_id === 1 || String((user as any)?.role_name || '').toLowerCase().includes('super') || user?.email === 'hiisupriya@gmail.com' || user?.email === 'saampark.official@gmail.com'
+        const isAdmin = user?.role === 'Admin' || (user as any)?.role_id === 2 || String((user as any)?.role_name || '').toLowerCase().includes('admin')
+
+        if (!isSuperAdmin && !isAdmin) {
+          throw new Error('Access denied: You do not have permission to modify company details.')
         }
 
         const compIndex = companies.findIndex(c => 
@@ -1095,6 +1132,19 @@ export const useAuthStore = create<AuthState>()(
         if (compIndex === -1) return null
 
         const target = companies[compIndex]
+
+        if (!isSuperAdmin && isAdmin) {
+          const userAssignedComps = [
+            ...(Array.isArray((user as any)?.companyIds) ? (user as any).companyIds : []),
+            (user as any)?.companyId,
+            (user as any)?.company_id,
+          ].filter(Boolean).map((id: any) => String(id).toLowerCase().trim())
+
+          const isAssigned = userAssignedComps.some(assignedId => isMatchingCompany(target, assignedId))
+          if (!isAssigned) {
+            throw new Error('Access denied: You can only modify your assigned company.')
+          }
+        }
         const merged: Company = {
           ...target,
           ...updates,

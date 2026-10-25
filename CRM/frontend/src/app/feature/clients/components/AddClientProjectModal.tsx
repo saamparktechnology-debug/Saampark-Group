@@ -19,7 +19,7 @@ import { addPayment } from "@/app/feature/sales/payments/services/paymentService
 import { addSubscription, saveInstallmentRecord } from "@/app/feature/subscriptions/services/subscriptionService"
 import { taskService } from "@/app/feature/tasks/services/taskService"
 import { saveStoredClient, getClients, formatDisplayEmail } from "../services/clientService"
-import { useAuthStore } from "@/store/useAuthStore"
+import { useAuthStore, getSelectableCompanies } from "@/store/useAuthStore"
 import { sendInvoiceDetailsEmailNotification, sendPaymentReceiptEmailNotification } from "@/services/emailNotificationService"
 
 interface AddClientProjectModalProps {
@@ -109,7 +109,22 @@ export function AddClientProjectModal({
     setIsClientSearchDropdownOpen(false)
   }
   
-  const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>(activeCompanyId || user?.companyId || "tech")
+  const selectableCompanies = React.useMemo(() => {
+    return getSelectableCompanies(companies, activeCompanyId, user, branches, subBranches)
+  }, [companies, activeCompanyId, user, branches, subBranches])
+
+  const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>(() => {
+    if (activeCompanyId && activeCompanyId !== "all") return activeCompanyId
+    return user?.companyId || "tech"
+  })
+
+  // Sync selectedCompanyId when selectableCompanies changes
+  React.useEffect(() => {
+    if (selectableCompanies.length > 0 && !selectableCompanies.some(c => c.id === selectedCompanyId || c.slug === selectedCompanyId)) {
+      setSelectedCompanyId(selectableCompanies[0].id || selectableCompanies[0].slug || "tech")
+    }
+  }, [selectableCompanies, selectedCompanyId])
+
   const [selectedBranchId, setSelectedBranchId] = React.useState<string>(activeBranchId || user?.branchId || "")
   const [selectedSubBranchId, setSelectedSubBranchId] = React.useState<string>("")
   const isBranchLocked = Boolean(user?.branchId && user?.role !== "Super Admin")
@@ -1141,15 +1156,21 @@ export function AddClientProjectModal({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
-                  Issuing Company Entity:
+                <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1 flex items-center justify-between">
+                  <span>Issuing Company Entity:</span>
+                  {selectableCompanies.length <= 1 && (
+                    <span className="text-[9px] text-blue-600 font-bold bg-blue-50 dark:bg-blue-950/40 px-1 py-0.2 rounded border border-blue-200 dark:border-blue-800">
+                      🔒 Active Company
+                    </span>
+                  )}
                 </label>
                 <select
                   value={selectedCompanyId}
                   onChange={(e) => handleCompanyChange(e.target.value)}
-                  className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-800 dark:text-zinc-200 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={selectableCompanies.length <= 1}
+                  className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-800 dark:text-zinc-200 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-85 disabled:cursor-not-allowed"
                 >
-                  {(companies as any[]).map((c: any) => (
+                  {(selectableCompanies as any[]).map((c: any) => (
                     <option key={c.id} value={c.id}>
                       {c.logo || "🏢"} {c.brand_name || c.name} {c.division_name ? `(${c.division_name})` : ""}
                     </option>

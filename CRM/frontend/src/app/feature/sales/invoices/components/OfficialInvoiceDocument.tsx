@@ -402,29 +402,91 @@ export function OfficialInvoiceDocument({
     return s !== "" && s !== "none" && s !== "-" && s !== "null" && s !== "undefined"
   }
 
-  // Parent Company baseline values
-  const companyGstUpi = (companyDetails?.gst_upi_id || activeCompany?.gst_upi_id || (companyDetails as any)?.upi_id || activeCompany?.upi_id || paySettings?.upiId || "")?.trim()
-  const companyNonGstUpi = (companyDetails?.nongst_upi_id || activeCompany?.nongst_upi_id || (companyDetails as any)?.upi_id || activeCompany?.upi_id || paySettings?.upiId || "")?.trim()
+  const isCustomCompany = Boolean(companyDetails)
+
+  // Parent Company baseline values (Strictly read from companyDetails when provided, without falling back to activeCompany)
+  const companyGstUpi = (
+    isCustomCompany 
+      ? (companyDetails?.gst_upi_id ?? (companyDetails as any)?.upi_id ?? "") 
+      : (activeCompany?.gst_upi_id || activeCompany?.upi_id || paySettings?.upiId || "")
+  )?.trim() || ""
+
+  const companyNonGstUpi = (
+    isCustomCompany 
+      ? (companyDetails?.nongst_upi_id ?? (companyDetails as any)?.upi_id ?? "") 
+      : (activeCompany?.nongst_upi_id || activeCompany?.upi_id || paySettings?.upiId || "")
+  )?.trim() || ""
+
   const companyUpi = isGstInvoice ? companyGstUpi : companyNonGstUpi
 
-  const companyGstHolder = (companyDetails?.gst_account_holder || activeCompany?.gst_account_holder || (companyDetails as any)?.account_holder || activeCompany?.account_holder || paySettings?.accountHolderName || "")?.trim()
-  const companyNonGstHolder = (companyDetails?.nongst_account_holder || activeCompany?.nongst_account_holder || (companyDetails as any)?.account_holder || activeCompany?.account_holder || paySettings?.accountHolderName || "")?.trim()
+  const companyGstHolder = (
+    isCustomCompany 
+      ? (companyDetails?.gst_account_holder ?? (companyDetails as any)?.account_holder ?? "") 
+      : (activeCompany?.gst_account_holder || activeCompany?.account_holder || paySettings?.accountHolderName || "")
+  )?.trim() || ""
+
+  const companyNonGstHolder = (
+    isCustomCompany 
+      ? (companyDetails?.nongst_account_holder ?? (companyDetails as any)?.account_holder ?? "") 
+      : (activeCompany?.nongst_account_holder || activeCompany?.account_holder || paySettings?.accountHolderName || "")
+  )?.trim() || ""
+
   const companyHolder = isGstInvoice ? companyGstHolder : companyNonGstHolder
 
-  const companyGstBank = (companyDetails?.gst_bank_name || activeCompany?.gst_bank_name || (companyDetails as any)?.bank_name || activeCompany?.bank_name || paySettings?.bankName || "")?.trim()
-  const companyNonGstBank = (companyDetails?.nongst_bank_name || activeCompany?.nongst_bank_name || (companyDetails as any)?.bank_name || activeCompany?.bank_name || paySettings?.bankName || "")?.trim()
+  const companyGstBank = (
+    isCustomCompany 
+      ? (companyDetails?.gst_bank_name ?? (companyDetails as any)?.bank_name ?? "") 
+      : (activeCompany?.gst_bank_name || activeCompany?.bank_name || paySettings?.bankName || "")
+  )?.trim() || ""
+
+  const companyNonGstBank = (
+    isCustomCompany 
+      ? (companyDetails?.nongst_bank_name ?? (companyDetails as any)?.bank_name ?? "") 
+      : (activeCompany?.nongst_bank_name || activeCompany?.bank_name || paySettings?.bankName || "")
+  )?.trim() || ""
+
   const companyBank = isGstInvoice ? companyGstBank : companyNonGstBank
 
-  const companyGstAccNum = (companyDetails?.gst_account_number || activeCompany?.gst_account_number || (companyDetails as any)?.account_number || activeCompany?.account_number || paySettings?.accountNumber || "")?.trim()
-  const companyNonGstAccNum = (companyDetails?.nongst_account_number || activeCompany?.nongst_account_number || (companyDetails as any)?.account_number || activeCompany?.account_number || paySettings?.accountNumber || "")?.trim()
+  const companyGstAccNum = (
+    isCustomCompany 
+      ? (companyDetails?.gst_account_number ?? (companyDetails as any)?.account_number ?? "") 
+      : (activeCompany?.gst_account_number || activeCompany?.account_number || paySettings?.accountNumber || "")
+  )?.trim() || ""
+
+  const companyNonGstAccNum = (
+    isCustomCompany 
+      ? (companyDetails?.nongst_account_number ?? (companyDetails as any)?.account_number ?? "") 
+      : (activeCompany?.nongst_account_number || activeCompany?.account_number || paySettings?.accountNumber || "")
+  )?.trim() || ""
+
   const companyAccNum = isGstInvoice ? companyGstAccNum : companyNonGstAccNum
 
-  const companyGstIfsc = (companyDetails?.gst_ifsc_code || activeCompany?.gst_ifsc_code || (companyDetails as any)?.ifsc_code || activeCompany?.ifsc_code || paySettings?.ifscCode || "")?.trim()
-  const companyNonGstIfsc = (companyDetails?.nongst_ifsc_code || activeCompany?.nongst_ifsc_code || (companyDetails as any)?.ifsc_code || activeCompany?.ifsc_code || paySettings?.ifscCode || "")?.trim()
+  const companyGstIfsc = (
+    isCustomCompany 
+      ? (companyDetails?.gst_ifsc_code ?? (companyDetails as any)?.ifsc_code ?? "") 
+      : (activeCompany?.gst_ifsc_code || activeCompany?.ifsc_code || paySettings?.ifscCode || "")
+  )?.trim() || ""
+
+  const companyNonGstIfsc = (
+    isCustomCompany 
+      ? (companyDetails?.nongst_ifsc_code ?? (companyDetails as any)?.ifsc_code ?? "") 
+      : (activeCompany?.nongst_ifsc_code || activeCompany?.ifsc_code || paySettings?.ifscCode || "")
+  )?.trim() || ""
+
   const companyIfsc = isGstInvoice ? companyGstIfsc : companyNonGstIfsc
 
-  const companyGstBranch = (companyDetails?.gst_bank_branch || activeCompany?.gst_bank_branch || (companyDetails as any)?.bank_branch || activeCompany?.bank_branch || paySettings?.branch || "")?.trim()
-  const companyNonGstBranch = (companyDetails?.nongst_bank_branch || activeCompany?.nongst_bank_branch || (companyDetails as any)?.bank_branch || activeCompany?.bank_branch || paySettings?.branch || "")?.trim()
+  const companyGstBranch = (
+    isCustomCompany 
+      ? (companyDetails?.gst_bank_branch ?? (companyDetails as any)?.bank_branch ?? "") 
+      : (activeCompany?.gst_bank_branch || activeCompany?.bank_branch || paySettings?.branch || "")
+  )?.trim() || ""
+
+  const companyNonGstBranch = (
+    isCustomCompany 
+      ? (companyDetails?.nongst_bank_branch ?? (companyDetails as any)?.bank_branch ?? "") 
+      : (activeCompany?.nongst_bank_branch || activeCompany?.bank_branch || paySettings?.branch || "")
+  )?.trim() || ""
+
   const companyBranch = isGstInvoice ? companyGstBranch : companyNonGstBranch
 
   // Bank & UPI details resolved specifically for issuing entity. If left gap / blank, resolves cleanly to "" without fake fallbacks
@@ -437,7 +499,7 @@ export function OfficialInvoiceDocument({
           ? (isGstInvoice ? (activeBranch?.gst_upi_id || activeBranch?.upi_id || companyUpi) : (activeBranch?.nongst_upi_id || activeBranch?.upi_id || companyUpi))
           : companyUpi
         )
-  )?.trim() || activeCompany?.upi_id?.trim() || ""
+  )?.trim() || ""
 
   const resolvedAccountHolder = (
     overrideBankDetails?.accountHolder !== undefined
@@ -459,7 +521,7 @@ export function OfficialInvoiceDocument({
           ? (isGstInvoice ? (activeBranch?.gst_bank_name || activeBranch?.bank_name || companyBank) : (activeBranch?.nongst_bank_name || activeBranch?.bank_name || companyBank))
           : companyBank
         )
-  )?.trim() || activeCompany?.bank_name?.trim() || ""
+  )?.trim() || ""
 
   const resolvedAccountNumber = (
     overrideBankDetails?.accountNumber !== undefined
@@ -470,7 +532,7 @@ export function OfficialInvoiceDocument({
           ? (isGstInvoice ? (activeBranch?.gst_account_number || activeBranch?.account_number || companyAccNum) : (activeBranch?.nongst_account_number || activeBranch?.account_number || companyAccNum))
           : companyAccNum
         )
-  )?.trim() || activeCompany?.account_number?.trim() || ""
+  )?.trim() || ""
 
   const resolvedIfscCode = (
     overrideBankDetails?.ifscCode !== undefined
@@ -481,7 +543,7 @@ export function OfficialInvoiceDocument({
           ? (isGstInvoice ? (activeBranch?.gst_ifsc_code || activeBranch?.ifsc_code || companyIfsc) : (activeBranch?.nongst_ifsc_code || activeBranch?.ifsc_code || companyIfsc))
           : companyIfsc
         )
-  )?.trim() || activeCompany?.ifsc_code?.trim() || ""
+  )?.trim() || ""
 
   const resolvedBankBranch = (
     overrideBankDetails?.bankBranch !== undefined
@@ -492,7 +554,7 @@ export function OfficialInvoiceDocument({
           ? (isGstInvoice ? (activeBranch?.gst_bank_branch || activeBranch?.bank_branch || companyBranch) : (activeBranch?.nongst_bank_branch || activeBranch?.bank_branch || companyBranch))
           : companyBranch
         )
-  )?.trim() || activeCompany?.bank_branch?.trim() || ""
+  )?.trim() || ""
 
   // Signatory & Stamp URLs (Strict to issuing entity with seamless cascade to parent Company)
   const companySignatureFallback = (
@@ -639,8 +701,8 @@ export function OfficialInvoiceDocument({
     : "NOT PAID"
 
   // Resolve QR Code URL: 100% scanable high-res square modules with margin (Cascading from Sub-Branch -> Branch -> Parent Company)
-  const companyGstQr = (companyDetails?.gst_payment_qr_url || activeCompany?.gst_payment_qr_url || (companyDetails as any)?.payment_qr_url || activeCompany?.payment_qr_url || "")?.trim()
-  const companyNonGstQr = (companyDetails?.nongst_payment_qr_url || activeCompany?.nongst_payment_qr_url || (companyDetails as any)?.payment_qr_url || activeCompany?.payment_qr_url || "")?.trim()
+  const companyGstQr = (isCustomCompany ? (companyDetails?.gst_payment_qr_url ?? (companyDetails as any)?.payment_qr_url ?? "") : (activeCompany?.gst_payment_qr_url || (activeCompany as any)?.payment_qr_url || ""))?.trim()
+  const companyNonGstQr = (isCustomCompany ? (companyDetails?.nongst_payment_qr_url ?? (companyDetails as any)?.payment_qr_url ?? "") : (activeCompany?.nongst_payment_qr_url || (activeCompany as any)?.payment_qr_url || ""))?.trim()
   const companyQr = isGstInvoice ? (companyGstQr || companyNonGstQr) : (companyNonGstQr || companyGstQr)
 
   const customPaymentQrUrl = 
@@ -660,11 +722,7 @@ export function OfficialInvoiceDocument({
           : (companyNonGstQr || companyQr)
         )
     ) ||
-    activeSubBranch?.payment_qr_url ||
-    activeBranch?.payment_qr_url ||
-    companyQr ||
-    activeCompany?.payment_qr_url ||
-    paySettings?.qrCodeUrl ||
+    (isCustomCompany ? "" : (activeSubBranch?.payment_qr_url || activeBranch?.payment_qr_url || companyQr || activeCompany?.payment_qr_url || paySettings?.qrCodeUrl || "")) ||
     (resolvedUpiId
       ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=1&ecc=M&data=${encodeURIComponent(`upi://pay?pa=${resolvedUpiId}&pn=${encodeURIComponent(resolvedAccountHolder || resolvedBrandName)}&am=${totalVal}&cu=INR`)}`
       : null
@@ -782,10 +840,10 @@ export function OfficialInvoiceDocument({
   const hasAccountHolder = isValidField(resolvedAccountHolder) && Boolean(hasAccountNum || hasBankName || hasIfsc)
   const hasBankBranch = isValidField(resolvedBankBranch) && Boolean(hasAccountNum || hasBankName || hasIfsc)
   const hasUpiId = isValidField(resolvedUpiId)
-  const hasQr = Boolean(customPaymentQrUrl && customPaymentQrUrl.trim() && customPaymentQrUrl !== "none" && (hasUpiId || hasAccountNum || hasBankName))
+  const hasQr = Boolean(customPaymentQrUrl && customPaymentQrUrl.trim() && customPaymentQrUrl !== "none" && !customPaymentQrUrl.includes("undefined") && !customPaymentQrUrl.includes("null"))
 
   const hasAnyBankInfo = Boolean(hasAccountNum || hasBankName || hasIfsc)
-  const hasUpiDetails = Boolean(hasUpiId || (hasQr && hasUpiId))
+  const hasUpiDetails = Boolean(hasUpiId)
   const hasAnyPaymentInfo = Boolean(hasAnyBankInfo || hasUpiDetails || hasQr)
   const hasBankDetails = hasAnyBankInfo
 
@@ -1546,10 +1604,10 @@ export function OfficialInvoiceDocument({
                 />
               </div>
 
-              <div className={`grid ${hasQr ? "grid-cols-12" : "grid-cols-1"} gap-2.5 items-center`}>
+              <div className={`grid ${hasQr && (hasAnyBankInfo || hasUpiDetails) ? "grid-cols-12" : "grid-cols-1"} gap-2.5 items-center`}>
                 {/* Left side of card: UPI QR Code & Instant Scan (only if QR exists) */}
                 {hasQr && (
-                  <div className="col-span-4 flex flex-col items-center justify-center text-center space-y-1">
+                  <div className={`${(hasAnyBankInfo || hasUpiDetails) ? "col-span-4" : "w-full"} flex flex-col items-center justify-center text-center space-y-1`}>
                     <div className="bg-white p-1.5 rounded-xl border border-zinc-300 shadow-2xs shrink-0">
                       <img 
                         src={customPaymentQrUrl} 
@@ -1566,21 +1624,22 @@ export function OfficialInvoiceDocument({
                   </div>
                 )}
 
-                {/* Right side of card: Direct Bank Account & UPI Details */}
-                <div className={`${hasQr ? "col-span-8" : "w-full"} space-y-1 text-[9px] text-zinc-700 dark:text-zinc-300`}>
-                  {hasBankName && (
-                    <div className="flex justify-between items-center gap-1">
-                      <span className="text-zinc-500 font-medium shrink-0">Bank:</span>
-                      <EditableText
-                        value={resolvedBankName}
-                        onChange={(val) => onFieldChange?.("bank_name", val)}
-                        interactive={interactive}
-                        fieldKey="bank_name"
-                        placeholder="Bank name..."
-                        className="text-zinc-900 dark:text-zinc-100 font-bold truncate text-right flex-1"
-                      />
-                    </div>
-                  )}
+                {/* Right side of card: Direct Bank Account & UPI Details (Renders ONLY if bank or UPI info is present) */}
+                {(hasAnyBankInfo || hasUpiDetails) && (
+                  <div className={`${hasQr ? "col-span-8" : "w-full"} space-y-1 text-[9px] text-zinc-700 dark:text-zinc-300`}>
+                    {hasBankName && (
+                      <div className="flex justify-between items-center gap-1">
+                        <span className="text-zinc-500 font-medium shrink-0">Bank:</span>
+                        <EditableText
+                          value={resolvedBankName}
+                          onChange={(val) => onFieldChange?.("bank_name", val)}
+                          interactive={interactive}
+                          fieldKey="bank_name"
+                          placeholder="Bank name..."
+                          className="text-zinc-900 dark:text-zinc-100 font-bold truncate text-right flex-1"
+                        />
+                      </div>
+                    )}
                   {hasAccountNum && (
                     <div className="flex justify-between items-center gap-1 font-mono">
                       <span className="text-zinc-500 font-medium font-sans shrink-0">A/C No:</span>
@@ -1634,7 +1693,8 @@ export function OfficialInvoiceDocument({
                     </div>
                   )}
                 </div>
-              </div>
+              )}
+            </div>
 
               {/* Payment App Badges */}
               {(hasUpiDetails || hasAnyBankInfo) && (

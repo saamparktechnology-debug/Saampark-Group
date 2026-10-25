@@ -175,7 +175,10 @@ const matrixController = {
 
       // Check if user has an email or alt id in `users` table
       try {
-        const [users] = await pool.execute('SELECT id, email FROM users WHERE id = ? OR email = ?', [userId, userId]);
+        const isNum = /^\d+$/.test(String(userId).trim());
+        const [users] = isNum
+          ? await pool.execute('SELECT id, email FROM users WHERE id = ? OR email = ?', [Number(userId), String(userId)])
+          : await pool.execute('SELECT id, email FROM users WHERE email = ?', [String(userId)]);
         if (users.length > 0) {
           const u = users[0];
           const kId = `user_permissions_matrix_${String(u.id).toLowerCase().replace(/\s+|@/g, '_')}`;
@@ -212,7 +215,10 @@ const matrixController = {
 
       // Find user to also save counterpart key (id and email)
       try {
-        const [users] = await pool.execute('SELECT id, email FROM users WHERE id = ? OR email = ?', [userId, userId]);
+        const isNum = /^\d+$/.test(String(userId).trim());
+        const [users] = isNum
+          ? await pool.execute('SELECT id, email FROM users WHERE id = ? OR email = ?', [Number(userId), String(userId)])
+          : await pool.execute('SELECT id, email FROM users WHERE email = ?', [String(userId)]);
         if (users.length > 0) {
           const u = users[0];
           const kId = `user_permissions_matrix_${String(u.id).toLowerCase().replace(/\s+|@/g, '_')}`;

@@ -117,6 +117,7 @@ export interface NavItem {
 
 const ALL_NAV_ITEMS: NavItem[] = [
   { name: "Dashboard", href: "/feature/dashboard", icon: LayoutDashboard },
+  { name: "Companies", href: "/feature/companies", icon: Building2 },
   { name: "Users", href: "/feature/users", icon: Users },
   {
     name: "CRM",

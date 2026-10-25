@@ -24,6 +24,8 @@ export interface ApprovalRequest {
   companyId: string
   branchId?: string
   branchName?: string
+  subBranchId?: string
+  subBranchName?: string
   status: ApprovalStatus
   reviewedBy?: {
     id?: string
@@ -43,9 +45,19 @@ const MODULE_KEY = "approvals"
  * Get all approval requests for the given company scope (or all).
  */
 export async function getApprovalRequests(companyId?: string): Promise<ApprovalRequest[]> {
-  const comp = companyId || "all"
-  const raw = await fetchModuleDataFromDB<ApprovalRequest[]>(MODULE_KEY, [], comp)
-  const list = Array.isArray(raw) ? raw : []
+  const rawAll = await fetchModuleDataFromDB<ApprovalRequest[]>(MODULE_KEY, [], "all")
+  let list = Array.isArray(rawAll) ? rawAll : []
+
+  if (companyId && companyId !== "all") {
+    const rawScoped = await fetchModuleDataFromDB<ApprovalRequest[]>(MODULE_KEY, [], companyId)
+    if (Array.isArray(rawScoped) && rawScoped.length > 0) {
+      const map = new Map<string, ApprovalRequest>()
+      list.forEach(r => { if (r && r.id) map.set(r.id, r) })
+      rawScoped.forEach(r => { if (r && r.id) map.set(r.id, r) })
+      list = Array.from(map.values())
+    }
+  }
+
   return filterGlobalDeletedItems(list, undefined, MODULE_KEY).sort((a, b) => (b.submittedAt || 0) - (a.submittedAt || 0))
 }
 
@@ -71,11 +83,39 @@ export async function submitForApproval(payload: {
   companyId: string
   branchId?: string
   branchName?: string
+  subBranchId?: string
+  subBranchName?: string
   notes?: string
   dataSnapshot?: any
 }): Promise<ApprovalRequest> {
   const currentScoped = await fetchModuleDataFromDB<ApprovalRequest[]>(MODULE_KEY, [], payload.companyId || "tech")
   const currentAll = await fetchModuleDataFromDB<ApprovalRequest[]>(MODULE_KEY, [], "all")
+
+  let autoBranchId = payload.branchId
+  let autoBranchName = payload.branchName
+  let autoSubBranchId = payload.subBranchId
+  let autoSubBranchName = payload.subBranchName
+
+  if (typeof window !== "undefined") {
+    try {
+      const { useAuthStore } = require("@/store/useAuthStore")
+      const st = useAuthStore.getState()
+      if (!autoBranchId) {
+        autoBranchId = st.activeBranchId || (st.user as any)?.branchId || (st.user as any)?.branch_id
+        if (autoBranchId) {
+          const foundB = st.branches?.find((b: any) => String(b.id) === String(autoBranchId))
+          autoBranchName = foundB?.name || autoBranchId
+        }
+      }
+      if (!autoSubBranchId) {
+        autoSubBranchId = st.activeSubBranchId || (st.user as any)?.subBranchId || (st.user as any)?.sub_branch_id
+        if (autoSubBranchId) {
+          const foundSB = st.subBranches?.find((s: any) => String(s.id) === String(autoSubBranchId))
+          autoSubBranchName = foundSB?.name || autoSubBranchId
+        }
+      }
+    } catch {}
+  }
 
   const id = `appr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
   const formattedAmount = payload.formattedAmount || `₹${(payload.amount || 0).toLocaleString("en-IN")}`
@@ -93,8 +133,10 @@ export async function submitForApproval(payload: {
     submittedBy: payload.submittedBy,
     submittedAt: Date.now(),
     companyId: payload.companyId || "tech",
-    branchId: payload.branchId,
-    branchName: payload.branchName,
+    branchId: autoBranchId,
+    branchName: autoBranchName,
+    subBranchId: autoSubBranchId,
+    subBranchName: autoSubBranchName,
     status: "pending",
     notes: payload.notes,
     dataSnapshot: payload.dataSnapshot,

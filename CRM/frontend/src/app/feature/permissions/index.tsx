@@ -19,7 +19,9 @@ import {
   Layers,
   CheckCheck,
   CheckCircle2,
-  Database
+  Database,
+  ChevronDown,
+  User
 } from "lucide-react"
 import { useAuthStore } from "@/store/useAuthStore"
 import { PermissionService } from "@/services/permissionService"
@@ -102,6 +104,21 @@ export default function PermissionsMain() {
   // Filtering & Category Navigation
   const [selectedCategory, setSelectedCategory] = React.useState<string>("all")
   const [searchQuery, setSearchQuery] = React.useState<string>("")
+
+  // Searchable User Picker state
+  const [isUserPickerOpen, setIsUserPickerOpen] = React.useState(false)
+  const [userPickerSearch, setUserPickerSearch] = React.useState("")
+  const userPickerRef = React.useRef<HTMLDivElement>(null)
+
+  React.useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (userPickerRef.current && !userPickerRef.current.contains(event.target as Node)) {
+        setIsUserPickerOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
   
   // Custom role modal states
   const [isRoleModalOpen, setIsRoleModalOpen] = React.useState(false)
@@ -595,6 +612,16 @@ export default function PermissionsMain() {
 
   const selectedUserData = visibleUsersList.find(u => u.id === selectedUserId) || usersList.find(u => u.id === selectedUserId)
 
+  const filteredPickerUsers = React.useMemo(() => {
+    if (!userPickerSearch.trim()) return visibleUsersList
+    const q = userPickerSearch.toLowerCase().trim()
+    return visibleUsersList.filter(u => 
+      u.name.toLowerCase().includes(q) ||
+      u.email.toLowerCase().includes(q) ||
+      (u.role && u.role.toLowerCase().includes(q))
+    )
+  }, [visibleUsersList, userPickerSearch])
+
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="space-y-6 max-w-[1600px] mx-auto p-4 sm:p-6">
       
@@ -903,20 +930,105 @@ export default function PermissionsMain() {
         <div className="space-y-4">
           <div className="bg-white dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200/80 dark:border-zinc-800 shadow-2xs space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">Select User Account:</label>
-                <select 
-                  value={selectedUserId} 
-                  onChange={(e) => setSelectedUserId(e.target.value)} 
-                  className="w-full sm:w-96 px-3.5 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs font-bold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                >
-                  <option value="">Select a user account</option>
-                  {visibleUsersList.map(u => (
-                    <option key={u.id} value={u.id}>
-                      {u.name} ({u.role}) — {u.email}
-                    </option>
-                  ))}
-                </select>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 relative" ref={userPickerRef}>
+                <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 whitespace-nowrap">Select User Account:</label>
+                
+                {/* Searchable Combobox Trigger */}
+                <div className="relative w-full sm:w-96">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsUserPickerOpen(!isUserPickerOpen)
+                      if (!isUserPickerOpen) setUserPickerSearch("")
+                    }}
+                    className="w-full flex items-center justify-between px-3.5 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs font-bold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-2xs"
+                  >
+                    {selectedUserData ? (
+                      <div className="flex items-center gap-2 truncate">
+                        <div className="w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-black flex items-center justify-center shrink-0">
+                          {selectedUserData.name.charAt(0).toUpperCase()}
+                        </div>
+                        <span className="truncate">{selectedUserData.name}</span>
+                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 font-semibold shrink-0">
+                          {selectedUserData.role}
+                        </span>
+                        <span className="text-[10px] text-zinc-400 font-normal truncate hidden md:inline">
+                          ({selectedUserData.email})
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-zinc-400 font-normal">🔍 Search user by name or email...</span>
+                    )}
+                    <ChevronDown size={14} className={"text-zinc-400 transition-transform " + (isUserPickerOpen ? "rotate-180" : "")} />
+                  </button>
+
+                  {/* Dropdown Popover with Real-time Search by Name & Email */}
+                  {isUserPickerOpen && (
+                    <div className="absolute left-0 top-full mt-1.5 w-full sm:w-[420px] max-w-[90vw] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-xl z-50 overflow-hidden flex flex-col max-h-[360px]">
+                      {/* Search Input Box */}
+                      <div className="p-2.5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-800/50">
+                        <div className="relative">
+                          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+                          <input
+                            type="text"
+                            autoFocus
+                            value={userPickerSearch}
+                            onChange={(e) => setUserPickerSearch(e.target.value)}
+                            placeholder="Search by name, email, or role..."
+                            className="w-full pl-9 pr-3 py-1.5 text-xs bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                          />
+                        </div>
+                      </div>
+
+                      {/* User List */}
+                      <div className="overflow-y-auto divide-y divide-zinc-100 dark:divide-zinc-800/60 p-1">
+                        {filteredPickerUsers.length === 0 ? (
+                          <div className="p-6 text-center text-xs text-zinc-400">
+                            No user accounts match "{userPickerSearch}"
+                          </div>
+                        ) : (
+                          filteredPickerUsers.map(u => {
+                            const isSelected = u.id === selectedUserId
+                            return (
+                              <button
+                                key={u.id}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedUserId(u.id)
+                                  setIsUserPickerOpen(false)
+                                  setUserPickerSearch("")
+                                }}
+                                className={"w-full text-left p-2.5 rounded-lg flex items-center justify-between transition-colors cursor-pointer " + (
+                                  isSelected 
+                                    ? "bg-blue-50/80 dark:bg-blue-950/40 text-blue-900 dark:text-blue-200" 
+                                    : "hover:bg-zinc-50 dark:hover:bg-zinc-800/60 text-zinc-800 dark:text-zinc-200"
+                                )}
+                              >
+                                <div className="flex items-center gap-2.5 truncate">
+                                  <div className="w-7 h-7 rounded-full bg-blue-600/10 text-blue-600 font-bold text-xs flex items-center justify-center shrink-0">
+                                    {u.name.charAt(0).toUpperCase()}
+                                  </div>
+                                  <div className="truncate">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-bold text-xs truncate">{u.name}</span>
+                                      <span className="text-[10px] px-1.5 py-0.2 rounded-full font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
+                                        {u.role}
+                                      </span>
+                                    </div>
+                                    <div className="text-[11px] text-zinc-400 truncate">{u.email}</div>
+                                  </div>
+                                </div>
+                                {isSelected && (
+                                  <Check size={14} className="text-blue-600 shrink-0 ml-2" />
+                                )}
+                              </button>
+                            )
+                          })
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {selectedUserData && (
@@ -947,6 +1059,50 @@ export default function PermissionsMain() {
                   <span>Configuring custom permissions for <strong>{selectedUserData.name}</strong> ({selectedUserData.email})</span>
                 </div>
                 <span className="font-bold text-blue-600 dark:text-blue-400">Role: {selectedUserData.role}</span>
+              </div>
+            )}
+
+            {/* Category Filter Chips & Search Bar for Tab 2 */}
+            {selectedUserId && (
+              <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 flex-1">
+                    <button
+                      onClick={() => setSelectedCategory("all")}
+                      className={"px-3 py-1 rounded-lg text-xs font-bold transition-colors whitespace-nowrap cursor-pointer " + (
+                        selectedCategory === "all"
+                          ? "bg-blue-600 text-white shadow-xs"
+                          : "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50"
+                      )}
+                    >
+                      All Modules ({CONFIGURABLE_MODULES.length})
+                    </button>
+                    {Object.entries(CLEAN_MODULE_CATEGORIES).map(([key, cat]) => (
+                      <button
+                        key={key}
+                        onClick={() => setSelectedCategory(key)}
+                        className={"px-3 py-1 rounded-lg text-xs font-bold transition-colors whitespace-nowrap cursor-pointer " + (
+                          selectedCategory === key
+                            ? "bg-blue-600 text-white shadow-xs"
+                            : "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50"
+                        )}
+                      >
+                        {cat.label} ({cat.modules.length})
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="relative w-52 shrink-0">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+                    <input 
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Filter modules..."
+                      className="w-full pl-9 pr-3 py-1.5 text-xs bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                    />
+                  </div>
+                </div>
               </div>
             )}
           </div>

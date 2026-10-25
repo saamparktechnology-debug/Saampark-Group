@@ -6,10 +6,11 @@ import {
   ShieldCheck, Check, X, Eye, Clock, AlertTriangle, Search, Filter, 
   FileText, ShoppingCart, CreditCard, User, Building2, Calendar, 
   ArrowRight, ShieldAlert, Sparkles, RefreshCw, Trash2, CheckCircle2,
-  XCircle, ChevronRight, Info
+  XCircle, ChevronRight, Info, GitBranch
 } from "lucide-react"
 
-import { useAuthStore } from "@/store/useAuthStore"
+import { useAuthStore, getUserEntityScope, isMatchingCompany } from "@/store/useAuthStore"
+import { usePermissionStore } from "@/store/usePermissionStore"
 import { 
   getApprovalRequests, 
   approveApprovalRequest, 
@@ -22,8 +23,20 @@ import {
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
 
 export default function ApprovalsPage() {
-  const { user, activeCompanyId } = useAuthStore()
-  const isSuperOrAdmin = user && (user.role === "Super Admin" || user.role === "Admin")
+  const { user, activeCompanyId, companies, branches, subBranches } = useAuthStore()
+  const { canPerformAction } = usePermissionStore()
+  
+  const isSuperOrAdmin = Boolean(user && (user.role === "Super Admin" || user.role === "Admin"))
+  const canAccessApprovals = Boolean(
+    isSuperOrAdmin || (user && canPerformAction(user as any, "Approvals", "view"))
+  )
+  const canApprove = Boolean(
+    isSuperOrAdmin || (user && canPerformAction(user as any, "Approvals", "edit"))
+  )
+
+  const userScope = React.useMemo(() => {
+    return getUserEntityScope(user, companies, branches, subBranches)
+  }, [user, companies, branches, subBranches])
 
   const [requests, setRequests] = React.useState<ApprovalRequest[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -59,25 +72,74 @@ export default function ApprovalsPage() {
     }
   }, [loadRequests])
 
-  // Non-admin block
-  if (!user || !isSuperOrAdmin) {
+  // Non-authorized block
+  if (!user || !canAccessApprovals) {
     return (
       <div className="min-h-[70vh] flex items-center justify-center p-6">
         <div className="max-w-md w-full p-8 rounded-3xl bg-surface border border-border shadow-xl text-center space-y-4">
           <div className="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto border border-amber-500/20">
             <ShieldAlert size={32} />
           </div>
-          <h2 className="text-xl font-black text-foreground">Admin Access Restricted</h2>
+          <h2 className="text-xl font-black text-foreground">Approvals Access Restricted</h2>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            The Approvals Center is strictly reserved for Administrators. All bills, quotations, and subscriptions created by team members are reviewed here.
+            The Approvals Center is reserved for authorized administrators and managerial roles. All bills, quotations, and subscriptions created by team members are reviewed here.
           </p>
         </div>
       </div>
     )
   }
 
-  // Filtered requests
-  const filteredRequests = requests.filter(r => {
+  // Cascading scoped requests according to organizational hierarchy:
+  // - Super Admin: Global access across all companies and branches.
+  // - Company Admin: Can see & approve company HQ direct requests, branch requests, and sub-branch requests under her company.
+  // - Branch Admin: Can see & approve requests from their branch + its sub-branches. DIRECT COMPANY HQ REQUESTS ARE HIDDEN.
+  // - Sub-Branch Admin: Can ONLY see & approve requests from their specific sub-branch. Parent branch and company requests are hidden.
+  const scopedRequests = requests.filter(r => {
+    if (!user) return false
+
+    // Super Admin: global or company filtered
+    if (userScope.isSuperAdmin) {
+      if (activeCompanyId && activeCompanyId !== "all") {
+        return isMatchingCompany({ id: activeCompanyId } as any, r.companyId)
+      }
+      return true
+    }
+
+    // 1. Sub-Branch Level: strictly scoped to assigned sub-branch
+    if (userScope.scopeLevel === 'subbranch') {
+      if (!r.subBranchId) return false
+      return userScope.allowedSubBranchIds.some(
+        id => String(id).toLowerCase().trim() === String(r.subBranchId).toLowerCase().trim()
+      )
+    }
+
+    // 2. Branch Level: scoped to branch + sub-branches under that branch (NO company HQ direct approvals)
+    if (userScope.scopeLevel === 'branch') {
+      if (!r.branchId && !r.subBranchId) return false // Direct Company HQ request hidden
+
+      if (r.branchId && userScope.allowedBranchIds.some(
+        id => String(id).toLowerCase().trim() === String(r.branchId).toLowerCase().trim()
+      )) {
+        return true
+      }
+
+      if (r.subBranchId && userScope.allowedSubBranchIds.some(
+        id => String(id).toLowerCase().trim() === String(r.subBranchId).toLowerCase().trim()
+      )) {
+        return true
+      }
+
+      return false
+    }
+
+    // 3. Company Level: can see company HQ, branches, and sub-branches under this company
+    return userScope.allowedCompanyIds.some(
+      cId => isMatchingCompany({ id: cId } as any, r.companyId)
+    )
+  })
+
+  // Filtered requests by UI search & status tabs
+  const filteredRequests = scopedRequests.filter(r => {
     if (statusFilter !== "all" && r.status !== statusFilter) return false
     if (typeFilter !== "all" && r.type !== typeFilter) return false
     if (searchQuery.trim()) {
@@ -86,17 +148,19 @@ export default function ApprovalsPage() {
       const matchClient = (r.clientName || "").toLowerCase().includes(q)
       const matchSubmitter = (r.submittedBy?.name || "").toLowerCase().includes(q)
       const matchTitle = (r.title || "").toLowerCase().includes(q)
-      if (!matchDoc && !matchClient && !matchSubmitter && !matchTitle) return false
+      const matchBranch = (r.branchName || "").toLowerCase().includes(q)
+      const matchSubBranch = (r.subBranchName || "").toLowerCase().includes(q)
+      if (!matchDoc && !matchClient && !matchSubmitter && !matchTitle && !matchBranch && !matchSubBranch) return false
     }
     return true
   })
 
-  // KPI stats
-  const pendingRequests = requests.filter(r => r.status === "pending")
+  // KPI stats from scoped submissions
+  const pendingRequests = scopedRequests.filter(r => r.status === "pending")
   const pendingCount = pendingRequests.length
   const pendingAmount = pendingRequests.reduce((sum, r) => sum + (r.amount || 0), 0)
-  const approvedCount = requests.filter(r => r.status === "approved").length
-  const rejectedCount = requests.filter(r => r.status === "rejected").length
+  const approvedCount = scopedRequests.filter(r => r.status === "approved").length
+  const rejectedCount = scopedRequests.filter(r => r.status === "rejected").length
 
   const handleApprove = async (req: ApprovalRequest) => {
     await executeWithFeedback(async () => {
@@ -359,15 +423,28 @@ export default function ApprovalsPage() {
                         </div>
                       </td>
 
-                      {/* Client */}
+                      {/* Client & Entity Hierarchy */}
                       <td className="py-3.5 px-4">
                         <div>
                           <p className="font-bold text-foreground">{req.clientName}</p>
-                          {req.branchName && (
-                            <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-                              <Building2 size={10} /> {req.branchName}
-                            </p>
-                          )}
+                          <div className="flex flex-wrap gap-1 mt-0.5">
+                            {req.subBranchName ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
+                                <GitBranch size={9} />
+                                <span>Sub-Branch: {req.subBranchName}</span>
+                              </span>
+                            ) : req.branchName ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/50 px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-800">
+                                <Building2 size={9} />
+                                <span>Branch: {req.branchName}</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/50 px-1.5 py-0.5 rounded border border-purple-200 dark:border-purple-800">
+                                <Building2 size={9} />
+                                <span>Company HQ Direct</span>
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </td>
 
@@ -419,7 +496,7 @@ export default function ApprovalsPage() {
                             <Eye size={15} />
                           </button>
 
-                          {isPending && (
+                          {isPending && canApprove && (
                             <>
                               <button
                                 type="button"

@@ -9,7 +9,7 @@ import {
 import { UserItem, KycStatus } from "../types"
 import { recordUserAccount } from "../services/userService"
 import { saveModuleDataToDB } from "@/lib/storageSync"
-import { useAuthStore } from "@/store/useAuthStore"
+import { useAuthStore, getSelectableCompanies } from "@/store/useAuthStore"
 import { createNotification } from "@/services/notificationService"
 import { OfferLetterDocument } from "./OfferLetterDocument"
 import { IdentityCardDocument } from "./IdentityCardDocument"
@@ -60,7 +60,12 @@ export function UserOverviewModal({
   const companies = useAuthStore((state) => state.companies)
   const branches = useAuthStore((state) => state.branches)
   const subBranches = useAuthStore((state) => state.subBranches)
+  const activeCompanyId = useAuthStore((state) => state.activeCompanyId)
   const isSuperAdminOrAdmin = currentUser?.role === "Super Admin" || currentUser?.role === "Admin"
+
+  const selectableCompanies = React.useMemo(() => {
+    return getSelectableCompanies(companies, activeCompanyId, currentUser, branches, subBranches)
+  }, [companies, activeCompanyId, currentUser, branches, subBranches])
 
   const [activeTab, setActiveTab] = React.useState<"kyc" | "offer_letter" | "id_card">("kyc")
   const [previewDocUrl, setPreviewDocUrl] = React.useState<string | null>(null)
@@ -69,7 +74,10 @@ export function UserOverviewModal({
   const [showRejectInput, setShowRejectInput] = React.useState(false)
 
   // Entity selection & Document Customization state
-  const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>(user?.companyId || "tech")
+  const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>(() => {
+    if (activeCompanyId && activeCompanyId !== "all") return activeCompanyId
+    return user?.companyId || "tech"
+  })
   const [selectedBranchId, setSelectedBranchId] = React.useState<string>(user?.branchId || "")
   const [selectedSubBranchId, setSelectedSubBranchId] = React.useState<string>(user?.subBranchId || "")
   const [customJoiningDate, setCustomJoiningDate] = React.useState<string>(user?.joinedDate || "2026-10-01")
@@ -672,16 +680,24 @@ export function UserOverviewModal({
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                   {/* Select Company */}
                   <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-muted-foreground flex items-center gap-1">
-                      <Building2 size={12} className="text-primary" />
-                      <span>Issuing Company:</span>
+                    <label className="text-[11px] font-bold text-muted-foreground flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <Building2 size={12} className="text-primary" />
+                        <span>Issuing Company:</span>
+                      </span>
+                      {selectableCompanies.length <= 1 && (
+                        <span className="text-[9px] text-blue-600 font-bold bg-blue-50 dark:bg-blue-950/40 px-1 py-0.2 rounded border border-blue-200 dark:border-blue-800">
+                          🔒 Active Company
+                        </span>
+                      )}
                     </label>
                     <select
                       value={selectedCompanyId}
                       onChange={(e) => setSelectedCompanyId(e.target.value)}
-                      className="w-full px-3 py-1.5 rounded-xl bg-surface border border-border text-xs font-semibold focus:outline-hidden cursor-pointer"
+                      disabled={selectableCompanies.length <= 1}
+                      className="w-full px-3 py-1.5 rounded-xl bg-surface border border-border text-xs font-semibold focus:outline-hidden cursor-pointer disabled:opacity-85 disabled:cursor-not-allowed"
                     >
-                      {companies.map(c => (
+                      {selectableCompanies.map(c => (
                         <option key={c.id} value={c.id}>
                           {c.name} {c.brand_name ? `(${c.brand_name})` : ""}
                         </option>
@@ -842,16 +858,24 @@ export function UserOverviewModal({
               <div className="p-4 rounded-2xl bg-surface-hover/30 border border-border grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {/* Select Company */}
                 <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-muted-foreground flex items-center gap-1">
-                    <Building2 size={12} className="text-primary" />
-                    <span>Company on Card:</span>
+                  <label className="text-[11px] font-bold text-muted-foreground flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <Building2 size={12} className="text-primary" />
+                      <span>Company on Card:</span>
+                    </span>
+                    {selectableCompanies.length <= 1 && (
+                      <span className="text-[9px] text-blue-600 font-bold bg-blue-50 dark:bg-blue-950/40 px-1 py-0.2 rounded border border-blue-200 dark:border-blue-800">
+                        🔒 Active Company
+                      </span>
+                    )}
                   </label>
                   <select
                     value={selectedCompanyId}
                     onChange={(e) => setSelectedCompanyId(e.target.value)}
-                    className="w-full px-3 py-1.5 rounded-xl bg-surface border border-border text-xs font-semibold focus:outline-hidden cursor-pointer"
+                    disabled={selectableCompanies.length <= 1}
+                    className="w-full px-3 py-1.5 rounded-xl bg-surface border border-border text-xs font-semibold focus:outline-hidden cursor-pointer disabled:opacity-85 disabled:cursor-not-allowed"
                   >
-                    {companies.map(c => (
+                    {selectableCompanies.map(c => (
                       <option key={c.id} value={c.id}>
                         {c.name} {c.brand_name ? `(${c.brand_name})` : ""}
                       </option>

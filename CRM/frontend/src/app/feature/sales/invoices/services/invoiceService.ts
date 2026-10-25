@@ -143,39 +143,54 @@ export const generateInvoiceNumber = (
   const d = String(parsedDate.getDate()).padStart(2, "0")
   const m = String(parsedDate.getMonth() + 1).padStart(2, "0")
   const y = String(parsedDate.getFullYear())
-  const prefix = isNonGst ? `NGINV-${d}${m}${y}-` : `INV-${d}${m}${y}-`
+  const dateStr = `${d}${m}${y}`
+
+  // Standard serial format: inv(date)001 for GST, ng(date)001 for Non-GST
+  const prefix = isNonGst ? `NG${dateStr}` : `INV${dateStr}`
+  const legacyPrefix = isNonGst ? `NGINV-${dateStr}-` : `INV-${dateStr}-`
+  const legacyHyphen = isNonGst ? `NG-${dateStr}-` : `INV-${dateStr}-`
 
   const deletedIds = getLocalDeletedIds()
 
   let maxSeq = 0
   const allExisting = [...existingInvoices]
 
-  for (const inv of allExisting) {
-    if (!inv || !inv.id) continue
-    const cleanId = String(inv.id).trim().toUpperCase()
+  const checkCandidate = (rawId: any) => {
+    if (!rawId) return
+    const cleanId = String(rawId).trim().toUpperCase()
     if (cleanId.startsWith(prefix)) {
-      const suffix = cleanId.substring(prefix.length)
+      const suffix = cleanId.substring(prefix.length).replace(/^-/, "")
+      const num = parseInt(suffix, 10)
+      if (!isNaN(num) && num > maxSeq) {
+        maxSeq = num
+      }
+    } else if (cleanId.startsWith(legacyPrefix)) {
+      const suffix = cleanId.substring(legacyPrefix.length)
+      const num = parseInt(suffix, 10)
+      if (!isNaN(num) && num > maxSeq) {
+        maxSeq = num
+      }
+    } else if (cleanId.startsWith(legacyHyphen)) {
+      const suffix = cleanId.substring(legacyHyphen.length)
       const num = parseInt(suffix, 10)
       if (!isNaN(num) && num > maxSeq) {
         maxSeq = num
       }
     }
+  }
+
+  for (const inv of allExisting) {
+    if (inv && inv.id) checkCandidate(inv.id)
+    if (inv && (inv as any).invoice_number) checkCandidate((inv as any).invoice_number)
   }
 
   // Also check deleted IDs so invoice sequence never collides with a previously deleted ID
   for (const delId of deletedIds) {
-    const cleanId = String(delId).trim().toUpperCase()
-    if (cleanId.startsWith(prefix)) {
-      const suffix = cleanId.substring(prefix.length)
-      const num = parseInt(suffix, 10)
-      if (!isNaN(num) && num > maxSeq) {
-        maxSeq = num
-      }
-    }
+    checkCandidate(delId)
   }
 
   const nextSeq = maxSeq + 1
-  const seqStr = String(nextSeq).padStart(4, "0")
+  const seqStr = String(nextSeq).padStart(3, "0")
   return `${prefix}${seqStr}`
 }
 

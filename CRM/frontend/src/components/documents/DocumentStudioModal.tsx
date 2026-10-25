@@ -9,7 +9,7 @@ import {
   ShieldCheck, AlertCircle, Eye, Landmark, QrCode, Award, Clock, CheckCircle2, ListChecks
 } from "lucide-react"
 
-import { useAuthStore, Company, Branch, SubBranch, getCompanyLogoUrl, getCanonicalCompanyId } from "@/store/useAuthStore"
+import { useAuthStore, Company, Branch, SubBranch, getCompanyLogoUrl, getCanonicalCompanyId, getSelectableCompanies, getUserEntityScope, isMatchingCompany } from "@/store/useAuthStore"
 import { getClients, saveStoredClient } from "@/app/feature/clients/services/clientService"
 import { ClientItem } from "@/app/feature/clients/types"
 import { 
@@ -73,9 +73,24 @@ export function DocumentStudioModal({
     if (initialData?.taxType === "gst") return "gst"
     return "gst"
   })
-  const [companyId, setCompanyId] = React.useState<string>(activeCompanyId || "tech")
+  const selectableCompanies = React.useMemo(() => {
+    return getSelectableCompanies(companies, activeCompanyId, user, branches, subBranches)
+  }, [companies, activeCompanyId, user, branches, subBranches])
+
+  const [companyId, setCompanyId] = React.useState<string>(() => {
+    if (initialData?.companyId) return initialData.companyId
+    if (activeCompanyId && activeCompanyId !== "all") return activeCompanyId
+    return "tech"
+  })
   const [branchId, setBranchId] = React.useState<string>(activeBranchId || "")
   const [subBranchId, setSubBranchId] = React.useState<string>("")
+
+  // Keep companyId in sync with selectableCompanies if locked
+  React.useEffect(() => {
+    if (selectableCompanies.length > 0 && !selectableCompanies.some(c => c.id === companyId || c.slug === companyId)) {
+      setCompanyId(selectableCompanies[0].id || selectableCompanies[0].slug || "tech")
+    }
+  }, [selectableCompanies, companyId])
 
   // Tab State depending on mode:
   // Quotation: "q_setup" (1. Project & Client), "q_scope" (2. Scope & Milestones), "q_commercial" (3. Pricing & Payment Terms)
@@ -90,8 +105,8 @@ export function DocumentStudioModal({
     return companies.find(c => {
       const canonC = getCanonicalCompanyId(c.id || c.slug)
       return (canonTarget && canonC && canonTarget === canonC) || c.id === companyId || c.slug === companyId
-    }) || companies[0]
-  }, [companies, companyId, activeCompanyId])
+    }) || selectableCompanies[0] || companies[0]
+  }, [companies, companyId, activeCompanyId, selectableCompanies])
 
   const companyBranches = React.useMemo(() => {
     if (!branches || branches.length === 0) return []
@@ -685,6 +700,40 @@ export function DocumentStudioModal({
         } else {
           saved = await addInvoice(finalDocPayload)
         }
+
+        // Auto-link/create project in Projects module if project reference is provided
+        if (projectTitle && projectTitle.trim()) {
+          try {
+            const { getProjects, addProject } = await import("@/app/feature/projects/services/projectService")
+            const existingProjects = await getProjects(companyId)
+            const cleanTitle = projectTitle.trim()
+            const found = existingProjects.find(p => p.title.toLowerCase().trim() === cleanTitle.toLowerCase())
+            if (!found) {
+              await addProject({
+                title: cleanTitle,
+                client: String(clientName || selectedClient?.name || "Client"),
+                clientId: selectedClient?.id ? String(selectedClient.id) : undefined,
+                projectType: "Client Project",
+                price: `₹${grandTotal.toLocaleString("en-IN")}`,
+                startDate: issueDate || new Date().toISOString().split("T")[0],
+                deadline: dueDate || new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
+                progress: 15,
+                status: "In Progress",
+                paymentStatus: "Payment Pending",
+                baseAmount: taxableBase,
+                totalAmount: grandTotal,
+                companyId: companyId,
+                branchId: branchId || undefined,
+                subBranchId: subBranchId || undefined,
+                labels: ["Client Project", "Invoice Generated"],
+                description: `Project for ${clientName || "Client"} - Invoice #${docNumber}`,
+              }, companyId)
+            }
+          } catch (err) {
+            console.warn("Auto-create project error:", err)
+          }
+        }
+
         onSaveSuccess?.(saved || finalDocPayload)
       } else if (mode === "quotation") {
         const quotationPayload = {
@@ -1003,13 +1052,21 @@ export function DocumentStudioModal({
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                       <div>
-                        <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Issuing Company Entity *</label>
+                        <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1 flex items-center justify-between">
+                          <span>Issuing Company Entity *</span>
+                          {selectableCompanies.length <= 1 && (
+                            <span className="text-[9px] text-blue-600 font-bold bg-blue-50 dark:bg-blue-950/40 px-1 py-0.2 rounded border border-blue-200 dark:border-blue-800">
+                              🔒 Active Scope
+                            </span>
+                          )}
+                        </label>
                         <select
                           value={companyId}
                           onChange={(e) => setCompanyId(e.target.value)}
-                          className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-bold"
+                          disabled={selectableCompanies.length <= 1}
+                          className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-bold disabled:opacity-85 disabled:cursor-not-allowed"
                         >
-                          {companies.map(c => (
+                          {selectableCompanies.map(c => (
                             <option key={c.id} value={c.id}>{c.brand_name || c.name}</option>
                           ))}
                         </select>
@@ -1424,13 +1481,21 @@ export function DocumentStudioModal({
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                       <div>
-                        <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Company Entity *</label>
+                        <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1 flex items-center justify-between">
+                          <span>Company Entity *</span>
+                          {selectableCompanies.length <= 1 && (
+                            <span className="text-[9px] text-blue-600 font-bold bg-blue-50 dark:bg-blue-950/40 px-1 py-0.2 rounded border border-blue-200 dark:border-blue-800">
+                              🔒 Active Scope
+                            </span>
+                          )}
+                        </label>
                         <select
                           value={companyId}
                           onChange={(e) => setCompanyId(e.target.value)}
-                          className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-bold"
+                          disabled={selectableCompanies.length <= 1}
+                          className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-bold disabled:opacity-85 disabled:cursor-not-allowed"
                         >
-                          {companies.map(c => (
+                          {selectableCompanies.map(c => (
                             <option key={c.id} value={c.id}>{c.brand_name || c.name}</option>
                           ))}
                         </select>
@@ -1603,7 +1668,14 @@ export function DocumentStudioModal({
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
-                        <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Company Entity *</label>
+                        <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1 flex items-center justify-between">
+                          <span>Company Entity *</span>
+                          {selectableCompanies.length <= 1 && (
+                            <span className="text-[9px] text-blue-600 font-bold bg-blue-50 dark:bg-blue-950/40 px-1 py-0.2 rounded border border-blue-200 dark:border-blue-800">
+                              🔒 Active Scope
+                            </span>
+                          )}
+                        </label>
                         <select
                           value={companyId}
                           onChange={(e) => {
@@ -1611,9 +1683,10 @@ export function DocumentStudioModal({
                             setBranchId("")
                             setSubBranchId("")
                           }}
-                          className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-bold"
+                          disabled={selectableCompanies.length <= 1}
+                          className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-bold disabled:opacity-85 disabled:cursor-not-allowed"
                         >
-                          {companies.map(c => (
+                          {selectableCompanies.map(c => (
                             <option key={c.id} value={c.id}>{c.brand_name || c.name}</option>
                           ))}
                         </select>

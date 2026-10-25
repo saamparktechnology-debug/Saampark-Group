@@ -27,7 +27,8 @@ import {
   Tag,
   Pencil,
   MapPin,
-  User
+  User,
+  Receipt
 } from "lucide-react"
 import { ColumnDef } from "@tanstack/react-table"
 
@@ -57,6 +58,7 @@ import {
 import { isMatchingCompany } from "@/store/useAuthStore"
 import { InvoiceModal } from "./components/InvoiceModal"
 import { DocumentStudioModal } from "@/components/documents/DocumentStudioModal"
+import { AddClientProjectModal } from "@/app/feature/clients/components/AddClientProjectModal"
 import { getClients, saveStoredClient } from "@/app/feature/clients/services/clientService"
 import { ClientItem } from "@/app/feature/clients/types"
 import { getProjects } from "@/app/feature/projects/services/projectService"
@@ -89,6 +91,7 @@ function InvoicesPageContent() {
   const [selectedInvoice, setSelectedInvoice] = React.useState<InvoiceItem | null>(null)
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = React.useState(false)
   const [isAddModalOpen, setIsAddModalOpen] = React.useState(false)
+  const [isAddClientProjectModalOpen, setIsAddClientProjectModalOpen] = React.useState(false)
 
   // Auto-fill from query params (e.g. redirected from Project or Client)
   const searchParams = useSearchParams()
@@ -1501,14 +1504,27 @@ function InvoicesPageContent() {
           )}
 
           {canAddInvoice && (
-            <button
-              type="button"
-              onClick={() => setIsAddModalOpen(true)}
-              className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm cursor-pointer"
-            >
-              <Plus size={14} />
-              <span>Create Invoice</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsAddClientProjectModalOpen(true)}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm cursor-pointer"
+                title="Create Invoice with Project (Full Billing, Team Attribution, & Milestones)"
+              >
+                <Plus size={14} />
+                <span>+ Create Invoice &amp; Project</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsAddModalOpen(true)}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-teal-700 dark:text-teal-300 bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/40 dark:hover:bg-teal-900/60 border border-teal-200 dark:border-teal-800 rounded-lg transition-colors shadow-2xs cursor-pointer"
+                title="Open Interactive Split-Screen Live Document Studio"
+              >
+                <Receipt size={14} />
+                <span>🎨 Studio Invoice</span>
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -1772,6 +1788,21 @@ function InvoicesPageContent() {
         )}
       </AnimatePresence>
 
+
+      {/* ── CLIENT PROJECT & INVOICE BUILDER (LINKED) ── */}
+      <AddClientProjectModal
+        isOpen={isAddClientProjectModalOpen}
+        client={null}
+        initialMode="project_and_invoice"
+        onClose={() => setIsAddClientProjectModalOpen(false)}
+        onProjectCreated={loadInvoices}
+        onInvoiceCreated={(inv) => {
+          setIsAddClientProjectModalOpen(false)
+          setSelectedInvoice(inv)
+          setIsInvoiceModalOpen(true)
+          loadInvoices()
+        }}
+      />
 
       {/* ── INTERACTIVE SPLIT-SCREEN DOCUMENT STUDIO (INVOICE ADD) ── */}
       <DocumentStudioModal

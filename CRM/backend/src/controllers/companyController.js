@@ -6,9 +6,42 @@ const getAllCompanies = async (req, res, next) => {
   try {
     let query = `SELECT c.*, COUNT(DISTINCT u.id) as member_count
                  FROM companies c
-                 LEFT JOIN users u ON u.company_id = c.id AND u.deleted_at IS NULL
-                 GROUP BY c.id ORDER BY c.created_at DESC`;
-    const [companies] = await pool.execute(query);
+                 LEFT JOIN users u ON u.company_id = c.id AND u.deleted_at IS NULL`;
+    const params = [];
+
+    // Role check: If requester is authenticated and is NOT Super Admin, filter to assigned company
+    if (req.user) {
+      const userRoleId = Number(req.user.role_id);
+      const isSuper = userRoleId === 1 || String(req.user.role || req.user.role_name || '').toLowerCase().includes('super') || req.user.email === 'hiisupriya@gmail.com' || req.user.email === 'saampark.official@gmail.com';
+      
+      if (!isSuper) {
+        // Find assigned companies for this user
+        let assignedComp = req.user.company_id;
+        let assignedComps = [];
+        try {
+          const [uRows] = await pool.execute('SELECT company_id, company_ids FROM users WHERE id = ?', [req.user.id]);
+          if (uRows.length > 0) {
+            if (uRows[0].company_id) assignedComp = uRows[0].company_id;
+            if (uRows[0].company_ids) {
+              const parsed = typeof uRows[0].company_ids === 'string' ? JSON.parse(uRows[0].company_ids) : uRows[0].company_ids;
+              if (Array.isArray(parsed)) assignedComps = parsed;
+            }
+          }
+        } catch (e) {}
+
+        const allAllowed = Array.from(new Set([assignedComp, ...assignedComps].filter(Boolean))).map(s => String(s).trim());
+        if (allAllowed.length > 0) {
+          const placeholders = allAllowed.map(() => '(c.id = ? OR c.slug = ?)').join(' OR ');
+          query += ` WHERE (${placeholders})`;
+          for (const item of allAllowed) {
+            params.push(item, item);
+          }
+        }
+      }
+    }
+
+    query += ` GROUP BY c.id ORDER BY c.created_at DESC`;
+    const [companies] = await pool.execute(query, params);
     return successResponse(res, 200, 'Companies fetched', companies);
   } catch (error) { next(error); }
 };
@@ -16,7 +49,7 @@ const getAllCompanies = async (req, res, next) => {
 // ─── GET SINGLE COMPANY ────────────────────────────────────────────────────────
 const getCompanyById = async (req, res, next) => {
   try {
-    const [companies] = await pool.execute('SELECT * FROM companies WHERE id = ?', [req.params.id]);
+    const [companies] = await pool.execute('SELECT * FROM companies WHERE id = ? OR slug = ?', [req.params.id, req.params.id]);
     if (!companies.length) return errorResponse(res, 404, 'Company not found.');
     return successResponse(res, 200, 'Company found', companies[0]);
   } catch (error) { next(error); }
@@ -70,8 +103,42 @@ const createCompany = async (req, res, next) => {
 // ─── UPDATE COMPANY ────────────────────────────────────────────────────────────
 const updateCompany = async (req, res, next) => {
   try {
-    if (req.user.role_id !== 1 && req.user.role !== 'Super Admin') {
-      return errorResponse(res, 403, 'Access denied: Only Super Admin can update companies.');
+    const userRoleId = Number(req.user?.role_id);
+    const userRole = String(req.user?.role || req.user?.role_name || '').toLowerCase();
+    const isSuper = userRoleId === 1 || userRole.includes('super') || req.user?.email === 'hiisupriya@gmail.com' || req.user?.email === 'saampark.official@gmail.com';
+
+    if (!isSuper) {
+      const isAdmin = userRoleId === 2 || userRole.includes('admin');
+      if (!isAdmin) {
+        return errorResponse(res, 403, 'Access denied: You do not have permission to update company details.');
+      }
+
+      let assignedComp = req.user.company_id;
+      let assignedComps = [];
+      try {
+        const [uRows] = await pool.execute('SELECT company_id, company_ids FROM users WHERE id = ?', [req.user.id]);
+        if (uRows.length > 0) {
+          if (uRows[0].company_id) assignedComp = uRows[0].company_id;
+          if (uRows[0].company_ids) {
+            const parsed = typeof uRows[0].company_ids === 'string' ? JSON.parse(uRows[0].company_ids) : uRows[0].company_ids;
+            if (Array.isArray(parsed)) assignedComps = parsed;
+          }
+        }
+      } catch (e) {}
+
+      const allAllowed = Array.from(new Set([assignedComp, ...assignedComps].filter(Boolean))).map(s => String(s).toLowerCase().trim());
+      const targetParam = String(req.params.id).toLowerCase().trim();
+
+      const [targetRows] = await pool.execute('SELECT id, slug FROM companies WHERE id = ? OR slug = ?', [req.params.id, req.params.id]);
+      if (!targetRows.length) return errorResponse(res, 404, 'Company not found.');
+
+      const targetId = String(targetRows[0].id).toLowerCase();
+      const targetSlug = String(targetRows[0].slug || '').toLowerCase();
+
+      const canUpdate = allAllowed.some(a => a === targetParam || a === targetId || a === targetSlug);
+      if (!canUpdate) {
+        return errorResponse(res, 403, 'Access denied: You can only edit your assigned company.');
+      }
     }
     
     const allowedFields = [
@@ -95,8 +162,8 @@ const updateCompany = async (req, res, next) => {
 
     if (fields.length > 0) {
       fields.push('updated_at = NOW()');
-      values.push(req.params.id);
-      await pool.execute(`UPDATE companies SET ${fields.join(', ')} WHERE id = ?`, values);
+      values.push(req.params.id, req.params.id);
+      await pool.execute(`UPDATE companies SET ${fields.join(', ')} WHERE id = ? OR slug = ?`, values);
     }
 
     return successResponse(res, 200, 'Company updated');
