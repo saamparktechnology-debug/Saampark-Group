@@ -174,6 +174,7 @@ export interface SubBranch {
   zoom?: number
   preview_scale?: string
   preview_invoice_type?: string
+  invoice_customization?: any
   status: 'Active' | 'Inactive'
   createdAt?: string
 }
@@ -246,6 +247,7 @@ export interface Company {
   zoom?: number
   preview_scale?: string
   preview_invoice_type?: string
+  invoice_customization?: any
   // SMTP / Email Dispatch Credentials (Per Company)
   smtp_host?: string
   smtp_port?: string | number
@@ -520,8 +522,18 @@ export function getUserEntityScope(
   if (Array.isArray(user.companyIds)) {
     rawCompanyIds.push(...user.companyIds)
   }
-  if (user.companyId && !rawCompanyIds.includes(user.companyId)) {
-    rawCompanyIds.push(user.companyId)
+  const singleComp = user.companyId || (user as any).company_id || (user as any).company
+  if (singleComp && !rawCompanyIds.includes(singleComp)) {
+    rawCompanyIds.push(String(singleComp))
+  }
+  if (rawCompanyIds.length === 0 && (user as any).companyName) {
+    const matchedByName = allCompanies.find(c => 
+      c.name.toLowerCase().trim() === String((user as any).companyName).toLowerCase().trim() ||
+      (c.brand_name && c.brand_name.toLowerCase().trim() === String((user as any).companyName).toLowerCase().trim())
+    )
+    if (matchedByName) {
+      rawCompanyIds.push(String(matchedByName.id))
+    }
   }
   if (rawCompanyIds.length === 0) {
     rawCompanyIds.push('tech')
@@ -644,7 +656,7 @@ export const DEFAULT_COMPANIES: Company[] = [
     cin: '',
     gstin: '',
     pan: '',
-    address: 'Salt Lake Sector V, Bidhannagar, Kolkata, West Bengal - 700091',
+    address: '',
     phone: '+91 9901518570',
     email: 'consultancy@saampark.in',
     website: 'www.saampark.in',
@@ -854,12 +866,19 @@ export const useAuthStore = create<AuthState>()(
             id: 'tech',
             slug: 'tech',
             numeric_id: 1,
-            brand_name: rawTech.brand_name || 'SAAMPARK',
-            division_name: (rawTech.division_name && !rawTech.division_name.toLowerCase().includes('consult')) ? rawTech.division_name : 'TECHNOLOGY',
-            subtitle: (rawTech.subtitle && !rawTech.subtitle.toLowerCase().includes('consult')) ? rawTech.subtitle : 'AND RESEARCH PRIVATE LIMITED',
+            brand_name: rawTech.brand_name ?? 'SAAMPARK',
+            division_name: rawTech.division_name !== undefined ? rawTech.division_name : 'TECHNOLOGY',
+            subtitle: rawTech.subtitle !== undefined ? rawTech.subtitle : 'AND RESEARCH PRIVATE LIMITED',
             name: (rawTech.name && rawTech.name.trim() !== '') ? rawTech.name : 'SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED',
-            logo: '💻',
-            logo_url: (rawTech.logo_url && rawTech.logo_url.trim() !== '') ? rawTech.logo_url : '/saampark-logo.png',
+            logo: rawTech.logo || '💻',
+            logo_url: rawTech.logo_url !== undefined ? rawTech.logo_url : '/saampark-logo.png',
+            signature_position: rawTech.signature_position || { x: 0, y: 0 },
+            stamp_position: rawTech.stamp_position || { x: 0, y: 0 },
+            logo_scale: rawTech.logo_scale ?? 1,
+            stamp_scale: rawTech.stamp_scale ?? 1,
+            signature_scale: rawTech.signature_scale ?? 1,
+            custom_stamps: Array.isArray(rawTech.custom_stamps) ? rawTech.custom_stamps : [],
+            invoice_customization: rawTech.invoice_customization || { hidden_fields: [] },
           }
 
           const sanitizedConsult: Company = {
@@ -868,13 +887,20 @@ export const useAuthStore = create<AuthState>()(
             id: 'consultancy',
             slug: 'consultancy',
             numeric_id: 2,
-            brand_name: rawConsult.brand_name || 'SAAMPARK',
-            division_name: 'CONSULTANCY SERVICE',
-            subtitle: (rawConsult.subtitle && !rawConsult.subtitle.toLowerCase().includes('research') && !rawConsult.subtitle.toLowerCase().includes('technology')) ? rawConsult.subtitle : 'MANAGEMENT & ADVISORY SERVICES',
+            brand_name: rawConsult.brand_name ?? 'SAAMPARK',
+            division_name: rawConsult.division_name !== undefined ? rawConsult.division_name : 'CONSULTANCY SERVICE',
+            subtitle: rawConsult.subtitle !== undefined ? rawConsult.subtitle : 'MANAGEMENT & ADVISORY SERVICES',
             name: (rawConsult.name && rawConsult.name.trim() !== '') ? rawConsult.name : 'SAAMPARK CONSULTANCY SERVICE',
-            logo: '💼',
+            logo: rawConsult.logo || '💼',
             // Consultancy starts totally fresh — never inherit technology logo
             logo_url: (rawConsult.logo_url && rawConsult.logo_url !== '/saampark-logo.png') ? rawConsult.logo_url : '',
+            signature_position: rawConsult.signature_position || { x: 0, y: 0 },
+            stamp_position: rawConsult.stamp_position || { x: 0, y: 0 },
+            logo_scale: rawConsult.logo_scale ?? 1,
+            stamp_scale: rawConsult.stamp_scale ?? 1,
+            signature_scale: rawConsult.signature_scale ?? 1,
+            custom_stamps: Array.isArray(rawConsult.custom_stamps) ? rawConsult.custom_stamps : [],
+            invoice_customization: rawConsult.invoice_customization || { hidden_fields: [] },
           }
 
           const combined: Company[] = [sanitizedTech, sanitizedConsult]

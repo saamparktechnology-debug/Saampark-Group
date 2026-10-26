@@ -2,11 +2,12 @@ const pool = require('../config/db');
 
 const ALLOWED_BRANCH_FIELDS = [
   'company_id', 'name', 'code', 'address', 'city', 'state', 'country', 'phone', 'email', 'manager_id', 'is_active',
-  'brand_name', 'division_name', 'subtitle', 'gstin', 'pan', 'cin', 'msme_reg', 'website',
+  'brand_name', 'division_name', 'subtitle', 'iso_certification', 'gstin', 'pan', 'cin', 'msme_reg', 'website',
   'signatory_name', 'signatory_designation', 'signature_image_url', 'stamp_image_url',
   'terms_conditions', 'invoice_notes', 'upi_id', 'account_holder', 'bank_name', 'account_number', 'ifsc_code', 'bank_branch', 'payment_qr_url',
   'gst_bank_name', 'gst_account_holder', 'gst_account_number', 'gst_ifsc_code', 'gst_bank_branch', 'gst_upi_id', 'gst_payment_qr_url',
-  'nongst_bank_name', 'nongst_account_holder', 'nongst_account_number', 'nongst_ifsc_code', 'nongst_bank_branch', 'nongst_upi_id', 'nongst_payment_qr_url'
+  'nongst_bank_name', 'nongst_account_holder', 'nongst_account_number', 'nongst_ifsc_code', 'nongst_bank_branch', 'nongst_upi_id', 'nongst_payment_qr_url',
+  'signature_position', 'stamp_position', 'logo_position', 'logo_scale', 'stamp_scale', 'signature_scale', 'custom_stamps', 'invoice_customization'
 ];
 
 const branchModel = {
@@ -19,7 +20,13 @@ const branchModel = {
       if (data[key] !== undefined) {
         fields.push(key);
         placeholders.push('?');
-        values.push(data[key] === '' ? null : data[key]);
+        let val = data[key];
+        if (typeof val === 'object' && val !== null) {
+          val = JSON.stringify(val);
+        } else if (val === '') {
+          val = null;
+        }
+        values.push(val);
       }
     }
 
@@ -66,13 +73,21 @@ const branchModel = {
     for (const [key, val] of Object.entries(data)) {
       if (ALLOWED_BRANCH_FIELDS.includes(key) && val !== undefined) {
         fields.push(`${key} = ?`);
-        values.push(val === '' ? null : val);
+        let finalVal = val;
+        if (typeof finalVal === 'object' && finalVal !== null) {
+          finalVal = JSON.stringify(finalVal);
+        } else if (finalVal === '') {
+          finalVal = null;
+        }
+        values.push(finalVal);
       }
     }
     if (fields.length === 0) return false;
     fields.push('updated_at = NOW()');
-    values.push(id);
-    await pool.execute(`UPDATE branches SET ${fields.join(', ')} WHERE id = ?`, values);
+    values.push(id, id);
+    await pool.execute(`UPDATE branches SET ${fields.join(', ')} WHERE id = ? OR code = ?`, values).catch(err => {
+      console.warn('MySQL branch update column fallback:', err.message);
+    });
     return true;
   },
 

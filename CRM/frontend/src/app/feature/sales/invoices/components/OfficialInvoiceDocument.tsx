@@ -354,16 +354,16 @@ export function OfficialInvoiceDocument({
   const resolvedSubtitle = activeSubBranch?.subtitle || activeBranch?.subtitle || activeCompany?.subtitle || ""
   const resolvedLogoUrl = overrideLogoUrl || activeSubBranch?.logo_url || activeBranch?.logo_url || getCompanyLogoUrl(activeCompany) || activeCompany?.logo_url || ""
 
-  // Specific Entity Legal IDs
-  const resolvedCin = (isSubBranchIssued ? activeSubBranch?.cin : isBranchIssued ? activeBranch?.cin : activeCompany?.cin)?.trim() || ""
-  const resolvedGstin = (isSubBranchIssued ? activeSubBranch?.gstin : isBranchIssued ? activeBranch?.gstin : activeCompany?.gstin)?.trim() || ""
-  const resolvedPan = (isSubBranchIssued ? activeSubBranch?.pan : isBranchIssued ? activeBranch?.pan : activeCompany?.pan)?.trim() || ""
+  // Specific Entity Legal IDs (Check companyDetails first when provided; don't fall back to other company IDs)
+  const resolvedCin = (isSubBranchIssued ? activeSubBranch?.cin : isBranchIssued ? activeBranch?.cin : (companyDetails ? companyDetails.cin : activeCompany?.cin))?.trim() || ""
+  const resolvedGstin = (isSubBranchIssued ? activeSubBranch?.gstin : isBranchIssued ? activeBranch?.gstin : (companyDetails ? companyDetails.gstin : activeCompany?.gstin))?.trim() || ""
+  const resolvedPan = (isSubBranchIssued ? activeSubBranch?.pan : isBranchIssued ? activeBranch?.pan : (companyDetails ? companyDetails.pan : activeCompany?.pan))?.trim() || ""
 
   // Address & Contact Information
-  const resolvedAddress = (isSubBranchIssued ? activeSubBranch?.address : isBranchIssued ? activeBranch?.address : activeCompany?.address)?.trim() || ""
-  const resolvedPhone = (isSubBranchIssued ? (activeSubBranch?.phone || (activeSubBranch as any)?.partnerPhone) : isBranchIssued ? activeBranch?.phone : activeCompany?.phone)?.trim() || ""
-  const resolvedEmail = (isSubBranchIssued ? (activeSubBranch?.email || (activeSubBranch as any)?.partnerEmail) : isBranchIssued ? activeBranch?.email : activeCompany?.email)?.trim() || ""
-  const resolvedWebsite = (isSubBranchIssued ? activeSubBranch?.website : isBranchIssued ? activeBranch?.website : activeCompany?.website)?.trim() || ""
+  const resolvedAddress = (isSubBranchIssued ? activeSubBranch?.address : isBranchIssued ? activeBranch?.address : (companyDetails ? companyDetails.address : activeCompany?.address))?.trim() || ""
+  const resolvedPhone = (isSubBranchIssued ? (activeSubBranch?.phone || (activeSubBranch as any)?.partnerPhone) : isBranchIssued ? activeBranch?.phone : (companyDetails ? companyDetails.phone : activeCompany?.phone))?.trim() || ""
+  const resolvedEmail = (isSubBranchIssued ? (activeSubBranch?.email || (activeSubBranch as any)?.partnerEmail) : isBranchIssued ? activeBranch?.email : (companyDetails ? companyDetails.email : activeCompany?.email))?.trim() || ""
+  const resolvedWebsite = (isSubBranchIssued ? activeSubBranch?.website : isBranchIssued ? activeBranch?.website : (companyDetails ? companyDetails.website : activeCompany?.website))?.trim() || ""
 
   // 2. Determine if GST (>0%) or Non-GST / 0% GST Bill (Done early for Bank profile binding)
   const isExplicitNonGst = 
@@ -395,26 +395,26 @@ export function OfficialInvoiceDocument({
     "SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED"
   ).trim()
 
-  // Helper to validate non-empty string fields
+  // Helper to validate non-empty string fields (strictly ignores empty, null, and placeholder text)
   const isValidField = (val?: string | null): boolean => {
     if (!val) return false
     const s = String(val).trim().toLowerCase()
-    return s !== "" && s !== "none" && s !== "-" && s !== "null" && s !== "undefined"
+    return s !== "" && s !== "none" && s !== "-" && s !== "null" && s !== "undefined" && s !== "n/a" && s !== "na"
   }
 
   const isCustomCompany = Boolean(companyDetails)
 
-  // Parent Company baseline values (Strictly read from companyDetails when provided, without falling back to activeCompany)
+  // Parent Company baseline values (Strictly read from companyDetails or activeCompany; NO hardcoded fallback values)
   const companyGstUpi = (
     isCustomCompany 
       ? (companyDetails?.gst_upi_id ?? (companyDetails as any)?.upi_id ?? "") 
-      : (activeCompany?.gst_upi_id || activeCompany?.upi_id || paySettings?.upiId || "")
+      : (activeCompany?.gst_upi_id || activeCompany?.upi_id || "")
   )?.trim() || ""
 
   const companyNonGstUpi = (
     isCustomCompany 
       ? (companyDetails?.nongst_upi_id ?? (companyDetails as any)?.upi_id ?? "") 
-      : (activeCompany?.nongst_upi_id || activeCompany?.upi_id || paySettings?.upiId || "")
+      : (activeCompany?.nongst_upi_id || activeCompany?.upi_id || "")
   )?.trim() || ""
 
   const companyUpi = isGstInvoice ? companyGstUpi : companyNonGstUpi
@@ -422,13 +422,13 @@ export function OfficialInvoiceDocument({
   const companyGstHolder = (
     isCustomCompany 
       ? (companyDetails?.gst_account_holder ?? (companyDetails as any)?.account_holder ?? "") 
-      : (activeCompany?.gst_account_holder || activeCompany?.account_holder || paySettings?.accountHolderName || "")
+      : (activeCompany?.gst_account_holder || activeCompany?.account_holder || "")
   )?.trim() || ""
 
   const companyNonGstHolder = (
     isCustomCompany 
       ? (companyDetails?.nongst_account_holder ?? (companyDetails as any)?.account_holder ?? "") 
-      : (activeCompany?.nongst_account_holder || activeCompany?.account_holder || paySettings?.accountHolderName || "")
+      : (activeCompany?.nongst_account_holder || activeCompany?.account_holder || "")
   )?.trim() || ""
 
   const companyHolder = isGstInvoice ? companyGstHolder : companyNonGstHolder
@@ -436,13 +436,13 @@ export function OfficialInvoiceDocument({
   const companyGstBank = (
     isCustomCompany 
       ? (companyDetails?.gst_bank_name ?? (companyDetails as any)?.bank_name ?? "") 
-      : (activeCompany?.gst_bank_name || activeCompany?.bank_name || paySettings?.bankName || "")
+      : (activeCompany?.gst_bank_name || activeCompany?.bank_name || "")
   )?.trim() || ""
 
   const companyNonGstBank = (
     isCustomCompany 
       ? (companyDetails?.nongst_bank_name ?? (companyDetails as any)?.bank_name ?? "") 
-      : (activeCompany?.nongst_bank_name || activeCompany?.bank_name || paySettings?.bankName || "")
+      : (activeCompany?.nongst_bank_name || activeCompany?.bank_name || "")
   )?.trim() || ""
 
   const companyBank = isGstInvoice ? companyGstBank : companyNonGstBank
@@ -450,13 +450,13 @@ export function OfficialInvoiceDocument({
   const companyGstAccNum = (
     isCustomCompany 
       ? (companyDetails?.gst_account_number ?? (companyDetails as any)?.account_number ?? "") 
-      : (activeCompany?.gst_account_number || activeCompany?.account_number || paySettings?.accountNumber || "")
+      : (activeCompany?.gst_account_number || activeCompany?.account_number || "")
   )?.trim() || ""
 
   const companyNonGstAccNum = (
     isCustomCompany 
       ? (companyDetails?.nongst_account_number ?? (companyDetails as any)?.account_number ?? "") 
-      : (activeCompany?.nongst_account_number || activeCompany?.account_number || paySettings?.accountNumber || "")
+      : (activeCompany?.nongst_account_number || activeCompany?.account_number || "")
   )?.trim() || ""
 
   const companyAccNum = isGstInvoice ? companyGstAccNum : companyNonGstAccNum
@@ -464,13 +464,13 @@ export function OfficialInvoiceDocument({
   const companyGstIfsc = (
     isCustomCompany 
       ? (companyDetails?.gst_ifsc_code ?? (companyDetails as any)?.ifsc_code ?? "") 
-      : (activeCompany?.gst_ifsc_code || activeCompany?.ifsc_code || paySettings?.ifscCode || "")
+      : (activeCompany?.gst_ifsc_code || activeCompany?.ifsc_code || "")
   )?.trim() || ""
 
   const companyNonGstIfsc = (
     isCustomCompany 
       ? (companyDetails?.nongst_ifsc_code ?? (companyDetails as any)?.ifsc_code ?? "") 
-      : (activeCompany?.nongst_ifsc_code || activeCompany?.ifsc_code || paySettings?.ifscCode || "")
+      : (activeCompany?.nongst_ifsc_code || activeCompany?.ifsc_code || "")
   )?.trim() || ""
 
   const companyIfsc = isGstInvoice ? companyGstIfsc : companyNonGstIfsc
@@ -478,13 +478,13 @@ export function OfficialInvoiceDocument({
   const companyGstBranch = (
     isCustomCompany 
       ? (companyDetails?.gst_bank_branch ?? (companyDetails as any)?.bank_branch ?? "") 
-      : (activeCompany?.gst_bank_branch || activeCompany?.bank_branch || paySettings?.branch || "")
+      : (activeCompany?.gst_bank_branch || activeCompany?.bank_branch || "")
   )?.trim() || ""
 
   const companyNonGstBranch = (
     isCustomCompany 
       ? (companyDetails?.nongst_bank_branch ?? (companyDetails as any)?.bank_branch ?? "") 
-      : (activeCompany?.nongst_bank_branch || activeCompany?.bank_branch || paySettings?.branch || "")
+      : (activeCompany?.nongst_bank_branch || activeCompany?.bank_branch || "")
   )?.trim() || ""
 
   const companyBranch = isGstInvoice ? companyGstBranch : companyNonGstBranch
@@ -722,7 +722,7 @@ export function OfficialInvoiceDocument({
           : (companyNonGstQr || companyQr)
         )
     ) ||
-    (isCustomCompany ? "" : (activeSubBranch?.payment_qr_url || activeBranch?.payment_qr_url || companyQr || activeCompany?.payment_qr_url || paySettings?.qrCodeUrl || "")) ||
+    (isCustomCompany ? "" : (activeSubBranch?.payment_qr_url || activeBranch?.payment_qr_url || companyQr || activeCompany?.payment_qr_url || "")) ||
     (resolvedUpiId
       ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=1&ecc=M&data=${encodeURIComponent(`upi://pay?pa=${resolvedUpiId}&pn=${encodeURIComponent(resolvedAccountHolder || resolvedBrandName)}&am=${totalVal}&cu=INR`)}`
       : null

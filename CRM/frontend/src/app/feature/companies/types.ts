@@ -59,6 +59,7 @@ export interface Company {
   zoom?: number
   preview_scale?: string
   preview_invoice_type?: string
+  invoice_customization?: any
 }
 
 export interface Branch {
@@ -126,6 +127,7 @@ export interface Branch {
   zoom?: number
   preview_scale?: string
   preview_invoice_type?: string
+  invoice_customization?: any
 }
 
 export interface SubBranch {
@@ -188,5 +190,6 @@ export interface SubBranch {
   zoom?: number
   preview_scale?: string
   preview_invoice_type?: string
+  invoice_customization?: any
 }
 
