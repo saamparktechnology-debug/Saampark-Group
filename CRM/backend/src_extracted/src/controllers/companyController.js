@@ -6,9 +6,42 @@ const getAllCompanies = async (req, res, next) => {
   try {
     let query = `SELECT c.*, COUNT(DISTINCT u.id) as member_count
                  FROM companies c
-                 LEFT JOIN users u ON u.company_id = c.id AND u.deleted_at IS NULL
-                 GROUP BY c.id ORDER BY c.created_at DESC`;
-    const [companies] = await pool.execute(query);
+                 LEFT JOIN users u ON u.company_id = c.id AND u.deleted_at IS NULL`;
+    const params = [];
+
+    // Role check: If requester is authenticated and is NOT Super Admin, filter to assigned company
+    if (req.user) {
+      const userRoleId = Number(req.user.role_id);
+      const isSuper = userRoleId === 1 || String(req.user.role || req.user.role_name || '').toLowerCase().includes('super') || req.user.email === 'hiisupriya@gmail.com' || req.user.email === 'saampark.official@gmail.com';
+      
+      if (!isSuper) {
+        // Find assigned companies for this user
+        let assignedComp = req.user.company_id;
+        let assignedComps = [];
+        try {
+          const [uRows] = await pool.execute('SELECT company_id, company_ids FROM users WHERE id = ?', [req.user.id]);
+          if (uRows.length > 0) {
+            if (uRows[0].company_id) assignedComp = uRows[0].company_id;
+            if (uRows[0].company_ids) {
+              const parsed = typeof uRows[0].company_ids === 'string' ? JSON.parse(uRows[0].company_ids) : uRows[0].company_ids;
+              if (Array.isArray(parsed)) assignedComps = parsed;
+            }
+          }
+        } catch (e) {}
+
+        const allAllowed = Array.from(new Set([assignedComp, ...assignedComps].filter(Boolean))).map(s => String(s).trim());
+        if (allAllowed.length > 0) {
+          const placeholders = allAllowed.map(() => '(c.id = ? OR c.slug = ?)').join(' OR ');
+          query += ` WHERE (${placeholders})`;
+          for (const item of allAllowed) {
+            params.push(item, item);
+          }
+        }
+      }
+    }
+
+    query += ` GROUP BY c.id ORDER BY c.created_at DESC`;
+    const [companies] = await pool.execute(query, params);
     return successResponse(res, 200, 'Companies fetched', companies);
   } catch (error) { next(error); }
 };
@@ -16,7 +49,7 @@ const getAllCompanies = async (req, res, next) => {
 // ─── GET SINGLE COMPANY ────────────────────────────────────────────────────────
 const getCompanyById = async (req, res, next) => {
   try {
-    const [companies] = await pool.execute('SELECT * FROM companies WHERE id = ?', [req.params.id]);
+    const [companies] = await pool.execute('SELECT * FROM companies WHERE id = ? OR slug = ?', [req.params.id, req.params.id]);
     if (!companies.length) return errorResponse(res, 404, 'Company not found.');
     return successResponse(res, 200, 'Company found', companies[0]);
   } catch (error) { next(error); }
@@ -70,17 +103,52 @@ const createCompany = async (req, res, next) => {
 // ─── UPDATE COMPANY ────────────────────────────────────────────────────────────
 const updateCompany = async (req, res, next) => {
   try {
-    if (req.user.role_id !== 1 && req.user.role !== 'Super Admin') {
-      return errorResponse(res, 403, 'Access denied: Only Super Admin can update companies.');
+    const userRoleId = Number(req.user?.role_id);
+    const userRole = String(req.user?.role || req.user?.role_name || '').toLowerCase();
+    const isSuper = userRoleId === 1 || userRole.includes('super') || req.user?.email === 'hiisupriya@gmail.com' || req.user?.email === 'saampark.official@gmail.com';
+
+    if (!isSuper) {
+      const isAdmin = userRoleId === 2 || userRole.includes('admin');
+      if (!isAdmin) {
+        return errorResponse(res, 403, 'Access denied: You do not have permission to update company details.');
+      }
+
+      let assignedComp = req.user.company_id;
+      let assignedComps = [];
+      try {
+        const [uRows] = await pool.execute('SELECT company_id, company_ids FROM users WHERE id = ?', [req.user.id]);
+        if (uRows.length > 0) {
+          if (uRows[0].company_id) assignedComp = uRows[0].company_id;
+          if (uRows[0].company_ids) {
+            const parsed = typeof uRows[0].company_ids === 'string' ? JSON.parse(uRows[0].company_ids) : uRows[0].company_ids;
+            if (Array.isArray(parsed)) assignedComps = parsed;
+          }
+        }
+      } catch (e) {}
+
+      const allAllowed = Array.from(new Set([assignedComp, ...assignedComps].filter(Boolean))).map(s => String(s).toLowerCase().trim());
+      const targetParam = String(req.params.id).toLowerCase().trim();
+
+      const [targetRows] = await pool.execute('SELECT id, slug FROM companies WHERE id = ? OR slug = ?', [req.params.id, req.params.id]);
+      if (!targetRows.length) return errorResponse(res, 404, 'Company not found.');
+
+      const targetId = String(targetRows[0].id).toLowerCase();
+      const targetSlug = String(targetRows[0].slug || '').toLowerCase();
+
+      const canUpdate = allAllowed.some(a => a === targetParam || a === targetId || a === targetSlug);
+      if (!canUpdate) {
+        return errorResponse(res, 403, 'Access denied: You can only edit your assigned company.');
+      }
     }
     
     const allowedFields = [
       'name', 'currency', 'currency_symbol', 'logo_url', 'address', 'industry',
-      'brand_name', 'division_name', 'subtitle', 'gstin', 'pan', 'cin', 'msme_reg', 'website',
+      'brand_name', 'division_name', 'subtitle', 'iso_certification', 'gstin', 'pan', 'cin', 'msme_reg', 'website',
       'signatory_name', 'signatory_designation', 'signature_image_url', 'stamp_image_url',
       'terms_conditions', 'invoice_notes', 'upi_id', 'account_holder', 'bank_name', 'account_number', 'ifsc_code', 'bank_branch', 'payment_qr_url',
       'gst_bank_name', 'gst_account_holder', 'gst_account_number', 'gst_ifsc_code', 'gst_bank_branch', 'gst_upi_id', 'gst_payment_qr_url',
-      'nongst_bank_name', 'nongst_account_holder', 'nongst_account_number', 'nongst_ifsc_code', 'nongst_bank_branch', 'nongst_upi_id', 'nongst_payment_qr_url'
+      'nongst_bank_name', 'nongst_account_holder', 'nongst_account_number', 'nongst_ifsc_code', 'nongst_bank_branch', 'nongst_upi_id', 'nongst_payment_qr_url',
+      'signature_position', 'stamp_position', 'logo_position', 'logo_scale', 'stamp_scale', 'signature_scale', 'custom_stamps', 'zoom', 'preview_scale', 'preview_invoice_type', 'invoice_customization'
     ];
 
     const fields = [];
@@ -89,14 +157,73 @@ const updateCompany = async (req, res, next) => {
     for (const field of allowedFields) {
       if (req.body[field] !== undefined) {
         fields.push(`${field} = ?`);
-        values.push(req.body[field] === '' ? null : req.body[field]);
+        let val = req.body[field];
+        if (typeof val === 'object' && val !== null) {
+          val = JSON.stringify(val);
+        } else if (val === '') {
+          val = null;
+        }
+        values.push(val);
       }
     }
 
     if (fields.length > 0) {
       fields.push('updated_at = NOW()');
-      values.push(req.params.id);
-      await pool.execute(`UPDATE companies SET ${fields.join(', ')} WHERE id = ?`, values);
+      values.push(req.params.id, req.params.id);
+      const [updateResult] = await pool.execute(`UPDATE companies SET ${fields.join(', ')} WHERE id = ? OR slug = ?`, values).catch(err => {
+        console.warn('MySQL company update column fallback:', err.message);
+        return [null];
+      });
+
+      if (!updateResult || updateResult.affectedRows === 0) {
+        const compSlug = String(req.body.slug || req.params.id).toLowerCase();
+        const insertCols = ['name', 'slug'];
+        const insertPlaceholders = ['?', '?'];
+        const insertVals = [req.body.name || req.params.id, compSlug];
+        for (const field of allowedFields) {
+          if (field !== 'name' && field !== 'slug' && req.body[field] !== undefined) {
+            insertCols.push(field);
+            insertPlaceholders.push('?');
+            let val = req.body[field];
+            if (typeof val === 'object' && val !== null) {
+              val = JSON.stringify(val);
+            } else if (val === '') {
+              val = null;
+            }
+            insertVals.push(val);
+          }
+        }
+        await pool.execute(
+          `INSERT INTO companies (${insertCols.join(', ')}) VALUES (${insertPlaceholders.join(', ')})
+           ON DUPLICATE KEY UPDATE updated_at = NOW()`,
+          insertVals
+        ).catch(e => console.warn('Company insert fallback notice:', e.message));
+      }
+    }
+
+    // Also sync to app_data table in MySQL for guaranteed persistence
+    try {
+      const [appDataRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "companies"');
+      let currentList = [];
+      if (appDataRows.length > 0 && appDataRows[0].data_json) {
+        try { currentList = JSON.parse(appDataRows[0].data_json); } catch {}
+      }
+      if (!Array.isArray(currentList)) currentList = [];
+      const targetSlug = String(req.body.slug || req.params.id).toLowerCase();
+      const existingIdx = currentList.findIndex(c => String(c.id).toLowerCase() === targetSlug || String(c.slug || '').toLowerCase() === targetSlug);
+      const updatedComp = { ...(existingIdx >= 0 ? currentList[existingIdx] : {}), ...req.body, id: targetSlug, slug: targetSlug };
+      if (existingIdx >= 0) {
+        currentList[existingIdx] = updatedComp;
+      } else {
+        currentList.push(updatedComp);
+      }
+      await pool.execute(
+        `INSERT INTO app_data (module_key, data_json) VALUES ("companies", ?)
+         ON DUPLICATE KEY UPDATE data_json = VALUES(data_json), updated_at = NOW()`,
+        [JSON.stringify(currentList)]
+      );
+    } catch (appDataErr) {
+      console.warn('app_data sync notice:', appDataErr.message);
     }
 
     return successResponse(res, 200, 'Company updated');

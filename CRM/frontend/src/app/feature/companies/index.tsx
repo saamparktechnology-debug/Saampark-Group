@@ -297,104 +297,64 @@ export default function CompaniesMain() {
       )
       setAllUsers(cleanUsers)
 
-      // 1. Merge Companies (strictly 2 canonical companies: tech and consultancy)
-      const getCanonKey = (c: any) => {
-        const str = String(c?.slug || c?.id || c?.numeric_id || c?.name || "").toLowerCase().trim()
-        if (str === "2" || str === "consultancy" || str.includes("consult")) return "consultancy"
-        return "tech"
-      }
-
+      // 1. Merge Companies: Support all companies dynamically with full retention
       const compMap = new Map<string, Company>()
+
+      // First add baseline canonical companies
       CANONICAL_COMPANIES.forEach(c => {
-        const k = getCanonKey(c)
-        compMap.set(k, { ...c, id: k, slug: k })
+        const key = c.slug || c.id
+        compMap.set(key, { ...c })
       })
 
-      if (Array.isArray(dbComps) && dbComps.length > 0) {
-        dbComps.forEach(c => {
-          if (!isCompanyDeleted(c.id, c.slug)) {
-            const k = getCanonKey(c)
-            const prev = compMap.get(k)
-            compMap.set(k, {
-              ...prev,
-              ...c,
-              id: k,
-              slug: k,
-              logo_url: (k === "consultancy" && c.logo_url === "/saampark-logo.png") ? "" : (c.logo_url !== undefined ? c.logo_url : (prev?.logo_url || "")),
-            })
-          }
-        })
-      }
-
+      // Overlay API companies (from MySQL)
       if (Array.isArray(compRes) && compRes.length > 0) {
         compRes.forEach(c => {
           if (!isCompanyDeleted(c.id, c.slug)) {
-            const k = getCanonKey(c)
-            const prev = compMap.get(k)
-            compMap.set(k, {
-              ...prev,
-              ...c,
-              id: k,
-              slug: k,
-              logo_url: (k === "consultancy" && c.logo_url === "/saampark-logo.png") ? "" : (c.logo_url !== undefined ? c.logo_url : (prev?.logo_url || "")),
-            })
+            const key = c.slug || String(c.id)
+            const prev = compMap.get(key) || compMap.get(c.slug) || compMap.get(String(c.id))
+            compMap.set(key, { ...(prev || {}), ...c })
           }
         })
       }
 
-      const rawTech = compMap.get("tech") || CANONICAL_COMPANIES[0]
-      const rawConsult = compMap.get("consultancy") || CANONICAL_COMPANIES[1]
+      // Overlay persistent storage companies (from app_data)
+      if (Array.isArray(dbComps) && dbComps.length > 0) {
+        dbComps.forEach(c => {
+          if (!isCompanyDeleted(c.id, c.slug)) {
+            const key = c.slug || String(c.id)
+            const prev = compMap.get(key) || compMap.get(c.slug) || compMap.get(String(c.id))
+            compMap.set(key, { ...(prev || {}), ...c })
+          }
+        })
+      }
 
-      const techUsersCount = cleanUsers.filter(u => {
-        const cIds = u.companyIds || (u.companyId ? [u.companyId] : ["tech"])
-        return (Array.isArray(cIds) ? cIds : [cIds]).some((id: any) => String(id).toLowerCase().includes("tech") || id === "1")
-      }).length
+      // Also overlay current auth store companies to ensure latest edits are retained
+      const storeComps = useAuthStore.getState().companies
+      if (Array.isArray(storeComps) && storeComps.length > 0) {
+        storeComps.forEach(c => {
+          if (!isCompanyDeleted(c.id, c.slug)) {
+            const key = c.slug || String(c.id)
+            const prev = compMap.get(key) || compMap.get(c.slug) || compMap.get(String(c.id))
+            compMap.set(key, { ...(prev || {}), ...c })
+          }
+        })
+      }
 
-      const consultUsersCount = cleanUsers.filter(u => {
-        const cIds = u.companyIds || (u.companyId ? [u.companyId] : [])
-        return (Array.isArray(cIds) ? cIds : [cIds]).some((id: any) => String(id).toLowerCase().includes("consult") || id === "2")
-      }).length
-
-      const finalCompanies: Company[] = [
-        {
-          ...CANONICAL_COMPANIES[0],
-          ...rawTech,
-          id: "tech",
-          slug: "tech",
-          brand_name: rawTech.brand_name ?? "SAAMPARK",
-          division_name: rawTech.division_name !== undefined ? rawTech.division_name : "TECHNOLOGY",
-          subtitle: rawTech.subtitle !== undefined ? rawTech.subtitle : "AND RESEARCH PRIVATE LIMITED",
-          name: (rawTech.name && rawTech.name.trim() !== "") ? rawTech.name : "SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED",
-          logo_url: rawTech.logo_url !== undefined ? rawTech.logo_url : "/saampark-logo.png",
-          member_count: techUsersCount,
-          signature_position: rawTech.signature_position || { x: 0, y: 0 },
-          stamp_position: rawTech.stamp_position || { x: 0, y: 0 },
-          logo_scale: rawTech.logo_scale ?? 1,
-          stamp_scale: rawTech.stamp_scale ?? 1,
-          signature_scale: rawTech.signature_scale ?? 1,
-          custom_stamps: Array.isArray(rawTech.custom_stamps) ? rawTech.custom_stamps : [],
-          invoice_customization: rawTech.invoice_customization || { hidden_fields: [] },
-        },
-        {
-          ...CANONICAL_COMPANIES[1],
-          ...rawConsult,
-          id: "consultancy",
-          slug: "consultancy",
-          brand_name: rawConsult.brand_name ?? "SAAMPARK",
-          division_name: rawConsult.division_name !== undefined ? rawConsult.division_name : "CONSULTANCY SERVICE",
-          subtitle: rawConsult.subtitle !== undefined ? rawConsult.subtitle : "MANAGEMENT & ADVISORY SERVICES",
-          name: (rawConsult.name && rawConsult.name.trim() !== "") ? rawConsult.name : "SAAMPARK CONSULTANCY SERVICE",
-          logo_url: (rawConsult.logo_url && rawConsult.logo_url !== "/saampark-logo.png") ? rawConsult.logo_url : "",
-          member_count: consultUsersCount,
-          signature_position: rawConsult.signature_position || { x: 0, y: 0 },
-          stamp_position: rawConsult.stamp_position || { x: 0, y: 0 },
-          logo_scale: rawConsult.logo_scale ?? 1,
-          stamp_scale: rawConsult.stamp_scale ?? 1,
-          signature_scale: rawConsult.signature_scale ?? 1,
-          custom_stamps: Array.isArray(rawConsult.custom_stamps) ? rawConsult.custom_stamps : [],
-          invoice_customization: rawConsult.invoice_customization || { hidden_fields: [] },
-        },
-      ]
+      const finalCompanies: Company[] = Array.from(compMap.values()).map(c => {
+        const uCount = getUserCountForCompany(c.id || c.slug)
+        return {
+          ...c,
+          member_count: uCount,
+          signature_position: c.signature_position || { x: 0, y: 0 },
+          stamp_position: c.stamp_position || { x: 0, y: 0 },
+          logo_position: c.logo_position || { x: 0, y: 0 },
+          logo_scale: c.logo_scale ?? 1,
+          stamp_scale: c.stamp_scale ?? 1,
+          signature_scale: c.signature_scale ?? 1,
+          custom_stamps: Array.isArray(c.custom_stamps) ? c.custom_stamps : [],
+          invoice_customization: c.invoice_customization || { hidden_fields: [] },
+        }
+      })
       setCompanies(finalCompanies)
 
       // 2. Merge Branches: KEEP all branches belonging to active companies unless deleted
@@ -662,33 +622,51 @@ export default function CompaniesMain() {
       }
 
       const targetId = (editingCompany as any)?.numeric_id || editingCompany?.id || editingCompany?.slug || payload.slug
+      const compKey = editingCompany ? (editingCompany.slug || String(editingCompany.id)) : payload.slug
+
+      // 1. Immediately update React state for instant UI response
+      setCompanies(prev => {
+        const idx = prev.findIndex(c => isMatchingCompany(c, compKey))
+        if (idx >= 0) {
+          const next = [...prev]
+          next[idx] = { ...next[idx], ...payload, id: next[idx].id || payload.slug, slug: next[idx].slug || payload.slug }
+          return next
+        }
+        return [...prev, { ...payload, id: payload.slug, slug: payload.slug } as Company]
+      })
+
       if (editingCompany) {
-        await CompanyApiService.update(String(targetId), payload).catch(() => {})
-      } else {
-        await CompanyApiService.create(payload).catch(() => {})
+        setEditingCompany((prev: any) => ({ ...prev, ...payload }))
       }
 
-      // Sync into useAuthStore state, app_data, and localStorage immediately
-      const { updateCompany, addCompany, fetchCompanies: syncCompanies } = useAuthStore.getState()
-      const compKey = editingCompany ? (editingCompany.slug || String(editingCompany.id)) : payload.slug
+      // 2. Sync into useAuthStore state (now sends ALL fields to backend API)
+      const { updateCompany, addCompany } = useAuthStore.getState()
       if (editingCompany) {
         await updateCompany(compKey, payload).catch(() => {})
       } else {
         await addCompany(payload).catch(() => {})
       }
-      await syncCompanies()
 
-      // Also persist directly to app_data module storage for guaranteed retention
-      await saveModuleDataToDB("companies", useAuthStore.getState().companies, "all").catch(() => {})
+      // 3. Also directly persist full payload to MySQL via CompanyApiService
+      try {
+        if (editingCompany) {
+          await CompanyApiService.update(String(targetId), payload)
+        } else {
+          await CompanyApiService.create(payload)
+        }
+      } catch (apiErr) {
+        console.warn("Company API save warning:", apiErr)
+      }
 
+      // 4. Persist all companies to app_data for guaranteed retention
+      const currentComps = useAuthStore.getState().companies
+      await saveModuleDataToDB("companies", currentComps, "all").catch(() => {})
+
+      // 5. Dispatch events so all tabs / preview sync immediately
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("saampark_company_updated", { detail: payload }))
         window.dispatchEvent(new CustomEvent("saampark_data_synced"))
         window.dispatchEvent(new Event("storage"))
-      }
-
-      if (editingCompany) {
-        setEditingCompany((prev: any) => ({ ...prev, ...payload }))
       }
 
       if (keepModalOpen) {
@@ -698,7 +676,10 @@ export default function CompaniesMain() {
         setShowCompanyModal(false)
         setEditingCompany(null)
       }
+
+      // 6. Reload fresh data from DB to ensure UI reflects what was actually saved
       await loadData()
+      await useAuthStore.getState().fetchCompanies().catch(() => {})
     } catch (err) {
       console.error("Error saving company:", err)
       alert("Failed to save company.")

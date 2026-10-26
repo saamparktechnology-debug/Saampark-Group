@@ -762,27 +762,29 @@ export const useAuthStore = create<AuthState>()(
           // 1. Fetch companies from MySQL module data store (primary single source of truth)
           const dbCompanies = await fetchModuleDataFromDB<Company[]>('companies', [], 'all').catch(() => [])
 
-          // 2. Fetch from backend API (companies table directly)
+          // 2. Fetch from backend API (companies table directly) — include ALL fields
           let apiList: Company[] = []
           const res: any = await api.get('/companies').catch(() => null)
           if (res && (Array.isArray(res.data) || Array.isArray(res))) {
             const list = Array.isArray(res.data) ? res.data : res
             apiList = list.map((c: any) => ({
+              // Pass through ALL MySQL fields
+              ...c,
+              // Normalize identifiers
               id: c.slug || String(c.id),
               numeric_id: c.id,
-              name: c.name,
-              brand_name: c.brand_name || (c.name?.startsWith('SAAMPARK') ? 'SAAMPARK' : c.name),
-              division_name: c.division_name || (c.name ? c.name.replace(/^SAAMPARK\s+/i, '') : ''),
-              subtitle: c.subtitle || '',
               slug: c.slug || String(c.id),
+              // Computed fields with safe fallbacks
+              brand_name: c.brand_name !== undefined ? c.brand_name : (c.name?.startsWith('SAAMPARK') ? 'SAAMPARK' : c.name),
+              division_name: c.division_name !== undefined ? c.division_name : '',
+              subtitle: c.subtitle !== undefined ? c.subtitle : '',
               logo: c.logo || (c.slug === 'digital' ? '📈' : (c.slug === 'saampark-ai-solutions' ? '🤖' : '💻')),
-              logo_url: c.logo_url || '',
               currency: c.currency || 'INR',
               currency_symbol: c.currency_symbol || '₹',
               industry: c.industry || 'Technology',
-              address: c.address || '',
             }))
           }
+
 
           const map = new Map<string, Company>()
 
@@ -860,13 +862,15 @@ export const useAuthStore = create<AuthState>()(
           const rawTech = map.get('tech') || DEFAULT_COMPANIES[0]
           const rawConsult = map.get('consultancy') || DEFAULT_COMPANIES[1]
 
+          // Build sanitized companies: use rawTech/rawConsult as primary source.
+          // Only fall back to DEFAULT_COMPANIES for fields that are truly missing (undefined),
+          // NOT for fields that are empty string (user intentionally cleared them).
           const sanitizedTech: Company = {
-            ...DEFAULT_COMPANIES[0],
             ...rawTech,
             id: 'tech',
             slug: 'tech',
-            numeric_id: 1,
-            brand_name: rawTech.brand_name ?? 'SAAMPARK',
+            numeric_id: (rawTech as any).numeric_id || 1,
+            brand_name: rawTech.brand_name !== undefined ? rawTech.brand_name : 'SAAMPARK',
             division_name: rawTech.division_name !== undefined ? rawTech.division_name : 'TECHNOLOGY',
             subtitle: rawTech.subtitle !== undefined ? rawTech.subtitle : 'AND RESEARCH PRIVATE LIMITED',
             name: (rawTech.name && rawTech.name.trim() !== '') ? rawTech.name : 'SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED',
@@ -882,17 +886,15 @@ export const useAuthStore = create<AuthState>()(
           }
 
           const sanitizedConsult: Company = {
-            ...DEFAULT_COMPANIES[1],
             ...rawConsult,
             id: 'consultancy',
             slug: 'consultancy',
-            numeric_id: 2,
-            brand_name: rawConsult.brand_name ?? 'SAAMPARK',
+            numeric_id: (rawConsult as any).numeric_id || 2,
+            brand_name: rawConsult.brand_name !== undefined ? rawConsult.brand_name : 'SAAMPARK',
             division_name: rawConsult.division_name !== undefined ? rawConsult.division_name : 'CONSULTANCY SERVICE',
             subtitle: rawConsult.subtitle !== undefined ? rawConsult.subtitle : 'MANAGEMENT & ADVISORY SERVICES',
             name: (rawConsult.name && rawConsult.name.trim() !== '') ? rawConsult.name : 'SAAMPARK CONSULTANCY SERVICE',
             logo: rawConsult.logo || '💼',
-            // Consultancy starts totally fresh — never inherit technology logo
             logo_url: (rawConsult.logo_url && rawConsult.logo_url !== '/saampark-logo.png') ? rawConsult.logo_url : '',
             signature_position: rawConsult.signature_position || { x: 0, y: 0 },
             stamp_position: rawConsult.stamp_position || { x: 0, y: 0 },
@@ -935,33 +937,43 @@ export const useAuthStore = create<AuthState>()(
             return false
           }
 
-          const dbBranches = await fetchModuleDataFromDB<Branch[]>('branches', [], 'all').catch(() => null)
-          
-          let list: Branch[] = []
+          // Fetch from both sources in parallel
+          const [dbBranches, apiRes] = await Promise.all([
+            fetchModuleDataFromDB<Branch[]>('branches', [], 'all').catch(() => null),
+            api.get('/branches', { headers: { 'x-company-id': 'all' } }).catch(() => null),
+          ])
+
+          const branchMap = new Map<string, Branch>()
+
+          // 1. Load app_data branches first
           if (Array.isArray(dbBranches) && dbBranches.length > 0) {
-            list = dbBranches
-          } else {
-            const res: any = await api.get('/branches', { headers: { 'x-company-id': 'all' } }).catch(() => null)
-            if (res && (Array.isArray(res.data) || Array.isArray(res))) {
-              list = Array.isArray(res.data) ? res.data : res
-            }
+            dbBranches.forEach(b => {
+              if (!isBranchDeleted(b.id, b.code)) {
+                branchMap.set(String(b.id), { ...b })
+              }
+            })
           }
 
-          // Ensure canonical default branches (tech br-1, br-2) are always preserved as baseline unless deleted
-          const branchMap = new Map<string, Branch>()
-          DEFAULT_BRANCHES.forEach(b => {
-            if (!isBranchDeleted(b.id, b.code)) {
-              branchMap.set(String(b.id), { ...b, company_id: (b as any).company_id || (b.companyId === 'tech' ? 1 : 1) })
-            }
-          })
-
-          list.forEach(b => {
+          // 2. Overlay MySQL API branches (higher priority — this is the real DB)
+          const apiList = apiRes && (Array.isArray(apiRes.data) || Array.isArray(apiRes))
+            ? (Array.isArray(apiRes.data) ? apiRes.data : apiRes)
+            : []
+          apiList.forEach((b: Branch) => {
             if (!isBranchDeleted(b.id, b.code)) {
               const strKey = String(b.id)
               const existing = branchMap.get(strKey)
-              branchMap.set(strKey, { ...existing, ...b })
+              branchMap.set(strKey, { ...(existing || {}), ...b })
             }
           })
+
+          // 3. If both sources are empty, fall back to DEFAULT_BRANCHES as last resort only
+          if (branchMap.size === 0) {
+            DEFAULT_BRANCHES.forEach(b => {
+              if (!isBranchDeleted(b.id, b.code)) {
+                branchMap.set(String(b.id), { ...b })
+              }
+            })
+          }
 
           const currentCompanies = get().companies || DEFAULT_COMPANIES
           const filtered = Array.from(branchMap.values()).map(b => {
@@ -1181,15 +1193,64 @@ export const useAuthStore = create<AuthState>()(
           name: updates.name || getCompanyFullName({ ...target, ...updates }),
         }
 
-        // Try backend API update if available
+        // Persist ALL fields to backend API
         try {
           const apiTargetId = (target as any).numeric_id || target.id
           await api.put(`/companies/${apiTargetId}`, {
+            ...merged,
             name: merged.name,
             slug: merged.slug || merged.id,
             currency: merged.currency,
             currency_symbol: merged.currency_symbol,
             logo_url: merged.logo_url,
+            address: merged.address ?? '',
+            phone: merged.phone ?? '',
+            email: merged.email ?? '',
+            website: merged.website ?? '',
+            gstin: merged.gstin ?? '',
+            pan: merged.pan ?? '',
+            cin: merged.cin ?? '',
+            msme_reg: merged.msme_reg ?? '',
+            iso_certification: merged.iso_certification ?? '',
+            brand_name: merged.brand_name ?? '',
+            division_name: merged.division_name ?? '',
+            subtitle: merged.subtitle ?? '',
+            signatory_name: merged.signatory_name ?? '',
+            signatory_designation: merged.signatory_designation ?? '',
+            signature_image_url: merged.signature_image_url ?? '',
+            stamp_image_url: merged.stamp_image_url ?? '',
+            terms_conditions: merged.terms_conditions ?? '',
+            invoice_notes: merged.invoice_notes ?? '',
+            upi_id: merged.upi_id ?? '',
+            account_holder: merged.account_holder ?? '',
+            bank_name: merged.bank_name ?? '',
+            account_number: merged.account_number ?? '',
+            ifsc_code: merged.ifsc_code ?? '',
+            bank_branch: merged.bank_branch ?? '',
+            payment_qr_url: merged.payment_qr_url ?? '',
+            gst_bank_name: merged.gst_bank_name ?? '',
+            gst_account_holder: merged.gst_account_holder ?? '',
+            gst_account_number: merged.gst_account_number ?? '',
+            gst_ifsc_code: merged.gst_ifsc_code ?? '',
+            gst_bank_branch: merged.gst_bank_branch ?? '',
+            gst_upi_id: merged.gst_upi_id ?? '',
+            gst_payment_qr_url: merged.gst_payment_qr_url ?? '',
+            nongst_bank_name: merged.nongst_bank_name ?? '',
+            nongst_account_holder: merged.nongst_account_holder ?? '',
+            nongst_account_number: merged.nongst_account_number ?? '',
+            nongst_ifsc_code: merged.nongst_ifsc_code ?? '',
+            nongst_bank_branch: merged.nongst_bank_branch ?? '',
+            nongst_upi_id: merged.nongst_upi_id ?? '',
+            nongst_payment_qr_url: merged.nongst_payment_qr_url ?? '',
+            signature_position: merged.signature_position,
+            stamp_position: merged.stamp_position,
+            logo_scale: merged.logo_scale,
+            stamp_scale: merged.stamp_scale,
+            signature_scale: merged.signature_scale,
+            custom_stamps: merged.custom_stamps,
+            zoom: merged.zoom,
+            preview_invoice_type: merged.preview_invoice_type,
+            invoice_customization: merged.invoice_customization,
           }).catch(() => {})
         } catch {}
 

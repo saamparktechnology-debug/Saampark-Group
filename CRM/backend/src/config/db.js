@@ -19,6 +19,9 @@ const defaultPool = mysql.createPool({
 const companyPools = new Map();
 
 function getCompanyDbName(companyId) {
+  if (process.env.ENABLE_MULTI_DB !== 'true') {
+    return env.db.database;
+  }
   if (!companyId) return env.db.database;
   const str = String(companyId).toLowerCase().trim();
   if (str === 'consultancy' || str.includes('consult')) {
@@ -31,6 +34,9 @@ function getCompanyDbName(companyId) {
 }
 
 function getCompanyPool(companyId) {
+  if (process.env.ENABLE_MULTI_DB !== 'true') {
+    return defaultPool;
+  }
   const dbName = getCompanyDbName(companyId);
   if (dbName === env.db.database) {
     return defaultPool;

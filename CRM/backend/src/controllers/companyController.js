@@ -148,7 +148,7 @@ const updateCompany = async (req, res, next) => {
       'terms_conditions', 'invoice_notes', 'upi_id', 'account_holder', 'bank_name', 'account_number', 'ifsc_code', 'bank_branch', 'payment_qr_url',
       'gst_bank_name', 'gst_account_holder', 'gst_account_number', 'gst_ifsc_code', 'gst_bank_branch', 'gst_upi_id', 'gst_payment_qr_url',
       'nongst_bank_name', 'nongst_account_holder', 'nongst_account_number', 'nongst_ifsc_code', 'nongst_bank_branch', 'nongst_upi_id', 'nongst_payment_qr_url',
-      'signature_position', 'stamp_position', 'logo_position', 'logo_scale', 'stamp_scale', 'signature_scale', 'custom_stamps', 'invoice_customization'
+      'signature_position', 'stamp_position', 'logo_position', 'logo_scale', 'stamp_scale', 'signature_scale', 'custom_stamps', 'zoom', 'preview_scale', 'preview_invoice_type', 'invoice_customization'
     ];
 
     const fields = [];
@@ -170,9 +170,60 @@ const updateCompany = async (req, res, next) => {
     if (fields.length > 0) {
       fields.push('updated_at = NOW()');
       values.push(req.params.id, req.params.id);
-      await pool.execute(`UPDATE companies SET ${fields.join(', ')} WHERE id = ? OR slug = ?`, values).catch(err => {
+      const [updateResult] = await pool.execute(`UPDATE companies SET ${fields.join(', ')} WHERE id = ? OR slug = ?`, values).catch(err => {
         console.warn('MySQL company update column fallback:', err.message);
+        return [null];
       });
+
+      if (!updateResult || updateResult.affectedRows === 0) {
+        const compSlug = String(req.body.slug || req.params.id).toLowerCase();
+        const insertCols = ['name', 'slug'];
+        const insertPlaceholders = ['?', '?'];
+        const insertVals = [req.body.name || req.params.id, compSlug];
+        for (const field of allowedFields) {
+          if (field !== 'name' && field !== 'slug' && req.body[field] !== undefined) {
+            insertCols.push(field);
+            insertPlaceholders.push('?');
+            let val = req.body[field];
+            if (typeof val === 'object' && val !== null) {
+              val = JSON.stringify(val);
+            } else if (val === '') {
+              val = null;
+            }
+            insertVals.push(val);
+          }
+        }
+        await pool.execute(
+          `INSERT INTO companies (${insertCols.join(', ')}) VALUES (${insertPlaceholders.join(', ')})
+           ON DUPLICATE KEY UPDATE updated_at = NOW()`,
+          insertVals
+        ).catch(e => console.warn('Company insert fallback notice:', e.message));
+      }
+    }
+
+    // Also sync to app_data table in MySQL for guaranteed persistence
+    try {
+      const [appDataRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "companies"');
+      let currentList = [];
+      if (appDataRows.length > 0 && appDataRows[0].data_json) {
+        try { currentList = JSON.parse(appDataRows[0].data_json); } catch {}
+      }
+      if (!Array.isArray(currentList)) currentList = [];
+      const targetSlug = String(req.body.slug || req.params.id).toLowerCase();
+      const existingIdx = currentList.findIndex(c => String(c.id).toLowerCase() === targetSlug || String(c.slug || '').toLowerCase() === targetSlug);
+      const updatedComp = { ...(existingIdx >= 0 ? currentList[existingIdx] : {}), ...req.body, id: targetSlug, slug: targetSlug };
+      if (existingIdx >= 0) {
+        currentList[existingIdx] = updatedComp;
+      } else {
+        currentList.push(updatedComp);
+      }
+      await pool.execute(
+        `INSERT INTO app_data (module_key, data_json) VALUES ("companies", ?)
+         ON DUPLICATE KEY UPDATE data_json = VALUES(data_json), updated_at = NOW()`,
+        [JSON.stringify(currentList)]
+      );
+    } catch (appDataErr) {
+      console.warn('app_data sync notice:', appDataErr.message);
     }
 
     return successResponse(res, 200, 'Company updated');

@@ -19,19 +19,25 @@ const getStoreData = async (req, res, next) => {
   try {
     const { key } = req.params;
     const companyId = req.query.company_id || req.query.companyId;
-    const activePool = pool.getCompanyPool ? pool.getCompanyPool(companyId) : pool;
+    let activePool = pool;
+    try {
+      if (pool.getCompanyPool) activePool = pool.getCompanyPool(companyId);
+    } catch {
+      activePool = pool;
+    }
     const deletedSet = await getDeletedItemIds(activePool, key);
 
     // 1. If companyId provided (and not 'all')
     if (companyId && companyId !== 'all') {
       const compKey = `${key}_${companyId}`;
-      let [compRows] = await activePool.execute('SELECT data_json FROM app_data WHERE module_key = ?', [compKey]);
-      
-      // Fallback check on base pool if separate DB is empty
-      if (compRows.length === 0 && activePool !== pool) {
+      let compRows = [];
+      try {
+        const [rows] = await activePool.execute('SELECT data_json FROM app_data WHERE module_key = ?', [compKey]);
+        compRows = rows;
+      } catch (err) {
         try {
           const [fallbackRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = ?', [compKey]);
-          if (fallbackRows.length > 0) compRows = fallbackRows;
+          compRows = fallbackRows;
         } catch {}
       }
 
@@ -108,16 +114,33 @@ const saveStoreData = async (req, res, next) => {
     }
 
     const dataJson = JSON.stringify(data);
-    const activePool = pool.getCompanyPool ? pool.getCompanyPool(targetCompanyId) : pool;
+    let activePool = pool;
+    try {
+      if (pool.getCompanyPool) activePool = pool.getCompanyPool(targetCompanyId);
+    } catch {
+      activePool = pool;
+    }
 
     // Save strictly to company key if targetCompanyId is specified
     if (targetCompanyId && targetCompanyId !== 'all') {
       const compKey = `${key}_${targetCompanyId}`;
-      await activePool.execute(
-        `INSERT INTO app_data (module_key, data_json) VALUES (?, ?)
-         ON DUPLICATE KEY UPDATE data_json = VALUES(data_json), updated_at = NOW()`,
-        [compKey, dataJson]
-      );
+      try {
+        await activePool.execute(
+          `INSERT INTO app_data (module_key, data_json) VALUES (?, ?)
+           ON DUPLICATE KEY UPDATE data_json = VALUES(data_json), updated_at = NOW()`,
+          [compKey, dataJson]
+        );
+      } catch (saveErr) {
+        if (activePool !== pool) {
+          await pool.execute(
+            `INSERT INTO app_data (module_key, data_json) VALUES (?, ?)
+             ON DUPLICATE KEY UPDATE data_json = VALUES(data_json), updated_at = NOW()`,
+            [compKey, dataJson]
+          );
+        } else {
+          throw saveErr;
+        }
+      }
       // Also sync to default pool for cross-company master indexing
       if (activePool !== pool) {
         try {
@@ -130,11 +153,23 @@ const saveStoreData = async (req, res, next) => {
       }
     } else {
       // Save to global key
-      await activePool.execute(
-        `INSERT INTO app_data (module_key, data_json) VALUES (?, ?)
-         ON DUPLICATE KEY UPDATE data_json = VALUES(data_json), updated_at = NOW()`,
-        [key, dataJson]
-      );
+      try {
+        await activePool.execute(
+          `INSERT INTO app_data (module_key, data_json) VALUES (?, ?)
+           ON DUPLICATE KEY UPDATE data_json = VALUES(data_json), updated_at = NOW()`,
+          [key, dataJson]
+        );
+      } catch (saveErr) {
+        if (activePool !== pool) {
+          await pool.execute(
+            `INSERT INTO app_data (module_key, data_json) VALUES (?, ?)
+             ON DUPLICATE KEY UPDATE data_json = VALUES(data_json), updated_at = NOW()`,
+            [key, dataJson]
+          );
+        } else {
+          throw saveErr;
+        }
+      }
     }
 
     return successResponse(res, 200, 'Module data saved to MySQL database successfully');
