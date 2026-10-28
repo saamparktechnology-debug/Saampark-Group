@@ -216,7 +216,13 @@ const login = async (req, res, next) => {
                 (u.email && u.email.toLowerCase().trim() === identifier) || 
                 (u.username && u.username.toLowerCase().replace(/^@/, '').trim() === identifier)
               );
-              if (matched && (matched.password === password || password === 'Password123')) {
+              let isMatch = false;
+              if (matched && matched.password_hash) {
+                isMatch = await comparePassword(password, matched.password_hash);
+              } else if (matched && matched.password) {
+                isMatch = (matched.password === password);
+              }
+              if (matched && isMatch) {
                 // Check if user is Super Admin
                 const mRole = String(matched.role || '').toLowerCase();
                 const isSuper = mRole.includes('super') || matched.role_id === 1 || matched.email === 'hiisupriya@gmail.com' || matched.email === 'saampark.official@gmail.com';
@@ -269,7 +275,43 @@ const login = async (req, res, next) => {
       return errorResponse(res, 403, 'Your account is on inactive stage, please contact your administration.');
     }
 
-    const isMatch = await comparePassword(password, user.password_hash);
+    let isMatch = await comparePassword(password, user.password_hash);
+    if (!isMatch && password.trim() !== password) {
+      isMatch = await comparePassword(password.trim(), user.password_hash);
+    }
+
+    if (!isMatch) {
+      // Auto-heal check: Did password change in app_data JSON users store?
+      try {
+        const [appDataRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "users"');
+        if (appDataRows.length > 0 && appDataRows[0].data_json) {
+          const list = JSON.parse(appDataRows[0].data_json);
+          if (Array.isArray(list)) {
+            const matched = list.find((u) => 
+              (u.email && u.email.toLowerCase().trim() === identifier) ||
+              (u.username && u.username.toLowerCase().replace(/^@/, '').trim() === identifier)
+            );
+            if (matched) {
+              let appDataMatch = false;
+              if (matched.password_hash) {
+                appDataMatch = await comparePassword(password, matched.password_hash) || await comparePassword(password.trim(), matched.password_hash);
+              } else if (matched.password) {
+                appDataMatch = (matched.password === password || matched.password === password.trim());
+              }
+              if (appDataMatch) {
+                isMatch = true;
+                // Auto-heal MySQL users table password_hash
+                const healedHash = await hashPassword(password.trim());
+                await pool.execute('UPDATE users SET password_hash = ? WHERE id = ?', [healedHash, user.id]);
+              }
+            }
+          }
+        }
+      } catch (syncErr) {
+        console.warn('Password auto-heal check error:', syncErr.message);
+      }
+    }
+
     if (!isMatch) {
       return errorResponse(res, 401, 'Invalid password. Please try again.');
     }
@@ -477,7 +519,8 @@ const resetPassword = async (req, res, next) => {
         if (Array.isArray(list)) {
           const idx = list.findIndex((u) => u.email && u.email.toLowerCase().trim() === email.toLowerCase().trim());
           if (idx >= 0) {
-            list[idx].password = newPassword;
+            list[idx].password_hash = hashedPassword;
+            delete list[idx].password;
             await pool.execute(
               `INSERT INTO app_data (module_key, data_json) VALUES ('users', ?)
                ON DUPLICATE KEY UPDATE data_json = VALUES(data_json), updated_at = NOW()`,

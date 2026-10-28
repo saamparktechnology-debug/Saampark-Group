@@ -186,6 +186,7 @@ export interface Company {
   brand_name?: string
   division_name?: string
   subtitle?: string
+  trademark_symbol?: string
   slug?: string
   logo?: string
   logo_url?: string
@@ -1186,9 +1187,12 @@ export const useAuthStore = create<AuthState>()(
         const merged: Company = {
           ...target,
           ...updates,
+          id: updates.slug || target.id,
+          slug: updates.slug || target.slug,
           brand_name: updates.brand_name !== undefined ? updates.brand_name : (target.brand_name || 'SAAMPARK'),
           division_name: updates.division_name !== undefined ? updates.division_name : (target.division_name || ''),
           subtitle: updates.subtitle !== undefined ? updates.subtitle : (target.subtitle || ''),
+          trademark_symbol: updates.trademark_symbol !== undefined ? updates.trademark_symbol : (target.trademark_symbol || ''),
           logo_url: updates.logo_url !== undefined ? updates.logo_url : (target.logo_url || ''),
           name: updates.name || getCompanyFullName({ ...target, ...updates }),
         }
@@ -1200,6 +1204,7 @@ export const useAuthStore = create<AuthState>()(
             ...merged,
             name: merged.name,
             slug: merged.slug || merged.id,
+            trademark_symbol: merged.trademark_symbol ?? '',
             currency: merged.currency,
             currency_symbol: merged.currency_symbol,
             logo_url: merged.logo_url,

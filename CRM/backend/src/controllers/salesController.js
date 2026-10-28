@@ -228,9 +228,22 @@ const debitNoteController = {
 const invoiceController = {
   async getAll(req, res) {
     try {
-      const companyId = req.headers['x-company-id'] || req.user?.company_id || req.query?.company_id;
+      const userRoleId = Number(req.user?.role_id);
+      const userRole = String(req.user?.role || req.user?.role_name || '').toLowerCase();
+      const isSuperAdmin = userRoleId === 1 || userRole.includes('super');
+
+      let companyId;
+      if (isSuperAdmin) {
+        companyId = req.headers['x-company-id'] || req.query?.company_id || req.user?.company_id;
+      } else {
+        companyId = req.user?.company_id;
+      }
       if (!companyId) return errorResponse(res, 400, 'Company ID is required');
-      const branchId = req.headers['x-branch-id'] || req.query.branch_id || req.user?.branch_id;
+
+      const branchId = isSuperAdmin 
+        ? (req.headers['x-branch-id'] || req.query.branch_id || req.user?.branch_id)
+        : (req.user?.branch_id || req.headers['x-branch-id'] || req.query.branch_id);
+
       let query = `
         SELECT i.*, c.company_name as client_company_name, c.primary_contact_name as client_contact_name,
                b.name as branch_name
@@ -271,13 +284,29 @@ const invoiceController = {
 
   async create(req, res) {
     try {
-      const companyId = req.headers['x-company-id'] || req.user?.company_id || req.body.company_id;
+      const userRoleId = Number(req.user?.role_id);
+      const userRole = String(req.user?.role || req.user?.role_name || '').toLowerCase();
+      const isSuperAdmin = userRoleId === 1 || userRole.includes('super');
+
+      const companyId = isSuperAdmin
+        ? (req.headers['x-company-id'] || req.body.company_id || req.user?.company_id)
+        : req.user?.company_id;
       if (!companyId) return errorResponse(res, 400, 'Company ID is required');
-      const branchId = req.body.branch_id || req.headers['x-branch-id'] || req.user?.branch_id || null;
+
+      const branchId = isSuperAdmin
+        ? (req.body.branch_id || req.headers['x-branch-id'] || req.user?.branch_id || null)
+        : (req.user?.branch_id || req.body.branch_id || null);
+
       const { client_id, subtotal, total_amount, due_date, notes, status, invoice_number } = req.body;
 
-      const [count] = await require('../config/db').execute('SELECT COUNT(*) as cnt FROM invoices WHERE company_id = ?', [companyId]);
-      const num = invoice_number || `INV-${new Date().getFullYear()}-${String(count[0].cnt + 1).padStart(3, '0')}`;
+      const now = new Date();
+      const d = String(now.getDate()).padStart(2, '0');
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const y = String(now.getFullYear());
+      const dateStr = `${d}${m}${y}`;
+      const isNonGst = Boolean(req.body.is_nongst || req.body.is_non_gst || req.body.scheme === 'Non-GST' || req.body.type === 'nongst');
+      const prefix = isNonGst ? `NG-${dateStr}` : `INV-${dateStr}`;
+      const num = invoice_number || `${prefix}${String(count[0].cnt + 1).padStart(3, '0')}`;
 
       const [result] = await require('../config/db').execute(
         `INSERT INTO invoices (company_id, branch_id, client_id, invoice_number, subtotal, total_amount, status, due_date, notes, created_by)
@@ -293,6 +322,17 @@ const invoiceController = {
 
   async update(req, res) {
     try {
+      const userRoleId = Number(req.user?.role_id);
+      const userRole = String(req.user?.role || req.user?.role_name || '').toLowerCase();
+      const isSuperAdmin = userRoleId === 1 || userRole.includes('super');
+
+      // Check ownership
+      const [inv] = await require('../config/db').execute('SELECT company_id FROM invoices WHERE id = ?', [req.params.id]);
+      if (!inv.length) return errorResponse(res, 404, 'Invoice not found');
+      if (!isSuperAdmin && String(inv[0].company_id) !== String(req.user?.company_id)) {
+        return errorResponse(res, 403, 'Access denied: You can only edit invoices for your assigned company');
+      }
+
       const fields = [];
       const values = [];
       for (const [key, val] of Object.entries(req.body)) {
@@ -312,6 +352,16 @@ const invoiceController = {
 
   async delete(req, res) {
     try {
+      const userRoleId = Number(req.user?.role_id);
+      const userRole = String(req.user?.role || req.user?.role_name || '').toLowerCase();
+      const isSuperAdmin = userRoleId === 1 || userRole.includes('super');
+
+      const [inv] = await require('../config/db').execute('SELECT company_id FROM invoices WHERE id = ?', [req.params.id]);
+      if (!inv.length) return errorResponse(res, 404, 'Invoice not found');
+      if (!isSuperAdmin && String(inv[0].company_id) !== String(req.user?.company_id)) {
+        return errorResponse(res, 403, 'Access denied: You can only delete invoices for your assigned company');
+      }
+
       await require('../config/db').execute('DELETE FROM invoices WHERE id = ?', [req.params.id]);
       return successResponse(res, 200, 'Invoice deleted');
     } catch (err) {

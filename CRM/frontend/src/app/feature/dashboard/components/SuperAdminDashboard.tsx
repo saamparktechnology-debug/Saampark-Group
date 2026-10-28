@@ -272,16 +272,36 @@ export function SuperAdminDashboard() {
   }
 
   // -------------------------------------------------------------------------
-  // REAL 3 COMPANIES BREAKDOWN (STRICTLY 3 COMPANIES)
+  // TARGET SCOPED ENTITIES (RESPECTS COMPANY ADMIN SCOPE & TOPBAR SELECTION)
   // -------------------------------------------------------------------------
+  const targetCompanies = React.useMemo(() => {
+    if (!isSuperAdmin) {
+      return allowedCompanies
+    }
+    if (activeCompanyId && activeCompanyId !== "all") {
+      return companies.filter(c => isMatchingCompany(c, activeCompanyId))
+    }
+    return companies
+  }, [isSuperAdmin, allowedCompanies, companies, activeCompanyId])
+
+  const targetBranches = React.useMemo(() => {
+    if (!isSuperAdmin) {
+      return allowedBranches
+    }
+    if (activeCompanyId && activeCompanyId !== "all") {
+      return branches.filter(b => isMatchingCompany({ id: b.companyId, slug: b.companyId } as any, activeCompanyId))
+    }
+    return branches
+  }, [isSuperAdmin, allowedBranches, branches, activeCompanyId])
+
   // -------------------------------------------------------------------------
   // DYNAMIC COMPANIES BREAKDOWN
   // -------------------------------------------------------------------------
   const realCompaniesData: CompanyRow[] = React.useMemo(() => {
     const palette = ["#2563eb", "#10b981", "#8b5cf6", "#f59e0b", "#ec4899", "#06b6d4"]
     
-    const validCompanies = Array.isArray(companies) ? companies : []
-    const validBranches = Array.isArray(branches) ? branches : []
+    const validCompanies = Array.isArray(targetCompanies) ? targetCompanies : []
+    const validBranches = Array.isArray(targetBranches) ? targetBranches : []
     const validUsers = Array.isArray(dbUsers) ? dbUsers : []
     const validProjects = Array.isArray(dbProjects) ? dbProjects : []
     const validInvoices = Array.isArray(dbInvoices) ? dbInvoices : []
@@ -340,13 +360,20 @@ export function SuperAdminDashboard() {
       ...r,
       percent: Math.round(((Number(r?.revenue) || 0) / totalRev) * 1000) / 10
     }))
-  }, [companies, branches, dbUsers, dbProjects, dbInvoices])
+  }, [targetCompanies, targetBranches, dbUsers, dbProjects, dbInvoices])
 
   // Total calculated metrics
-  const totalCompaniesCount = (companies || []).length
-  const totalBranchesCount = (branches || []).length
-  const activeUsersCount = (dbUsers || []).length
-  const activeProjectsCount = (dbProjects || []).length
+  const totalCompaniesCount = targetCompanies.length
+  const totalBranchesCount = targetBranches.length
+  const activeUsersCount = (dbUsers || []).filter(u => {
+    if (isSuperAdmin && (!activeCompanyId || activeCompanyId === "all")) return true
+    const userComp = u.companyId || u.company_id || u.company
+    return targetCompanies.some(c => isMatchingCompany(c, userComp))
+  }).length
+  const activeProjectsCount = (dbProjects || []).filter(p => {
+    if (isSuperAdmin && (!activeCompanyId || activeCompanyId === "all")) return true
+    return targetCompanies.some(c => isMatchingCompany(c, p.companyId))
+  }).length
   const totalRevenueNumber = (realCompaniesData || []).reduce((s, c) => s + (Number(c?.revenue) || 0), 0)
   const totalOutstandingNumber = (realCompaniesData || []).reduce((s, c) => s + (Number(c?.outstanding) || 0), 0)
   const totalReceivedNumber = Math.max(0, totalRevenueNumber - totalOutstandingNumber)
@@ -355,8 +382,8 @@ export function SuperAdminDashboard() {
   // DYNAMIC BRANCHES BREAKDOWN (INCLUDING ALL NEWLY CREATED BRANCHES)
   // -------------------------------------------------------------------------
   const realBranchesData: BranchRow[] = React.useMemo(() => {
-    const validBranches = Array.isArray(branches) ? branches : []
-    const validCompanies = Array.isArray(companies) ? companies : []
+    const validBranches = Array.isArray(targetBranches) ? targetBranches : []
+    const validCompanies = Array.isArray(targetCompanies) ? targetCompanies : []
     const validUsers = Array.isArray(dbUsers) ? dbUsers : []
     const validProjects = Array.isArray(dbProjects) ? dbProjects : []
     const validInvoices = Array.isArray(dbInvoices) ? dbInvoices : []
@@ -403,7 +430,7 @@ export function SuperAdminDashboard() {
         outstanding: realOut
       }
     }).filter(Boolean) as BranchRow[]
-  }, [branches, companies, dbUsers, dbProjects, dbInvoices])
+  }, [targetBranches, targetCompanies, dbUsers, dbProjects, dbInvoices])
 
   // Active Company / Branch Display Names
   const activeCompanyObj = (companies || []).find(c => c && isMatchingCompany(c, activeCompanyId))

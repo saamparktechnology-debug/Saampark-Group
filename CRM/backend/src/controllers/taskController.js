@@ -21,12 +21,26 @@ const createTask = async (req, res, next) => {
 // Get All Tasks
 const getAllTasks = async (req, res, next) => {
   try {
-    const [tasks] = await pool.execute(
-      `SELECT t.*, u.full_name as assigned_to_name 
-       FROM tasks t 
-       LEFT JOIN users u ON t.assigned_to = u.id 
-       ORDER BY t.due_date ASC`
-    );
+    const userRoleId = Number(req.user?.role_id);
+    const userRole = String(req.user?.role || req.user?.role_name || '').toLowerCase();
+    const isSuperAdmin = userRoleId === 1 || userRole.includes('super');
+
+    let query = `
+      SELECT t.*, u.full_name as assigned_to_name 
+      FROM tasks t 
+      LEFT JOIN users u ON t.assigned_to = u.id 
+      WHERE 1=1
+    `;
+    const params = [];
+
+    if (!isSuperAdmin) {
+      const userComp = req.user?.company_id || 1;
+      query += ' AND (u.company_id = ? OR t.assigned_to = ?)';
+      params.push(userComp, req.user?.id);
+    }
+
+    query += ' ORDER BY t.due_date ASC';
+    const [tasks] = await pool.execute(query, params);
     return successResponse(res, 200, 'Tasks fetched successfully', tasks);
   } catch (error) {
     next(error);

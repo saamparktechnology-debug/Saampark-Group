@@ -52,6 +52,9 @@ async function checkDbConnection() {
     try {
       await connection.execute('ALTER TABLE users ADD COLUMN company_ids TEXT NULL');
     } catch {}
+    try {
+      await connection.execute('ALTER TABLE companies ADD COLUMN trademark_symbol VARCHAR(10) NULL');
+    } catch {}
     connection.release();
   } catch (error) {
     console.error('⚠️ MySQL Connection warning (will retry on request):', error.message);

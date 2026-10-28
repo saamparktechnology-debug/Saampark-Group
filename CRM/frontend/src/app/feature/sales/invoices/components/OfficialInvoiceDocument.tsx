@@ -345,25 +345,23 @@ export function OfficialInvoiceDocument({
   const signatureScale = propSignatureScale ?? entitySigScale ?? 1
   const customStamps: CustomTextStamp[] = (propCustomStamps && propCustomStamps.length > 0) ? propCustomStamps : (entityCustomStamps || [])
 
-  const resolvedBrandName = activeSubBranch?.brand_name || activeSubBranch?.name || activeBranch?.brand_name || activeCompany?.brand_name || activeCompany?.name || "SAAMPARK"
-  const resolvedDivisionName = (activeSubBranch?.division_name && activeSubBranch.division_name.trim()) 
-    ? activeSubBranch.division_name.trim() 
-    : ((activeBranch?.division_name && activeBranch.division_name.trim()) 
-      ? activeBranch.division_name.trim() 
-      : (activeCompany?.division_name?.trim() || ""))
-  const resolvedSubtitle = activeSubBranch?.subtitle || activeBranch?.subtitle || activeCompany?.subtitle || ""
-  const resolvedLogoUrl = overrideLogoUrl || activeSubBranch?.logo_url || activeBranch?.logo_url || getCompanyLogoUrl(activeCompany) || activeCompany?.logo_url || ""
+  // Corporate Entity Details (Corporate identity remains intact forever; branches/sub-branches appear in their designated hierarchy strip)
+  const resolvedBrandName = companyDetails?.brand_name || activeCompany?.brand_name || activeCompany?.name || "SAAMPARK"
+  const resolvedDivisionName = companyDetails?.division_name !== undefined ? companyDetails.division_name : (activeCompany?.division_name || "")
+  const resolvedSubtitle = companyDetails?.subtitle !== undefined ? companyDetails.subtitle : (activeCompany?.subtitle || "")
+  const resolvedTrademarkSymbol = (companyDetails?.trademark_symbol || activeCompany?.trademark_symbol || (activeCompany as any)?.invoice_customization?.trademark_symbol || "").trim()
+  const resolvedLogoUrl = overrideLogoUrl || getCompanyLogoUrl(activeCompany) || activeCompany?.logo_url || companyDetails?.logo_url || ""
 
-  // Specific Entity Legal IDs (Check companyDetails first when provided; don't fall back to other company IDs)
-  const resolvedCin = (isSubBranchIssued ? activeSubBranch?.cin : isBranchIssued ? activeBranch?.cin : (companyDetails ? companyDetails.cin : activeCompany?.cin))?.trim() || ""
-  const resolvedGstin = (isSubBranchIssued ? activeSubBranch?.gstin : isBranchIssued ? activeBranch?.gstin : (companyDetails ? companyDetails.gstin : activeCompany?.gstin))?.trim() || ""
-  const resolvedPan = (isSubBranchIssued ? activeSubBranch?.pan : isBranchIssued ? activeBranch?.pan : (companyDetails ? companyDetails.pan : activeCompany?.pan))?.trim() || ""
+  // Specific Entity Legal IDs (Belongs to Company)
+  const resolvedCin = (companyDetails ? companyDetails.cin : activeCompany?.cin)?.trim() || ""
+  const resolvedGstin = (companyDetails ? companyDetails.gstin : activeCompany?.gstin)?.trim() || ""
+  const resolvedPan = (companyDetails ? companyDetails.pan : activeCompany?.pan)?.trim() || ""
 
-  // Address & Contact Information
-  const resolvedAddress = (isSubBranchIssued ? activeSubBranch?.address : isBranchIssued ? activeBranch?.address : (companyDetails ? companyDetails.address : activeCompany?.address))?.trim() || ""
-  const resolvedPhone = (isSubBranchIssued ? (activeSubBranch?.phone || (activeSubBranch as any)?.partnerPhone) : isBranchIssued ? activeBranch?.phone : (companyDetails ? companyDetails.phone : activeCompany?.phone))?.trim() || ""
-  const resolvedEmail = (isSubBranchIssued ? (activeSubBranch?.email || (activeSubBranch as any)?.partnerEmail) : isBranchIssued ? activeBranch?.email : (companyDetails ? companyDetails.email : activeCompany?.email))?.trim() || ""
-  const resolvedWebsite = (isSubBranchIssued ? activeSubBranch?.website : isBranchIssued ? activeBranch?.website : (companyDetails ? companyDetails.website : activeCompany?.website))?.trim() || ""
+  // Address & Contact Information (Corporate entity defaults)
+  const resolvedAddress = (companyDetails ? companyDetails.address : activeCompany?.address)?.trim() || ""
+  const resolvedPhone = (companyDetails ? companyDetails.phone : activeCompany?.phone)?.trim() || ""
+  const resolvedEmail = (companyDetails ? companyDetails.email : activeCompany?.email)?.trim() || ""
+  const resolvedWebsite = (companyDetails ? companyDetails.website : activeCompany?.website)?.trim() || ""
 
   // 2. Determine if GST (>0%) or Non-GST / 0% GST Bill (Done early for Bank profile binding)
   const isExplicitNonGst = 
@@ -394,6 +392,26 @@ export function OfficialInvoiceDocument({
     `${resolvedBrandName} ${resolvedDivisionName}`.trim() || 
     "SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED"
   ).trim()
+
+  // Split Corporate Brand & Division for Top Header Typography
+  // Top line: SAAMPARK (with optional TM/R pill badge)
+  // Second line: TECHNOLOGY AND RESEARCH PRIVATE LIMITED (or CONSULTANCY SERVICES / division_name)
+  let headerBrandName = (resolvedBrandName || "SAAMPARK").toUpperCase().trim()
+  let headerSecondaryLine = (resolvedDivisionName || "").toUpperCase().trim()
+  
+  if (!headerSecondaryLine && fullRegisteredCompanyName) {
+    const upperFull = fullRegisteredCompanyName.toUpperCase().trim()
+    if (upperFull.startsWith(headerBrandName + " ")) {
+      headerSecondaryLine = upperFull.substring(headerBrandName.length + 1).trim()
+    } else if (upperFull.startsWith("SAAMPARK ")) {
+      headerBrandName = "SAAMPARK"
+      headerSecondaryLine = upperFull.substring(9).trim()
+    }
+  }
+
+  if (resolvedSubtitle && !headerSecondaryLine.includes(resolvedSubtitle.toUpperCase())) {
+    headerSecondaryLine = headerSecondaryLine ? `${headerSecondaryLine} ${resolvedSubtitle.toUpperCase()}` : resolvedSubtitle.toUpperCase()
+  }
 
   // Helper to validate non-empty string fields (strictly ignores empty, null, and placeholder text)
   const isValidField = (val?: string | null): boolean => {
@@ -616,14 +634,16 @@ export function OfficialInvoiceDocument({
       : (activeCompany as any)?.iso_certification
   ) ?? "An ISO 9001:2015 Certified Company"
 
-  // Terms & Conditions / Notes (Strictly inherited from company settings with optional invoice override)
+  // Terms & Conditions / Notes (Inherited across Company, Branch, Sub-Branch with optional invoice override)
   const resolvedTermsAndNotes = (
     (invoice as any)?.terms ||
     (invoice as any)?.notes ||
-    companyDetails?.invoice_notes ||
-    activeCompany?.invoice_notes ||
+    (isSubBranchIssued ? (activeSubBranch?.terms_conditions || (activeSubBranch as any)?.invoice_notes) : null) ||
+    (isBranchIssued ? (activeBranch?.terms_conditions || (activeBranch as any)?.invoice_notes) : null) ||
     companyDetails?.terms_conditions ||
+    companyDetails?.invoice_notes ||
     activeCompany?.terms_conditions ||
+    activeCompany?.invoice_notes ||
     "1. E. & O.E.\n2. Total payment due within due date to avoid suspension/cancellation.\n3. Please include invoice number in payment notes.\n4. All disputes subject to local jurisdiction."
   )?.trim()
 
@@ -944,28 +964,34 @@ export function OfficialInvoiceDocument({
         {/* Title, Full Company Name, Subtitle, ISO Badge & Legal IDs */}
         <div className="space-y-1.5 flex-1 min-w-0 pt-0.5">
           <div>
-            {/* Primary Official Registered Corporate Name */}
-            <EditableText
-              as="h1"
-              value={fullRegisteredCompanyName}
-              onChange={(val) => onFieldChange?.("name", val)}
-              interactive={interactive}
-              fieldKey="name"
-              className="text-base sm:text-lg font-black tracking-tight leading-tight text-zinc-950 uppercase font-sans"
-            />
+            {/* Primary Corporate Brand Name with TM/R pill badge */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <EditableText
+                as="h1"
+                value={headerBrandName}
+                onChange={(val) => onFieldChange?.("brand_name", val)}
+                interactive={interactive}
+                fieldKey="brand_name"
+                className="text-lg sm:text-xl font-black tracking-tight leading-none text-zinc-950 uppercase font-sans"
+              />
+              {resolvedTrademarkSymbol ? (
+                <span className="inline-flex items-center justify-center border border-zinc-700/60 text-zinc-800 text-[8px] font-black px-1.5 py-0.2 rounded-full uppercase leading-none shadow-2xs">
+                  {resolvedTrademarkSymbol === "R" || resolvedTrademarkSymbol === "®" ? "®" : resolvedTrademarkSymbol}
+                </span>
+              ) : null}
+            </div>
 
-            {/* If a distinct subtitle/tagline is defined, display it */}
-            {(resolvedSubtitle || interactive) && (
+            {/* Secondary Corporate Line (Division / Subtitle / Legal Entity Name) */}
+            {headerSecondaryLine ? (
               <EditableText
                 as="h2"
-                value={resolvedSubtitle}
-                onChange={(val) => onFieldChange?.("subtitle", val)}
+                value={headerSecondaryLine}
+                onChange={(val) => onFieldChange?.("division_name", val)}
                 interactive={interactive}
-                fieldKey="subtitle"
-                placeholder="Add company subtitle or division tagline..."
-                className="text-[10.5px] sm:text-[11px] font-semibold text-zinc-600 tracking-wider mt-0.5 block"
+                fieldKey="division_name"
+                className="text-[11px] sm:text-xs font-black tracking-wider text-zinc-700 uppercase font-sans mt-0.5 block leading-tight"
               />
-            )}
+            ) : null}
 
             {/* Editable ISO 9001 / Quality Certification Badge */}
             {(resolvedIsoCertification || interactive) && (
@@ -1118,7 +1144,7 @@ export function OfficialInvoiceDocument({
       </div>
 
       {/* Right: Header Card with Status Badge & Dates - All editable */}
-      <div className={`w-full sm:w-56 rounded-xl ${theme.cardHeaderGradient} text-white p-3.5 shadow-md shrink-0 flex flex-col self-start space-y-2`}>
+      <div className={`w-full sm:w-56 rounded-lg ${theme.cardHeaderGradient} text-white p-3.5 shadow-md shrink-0 flex flex-col self-start space-y-2`}>
         <div className="flex items-center justify-between border-b border-white/20 pb-1.5">
           <EditableText
             value={theme.invoiceTypeLabel + (totalPgs > 1 ? ` (P.${pageNumber}/${totalPgs})` : '')}
@@ -1202,24 +1228,32 @@ export function OfficialInvoiceDocument({
       const parentCode = resolvedParentBranch?.code || activeBranch?.code
       const parentManager = resolvedParentBranch?.managerName || (resolvedParentBranch as any)?.manager_name || (activeBranch?.managerName || (activeBranch as any)?.manager_name)
       const parentCity = resolvedParentBranch?.city || activeBranch?.city
+      const parentLogo = resolvedParentBranch?.logo_url || activeBranch?.logo_url
 
       const subName = activeSubBranch.name || "Franchise Sub-Branch"
       const subCode = activeSubBranch.code
       const partnerName = activeSubBranch.partner_name || (activeSubBranch as any)?.partnerName
+      const partnerPhone = activeSubBranch.partner_phone || (activeSubBranch as any)?.partnerPhone || activeSubBranch.phone
+      const partnerEmail = activeSubBranch.partner_email || (activeSubBranch as any)?.partnerEmail || activeSubBranch.email
       const subCity = activeSubBranch.city || activeSubBranch.state
+      const subLogo = activeSubBranch.logo_url
 
       return (
-        <div className="w-full rounded-xl bg-gradient-to-r from-blue-50/90 via-slate-50 to-emerald-50/90 border border-zinc-200/90 p-2.5 sm:p-3 shadow-2xs">
+        <div className="w-full rounded-lg bg-gradient-to-r from-blue-50/90 via-slate-50 to-emerald-50/90 border border-zinc-200/90 p-2.5 shadow-2xs">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 divide-y sm:divide-y-0 sm:divide-x divide-zinc-200">
             {/* Left: Parent Branch */}
             <div className="flex items-center gap-2.5 min-w-0 pr-0 sm:pr-2">
-              <span className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
-                <Building2 size={14} />
-              </span>
+              {parentLogo ? (
+                <img src={parentLogo} alt={parentName} className="w-7 h-7 rounded-md object-contain border border-blue-200 bg-white p-0.5 shrink-0" />
+              ) : (
+                <span className="w-7 h-7 rounded-md bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                  <Building2 size={14} />
+                </span>
+              )}
               <div className="min-w-0 flex-1 leading-tight">
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <EditableText
-                    value="Parent Branch:"
+                    value="Branch:"
                     interactive={interactive}
                     className="text-[8.5px] uppercase font-black text-blue-700 tracking-wider"
                   />
@@ -1234,13 +1268,13 @@ export function OfficialInvoiceDocument({
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-2.5 text-[9.5px] text-zinc-600 mt-0.5 flex-wrap">
+                <div className="flex items-center gap-2 text-[9px] text-zinc-600 mt-0.5 flex-wrap">
                   {parentManager && (
                     <span>Mgr: <strong className="text-zinc-800">{parentManager}</strong></span>
                   )}
                   {parentCity && (
                     <span className="flex items-center gap-1 text-zinc-500 font-medium">
-                      <MapPin size={9} className="text-blue-600 shrink-0" />
+                      <MapPin size={8.5} className="text-blue-600 shrink-0" />
                       <span>{parentCity}</span>
                     </span>
                   )}
@@ -1250,13 +1284,17 @@ export function OfficialInvoiceDocument({
 
             {/* Right: Franchise Sub-Branch */}
             <div className="flex items-center gap-2.5 min-w-0 pt-2 sm:pt-0 pl-0 sm:pl-2">
-              <span className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
-                <ShieldCheck size={14} />
-              </span>
+              {subLogo ? (
+                <img src={subLogo} alt={subName} className="w-7 h-7 rounded-md object-contain border border-emerald-200 bg-white p-0.5 shrink-0" />
+              ) : (
+                <span className="w-7 h-7 rounded-md bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                  <ShieldCheck size={14} />
+                </span>
+              )}
               <div className="min-w-0 flex-1 leading-tight">
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <EditableText
-                    value="Franchise Sub-Branch:"
+                    value="Sub-Branch:"
                     interactive={interactive}
                     className="text-[8.5px] uppercase font-black text-emerald-700 tracking-wider"
                   />
@@ -1271,13 +1309,16 @@ export function OfficialInvoiceDocument({
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-2.5 text-[9.5px] text-zinc-600 mt-0.5 flex-wrap">
+                <div className="flex items-center gap-2 text-[9px] text-zinc-600 mt-0.5 flex-wrap">
                   {partnerName && (
                     <span>Partner: <strong className="text-zinc-800">{partnerName}</strong></span>
                   )}
+                  {partnerPhone && (
+                    <span>• Tel: <strong className="text-zinc-800">{partnerPhone}</strong></span>
+                  )}
                   {subCity && (
                     <span className="flex items-center gap-1 text-zinc-500 font-medium">
-                      <MapPin size={9} className="text-emerald-600 shrink-0" />
+                      <MapPin size={8.5} className="text-emerald-600 shrink-0" />
                       <span>{subCity}</span>
                     </span>
                   )}
@@ -1294,18 +1335,26 @@ export function OfficialInvoiceDocument({
       const branchCode = activeBranch.code
       const branchManager = activeBranch.managerName || (activeBranch as any)?.manager_name
       const branchLocation = [activeBranch.city, activeBranch.state].filter(Boolean).join(", ")
+      const branchPhone = activeBranch.phone
+      const branchEmail = activeBranch.email
+      const managerPhone = activeBranch.managerPhone || (activeBranch as any)?.manager_phone
+      const branchLogo = activeBranch.logo_url
 
       return (
-        <div className="w-full rounded-xl bg-blue-50/80 border border-blue-200/90 p-2.5 sm:p-3 shadow-2xs">
+        <div className="w-full rounded-lg bg-blue-50/80 border border-blue-200/90 p-2.5 shadow-2xs">
           <div className="flex items-center justify-between gap-2.5">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <span className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
-                <Building2 size={14} />
-              </span>
-              <div className="min-w-0 leading-tight">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              {branchLogo ? (
+                <img src={branchLogo} alt={branchName} className="w-7 h-7 rounded-md object-contain border border-blue-200 bg-white p-0.5 shrink-0" />
+              ) : (
+                <span className="w-7 h-7 rounded-md bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                  <Building2 size={14} />
+                </span>
+              )}
+              <div className="min-w-0 leading-tight flex-1">
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <EditableText
-                    value="Issuing Operational Branch:"
+                    value="Branch:"
                     interactive={interactive}
                     className="text-[8.5px] uppercase font-black text-blue-700 tracking-wider"
                   />
@@ -1320,17 +1369,28 @@ export function OfficialInvoiceDocument({
                     </span>
                   )}
                   {branchManager && (
-                    <span className="text-[9.5px] text-zinc-600">
+                    <span className="text-[9px] text-zinc-600">
                       • Manager: <strong className="text-zinc-800">{branchManager}</strong>
                     </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 text-[8.5px] text-zinc-600 mt-0.5 flex-wrap">
+                  {managerPhone && (
+                    <span>Mgr Tel: <strong className="text-zinc-800 font-mono">{managerPhone}</strong></span>
+                  )}
+                  {branchPhone && (
+                    <span>• Branch Tel: <strong className="text-zinc-800 font-mono">{branchPhone}</strong></span>
+                  )}
+                  {branchEmail && (
+                    <span>• {branchEmail}</span>
                   )}
                 </div>
               </div>
             </div>
 
             {branchLocation && (
-              <div className="flex items-center gap-1 text-[9.5px] text-zinc-600 shrink-0 bg-white/80 px-2 py-0.5 rounded-md border border-blue-200">
-                <MapPin size={9} className="text-blue-600 shrink-0" />
+              <div className="flex items-center gap-1 text-[9px] text-zinc-600 shrink-0 bg-white/80 px-2 py-0.5 rounded-md border border-blue-200">
+                <MapPin size={8.5} className="text-blue-600 shrink-0" />
                 <span className="font-medium">{branchLocation}</span>
               </div>
             )}
@@ -1345,7 +1405,7 @@ export function OfficialInvoiceDocument({
   const renderInfoCards = () => (
     <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-1">
       {/* Box 1: BILL TO (6 cols) */}
-      <div className={`sm:col-span-6 p-3.5 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-1 shadow-2xs`}>
+      <div className={`sm:col-span-6 p-3 rounded-lg ${theme.lightBg} border ${theme.lightBorder} space-y-1 shadow-2xs`}>
         <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-zinc-700">
           <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
             <UserCheck size={9} />
@@ -1400,7 +1460,7 @@ export function OfficialInvoiceDocument({
       </div>
 
       {/* Box 2: SERVICE / ENGAGEMENT DETAILS (6 cols) with embedded Official Verification QR beside it */}
-      <div className={`sm:col-span-6 p-3.5 rounded-xl ${theme.lightBg} border ${theme.lightBorder} shadow-2xs flex items-center justify-between gap-3`}>
+      <div className={`sm:col-span-6 p-3 rounded-lg ${theme.lightBg} border ${theme.lightBorder} shadow-2xs flex items-center justify-between gap-3`}>
         <div className="space-y-1 flex-1 min-w-0">
           <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-zinc-700">
             <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
@@ -1422,8 +1482,8 @@ export function OfficialInvoiceDocument({
             <EditableText value={isGstInvoice ? 'GST Tax Invoice' : 'Non-GST Direct Invoice'} interactive={interactive} />
           </p>
           <p className="text-[9.5px] text-zinc-600 truncate">
-            <EditableText value="Company:" interactive={interactive} className="font-bold mr-1" />
-            <EditableText value={fullRegisteredCompanyName} interactive={interactive} />
+            <EditableText value="Services:" interactive={interactive} className="font-bold mr-1" />
+            <EditableText value={invoice.project || (invoice as any)?.serviceScope || "Professional & Enterprise IT Services"} interactive={interactive} />
           </p>
           {isSubBranchIssued ? (
             <p className="text-[9px] text-emerald-800 dark:text-emerald-300 truncate font-semibold">
@@ -1438,8 +1498,8 @@ export function OfficialInvoiceDocument({
           ) : null}
         </div>
 
-        {/* Official Scan & Verify QR Code beside Project Scope */}
-        <div className="shrink-0 text-center flex flex-col items-center bg-white p-2 border border-zinc-300 shadow-2xs rounded-xl">
+        {/* Official Scan & Verify QR Code beside Project Scope (Crisp Square) */}
+        <div className="shrink-0 text-center flex flex-col items-center bg-white p-1.5 border border-zinc-300 shadow-2xs rounded-none aspect-square">
           <a 
             href={publicInvoiceViewUrl} 
             target="_blank" 
@@ -1450,14 +1510,14 @@ export function OfficialInvoiceDocument({
             <img 
               src={invoiceVerificationQrUrl} 
               alt={`QR ${invoiceNumOrId}`} 
-              className="w-14 h-14 bg-white object-contain group-hover:scale-105 transition-transform" 
+              className="w-14 h-14 aspect-square bg-white object-contain group-hover:scale-105 transition-transform" 
               style={{ imageRendering: 'pixelated' }}
             />
           </a>
           <EditableText
             value="Scan & Verify"
             interactive={interactive}
-            className="text-[7px] font-mono font-bold text-zinc-700 mt-1 block uppercase tracking-tight"
+            className="text-[7px] font-mono font-bold text-zinc-700 mt-0.5 block uppercase tracking-tight"
           />
         </div>
       </div>
@@ -1574,7 +1634,7 @@ export function OfficialInvoiceDocument({
         {/* Left 6 Columns: Amount in Words + Bank & UPI Payment Details */}
         <div className="sm:col-span-6 flex flex-col justify-between gap-2">
           {/* Card 1: TOTAL AMOUNT IN WORDS */}
-          <div className={`p-2.5 sm:p-3 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-1 shadow-2xs`}>
+          <div className={`p-2.5 sm:p-3 rounded-lg ${theme.lightBg} border ${theme.lightBorder} space-y-1 shadow-2xs`}>
             <div className="font-black text-[9px] uppercase tracking-wider text-zinc-600 flex items-center gap-1">
               <FileText size={11} className={theme.primaryText} />
               <EditableText value="TOTAL AMOUNT IN WORDS" interactive={interactive} />
@@ -1588,7 +1648,7 @@ export function OfficialInvoiceDocument({
 
           {/* Card 2: BANK & UPI PAYMENT DETAILS (Renders ONLY if bank or UPI details are entered. If gap/blank, completely blank!) */}
           {hasAnyPaymentInfo && (
-            <div className={`p-2.5 sm:p-3 rounded-xl ${theme.lightBg} border ${theme.lightBorder} space-y-2 shadow-2xs flex-1 flex flex-col justify-between`}>
+            <div className={`p-2.5 sm:p-3 rounded-lg ${theme.lightBg} border ${theme.lightBorder} space-y-2 shadow-2xs flex-1 flex flex-col justify-between`}>
               <div className="flex items-center justify-between border-b border-zinc-200/80 dark:border-zinc-700/60 pb-1">
                 <span className="font-black text-[9.5px] uppercase tracking-wider text-zinc-800 dark:text-zinc-200 flex items-center gap-1">
                   <Landmark size={12} className={theme.primaryText} />
@@ -1608,11 +1668,11 @@ export function OfficialInvoiceDocument({
                 {/* Left side of card: UPI QR Code & Instant Scan (only if QR exists) */}
                 {hasQr && (
                   <div className={`${(hasAnyBankInfo || hasUpiDetails) ? "col-span-4" : "w-full"} flex flex-col items-center justify-center text-center space-y-1`}>
-                    <div className="bg-white p-1.5 rounded-xl border border-zinc-300 shadow-2xs shrink-0">
+                    <div className="bg-white p-1 rounded-none border border-zinc-300 shadow-2xs shrink-0 aspect-square">
                       <img 
                         src={customPaymentQrUrl} 
                         alt="UPI Payment QR Code" 
-                        className="w-16 h-16 object-contain" 
+                        className="w-16 h-16 aspect-square object-contain" 
                         style={{ imageRendering: 'pixelated' }}
                       />
                     </div>
@@ -1720,7 +1780,7 @@ export function OfficialInvoiceDocument({
 
         {/* Right 6 Columns: Financial Computation Matrix */}
         <div className="sm:col-span-6 flex flex-col justify-between text-[9.5px]">
-          <div className="p-3 sm:p-3.5 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 space-y-1 text-zinc-700 dark:text-zinc-300 shadow-2xs h-full flex flex-col justify-between">
+          <div className="p-3 sm:p-3.5 rounded-lg bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 space-y-1 text-zinc-700 dark:text-zinc-300 shadow-2xs h-full flex flex-col justify-between">
             <div className="space-y-0.5">
               <div className="flex justify-between py-0.5">
                 <EditableText value="Total Services Value" interactive={interactive} />
@@ -1748,7 +1808,7 @@ export function OfficialInvoiceDocument({
               ) : null}
 
               <div className="flex justify-between py-1 border-t border-zinc-200 dark:border-zinc-700 font-bold text-zinc-900 dark:text-zinc-100">
-                <EditableText value="Taxable Base Amount" interactive={interactive} />
+                <EditableText value={isGstInvoice ? "Taxable Base Amount" : "Base Amount"} interactive={interactive} />
                 <span className="font-mono">₹{taxableBase.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
               </div>
 
@@ -1793,7 +1853,7 @@ export function OfficialInvoiceDocument({
 
       {/* TERMS & CONDITIONS / INVOICE NOTES (Enlarged, Clear & Prominent) */}
       {(resolvedTermsAndNotes || interactive) && (
-        <div className="p-3 sm:p-3.5 rounded-xl border border-zinc-300/90 dark:border-zinc-700 bg-zinc-50/90 dark:bg-zinc-900/60 text-[9.5px] sm:text-[10.5px] text-zinc-700 dark:text-zinc-300 space-y-1 shadow-2xs">
+        <div className="p-3 sm:p-3.5 rounded-lg border border-zinc-300/90 dark:border-zinc-700 bg-zinc-50/90 dark:bg-zinc-900/60 text-[9.5px] sm:text-[10.5px] text-zinc-700 dark:text-zinc-300 space-y-1 shadow-2xs">
           <EditableText
             value="Terms & Conditions / Official Notes:"
             interactive={interactive}
@@ -2015,22 +2075,22 @@ export function OfficialInvoiceDocument({
         </div>
 
         {/* BOTTOM BANNER WITH PAGE NUMBER */}
-        <div className={`rounded-xl ${theme.headerGradient} text-white p-2 text-[8.5px] sm:text-[9px] font-medium flex flex-wrap items-center justify-between gap-1.5 shadow-xs`}>
-          <p className="flex items-center gap-1">
-            <MapPin size={9} />
+        <div className={`rounded-lg ${theme.headerGradient} text-white px-3 py-1.5 text-[8.5px] sm:text-[9px] font-medium flex items-center justify-between gap-2 overflow-hidden whitespace-nowrap shadow-xs`}>
+          <div className="flex items-center gap-1 min-w-0 max-w-[55%] truncate">
+            <MapPin size={9} className="shrink-0" />
             <EditableText
               value={resolvedAddress || fullRegisteredCompanyName}
               onChange={(val) => onFieldChange?.("address", val)}
               interactive={interactive}
               fieldKey="address"
-              className="text-white"
+              className="text-white truncate"
             />
-          </p>
-          <div className="flex items-center gap-2">
-            <span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 overflow-hidden text-[8px] sm:text-[8.5px]">
+            <span className="truncate max-w-[260px] sm:max-w-[340px]">
               {resolvedEmail ? `Support: ${resolvedEmail}` : ""} {resolvedPhone ? `| Tel: ${resolvedPhone}` : ""}
             </span>
-            <span className="font-mono font-bold bg-black/20 px-2 py-0.5 rounded text-[8px]">
+            <span className="font-mono font-bold bg-black/20 px-2 py-0.5 rounded text-[8px] shrink-0">
               Page {pageNumber} of {totalPgs}
             </span>
           </div>
@@ -2041,18 +2101,23 @@ export function OfficialInvoiceDocument({
 
   const renderPageFooterOnly = (pageNumber: number, totalPgs: number) => (
     <div className="mt-auto shrink-0 pt-2 border-t border-zinc-200 space-y-2">
-      <div className="flex justify-between items-center bg-zinc-50 p-2 rounded-xl border border-zinc-200 text-[8.5px] text-zinc-600">
+      <div className="flex justify-between items-center bg-zinc-50 p-2 rounded-lg border border-zinc-200 text-[8.5px] text-zinc-600">
         <span>Continued to Next Page...</span>
         <span className="font-mono font-bold text-zinc-800">Page {pageNumber} of {totalPgs}</span>
       </div>
-      <div className={`rounded-xl ${theme.headerGradient} text-white p-1.5 text-[8px] font-medium flex flex-wrap items-center justify-between gap-1 shadow-xs`}>
-        <p className="flex items-center gap-1">
-          <MapPin size={9} />
-          <span>{resolvedAddress || fullRegisteredCompanyName}</span>
+      <div className={`rounded-lg ${theme.headerGradient} text-white px-2.5 py-1 text-[8px] font-medium flex items-center justify-between gap-2 overflow-hidden whitespace-nowrap shadow-xs`}>
+        <p className="flex items-center gap-1 min-w-0 max-w-[55%] truncate">
+          <MapPin size={8.5} className="shrink-0" />
+          <span className="truncate">{resolvedAddress || fullRegisteredCompanyName}</span>
         </p>
-        <span className="font-mono font-bold bg-black/20 px-1.5 py-0.2 rounded text-[7.5px]">
-          Page {pageNumber} of {totalPgs}
-        </span>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="truncate max-w-[260px]">
+            {resolvedEmail ? `Support: ${resolvedEmail}` : ""} {resolvedPhone ? `| Tel: ${resolvedPhone}` : ""}
+          </span>
+          <span className="font-mono font-bold bg-black/20 px-1.5 py-0.2 rounded text-[7.5px] shrink-0">
+            Page {pageNumber} of {totalPgs}
+          </span>
+        </div>
       </div>
     </div>
   )
@@ -2062,7 +2127,7 @@ export function OfficialInvoiceDocument({
       {paginatedPages.map((pg) => (
         <div
           key={`invoice-page-${pg.pageNumber}`}
-          className="a4-page bg-white text-zinc-900 font-sans p-5 sm:p-6 text-xs shadow-2xl border border-zinc-200/90 rounded-2xl w-full max-w-[794px] min-h-[1080px] mx-auto relative flex flex-col justify-between gap-3 sm:gap-3.5 overflow-visible print:w-[210mm] print:max-w-[210mm] print:h-[282mm] print:min-h-[282mm] print:max-h-[282mm] print:p-[6mm_8mm] print:gap-2 print:m-0 print:shadow-none print:border-none print:rounded-none page-break-after"
+          className="a4-page bg-white text-zinc-900 font-sans p-5 sm:p-6 text-xs shadow-2xl border border-zinc-200/90 rounded-lg w-full max-w-[794px] min-h-[1080px] mx-auto relative flex flex-col justify-between gap-3 sm:gap-3.5 overflow-visible print:w-[210mm] print:max-w-[210mm] print:h-[282mm] print:min-h-[282mm] print:max-h-[282mm] print:p-[6mm_8mm] print:gap-2 print:m-0 print:shadow-none print:border-none print:rounded-none page-break-after"
         >
           {/* Draggable Custom Text Stamps / Badges Overlay (on page 1) */}
           {pg.isFirstPage && customStamps && customStamps.map((stamp: CustomTextStamp) => {

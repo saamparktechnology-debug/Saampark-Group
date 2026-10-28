@@ -63,7 +63,7 @@ const branchController = {
           resolvedCompanyId = 1;
         } else if (companyId === 'digital') {
           resolvedCompanyId = 2;
-        } else if (companyId === 'saampark-ai-solutions' || companyId === 'ai') {
+        } else if (companyId === 'saampark-ai-solutions' || companyId === 'ai' || companyId === 'consultancy') {
           resolvedCompanyId = 3;
         } else {
           resolvedCompanyId = 1;
@@ -71,7 +71,7 @@ const branchController = {
       }
 
       const id = await branchModel.create({ ...req.body, company_id: resolvedCompanyId });
-      return successResponse(res, 201, 'Branch created', { id });
+      return successResponse(res, 201, 'Branch created', { id, company_id: resolvedCompanyId });
     } catch (err) {
       return errorResponse(res, 500, err.message);
     }
@@ -205,12 +205,22 @@ const subBranchController = {
         if (compRows && compRows.length > 0) resolvedCompanyId = compRows[0].id;
         else if (companyId === 'tech') resolvedCompanyId = 1;
         else if (companyId === 'digital') resolvedCompanyId = 2;
-        else if (companyId === 'saampark-ai-solutions' || companyId === 'ai') resolvedCompanyId = 3;
+        else if (companyId === 'saampark-ai-solutions' || companyId === 'ai' || companyId === 'consultancy') resolvedCompanyId = 3;
         else resolvedCompanyId = 1;
       }
 
-      const id = await subBranchModel.create({ ...req.body, company_id: resolvedCompanyId });
-      return successResponse(res, 201, 'Sub-branch created', { id });
+      let rawBranchId = req.body.branch_id || req.body.parentBranchId;
+      let resolvedBranchId = rawBranchId;
+      if (rawBranchId && isNaN(Number(rawBranchId))) {
+        const pool = require('../config/db');
+        const [bRows] = await pool.execute('SELECT id FROM branches WHERE code = ? OR name = ?', [rawBranchId, rawBranchId]).catch(() => [[]]);
+        if (bRows && bRows.length > 0) {
+          resolvedBranchId = bRows[0].id;
+        }
+      }
+
+      const id = await subBranchModel.create({ ...req.body, branch_id: resolvedBranchId, company_id: resolvedCompanyId });
+      return successResponse(res, 201, 'Sub-branch created', { id, company_id: resolvedCompanyId, branch_id: resolvedBranchId });
     } catch (err) {
       return errorResponse(res, 500, err.message);
     }

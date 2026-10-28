@@ -10,12 +10,30 @@ const branchController = {
       const userRole = String(req.user?.role || req.user?.role_name || '').toLowerCase();
       const isSuperAdmin = userRoleId === 1 || userRole.includes('super');
 
-      const companyId = (reqCompanyId && reqCompanyId !== 'all')
-        ? reqCompanyId
-        : (isSuperAdmin ? null : req.user?.company_id);
-
-      // Super Admin can get all branches across all companies
-      if (!companyId && !isSuperAdmin) return errorResponse(res, 400, 'Company ID required');
+      let companyId;
+      if (isSuperAdmin) {
+        companyId = (reqCompanyId && reqCompanyId !== 'all') ? reqCompanyId : null;
+      } else {
+        // Enforce user's assigned company scope
+        let userComps = [req.user?.company_id];
+        if (req.user?.company_ids) {
+          try {
+            const parsed = typeof req.user.company_ids === 'string' ? JSON.parse(req.user.company_ids) : req.user.company_ids;
+            if (Array.isArray(parsed)) userComps.push(...parsed);
+          } catch {}
+        }
+        userComps = userComps.filter(Boolean).map(c => String(c).toLowerCase().trim());
+        if (reqCompanyId && reqCompanyId !== 'all') {
+          const reqNorm = String(reqCompanyId).toLowerCase().trim();
+          const isAllowed = userComps.includes(reqNorm);
+          if (!isAllowed) {
+            return errorResponse(res, 403, 'Access denied: You do not have permission to view branches for this company');
+          }
+          companyId = reqCompanyId;
+        } else {
+          companyId = req.user?.company_id;
+        }
+      }
 
       let resolvedCompanyId = companyId;
       if (companyId && isNaN(Number(companyId))) {
@@ -23,8 +41,6 @@ const branchController = {
         const [compRows] = await pool.execute('SELECT id FROM companies WHERE slug = ? OR name = ?', [companyId, companyId]).catch(() => [[]]);
         if (compRows && compRows.length > 0) {
           resolvedCompanyId = compRows[0].id;
-        } else if (companyId === 'tech') {
-          resolvedCompanyId = 1;
         }
       }
 
@@ -49,7 +65,16 @@ const branchController = {
 
   async create(req, res) {
     try {
-      let companyId = req.headers['x-company-id'] || req.body.company_id || req.user?.company_id;
+      const userRoleId = Number(req.user?.role_id);
+      const userRole = String(req.user?.role || req.user?.role_name || '').toLowerCase();
+      const isSuperAdmin = userRoleId === 1 || userRole.includes('super');
+
+      let companyId;
+      if (isSuperAdmin) {
+        companyId = req.headers['x-company-id'] || req.body.company_id || req.user?.company_id;
+      } else {
+        companyId = req.user?.company_id;
+      }
       if (!companyId || companyId === 'all') companyId = req.body.company_id || req.user?.company_id;
       if (!companyId) return errorResponse(res, 400, 'Company ID required');
 
@@ -59,19 +84,13 @@ const branchController = {
         const [compRows] = await pool.execute('SELECT id FROM companies WHERE slug = ? OR name = ?', [companyId, companyId]).catch(() => [[]]);
         if (compRows && compRows.length > 0) {
           resolvedCompanyId = compRows[0].id;
-        } else if (companyId === 'tech') {
-          resolvedCompanyId = 1;
-        } else if (companyId === 'digital') {
-          resolvedCompanyId = 2;
-        } else if (companyId === 'saampark-ai-solutions' || companyId === 'ai') {
-          resolvedCompanyId = 3;
         } else {
           resolvedCompanyId = 1;
         }
       }
 
       const id = await branchModel.create({ ...req.body, company_id: resolvedCompanyId });
-      return successResponse(res, 201, 'Branch created', { id });
+      return successResponse(res, 201, 'Branch created', { id, company_id: resolvedCompanyId });
     } catch (err) {
       return errorResponse(res, 500, err.message);
     }
@@ -159,22 +178,28 @@ const subBranchController = {
       let subBranches;
       if (branch_id) {
         subBranches = await subBranchModel.findByBranch(branch_id);
-      } else if (reqCompanyId && reqCompanyId !== 'all') {
-        let resolvedCompanyId = reqCompanyId;
-        if (isNaN(Number(reqCompanyId))) {
-          const pool = require('../config/db');
-          const [compRows] = await pool.execute('SELECT id FROM companies WHERE slug = ? OR name = ?', [reqCompanyId, reqCompanyId]).catch(() => [[]]);
-          if (compRows && compRows.length > 0) resolvedCompanyId = compRows[0].id;
-          else if (reqCompanyId === 'tech') resolvedCompanyId = 1;
-        }
-        subBranches = await subBranchModel.findByCompany(resolvedCompanyId);
       } else if (isSuperAdmin) {
-        // Super Admin gets all sub-branches across all companies
-        subBranches = await subBranchModel.findAll();
-      } else if (req.user?.company_id) {
-        subBranches = await subBranchModel.findByCompany(req.user.company_id);
+        if (reqCompanyId && reqCompanyId !== 'all') {
+          let resolvedCompanyId = reqCompanyId;
+          if (isNaN(Number(reqCompanyId))) {
+            const pool = require('../config/db');
+            const [compRows] = await pool.execute('SELECT id FROM companies WHERE slug = ? OR name = ?', [reqCompanyId, reqCompanyId]).catch(() => [[]]);
+            if (compRows && compRows.length > 0) resolvedCompanyId = compRows[0].id;
+          }
+          subBranches = await subBranchModel.findByCompany(resolvedCompanyId);
+        } else {
+          // Super Admin gets all sub-branches across all companies
+          subBranches = await subBranchModel.findAll();
+        }
       } else {
-        subBranches = [];
+        // Enforce user's assigned company
+        let assignedComp = req.user?.company_id || 1;
+        if (isNaN(Number(assignedComp))) {
+          const pool = require('../config/db');
+          const [compRows] = await pool.execute('SELECT id FROM companies WHERE slug = ? OR name = ?', [assignedComp, assignedComp]).catch(() => [[]]);
+          if (compRows && compRows.length > 0) assignedComp = compRows[0].id;
+        }
+        subBranches = await subBranchModel.findByCompany(assignedComp);
       }
       return successResponse(res, 200, 'Sub-branches fetched', subBranches);
     } catch (err) {
@@ -194,7 +219,16 @@ const subBranchController = {
 
   async create(req, res) {
     try {
-      let companyId = req.headers['x-company-id'] || req.body.company_id || req.user?.company_id;
+      const userRoleId = Number(req.user?.role_id);
+      const userRole = String(req.user?.role || req.user?.role_name || '').toLowerCase();
+      const isSuperAdmin = userRoleId === 1 || userRole.includes('super');
+
+      let companyId;
+      if (isSuperAdmin) {
+        companyId = req.headers['x-company-id'] || req.body.company_id || req.user?.company_id;
+      } else {
+        companyId = req.user?.company_id;
+      }
       if (!companyId || companyId === 'all') companyId = req.body.company_id || req.user?.company_id;
       if (!companyId) return errorResponse(res, 400, 'Company ID required');
 
@@ -203,14 +237,21 @@ const subBranchController = {
         const pool = require('../config/db');
         const [compRows] = await pool.execute('SELECT id FROM companies WHERE slug = ? OR name = ?', [companyId, companyId]).catch(() => [[]]);
         if (compRows && compRows.length > 0) resolvedCompanyId = compRows[0].id;
-        else if (companyId === 'tech') resolvedCompanyId = 1;
-        else if (companyId === 'digital') resolvedCompanyId = 2;
-        else if (companyId === 'saampark-ai-solutions' || companyId === 'ai') resolvedCompanyId = 3;
         else resolvedCompanyId = 1;
       }
 
-      const id = await subBranchModel.create({ ...req.body, company_id: resolvedCompanyId });
-      return successResponse(res, 201, 'Sub-branch created', { id });
+      let rawBranchId = req.body.branch_id || req.body.parentBranchId;
+      let resolvedBranchId = rawBranchId;
+      if (rawBranchId && isNaN(Number(rawBranchId))) {
+        const pool = require('../config/db');
+        const [bRows] = await pool.execute('SELECT id FROM branches WHERE code = ? OR name = ?', [rawBranchId, rawBranchId]).catch(() => [[]]);
+        if (bRows && bRows.length > 0) {
+          resolvedBranchId = bRows[0].id;
+        }
+      }
+
+      const id = await subBranchModel.create({ ...req.body, branch_id: resolvedBranchId, company_id: resolvedCompanyId });
+      return successResponse(res, 201, 'Sub-branch created', { id, company_id: resolvedCompanyId, branch_id: resolvedBranchId });
     } catch (err) {
       return errorResponse(res, 500, err.message);
     }

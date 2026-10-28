@@ -1,7 +1,7 @@
 const pool = require('../config/db');
 
 const ALLOWED_SUB_BRANCH_FIELDS = [
-  'branch_id', 'company_id', 'name', 'code', 'address', 'city', 'state', 'phone', 'email', 'manager_id', 'is_active',
+  'branch_id', 'company_id', 'name', 'code', 'address', 'city', 'state', 'phone', 'email', 'manager_id', 'is_active', 'logo_url',
   'brand_name', 'division_name', 'subtitle', 'gstin', 'pan', 'cin', 'msme_reg', 'website',
   'signatory_name', 'signatory_designation', 'signature_image_url', 'stamp_image_url',
   'terms_conditions', 'invoice_notes', 'upi_id', 'account_holder', 'bank_name', 'account_number', 'ifsc_code', 'bank_branch', 'payment_qr_url',

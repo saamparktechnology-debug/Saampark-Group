@@ -145,8 +145,9 @@ export const generateInvoiceNumber = (
   const y = String(parsedDate.getFullYear())
   const dateStr = `${d}${m}${y}`
 
-  // Standard serial format: inv(date)001 for GST, ng(date)001 for Non-GST
-  const prefix = isNonGst ? `NG${dateStr}` : `INV${dateStr}`
+  // Standard serial format: INV-(date)001 for GST, NG-(date)001 for Non-GST
+  const prefix = isNonGst ? `NG-${dateStr}` : `INV-${dateStr}`
+  const unhyphenatedPrefix = isNonGst ? `NG${dateStr}` : `INV${dateStr}`
   const legacyPrefix = isNonGst ? `NGINV-${dateStr}-` : `INV-${dateStr}-`
   const legacyHyphen = isNonGst ? `NG-${dateStr}-` : `INV-${dateStr}-`
 
@@ -160,6 +161,12 @@ export const generateInvoiceNumber = (
     const cleanId = String(rawId).trim().toUpperCase()
     if (cleanId.startsWith(prefix)) {
       const suffix = cleanId.substring(prefix.length).replace(/^-/, "")
+      const num = parseInt(suffix, 10)
+      if (!isNaN(num) && num > maxSeq) {
+        maxSeq = num
+      }
+    } else if (cleanId.startsWith(unhyphenatedPrefix)) {
+      const suffix = cleanId.substring(unhyphenatedPrefix.length).replace(/^-/, "")
       const num = parseInt(suffix, 10)
       if (!isNaN(num) && num > maxSeq) {
         maxSeq = num

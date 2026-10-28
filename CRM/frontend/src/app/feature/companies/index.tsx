@@ -7,7 +7,7 @@ import {
   MapPin, Phone, Mail, Globe, Users, Briefcase, DollarSign, Building, 
   Loader2, AlertCircle, Shield, CreditCard, Award, CheckCircle2, Image,
   X, Sparkles, Eye, Landmark, QrCode, FileText, Check, ShieldCheck,
-  Columns, Maximize2, Minimize2, Split, LayoutTemplate, Save
+  Columns, Maximize2, Minimize2, Split, LayoutTemplate, Save, Copy
 } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
@@ -106,7 +106,7 @@ const CANONICAL_BRANCHES: Branch[] = [
 ]
 
 export default function CompaniesMain() {
-  const { user, fetchCompanies } = useAuthStore()
+  const { user, fetchCompanies, activeCompanyId } = useAuthStore()
   const isSuperAdmin = user?.role === "Super Admin" || (user as any)?.role_id === 1 || String((user as any)?.role_name || "").toLowerCase().includes("super") || user?.email === "hiisupriya@gmail.com" || user?.email === "saampark.official@gmail.com"
 
   const userAssignedComps = React.useMemo(() => {
@@ -197,7 +197,7 @@ export default function CompaniesMain() {
   } | null>(null)
 
   const [companyForm, setCompanyForm] = React.useState({
-    name: "", brand_name: "", division_name: "", subtitle: "", slug: "", 
+    name: "", brand_name: "", division_name: "", subtitle: "", slug: "", trademark_symbol: "",
     industry: "Technology", currency: "INR", logo_url: "",
     gstin: "", pan: "", cin: "", msme_reg: "", iso_certification: "An ISO 9001:2015 Certified Company",
     signatory_name: "", signatory_designation: "", signature_image_url: "", stamp_image_url: "",
@@ -212,8 +212,9 @@ export default function CompaniesMain() {
   const [showBranchModal, setShowBranchModal] = React.useState(false)
   const [editingBranch, setEditingBranch] = React.useState<Branch | null>(null)
   const [branchCompanyId, setBranchCompanyId] = React.useState("")
-  const [branchTab, setBranchTab] = React.useState<"basic" | "tax" | "stamp" | "bank" | "preview">("basic")
+  const [branchTab, setBranchTab] = React.useState<"basic" | "tax" | "stamp" | "bank" | "terms" | "preview">("basic")
   const [branchBankProfileTab, setBranchBankProfileTab] = React.useState<"gst" | "nongst">("gst")
+  const [branchCopiedNotice, setBranchCopiedNotice] = React.useState(false)
   const [branchForm, setBranchForm] = React.useState({
     name: "", code: "", brand_name: "", division_name: "", subtitle: "",
     logo_url: "", payment_qr_url: "",
@@ -231,8 +232,9 @@ export default function CompaniesMain() {
   const [editingSubBranch, setEditingSubBranch] = React.useState<SubBranch | null>(null)
   const [subBranchBranchId, setSubBranchBranchId] = React.useState("")
   const [subBranchCompanyId, setSubBranchCompanyId] = React.useState("")
-  const [subBranchTab, setSubBranchTab] = React.useState<"partner" | "location" | "stamp" | "bank" | "preview">("partner")
+  const [subBranchTab, setSubBranchTab] = React.useState<"partner" | "location" | "stamp" | "bank" | "terms" | "preview">("partner")
   const [subBranchBankProfileTab, setSubBranchBankProfileTab] = React.useState<"gst" | "nongst">("gst")
+  const [subBranchCopiedNotice, setSubBranchCopiedNotice] = React.useState(false)
   const [subBranchForm, setSubBranchForm] = React.useState({
     name: "", code: "", partner_name: "", partner_phone: "", partner_email: "",
     revenue_share_pct: 0, partner_type: "Individual",
@@ -300,16 +302,32 @@ export default function CompaniesMain() {
       // 1. Merge Companies: Support all companies dynamically with full retention
       const compMap = new Map<string, Company>()
 
-      // First add baseline canonical companies
+      // First add baseline canonical companies (Super Admin gets all, Company Admin gets only assigned)
       CANONICAL_COMPANIES.forEach(c => {
+        if (!isSuperAdmin) {
+          const isAssigned = userAssignedComps.length > 0
+            ? userAssignedComps.some(target => isMatchingCompany(c, target))
+            : isMatchingCompany(c, (user as any)?.companyId || (user as any)?.company_id)
+          if (!isAssigned) return
+        }
         const key = c.slug || c.id
         compMap.set(key, { ...c })
       })
 
-      // Overlay API companies (from MySQL)
+      // Helper: check if a company is accessible to current user
+      const isCompanyAllowed = (c: any): boolean => {
+        if (isSuperAdmin) return true
+        if (userAssignedComps.length > 0) {
+          return userAssignedComps.some(target => isMatchingCompany(c, target))
+        }
+        const uComp = (user as any)?.companyId || (user as any)?.company_id
+        return uComp ? isMatchingCompany(c, uComp) : false
+      }
+
+      // Overlay API companies (from MySQL) — only allowed companies for non-super-admins
       if (Array.isArray(compRes) && compRes.length > 0) {
         compRes.forEach(c => {
-          if (!isCompanyDeleted(c.id, c.slug)) {
+          if (!isCompanyDeleted(c.id, c.slug) && isCompanyAllowed(c)) {
             const key = c.slug || String(c.id)
             const prev = compMap.get(key) || compMap.get(c.slug) || compMap.get(String(c.id))
             compMap.set(key, { ...(prev || {}), ...c })
@@ -317,10 +335,10 @@ export default function CompaniesMain() {
         })
       }
 
-      // Overlay persistent storage companies (from app_data)
+      // Overlay persistent storage companies (from app_data) — only allowed companies
       if (Array.isArray(dbComps) && dbComps.length > 0) {
         dbComps.forEach(c => {
-          if (!isCompanyDeleted(c.id, c.slug)) {
+          if (!isCompanyDeleted(c.id, c.slug) && isCompanyAllowed(c)) {
             const key = c.slug || String(c.id)
             const prev = compMap.get(key) || compMap.get(c.slug) || compMap.get(String(c.id))
             compMap.set(key, { ...(prev || {}), ...c })
@@ -328,11 +346,11 @@ export default function CompaniesMain() {
         })
       }
 
-      // Also overlay current auth store companies to ensure latest edits are retained
+      // Also overlay current auth store companies — only allowed companies
       const storeComps = useAuthStore.getState().companies
       if (Array.isArray(storeComps) && storeComps.length > 0) {
         storeComps.forEach(c => {
-          if (!isCompanyDeleted(c.id, c.slug)) {
+          if (!isCompanyDeleted(c.id, c.slug) && isCompanyAllowed(c)) {
             const key = c.slug || String(c.id)
             const prev = compMap.get(key) || compMap.get(c.slug) || compMap.get(String(c.id))
             compMap.set(key, { ...(prev || {}), ...c })
@@ -440,19 +458,25 @@ export default function CompaniesMain() {
       })
       setSubBranches(subList)
 
-      // Persist baseline to DB (Super Admin only to avoid scoped truncation)
+      // Persist fresh data to app_data cache for all users — Super Admin saves all companies,
+      // other users only save branches/sub-branches (company list is scoped server-side)
       if (isSuperAdmin) {
         saveModuleDataToDB("companies", finalCompanies, "all").catch(() => {})
       }
-      saveModuleDataToDB("branches", finalBranches, "all").catch(() => {})
-      saveModuleDataToDB("sub_branches", subList, "all").catch(() => {})
+      // Always cache branches/sub-branches so they survive refresh even when API is slow
+      if (finalBranches.length > 0) {
+        saveModuleDataToDB("branches", finalBranches, "all").catch(() => {})
+      }
+      if (subList.length > 0) {
+        saveModuleDataToDB("sub_branches", subList, "all").catch(() => {})
+      }
       setExpandedCompanies(prev => new Set([...Array.from(prev), ...finalCompanies.map(c => c.id)]))
     } catch (err: any) {
       setError(err?.message || "Failed to load data")
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [activeCompanyId, isSuperAdmin, userAssignedComps, user])
 
   React.useEffect(() => { loadData() }, [loadData])
 
@@ -482,36 +506,52 @@ export default function CompaniesMain() {
   }
 
   const getSubBranchesForBranch = (branchId: string | number) => {
-    return subBranches.filter(sb => String(sb.branch_id || (sb as any).branchId) === String(branchId))
+    return subBranches.filter(sb => {
+      const sbBranch = sb.branch_id || (sb as any).branchId || (sb as any).parentBranchId
+      return String(sbBranch) === String(branchId)
+    })
   }
-  const getUserCountForCompany = (companyId: string) => {
-    const isConsult = String(companyId).toLowerCase().includes("consult") || companyId === "2"
-    if (isConsult) {
-      return (allUsers || []).filter(u => {
-        const cIds = u.companyIds || (u.companyId ? [u.companyId] : [])
-        return (Array.isArray(cIds) ? cIds : [cIds]).some((id: any) => String(id).toLowerCase().includes("consult") || id === "2")
-      }).length
-    }
+  const getUserCountForCompany = (compInput: string | Company) => {
+    const targetComp = typeof compInput === "object" && compInput !== null
+      ? compInput
+      : companies.find(c => isMatchingCompany(c, compInput)) || { id: compInput, slug: compInput }
+
     return (allUsers || []).filter(u => {
-      const cIds = u.companyIds || (u.companyId ? [u.companyId] : ["tech"])
-      return (Array.isArray(cIds) ? cIds : [cIds]).some((id: any) => String(id).toLowerCase().includes("tech") || id === "1")
+      const uCompId = u.company_id || u.companyId
+      if (uCompId && isMatchingCompany(targetComp, uCompId)) return true
+      if (Array.isArray(u.companyIds)) {
+        return u.companyIds.some((id: any) => isMatchingCompany(targetComp, id))
+      }
+      return false
     }).length
   }
 
   const filteredCompanies = React.useMemo(() => {
     return companies.filter(c => {
       // 1. Role Scope Restriction: Non-Super-Admins can ONLY see their assigned company
-      if (!isSuperAdmin && userAssignedComps.length > 0) {
-        const isAssigned = userAssignedComps.some(target => isMatchingCompany(c, target))
-        if (!isAssigned) return false
+      if (!isSuperAdmin) {
+        if (userAssignedComps.length > 0) {
+          const isAssigned = userAssignedComps.some(target => isMatchingCompany(c, target))
+          if (!isAssigned) return false
+        } else {
+          const uComp = (user as any)?.companyId || (user as any)?.company_id
+          if (uComp && !isMatchingCompany(c, uComp)) return false
+          if (!uComp) return false
+        }
       }
 
-      // 2. Search & Industry Filters
+      // 2. Active Company Filter (from Topbar switcher):
+      // When activeCompanyId is set to a specific company (not "all"), ONLY show that company!
+      if (activeCompanyId && activeCompanyId !== "all") {
+        if (!isMatchingCompany(c, activeCompanyId)) return false
+      }
+
+      // 3. Search & Industry Filters
       const matchesSearch = !searchQuery || c.name?.toLowerCase().includes(searchQuery.toLowerCase()) || c.slug?.toLowerCase().includes(searchQuery.toLowerCase())
       const matchesIndustry = !industryFilter || c.industry === industryFilter
       return matchesSearch && matchesIndustry
     })
-  }, [companies, searchQuery, industryFilter, isSuperAdmin, userAssignedComps])
+  }, [companies, searchQuery, industryFilter, isSuperAdmin, userAssignedComps, activeCompanyId, user])
 
   // ── COMPANY MODAL OPENERS ──────────────────────────────────────────────────
   const openAddCompany = () => {
@@ -527,7 +567,7 @@ export default function CompaniesMain() {
     setCompanyZoom(100)
     setPreviewInvoiceType("gst")
     setCompanyForm({
-      name: "", brand_name: "SAAMPARK", division_name: "", subtitle: "", slug: "",
+      name: "", brand_name: "SAAMPARK", division_name: "", subtitle: "", slug: "", trademark_symbol: "",
       industry: "Technology", currency: "INR", logo_url: "",
       gstin: "", pan: "", cin: "", msme_reg: "", iso_certification: "An ISO 9001:2015 Certified Company",
       signatory_name: "Authorized Signatory", signatory_designation: "Managing Director", signature_image_url: "", stamp_image_url: "",
@@ -556,7 +596,7 @@ export default function CompaniesMain() {
     setCompanyZoom(c.zoom || 100)
     setPreviewInvoiceType(c.preview_invoice_type || "gst")
     setCompanyForm({
-      name: c.name || "", brand_name: c.brand_name || "", division_name: c.division_name || "", subtitle: c.subtitle || "", slug: c.slug || "",
+      name: c.name || "", brand_name: c.brand_name || "", division_name: c.division_name || "", subtitle: c.subtitle || "", slug: c.slug || "", trademark_symbol: c.trademark_symbol || "",
       industry: c.industry || "Technology", currency: c.currency || "INR", logo_url: c.logo_url || "",
       gstin: c.gstin || "", pan: c.pan || "", cin: c.cin || "", msme_reg: c.msme_reg || "",
       iso_certification: c.iso_certification ?? "An ISO 9001:2015 Certified Company",
@@ -602,6 +642,7 @@ export default function CompaniesMain() {
         ...companyForm,
         name: companyForm.name.trim(),
         slug: companyForm.slug.trim() || generateSlug(companyForm.name.trim()),
+        trademark_symbol: companyForm.trademark_symbol || "",
         currency_symbol: cur?.symbol || "₹",
         signature_position: companySignaturePos,
         stamp_position: companyStampPos,
@@ -629,7 +670,7 @@ export default function CompaniesMain() {
         const idx = prev.findIndex(c => isMatchingCompany(c, compKey))
         if (idx >= 0) {
           const next = [...prev]
-          next[idx] = { ...next[idx], ...payload, id: next[idx].id || payload.slug, slug: next[idx].slug || payload.slug }
+          next[idx] = { ...next[idx], ...payload, id: payload.slug || next[idx].id, slug: payload.slug || next[idx].slug }
           return next
         }
         return [...prev, { ...payload, id: payload.slug, slug: payload.slug } as Company]
@@ -677,9 +718,8 @@ export default function CompaniesMain() {
         setEditingCompany(null)
       }
 
-      // 6. Reload fresh data from DB to ensure UI reflects what was actually saved
-      await loadData()
-      await useAuthStore.getState().fetchCompanies().catch(() => {})
+      // 6. Refresh companies in auth store in background (non-blocking)
+      useAuthStore.getState().fetchCompanies().catch(() => {})
     } catch (err) {
       console.error("Error saving company:", err)
       alert("Failed to save company.")
@@ -809,18 +849,60 @@ export default function CompaniesMain() {
     }))
   }
 
+  const handleCopyCompanyDetailsToBranch = () => {
+    const parentCompany = companies.find(c => isMatchingCompany(c, branchCompanyId))
+    if (!parentCompany) return
+    setBranchForm(prev => ({
+      ...prev,
+      gst_bank_name: parentCompany.gst_bank_name || parentCompany.bank_name || prev.gst_bank_name,
+      gst_account_holder: parentCompany.gst_account_holder || parentCompany.account_holder || prev.gst_account_holder,
+      gst_account_number: parentCompany.gst_account_number || parentCompany.account_number || prev.gst_account_number,
+      gst_ifsc_code: parentCompany.gst_ifsc_code || parentCompany.ifsc_code || prev.gst_ifsc_code,
+      gst_bank_branch: parentCompany.gst_bank_branch || parentCompany.bank_branch || prev.gst_bank_branch,
+      gst_upi_id: parentCompany.gst_upi_id || parentCompany.upi_id || prev.gst_upi_id,
+      gst_payment_qr_url: parentCompany.gst_payment_qr_url || parentCompany.payment_qr_url || prev.gst_payment_qr_url,
+      nongst_bank_name: parentCompany.nongst_bank_name || parentCompany.bank_name || prev.nongst_bank_name,
+      nongst_account_holder: parentCompany.nongst_account_holder || parentCompany.account_holder || prev.nongst_account_holder,
+      nongst_account_number: parentCompany.nongst_account_number || parentCompany.account_number || prev.nongst_account_number,
+      nongst_ifsc_code: parentCompany.nongst_ifsc_code || parentCompany.ifsc_code || prev.nongst_ifsc_code,
+      nongst_bank_branch: parentCompany.nongst_bank_branch || parentCompany.bank_branch || prev.nongst_bank_branch,
+      nongst_upi_id: parentCompany.nongst_upi_id || parentCompany.upi_id || prev.nongst_upi_id,
+      nongst_payment_qr_url: parentCompany.nongst_payment_qr_url || parentCompany.payment_qr_url || prev.nongst_payment_qr_url,
+      bank_name: parentCompany.gst_bank_name || parentCompany.bank_name || prev.bank_name,
+      account_holder: parentCompany.gst_account_holder || parentCompany.account_holder || prev.account_holder,
+      account_number: parentCompany.gst_account_number || parentCompany.account_number || prev.account_number,
+      ifsc_code: parentCompany.gst_ifsc_code || parentCompany.ifsc_code || prev.ifsc_code,
+      bank_branch: parentCompany.gst_bank_branch || parentCompany.bank_branch || prev.bank_branch,
+      upi_id: parentCompany.gst_upi_id || parentCompany.upi_id || prev.upi_id,
+      payment_qr_url: parentCompany.gst_payment_qr_url || parentCompany.payment_qr_url || prev.payment_qr_url,
+      signatory_name: parentCompany.signatory_name || prev.signatory_name,
+      signatory_designation: parentCompany.signatory_designation || prev.signatory_designation,
+      signature_image_url: parentCompany.signature_image_url || prev.signature_image_url,
+      stamp_image_url: parentCompany.stamp_image_url || prev.stamp_image_url,
+      terms_conditions: parentCompany.terms_conditions || (parentCompany as any).terms || prev.terms_conditions,
+      invoice_notes: parentCompany.invoice_notes || (parentCompany as any).notes || prev.invoice_notes,
+    }))
+    setBranchCopiedNotice(true)
+    setTimeout(() => setBranchCopiedNotice(false), 2500)
+  }
+
   const [branchPreviewSaveSuccess, setBranchPreviewSaveSuccess] = React.useState(false)
 
   const saveBranch = async (keepModalOpen = false) => {
     if (!branchForm.name.trim()) return
     setSaving(true)
     try {
+      const curComp = companies.find(c => isMatchingCompany(c, branchCompanyId))
+      const resolvedCompSlug = curComp?.slug || String(curComp?.id || branchCompanyId || "tech")
+      // Use actual numeric ID from the company object (populated from MySQL API response)
+      const resolvedCompNumeric = (curComp as any)?.numeric_id || (Number.isFinite(Number(curComp?.id)) ? Number(curComp?.id) : null) || 1
+
       const payload: any = {
         ...branchForm,
         name: branchForm.name.trim(),
         code: branchForm.code.trim().toUpperCase(),
-        companyId: branchCompanyId,
-        company_id: branchCompanyId,
+        companyId: resolvedCompSlug,
+        company_id: resolvedCompNumeric,
         signature_position: branchSignaturePos,
         stamp_position: branchStampPos,
         logo_scale: branchLogoScale,
@@ -849,18 +931,36 @@ export default function CompaniesMain() {
       unmarkGlobalItemDeleted(payload.code, "branches")
       if (editingBranch?.id) unmarkGlobalItemDeleted(editingBranch.id, "branches")
 
+      let savedBranch: any = null
       if (editingBranch) {
-        await useAuthStore.getState().updateBranch(editingBranch.id, payload).catch(() => {})
-        await BranchApiService.update(String(editingBranch.id), payload).catch(() => {})
-        setEditingBranch((prev: any) => ({ ...prev, ...payload }))
+        await BranchApiService.update(String(editingBranch.id), payload)
+        savedBranch = { ...editingBranch, ...payload }
+        setEditingBranch(savedBranch)
+        setBranches(prev => prev.map(b => String(b.id) === String(editingBranch.id) ? savedBranch : b))
       } else {
-        await useAuthStore.getState().addBranch(payload).catch(() => {})
-        await BranchApiService.create(branchCompanyId, payload).catch(() => {})
+        const apiRes = await BranchApiService.create(String(resolvedCompNumeric), payload)
+        const realId = apiRes?.id || apiRes?.data?.id
+        if (!realId) {
+          throw new Error("Branch creation did not return a valid ID from the server.")
+        }
+        savedBranch = { ...payload, id: realId, company_id: resolvedCompNumeric, companyId: resolvedCompSlug }
+        setBranches(prev => [...prev.filter(b => String(b.id) !== String(realId)), savedBranch])
       }
 
-      // Persist directly to app_data module storage for guaranteed retention
-      const currentBranches = useAuthStore.getState().branches
-      await saveModuleDataToDB("branches", currentBranches, "all").catch(() => {})
+      // Update auth store in memory for global components
+      const curStoreBranches = useAuthStore.getState().branches || []
+      const nextStoreBranches = editingBranch
+        ? curStoreBranches.map(b => String(b.id) === String(editingBranch.id) ? savedBranch : b)
+        : [...curStoreBranches.filter(b => String(b.id) !== String(savedBranch.id)), savedBranch]
+      useAuthStore.setState({ branches: nextStoreBranches })
+
+      // Always persist branches to app_data so they survive page refresh for all users
+      saveModuleDataToDB("branches", nextStoreBranches, "all").catch(() => {})
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("storage"))
+        window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+      }
 
       if (keepModalOpen) {
         setBranchPreviewSaveSuccess(true)
@@ -870,8 +970,6 @@ export default function CompaniesMain() {
         setEditingBranch(null)
       }
       setExpandedCompanies(prev => new Set([...prev, branchCompanyId]))
-      await loadData()
-      await useAuthStore.getState().fetchBranches().catch(() => {})
     } catch (err) {
       console.error("Error saving branch:", err)
       alert("Failed to save branch.")
@@ -1029,17 +1127,62 @@ export default function CompaniesMain() {
     }))
   }
 
+  const handleCopyCompanyDetailsToSubBranch = () => {
+    const pBranch = branches.find(b => b.id === subBranchBranchId)
+    const parentCompany = companies.find(c => isMatchingCompany(c, subBranchCompanyId) || (pBranch && isMatchingCompany(c, pBranch.company_id)))
+    if (!parentCompany) return
+    setSubBranchForm(prev => ({
+      ...prev,
+      gst_bank_name: parentCompany.gst_bank_name || parentCompany.bank_name || prev.gst_bank_name,
+      gst_account_holder: parentCompany.gst_account_holder || parentCompany.account_holder || prev.gst_account_holder,
+      gst_account_number: parentCompany.gst_account_number || parentCompany.account_number || prev.gst_account_number,
+      gst_ifsc_code: parentCompany.gst_ifsc_code || parentCompany.ifsc_code || prev.gst_ifsc_code,
+      gst_bank_branch: parentCompany.gst_bank_branch || parentCompany.bank_branch || prev.gst_bank_branch,
+      gst_upi_id: parentCompany.gst_upi_id || parentCompany.upi_id || prev.gst_upi_id,
+      gst_payment_qr_url: parentCompany.gst_payment_qr_url || parentCompany.payment_qr_url || prev.gst_payment_qr_url,
+      nongst_bank_name: parentCompany.nongst_bank_name || parentCompany.bank_name || prev.nongst_bank_name,
+      nongst_account_holder: parentCompany.nongst_account_holder || parentCompany.account_holder || prev.nongst_account_holder,
+      nongst_account_number: parentCompany.nongst_account_number || parentCompany.account_number || prev.nongst_account_number,
+      nongst_ifsc_code: parentCompany.nongst_ifsc_code || parentCompany.ifsc_code || prev.nongst_ifsc_code,
+      nongst_bank_branch: parentCompany.nongst_bank_branch || parentCompany.bank_branch || prev.nongst_bank_branch,
+      nongst_upi_id: parentCompany.nongst_upi_id || parentCompany.upi_id || prev.nongst_upi_id,
+      nongst_payment_qr_url: parentCompany.nongst_payment_qr_url || parentCompany.payment_qr_url || prev.nongst_payment_qr_url,
+      bank_name: parentCompany.gst_bank_name || parentCompany.bank_name || prev.bank_name,
+      account_holder: parentCompany.gst_account_holder || parentCompany.account_holder || prev.account_holder,
+      account_number: parentCompany.gst_account_number || parentCompany.account_number || prev.account_number,
+      ifsc_code: parentCompany.gst_ifsc_code || parentCompany.ifsc_code || prev.ifsc_code,
+      bank_branch: parentCompany.gst_bank_branch || parentCompany.bank_branch || prev.bank_branch,
+      upi_id: parentCompany.gst_upi_id || parentCompany.upi_id || prev.upi_id,
+      payment_qr_url: parentCompany.gst_payment_qr_url || parentCompany.payment_qr_url || prev.payment_qr_url,
+      signatory_name: parentCompany.signatory_name || prev.signatory_name,
+      signatory_designation: parentCompany.signatory_designation || prev.signatory_designation,
+      signature_image_url: parentCompany.signature_image_url || prev.signature_image_url,
+      stamp_image_url: parentCompany.stamp_image_url || prev.stamp_image_url,
+      terms_conditions: parentCompany.terms_conditions || (parentCompany as any).terms || prev.terms_conditions,
+      invoice_notes: parentCompany.invoice_notes || (parentCompany as any).notes || prev.invoice_notes,
+    }))
+    setSubBranchCopiedNotice(true)
+    setTimeout(() => setSubBranchCopiedNotice(false), 2500)
+  }
+
   const [subBranchPreviewSaveSuccess, setSubBranchPreviewSaveSuccess] = React.useState(false)
 
   const saveSubBranch = async (keepModalOpen = false) => {
     if (!subBranchForm.name.trim()) return
     setSaving(true)
     try {
+      const curBranch = branches.find(b => String(b.id) === String(subBranchBranchId) || (b.code && b.code === subBranchBranchId))
+      const resolvedBranchId = curBranch?.id || subBranchBranchId
+      const curComp = companies.find(c => isMatchingCompany(c, subBranchCompanyId))
+      const resolvedCompSlug = curComp?.slug || String(curComp?.id || subBranchCompanyId || "tech")
+      // Use actual numeric ID from the company object (populated from MySQL API response)
+      const resolvedCompNumeric = (curComp as any)?.numeric_id || (Number.isFinite(Number(curComp?.id)) ? Number(curComp?.id) : null) || (Number.isFinite(Number((curBranch as any)?.company_id)) ? Number((curBranch as any)?.company_id) : null) || 1
+
       const payload: any = {
-        branch_id: subBranchBranchId,
-        parentBranchId: subBranchBranchId,
-        companyId: subBranchCompanyId,
-        company_id: subBranchCompanyId,
+        branch_id: resolvedBranchId,
+        parentBranchId: resolvedBranchId,
+        companyId: resolvedCompSlug,
+        company_id: resolvedCompNumeric,
         ...subBranchForm,
         name: subBranchForm.name.trim(),
         code: subBranchForm.code.trim().toUpperCase(),
@@ -1066,18 +1209,36 @@ export default function CompaniesMain() {
       unmarkGlobalItemDeleted(payload.code, "subBranches")
       if (editingSubBranch?.id) unmarkGlobalItemDeleted(editingSubBranch.id, "subBranches")
 
+      let savedSub: any = null
       if (editingSubBranch) {
-        await useAuthStore.getState().updateSubBranch(editingSubBranch.id, payload).catch(() => {})
-        await SubBranchApiService.update(String(editingSubBranch.id), payload).catch(() => {})
-        setEditingSubBranch((prev: any) => ({ ...prev, ...payload }))
+        await SubBranchApiService.update(String(editingSubBranch.id), payload)
+        savedSub = { ...editingSubBranch, ...payload }
+        setEditingSubBranch(savedSub)
+        setSubBranches(prev => prev.map(sb => String(sb.id) === String(editingSubBranch.id) ? savedSub : sb))
       } else {
-        await useAuthStore.getState().addSubBranch(payload).catch(() => {})
-        await SubBranchApiService.create(subBranchCompanyId, payload).catch(() => {})
+        const apiRes = await SubBranchApiService.create(String(resolvedCompNumeric), payload)
+        const realId = apiRes?.id || apiRes?.data?.id
+        if (!realId) {
+          throw new Error("Sub-branch creation did not return a valid ID from the server.")
+        }
+        savedSub = { ...payload, id: realId, branch_id: resolvedBranchId, company_id: resolvedCompNumeric, companyId: resolvedCompSlug }
+        setSubBranches(prev => [...prev.filter(sb => String(sb.id) !== String(realId)), savedSub])
       }
 
-      // Persist directly to app_data module storage for guaranteed retention
-      const currentSubBranches = useAuthStore.getState().subBranches
-      await saveModuleDataToDB("sub_branches", currentSubBranches, "all").catch(() => {})
+      // Update auth store in memory for global components
+      const curStoreSubs = useAuthStore.getState().subBranches || []
+      const nextStoreSubs = editingSubBranch
+        ? curStoreSubs.map(sb => String(sb.id) === String(editingSubBranch.id) ? savedSub : sb)
+        : [...curStoreSubs.filter(sb => String(sb.id) !== String(savedSub.id)), savedSub]
+      useAuthStore.setState({ subBranches: nextStoreSubs })
+
+      // Always persist sub-branches to app_data so they survive page refresh for all users
+      saveModuleDataToDB("sub_branches", nextStoreSubs, "all").catch(() => {})
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("storage"))
+        window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+      }
 
       if (keepModalOpen) {
         setSubBranchPreviewSaveSuccess(true)
@@ -1087,8 +1248,6 @@ export default function CompaniesMain() {
         setEditingSubBranch(null)
       }
       setExpandedBranches(prev => new Set([...prev, subBranchBranchId]))
-      await loadData()
-      await useAuthStore.getState().fetchSubBranches().catch(() => {})
     } catch (err) {
       console.error("Error saving sub-branch:", err)
       alert("Failed to save sub-branch.")
@@ -1521,6 +1680,21 @@ export default function CompaniesMain() {
                             <div><label className="block font-semibold mb-1">Division / Group Tagline</label><Input placeholder="e.g. RESEARCH & INNOVATION" value={companyForm.division_name} onChange={e => setCompanyForm({ ...companyForm, division_name: e.target.value })} /></div>
                             <div><label className="block font-semibold mb-1">Subtitle / Sub-Header</label><Input placeholder="e.g. Software, Cloud & Security" value={companyForm.subtitle} onChange={e => setCompanyForm({ ...companyForm, subtitle: e.target.value })} /></div>
                           </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                            <div>
+                              <label className="block font-semibold mb-1">Trademark / Registered Badge</label>
+                              <select 
+                                value={companyForm.trademark_symbol} 
+                                onChange={e => setCompanyForm({ ...companyForm, trademark_symbol: e.target.value })}
+                                className="w-full px-3 py-2 rounded-md border border-border bg-surface text-foreground text-xs font-semibold"
+                              >
+                                <option value="">None (No badge)</option>
+                                <option value="TM">TM (Trademark / Applied)</option>
+                                <option value="R">R / ® (Registered Trademark)</option>
+                              </select>
+                              <span className="text-[10px] text-muted-foreground block mt-0.5">When selected, appears as a stylish pill badge next to SAAMPARK brand on invoices.</span>
+                            </div>
+                          </div>
                         </div>
                       )}
 
@@ -1538,7 +1712,21 @@ export default function CompaniesMain() {
 
                       {companyTab === "contact" && (
                         <div className="space-y-4">
-                          <div><label className="block font-semibold mb-1">Registered Address *</label><Input placeholder="Full registered street address" value={companyForm.address} onChange={e => setCompanyForm({ ...companyForm, address: e.target.value })} /></div>
+                          <div>
+                            <div className="flex justify-between items-center mb-1">
+                              <label className="block font-semibold">Registered Address *</label>
+                              <span className={`text-[10px] font-mono ${companyForm.address.length > 110 ? "text-amber-500 font-bold" : "text-muted-foreground"}`}>
+                                {companyForm.address.length}/120 chars
+                              </span>
+                            </div>
+                            <Input 
+                              placeholder="Full registered street address" 
+                              maxLength={120} 
+                              value={companyForm.address} 
+                              onChange={e => setCompanyForm({ ...companyForm, address: e.target.value })} 
+                            />
+                            <span className="text-[10px] text-muted-foreground block mt-0.5">Character limit keeps invoice bottom footer on a single clean line without extra vertical spacing.</span>
+                          </div>
                           <div className="grid grid-cols-3 gap-3">
                             <div><label className="block font-semibold mb-1">City</label><Input value={companyForm.city} onChange={e => setCompanyForm({ ...companyForm, city: e.target.value })} /></div>
                             <div><label className="block font-semibold mb-1">State</label><Input value={companyForm.state} onChange={e => setCompanyForm({ ...companyForm, state: e.target.value })} /></div>
@@ -1906,8 +2094,8 @@ export default function CompaniesMain() {
                         <OfficialInvoiceDocument
                           invoice={{
                             id: "DEMO-INV-001",
-                            invoiceNumber: "INV-" + (companyForm.slug?.toUpperCase() || "DEMO") + "-2026-001",
-                            invoice_number: "INV-" + (companyForm.slug?.toUpperCase() || "DEMO") + "-2026-001",
+                            invoiceNumber: previewInvoiceType === "gst" ? "INV-29102026001" : "NG-29102026001",
+                            invoice_number: previewInvoiceType === "gst" ? "INV-29102026001" : "NG-29102026001",
                             date: "2026-09-18",
                             issueDate: "2026-09-18",
                             dueDate: "2026-10-03",
@@ -2056,6 +2244,24 @@ export default function CompaniesMain() {
                       <Eye size={13} />
                       <span className="hidden sm:inline">Preview Only</span>
                     </button>
+                    <button
+                      type="button"
+                      onClick={handleCopyCompanyDetailsToBranch}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-muted hover:bg-muted/80 text-foreground border border-border"
+                      title="Copy Bank, QR, Stamp, Signature, and Terms from Parent Company"
+                    >
+                      {branchCopiedNotice ? (
+                        <>
+                          <Check size={13} className="text-emerald-500" />
+                          <span className="text-emerald-600 dark:text-emerald-400">Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={13} className="text-primary" />
+                          <span className="hidden sm:inline">Copy Company Details</span>
+                        </>
+                      )}
+                    </button>
                   </div>
                   <Button variant="ghost" size="sm" onClick={() => setShowBranchModal(false)}><X className="h-4 w-4" /></Button>
                 </div>
@@ -2069,11 +2275,12 @@ export default function CompaniesMain() {
                     branchModalViewMode === "split" ? "w-full lg:w-[48%] xl:w-[45%] border-b lg:border-b-0 lg:border-r border-border shrink-0" : "w-full"
                   }`}>
                     {/* Tab Navigation */}
-                    <div className="grid grid-cols-4 border-b border-border bg-muted/40 font-bold text-center shrink-0">
-                      <button type="button" onClick={() => setBranchTab("basic")} className={`py-2.5 border-b-2 text-[11px] font-bold ${branchTab === "basic" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>1. Info</button>
-                      <button type="button" onClick={() => setBranchTab("tax")} className={`py-2.5 border-b-2 text-[11px] font-bold ${branchTab === "tax" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>2. Address &amp; Tax</button>
-                      <button type="button" onClick={() => setBranchTab("stamp")} className={`py-2.5 border-b-2 text-[11px] font-bold ${branchTab === "stamp" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>3. Stamp &amp; Sig</button>
-                      <button type="button" onClick={() => setBranchTab("bank")} className={`py-2.5 border-b-2 text-[11px] font-bold ${branchTab === "bank" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>4. Bank &amp; QR</button>
+                    <div className="grid grid-cols-5 border-b border-border bg-muted/40 font-bold text-center shrink-0">
+                      <button type="button" onClick={() => setBranchTab("basic")} className={`py-2.5 border-b-2 text-[10px] sm:text-[11px] font-bold ${branchTab === "basic" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>1. Info</button>
+                      <button type="button" onClick={() => setBranchTab("tax")} className={`py-2.5 border-b-2 text-[10px] sm:text-[11px] font-bold ${branchTab === "tax" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>2. Address</button>
+                      <button type="button" onClick={() => setBranchTab("stamp")} className={`py-2.5 border-b-2 text-[10px] sm:text-[11px] font-bold ${branchTab === "stamp" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>3. Stamp &amp; Sig</button>
+                      <button type="button" onClick={() => setBranchTab("bank")} className={`py-2.5 border-b-2 text-[10px] sm:text-[11px] font-bold ${branchTab === "bank" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>4. Bank &amp; QR</button>
+                      <button type="button" onClick={() => setBranchTab("terms")} className={`py-2.5 border-b-2 text-[10px] sm:text-[11px] font-bold ${branchTab === "terms" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>5. Terms &amp; Notes</button>
                     </div>
 
                     {/* Form Fields */}
@@ -2115,10 +2322,6 @@ export default function CompaniesMain() {
                           <div className="grid grid-cols-2 gap-3">
                             <div><label className="block font-semibold mb-1">Branch Phone</label><Input value={branchForm.phone} onChange={e => setBranchForm({ ...branchForm, phone: e.target.value })} /></div>
                             <div><label className="block font-semibold mb-1">Branch Email</label><Input value={branchForm.email} onChange={e => setBranchForm({ ...branchForm, email: e.target.value })} /></div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border">
-                            <div><label className="block font-semibold mb-1">Branch GSTIN (Optional)</label><Input placeholder="19AAECS1234F1Z8" value={branchForm.gstin} onChange={e => setBranchForm({ ...branchForm, gstin: e.target.value.toUpperCase() })} className="font-mono font-bold uppercase" /></div>
-                            <div><label className="block font-semibold mb-1">Branch PAN (Optional)</label><Input placeholder="AAECS1234F" value={branchForm.pan} onChange={e => setBranchForm({ ...branchForm, pan: e.target.value.toUpperCase() })} className="font-mono font-bold uppercase" /></div>
                           </div>
                         </div>
                       )}
@@ -2349,6 +2552,35 @@ export default function CompaniesMain() {
                           )}
                         </div>
                       )}
+
+                      {branchTab === "terms" && (
+                        <div className="space-y-4">
+                          <div className="p-3 bg-blue-50/70 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/50 rounded-xl flex items-center gap-2 text-xs text-blue-700 dark:text-blue-300">
+                            <Landmark size={14} className="shrink-0 text-blue-600" />
+                            <span>Leave blank to automatically inherit parent Company's Terms &amp; Conditions and Invoice Notes.</span>
+                          </div>
+                          <div>
+                            <label className="block font-semibold mb-1 text-[11px]">Branch Terms &amp; Conditions (Override)</label>
+                            <textarea
+                              rows={4}
+                              value={branchForm.terms_conditions}
+                              onChange={e => setBranchForm({ ...branchForm, terms_conditions: e.target.value })}
+                              className="w-full px-3 py-2 rounded-xl border border-border bg-surface text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                              placeholder="Enter branch-specific terms or leave empty to inherit from parent Company..."
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-semibold mb-1 text-[11px]">Branch Invoice Notes (Override)</label>
+                            <textarea
+                              rows={3}
+                              value={branchForm.invoice_notes}
+                              onChange={e => setBranchForm({ ...branchForm, invoice_notes: e.target.value })}
+                              className="w-full px-3 py-2 rounded-xl border border-border bg-surface text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                              placeholder="Enter branch-specific invoice notes or leave empty to inherit from parent Company..."
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Left Pane Footer Actions */}
@@ -2508,8 +2740,8 @@ export default function CompaniesMain() {
                             <OfficialInvoiceDocument
                               invoice={{
                                 id: "DEMO-BR-INV-001",
-                                invoiceNumber: "INV-" + (branchForm.code || "BR") + "-2026-001",
-                                invoice_number: "INV-" + (branchForm.code || "BR") + "-2026-001",
+                                invoiceNumber: previewInvoiceType === "gst" ? "INV-29102026001" : "NG-29102026001",
+                                invoice_number: previewInvoiceType === "gst" ? "INV-29102026001" : "NG-29102026001",
                                 date: "2026-09-18",
                                 issueDate: "2026-09-18",
                                 dueDate: "2026-10-03",
@@ -2667,6 +2899,24 @@ export default function CompaniesMain() {
                       <Eye size={13} />
                       <span className="hidden sm:inline">Preview Only</span>
                     </button>
+                    <button
+                      type="button"
+                      onClick={handleCopyCompanyDetailsToSubBranch}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-muted hover:bg-muted/80 text-foreground border border-border"
+                      title="Copy Bank, QR, Stamp, Signature, and Terms from Parent Company"
+                    >
+                      {subBranchCopiedNotice ? (
+                        <>
+                          <Check size={13} className="text-emerald-500" />
+                          <span className="text-emerald-600 dark:text-emerald-400">Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={13} className="text-emerald-600" />
+                          <span className="hidden sm:inline">Copy Company Details</span>
+                        </>
+                      )}
+                    </button>
                   </div>
                   <Button variant="ghost" size="sm" onClick={() => setShowSubBranchModal(false)}><X className="h-4 w-4" /></Button>
                 </div>
@@ -2680,11 +2930,12 @@ export default function CompaniesMain() {
                     subBranchModalViewMode === "split" ? "w-full lg:w-[48%] xl:w-[45%] border-b lg:border-b-0 lg:border-r border-border shrink-0" : "w-full"
                   }`}>
                     {/* Tab Navigation */}
-                    <div className="grid grid-cols-4 border-b border-border bg-muted/40 font-bold text-center shrink-0">
-                      <button type="button" onClick={() => setSubBranchTab("partner")} className={`py-2.5 border-b-2 text-[11px] font-bold ${subBranchTab === "partner" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>1. Partner &amp; Share</button>
-                      <button type="button" onClick={() => setSubBranchTab("location")} className={`py-2.5 border-b-2 text-[11px] font-bold ${subBranchTab === "location" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>2. Address &amp; Tax</button>
-                      <button type="button" onClick={() => setSubBranchTab("stamp")} className={`py-2.5 border-b-2 text-[11px] font-bold ${subBranchTab === "stamp" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>3. Stamp &amp; Sig</button>
-                      <button type="button" onClick={() => setSubBranchTab("bank")} className={`py-2.5 border-b-2 text-[11px] font-bold ${subBranchTab === "bank" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>4. Bank &amp; QR</button>
+                    <div className="grid grid-cols-5 border-b border-border bg-muted/40 font-bold text-center shrink-0">
+                      <button type="button" onClick={() => setSubBranchTab("partner")} className={`py-2.5 border-b-2 text-[10px] sm:text-[11px] font-bold ${subBranchTab === "partner" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>1. Partner</button>
+                      <button type="button" onClick={() => setSubBranchTab("location")} className={`py-2.5 border-b-2 text-[10px] sm:text-[11px] font-bold ${subBranchTab === "location" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>2. Address</button>
+                      <button type="button" onClick={() => setSubBranchTab("stamp")} className={`py-2.5 border-b-2 text-[10px] sm:text-[11px] font-bold ${subBranchTab === "stamp" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>3. Stamp &amp; Sig</button>
+                      <button type="button" onClick={() => setSubBranchTab("bank")} className={`py-2.5 border-b-2 text-[10px] sm:text-[11px] font-bold ${subBranchTab === "bank" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>4. Bank &amp; QR</button>
+                      <button type="button" onClick={() => setSubBranchTab("terms")} className={`py-2.5 border-b-2 text-[10px] sm:text-[11px] font-bold ${subBranchTab === "terms" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>5. Terms &amp; Notes</button>
                     </div>
 
                     {/* Form Fields */}
@@ -2970,6 +3221,35 @@ export default function CompaniesMain() {
                           )}
                         </div>
                       )}
+
+                      {subBranchTab === "terms" && (
+                        <div className="space-y-4">
+                          <div className="p-3 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/50 rounded-xl flex items-center gap-2 text-xs text-emerald-700 dark:text-emerald-300">
+                            <Landmark size={14} className="shrink-0 text-emerald-600" />
+                            <span>Leave blank to automatically inherit parent Company's Terms &amp; Conditions and Invoice Notes.</span>
+                          </div>
+                          <div>
+                            <label className="block font-semibold mb-1 text-[11px]">Sub-Branch Terms &amp; Conditions (Override)</label>
+                            <textarea
+                              rows={4}
+                              value={subBranchForm.terms_conditions}
+                              onChange={e => setSubBranchForm({ ...subBranchForm, terms_conditions: e.target.value })}
+                              className="w-full px-3 py-2 rounded-xl border border-border bg-surface text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                              placeholder="Enter sub-branch specific terms or leave empty to inherit from parent Company..."
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-semibold mb-1 text-[11px]">Sub-Branch Invoice Notes (Override)</label>
+                            <textarea
+                              rows={3}
+                              value={subBranchForm.invoice_notes}
+                              onChange={e => setSubBranchForm({ ...subBranchForm, invoice_notes: e.target.value })}
+                              className="w-full px-3 py-2 rounded-xl border border-border bg-surface text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                              placeholder="Enter sub-branch specific invoice notes or leave empty to inherit from parent Company..."
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Left Pane Footer Actions */}
@@ -3130,8 +3410,8 @@ export default function CompaniesMain() {
                             <OfficialInvoiceDocument
                               invoice={{
                                 id: "DEMO-SB-INV-001",
-                                invoiceNumber: "INV-" + (subBranchForm.code || "SB") + "-2026-001",
-                                invoice_number: "INV-" + (subBranchForm.code || "SB") + "-2026-001",
+                                invoiceNumber: previewInvoiceType === "gst" ? "INV-29102026001" : "NG-29102026001",
+                                invoice_number: previewInvoiceType === "gst" ? "INV-29102026001" : "NG-29102026001",
                                 date: "2026-09-18",
                                 issueDate: "2026-09-18",
                                 dueDate: "2026-10-03",

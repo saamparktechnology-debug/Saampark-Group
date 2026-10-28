@@ -12,24 +12,18 @@ async function ensureUsersColumns() {
 }
 ensureUsersColumns();
 
-// Helper: Resolve requesting user info from JWT or headers
+// Helper: Resolve requesting user info from authenticated JWT token
 async function resolveRequester(req) {
-  if (req.user && req.user.role_id) return req.user;
-  const headerUserId = req.headers['x-user-id'];
-  const headerEmail = req.headers['x-user-email'];
-  if (headerUserId || headerEmail) {
+  if (req.user && req.user.id) {
     try {
       const [rows] = await pool.execute(
-        'SELECT id, email, role_id, company_id, company_ids, branch_id, sub_branch_id FROM users WHERE (id = ? OR email = ?) AND deleted_at IS NULL',
-        [headerUserId || '', headerEmail || '']
+        'SELECT id, email, role_id, company_id, company_ids, branch_id, sub_branch_id FROM users WHERE id = ? AND deleted_at IS NULL',
+        [req.user.id]
       );
       if (rows.length > 0) return rows[0];
     } catch {}
+    return req.user;
   }
-  const headerRole = req.headers['x-user-role'];
-  if (headerRole === 'Super Admin') return { role_id: 1, role_name: 'Super Admin' };
-  if (headerRole === 'Admin') return { role_id: 2, role_name: 'Admin' };
-  if (headerRole === 'Clients') return { role_id: 4, role_name: 'Clients' };
   return { role_id: 3, role_name: 'Teams' }; // default Teams
 }
 
@@ -113,6 +107,15 @@ const getAllUsers = async (req, res, next) => {
 
       const targetComp = (companyId && companyId !== 'all') ? companyId : null;
       if (targetComp) {
+        // Enforce that targetComp belongs to Admin's assigned companies
+        const isAllowed = compList.some(c => 
+          String(c).toLowerCase().trim() === String(targetComp).toLowerCase().trim() ||
+          (req.companyId && String(c).toLowerCase().trim() === String(req.companyId).toLowerCase().trim()) ||
+          (req.companySlug && String(c).toLowerCase().trim() === String(req.companySlug).toLowerCase().trim())
+        );
+        if (!isAllowed) {
+          return errorResponse(res, 403, 'Access denied: You can only view users in your assigned company.');
+        }
         query += ` AND (u.company_id = ? OR u.company_id = ? OR JSON_CONTAINS(COALESCE(u.company_ids, '[]'), JSON_QUOTE(?)) OR JSON_CONTAINS(COALESCE(u.company_ids, '[]'), JSON_QUOTE(?)))`;
         params.push(String(req.companyId || targetComp), String(req.companySlug || targetComp), String(req.companyId || targetComp), String(req.companySlug || targetComp));
       } else {
@@ -130,14 +133,15 @@ const getAllUsers = async (req, res, next) => {
         params.push(subBranchId);
       }
     } else {
-      // Teams / Clients
-      const effectiveBranch = requester.branch_id || branchId;
-      if (effectiveBranch && effectiveBranch !== 'all') {
+      // Teams / Clients: Strictly locked to their assigned company & branch
+      const userCompany = requester.company_id || 'tech';
+      query += ` AND (u.company_id = ? OR u.company_id = ?)`;
+      params.push(String(userCompany), String(req.companySlug || userCompany));
+
+      const effectiveBranch = requester.branch_id;
+      if (effectiveBranch) {
         query += ` AND u.branch_id = ?`;
         params.push(effectiveBranch);
-      } else if (companyId && companyId !== 'all') {
-        query += ` AND (u.company_id = ? OR u.company_id = ?)`;
-        params.push(String(req.companyId || companyId), String(req.companySlug || companyId));
       }
     }
 

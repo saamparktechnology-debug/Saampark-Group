@@ -1,10 +1,11 @@
 export interface Company {
   id: string
   name: string
-  slug: string
+  slug?: string
   brand_name?: string
   division_name?: string
   subtitle?: string
+  trademark_symbol?: string
   industry?: string
   currency?: string
   currency_symbol?: string
@@ -117,6 +118,7 @@ export interface Branch {
   cin?: string
   msme_reg?: string
   subtitle?: string
+  trademark_symbol?: string
   signature_position?: { x: number; y: number }
   stamp_position?: { x: number; y: number }
   logo_position?: { x: number; y: number }
@@ -152,6 +154,7 @@ export interface SubBranch {
   cin?: string
   msme_reg?: string
   subtitle?: string
+  trademark_symbol?: string
   iso_certification?: string
   terms_conditions?: string
   invoice_notes?: string

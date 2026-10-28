@@ -3,22 +3,22 @@ const router = express.Router();
 const { getAllUsers, getUserById, updateUser, toggleUserStatus, deleteUser, createUser } = require('../controllers/userController');
 const { authenticate, requireRole, optionalAuth } = require('../middlewares/authMiddleware');
 
-// GET all users
-router.get('/', optionalAuth, getAllUsers);
+// GET all users (requires authentication)
+router.get('/', authenticate, getAllUsers);
 
-// CREATE user (Admin/Super Admin) — Bypasses OTP, sends welcome credentials email
-router.post('/', optionalAuth, createUser);
+// CREATE user (Admin / Super Admin only)
+router.post('/', authenticate, requireRole(1, 2), createUser);
 
 // GET single user
-router.get('/:id', optionalAuth, getUserById);
+router.get('/:id', authenticate, getUserById);
 
-// UPDATE user
-router.put('/:id', optionalAuth, updateUser);
+// UPDATE user (Admin / Super Admin)
+router.put('/:id', authenticate, requireRole(1, 2), updateUser);
 
-// TOGGLE status
-router.patch('/:id/status', optionalAuth, toggleUserStatus);
+// TOGGLE status (Admin / Super Admin)
+router.patch('/:id/status', authenticate, requireRole(1, 2), toggleUserStatus);
 
-// DELETE user (soft)
-router.delete('/:id', optionalAuth, deleteUser);
+// DELETE user (soft) (Super Admin only)
+router.delete('/:id', authenticate, requireRole(1), deleteUser);
 
 module.exports = router;

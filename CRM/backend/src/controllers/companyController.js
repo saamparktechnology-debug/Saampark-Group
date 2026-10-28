@@ -107,6 +107,19 @@ const updateCompany = async (req, res, next) => {
     const userRole = String(req.user?.role || req.user?.role_name || '').toLowerCase();
     const isSuper = userRoleId === 1 || userRole.includes('super') || req.user?.email === 'hiisupriya@gmail.com' || req.user?.email === 'saampark.official@gmail.com';
 
+    const isNumericParam = Number.isFinite(Number(req.params.id));
+    const [targetRows] = await pool.execute(
+      isNumericParam 
+        ? 'SELECT id, slug FROM companies WHERE id = ? UNION SELECT id, slug FROM companies WHERE slug = ? LIMIT 1'
+        : 'SELECT id, slug FROM companies WHERE slug = ? UNION SELECT id, slug FROM companies WHERE id = ? LIMIT 1',
+      [req.params.id, req.params.id]
+    );
+    if (!targetRows.length) return errorResponse(res, 404, 'Company not found.');
+
+    const numericId = targetRows[0].id;
+    const oldSlug = targetRows[0].slug ? String(targetRows[0].slug).toLowerCase().trim() : null;
+    const targetIdStr = String(numericId).toLowerCase();
+
     if (!isSuper) {
       const isAdmin = userRoleId === 2 || userRole.includes('admin');
       if (!isAdmin) {
@@ -129,21 +142,32 @@ const updateCompany = async (req, res, next) => {
       const allAllowed = Array.from(new Set([assignedComp, ...assignedComps].filter(Boolean))).map(s => String(s).toLowerCase().trim());
       const targetParam = String(req.params.id).toLowerCase().trim();
 
-      const [targetRows] = await pool.execute('SELECT id, slug FROM companies WHERE id = ? OR slug = ?', [req.params.id, req.params.id]);
-      if (!targetRows.length) return errorResponse(res, 404, 'Company not found.');
-
-      const targetId = String(targetRows[0].id).toLowerCase();
-      const targetSlug = String(targetRows[0].slug || '').toLowerCase();
-
-      const canUpdate = allAllowed.some(a => a === targetParam || a === targetId || a === targetSlug);
+      const canUpdate = allAllowed.some(a => a === targetParam || a === targetIdStr || (oldSlug && a === oldSlug));
       if (!canUpdate) {
         return errorResponse(res, 403, 'Access denied: You can only edit your assigned company.');
+      }
+
+      // Non-super-admin is NOT permitted to rename company slug (prevents breaking foreign references & lockouts)
+      delete req.body.slug;
+    }
+
+    const isSlugRenamed = Boolean(req.body.slug && oldSlug && String(req.body.slug).toLowerCase().trim() !== oldSlug);
+    const newSlug = isSlugRenamed ? String(req.body.slug).toLowerCase().trim() : (oldSlug || targetParam);
+
+    // If super admin is changing the slug, ensure it does not conflict with another company
+    if (isSlugRenamed) {
+      const [conflictRows] = await pool.execute(
+        'SELECT id FROM companies WHERE (slug = ? OR id = ?) AND id != ?',
+        [newSlug, newSlug, numericId]
+      );
+      if (conflictRows.length > 0) {
+        return errorResponse(res, 409, 'A company with this slug or ID already exists.');
       }
     }
     
     const allowedFields = [
-      'name', 'currency', 'currency_symbol', 'logo_url', 'address', 'industry',
-      'brand_name', 'division_name', 'subtitle', 'iso_certification', 'gstin', 'pan', 'cin', 'msme_reg', 'website',
+      'name', ...(isSuper ? ['slug'] : []), 'currency', 'currency_symbol', 'logo_url', 'address', 'industry', 'phone', 'email',
+      'brand_name', 'division_name', 'subtitle', 'trademark_symbol', 'iso_certification', 'gstin', 'pan', 'cin', 'msme_reg', 'website',
       'signatory_name', 'signatory_designation', 'signature_image_url', 'stamp_image_url',
       'terms_conditions', 'invoice_notes', 'upi_id', 'account_holder', 'bank_name', 'account_number', 'ifsc_code', 'bank_branch', 'payment_qr_url',
       'gst_bank_name', 'gst_account_holder', 'gst_account_number', 'gst_ifsc_code', 'gst_bank_branch', 'gst_upi_id', 'gst_payment_qr_url',
@@ -169,14 +193,15 @@ const updateCompany = async (req, res, next) => {
 
     if (fields.length > 0) {
       fields.push('updated_at = NOW()');
-      values.push(req.params.id, req.params.id);
-      const [updateResult] = await pool.execute(`UPDATE companies SET ${fields.join(', ')} WHERE id = ? OR slug = ?`, values).catch(err => {
+      values.push(numericId);
+      // Strictly update by numericId to never collide with other rows sharing slug or ID
+      const [updateResult] = await pool.execute(`UPDATE companies SET ${fields.join(', ')} WHERE id = ?`, values).catch(err => {
         console.warn('MySQL company update column fallback:', err.message);
         return [null];
       });
 
       if (!updateResult || updateResult.affectedRows === 0) {
-        const compSlug = String(req.body.slug || req.params.id).toLowerCase();
+        const compSlug = String(req.body.slug || oldSlug || req.params.id).toLowerCase();
         const insertCols = ['name', 'slug'];
         const insertPlaceholders = ['?', '?'];
         const insertVals = [req.body.name || req.params.id, compSlug];
@@ -201,6 +226,71 @@ const updateCompany = async (req, res, next) => {
       }
     }
 
+    // When a super admin renames a slug, propagate changes to references (users, branches, sub-branches)
+    if (isSlugRenamed && oldSlug) {
+      // 1. Update users assigned to this company slug
+      await pool.execute('UPDATE users SET company_id = ? WHERE company_id = ?', [newSlug, oldSlug]).catch(() => {});
+      try {
+        const [uRows] = await pool.execute('SELECT id, company_ids FROM users WHERE company_ids LIKE ?', [`%"${oldSlug}"%`]);
+        for (const u of uRows) {
+          if (u.company_ids) {
+            let arr = typeof u.company_ids === 'string' ? JSON.parse(u.company_ids) : u.company_ids;
+            if (Array.isArray(arr) && arr.includes(oldSlug)) {
+              arr = arr.map(s => s === oldSlug ? newSlug : s);
+              await pool.execute('UPDATE users SET company_ids = ? WHERE id = ?', [JSON.stringify(arr), u.id]);
+            }
+          }
+        }
+      } catch (e) {}
+
+      // 2. Update branches referencing the old slug
+      await pool.execute('UPDATE branches SET company_id = ? WHERE company_id = ?', [numericId, oldSlug]).catch(() => {});
+
+      // 3. Migrate branches in app_data
+      try {
+        const [bRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "branches"');
+        if (bRows.length > 0 && bRows[0].data_json) {
+          let bList = JSON.parse(bRows[0].data_json);
+          if (Array.isArray(bList)) {
+            let changed = false;
+            bList = bList.map(b => {
+              const bComp = String(b.company_id || b.companyId || '').toLowerCase().trim();
+              if (bComp === oldSlug) {
+                changed = true;
+                return { ...b, company_id: numericId, companyId: newSlug };
+              }
+              return b;
+            });
+            if (changed) {
+              await pool.execute('UPDATE app_data SET data_json = ?, updated_at = NOW() WHERE module_key = "branches"', [JSON.stringify(bList)]);
+            }
+          }
+        }
+      } catch (e) {}
+
+      // 4. Migrate sub_branches in app_data
+      try {
+        const [sbRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "sub_branches"');
+        if (sbRows.length > 0 && sbRows[0].data_json) {
+          let sbList = JSON.parse(sbRows[0].data_json);
+          if (Array.isArray(sbList)) {
+            let changed = false;
+            sbList = sbList.map(sb => {
+              const sbComp = String(sb.company_id || sb.companyId || '').toLowerCase().trim();
+              if (sbComp === oldSlug) {
+                changed = true;
+                return { ...sb, company_id: numericId, companyId: newSlug };
+              }
+              return sb;
+            });
+            if (changed) {
+              await pool.execute('UPDATE app_data SET data_json = ?, updated_at = NOW() WHERE module_key = "sub_branches"', [JSON.stringify(sbList)]);
+            }
+          }
+        }
+      } catch (e) {}
+    }
+
     // Also sync to app_data table in MySQL for guaranteed persistence
     try {
       const [appDataRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "companies"');
@@ -209,9 +299,20 @@ const updateCompany = async (req, res, next) => {
         try { currentList = JSON.parse(appDataRows[0].data_json); } catch {}
       }
       if (!Array.isArray(currentList)) currentList = [];
-      const targetSlug = String(req.body.slug || req.params.id).toLowerCase();
-      const existingIdx = currentList.findIndex(c => String(c.id).toLowerCase() === targetSlug || String(c.slug || '').toLowerCase() === targetSlug);
-      const updatedComp = { ...(existingIdx >= 0 ? currentList[existingIdx] : {}), ...req.body, id: targetSlug, slug: targetSlug };
+      
+      // Match on the old slug from row BEFORE update to avoid cross-tenant corruptions
+      const oldTarget = String(oldSlug || req.params.id).toLowerCase();
+      const targetSlug = String(req.body.slug || oldSlug || req.params.id).toLowerCase();
+      const matches = (c, key) => String(c.id).toLowerCase() === key || String(c.slug || '').toLowerCase() === key;
+      const existingIdx = currentList.findIndex(c => matches(c, oldTarget) || matches(c, String(numericId)));
+
+      const updatedComp = { 
+        ...(existingIdx >= 0 ? currentList[existingIdx] : {}), 
+        ...req.body, 
+        id: targetSlug, 
+        slug: targetSlug,
+        numeric_id: numericId
+      };
       if (existingIdx >= 0) {
         currentList[existingIdx] = updatedComp;
       } else {
