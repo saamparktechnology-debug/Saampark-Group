@@ -509,7 +509,9 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
       subBranchName: subBranchNameToSave || undefined,
       department: department.trim() || (role === "Clients" ? "Client Accounts" : "General"),
       phone: phone.trim(),
-      password: password.trim() || "Password123",
+      ...(editingUser
+        ? (password.trim() ? { password: password.trim() } : (editingUser.password ? { password: editingUser.password } : {}))
+        : { password: password.trim() || "Password123" }),
       status,
       avatarUrl: avatarUrl || undefined,
       kycStatus,

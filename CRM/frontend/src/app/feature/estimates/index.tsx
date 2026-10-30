@@ -4,7 +4,8 @@ import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
   FileText, Plus, Search, Edit, Trash2, X, Send, 
-  Printer, UserCheck, Mail, Building2, Phone, Sparkles, ArrowRight
+  Printer, UserCheck, Mail, Building2, Phone, Sparkles, ArrowRight,
+  Calculator, Clock, CheckCircle2
 } from "lucide-react"
 import { useAuthStore, getCompanyFullName, getCompanyLogoUrl } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
@@ -339,20 +340,75 @@ export default function EstimatesMain() {
         )}
       </div>
 
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white dark:bg-zinc-900 p-3 rounded-xl border border-zinc-200/80 dark:border-zinc-800 shadow-2xs">
-        <div className="relative w-full sm:w-80">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-          <input type="text" placeholder="Search by number, customer, email..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-9 pr-3 py-1.5 text-xs bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-blue-500" />
+      {/* KPI METRICS */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="kpi-card-premium flex items-center justify-between">
+          <div>
+            <p className="text-xs text-muted-foreground font-semibold">Total Estimates</p>
+            <h3 className="text-2xl font-black text-foreground mt-0.5">{estimates.length}</h3>
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 dark:text-blue-400 mt-1">
+              <span>●</span> Projected cost proposals
+            </span>
+          </div>
+          <div className="p-3 bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 rounded-xl">
+            <FileText size={22} />
+          </div>
         </div>
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-3 py-1.5 text-xs bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg focus:outline-hidden cursor-pointer">
-          <option value="all">All Status</option><option value="Draft">Draft</option><option value="Sent">Sent</option><option value="Approved">Approved</option><option value="Rejected">Rejected</option>
+
+        <div className="kpi-card-premium flex items-center justify-between">
+          <div>
+            <p className="text-xs text-muted-foreground font-semibold">Total Value</p>
+            <h3 className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-0.5">₹{estimates.reduce((acc, e) => acc + (e.total || 0), 0).toLocaleString("en-IN")}</h3>
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 dark:text-blue-400 mt-1">
+              <span>₹</span> Total estimate pipeline
+            </span>
+          </div>
+          <div className="p-3 bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 rounded-xl">
+            <Calculator size={22} />
+          </div>
+        </div>
+
+        <div className="kpi-card-premium flex items-center justify-between">
+          <div>
+            <p className="text-xs text-muted-foreground font-semibold">Sent &amp; Pending</p>
+            <h3 className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-0.5">{estimates.filter(e => e.status === "Sent").length}</h3>
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400 mt-1">
+              <span>⏱</span> Awaiting review
+            </span>
+          </div>
+          <div className="p-3 bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 rounded-xl">
+            <Clock size={22} />
+          </div>
+        </div>
+
+        <div className="kpi-card-premium flex items-center justify-between">
+          <div>
+            <p className="text-xs text-muted-foreground font-semibold">Approved</p>
+            <h3 className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5">{estimates.filter(e => e.status === "Approved").length}</h3>
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+              <span>✓</span> Confirmed by customer
+            </span>
+          </div>
+          <div className="p-3 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 rounded-xl">
+            <CheckCircle2 size={22} />
+          </div>
+        </div>
+      </div>
+
+      <div className="box-3d flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-2xl">
+        <div className="relative w-full sm:w-80">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input type="text" placeholder="Search by number, customer, email..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-9 pr-3 py-2 text-xs liquid-glass-input rounded-xl focus:outline-hidden" />
+        </div>
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-3 py-2 text-xs liquid-glass-input rounded-xl focus:outline-hidden cursor-pointer font-semibold">
+          <option value="all">All Statuses</option><option value="Draft">Draft</option><option value="Sent">Sent</option><option value="Approved">Approved</option><option value="Rejected">Rejected</option>
         </select>
       </div>
 
-      <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl overflow-hidden shadow-2xs">
+      <div className="table-3d-wrapper rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-200 dark:border-zinc-800 text-zinc-500 uppercase font-semibold text-[11px]">
+            <thead className="bg-muted/40 border-b border-border text-muted-foreground uppercase font-bold text-[11px] tracking-wider">
               <tr>
                 <th className="py-3 px-4">Number</th>
                 <th className="py-3 px-4">Customer & Recipient</th>

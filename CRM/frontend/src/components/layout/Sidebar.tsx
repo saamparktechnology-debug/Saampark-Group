@@ -460,6 +460,22 @@ export function Sidebar() {
     "Activity Logs": "Activity Logs",
   }
 
+  // Essential governance modules required when viewing at SAAMPARK Group holding level
+  const GROUP_GOVERNANCE_MODULES = new Set([
+    "Dashboard",
+    "Companies",
+    "Branches",
+    "Users",
+    "Approvals",
+    "Reports",
+    "Settings",
+    "General Settings",
+    "Permissions",
+    "Departments",
+    "Teams",
+    "Activity Logs",
+  ])
+
   // Check permission for any nav or sub-nav item strictly and individually
   const checkNavAllowed = React.useCallback((u: any, name: string): boolean => {
     if (!u) return false
@@ -470,6 +486,17 @@ export function Sidebar() {
     }
 
     const targetModule = NAV_TO_MODULE_MAP[name] || name
+
+    const isGroupLevel = !activeCompanyId || activeCompanyId === "all" || activeCompanyId === "group" || activeCompanyId === "saampark-group"
+
+    // When at SAAMPARK Group holding level, show only necessary executive governance modules for Super Admin.
+    // Operational business modules (Invoices, Quotations, Estimates, Leads, Clients, Projects, Tasks, etc.)
+    // belong to operating companies and will automatically appear when switching to a specific company.
+    if (isGroupLevel && u.role === "Super Admin") {
+      if (!GROUP_GOVERNANCE_MODULES.has(name) && !GROUP_GOVERNANCE_MODULES.has(targetModule)) {
+        return false
+      }
+    }
 
     // Entity-level module visibility restriction (Company -> Branch -> Sub-Branch)
     const isEntityAllowed = isEntityModuleAllowed(activeCompanyId, activeBranchId, activeSubBranchId, targetModule)

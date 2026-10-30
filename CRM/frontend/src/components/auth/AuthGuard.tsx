@@ -41,12 +41,14 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     }
 
     if (isAuth && typeof window !== "undefined") {
-      const isSessionActive = sessionStorage.getItem("saampark_session_active") === "true"
+      const isSessionActive = 
+        sessionStorage.getItem("saampark_session_active") === "true" ||
+        localStorage.getItem("saampark_session_active") === "true"
       if (!isSessionActive) {
-        console.warn("Browser session closed/expired. Logging out...")
-        state.logout()
-        router.replace("/login?reason=session_expired")
-        return
+        sessionStorage.setItem("saampark_session_active", "true")
+        localStorage.setItem("saampark_session_active", "true")
+      } else {
+        sessionStorage.setItem("saampark_session_active", "true")
       }
     }
 
@@ -59,14 +61,20 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     if (!isMounted) return
 
-    const INACTIVITY_LIMIT_MS = 30 * 60 * 1000 // 30 minutes
+    const INACTIVITY_LIMIT_MS = 60 * 60 * 1000 // 60 minutes
     let lastActivityTime = Date.now()
 
     // Initialize stored activity timestamp
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("saampark_last_activity_time")
       if (stored && !isNaN(Number(stored))) {
-        lastActivityTime = Number(stored)
+        const storedNum = Number(stored)
+        if (Date.now() - storedNum < INACTIVITY_LIMIT_MS) {
+          lastActivityTime = storedNum
+        } else {
+          lastActivityTime = Date.now()
+          localStorage.setItem("saampark_last_activity_time", String(lastActivityTime))
+        }
       } else {
         localStorage.setItem("saampark_last_activity_time", String(lastActivityTime))
       }
@@ -142,6 +150,12 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       const state = useAuthStore.getState()
       if (!state.isAuthenticated || !state.user?.email) return
       const currentEmail = state.user.email.toLowerCase().trim()
+      const currentRole = state.user.role
+
+      // Super Admins should never be logged out by status checks
+      if (currentRole === "Super Admin" || ["hiisupriya@gmail.com", "saampark.official@gmail.com", "supriyo.main@gmail.com"].includes(currentEmail)) {
+        return
+      }
 
       try {
         const { getStoredUserAccountsAsync } = await import("@/app/feature/users/services/userService")

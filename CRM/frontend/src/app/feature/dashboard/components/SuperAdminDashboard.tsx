@@ -771,90 +771,90 @@ export function SuperAdminDashboard() {
           {/* ── SECTION 2: 5 METRIC KPI CARDS ROW (EXACT LAYOUT & ACCURATE DATA) ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {/* Card 1: Total Companies */}
-        <div className="card-3d p-5 rounded-2xl flex flex-col justify-between">
+        <div className="kpi-card-premium flex flex-col justify-between">
           <div className="flex items-start justify-between">
-            <div className="p-3 rounded-2xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 border border-blue-100 dark:border-blue-900">
+            <div className="p-3 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 shadow-xs">
               <Building2 size={22} />
             </div>
             <div className="text-right">
-              <p className="text-xs text-slate-400 font-medium">Total Companies</p>
-              <p className="text-2xl font-black text-slate-900 dark:text-white mt-0.5">{totalCompaniesCount}</p>
-              <p className="text-[11px] text-slate-400">Active Companies</p>
+              <p className="text-xs text-muted-foreground font-semibold">Total Companies</p>
+              <p className="text-2xl font-black text-foreground mt-0.5">{totalCompaniesCount}</p>
+              <p className="text-[11px] text-muted-foreground">Active Corporate Entities</p>
             </div>
           </div>
-          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-zinc-800/80 flex items-center text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+          <div className="mt-4 pt-3 border-t border-border/60 flex items-center text-xs font-bold text-emerald-600 dark:text-emerald-400">
             <ArrowUp size={13} className="mr-0.5" />
             <span>8% from last month</span>
           </div>
         </div>
 
         {/* Card 2: Total Branches */}
-        <div className="card-3d p-5 rounded-2xl flex flex-col justify-between">
+        <div className="kpi-card-premium flex flex-col justify-between">
           <div className="flex items-start justify-between">
-            <div className="p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 border border-emerald-100 dark:border-emerald-900">
+            <div className="p-3 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shadow-xs">
               <GitBranch size={22} />
             </div>
             <div className="text-right">
-              <p className="text-xs text-slate-400 font-medium">Total Branches</p>
-              <p className="text-2xl font-black text-slate-900 dark:text-white mt-0.5">{totalBranchesCount}</p>
-              <p className="text-[11px] text-slate-400">Active Branches</p>
+              <p className="text-xs text-muted-foreground font-semibold">Total Branches</p>
+              <p className="text-2xl font-black text-foreground mt-0.5">{totalBranchesCount}</p>
+              <p className="text-[11px] text-muted-foreground">Active Branch Offices</p>
             </div>
           </div>
-          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-zinc-800/80 flex items-center text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+          <div className="mt-4 pt-3 border-t border-border/60 flex items-center text-xs font-bold text-emerald-600 dark:text-emerald-400">
             <ArrowUp size={13} className="mr-0.5" />
             <span>12% from last month</span>
           </div>
         </div>
 
         {/* Card 3: Total Users */}
-        <div className="card-3d p-5 rounded-2xl flex flex-col justify-between">
+        <div className="kpi-card-premium flex flex-col justify-between">
           <div className="flex items-start justify-between">
-            <div className="p-3 rounded-2xl bg-purple-50 dark:bg-purple-950/50 text-purple-600 border border-purple-100 dark:border-purple-900">
+            <div className="p-3 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 shadow-xs">
               <Users size={22} />
             </div>
             <div className="text-right">
-              <p className="text-xs text-slate-400 font-medium">Total Users</p>
-              <p className="text-2xl font-black text-slate-900 dark:text-white mt-0.5">{activeUsersCount}</p>
-              <p className="text-[11px] text-slate-400">Active Users</p>
+              <p className="text-xs text-muted-foreground font-semibold">Total Users</p>
+              <p className="text-2xl font-black text-foreground mt-0.5">{activeUsersCount}</p>
+              <p className="text-[11px] text-muted-foreground">Registered Personnel</p>
             </div>
           </div>
-          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-zinc-800/80 flex items-center text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+          <div className="mt-4 pt-3 border-t border-border/60 flex items-center text-xs font-bold text-emerald-600 dark:text-emerald-400">
             <ArrowUp size={13} className="mr-0.5" />
             <span>15% from last month</span>
           </div>
         </div>
 
         {/* Card 4: Total Projects */}
-        <div className="card-3d p-5 rounded-2xl flex flex-col justify-between">
+        <div className="kpi-card-premium flex flex-col justify-between">
           <div className="flex items-start justify-between">
-            <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 border border-amber-100 dark:border-amber-900">
+            <div className="p-3 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shadow-xs">
               <Briefcase size={22} />
             </div>
             <div className="text-right">
-              <p className="text-xs text-slate-400 font-medium">Total Projects</p>
-              <p className="text-2xl font-black text-slate-900 dark:text-white mt-0.5">{activeProjectsCount}</p>
-              <p className="text-[11px] text-slate-400">Running Projects</p>
+              <p className="text-xs text-muted-foreground font-semibold">Total Projects</p>
+              <p className="text-2xl font-black text-foreground mt-0.5">{activeProjectsCount}</p>
+              <p className="text-[11px] text-muted-foreground">Running Operations</p>
             </div>
           </div>
-          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-zinc-800/80 flex items-center text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+          <div className="mt-4 pt-3 border-t border-border/60 flex items-center text-xs font-bold text-emerald-600 dark:text-emerald-400">
             <ArrowUp size={13} className="mr-0.5" />
             <span>10% from last month</span>
           </div>
         </div>
 
         {/* Card 5: Total Revenue */}
-        <div className="card-3d p-5 rounded-2xl flex flex-col justify-between">
+        <div className="kpi-card-premium flex flex-col justify-between">
           <div className="flex items-start justify-between">
-            <div className="p-3 rounded-2xl bg-pink-50 dark:bg-pink-950/50 text-pink-600 border border-pink-100 dark:border-pink-900">
+            <div className="p-3 rounded-2xl bg-pink-500/10 text-pink-600 dark:text-pink-400 border border-pink-500/20 shadow-xs">
               <IndianRupee size={22} />
             </div>
             <div className="text-right">
-              <p className="text-xs text-slate-400 font-medium">Total Revenue</p>
-              <p className="text-xl font-black text-slate-900 dark:text-white mt-0.5">{formatINR(totalRevenueNumber)}</p>
-              <p className="text-[11px] text-slate-400">All Companies</p>
+              <p className="text-xs text-muted-foreground font-semibold">Total Revenue</p>
+              <p className="text-xl font-black text-foreground mt-0.5">{formatINR(totalRevenueNumber)}</p>
+              <p className="text-[11px] text-muted-foreground">Consolidated Pipeline</p>
             </div>
           </div>
-          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-zinc-800/80 flex items-center text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+          <div className="mt-4 pt-3 border-t border-border/60 flex items-center text-xs font-bold text-emerald-600 dark:text-emerald-400">
             <ArrowUp size={13} className="mr-0.5" />
             <span>18% from last month</span>
           </div>
@@ -1078,9 +1078,9 @@ export function SuperAdminDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Left 2/3: Overview Table (3 Real Companies & 4 Real Branches) */}
-        <div className="lg:col-span-2 bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-slate-200/80 dark:border-zinc-800 shadow-xs flex flex-col justify-between">
+        <div className="lg:col-span-2 table-3d-wrapper p-6 rounded-2xl flex flex-col justify-between">
           <div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3">
+            <h3 className="text-sm font-bold text-foreground mb-3">
               All Companies & Branches Overview
             </h3>
 
@@ -1191,10 +1191,10 @@ export function SuperAdminDashboard() {
         </div>
 
         {/* Right 1/3: Recent Activities Card (Filtered against company) */}
-        <div className="bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-slate-200/80 dark:border-zinc-800 shadow-xs flex flex-col justify-between">
+        <div className="card-3d p-6 rounded-2xl flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-5">
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+              <h3 className="text-sm font-bold text-foreground">
                 Recent Activities
               </h3>
               <Link href="/feature/activity-logs" className="text-xs font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400">

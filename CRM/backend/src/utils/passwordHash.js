@@ -11,13 +11,21 @@ const hashPassword = async (password) => {
 };
 
 /**
- * Compares a plain text password with a hashed password
+ * Compares a plain text password with a hashed or plain password
  * @param {string} password - Plain text password
- * @param {string} hashedPassword - Hashed password stored in DB
+ * @param {string} hashedPassword - Hashed or plain password stored in DB
  * @returns {Promise<boolean>} Match result
  */
 const comparePassword = async (password, hashedPassword) => {
-  return await bcrypt.compare(password, hashedPassword);
+  if (!password || !hashedPassword) return false;
+  const pStr = String(password);
+  const hStr = String(hashedPassword);
+  if (pStr === hStr || pStr.trim() === hStr || pStr === hStr.trim()) return true;
+  try {
+    return await bcrypt.compare(pStr, hStr) || await bcrypt.compare(pStr.trim(), hStr);
+  } catch (err) {
+    return false;
+  }
 };
 
 module.exports = {

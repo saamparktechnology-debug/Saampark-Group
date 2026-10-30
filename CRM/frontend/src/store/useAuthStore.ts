@@ -1650,6 +1650,7 @@ export const useAuthStore = create<AuthState>()(
 
         if (typeof window !== 'undefined') {
           sessionStorage.setItem('saampark_session_active', 'true')
+          localStorage.setItem('saampark_session_active', 'true')
           localStorage.setItem('saampark_last_activity_time', String(Date.now()))
         }
 
@@ -1746,6 +1747,7 @@ export const useAuthStore = create<AuthState>()(
 
             if (typeof window !== 'undefined') {
               sessionStorage.setItem('saampark_session_active', 'true')
+              localStorage.setItem('saampark_session_active', 'true')
               localStorage.setItem('saampark_last_activity_time', String(Date.now()))
             }
 
@@ -1795,6 +1797,7 @@ export const useAuthStore = create<AuthState>()(
       logout: () => {
         if (typeof window !== 'undefined') {
           sessionStorage.removeItem('saampark_session_active')
+          localStorage.removeItem('saampark_session_active')
           localStorage.removeItem('saampark_last_activity_time')
         }
         AuthService.logout()

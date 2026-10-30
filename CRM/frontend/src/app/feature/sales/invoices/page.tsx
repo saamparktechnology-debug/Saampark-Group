@@ -1531,49 +1531,61 @@ function InvoicesPageContent() {
 
       {/* ---------------- KPI SUMMARY CARDS ---------------- */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl p-4 shadow-2xs flex items-center justify-between">
+        <div className="kpi-card-premium flex items-center justify-between">
           <div>
-            <p className="text-xs text-zinc-500 font-medium">{isClientRole ? "My Total Invoiced" : "Total Invoiced"}</p>
-            <h3 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mt-0.5">₹{totalInvoicedNum.toLocaleString("en-IN")}</h3>
+            <p className="text-xs text-muted-foreground font-semibold">{isClientRole ? "My Total Invoiced" : "Total Invoiced"}</p>
+            <h3 className="text-2xl font-black text-foreground mt-0.5">₹{totalInvoicedNum.toLocaleString("en-IN")}</h3>
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 dark:text-blue-400 mt-1">
+              <span>●</span> {displayedInvoices.length} invoices generated
+            </span>
           </div>
-          <div className="p-2.5 bg-blue-50 dark:bg-blue-950/50 text-blue-600 rounded-lg">
-            <FileText size={20} />
+          <div className="p-3 bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 rounded-xl">
+            <FileText size={22} />
           </div>
         </div>
 
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl p-4 shadow-2xs flex items-center justify-between">
+        <div className="kpi-card-premium flex items-center justify-between">
           <div>
-            <p className="text-xs text-zinc-500 font-medium">Payments Received</p>
-            <h3 className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">₹{totalReceivedNum.toLocaleString("en-IN")}</h3>
+            <p className="text-xs text-muted-foreground font-semibold">Payments Received</p>
+            <h3 className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5">₹{totalReceivedNum.toLocaleString("en-IN")}</h3>
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+              <span>✓</span> Real-time reconciled
+            </span>
           </div>
-          <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 rounded-lg">
-            <CheckCircle2 size={20} />
+          <div className="p-3 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 rounded-xl">
+            <CheckCircle2 size={22} />
           </div>
         </div>
 
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl p-4 shadow-2xs flex items-center justify-between">
+        <div className="kpi-card-premium flex items-center justify-between">
           <div>
-            <p className="text-xs text-zinc-500 font-medium">Pending Collections</p>
-            <h3 className="text-xl font-bold text-rose-600 dark:text-rose-400 mt-0.5">₹{totalDueNum.toLocaleString("en-IN")}</h3>
+            <p className="text-xs text-muted-foreground font-semibold">Pending Collections</p>
+            <h3 className="text-2xl font-black text-rose-600 dark:text-rose-400 mt-0.5">₹{totalDueNum.toLocaleString("en-IN")}</h3>
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-600 dark:text-rose-400 mt-1">
+              <span>!</span> Outstanding ledger
+            </span>
           </div>
-          <div className="p-2.5 bg-rose-50 dark:bg-rose-950/50 text-rose-600 rounded-lg">
-            <Clock size={20} />
+          <div className="p-3 bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 rounded-xl">
+            <Clock size={22} />
           </div>
         </div>
 
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl p-4 shadow-2xs flex items-center justify-between">
+        <div className="kpi-card-premium flex items-center justify-between">
           <div>
-            <p className="text-xs text-zinc-500 font-medium">Unpaid Invoices</p>
-            <h3 className="text-xl font-bold text-amber-600 dark:text-amber-400 mt-0.5">{pendingCount}</h3>
+            <p className="text-xs text-muted-foreground font-semibold">Unpaid Invoices</p>
+            <h3 className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-0.5">{pendingCount}</h3>
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400 mt-1">
+              <span>⏱</span> Awaiting settlement
+            </span>
           </div>
-          <div className="p-2.5 bg-amber-50 dark:bg-amber-950/50 text-amber-600 rounded-lg">
-            <AlertCircle size={20} />
+          <div className="p-3 bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 rounded-xl">
+            <AlertCircle size={22} />
           </div>
         </div>
       </div>
 
       {/* ---------------- TABLE CONTAINER ---------------- */}
-      <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl p-6 shadow-2xs space-y-4">
+      <div className="table-3d-wrapper p-6 space-y-4">
         {/* Filter Tabs Bar */}
         <div className="flex items-center gap-1.5 border-b border-zinc-100 dark:border-zinc-800 pb-3 overflow-x-auto text-xs">
           <button

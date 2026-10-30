@@ -143,7 +143,7 @@ export function ProjectList({
       </div>
 
       {/* ---------------- CONTROL TOOLBAR (Image 1 & 2) ---------------- */}
-      <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+      <div className="box-3d p-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl">
         
         {/* Left Side Controls */}
         <div className="flex items-center gap-2 flex-wrap">
@@ -242,11 +242,11 @@ export function ProjectList({
       </div>
 
       {/* ---------------- MAIN DATA TABLE (Image 1) ---------------- */}
-      <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl overflow-hidden shadow-2xs">
+      <div className="table-3d-wrapper rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-zinc-200/80 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 font-semibold bg-zinc-50/50 dark:bg-zinc-800/40">
+              <tr className="border-b border-border text-muted-foreground font-bold bg-muted/40 text-[11px] uppercase tracking-wider">
                 <th className="py-3 px-4">Title</th>
                 <th className="py-3 px-4">
                   <div className="flex items-center gap-1">

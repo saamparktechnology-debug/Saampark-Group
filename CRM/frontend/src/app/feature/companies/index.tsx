@@ -340,7 +340,7 @@ export default function CompaniesMain() {
         dbComps.forEach(c => {
           if (!isCompanyDeleted(c.id, c.slug) && isCompanyAllowed(c)) {
             const key = c.slug || String(c.id)
-            const prev = compMap.get(key) || compMap.get(c.slug) || compMap.get(String(c.id))
+            const prev = compMap.get(key) || (c.slug ? compMap.get(c.slug) : undefined) || compMap.get(String(c.id))
             compMap.set(key, { ...(prev || {}), ...c })
           }
         })
@@ -352,14 +352,14 @@ export default function CompaniesMain() {
         storeComps.forEach(c => {
           if (!isCompanyDeleted(c.id, c.slug) && isCompanyAllowed(c)) {
             const key = c.slug || String(c.id)
-            const prev = compMap.get(key) || compMap.get(c.slug) || compMap.get(String(c.id))
+            const prev = compMap.get(key) || (c.slug ? compMap.get(c.slug) : undefined) || compMap.get(String(c.id))
             compMap.set(key, { ...(prev || {}), ...c })
           }
         })
       }
 
       const finalCompanies: Company[] = Array.from(compMap.values()).map(c => {
-        const uCount = getUserCountForCompany(c.id || c.slug)
+        const uCount = getUserCountForCompany(c.id || c.slug || "")
         return {
           ...c,
           member_count: uCount,

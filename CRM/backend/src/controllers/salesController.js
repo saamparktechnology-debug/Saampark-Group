@@ -306,9 +306,11 @@ const invoiceController = {
       const dateStr = `${d}${m}${y}`;
       const isNonGst = Boolean(req.body.is_nongst || req.body.is_non_gst || req.body.scheme === 'Non-GST' || req.body.type === 'nongst');
       const prefix = isNonGst ? `NG-${dateStr}` : `INV-${dateStr}`;
-      const num = invoice_number || `${prefix}${String(count[0].cnt + 1).padStart(3, '0')}`;
+      const pool = require('../config/db');
+      const [count] = await pool.execute('SELECT COUNT(*) as cnt FROM invoices WHERE company_id = ?', [companyId]).catch(() => [[{ cnt: 0 }]]);
+      const num = invoice_number || `${prefix}${String((count && count[0] ? count[0].cnt : 0) + 1).padStart(3, '0')}`;
 
-      const [result] = await require('../config/db').execute(
+      const [result] = await pool.execute(
         `INSERT INTO invoices (company_id, branch_id, client_id, invoice_number, subtotal, total_amount, status, due_date, notes, created_by)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [companyId, branchId, client_id || null, num, subtotal || total_amount || 0, total_amount || subtotal || 0, status || 'unpaid', due_date || null, notes || null, req.user?.id || null]

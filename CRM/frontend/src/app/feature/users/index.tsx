@@ -120,6 +120,10 @@ export default function UsersMain() {
                  (u.companyId && isMatchingCompany({ id: u.companyId, slug: u.companyId } as any, targetComp))
         })
       })
+    } else if (isSuperAdminLoggedIn) {
+      // 👑 When at SAAMPARK Group level (All Companies), show ONLY Super Admins and Admins!
+      // Operational Teams and Clients belong to individual operating companies and will appear when switching to that company.
+      filtered = filtered.filter((u) => u.role === "Super Admin" || u.role === "Admin")
     }
 
     // 2. Strict Branch Filter (Show ONLY users assigned to this branch)

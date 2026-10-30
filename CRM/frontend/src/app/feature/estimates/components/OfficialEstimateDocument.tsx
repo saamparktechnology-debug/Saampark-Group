@@ -4,7 +4,7 @@ import * as React from "react"
 import { 
   Printer, Download, Check, X, ArrowRight, Building2, MapPin, 
   Phone, Mail, Globe, Shield, Calendar, Calculator, CheckCircle2,
-  Clock, AlertCircle, FileText, QrCode, Landmark, Stamp, FileCheck
+  Clock, AlertCircle, FileText, QrCode, Landmark, Stamp, FileCheck, Sparkles
 } from "lucide-react"
 import { EstimateItem } from "../services/estimateService"
 import { useAuthStore, Company, Branch, DEFAULT_COMPANIES, getCompanyLogoUrl } from "@/store/useAuthStore"
@@ -270,16 +270,26 @@ export function OfficialEstimateDocument({
     window.print()
   }
 
-  // Theme matching corporate Tax Document palette
-  const theme = {
-    cardHeaderGradient: "bg-gradient-to-r from-[#005f69] via-[#007380] to-[#008a99]",
-    tableHeaderBg: "bg-[#005f69] text-white",
-    primaryText: "text-[#005f69]",
-    primaryBg: "bg-[#005f69]",
-    grandTotalBg: "bg-[#005f69] text-white",
-    lightBg: "bg-teal-50/70",
-    lightBorder: "border-teal-200",
-  }
+  // Theme matching corporate palette (GST Teal vs Non-GST Sky Blue)
+  const theme = isNonGst
+    ? {
+        cardHeaderGradient: "bg-gradient-to-r from-[#0284c7] via-[#0ea5e9] to-[#38bdf8]",
+        tableHeaderBg: "bg-[#0284c7] text-white",
+        primaryText: "text-[#0284c7]",
+        primaryBg: "bg-[#0ea5e9]",
+        grandTotalBg: "bg-[#0284c7] text-white",
+        lightBg: "bg-sky-50/80",
+        lightBorder: "border-sky-200",
+      }
+    : {
+        cardHeaderGradient: "bg-gradient-to-r from-[#005f69] via-[#007380] to-[#008a99]",
+        tableHeaderBg: "bg-[#005f69] text-white",
+        primaryText: "text-[#005f69]",
+        primaryBg: "bg-[#005f69]",
+        grandTotalBg: "bg-[#005f69] text-white",
+        lightBg: "bg-teal-50/70",
+        lightBorder: "border-teal-200",
+      }
 
   const hasLegalIds = Boolean(resolvedCin || resolvedGstin || resolvedPan || resolvedMsme)
   const hasContactInfo = Boolean(resolvedPhone || resolvedWebsite || resolvedEmail)
@@ -373,12 +383,11 @@ export function OfficialEstimateDocument({
         <div id="printable-estimate" className="min-w-[620px] sm:min-w-0 p-5 sm:p-10 space-y-5 text-xs leading-relaxed bg-white print:min-w-0 print:p-6 print:space-y-4">
         
         {/* 1. Top Header: Company Brand, Logo, Statutory IDs & Document Header Card */}
-        <div className="flex flex-col sm:flex-row justify-between items-stretch gap-4 border-b-2 border-zinc-900 pb-4">
-          {/* Left: Company Brand & Entity Info with Logo */}
-          <div className="flex items-start gap-3.5 flex-1 min-w-0">
+        <div className="flex flex-col gap-2.5 border-b-2 border-zinc-900 pb-3">
+          <div className="flex flex-col sm:flex-row justify-between items-center sm:items-start gap-4">
             {/* Logo Card */}
             {resolvedLogoUrl ? (
-              <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden shadow-2xs shrink-0 border border-zinc-200 bg-white flex items-center justify-center p-2">
+              <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden shadow-2xs shrink-0 border border-zinc-200 bg-white flex items-center justify-center p-1.5">
                 <img 
                   src={resolvedLogoUrl} 
                   alt={resolvedBrandName} 
@@ -386,143 +395,149 @@ export function OfficialEstimateDocument({
                 />
               </div>
             ) : (
-              <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden shadow-md shrink-0 border border-teal-900/30 bg-gradient-to-b from-[#004e59] via-[#005c68] to-[#003840] flex flex-col items-center justify-center p-2 text-white text-center">
-                <div className="text-2xl mb-1">🏢</div>
-                <div className="font-black text-[11px] tracking-wider uppercase leading-tight">{resolvedBrandName}</div>
-                <div className="text-[7.5px] font-bold text-teal-200 tracking-widest uppercase mt-0.5">{resolvedDivisionName || "ENTERPRISE"}</div>
+              <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden shadow-md shrink-0 border border-teal-900/30 bg-gradient-to-b from-[#004e59] via-[#005c68] to-[#003840] flex flex-col items-center justify-center p-2 text-white text-center">
+                <Sparkles className="w-5 h-5 mb-1 text-teal-200 drop-shadow-sm" />
+                <div className="font-black text-[11px] tracking-wider uppercase leading-tight font-sans">{resolvedBrandName}</div>
+                <div className="text-[7px] font-bold text-teal-200 tracking-widest uppercase mt-0.5">{resolvedDivisionName || "ENTERPRISE"}</div>
               </div>
             )}
 
-            {/* Title, Subtitle, Legal IDs & Coordinates */}
-            <div className="space-y-1 flex-1 min-w-0 pt-0.5">
-              <div>
-                <h1 className="text-xl sm:text-2xl font-black tracking-tight leading-none text-zinc-950 uppercase">
-                  <span>{resolvedBrandName}</span>{" "}
-                  {resolvedDivisionName && <span className={`${theme.primaryText} font-extrabold`}>{resolvedDivisionName}</span>}
-                </h1>
-                {resolvedSubtitle && (
-                  <h2 className="text-xs sm:text-sm font-bold text-zinc-700 tracking-wider mt-1 uppercase">
-                    {resolvedSubtitle}
-                  </h2>
-                )}
-              </div>
+            {/* Center: BIG SAAMPARK and in below BIGGER SECONDARY LINE */}
+            <div className="flex-1 flex flex-col items-center justify-center text-center min-w-0 px-2 sm:px-4">
+              <h1 className="text-2xl sm:text-3xl md:text-[34px] font-black tracking-wider leading-none text-zinc-950 uppercase font-sans text-center drop-shadow-2xs">
+                {resolvedBrandName}
+              </h1>
 
-              {/* Legal IDs: CIN, GSTIN, PAN, MSME */}
+              {/* Secondary Line */}
+              <h2 className="text-xs sm:text-sm md:text-[15px] font-black tracking-widest text-zinc-800 uppercase font-sans mt-1.5 block leading-tight text-center">
+                {resolvedDivisionName || (activeCompany?.id === "digital" ? "CONSULTANCY SERVICES" : "TECHNOLOGY AND RESEARCH PVT. LTD.")}
+              </h2>
+
+              {resolvedSubtitle && (
+                <p className="text-[8.5px] sm:text-[9px] font-semibold text-zinc-500 tracking-wider uppercase mt-0.5 text-center">
+                  {resolvedSubtitle}
+                </p>
+              )}
+
+              {/* Legal IDs: CIN, GSTIN, PAN, MSME centered */}
               {hasLegalIds && (
-                <p className="text-[10px] font-semibold text-zinc-600 font-mono pt-0.5 flex items-center gap-2 flex-wrap">
+                <p className="text-[10px] sm:text-[10.5px] font-semibold text-zinc-600 font-mono pt-1.5 flex items-center justify-center gap-2.5 flex-wrap">
                   {resolvedCin && <span>CIN: <strong className="text-zinc-900 font-bold">{resolvedCin}</strong></span>}
                   {resolvedGstin && <span>{resolvedCin ? "| " : ""}GSTIN: <strong className="text-zinc-900 font-black">{resolvedGstin}</strong></span>}
                   {resolvedPan && <span>{(resolvedCin || resolvedGstin) ? "| " : ""}PAN: <strong className="text-zinc-900 font-black">{resolvedPan}</strong></span>}
                   {resolvedMsme && <span>| MSME: <strong className="text-zinc-900 font-semibold">{resolvedMsme}</strong></span>}
                 </p>
               )}
+            </div>
 
-              {/* Address & Contact Row */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 text-[9.5px] text-zinc-700 pt-0.5">
-                {resolvedAddress && (
-                  <div className="flex items-start gap-1.5">
-                    <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center text-[7.5px] shrink-0 mt-0.5`}>📍</span>
-                    <div className="leading-snug">
-                      <strong className="text-zinc-900 block text-[9.5px]">Corporate Office:</strong>
-                      <span className="text-zinc-600 text-[9px]">{resolvedAddress}</span>
-                    </div>
-                  </div>
-                )}
-
-                {hasContactInfo && (
-                  <div className="space-y-0.5">
-                    {resolvedPhone && (
-                      <p className="flex items-center gap-1.5">
-                        <span className={`w-3 h-3 rounded-full ${theme.primaryBg} text-white flex items-center justify-center text-[6.5px] shrink-0`}>📞</span>
-                        <span className="font-mono text-zinc-800 font-semibold text-[9px]">{resolvedPhone}</span>
-                      </p>
-                    )}
-                    {resolvedEmail && (
-                      <p className="flex items-center gap-1.5">
-                        <span className={`w-3 h-3 rounded-full ${theme.primaryBg} text-white flex items-center justify-center text-[6.5px] shrink-0`}>✉️</span>
-                        <span className="text-zinc-700 text-[9px]">{resolvedEmail}</span>
-                      </p>
-                    )}
-                    {resolvedWebsite && (
-                      <p className="flex items-center gap-1.5">
-                        <span className={`w-3 h-3 rounded-full ${theme.primaryBg} text-white flex items-center justify-center text-[6.5px] shrink-0`}>🌐</span>
-                        <span className="text-zinc-700 text-[9px]">{resolvedWebsite}</span>
-                      </p>
-                    )}
-                  </div>
-                )}
+            {/* Right: Header Card with Status Badge & Dates */}
+            <div className={`w-full sm:w-56 rounded-xl ${theme.cardHeaderGradient} text-white p-3.5 shadow-md shrink-0 flex flex-col self-start space-y-2`}>
+              <div className="flex items-center justify-between border-b border-white/20 pb-1.5">
+                <span className="font-black text-[11px] tracking-wider uppercase">
+                  {isNonGst ? "COMMERCIAL ESTIMATE" : "OFFICIAL ESTIMATE"}
+                </span>
+                <span className={`px-2 py-0.5 rounded-full text-[8.5px] font-black tracking-wider uppercase ${
+                  estimate.status === "Accepted" 
+                    ? "bg-white text-emerald-800" 
+                    : estimate.status === "Sent" 
+                    ? "bg-white text-blue-800" 
+                    : estimate.status === "Declined"
+                    ? "bg-white text-rose-800"
+                    : "bg-white text-zinc-800"
+                }`}>
+                  {estimate.status}
+                </span>
               </div>
 
-              {/* Issuing Branch / Operating Unit Card */}
-              {(activeBranch || activeSubBranch) && (
-                <div className="mt-1 p-2 rounded-xl bg-gradient-to-r from-teal-50 to-zinc-50 border border-teal-200/80 text-[9px] text-zinc-700">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-extrabold text-zinc-900 flex items-center gap-1">
-                      <span>🏢</span>
-                      <span>Issuing Branch:</span>
-                      <span className="text-teal-800 font-black">{activeBranch?.name || activeSubBranch?.name}</span>
-                    </span>
-                    {(activeBranch?.code || activeSubBranch?.code) && (
-                      <span className="font-mono text-[8px] px-1.5 py-0.2 rounded bg-teal-100 text-teal-800 font-bold border border-teal-200">
-                        Code: {(activeBranch?.code || activeSubBranch?.code || '').toUpperCase()}
+              <div className="space-y-1 text-[10px]">
+                <div>
+                  <span className="text-white/80 text-[8px] uppercase tracking-wider font-semibold block">ESTIMATE NO:</span>
+                  <strong className="font-mono text-amber-300 text-[12.5px] font-black break-all leading-tight block">
+                    {estimate.estimateNumber}
+                  </strong>
+                </div>
+                <div className="flex items-center gap-2 pt-0.5">
+                  <span className="text-white/80 text-[8px] uppercase font-bold tracking-wider shrink-0 w-12">DATE:</span>
+                  <strong className="text-white font-mono text-[9.5px]">
+                    {formatEstimateDate(estimate.date)}
+                  </strong>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-white/80 text-[8px] uppercase font-bold tracking-wider shrink-0 w-12">VALID TILL:</span>
+                  <strong className="text-amber-200 font-mono text-[9.5px]">
+                    {formatEstimateDate(estimate.validUntil)}
+                  </strong>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Address & Contact Row */}
+          {(resolvedAddress || hasContactInfo) && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-x-4 gap-y-1 text-[9.5px] text-zinc-700 pt-1.5 border-t border-zinc-100">
+              {resolvedAddress && (
+                <div className="flex items-center gap-1.5 min-w-0 max-w-full sm:max-w-[55%]">
+                  <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
+                    <MapPin size={8} />
+                  </span>
+                  <strong className="text-zinc-900 text-[9px] shrink-0">Office:</strong>
+                  <span className="text-zinc-600 text-[9px] truncate">{resolvedAddress}</span>
+                </div>
+              )}
+
+              {hasContactInfo && (
+                <div className="flex items-center gap-3 flex-wrap justify-end text-[9px]">
+                  {resolvedPhone && (
+                    <p className="flex items-center gap-1">
+                      <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
+                        <Phone size={7.5} />
                       </span>
-                    )}
-                    {activeSubBranch && (
-                      <span className="font-mono text-[8px] px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-bold border border-emerald-200">
-                        🌿 Sub-Branch Partner ({activeSubBranch.revenueSharePct}% Share)
+                      <span className="font-mono text-zinc-800 font-semibold">{resolvedPhone}</span>
+                    </p>
+                  )}
+                  {resolvedEmail && (
+                    <p className="flex items-center gap-1">
+                      <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
+                        <Mail size={7.5} />
                       </span>
-                    )}
-                  </div>
+                      <span className="text-zinc-700">{resolvedEmail}</span>
+                    </p>
+                  )}
+                  {resolvedWebsite && (
+                    <p className="flex items-center gap-1">
+                      <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
+                        <Globe size={7.5} />
+                      </span>
+                      <span className="text-zinc-700">{resolvedWebsite}</span>
+                    </p>
+                  )}
                 </div>
               )}
             </div>
-          </div>
+          )}
 
-          {/* Right: Header Card with Status Badge & Dates */}
-          <div className={`w-full sm:w-60 rounded-2xl ${theme.cardHeaderGradient} text-white p-3.5 shadow-md shrink-0 flex flex-col self-start space-y-2.5`}>
-            <div className="flex items-center justify-between border-b border-white/20 pb-2">
-              <span className="font-black text-xs tracking-wider uppercase">
-                {isNonGst ? "COMMERCIAL ESTIMATE (NON-GST)" : "OFFICIAL GST ESTIMATE"}
-              </span>
-              <span className={`px-2 py-0.5 rounded-full text-[9px] font-black tracking-wider uppercase ${
-                estimate.status === "Accepted" 
-                  ? "bg-white text-emerald-800" 
-                  : estimate.status === "Sent" 
-                  ? "bg-white text-blue-800" 
-                  : estimate.status === "Declined"
-                  ? "bg-white text-rose-800"
-                  : "bg-white text-zinc-800"
-              }`}>
-                {estimate.status}
-              </span>
-            </div>
-
-            <div className="space-y-1.5 text-[10px]">
-              <div>
-                <span className="text-white/80 text-[8.5px] uppercase tracking-wider font-semibold block">ESTIMATE NO:</span>
-                <strong className="font-mono text-amber-300 text-xs font-black break-all leading-tight block">
-                  {estimate.estimateNumber}
-                </strong>
-              </div>
-              <div className="flex items-center gap-2 pt-0.5">
-                <span className="text-white/80 text-[8.5px] uppercase font-bold tracking-wider shrink-0 w-14">DATE:</span>
-                <strong className="text-white font-mono text-[9.5px]">
-                  {formatEstimateDate(estimate.date)}
-                </strong>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-white/80 text-[8.5px] uppercase font-bold tracking-wider shrink-0 w-14">VALID TILL:</span>
-                <strong className="text-amber-200 font-mono text-[9.5px]">
-                  {formatEstimateDate(estimate.validUntil)}
-                </strong>
+          {/* Issuing Branch / Operating Unit Card */}
+          {(activeBranch || activeSubBranch) && (
+            <div className="mt-1 p-2 rounded-xl bg-gradient-to-r from-teal-50 to-zinc-50 border border-teal-200/80 text-[9px] text-zinc-700">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-extrabold text-zinc-900 flex items-center gap-1">
+                  <Building2 size={12} className="text-teal-700" />
+                  <span>Issuing Branch:</span>
+                  <span className="text-teal-800 font-black">{activeBranch?.name || activeSubBranch?.name}</span>
+                </span>
+                {(activeBranch?.code || activeSubBranch?.code) && (
+                  <span className="font-mono text-[8px] px-1.5 py-0.2 rounded bg-teal-100 text-teal-800 font-bold border border-teal-200">
+                    Code: {(activeBranch?.code || activeSubBranch?.code || '').toUpperCase()}
+                  </span>
+                )}
+                {activeSubBranch && (
+                  <span className="font-mono text-[8px] px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-bold border border-emerald-200">
+                    🌿 Sub-Branch Partner ({activeSubBranch.revenueSharePct}% Share)
+                  </span>
+                )}
               </div>
             </div>
-
-            <div className="pt-2 border-t border-white/20 flex items-center justify-between text-[9px] text-teal-100">
-              <span>Verified Estimate</span>
-              <span className="font-mono">Ref: {(estimate as any).title ? (estimate as any).title.slice(0, 18) + '...' : 'Commercial Tender'}</span>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* 2. Customer / Bill-To Section */}

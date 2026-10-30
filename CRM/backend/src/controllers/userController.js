@@ -386,9 +386,29 @@ const updateUser = async (req, res, next) => {
 
       const lookupEmail = newEmailVal || targetEmail;
       const [updatedUserRows] = await pool.execute(
-        'SELECT u.*, r.name as role_name FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id = ? OR u.email = ? OR u.email = ?',
-        [id, lookupEmail, targetEmail]
-      );
+        'SELECT u.*, r.name as role_name FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id = ? OR u.email = ? OR u.email = ? OR u.email = ?',
+        [id, lookupEmail, targetEmail, oldEmailVal || targetEmail]
+      ).catch(() => [[]]);
+
+      let effBranchId = branchIdVal !== undefined ? branchIdVal : (req.body.branch_id || req.body.branchId || undefined);
+      let effBranchName = req.body.branch_name || req.body.branchName;
+      if (effBranchId && !effBranchName) {
+        try {
+          const [bRows] = await pool.execute('SELECT name FROM branches WHERE id = ? OR LOWER(name) = LOWER(?)', [effBranchId, effBranchId]);
+          if (bRows.length > 0) effBranchName = bRows[0].name;
+        } catch {}
+      }
+      let effSubBranchId = subBranchIdVal !== undefined ? subBranchIdVal : (req.body.sub_branch_id || req.body.subBranchId || undefined);
+      let effSubBranchName = req.body.sub_branch_name || req.body.subBranchName;
+      if (effSubBranchId && !effSubBranchName) {
+        try {
+          const [sbRows] = await pool.execute('SELECT name FROM sub_branches WHERE id = ? OR LOWER(name) = LOWER(?)', [effSubBranchId, effSubBranchId]);
+          if (sbRows.length > 0) effSubBranchName = sbRows[0].name;
+        } catch {}
+      }
+
+      let updatedItem = null;
+
       if (updatedUserRows.length > 0) {
         const u = updatedUserRows[0];
         const emailNorm = (u.email || '').toLowerCase().trim();
@@ -408,25 +428,10 @@ const updateUser = async (req, res, next) => {
         }
 
         const effectiveAvatar = avatarVal || u.avatar_url || undefined;
+        effBranchId = branchIdVal !== undefined ? branchIdVal : (u.branch_id || effBranchId);
+        effSubBranchId = subBranchIdVal !== undefined ? subBranchIdVal : (u.sub_branch_id || effSubBranchId);
 
-        let effBranchId = branchIdVal !== undefined ? branchIdVal : (u.branch_id || req.body.branch_id || req.body.branchId || undefined);
-        let effBranchName = req.body.branch_name || req.body.branchName;
-        if (effBranchId && !effBranchName) {
-          try {
-            const [bRows] = await pool.execute('SELECT name FROM branches WHERE id = ? OR LOWER(name) = LOWER(?)', [effBranchId, effBranchId]);
-            if (bRows.length > 0) effBranchName = bRows[0].name;
-          } catch {}
-        }
-        let effSubBranchId = subBranchIdVal !== undefined ? subBranchIdVal : (u.sub_branch_id || req.body.sub_branch_id || req.body.subBranchId || undefined);
-        let effSubBranchName = req.body.sub_branch_name || req.body.subBranchName;
-        if (effSubBranchId && !effSubBranchName) {
-          try {
-            const [sbRows] = await pool.execute('SELECT name FROM sub_branches WHERE id = ? OR LOWER(name) = LOWER(?)', [effSubBranchId, effSubBranchId]);
-            if (sbRows.length > 0) effSubBranchName = sbRows[0].name;
-          } catch {}
-        }
-
-        const updatedItem = {
+        updatedItem = {
           id: String(u.id),
           name: u.full_name || u.email,
           email: emailNorm,
@@ -447,11 +452,41 @@ const updateUser = async (req, res, next) => {
           permissions: permObj,
           allowedModules: permObj?.allowedModules,
         };
+      } else {
+        // Fallback for accounts tracked directly via app_data (e.g. system accounts with string IDs)
+        const targetIdStr = String(id).toLowerCase().trim();
+        const existingIdx = currentUsers.findIndex(cu => 
+          String(cu.id || '').toLowerCase().trim() === targetIdStr ||
+          (cu.email && cu.email.toLowerCase().trim() === targetEmail) ||
+          (oldEmailVal && cu.email && cu.email.toLowerCase().trim() === oldEmailVal)
+        );
+        const existingCu = existingIdx >= 0 ? currentUsers[existingIdx] : {};
+        updatedItem = {
+          ...existingCu,
+          id: id,
+          name: displayName || existingCu.name || targetEmail,
+          email: newEmailVal || targetEmail,
+          phone: phoneVal !== null ? phoneVal : (existingCu.phone || ''),
+          department: department !== undefined ? department : (existingCu.department || 'General'),
+          status: statusVal ? (statusVal === 'inactive' ? 'Inactive' : 'Active') : (existingCu.status || 'Active'),
+          role: req.body.role || existingCu.role || (roleIdVal === 1 ? 'Super Admin' : roleIdVal === 2 ? 'Admin' : 'Teams'),
+          companyId: company_id || existingCu.companyId || 'tech',
+          companyIds: compList || existingCu.companyIds || ['tech'],
+          branchId: effBranchId || existingCu.branchId,
+          branchName: effBranchName || existingCu.branchName,
+          subBranchId: effSubBranchId || existingCu.subBranchId,
+          subBranchName: effSubBranchName || existingCu.subBranchName,
+          avatarUrl: avatarVal || existingCu.avatarUrl,
+          avatar: avatarVal || existingCu.avatar,
+        };
+      }
 
+      if (updatedItem) {
+        const emailNorm = (updatedItem.email || '').toLowerCase().trim();
         const filteredUsers = currentUsers.filter((cu) => {
           const cuEmail = (cu.email || '').toLowerCase().trim();
           const cuId = String(cu.id || '').toLowerCase().trim();
-          if (cuId && cuId === String(u.id).toLowerCase().trim()) return false;
+          if (cuId && cuId === String(id).toLowerCase().trim()) return false;
           if (cuEmail === emailNorm) return false;
           if (oldEmailVal && cuEmail === oldEmailVal) return false;
           return true;

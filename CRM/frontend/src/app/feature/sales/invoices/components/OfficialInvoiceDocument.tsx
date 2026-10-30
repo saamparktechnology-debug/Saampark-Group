@@ -413,6 +413,12 @@ export function OfficialInvoiceDocument({
     headerSecondaryLine = headerSecondaryLine ? `${headerSecondaryLine} ${resolvedSubtitle.toUpperCase()}` : resolvedSubtitle.toUpperCase()
   }
 
+  if (!headerSecondaryLine) {
+    headerSecondaryLine = (activeCompany?.id === "digital" || activeCompany?.id === "consultancy")
+      ? "CONSULTANCY SERVICES"
+      : "TECHNOLOGY AND RESEARCH PVT. LTD."
+  }
+
   // Helper to validate non-empty string fields (strictly ignores empty, null, and placeholder text)
   const isValidField = (val?: string | null): boolean => {
     if (!val) return false
@@ -798,9 +804,9 @@ export function OfficialInvoiceDocument({
   const totalTableGst = isGstInvoice ? finalRenderedRows.reduce((sum, it) => sum + it.rowTax, 0) : 0
   const totalTableGross = isGstInvoice ? finalRenderedRows.reduce((sum, it) => sum + it.rowTotal, 0) : totalTableBase
 
-  // 4. Strict A4 Pagination Engine (Strictly > 3 items creates next page)
-  const ITEMS_PER_FIRST_PAGE = 3
-  const ITEMS_PER_SUBSEQUENT_PAGE = 3
+  // 4. Strict A4 Pagination Engine (2 items per page: 2 products fit on 1 A4 page; 3rd creates page 2 with same invoice format)
+  const ITEMS_PER_FIRST_PAGE = 2
+  const ITEMS_PER_SUBSEQUENT_PAGE = 2
 
   const paginatedPages = React.useMemo(() => {
     if (finalRenderedRows.length <= ITEMS_PER_FIRST_PAGE) {
@@ -876,9 +882,9 @@ export function OfficialInvoiceDocument({
 
 
   const renderTopHeader = (pageNumber: number = 1, totalPgs: number = 1) => (
-    <div className="flex flex-col sm:flex-row justify-between items-stretch gap-3 border-b border-zinc-200 pb-2.5">
-      {/* Left: Company Brand & Entity Info with Logo */}
-      <div className="flex items-start gap-3 flex-1 min-w-0">
+    <div className="flex flex-col gap-2.5 border-b border-zinc-200 pb-2.5">
+      {/* 3-Column Top Identity Grid: Left = Logo, Center = Big SAAMPARK & Division/Subtitle, Right = Invoice Card */}
+      <div className="flex flex-col sm:flex-row justify-between items-center sm:items-start gap-3">
         {/* Top-Left Logo Card */}
         <motion.div
           drag={interactive}
@@ -939,7 +945,7 @@ export function OfficialInvoiceDocument({
             </div>
           )}
           {resolvedLogoUrl ? (
-            <div className="relative w-24 h-24 sm:w-28 sm:h-28 shrink-0 bg-transparent flex items-center justify-center p-0.5 border-0 shadow-none">
+            <div className="relative w-20 h-20 sm:w-24 sm:h-24 shrink-0 bg-transparent flex items-center justify-center p-0.5 border-0 shadow-none">
               <img 
                 src={resolvedLogoUrl} 
                 alt={resolvedBrandName || "Entity Logo"} 
@@ -947,13 +953,13 @@ export function OfficialInvoiceDocument({
               />
             </div>
           ) : (
-            <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden shadow-md shrink-0 border border-teal-900/30 bg-gradient-to-b from-[#004e59] via-[#005c68] to-[#003840] flex flex-col items-center justify-center p-2">
+            <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden shadow-md shrink-0 border border-teal-900/30 bg-gradient-to-b from-[#004e59] via-[#005c68] to-[#003840] flex flex-col items-center justify-center p-2">
               <div className="relative z-10 w-full h-full flex flex-col items-center justify-center text-center text-white">
-                <Sparkles className="w-6 h-6 mb-1 text-teal-200 drop-shadow-sm" />
-                <div className="font-black text-xs tracking-wider uppercase leading-tight font-sans">
+                <Sparkles className="w-5 h-5 mb-1 text-teal-200 drop-shadow-sm" />
+                <div className="font-black text-[11px] tracking-wider uppercase leading-tight font-sans">
                   {resolvedBrandName}
                 </div>
-                <div className="text-[7.5px] font-bold text-teal-200 tracking-widest uppercase mt-0.5">
+                <div className="text-[7px] font-bold text-teal-200 tracking-widest uppercase mt-0.5">
                   {resolvedDivisionName || "TECHNOLOGY"}
                 </div>
               </div>
@@ -961,248 +967,160 @@ export function OfficialInvoiceDocument({
           )}
         </motion.div>
 
-        {/* Title, Full Company Name, Subtitle, ISO Badge & Legal IDs */}
-        <div className="space-y-1.5 flex-1 min-w-0 pt-0.5">
-          <div>
-            {/* Primary Corporate Brand Name with TM/R pill badge */}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <EditableText
-                as="h1"
-                value={headerBrandName}
-                onChange={(val) => onFieldChange?.("brand_name", val)}
-                interactive={interactive}
-                fieldKey="brand_name"
-                className="text-lg sm:text-xl font-black tracking-tight leading-none text-zinc-950 uppercase font-sans"
-              />
-              {resolvedTrademarkSymbol ? (
-                <span className="inline-flex items-center justify-center border border-zinc-700/60 text-zinc-800 text-[8px] font-black px-1.5 py-0.2 rounded-full uppercase leading-none shadow-2xs">
-                  {resolvedTrademarkSymbol === "R" || resolvedTrademarkSymbol === "®" ? "®" : resolvedTrademarkSymbol}
-                </span>
-              ) : null}
-            </div>
-
-            {/* Secondary Corporate Line (Division / Subtitle / Legal Entity Name) */}
-            {headerSecondaryLine ? (
-              <EditableText
-                as="h2"
-                value={headerSecondaryLine}
-                onChange={(val) => onFieldChange?.("division_name", val)}
-                interactive={interactive}
-                fieldKey="division_name"
-                className="text-[11px] sm:text-xs font-black tracking-wider text-zinc-700 uppercase font-sans mt-0.5 block leading-tight"
-              />
+        {/* Center: BIG SAAMPARK and in below BIGGER SECONDARY LINE (TECHNOLOGY AND RESEARCH PVT LTD / CONSULTANCY SERVICES) */}
+        <div className="flex-1 flex flex-col items-center justify-center text-center min-w-0 px-2 sm:px-4">
+          <div className="flex items-center justify-center gap-2 flex-wrap">
+            <EditableText
+              as="h1"
+              value={headerBrandName}
+              onChange={(val) => onFieldChange?.("brand_name", val)}
+              interactive={interactive}
+              fieldKey="brand_name"
+              className="text-2xl sm:text-3xl md:text-[34px] font-black tracking-wider leading-none text-zinc-950 uppercase font-sans text-center drop-shadow-2xs"
+            />
+            {resolvedTrademarkSymbol ? (
+              <span className="inline-flex items-center justify-center border border-zinc-700/60 text-zinc-800 text-[9px] font-black px-1.5 py-0.5 rounded-full uppercase leading-none shadow-2xs">
+                {resolvedTrademarkSymbol === "R" || resolvedTrademarkSymbol === "®" ? "®" : resolvedTrademarkSymbol}
+              </span>
             ) : null}
-
-            {/* Editable ISO 9001 / Quality Certification Badge */}
-            {(resolvedIsoCertification || interactive) && (
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 border border-amber-300/90 dark:border-amber-700/80 text-amber-900 dark:text-amber-200 text-[9px] sm:text-[9.5px] font-black tracking-wider uppercase shadow-2xs mt-1">
-                <Award size={12} className="text-amber-600 dark:text-amber-400 shrink-0" />
-                <EditableText
-                  value={resolvedIsoCertification}
-                  onChange={(val) => onFieldChange?.("iso_certification", val)}
-                  interactive={interactive}
-                  fieldKey="iso_certification"
-                  placeholder="Quality certification..."
-                />
-              </div>
-            )}
           </div>
 
-          {/* Legal IDs: CIN, GSTIN (GST Only), PAN - Strictly render only when values are provided */}
+          {/* Secondary Line: TECHNOLOGY AND RESEARCH PVT LTD / CONSULTANCY SERVICES (editable) */}
+          <EditableText
+            as="h2"
+            value={headerSecondaryLine}
+            onChange={(val) => onFieldChange?.("division_name", val)}
+            interactive={interactive}
+            fieldKey="division_name"
+            placeholder="TECHNOLOGY AND RESEARCH PVT. LTD."
+            className="text-xs sm:text-sm md:text-[15px] font-black tracking-widest text-zinc-800 uppercase font-sans mt-1.5 block leading-tight text-center"
+          />
+
+          {/* Editable ISO Certification Badge */}
+          {(resolvedIsoCertification || interactive) && (
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-amber-50 border border-amber-300 text-amber-900 text-[9px] sm:text-[9.5px] font-black tracking-wider uppercase shadow-2xs mt-1.5">
+              <Award size={12} className="text-amber-600 shrink-0" />
+              <EditableText
+                value={resolvedIsoCertification}
+                onChange={(val) => onFieldChange?.("iso_certification", val)}
+                interactive={interactive}
+                fieldKey="iso_certification"
+                placeholder="Quality certification..."
+              />
+            </div>
+          )}
+
+          {/* Legal IDs: CIN, GSTIN, PAN centered */}
           {hasLegalIds && (
-            <p className="text-[10px] sm:text-[10.5px] font-semibold text-zinc-600 font-mono pt-1 flex items-center gap-2.5 flex-wrap">
+            <p className="text-[10px] sm:text-[10.5px] font-semibold text-zinc-600 font-mono pt-1.5 flex items-center justify-center gap-2.5 flex-wrap">
               {hasCin && (
                 <span className="inline-flex items-center gap-1">
-                  <EditableText
-                    value="CIN:"
-                    interactive={interactive}
-                    className="text-zinc-500 font-sans text-[9.5px] font-bold"
-                  />
-                  <EditableText
-                    value={resolvedCin}
-                    onChange={(val) => onFieldChange?.("cin", val)}
-                    interactive={interactive}
-                    fieldKey="cin"
-                    placeholder="CIN Number..."
-                    className="text-zinc-800 font-bold"
-                  />
+                  <EditableText value="CIN:" interactive={interactive} className="text-zinc-500 font-sans text-[9.5px] font-bold" />
+                  <EditableText value={resolvedCin} onChange={(val) => onFieldChange?.("cin", val)} interactive={interactive} fieldKey="cin" placeholder="CIN Number..." className="text-zinc-800 font-bold" />
                 </span>
               )}
               {hasGstin && (
                 <span className="inline-flex items-center gap-1">
                   {hasCin ? <span className="text-zinc-300 mr-0.5">|</span> : null}
-                  <EditableText
-                    value="GSTIN:"
-                    interactive={interactive}
-                    className="text-zinc-500 font-sans text-[9.5px] font-bold"
-                  />
-                  <EditableText
-                    value={resolvedGstin}
-                    onChange={(val) => onFieldChange?.("gstin", val)}
-                    interactive={interactive}
-                    fieldKey="gstin"
-                    placeholder="GSTIN..."
-                    className="text-zinc-900 font-black"
-                  />
+                  <EditableText value="GSTIN:" interactive={interactive} className="text-zinc-500 font-sans text-[9.5px] font-bold" />
+                  <EditableText value={resolvedGstin} onChange={(val) => onFieldChange?.("gstin", val)} interactive={interactive} fieldKey="gstin" placeholder="GSTIN..." className="text-zinc-900 font-black" />
                 </span>
               )}
               {hasPan && (
                 <span className="inline-flex items-center gap-1">
                   {(hasCin || hasGstin) ? <span className="text-zinc-300 mr-0.5">|</span> : null}
-                  <EditableText
-                    value="PAN:"
-                    interactive={interactive}
-                    className="text-zinc-500 font-sans text-[9.5px] font-bold"
-                  />
-                  <EditableText
-                    value={resolvedPan}
-                    onChange={(val) => onFieldChange?.("pan", val)}
-                    interactive={interactive}
-                    fieldKey="pan"
-                    placeholder="PAN..."
-                    className="text-zinc-900 font-black"
-                  />
+                  <EditableText value="PAN:" interactive={interactive} className="text-zinc-500 font-sans text-[9.5px] font-bold" />
+                  <EditableText value={resolvedPan} onChange={(val) => onFieldChange?.("pan", val)} interactive={interactive} fieldKey="pan" placeholder="PAN..." className="text-zinc-900 font-black" />
                 </span>
               )}
             </p>
           )}
+        </div>
 
-          {/* Address & Contact Row */}
-          {(isValidField(resolvedAddress) || hasContactInfo) && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1 text-[10px] text-zinc-700 pt-1">
-              {isValidField(resolvedAddress) ? (
-                <div className="flex items-start gap-1.5">
-                  <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0 mt-0.5`}>
-                    <MapPin size={9} />
+        {/* Right: Header Card with Status Badge & Dates */}
+        <div className={`w-full sm:w-52 rounded-lg ${theme.cardHeaderGradient} text-white p-3 shadow-md shrink-0 flex flex-col self-start space-y-1.5`}>
+          <div className="flex items-center justify-between border-b border-white/20 pb-1">
+            <EditableText
+              value={theme.invoiceTypeLabel + (totalPgs > 1 ? ` (P.${pageNumber}/${totalPgs})` : '')}
+              interactive={interactive}
+              className="font-black text-[11px] tracking-wider uppercase text-white"
+            />
+            <EditableText
+              value={statusBadgeText}
+              interactive={interactive}
+              className={`px-2 py-0.5 rounded-full text-[8.5px] font-black tracking-wider uppercase ${
+                isFullyPaid ? "bg-white text-emerald-800" : isPartPaid ? "bg-white text-amber-800" : "bg-white text-rose-800"
+              }`}
+            />
+          </div>
+
+          <div className="space-y-1 text-[10px]">
+            <div>
+              <EditableText value="INVOICE NO:" interactive={interactive} className="text-white/80 text-[8px] uppercase tracking-wider font-semibold block" />
+              <EditableText value={invoiceNumOrId} interactive={interactive} className="font-mono text-white text-[12.5px] font-black break-all leading-tight block" />
+            </div>
+            <div className="flex items-center gap-2 pt-0.5">
+              <EditableText value="DATE:" interactive={interactive} className="text-white/80 text-[8px] uppercase font-bold tracking-wider shrink-0 w-8" />
+              <EditableText value={formatInvoiceDate(invoice.billDate)} interactive={interactive} className="text-white font-mono text-[9.5px] font-bold" />
+            </div>
+            <div className="flex items-center gap-2">
+              <EditableText value="DUE:" interactive={interactive} className="text-white/80 text-[8px] uppercase font-bold tracking-wider shrink-0 w-8" />
+              <EditableText value={hasDue ? formatInvoiceDate(invoice.dueDate) : "-"} interactive={interactive} className="text-white font-mono text-[9.5px] font-bold" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Address & Contact Row */}
+      {(isValidField(resolvedAddress) || hasContactInfo) && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-x-4 gap-y-1 text-[9.5px] text-zinc-700 pt-1 border-t border-zinc-100">
+          {isValidField(resolvedAddress) && (
+            <div className="flex items-center gap-1.5 min-w-0 max-w-full sm:max-w-[55%]">
+              <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
+                <MapPin size={8} />
+              </span>
+              <span className="text-zinc-900 font-bold text-[9px] shrink-0">Office:</span>
+              <EditableText
+                value={resolvedAddress}
+                onChange={(val) => onFieldChange?.("address", val)}
+                interactive={interactive}
+                fieldKey="address"
+                placeholder="Company address..."
+                className="text-zinc-600 text-[9px] truncate"
+              />
+            </div>
+          )}
+
+          {hasContactInfo && (
+            <div className="flex items-center gap-3 flex-wrap justify-end text-[9px]">
+              {isValidField(resolvedPhone) && (
+                <p className="flex items-center gap-1">
+                  <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
+                    <Phone size={7.5} />
                   </span>
-                  <div className="leading-tight flex-1">
-                    <span className="text-zinc-900 block text-[9.5px] font-bold">Office:</span>
-                    <EditableText
-                      value={resolvedAddress}
-                      onChange={(val) => onFieldChange?.("address", val)}
-                      interactive={interactive}
-                      fieldKey="address"
-                      placeholder="Company address..."
-                      className="text-zinc-600 text-[9.5px]"
-                    />
-                  </div>
-                </div>
-              ) : <div />}
-
-              {hasContactInfo && (
-                <div className="space-y-1">
-                  {isValidField(resolvedPhone) && (
-                    <p className="flex items-center gap-1.5">
-                      <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
-                        <Phone size={8.5} />
-                      </span>
-                      <EditableText
-                        value={resolvedPhone}
-                        onChange={(val) => onFieldChange?.("phone", val)}
-                        interactive={interactive}
-                        fieldKey="phone"
-                        placeholder="+91 Phone..."
-                        className="font-mono text-zinc-800 font-semibold text-[9.5px]"
-                      />
-                    </p>
-                  )}
-                  {isValidField(resolvedEmail) && (
-                    <p className="flex items-center gap-1.5">
-                      <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
-                        <Mail size={8.5} />
-                      </span>
-                      <EditableText
-                        value={resolvedEmail}
-                        onChange={(val) => onFieldChange?.("email", val)}
-                        interactive={interactive}
-                        fieldKey="email"
-                        placeholder="Official email..."
-                        className="text-zinc-700 text-[9.5px]"
-                      />
-                    </p>
-                  )}
-                  {isValidField(resolvedWebsite) && (
-                    <p className="flex items-center gap-1.5">
-                      <span className={`w-4 h-4 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
-                        <Globe size={8.5} />
-                      </span>
-                      <EditableText
-                        value={resolvedWebsite}
-                        onChange={(val) => onFieldChange?.("website", val)}
-                        interactive={interactive}
-                        fieldKey="website"
-                        placeholder="Website..."
-                        className="text-zinc-700 text-[9.5px]"
-                      />
-                    </p>
-                  )}
-                </div>
+                  <EditableText value={resolvedPhone} onChange={(val) => onFieldChange?.("phone", val)} interactive={interactive} fieldKey="phone" placeholder="+91..." className="font-mono text-zinc-800 font-semibold" />
+                </p>
+              )}
+              {isValidField(resolvedEmail) && (
+                <p className="flex items-center gap-1">
+                  <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
+                    <Mail size={7.5} />
+                  </span>
+                  <EditableText value={resolvedEmail} onChange={(val) => onFieldChange?.("email", val)} interactive={interactive} fieldKey="email" placeholder="Email..." className="text-zinc-700" />
+                </p>
+              )}
+              {isValidField(resolvedWebsite) && (
+                <p className="flex items-center gap-1">
+                  <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
+                    <Globe size={7.5} />
+                  </span>
+                  <EditableText value={resolvedWebsite} onChange={(val) => onFieldChange?.("website", val)} interactive={interactive} fieldKey="website" placeholder="Website..." className="text-zinc-700" />
+                </p>
               )}
             </div>
           )}
         </div>
-      </div>
-
-      {/* Right: Header Card with Status Badge & Dates - All editable */}
-      <div className={`w-full sm:w-56 rounded-lg ${theme.cardHeaderGradient} text-white p-3.5 shadow-md shrink-0 flex flex-col self-start space-y-2`}>
-        <div className="flex items-center justify-between border-b border-white/20 pb-1.5">
-          <EditableText
-            value={theme.invoiceTypeLabel + (totalPgs > 1 ? ` (P.${pageNumber}/${totalPgs})` : '')}
-            interactive={interactive}
-            className="font-black text-[11.5px] tracking-wider uppercase text-white"
-          />
-          <EditableText
-            value={statusBadgeText}
-            interactive={interactive}
-            className={`px-2 py-0.5 rounded-full text-[8.5px] font-black tracking-wider uppercase ${
-              isFullyPaid 
-                ? "bg-white text-emerald-800" 
-                : isPartPaid 
-                ? "bg-white text-amber-800" 
-                : "bg-white text-rose-800"
-            }`}
-          />
-        </div>
-
-        <div className="space-y-1.5 text-[10px]">
-          <div>
-            <EditableText
-              value="INVOICE NO:"
-              interactive={interactive}
-              className="text-white/80 text-[8.5px] uppercase tracking-wider font-semibold block"
-            />
-            <EditableText
-              value={invoiceNumOrId}
-              interactive={interactive}
-              className="font-mono text-white text-[13px] font-black break-all leading-tight block"
-            />
-          </div>
-          <div className="flex items-center gap-2 pt-0.5">
-            <EditableText
-              value="DATE:"
-              interactive={interactive}
-              className="text-white/80 text-[8.5px] uppercase font-bold tracking-wider shrink-0 w-9"
-            />
-            <EditableText
-              value={formatInvoiceDate(invoice.billDate)}
-              interactive={interactive}
-              className="text-white font-mono text-[10px] font-bold"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <EditableText
-              value="DUE:"
-              interactive={interactive}
-              className="text-white/80 text-[8.5px] uppercase font-bold tracking-wider shrink-0 w-9"
-            />
-            <EditableText
-              value={hasDue ? formatInvoiceDate(invoice.dueDate) : "-"}
-              interactive={interactive}
-              className="text-white font-mono text-[10px] font-bold"
-            />
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   )
 
@@ -2294,21 +2212,12 @@ export function OfficialInvoiceDocument({
             )
           })}
 
-          {/* PAGE CONTENT (Top to mid sections) */}
+          {/* PAGE CONTENT (Top to mid sections) - Consistent invoice format across all pages */}
           <div className="flex flex-col gap-2 shrink-0">
-            {pg.isFirstPage ? (
-              <>
-                {renderTopHeader(pg.pageNumber, totalPages)}
-                {renderEntityHierarchyStrip()}
-                {renderInfoCards()}
-                {renderTable(pg.items, pg.startIndex, pg.isLastPage)}
-              </>
-            ) : (
-              <>
-                {renderCompactSubsequentHeader(pg.pageNumber, totalPages)}
-                {renderTable(pg.items, pg.startIndex, pg.isLastPage)}
-              </>
-            )}
+            {renderTopHeader(pg.pageNumber, totalPages)}
+            {renderEntityHierarchyStrip()}
+            {renderInfoCards()}
+            {renderTable(pg.items, pg.startIndex, pg.isLastPage)}
           </div>
 
           {/* FINANCIALS, SIGNATURES & STICKY FOOTER */}

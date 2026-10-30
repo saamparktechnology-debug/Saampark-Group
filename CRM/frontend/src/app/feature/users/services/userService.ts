@@ -319,7 +319,7 @@ export async function recordUserAccountAsync(user: Partial<UserItem>, isNewRegis
       status: user.status !== undefined ? user.status : (existing?.status || "Active"),
       department: user.department !== undefined ? user.department : (existing?.department || "General"),
       phone: user.phone !== undefined ? user.phone : (existing?.phone || ""),
-      password: user.password !== undefined ? user.password : (existing?.password || "Password123"),
+      password: (user.password && user.password.trim()) ? user.password.trim() : (existing?.password || "Password123"),
       lastLogin: user.lastLogin !== undefined ? user.lastLogin : (existing?.lastLogin || "Just now"),
       joinedDate: user.joinedDate !== undefined ? user.joinedDate : (existing?.joinedDate || new Date().toISOString().split("T")[0]),
       employeeId: user.employeeId !== undefined ? user.employeeId : (existing?.employeeId || (user.id ? `SP-EMP-${String(user.id).replace(/[^0-9]/g, "").slice(-4).padStart(4, "0") || "0041"}` : `SP-EMP-${String(Date.now()).slice(-4)}`)),
@@ -1002,9 +1002,13 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
           const isRootSuper = isRootSuperAdminEmail(preservedEmail);
           const effectiveRole: UserRole = isRootSuper ? "Super Admin" : (mappedRole || existingItem?.role || finalRole);
 
+          const liveName = u.full_name || u.name || u.first_name || (u.email ? undefined : undefined);
+          const livePhone = (u.phone !== undefined && u.phone !== null && u.phone !== "") ? u.phone : undefined;
+          const liveDept = (u.department && u.department !== "General") ? u.department : undefined;
+
           const item: UserItem = {
             id: String(u.id || existingItem?.id || `usr_${Math.random()}`),
-            name: existingItem?.name || u.full_name || u.name || u.first_name || u.email || "User Account",
+            name: liveName || existingItem?.name || u.email || "User Account",
             email: preservedEmail,
             username: u.username || existingItem?.username || undefined,
             role: effectiveRole,
@@ -1021,7 +1025,7 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
             avatarUrl: u.avatar || u.avatarUrl || u.avatar_url || existingItem?.avatarUrl || undefined,
             status: u.status === "inactive" || u.is_active === false ? "Inactive" : "Active",
             department: u.department || existingItem?.department || "General",
-            phone: u.phone || existingItem?.phone || "",
+            phone: livePhone || existingItem?.phone || "",
             password: existingItem?.password || (u as any)?.password || undefined,
             lastLogin: u.last_login || existingItem?.lastLogin || "Active session",
             joinedDate: u.created_at ? u.created_at.split("T")[0] : existingItem?.joinedDate || new Date().toISOString().split("T")[0],
@@ -1034,31 +1038,28 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
 
           if (existingIdx >= 0 && existingItem) {
             dbUsers[existingIdx] = {
-              ...item,
               ...existingItem,
+              ...item,
               email: preservedEmail,
               id: String(existingItem.id || u.id),
-              name: existingItem.name || item.name,
-              username: existingItem.username || u.username || item.username || undefined,
-              avatarUrl: existingItem.avatarUrl || item.avatarUrl,
-              companyIds: (existingItem.companyIds && existingItem.companyIds.length > 0) ? existingItem.companyIds : parsedCompanyIds,
-              companyId: (existingItem.companyIds && existingItem.companyIds[0]) || existingItem.companyId || item.companyId,
-              companyName:
-                ((existingItem.companyIds || parsedCompanyIds).includes("digital") && (existingItem.companyIds || parsedCompanyIds).includes("tech"))
-                  ? "SAAMPARK Group (Multiple)"
-                  : ((existingItem.companyIds || parsedCompanyIds)[0] === "digital" ? "SAAMPARK Digital Marketing" : "SAAMPARK Technology"),
-              branchId: existingItem.branchId !== undefined ? existingItem.branchId : item.branchId,
-              branchIds: existingItem.branchIds !== undefined ? existingItem.branchIds : item.branchIds,
-              branchName: existingItem.branchName !== undefined ? existingItem.branchName : item.branchName,
-              department: existingItem.department || item.department,
-              role: isRootSuper ? "Super Admin" : (mappedRole || existingItem.role || item.role),
-              status: existingItem.status || item.status,
-              phone: existingItem.phone !== undefined ? existingItem.phone : item.phone,
+              name: liveName || existingItem.name || item.name,
+              username: u.username || item.username || existingItem.username || undefined,
+              avatarUrl: u.avatar || u.avatarUrl || u.avatar_url || existingItem.avatarUrl || item.avatarUrl,
+              companyIds: (item.companyIds && item.companyIds.length > 0) ? item.companyIds : ((existingItem.companyIds && existingItem.companyIds.length > 0) ? existingItem.companyIds : parsedCompanyIds),
+              companyId: item.companyId || existingItem.companyId || parsedCompanyIds[0] || "tech",
+              companyName: item.companyName || existingItem.companyName,
+              branchId: (u.branch_id || u.branchId !== undefined) ? (u.branch_id || u.branchId) : (existingItem.branchId !== undefined ? existingItem.branchId : item.branchId),
+              branchIds: (u.branch_ids ? (() => { try { return JSON.parse(u.branch_ids) } catch { return [u.branch_ids] } })() : (item.branchIds !== undefined ? item.branchIds : existingItem.branchIds)),
+              branchName: (u.branch_name || u.branchName) || existingItem.branchName || item.branchName,
+              department: liveDept || u.department || existingItem.department || item.department,
+              role: isRootSuper ? "Super Admin" : (mappedRole || item.role || existingItem.role || finalRole),
+              status: (u.status ? (u.status === "inactive" || u.is_active === false ? "Inactive" : "Active") : (existingItem.status || item.status)),
+              phone: livePhone || existingItem.phone || item.phone,
               password: existingItem.password || item.password || undefined,
-              permissions: existingItem.permissions !== undefined ? existingItem.permissions : (permObj || item.permissions),
-              allowedModules: existingItem.allowedModules || permObj?.allowedModules || item.allowedModules,
-              kycStatus: existingItem.kycStatus || item.kycStatus,
-              kycData: existingItem.kycData || item.kycData,
+              permissions: permObj || item.permissions || existingItem.permissions,
+              allowedModules: permObj?.allowedModules || item.allowedModules || existingItem.allowedModules,
+              kycStatus: u.kyc_status || u.kycStatus || existingItem.kycStatus || item.kycStatus,
+              kycData: item.kycData || existingItem.kycData,
               previousEmails: existingItem.previousEmails,
               previousEmail: existingItem.previousEmail,
             };
@@ -1274,6 +1275,7 @@ export async function updateUser(idOrEmail: string, updates: Partial<UserItem>, 
     ...updates,
     id: existing.id,
     email: updates.email || existing.email,
+    password: (updates.password && updates.password.trim()) ? updates.password.trim() : existing.password,
     username: updates.username !== undefined ? updates.username : existing.username,
     branchId: updates.branchId !== undefined ? (updates.branchId || undefined) : existing.branchId,
     branchName: updates.branchName !== undefined ? (updates.branchName || undefined) : existing.branchName,

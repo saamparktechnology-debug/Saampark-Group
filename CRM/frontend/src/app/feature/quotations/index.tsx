@@ -533,57 +533,69 @@ export default function QuotationsMain() {
 
       {/* KPI METRICS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl p-4 shadow-xs flex items-center justify-between">
+        <div className="kpi-card-premium flex items-center justify-between">
           <div>
-            <p className="text-xs text-zinc-500 font-medium">Total Quotations</p>
-            <h3 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mt-0.5">{quotations.length}</h3>
+            <p className="text-xs text-muted-foreground font-semibold">Total Quotations</p>
+            <h3 className="text-2xl font-black text-foreground mt-0.5">{quotations.length}</h3>
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+              <span>●</span> Active commercial proposals
+            </span>
           </div>
-          <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 rounded-xl">
-            <FileText size={20} />
+          <div className="p-3 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 rounded-xl">
+            <FileText size={22} />
           </div>
         </div>
 
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl p-4 shadow-xs flex items-center justify-between">
+        <div className="kpi-card-premium flex items-center justify-between">
           <div>
-            <p className="text-xs text-zinc-500 font-medium">Pipeline Value</p>
-            <h3 className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">₹{totalPipeline.toLocaleString("en-IN")}</h3>
+            <p className="text-xs text-muted-foreground font-semibold">Pipeline Value</p>
+            <h3 className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5">₹{totalPipeline.toLocaleString("en-IN")}</h3>
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+              <span>₹</span> Cumulative tender value
+            </span>
           </div>
-          <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 rounded-xl">
-            <Calculator size={20} />
+          <div className="p-3 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 rounded-xl">
+            <Calculator size={22} />
           </div>
         </div>
 
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl p-4 shadow-xs flex items-center justify-between">
+        <div className="kpi-card-premium flex items-center justify-between">
           <div>
-            <p className="text-xs text-zinc-500 font-medium">Sent &amp; Pending</p>
-            <h3 className="text-xl font-bold text-blue-600 dark:text-blue-400 mt-0.5">{quotations.filter(q => q.status === "Sent").length}</h3>
+            <p className="text-xs text-muted-foreground font-semibold">Sent &amp; Pending</p>
+            <h3 className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-0.5">{quotations.filter(q => q.status === "Sent").length}</h3>
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 dark:text-blue-400 mt-1">
+              <span>⏱</span> Under client evaluation
+            </span>
           </div>
-          <div className="p-2.5 bg-blue-50 dark:bg-blue-950/50 text-blue-600 rounded-xl">
-            <Clock size={20} />
+          <div className="p-3 bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 rounded-xl">
+            <Clock size={22} />
           </div>
         </div>
 
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl p-4 shadow-xs flex items-center justify-between">
+        <div className="kpi-card-premium flex items-center justify-between">
           <div>
-            <p className="text-xs text-zinc-500 font-medium">Accepted</p>
-            <h3 className="text-xl font-bold text-purple-600 dark:text-purple-400 mt-0.5">{quotations.filter(q => q.status === "Accepted").length}</h3>
+            <p className="text-xs text-muted-foreground font-semibold">Accepted</p>
+            <h3 className="text-2xl font-black text-purple-600 dark:text-purple-400 mt-0.5">{quotations.filter(q => q.status === "Accepted").length}</h3>
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-purple-600 dark:text-purple-400 mt-1">
+              <span>✓</span> Approved for execution
+            </span>
           </div>
-          <div className="p-2.5 bg-purple-50 dark:bg-purple-950/50 text-purple-600 rounded-xl">
-            <CheckCircle2 size={20} />
+          <div className="p-3 bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 rounded-xl">
+            <CheckCircle2 size={22} />
           </div>
         </div>
       </div>
 
       {/* FILTER & SEARCH */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white dark:bg-zinc-900 p-3 rounded-xl border border-zinc-200/80 dark:border-zinc-800 shadow-xs">
+      <div className="box-3d flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-2xl">
         <div className="relative w-full sm:w-80">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input 
             type="text" 
             placeholder="Search by quote #, client, email..." 
             value={searchQuery} 
             onChange={(e) => setSearchQuery(e.target.value)} 
-            className="w-full pl-9 pr-3 py-1.5 text-xs bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-emerald-500" 
+            className="w-full pl-9 pr-3 py-2 text-xs liquid-glass-input rounded-xl focus:outline-hidden" 
           />
         </div>
 
@@ -593,10 +605,10 @@ export default function QuotationsMain() {
               key={st}
               type="button"
               onClick={() => setStatusFilter(st)}
-              className={`px-3 py-1 text-xs font-semibold rounded-lg capitalize transition-colors ${
+              className={`px-3 py-1.5 text-xs font-semibold rounded-xl capitalize transition-colors ${
                 statusFilter === st 
                   ? "bg-emerald-600 text-white shadow-xs" 
-                  : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                  : "text-muted-foreground hover:bg-muted"
               }`}
             >
               {st}
@@ -606,10 +618,10 @@ export default function QuotationsMain() {
       </div>
 
       {/* TABLE */}
-      <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl overflow-hidden shadow-xs">
+      <div className="table-3d-wrapper rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-200 dark:border-zinc-800 text-zinc-500 uppercase font-semibold text-[11px]">
+            <thead className="bg-muted/40 border-b border-border text-muted-foreground uppercase font-bold text-[11px] tracking-wider">
               <tr>
                 <th className="py-3 px-4">Quote #</th>
                 <th className="py-3 px-4">Client / Organization</th>
