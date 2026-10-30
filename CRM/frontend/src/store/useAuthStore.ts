@@ -1799,7 +1799,12 @@ export const useAuthStore = create<AuthState>()(
           sessionStorage.removeItem('saampark_session_active')
           localStorage.removeItem('saampark_session_active')
           localStorage.removeItem('saampark_last_activity_time')
+          localStorage.removeItem('saampark_universal_deleted_ids')
         }
+        try {
+          const { resetDeletedCache } = require('@/lib/storageSync')
+          resetDeletedCache?.()
+        } catch {}
         AuthService.logout()
         set({
           isAuthenticated: false,

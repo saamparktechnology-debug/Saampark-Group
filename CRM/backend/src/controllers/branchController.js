@@ -258,28 +258,22 @@ const subBranchController = {
 
       // 2. Try finding by code, name, or slug
       if (!resolvedBranchId && rawBranchId) {
-        const [bRows] = await pool.execute('SELECT id FROM branches WHERE code = ? OR name = ? OR LOWER(name) = LOWER(?)', [rawBranchId, rawBranchId, String(rawBranchId)]).catch(() => [[]]);
+        const [bRows] = await pool.execute('SELECT id FROM branches WHERE (code = ? OR name = ? OR LOWER(name) = LOWER(?)) AND company_id = ?', [rawBranchId, rawBranchId, String(rawBranchId), resolvedCompanyId]).catch(() => [[]]);
         if (bRows && bRows.length > 0) resolvedBranchId = bRows[0].id;
       }
 
-      // 3. Try finding any branch matching company
+      if (rawBranchId && !resolvedBranchId) {
+        return errorResponse(res, 400, 'Selected parent branch not found for this company.');
+      }
+
+      // 3. If no branch was specified, look for the first active branch belonging to the company
       if (!resolvedBranchId) {
-        const [bRows] = await pool.execute('SELECT id FROM branches WHERE company_id = ? ORDER BY id ASC LIMIT 1', [resolvedCompanyId]).catch(() => [[]]);
+        const [bRows] = await pool.execute('SELECT id FROM branches WHERE company_id = ? ORDER BY is_active DESC, id ASC LIMIT 1', [resolvedCompanyId]).catch(() => [[]]);
         if (bRows && bRows.length > 0) resolvedBranchId = bRows[0].id;
       }
 
-      // 4. Fallback to any existing branch in branches table, or create default
       if (!resolvedBranchId) {
-        const [bRows] = await pool.execute('SELECT id FROM branches ORDER BY id ASC LIMIT 1').catch(() => [[]]);
-        if (bRows && bRows.length > 0) {
-          resolvedBranchId = bRows[0].id;
-        } else {
-          const [ins] = await pool.execute(
-            'INSERT INTO branches (company_id, name, code, is_active) VALUES (?, "Main Branch", "HO-01", 1)',
-            [resolvedCompanyId]
-          ).catch(() => [{ insertId: 1 }]);
-          resolvedBranchId = ins.insertId || 1;
-        }
+        return errorResponse(res, 400, 'A parent branch is required to create a sub-branch. Please create a branch first.');
       }
 
       const id = await subBranchModel.create({ ...req.body, branch_id: resolvedBranchId, company_id: resolvedCompanyId });

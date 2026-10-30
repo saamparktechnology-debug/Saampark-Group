@@ -26,10 +26,14 @@ const knowledgeBaseModel = {
   },
 
   async update(id, data) {
+    const allowed = ['category', 'title', 'content', 'tags', 'is_published'];
     const fields = [];
     const values = [];
     for (const [key, val] of Object.entries(data)) {
-      if (val !== undefined) { fields.push(`${key} = ?`); values.push(val); }
+      if (allowed.includes(key) && val !== undefined) {
+        fields.push(`${key} = ?`);
+        values.push(val);
+      }
     }
     if (fields.length === 0) return false;
     values.push(id);
@@ -64,10 +68,14 @@ const slaModel = {
   },
 
   async update(id, data) {
+    const allowed = ['name', 'priority', 'first_response_hours', 'resolution_hours', 'business_hours_only'];
     const fields = [];
     const values = [];
     for (const [key, val] of Object.entries(data)) {
-      if (val !== undefined) { fields.push(`${key} = ?`); values.push(val); }
+      if (allowed.includes(key) && val !== undefined) {
+        fields.push(`${key} = ?`);
+        values.push(val);
+      }
     }
     if (fields.length === 0) return false;
     values.push(id);
@@ -133,10 +141,14 @@ const messageTemplateModel = {
   },
 
   async update(id, data) {
+    const allowed = ['name', 'type', 'subject', 'body', 'variables', 'is_active'];
     const fields = [];
     const values = [];
     for (const [key, val] of Object.entries(data)) {
-      if (val !== undefined) { fields.push(`${key} = ?`); values.push(val); }
+      if (allowed.includes(key) && val !== undefined) {
+        fields.push(`${key} = ?`);
+        values.push(val);
+      }
     }
     if (fields.length === 0) return false;
     values.push(id);

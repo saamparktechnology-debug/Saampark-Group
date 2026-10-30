@@ -84,10 +84,18 @@ const branchModel = {
     }
     if (fields.length === 0) return false;
     fields.push('updated_at = NOW()');
-    values.push(id, id);
-    await pool.execute(`UPDATE branches SET ${fields.join(', ')} WHERE id = ? OR code = ?`, values).catch(err => {
-      console.warn('MySQL branch update column fallback:', err.message);
-    });
+    const isNum = !isNaN(Number(id)) && Number(id) > 0;
+    if (isNum) {
+      values.push(Number(id));
+      await pool.execute(`UPDATE branches SET ${fields.join(', ')} WHERE id = ?`, values).catch(err => {
+        console.warn('MySQL branch update column fallback:', err.message);
+      });
+    } else {
+      values.push(String(id));
+      await pool.execute(`UPDATE branches SET ${fields.join(', ')} WHERE code = ?`, values).catch(err => {
+        console.warn('MySQL branch update column fallback:', err.message);
+      });
+    }
     return true;
   },
 

@@ -49,10 +49,11 @@ const purchaseOrderModel = {
   },
 
   async update(id, data) {
+    const allowed = ['branch_id', 'vendor_id', 'order_number', 'order_date', 'expected_delivery_date', 'subtotal', 'discount_amount', 'tax_amount', 'shipping_cost', 'total', 'status', 'notes'];
     const fields = [];
     const values = [];
     for (const [key, val] of Object.entries(data)) {
-      if (val !== undefined && key !== 'items') { fields.push(`${key} = ?`); values.push(val); }
+      if (allowed.includes(key) && val !== undefined) { fields.push(`${key} = ?`); values.push(val); }
     }
     if (fields.length > 0) { values.push(id); await pool.execute(`UPDATE purchase_orders SET ${fields.join(', ')} WHERE id = ?`, values); }
     if (data.items) {
@@ -122,10 +123,11 @@ const purchaseInvoiceModel = {
   },
 
   async update(id, data) {
+    const allowed = ['branch_id', 'vendor_id', 'purchase_order_id', 'invoice_number', 'invoice_date', 'due_date', 'subtotal', 'tax_amount', 'total', 'paid_amount', 'status', 'notes'];
     const fields = [];
     const values = [];
     for (const [key, val] of Object.entries(data)) {
-      if (val !== undefined && key !== 'items') { fields.push(`${key} = ?`); values.push(val); }
+      if (allowed.includes(key) && val !== undefined) { fields.push(`${key} = ?`); values.push(val); }
     }
     if (fields.length > 0) { values.push(id); await pool.execute(`UPDATE purchase_invoices SET ${fields.join(', ')} WHERE id = ?`, values); }
     if (data.items) {
@@ -166,10 +168,11 @@ const purchaseReturnModel = {
   },
 
   async update(id, data) {
+    const allowed = ['vendor_id', 'purchase_invoice_id', 'return_number', 'return_date', 'total', 'reason', 'status'];
     const fields = [];
     const values = [];
     for (const [key, val] of Object.entries(data)) {
-      if (val !== undefined) { fields.push(`${key} = ?`); values.push(val); }
+      if (allowed.includes(key) && val !== undefined) { fields.push(`${key} = ?`); values.push(val); }
     }
     if (fields.length === 0) return false;
     values.push(id);

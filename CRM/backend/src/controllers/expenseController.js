@@ -4,7 +4,8 @@ const expenseModel = require('../models/expenseModel');
 const expenseController = {
   async getAll(req, res) {
     try {
-      const companyId = req.headers['x-company-id'] || req.user?.company_id || req.query.company_id || 'tech';
+      const companyId = req.headers['x-company-id'] || req.user?.company_id || req.query.company_id;
+      if (!companyId) return errorResponse(res, 400, 'Company ID is required');
       const branchId = req.headers['x-branch-id'] || req.user?.branch_id || req.query.branch_id;
       const filters = {
         status: req.query.status,
@@ -31,7 +32,8 @@ const expenseController = {
 
   async create(req, res) {
     try {
-      const companyId = req.headers['x-company-id'] || req.user?.company_id || req.body.company_id || 'tech';
+      const companyId = req.headers['x-company-id'] || req.user?.company_id || req.body.company_id;
+      if (!companyId) return errorResponse(res, 400, 'Company ID is required');
       const createdBy = req.user?.id || req.user?.email || 'admin';
       const result = await expenseModel.create({
         ...req.body,
@@ -77,7 +79,8 @@ const expenseController = {
 
   async getStats(req, res) {
     try {
-      const companyId = req.headers['x-company-id'] || req.user?.company_id || req.query.company_id || 'tech';
+      const companyId = req.headers['x-company-id'] || req.user?.company_id || req.query.company_id;
+      if (!companyId) return errorResponse(res, 400, 'Company ID is required');
       const stats = await expenseModel.getStats(companyId);
       return successResponse(res, 200, 'Expense stats fetched', stats);
     } catch (err) {

@@ -12,7 +12,8 @@ const getAllCompanies = async (req, res, next) => {
     // Role check: If requester is authenticated and is NOT Super Admin, filter to assigned company
     if (req.user) {
       const userRoleId = Number(req.user.role_id);
-      const isSuper = userRoleId === 1 || String(req.user.role || req.user.role_name || '').toLowerCase().includes('super') || req.user.email === 'hiisupriya@gmail.com' || req.user.email === 'saampark.official@gmail.com';
+      const userRole = String(req.user.role || req.user.role_name || '').toLowerCase().trim();
+      const isSuper = userRoleId === 1 || userRole === 'super admin' || userRole === 'superadmin';
       
       if (!isSuper) {
         // Find assigned companies for this user
@@ -96,6 +97,12 @@ const createCompany = async (req, res, next) => {
       ]
     );
 
+    // Invalidate company scope cache immediately so new company is available right away
+    try {
+      const { invalidateCompanyCache } = require('../middlewares/companyScopeMiddleware');
+      if (typeof invalidateCompanyCache === 'function') invalidateCompanyCache();
+    } catch {}
+
     return successResponse(res, 201, 'Company created successfully', { company_id: result.insertId, slug: companySlug });
   } catch (error) { next(error); }
 };
@@ -104,8 +111,8 @@ const createCompany = async (req, res, next) => {
 const updateCompany = async (req, res, next) => {
   try {
     const userRoleId = Number(req.user?.role_id);
-    const userRole = String(req.user?.role || req.user?.role_name || '').toLowerCase();
-    const isSuper = userRoleId === 1 || userRole.includes('super') || req.user?.email === 'hiisupriya@gmail.com' || req.user?.email === 'saampark.official@gmail.com';
+    const userRole = String(req.user?.role || req.user?.role_name || '').toLowerCase().trim();
+    const isSuper = userRoleId === 1 || userRole === 'super admin' || userRole === 'superadmin';
 
     const isNumericParam = Number.isFinite(Number(req.params.id));
     const [targetRows] = await pool.execute(
@@ -350,38 +357,50 @@ const deleteCompany = async (req, res, next) => {
     const compId = comp[0].id;
     const compSlug = comp[0].slug;
 
-    // Track deleted company in tombstone table so all users belonging to it can be blocked
-    await pool.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "companies")', [String(compId)]).catch(() => {});
-    await pool.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "companies")', [compSlug]).catch(() => {});
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
 
-    // Mark company users as inactive before unlinking
-    await pool.execute('UPDATE users SET status = "inactive", updated_at = NOW() WHERE company_id = ?', [compId]).catch(() => {});
+      // Track deleted company in tombstone table so all users belonging to it can be blocked
+      await conn.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "companies")', [String(compId)]).catch(() => {});
+      await conn.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "companies")', [compSlug]).catch(() => {});
 
-    // Clean up dependent child tables to prevent foreign key errors
-    await pool.execute('DELETE FROM sub_branches WHERE company_id = ?', [compId]).catch(() => {});
-    await pool.execute('DELETE FROM branches WHERE company_id = ?', [compId]).catch(() => {});
-    await pool.execute('DELETE FROM employee_attendance WHERE company_id = ?', [compId]).catch(() => {});
-    await pool.execute('DELETE FROM employee_leaves WHERE company_id = ?', [compId]).catch(() => {});
-    await pool.execute('DELETE FROM payroll WHERE company_id = ?', [compId]).catch(() => {});
-    await pool.execute('DELETE FROM invoices WHERE company_id = ?', [compId]).catch(() => {});
-    await pool.execute('DELETE FROM projects WHERE company_id = ?', [compId]).catch(() => {});
-    await pool.execute('DELETE FROM customers WHERE company_id = ?', [compId]).catch(() => {});
-    await pool.execute('DELETE FROM leads WHERE company_id = ?', [compId]).catch(() => {});
-    await pool.execute('DELETE FROM deals WHERE company_id = ?', [compId]).catch(() => {});
-    await pool.execute('DELETE FROM expenses WHERE company_id = ?', [compId]).catch(() => {});
-    await pool.execute('DELETE FROM tickets WHERE company_id = ?', [compId]).catch(() => {});
-    await pool.execute(
-      'DELETE FROM app_data WHERE module_key IN (?, ?, ?, ?, ?, ?, ?, ?)',
-      [
-        `branches_${compId}`, `branches_${compSlug}`,
-        `companies_${compId}`, `companies_${compSlug}`,
-        `invoices_${compId}`, `invoices_${compSlug}`,
-        `settings_${compId}`, `settings_${compSlug}`
-      ]
-    ).catch(() => {});
+      // Mark company users as inactive before unlinking
+      await conn.execute('UPDATE users SET status = "inactive", updated_at = NOW() WHERE company_id = ?', [compId]).catch(() => {});
 
-    // Delete company record from database
-    await pool.execute('DELETE FROM companies WHERE id = ?', [compId]);
+      // Clean up dependent child tables to prevent foreign key errors
+      await conn.execute('DELETE FROM sub_branches WHERE company_id = ?', [compId]).catch(() => {});
+      await conn.execute('DELETE FROM branches WHERE company_id = ?', [compId]).catch(() => {});
+      await conn.execute('DELETE FROM employee_attendance WHERE company_id = ?', [compId]).catch(() => {});
+      await conn.execute('DELETE FROM employee_leaves WHERE company_id = ?', [compId]).catch(() => {});
+      await conn.execute('DELETE FROM payroll WHERE company_id = ?', [compId]).catch(() => {});
+      await conn.execute('DELETE FROM invoices WHERE company_id = ?', [compId]).catch(() => {});
+      await conn.execute('DELETE FROM projects WHERE company_id = ?', [compId]).catch(() => {});
+      await conn.execute('DELETE FROM customers WHERE company_id = ?', [compId]).catch(() => {});
+      await conn.execute('DELETE FROM leads WHERE company_id = ?', [compId]).catch(() => {});
+      await conn.execute('DELETE FROM deals WHERE company_id = ?', [compId]).catch(() => {});
+      await conn.execute('DELETE FROM expenses WHERE company_id = ?', [compId]).catch(() => {});
+      await conn.execute('DELETE FROM tickets WHERE company_id = ?', [compId]).catch(() => {});
+      await conn.execute(
+        'DELETE FROM app_data WHERE module_key IN (?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          `branches_${compId}`, `branches_${compSlug}`,
+          `companies_${compId}`, `companies_${compSlug}`,
+          `invoices_${compId}`, `invoices_${compSlug}`,
+          `settings_${compId}`, `settings_${compSlug}`
+        ]
+      ).catch(() => {});
+
+      // Delete company record from database
+      await conn.execute('DELETE FROM companies WHERE id = ?', [compId]);
+
+      await conn.commit();
+    } catch (txnErr) {
+      await conn.rollback();
+      throw txnErr;
+    } finally {
+      conn.release();
+    }
 
     // Invalidate company scope cache
     try {

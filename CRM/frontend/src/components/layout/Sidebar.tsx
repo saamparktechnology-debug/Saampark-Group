@@ -190,7 +190,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
       { name: "General Settings", href: "/feature/settings", icon: Settings },
       { name: "Companies", href: "/feature/companies", icon: Building2 },
       { name: "Branches", href: "/feature/branches", icon: GitBranch },
-      { name: "Departments", href: "/feature/team/members", icon: Users },
+      { name: "Departments", href: "/feature/departments", icon: Briefcase },
       { name: "Teams", href: "/feature/teams", icon: UserCheck },
       { name: "Permissions", href: "/feature/permissions", icon: Shield },
     ]

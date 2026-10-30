@@ -50,7 +50,7 @@ const requireRole = (...allowedRoleIds) => {
     const userRole = String(req.user.role || req.user.role_name || ROLE_IDS[userRoleId] || '').toLowerCase();
     
     // Super admin role always passes super admin / role checks unless specifically restricted
-    if (userRoleId === 1 || userRole.includes('super')) {
+    if (userRoleId === 1 || userRole === 'super admin' || userRole === 'superadmin') {
       return next();
     }
 

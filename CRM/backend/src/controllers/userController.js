@@ -308,7 +308,7 @@ const updateUser = async (req, res, next) => {
     const setClauses = [];
     const params = [];
 
-    if (displayName !== null) { setClauses.push('full_name = COALESCE(?, full_name)'); params.push(displayName); }
+    if (displayName !== null) { setClauses.push('full_name = ?'); params.push(displayName); }
     if (newEmailVal) { setClauses.push('email = ?'); params.push(newEmailVal); }
     if (usernameVal !== undefined) { setClauses.push('username = ?'); params.push(usernameVal); }
     if (phoneVal !== null || phone === '') { setClauses.push('phone = ?'); params.push(phoneVal); }
@@ -341,15 +341,15 @@ const updateUser = async (req, res, next) => {
     
     try {
       if (isNumericTargetId) {
-        params.push(id, targetEmail, oldEmailVal || id);
+        params.push(parseInt(id, 10));
         await pool.execute(
-          `UPDATE users SET ${setClauses.join(', ')} WHERE id = ? OR email = ? OR email = ?`,
+          `UPDATE users SET ${setClauses.join(', ')} WHERE id = ?`,
           params
         );
       } else {
-        params.push(targetEmail || id, oldEmailVal || id);
+        params.push(targetEmail || id);
         await pool.execute(
-          `UPDATE users SET ${setClauses.join(', ')} WHERE email = ? OR email = ?`,
+          `UPDATE users SET ${setClauses.join(', ')} WHERE email = ?`,
           params
         );
       }
@@ -763,7 +763,6 @@ const createUser = async (req, res, next) => {
       status: 'Active',
       department: department || 'General',
       phone: phone || '',
-      password: password || 'Password123',
       lastLogin: 'Just created',
       joinedDate: new Date().toISOString().split('T')[0],
       permissions: permissions || null,

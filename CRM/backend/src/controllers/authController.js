@@ -223,11 +223,8 @@ const login = async (req, res, next) => {
                 isMatch = (matched.password === password || matched.password === password.trim());
               }
               // Check if user is Super Admin
-              const mRole = String(matched.role || '').toLowerCase();
-              const isSuper = mRole.includes('super') || matched.role_id === 1 || matched.email === 'hiisupriya@gmail.com' || matched.email === 'saampark.official@gmail.com' || matched.email === 'supriyo.main@gmail.com';
-              if (!isMatch && isSuper && ['123456', 'admin123', 'Password123', 'admin'].includes(password.trim())) {
-                isMatch = true;
-              }
+              const mRole = String(matched.role || '').toLowerCase().trim();
+              const isSuper = matched.role_id === 1 || mRole === 'super admin' || mRole === 'superadmin';
               if (matched && isMatch) {
                 if (!isSuper) {
                   const mComp = matched.companyId || matched.company_id || (Array.isArray(matched.companyIds) ? matched.companyIds[0] : null);
@@ -316,24 +313,12 @@ const login = async (req, res, next) => {
     }
 
     if (!isMatch) {
-      // Emergency Super Admin fallback to ensure Super Admin is never locked out
-      const isSuper = user.role_id === 1 || String(user.role_name || user.role || '').toLowerCase().includes('super') ||
-        ['hiisupriya@gmail.com', 'saampark.official@gmail.com', 'supriyo.main@gmail.com'].includes(user.email?.toLowerCase().trim());
-      if (isSuper && ['123456', 'admin123', 'Password123', 'admin'].includes(password.trim())) {
-        isMatch = true;
-        try {
-          const healedHash = await hashPassword(password.trim());
-          await pool.execute('UPDATE users SET password_hash = ? WHERE id = ?', [healedHash, user.id]);
-        } catch {}
-      }
-    }
-
-    if (!isMatch) {
       return errorResponse(res, 401, 'Invalid password. Please try again.');
     }
 
     // Enforce Company Availability Check for non-Super Admin users
-    const isSuperAdmin = user.role_id === 1 || String(user.role_name || user.role || '').toLowerCase().includes('super') || user.email === 'hiisupriya@gmail.com' || user.email === 'saampark.official@gmail.com';
+    const uRole = String(user.role_name || user.role || '').toLowerCase().trim();
+    const isSuperAdmin = user.role_id === 1 || uRole === 'super admin' || uRole === 'superadmin';
     if (!isSuperAdmin) {
       let compTarget = user.company_id;
 

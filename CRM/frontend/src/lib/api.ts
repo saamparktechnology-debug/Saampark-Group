@@ -110,6 +110,19 @@ async function request<T = any>(endpoint: string, options: RequestInit = {}): Pr
       const errorData = await response.json().catch(() => ({}))
       const errorMessage = errorData.message || errorData.error || `Request failed with status ${response.status}`
       console.warn(`API Http Status Warning [${options.method || 'GET'} ${endpoint}]:`, errorMessage)
+
+      if (response.status === 401 && typeof window !== 'undefined') {
+        const isAuthEndpoint = endpoint.includes('/auth/login') || endpoint.includes('/auth/register') || endpoint.includes('/auth/forgot-password')
+        if (!isAuthEndpoint && !window.location.pathname.includes('/login')) {
+          try {
+            localStorage.removeItem('auth-storage')
+            localStorage.removeItem('token')
+            sessionStorage.clear()
+          } catch {}
+          window.location.href = '/login?expired=1'
+        }
+      }
+
       return { status: "error", message: errorMessage, data: null, error: true } as any
     }
 

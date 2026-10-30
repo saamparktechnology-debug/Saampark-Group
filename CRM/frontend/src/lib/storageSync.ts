@@ -47,12 +47,14 @@ export async function markGlobalItemDeleted(id: string | number, moduleName?: st
   // Strict check: Clients can NEVER delete records assigned by Admin/Super Admin
   if (typeof window !== "undefined") {
     try {
-      const { useAuthStore } = require("@/store/useAuthStore")
-      const currentUser = useAuthStore.getState().user
-      const roleLower = (currentUser?.role || "").toLowerCase().trim()
-      if (roleLower.includes("client")) {
-        console.warn("Client blocked from deleting system items:", strId, moduleName)
-        return
+      const authRaw = localStorage.getItem("auth-storage")
+      if (authRaw) {
+        const parsed = JSON.parse(authRaw)
+        const roleLower = String(parsed?.state?.user?.role || "").toLowerCase().trim()
+        if (roleLower.includes("client")) {
+          console.warn("Client blocked from deleting system items:", strId, moduleName)
+          return
+        }
       }
     } catch {}
   }
@@ -97,6 +99,12 @@ let deletedCache: string[] = []
 let lastDeletedSyncTime = 0
 let inFlightDeletedSync: Promise<string[]> | null = null
 const DELETED_CACHE_TTL_MS = 15000 // 15 seconds cache
+
+export function resetDeletedCache(): void {
+  deletedCache = []
+  lastDeletedSyncTime = 0
+  inFlightDeletedSync = null
+}
 
 // Fetch all deleted item IDs from MySQL DB to ensure cross-browser synchronization
 export async function syncGlobalDeletedIds(): Promise<string[]> {
