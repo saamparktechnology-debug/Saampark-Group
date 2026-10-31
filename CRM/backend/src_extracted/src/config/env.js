@@ -21,7 +21,7 @@ const env = {
 
   jwt: {
     secret: process.env.JWT_SECRET || '8vK#2mQ!7xP@4zL$9rT^6nW&3cY*5sH@1jF!8dQ#0kV$6pX',
-    expiresIn: process.env.JWT_EXPIRES_IN || '1d',
+    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
   },
 
   clientUrl: process.env.CLIENT_URL || 'http://localhost:3000',

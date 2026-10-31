@@ -228,9 +228,22 @@ const debitNoteController = {
 const invoiceController = {
   async getAll(req, res) {
     try {
-      const companyId = req.headers['x-company-id'] || req.user?.company_id || req.query?.company_id;
+      const userRoleId = Number(req.user?.role_id);
+      const userRole = String(req.user?.role || req.user?.role_name || '').toLowerCase();
+      const isSuperAdmin = userRoleId === 1 || userRole.includes('super');
+
+      let companyId;
+      if (isSuperAdmin) {
+        companyId = req.headers['x-company-id'] || req.query?.company_id || req.user?.company_id;
+      } else {
+        companyId = req.user?.company_id;
+      }
       if (!companyId) return errorResponse(res, 400, 'Company ID is required');
-      const branchId = req.headers['x-branch-id'] || req.query.branch_id || req.user?.branch_id;
+
+      const branchId = isSuperAdmin 
+        ? (req.headers['x-branch-id'] || req.query.branch_id || req.user?.branch_id)
+        : (req.user?.branch_id || req.headers['x-branch-id'] || req.query.branch_id);
+
       let query = `
         SELECT i.*, c.company_name as client_company_name, c.primary_contact_name as client_contact_name,
                b.name as branch_name
@@ -254,7 +267,8 @@ const invoiceController = {
 
   async getById(req, res) {
     try {
-      const [rows] = await require('../config/db').execute(
+      const pool = require('../config/db');
+      const [rows] = await pool.execute(
         `SELECT i.*, c.company_name as client_company_name, b.name as branch_name
          FROM invoices i
          LEFT JOIN customers c ON i.client_id = c.id
@@ -263,59 +277,195 @@ const invoiceController = {
         [req.params.id]
       );
       if (!rows[0]) return errorResponse(res, 404, 'Invoice not found');
-      return successResponse(res, 200, 'Invoice fetched', rows[0]);
+      const [items] = await pool.execute(
+        'SELECT * FROM invoice_items WHERE invoice_id = ?',
+        [req.params.id]
+      ).catch(() => [[]]);
+      return successResponse(res, 200, 'Invoice fetched', { ...rows[0], items: items || [] });
     } catch (err) {
       return errorResponse(res, 500, err.message);
     }
   },
 
   async create(req, res) {
+    const pool = require('../config/db');
+    const conn = await pool.getConnection();
     try {
-      const companyId = req.headers['x-company-id'] || req.user?.company_id || req.body.company_id;
-      if (!companyId) return errorResponse(res, 400, 'Company ID is required');
-      const branchId = req.body.branch_id || req.headers['x-branch-id'] || req.user?.branch_id || null;
-      const { client_id, subtotal, total_amount, due_date, notes, status, invoice_number } = req.body;
+      await conn.beginTransaction();
 
-      const [count] = await require('../config/db').execute('SELECT COUNT(*) as cnt FROM invoices WHERE company_id = ?', [companyId]);
-      const num = invoice_number || `INV-${new Date().getFullYear()}-${String(count[0].cnt + 1).padStart(3, '0')}`;
+      const userRoleId = Number(req.user?.role_id);
+      const userRole = String(req.user?.role || req.user?.role_name || '').toLowerCase().trim();
+      const isSuperAdmin = userRoleId === 1 || userRole === 'super admin' || userRole === 'superadmin';
 
-      const [result] = await require('../config/db').execute(
+      const companyId = isSuperAdmin
+        ? (req.headers['x-company-id'] || req.body.company_id || req.user?.company_id)
+        : req.user?.company_id;
+      if (!companyId) {
+        conn.release();
+        return errorResponse(res, 400, 'Company ID is required');
+      }
+
+      const branchId = isSuperAdmin
+        ? (req.body.branch_id || req.headers['x-branch-id'] || req.user?.branch_id || null)
+        : (req.user?.branch_id || req.body.branch_id || null);
+
+      const { client_id, subtotal, total_amount, due_date, notes, status, invoice_number, items } = req.body;
+
+      const now = new Date();
+      const d = String(now.getDate()).padStart(2, '0');
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const y = String(now.getFullYear());
+      const dateStr = `${d}${m}${y}`;
+      const isNonGst = Boolean(req.body.is_nongst || req.body.is_non_gst || req.body.scheme === 'Non-GST' || req.body.type === 'nongst');
+      const prefix = isNonGst ? `NG-${dateStr}` : `INV-${dateStr}`;
+
+      let num = invoice_number;
+      if (!num) {
+        const [count] = await conn.execute('SELECT COUNT(*) as cnt FROM invoices WHERE company_id = ? FOR UPDATE', [companyId]).catch(() => [[{ cnt: 0 }]]);
+        const seq = ((count && count[0] ? count[0].cnt : 0) + 1).toString().padStart(3, '0');
+        num = `${prefix}${seq}`;
+        // Verify uniqueness
+        const [existing] = await conn.execute('SELECT id FROM invoices WHERE invoice_number = ?', [num]);
+        if (existing.length > 0) {
+          num = `${prefix}${seq}-${Date.now().toString().slice(-4)}`;
+        }
+      }
+
+      const [result] = await conn.execute(
         `INSERT INTO invoices (company_id, branch_id, client_id, invoice_number, subtotal, total_amount, status, due_date, notes, created_by)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [companyId, branchId, client_id || null, num, subtotal || total_amount || 0, total_amount || subtotal || 0, status || 'unpaid', due_date || null, notes || null, req.user?.id || null]
       );
+      const invoiceId = result.insertId;
 
-      return successResponse(res, 201, 'Invoice created successfully', { id: result.insertId, invoice_number: num });
+      if (Array.isArray(items) && items.length > 0) {
+        for (const item of items) {
+          await conn.execute(
+            `INSERT INTO invoice_items (invoice_id, product_id, description, quantity, unit_price, discount_percent, tax_percent, total)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              invoiceId,
+              item.product_id || item.productId || null,
+              item.description || item.name || 'Item',
+              item.quantity || 1,
+              item.unit_price || item.unitPrice || item.rate || 0,
+              item.discount_percent || item.discount || 0,
+              item.tax_percent || item.taxPercent || item.tax || 0,
+              item.total || ((Number(item.quantity) || 1) * (Number(item.unit_price) || 0))
+            ]
+          );
+        }
+      }
+
+      await conn.commit();
+      return successResponse(res, 201, 'Invoice created successfully', { id: invoiceId, invoice_number: num });
     } catch (err) {
+      await conn.rollback();
       return errorResponse(res, 500, err.message);
+    } finally {
+      conn.release();
     }
   },
 
   async update(req, res) {
+    const pool = require('../config/db');
+    const conn = await pool.getConnection();
     try {
+      await conn.beginTransaction();
+
+      const userRoleId = Number(req.user?.role_id);
+      const userRole = String(req.user?.role || req.user?.role_name || '').toLowerCase().trim();
+      const isSuperAdmin = userRoleId === 1 || userRole === 'super admin' || userRole === 'superadmin';
+
+      // Check ownership
+      const [inv] = await conn.execute('SELECT company_id FROM invoices WHERE id = ?', [req.params.id]);
+      if (!inv.length) {
+        conn.release();
+        return errorResponse(res, 404, 'Invoice not found');
+      }
+      if (!isSuperAdmin && String(inv[0].company_id) !== String(req.user?.company_id)) {
+        conn.release();
+        return errorResponse(res, 403, 'Access denied: You can only edit invoices for your assigned company');
+      }
+
+      const allowedColumns = [
+        'branch_id', 'client_id', 'invoice_number', 'subtotal', 'total_amount', 
+        'status', 'due_date', 'notes', 'currency', 'tax_amount', 'discount_amount'
+      ];
       const fields = [];
       const values = [];
       for (const [key, val] of Object.entries(req.body)) {
-        if (val !== undefined && key !== 'id') {
+        if (allowedColumns.includes(key) && val !== undefined) {
           fields.push(`${key} = ?`);
           values.push(val);
         }
       }
-      if (fields.length === 0) return successResponse(res, 200, 'No changes');
-      values.push(req.params.id);
-      await require('../config/db').execute(`UPDATE invoices SET ${fields.join(', ')} WHERE id = ?`, values);
+
+      if (fields.length > 0) {
+        values.push(req.params.id);
+        await conn.execute(`UPDATE invoices SET ${fields.join(', ')} WHERE id = ?`, values);
+      }
+
+      if (Array.isArray(req.body.items)) {
+        await conn.execute('DELETE FROM invoice_items WHERE invoice_id = ?', [req.params.id]);
+        for (const item of req.body.items) {
+          await conn.execute(
+            `INSERT INTO invoice_items (invoice_id, product_id, description, quantity, unit_price, discount_percent, tax_percent, total)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              req.params.id,
+              item.product_id || item.productId || null,
+              item.description || item.name || 'Item',
+              item.quantity || 1,
+              item.unit_price || item.unitPrice || item.rate || 0,
+              item.discount_percent || item.discount || 0,
+              item.tax_percent || item.taxPercent || item.tax || 0,
+              item.total || ((Number(item.quantity) || 1) * (Number(item.unit_price) || 0))
+            ]
+          );
+        }
+      }
+
+      await conn.commit();
       return successResponse(res, 200, 'Invoice updated');
     } catch (err) {
+      await conn.rollback();
       return errorResponse(res, 500, err.message);
+    } finally {
+      conn.release();
     }
   },
 
   async delete(req, res) {
+    const pool = require('../config/db');
+    const conn = await pool.getConnection();
     try {
-      await require('../config/db').execute('DELETE FROM invoices WHERE id = ?', [req.params.id]);
+      await conn.beginTransaction();
+
+      const userRoleId = Number(req.user?.role_id);
+      const userRole = String(req.user?.role || req.user?.role_name || '').toLowerCase().trim();
+      const isSuperAdmin = userRoleId === 1 || userRole === 'super admin' || userRole === 'superadmin';
+
+      const [inv] = await conn.execute('SELECT company_id FROM invoices WHERE id = ?', [req.params.id]);
+      if (!inv.length) {
+        conn.release();
+        return errorResponse(res, 404, 'Invoice not found');
+      }
+      if (!isSuperAdmin && String(inv[0].company_id) !== String(req.user?.company_id)) {
+        conn.release();
+        return errorResponse(res, 403, 'Access denied: You can only delete invoices for your assigned company');
+      }
+
+      await conn.execute('DELETE FROM invoice_items WHERE invoice_id = ?', [req.params.id]).catch(() => {});
+      await conn.execute('DELETE FROM invoices WHERE id = ?', [req.params.id]);
+
+      await conn.commit();
       return successResponse(res, 200, 'Invoice deleted');
     } catch (err) {
+      await conn.rollback();
       return errorResponse(res, 500, err.message);
+    } finally {
+      conn.release();
     }
   }
 };

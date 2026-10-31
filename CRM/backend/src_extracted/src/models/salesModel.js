@@ -275,7 +275,15 @@ const paymentModel = {
        data.payment_method || 'cash', data.reference_number || null, data.bank_account_id || null,
        data.cheque_number || null, data.notes || null, data.status || 'completed', data.created_by || null]
     );
-    return result.insertId;
+    const paymentId = result.insertId;
+
+    // Update bank account balance if payment is tied to a bank account
+    if (data.bank_account_id && data.amount) {
+      const delta = data.vendor_id ? -Math.abs(Number(data.amount)) : Math.abs(Number(data.amount));
+      await pool.execute('UPDATE bank_accounts SET current_balance = current_balance + ? WHERE id = ?', [delta, data.bank_account_id]).catch(() => {});
+    }
+
+    return paymentId;
   },
 
   async findById(id) {
@@ -285,13 +293,16 @@ const paymentModel = {
 
   async findByCompany(company_id, { type, page = 1, limit = 50 } = {}) {
     let query = 'SELECT * FROM payments WHERE company_id = ?';
+    let countQuery = 'SELECT COUNT(*) as total FROM payments WHERE company_id = ?';
     const params = [company_id];
-    if (type === 'customer') { query += ' AND customer_id IS NOT NULL'; }
-    if (type === 'vendor') { query += ' AND vendor_id IS NOT NULL'; }
+    const countParams = [company_id];
+    if (type === 'customer') { query += ' AND customer_id IS NOT NULL'; countQuery += ' AND customer_id IS NOT NULL'; }
+    if (type === 'vendor') { query += ' AND vendor_id IS NOT NULL'; countQuery += ' AND vendor_id IS NOT NULL'; }
     const offset = (page - 1) * limit;
     query += ` ORDER BY created_at DESC LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`;
     const [rows] = await pool.execute(query, params);
-    return rows;
+    const [count] = await pool.execute(countQuery, countParams);
+    return { data: rows, total: count[0]?.total || 0, page, limit };
   },
 
   async delete(id) {

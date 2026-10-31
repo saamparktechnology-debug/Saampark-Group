@@ -280,6 +280,7 @@ export function Topbar() {
   const activeCompanyLogo = isAllCompanies ? null : (activeCompany ? getCompanyLogoUrl(activeCompany) : null)
   const activeBranch = branches.find(b => b.id === activeBranchId)
   const activeSubBranch = subBranches.find(sb => sb.id === activeSubBranchId)
+  const activeEntityLogo = activeSubBranch?.logo_url || activeBranch?.logo_url || activeCompanyLogo
 
   const canSwitchEntities = userScope.isSuperAdmin || (userScope.scopeLevel !== 'subbranch' && (allowedCompanies.length > 1 || allowedBranches.length > 1 || allowedSubBranches.length > 0))
 
@@ -327,10 +328,10 @@ export function Topbar() {
               <div className="w-6 h-6 rounded-lg bg-blue-600/20 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/30">
                 <Building2 size={13} />
               </div>
-            ) : activeCompanyLogo ? (
+            ) : activeEntityLogo ? (
               <img
-                src={activeCompanyLogo}
-                alt={activeCompanyName}
+                src={activeEntityLogo}
+                alt={activeSubBranch?.name || activeBranch?.name || activeCompanyName}
                 className="w-6 h-6 rounded-lg object-contain shrink-0 bg-white dark:bg-zinc-900 p-0.5 border border-slate-200 dark:border-zinc-700"
               />
             ) : (
@@ -570,7 +571,11 @@ export function Topbar() {
                             }`}
                           >
                             <div className="flex items-center gap-2 min-w-0 flex-1">
-                              <MapPin size={15} className="text-amber-500 shrink-0" />
+                              {b.logo_url ? (
+                                <img src={b.logo_url} alt={b.name} className="w-5 h-5 rounded object-contain shrink-0 bg-white dark:bg-zinc-800 p-0.5 border border-border" />
+                              ) : (
+                                <MapPin size={15} className="text-amber-500 shrink-0" />
+                              )}
                               <div className="truncate">
                                 <p className="font-bold text-xs text-foreground truncate">{b.name}</p>
                                 <p className="text-[10px] text-muted-foreground truncate">
@@ -665,9 +670,13 @@ export function Topbar() {
                           }`}
                         >
                           <div className="flex items-center gap-2 min-w-0 flex-1">
-                            <div className="w-6 h-6 rounded-lg bg-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 text-xs font-bold">
-                              🤝
-                            </div>
+                            {sb.logo_url ? (
+                              <img src={sb.logo_url} alt={sb.name} className="w-6 h-6 rounded-lg object-contain shrink-0 bg-white dark:bg-zinc-800 p-0.5 border border-border" />
+                            ) : (
+                              <div className="w-6 h-6 rounded-lg bg-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 text-xs font-bold">
+                                🤝
+                              </div>
+                            )}
                             <div className="truncate">
                               <p className="font-bold text-xs text-foreground truncate">{sb.name}</p>
                               <p className="text-[10px] text-muted-foreground truncate">

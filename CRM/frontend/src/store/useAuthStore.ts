@@ -843,29 +843,28 @@ export const useAuthStore = create<AuthState>()(
             })
           }
 
-          // 4. Overlay Live Backend API (MySQL companies table)
+          // 4. Overlay Live Backend API (MySQL companies table) - highest source of truth
           apiList.forEach(c => {
             const key = getCanonicalKey(c)
             const existing = map.get(key)
-            map.set(key, {
+            const mergedComp = {
               ...existing,
               ...c,
               id: key,
               slug: key,
               logo_url: (c.logo_url && c.logo_url.trim() !== '') ? c.logo_url : (existing?.logo_url || ''),
-              brand_name: existing?.brand_name || c.brand_name || c.name,
-              division_name: existing?.division_name !== undefined ? existing.division_name : (c.division_name || ''),
-              subtitle: existing?.subtitle !== undefined ? existing.subtitle : (c.subtitle || ''),
-              name: getCompanyFullName({ ...existing, ...c }),
-            })
+              brand_name: (c.brand_name && c.brand_name.trim() !== '') ? c.brand_name : (existing?.brand_name || 'SAAMPARK'),
+              division_name: c.division_name !== undefined ? c.division_name : (existing?.division_name || ''),
+              subtitle: c.subtitle !== undefined ? c.subtitle : (existing?.subtitle || ''),
+              name: (c.name && c.name.trim() !== '') ? c.name : getCompanyFullName({ ...existing, ...c }),
+            }
+            map.set(key, mergedComp)
           })
 
           const rawTech = map.get('tech') || DEFAULT_COMPANIES[0]
           const rawConsult = map.get('consultancy') || DEFAULT_COMPANIES[1]
 
-          // Build sanitized companies: use rawTech/rawConsult as primary source.
-          // Only fall back to DEFAULT_COMPANIES for fields that are truly missing (undefined),
-          // NOT for fields that are empty string (user intentionally cleared them).
+          // Build sanitized companies: preserve live database updates directly
           const sanitizedTech: Company = {
             ...rawTech,
             id: 'tech',
@@ -874,7 +873,7 @@ export const useAuthStore = create<AuthState>()(
             brand_name: rawTech.brand_name !== undefined ? rawTech.brand_name : 'SAAMPARK',
             division_name: rawTech.division_name !== undefined ? rawTech.division_name : 'TECHNOLOGY',
             subtitle: rawTech.subtitle !== undefined ? rawTech.subtitle : 'AND RESEARCH PRIVATE LIMITED',
-            name: (rawTech.name && rawTech.name.trim() !== '') ? rawTech.name : 'SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED',
+            name: (rawTech.name && rawTech.name.trim() !== '') ? rawTech.name : (getCompanyFullName(rawTech) || 'SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED'),
             logo: rawTech.logo || '💻',
             logo_url: rawTech.logo_url !== undefined ? rawTech.logo_url : '/saampark-logo.png',
             signature_position: rawTech.signature_position || { x: 0, y: 0 },
@@ -894,7 +893,7 @@ export const useAuthStore = create<AuthState>()(
             brand_name: rawConsult.brand_name !== undefined ? rawConsult.brand_name : 'SAAMPARK',
             division_name: rawConsult.division_name !== undefined ? rawConsult.division_name : 'CONSULTANCY SERVICE',
             subtitle: rawConsult.subtitle !== undefined ? rawConsult.subtitle : 'MANAGEMENT & ADVISORY SERVICES',
-            name: (rawConsult.name && rawConsult.name.trim() !== '') ? rawConsult.name : 'SAAMPARK CONSULTANCY SERVICE',
+            name: (rawConsult.name && rawConsult.name.trim() !== '') ? rawConsult.name : (getCompanyFullName(rawConsult) || 'SAAMPARK CONSULTANCY SERVICE'),
             logo: rawConsult.logo || '💼',
             logo_url: (rawConsult.logo_url && rawConsult.logo_url !== '/saampark-logo.png') ? rawConsult.logo_url : '',
             signature_position: rawConsult.signature_position || { x: 0, y: 0 },

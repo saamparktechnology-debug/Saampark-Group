@@ -268,6 +268,9 @@ export function Sidebar() {
 
   const activeCompanyName = isAllCompanies ? "SAAMPARK GROUP" : (activeCompany ? getCompanyFullName(activeCompany) : "SAAMPARK GROUP")
   const activeCompanyLogo = isAllCompanies ? null : (activeCompany ? getCompanyLogoUrl(activeCompany) : null)
+  const activeBranch = branches.find(b => b.id === activeBranchId)
+  const activeSubBranch = subBranches.find(sb => sb.id === activeSubBranchId)
+  const activeEntityLogo = activeSubBranch?.logo_url || activeBranch?.logo_url || activeCompanyLogo
   const { isModuleAllowed, isCompanyModuleAllowed, isEntityModuleAllowed, userActionPermissions, userPermissions, companyEnabledModules } = usePermissionStore()
 
   const [rawCounts, setRawCounts] = React.useState<Record<string, number>>({})
@@ -647,10 +650,10 @@ export function Sidebar() {
             <div className="w-10 h-10 min-w-[40px] rounded-xl bg-slate-800/80 border border-slate-700/60 p-1 flex items-center justify-center overflow-hidden shrink-0 group-hover:scale-105 transition-transform shadow-xs">
               {isAllCompanies ? (
                 <SaamparkVortexLogo className="w-8 h-8" />
-              ) : activeCompanyLogo ? (
+              ) : activeEntityLogo ? (
                 <img
-                  key={activeCompanyLogo || activeCompany?.id}
-                  src={activeCompanyLogo}
+                  key={activeEntityLogo || activeCompany?.id}
+                  src={activeEntityLogo}
                   alt={activeCompanyName}
                   className="w-full h-full object-contain"
                 />

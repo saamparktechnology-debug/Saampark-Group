@@ -1,7 +1,7 @@
 const pool = require('../config/db');
 
 const ALLOWED_BRANCH_FIELDS = [
-  'company_id', 'name', 'code', 'address', 'city', 'state', 'country', 'phone', 'email', 'manager_id', 'is_active',
+  'company_id', 'name', 'code', 'address', 'city', 'state', 'country', 'phone', 'email', 'manager_id', 'is_active', 'logo_url',
   'brand_name', 'division_name', 'subtitle', 'iso_certification', 'gstin', 'pan', 'cin', 'msme_reg', 'website',
   'signatory_name', 'signatory_designation', 'signature_image_url', 'stamp_image_url',
   'terms_conditions', 'invoice_notes', 'upi_id', 'account_holder', 'bank_name', 'account_number', 'ifsc_code', 'bank_branch', 'payment_qr_url',
@@ -84,10 +84,18 @@ const branchModel = {
     }
     if (fields.length === 0) return false;
     fields.push('updated_at = NOW()');
-    values.push(id, id);
-    await pool.execute(`UPDATE branches SET ${fields.join(', ')} WHERE id = ? OR code = ?`, values).catch(err => {
-      console.warn('MySQL branch update column fallback:', err.message);
-    });
+    const isNum = !isNaN(Number(id)) && Number(id) > 0;
+    if (isNum) {
+      values.push(Number(id));
+      await pool.execute(`UPDATE branches SET ${fields.join(', ')} WHERE id = ?`, values).catch(err => {
+        console.warn('MySQL branch update column fallback:', err.message);
+      });
+    } else {
+      values.push(String(id));
+      await pool.execute(`UPDATE branches SET ${fields.join(', ')} WHERE code = ?`, values).catch(err => {
+        console.warn('MySQL branch update column fallback:', err.message);
+      });
+    }
     return true;
   },
 

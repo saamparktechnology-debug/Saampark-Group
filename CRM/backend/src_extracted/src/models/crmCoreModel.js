@@ -39,10 +39,14 @@ const enquiryModel = {
   },
 
   async update(id, data) {
+    const allowed = ['branch_id', 'client_name', 'email', 'phone', 'company_name', 'source', 'service_interested', 'estimated_budget', 'status', 'assigned_to', 'notes'];
     const fields = [];
     const values = [];
     for (const [key, val] of Object.entries(data)) {
-      if (val !== undefined) { fields.push(`${key} = ?`); values.push(val); }
+      if (allowed.includes(key) && val !== undefined) {
+        fields.push(`${key} = ?`);
+        values.push(val);
+      }
     }
     if (fields.length === 0) return false;
     values.push(id);
@@ -88,10 +92,14 @@ const followUpModel = {
   },
 
   async update(id, data) {
+    const allowed = ['type', 'subject', 'description', 'scheduled_at', 'status', 'assigned_to'];
     const fields = [];
     const values = [];
     for (const [key, val] of Object.entries(data)) {
-      if (val !== undefined) { fields.push(`${key} = ?`); values.push(val); }
+      if (allowed.includes(key) && val !== undefined) {
+        fields.push(`${key} = ?`);
+        values.push(val);
+      }
     }
     if (fields.length === 0) return false;
     values.push(id);
@@ -163,10 +171,14 @@ const meetingModel = {
   },
 
   async update(id, data) {
+    const allowed = ['title', 'description', 'meeting_date', 'duration', 'location', 'meeting_url', 'status', 'organized_by'];
     const fields = [];
     const values = [];
     for (const [key, val] of Object.entries(data)) {
-      if (val !== undefined) { fields.push(`${key} = ?`); values.push(val); }
+      if (allowed.includes(key) && val !== undefined) {
+        fields.push(`${key} = ?`);
+        values.push(val);
+      }
     }
     if (fields.length === 0) return false;
     values.push(id);
@@ -200,10 +212,14 @@ const noteModel = {
   },
 
   async update(id, data) {
+    const allowed = ['content', 'is_pinned'];
     const fields = [];
     const values = [];
     for (const [key, val] of Object.entries(data)) {
-      if (val !== undefined) { fields.push(`${key} = ?`); values.push(val); }
+      if (allowed.includes(key) && val !== undefined) {
+        fields.push(`${key} = ?`);
+        values.push(val);
+      }
     }
     if (fields.length === 0) return false;
     values.push(id);

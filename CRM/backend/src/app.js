@@ -7,6 +7,7 @@ const errorHandler = require('./middlewares/errorHandler');
 const companyScopeMiddleware = require('./middlewares/companyScopeMiddleware');
 
 const app = express();
+app.set('trust proxy', 1);
 
 // ==========================================
 // 1. GLOBAL MIDDLEWARES

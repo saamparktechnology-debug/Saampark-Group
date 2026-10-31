@@ -626,7 +626,9 @@ export default function BranchesMain() {
       name: subBranchForm.name.trim(),
       code: subBranchForm.code.trim().toUpperCase(),
       companyId: subBranchCompanyId,
+      company_id: subBranchCompanyId,
       parentBranchId: subBranchParentBranchId,
+      branch_id: subBranchParentBranchId,
       // Base Fallback
       bank_name: (subBranchForm.gst_bank_name || subBranchForm.bank_name || subBranchForm.nongst_bank_name).trim(),
       account_holder: (subBranchForm.gst_account_holder || subBranchForm.account_holder || subBranchForm.nongst_account_holder).trim(),

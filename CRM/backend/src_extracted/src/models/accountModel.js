@@ -36,21 +36,24 @@ const transactionModel = {
     let expenseQuery = 'SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE company_id = ? AND type = "expense"';
     const params = [company_id];
 
-    if (from_date) { incomeQuery += ' AND date >= ?'; expenseQuery += ' AND date >= ?'; }
-    if (to_date) { incomeQuery += ' AND date <= ?'; expenseQuery += ' AND date <= ?'; }
+    if (from_date) {
+      incomeQuery += ' AND date >= ?';
+      expenseQuery += ' AND date >= ?';
+      params.push(from_date);
+    }
+    if (to_date) {
+      incomeQuery += ' AND date <= ?';
+      expenseQuery += ' AND date <= ?';
+      params.push(to_date);
+    }
 
-    const incomeParams = [...params];
-    const expenseParams = [...params];
-    if (from_date) { incomeParams.push(from_date); expenseParams.push(from_date); }
-    if (to_date) { incomeParams.push(to_date); expenseParams.push(to_date); }
-
-    const [income] = await pool.execute(incomeQuery, incomeParams);
-    const [expense] = await pool.execute(expenseQuery, expenseParams);
+    const [income] = await pool.execute(incomeQuery, params);
+    const [expense] = await pool.execute(expenseQuery, params);
 
     return {
-      income: income[0].total,
-      expense: expense[0].total,
-      profit: income[0].total - expense[0].total
+      income: Number(income[0].total) || 0,
+      expense: Number(expense[0].total) || 0,
+      profit: (Number(income[0].total) || 0) - (Number(expense[0].total) || 0)
     };
   },
 
@@ -86,10 +89,14 @@ const bankAccountModel = {
   },
 
   async update(id, data) {
+    const allowed = ['bank_name', 'account_holder', 'account_number', 'ifsc_code', 'branch', 'opening_balance', 'current_balance', 'is_active'];
     const fields = [];
     const values = [];
     for (const [key, val] of Object.entries(data)) {
-      if (val !== undefined) { fields.push(`${key} = ?`); values.push(val); }
+      if (allowed.includes(key) && val !== undefined) {
+        fields.push(`${key} = ?`);
+        values.push(val);
+      }
     }
     if (fields.length === 0) return false;
     values.push(id);
@@ -118,10 +125,14 @@ const chartOfAccountsModel = {
   },
 
   async update(id, data) {
+    const allowed = ['account_code', 'account_name', 'account_type', 'parent_id', 'is_active'];
     const fields = [];
     const values = [];
     for (const [key, val] of Object.entries(data)) {
-      if (val !== undefined) { fields.push(`${key} = ?`); values.push(val); }
+      if (allowed.includes(key) && val !== undefined) {
+        fields.push(`${key} = ?`);
+        values.push(val);
+      }
     }
     if (fields.length === 0) return false;
     values.push(id);
@@ -154,10 +165,14 @@ const categoryModel = {
   },
 
   async update(id, data) {
+    const allowed = ['name', 'type', 'parent_id'];
     const fields = [];
     const values = [];
     for (const [key, val] of Object.entries(data)) {
-      if (val !== undefined) { fields.push(`${key} = ?`); values.push(val); }
+      if (allowed.includes(key) && val !== undefined) {
+        fields.push(`${key} = ?`);
+        values.push(val);
+      }
     }
     if (fields.length === 0) return false;
     values.push(id);
@@ -186,10 +201,14 @@ const taxRateModel = {
   },
 
   async update(id, data) {
+    const allowed = ['name', 'rate', 'type', 'is_inclusive', 'is_active'];
     const fields = [];
     const values = [];
     for (const [key, val] of Object.entries(data)) {
-      if (val !== undefined) { fields.push(`${key} = ?`); values.push(val); }
+      if (allowed.includes(key) && val !== undefined) {
+        fields.push(`${key} = ?`);
+        values.push(val);
+      }
     }
     if (fields.length === 0) return false;
     values.push(id);

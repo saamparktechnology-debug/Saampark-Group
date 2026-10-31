@@ -47,7 +47,6 @@ async function getEmailConfig(companyId = null, overrideConfig = null) {
           const cNum = String(c.numeric_id || '').toLowerCase().trim();
           return cId === canonId || cSlug === canonId || cNum === canonId || (canonId.includes('consult') && (cId.includes('consult') || cSlug.includes('consult')));
         }) : null;
-
         if (comp && comp.smtp_user && comp.smtp_pass) {
           const host = (comp.smtp_host || 'smtp.gmail.com').trim();
           const port = parseInt(comp.smtp_port || '587', 10);

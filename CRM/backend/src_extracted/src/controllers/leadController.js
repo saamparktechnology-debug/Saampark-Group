@@ -24,9 +24,23 @@ const createLead = async (req, res, next) => {
 // Get all Leads
 const getAllLeads = async (req, res, next) => {
   try {
-    const compId = req.companyId || (req.headers['x-company-id'] ? parseInt(req.headers['x-company-id'], 10) : null) || req.query.company_id || req.query.companyId;
-    const branchId = req.headers['x-branch-id'] || req.query.branch_id || req.query.branchId;
-    const subBranchId = req.headers['x-sub-branch-id'] || req.query.sub_branch_id;
+    const userRoleId = Number(req.user?.role_id);
+    const userRole = String(req.user?.role || req.user?.role_name || '').toLowerCase();
+    const isSuperAdmin = userRoleId === 1 || userRole.includes('super');
+
+    let compId;
+    let branchId;
+    let subBranchId;
+
+    if (isSuperAdmin) {
+      compId = req.companyId || (req.headers['x-company-id'] ? parseInt(req.headers['x-company-id'], 10) : null) || req.query.company_id || req.query.companyId;
+      branchId = req.headers['x-branch-id'] || req.query.branch_id || req.query.branchId;
+      subBranchId = req.headers['x-sub-branch-id'] || req.query.sub_branch_id;
+    } else {
+      compId = req.user?.company_id || 1;
+      branchId = req.user?.branch_id || req.headers['x-branch-id'] || req.query.branch_id;
+      subBranchId = req.user?.sub_branch_id || req.headers['x-sub-branch-id'] || req.query.sub_branch_id;
+    }
 
     let query = `
       SELECT l.*, ls.source_name, u.full_name as assigned_agent_name 
@@ -38,15 +52,15 @@ const getAllLeads = async (req, res, next) => {
     const params = [];
 
     if (compId && compId !== 'all') {
-      query += ' AND (l.company_id = ? OR l.company_id IS NULL)';
+      query += ' AND l.company_id = ?';
       params.push(compId);
     }
     if (branchId && branchId !== 'all') {
-      query += ' AND (l.branch_id = ? OR l.branch_id IS NULL)';
+      query += ' AND l.branch_id = ?';
       params.push(branchId);
     }
     if (subBranchId && subBranchId !== 'all') {
-      query += ' AND (l.sub_branch_id = ? OR l.sub_branch_id IS NULL)';
+      query += ' AND l.sub_branch_id = ?';
       params.push(subBranchId);
     }
 

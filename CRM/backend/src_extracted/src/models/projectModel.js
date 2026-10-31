@@ -32,10 +32,14 @@ const projectModel = {
   },
 
   async update(id, data) {
+    const allowed = ['title', 'client_id', 'company_id', 'project_type', 'status', 'progress', 'price', 'start_date', 'deadline', 'description'];
     const fields = [];
     const values = [];
     for (const [key, val] of Object.entries(data)) {
-      if (val !== undefined) { fields.push(`${key} = ?`); values.push(val); }
+      if (allowed.includes(key) && val !== undefined) {
+        fields.push(`${key} = ?`);
+        values.push(val);
+      }
     }
     if (fields.length === 0) return false;
     values.push(id);
@@ -64,10 +68,14 @@ const milestoneModel = {
   },
 
   async update(id, data) {
+    const allowed = ['title', 'description', 'due_date', 'status', 'progress'];
     const fields = [];
     const values = [];
     for (const [key, val] of Object.entries(data)) {
-      if (val !== undefined) { fields.push(`${key} = ?`); values.push(val); }
+      if (allowed.includes(key) && val !== undefined) {
+        fields.push(`${key} = ?`);
+        values.push(val);
+      }
     }
     if (fields.length === 0) return false;
     values.push(id);
@@ -100,10 +108,14 @@ const subtaskModel = {
   },
 
   async update(id, data) {
+    const allowed = ['title', 'status', 'assigned_to', 'due_date'];
     const fields = [];
     const values = [];
     for (const [key, val] of Object.entries(data)) {
-      if (val !== undefined) { fields.push(`${key} = ?`); values.push(val); }
+      if (allowed.includes(key) && val !== undefined) {
+        fields.push(`${key} = ?`);
+        values.push(val);
+      }
     }
     if (fields.length === 0) return false;
     values.push(id);
@@ -131,7 +143,7 @@ const timesheetModel = {
   async findByCompany(company_id, { employee_id, project_id, from_date, to_date, page = 1, limit = 50 } = {}) {
     let query = `SELECT ts.*, e.first_name, e.last_name, p.title as project_name
                  FROM timesheets ts
-                 JOIN employees e ON ts.employee_id = e.id
+                 LEFT JOIN employees e ON ts.employee_id = e.id
                  LEFT JOIN projects p ON ts.project_id = p.id
                  WHERE ts.company_id = ?`;
     const params = [company_id];

@@ -256,19 +256,23 @@ const subBranchController = {
         if (bRows && bRows.length > 0) resolvedBranchId = bRows[0].id;
       }
 
-      // 2. Try finding by code, name, or slug
+      // 2. Try finding by code, name, slug, or stripped prefix (e.g. br-1)
       if (!resolvedBranchId && rawBranchId) {
-        const [bRows] = await pool.execute('SELECT id FROM branches WHERE (code = ? OR name = ? OR LOWER(name) = LOWER(?)) AND company_id = ?', [rawBranchId, rawBranchId, String(rawBranchId), resolvedCompanyId]).catch(() => [[]]);
+        const cleanId = String(rawBranchId).replace(/^br-/, '');
+        const [bRows] = await pool.execute(
+          'SELECT id FROM branches WHERE id = ? OR code = ? OR name = ? OR LOWER(name) = LOWER(?) OR id = ?',
+          [rawBranchId, rawBranchId, rawBranchId, String(rawBranchId), cleanId]
+        ).catch(() => [[]]);
         if (bRows && bRows.length > 0) resolvedBranchId = bRows[0].id;
       }
 
-      if (rawBranchId && !resolvedBranchId) {
-        return errorResponse(res, 400, 'Selected parent branch not found for this company.');
-      }
-
-      // 3. If no branch was specified, look for the first active branch belonging to the company
+      // 3. Fallback to first branch belonging to this company or any active branch
       if (!resolvedBranchId) {
-        const [bRows] = await pool.execute('SELECT id FROM branches WHERE company_id = ? ORDER BY is_active DESC, id ASC LIMIT 1', [resolvedCompanyId]).catch(() => [[]]);
+        const [bRows] = await pool.execute('SELECT id FROM branches WHERE company_id = ? ORDER BY id ASC LIMIT 1', [resolvedCompanyId]).catch(() => [[]]);
+        if (bRows && bRows.length > 0) resolvedBranchId = bRows[0].id;
+      }
+      if (!resolvedBranchId) {
+        const [bRows] = await pool.execute('SELECT id FROM branches ORDER BY id ASC LIMIT 1').catch(() => [[]]);
         if (bRows && bRows.length > 0) resolvedBranchId = bRows[0].id;
       }
 

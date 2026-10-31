@@ -1,7 +1,7 @@
 const pool = require('../config/db');
 
 const ALLOWED_SUB_BRANCH_FIELDS = [
-  'branch_id', 'company_id', 'name', 'code', 'address', 'city', 'state', 'phone', 'email', 'manager_id', 'is_active',
+  'branch_id', 'company_id', 'name', 'code', 'address', 'city', 'state', 'phone', 'email', 'manager_id', 'is_active', 'logo_url',
   'brand_name', 'division_name', 'subtitle', 'gstin', 'pan', 'cin', 'msme_reg', 'website',
   'signatory_name', 'signatory_designation', 'signature_image_url', 'stamp_image_url',
   'terms_conditions', 'invoice_notes', 'upi_id', 'account_holder', 'bank_name', 'account_number', 'ifsc_code', 'bank_branch', 'payment_qr_url',
@@ -15,11 +15,20 @@ const subBranchModel = {
     const placeholders = [];
     const values = [];
 
+    const cleanBranchId = !isNaN(parseInt(data.branch_id, 10)) && parseInt(data.branch_id, 10) > 0 ? parseInt(data.branch_id, 10) : (!isNaN(parseInt(data.parentBranchId, 10)) && parseInt(data.parentBranchId, 10) > 0 ? parseInt(data.parentBranchId, 10) : 1);
+    const cleanCompanyId = !isNaN(parseInt(data.company_id, 10)) && parseInt(data.company_id, 10) > 0 ? parseInt(data.company_id, 10) : 1;
+
     for (const key of ALLOWED_SUB_BRANCH_FIELDS) {
       if (data[key] !== undefined) {
         fields.push(key);
         placeholders.push('?');
-        values.push(data[key] === '' ? null : data[key]);
+        let val = data[key] === '' ? null : data[key];
+        if (key === 'branch_id') val = cleanBranchId;
+        else if (key === 'company_id') val = cleanCompanyId;
+        else if (val !== null && typeof val === 'object') {
+          val = JSON.stringify(val);
+        }
+        values.push(val);
       }
     }
 
@@ -31,12 +40,12 @@ const subBranchModel = {
     if (!fields.includes('branch_id')) {
       fields.push('branch_id');
       placeholders.push('?');
-      values.push(data.branch_id || data.parentBranchId || 1);
+      values.push(cleanBranchId);
     }
     if (!fields.includes('company_id')) {
       fields.push('company_id');
       placeholders.push('?');
-      values.push(data.company_id || 1);
+      values.push(cleanCompanyId);
     }
 
     const [result] = await pool.execute(
@@ -92,10 +101,16 @@ const subBranchModel = {
   async update(id, data) {
     const fields = [];
     const values = [];
-    for (const [key, val] of Object.entries(data)) {
-      if (ALLOWED_SUB_BRANCH_FIELDS.includes(key) && val !== undefined) {
+    for (const [key, rawVal] of Object.entries(data)) {
+      if (ALLOWED_SUB_BRANCH_FIELDS.includes(key) && rawVal !== undefined) {
+        let val = rawVal === '' ? null : rawVal;
+        if (key === 'branch_id' && val !== null && !isNaN(Number(val))) val = Number(val);
+        else if (key === 'company_id' && val !== null && !isNaN(Number(val))) val = Number(val);
+        else if (val !== null && typeof val === 'object') {
+          val = JSON.stringify(val);
+        }
         fields.push(`${key} = ?`);
-        values.push(val === '' ? null : val);
+        values.push(val);
       }
     }
     if (fields.length === 0) return false;

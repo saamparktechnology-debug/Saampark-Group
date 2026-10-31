@@ -12,24 +12,18 @@ async function ensureUsersColumns() {
 }
 ensureUsersColumns();
 
-// Helper: Resolve requesting user info from JWT or headers
+// Helper: Resolve requesting user info from authenticated JWT token
 async function resolveRequester(req) {
-  if (req.user && req.user.role_id) return req.user;
-  const headerUserId = req.headers['x-user-id'];
-  const headerEmail = req.headers['x-user-email'];
-  if (headerUserId || headerEmail) {
+  if (req.user && req.user.id) {
     try {
       const [rows] = await pool.execute(
-        'SELECT id, email, role_id, company_id, company_ids, branch_id, sub_branch_id FROM users WHERE (id = ? OR email = ?) AND deleted_at IS NULL',
-        [headerUserId || '', headerEmail || '']
+        'SELECT id, email, role_id, company_id, company_ids, branch_id, sub_branch_id FROM users WHERE id = ? AND deleted_at IS NULL',
+        [req.user.id]
       );
       if (rows.length > 0) return rows[0];
     } catch {}
+    return req.user;
   }
-  const headerRole = req.headers['x-user-role'];
-  if (headerRole === 'Super Admin') return { role_id: 1, role_name: 'Super Admin' };
-  if (headerRole === 'Admin') return { role_id: 2, role_name: 'Admin' };
-  if (headerRole === 'Clients') return { role_id: 4, role_name: 'Clients' };
   return { role_id: 3, role_name: 'Teams' }; // default Teams
 }
 
@@ -66,8 +60,8 @@ const getAllUsers = async (req, res, next) => {
              b.name as branch_name, sb.name as sub_branch_name, c.name as company_name
       FROM users u
       LEFT JOIN roles r ON u.role_id = r.id
-      LEFT JOIN branches b ON u.branch_id = b.id
-      LEFT JOIN sub_branches sb ON u.sub_branch_id = sb.id
+      LEFT JOIN branches b ON (u.branch_id = b.id OR LOWER(u.branch_id) = LOWER(b.name))
+      LEFT JOIN sub_branches sb ON (u.sub_branch_id = sb.id OR LOWER(u.sub_branch_id) = LOWER(sb.name))
       LEFT JOIN companies c ON (u.company_id = c.id OR u.company_id = c.slug)
       WHERE u.deleted_at IS NULL
     `;
@@ -113,6 +107,15 @@ const getAllUsers = async (req, res, next) => {
 
       const targetComp = (companyId && companyId !== 'all') ? companyId : null;
       if (targetComp) {
+        // Enforce that targetComp belongs to Admin's assigned companies
+        const isAllowed = compList.some(c => 
+          String(c).toLowerCase().trim() === String(targetComp).toLowerCase().trim() ||
+          (req.companyId && String(c).toLowerCase().trim() === String(req.companyId).toLowerCase().trim()) ||
+          (req.companySlug && String(c).toLowerCase().trim() === String(req.companySlug).toLowerCase().trim())
+        );
+        if (!isAllowed) {
+          return errorResponse(res, 403, 'Access denied: You can only view users in your assigned company.');
+        }
         query += ` AND (u.company_id = ? OR u.company_id = ? OR JSON_CONTAINS(COALESCE(u.company_ids, '[]'), JSON_QUOTE(?)) OR JSON_CONTAINS(COALESCE(u.company_ids, '[]'), JSON_QUOTE(?)))`;
         params.push(String(req.companyId || targetComp), String(req.companySlug || targetComp), String(req.companyId || targetComp), String(req.companySlug || targetComp));
       } else {
@@ -130,14 +133,15 @@ const getAllUsers = async (req, res, next) => {
         params.push(subBranchId);
       }
     } else {
-      // Teams / Clients
-      const effectiveBranch = requester.branch_id || branchId;
-      if (effectiveBranch && effectiveBranch !== 'all') {
+      // Teams / Clients: Strictly locked to their assigned company & branch
+      const userCompany = requester.company_id || 'tech';
+      query += ` AND (u.company_id = ? OR u.company_id = ?)`;
+      params.push(String(userCompany), String(req.companySlug || userCompany));
+
+      const effectiveBranch = requester.branch_id;
+      if (effectiveBranch) {
         query += ` AND u.branch_id = ?`;
         params.push(effectiveBranch);
-      } else if (companyId && companyId !== 'all') {
-        query += ` AND (u.company_id = ? OR u.company_id = ?)`;
-        params.push(String(req.companyId || companyId), String(req.companySlug || companyId));
       }
     }
 
@@ -155,7 +159,12 @@ const getAllUsers = async (req, res, next) => {
         throw qErr;
       }
     }
-    return successResponse(res, 200, 'Users fetched successfully', users);
+    const mappedUsers = (users || []).map(u => ({
+      ...u,
+      name: u.full_name || u.name || u.username || u.email || 'User',
+      role: u.role_name || u.role || 'Teams'
+    }));
+    return successResponse(res, 200, 'Users fetched successfully', mappedUsers);
   } catch (error) {
     next(error);
   }
@@ -173,8 +182,8 @@ const getUserById = async (req, res, next) => {
                 b.name as branch_name, sb.name as sub_branch_name, c.name as company_name
          FROM users u
          LEFT JOIN roles r ON u.role_id = r.id
-         LEFT JOIN branches b ON u.branch_id = b.id
-         LEFT JOIN sub_branches sb ON u.sub_branch_id = sb.id
+         LEFT JOIN branches b ON (u.branch_id = b.id OR LOWER(u.branch_id) = LOWER(b.name))
+         LEFT JOIN sub_branches sb ON (u.sub_branch_id = sb.id OR LOWER(u.sub_branch_id) = LOWER(sb.name))
          LEFT JOIN companies c ON (u.company_id = c.id OR u.company_id = c.slug)
          WHERE (u.id = ? OR u.email = ?) AND u.deleted_at IS NULL`,
         [id, id]
@@ -188,8 +197,8 @@ const getUserById = async (req, res, next) => {
                   b.name as branch_name, sb.name as sub_branch_name, c.name as company_name
            FROM users u
            LEFT JOIN roles r ON u.role_id = r.id
-           LEFT JOIN branches b ON u.branch_id = b.id
-           LEFT JOIN sub_branches sb ON u.sub_branch_id = sb.id
+           LEFT JOIN branches b ON (u.branch_id = b.id OR LOWER(u.branch_id) = LOWER(b.name))
+           LEFT JOIN sub_branches sb ON (u.sub_branch_id = sb.id OR LOWER(u.sub_branch_id) = LOWER(sb.name))
            LEFT JOIN companies c ON (u.company_id = c.id OR u.company_id = c.slug)
            WHERE (u.id = ? OR u.email = ?) AND u.deleted_at IS NULL`,
           [id, id]
@@ -240,11 +249,40 @@ const updateUser = async (req, res, next) => {
       else roleIdVal = 3;
     }
 
+    const newEmailVal = email ? email.toLowerCase().trim() : null;
+    const oldEmailVal = (req.body.old_email || req.body.oldEmail || '').toLowerCase().trim();
+    const targetEmail = (oldEmailVal || newEmailVal || id || '').toLowerCase().trim();
+
+    // 🛡️ PRIMARY ROOT SUPER ADMIN PROTECTION:
+    // saampark.official@gmail.com must ALWAYS remain Super Admin (role_id: 1)
+    // No one can demote or change this master account's role.
+    const isNumericId = !isNaN(parseInt(id, 10)) && !String(id).startsWith('usr_');
+    let isRootSuperAccount = 
+      targetEmail === 'saampark.official@gmail.com' || 
+      newEmailVal === 'saampark.official@gmail.com' ||
+      oldEmailVal === 'saampark.official@gmail.com';
+
+    if (!isRootSuperAccount) {
+      try {
+        const [existingRows] = await pool.execute(
+          'SELECT email FROM users WHERE id = ? OR email = ?',
+          [isNumericId ? parseInt(id, 10) : 0, targetEmail]
+        );
+        if (existingRows.length > 0 && (existingRows[0].email || '').toLowerCase().trim() === 'saampark.official@gmail.com') {
+          isRootSuperAccount = true;
+        }
+      } catch {}
+    }
+
+    if (isRootSuperAccount) {
+      roleIdVal = 1; // Unconditionally keep as Super Admin
+    }
+
     // RBAC Hierarchy Enforcement:
     // Only a Super Admin can promote/assign Super Admin (1) or Admin (2)
     if (roleIdVal === 1 || roleIdVal === 2) {
-      if (requester.role_id !== 1) {
-        return errorResponse(res, 403, 'Only a Super Admin can assign Super Admin or Admin roles.');
+      if (requester.role_id !== 1 && !isRootSuperAccount) {
+        return errorResponse(res, 403, 'Access denied: Only a Super Admin can create or change a user role to Super Admin or Admin.');
       }
     }
 
@@ -262,10 +300,6 @@ const updateUser = async (req, res, next) => {
       }
     }
 
-    const newEmailVal = email ? email.toLowerCase().trim() : null;
-    const oldEmailVal = (req.body.old_email || req.body.oldEmail || '').toLowerCase().trim();
-    const targetEmail = (oldEmailVal || newEmailVal || id || '').toLowerCase().trim();
-
     // Multi-company serialization
     const compList = company_ids || companyIds || (company_id ? [company_id] : null);
     const compIdsStr = Array.isArray(compList) ? JSON.stringify(compList) : (typeof compList === 'string' ? compList : null);
@@ -274,7 +308,7 @@ const updateUser = async (req, res, next) => {
     const setClauses = [];
     const params = [];
 
-    if (displayName !== null) { setClauses.push('full_name = COALESCE(?, full_name)'); params.push(displayName); }
+    if (displayName !== null) { setClauses.push('full_name = ?'); params.push(displayName); }
     if (newEmailVal) { setClauses.push('email = ?'); params.push(newEmailVal); }
     if (usernameVal !== undefined) { setClauses.push('username = ?'); params.push(usernameVal); }
     if (phoneVal !== null || phone === '') { setClauses.push('phone = ?'); params.push(phoneVal); }
@@ -303,19 +337,19 @@ const updateUser = async (req, res, next) => {
     }
 
     setClauses.push('updated_at = NOW()');
-    const isNumericId = !isNaN(parseInt(id, 10)) && Number(id) > 0;
+    const isNumericTargetId = !isNaN(parseInt(id, 10)) && Number(id) > 0;
     
     try {
-      if (isNumericId) {
-        params.push(id, targetEmail, oldEmailVal || id);
+      if (isNumericTargetId) {
+        params.push(parseInt(id, 10));
         await pool.execute(
-          `UPDATE users SET ${setClauses.join(', ')} WHERE id = ? OR email = ? OR email = ?`,
+          `UPDATE users SET ${setClauses.join(', ')} WHERE id = ?`,
           params
         );
       } else {
-        params.push(targetEmail || id, oldEmailVal || id);
+        params.push(targetEmail || id);
         await pool.execute(
-          `UPDATE users SET ${setClauses.join(', ')} WHERE email = ? OR email = ?`,
+          `UPDATE users SET ${setClauses.join(', ')} WHERE email = ?`,
           params
         );
       }
@@ -325,7 +359,7 @@ const updateUser = async (req, res, next) => {
         const usernameIdx = setClauses.findIndex(c => c.startsWith('username ='));
         const fallbackParams = [...params];
         if (usernameIdx >= 0) fallbackParams.splice(usernameIdx, 1);
-        if (isNumericId) {
+        if (isNumericTargetId) {
           await pool.execute(
             `UPDATE users SET ${fallbackSetClauses.join(', ')} WHERE id = ? OR email = ? OR email = ?`,
             fallbackParams
@@ -352,9 +386,29 @@ const updateUser = async (req, res, next) => {
 
       const lookupEmail = newEmailVal || targetEmail;
       const [updatedUserRows] = await pool.execute(
-        'SELECT u.*, r.name as role_name FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id = ? OR u.email = ? OR u.email = ?',
-        [id, lookupEmail, targetEmail]
-      );
+        'SELECT u.*, r.name as role_name FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id = ? OR u.email = ? OR u.email = ? OR u.email = ?',
+        [id, lookupEmail, targetEmail, oldEmailVal || targetEmail]
+      ).catch(() => [[]]);
+
+      let effBranchId = branchIdVal !== undefined ? branchIdVal : (req.body.branch_id || req.body.branchId || undefined);
+      let effBranchName = req.body.branch_name || req.body.branchName;
+      if (effBranchId && !effBranchName) {
+        try {
+          const [bRows] = await pool.execute('SELECT name FROM branches WHERE id = ? OR LOWER(name) = LOWER(?)', [effBranchId, effBranchId]);
+          if (bRows.length > 0) effBranchName = bRows[0].name;
+        } catch {}
+      }
+      let effSubBranchId = subBranchIdVal !== undefined ? subBranchIdVal : (req.body.sub_branch_id || req.body.subBranchId || undefined);
+      let effSubBranchName = req.body.sub_branch_name || req.body.subBranchName;
+      if (effSubBranchId && !effSubBranchName) {
+        try {
+          const [sbRows] = await pool.execute('SELECT name FROM sub_branches WHERE id = ? OR LOWER(name) = LOWER(?)', [effSubBranchId, effSubBranchId]);
+          if (sbRows.length > 0) effSubBranchName = sbRows[0].name;
+        } catch {}
+      }
+
+      let updatedItem = null;
+
       if (updatedUserRows.length > 0) {
         const u = updatedUserRows[0];
         const emailNorm = (u.email || '').toLowerCase().trim();
@@ -374,8 +428,10 @@ const updateUser = async (req, res, next) => {
         }
 
         const effectiveAvatar = avatarVal || u.avatar_url || undefined;
+        effBranchId = branchIdVal !== undefined ? branchIdVal : (u.branch_id || effBranchId);
+        effSubBranchId = subBranchIdVal !== undefined ? subBranchIdVal : (u.sub_branch_id || effSubBranchId);
 
-        const updatedItem = {
+        updatedItem = {
           id: String(u.id),
           name: u.full_name || u.email,
           email: emailNorm,
@@ -384,10 +440,10 @@ const updateUser = async (req, res, next) => {
           companyId: u.company_id || 'tech',
           companyIds: parsedCompanyIds,
           companyName: u.company_name || 'SAAMPARK Technology',
-          branchId: u.branch_id || req.body.branch_id || req.body.branchId || undefined,
-          branchName: req.body.branch_name || req.body.branchName || undefined,
-          subBranchId: u.sub_branch_id || req.body.sub_branch_id || req.body.subBranchId || undefined,
-          subBranchName: req.body.sub_branch_name || req.body.subBranchName || undefined,
+          branchId: effBranchId || undefined,
+          branchName: effBranchName || undefined,
+          subBranchId: effSubBranchId || undefined,
+          subBranchName: effSubBranchName || undefined,
           avatarUrl: effectiveAvatar,
           avatar: effectiveAvatar,
           status: u.status === 'inactive' ? 'Inactive' : 'Active',
@@ -396,11 +452,41 @@ const updateUser = async (req, res, next) => {
           permissions: permObj,
           allowedModules: permObj?.allowedModules,
         };
+      } else {
+        // Fallback for accounts tracked directly via app_data (e.g. system accounts with string IDs)
+        const targetIdStr = String(id).toLowerCase().trim();
+        const existingIdx = currentUsers.findIndex(cu => 
+          String(cu.id || '').toLowerCase().trim() === targetIdStr ||
+          (cu.email && cu.email.toLowerCase().trim() === targetEmail) ||
+          (oldEmailVal && cu.email && cu.email.toLowerCase().trim() === oldEmailVal)
+        );
+        const existingCu = existingIdx >= 0 ? currentUsers[existingIdx] : {};
+        updatedItem = {
+          ...existingCu,
+          id: id,
+          name: displayName || existingCu.name || targetEmail,
+          email: newEmailVal || targetEmail,
+          phone: phoneVal !== null ? phoneVal : (existingCu.phone || ''),
+          department: department !== undefined ? department : (existingCu.department || 'General'),
+          status: statusVal ? (statusVal === 'inactive' ? 'Inactive' : 'Active') : (existingCu.status || 'Active'),
+          role: req.body.role || existingCu.role || (roleIdVal === 1 ? 'Super Admin' : roleIdVal === 2 ? 'Admin' : 'Teams'),
+          companyId: company_id || existingCu.companyId || 'tech',
+          companyIds: compList || existingCu.companyIds || ['tech'],
+          branchId: effBranchId || existingCu.branchId,
+          branchName: effBranchName || existingCu.branchName,
+          subBranchId: effSubBranchId || existingCu.subBranchId,
+          subBranchName: effSubBranchName || existingCu.subBranchName,
+          avatarUrl: avatarVal || existingCu.avatarUrl,
+          avatar: avatarVal || existingCu.avatar,
+        };
+      }
 
+      if (updatedItem) {
+        const emailNorm = (updatedItem.email || '').toLowerCase().trim();
         const filteredUsers = currentUsers.filter((cu) => {
           const cuEmail = (cu.email || '').toLowerCase().trim();
           const cuId = String(cu.id || '').toLowerCase().trim();
-          if (cuId && cuId === String(u.id).toLowerCase().trim()) return false;
+          if (cuId && cuId === String(id).toLowerCase().trim()) return false;
           if (cuEmail === emailNorm) return false;
           if (oldEmailVal && cuEmail === oldEmailVal) return false;
           return true;
@@ -428,11 +514,53 @@ const updateUser = async (req, res, next) => {
 const toggleUserStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const [users] = await pool.execute('SELECT status FROM users WHERE id = ? AND deleted_at IS NULL', [id]);
+    const isNum = !isNaN(Number(id)) && Number(id) > 0;
+    let users = [];
+
+    if (isNum) {
+      [users] = await pool.execute('SELECT id, email, role_id, status FROM users WHERE id = ? AND deleted_at IS NULL', [Number(id)]);
+    }
+    if (!users.length) {
+      [users] = await pool.execute(
+        'SELECT id, email, role_id, status FROM users WHERE (email = ? OR (id = 4 AND ? = "usr_root_super_admin")) AND deleted_at IS NULL',
+        [id, id]
+      );
+    }
     if (!users.length) return errorResponse(res, 404, 'User not found.');
 
-    const newStatus = users[0].status === 'active' ? 'inactive' : 'active';
-    await pool.execute('UPDATE users SET status = ?, updated_at = NOW() WHERE id = ?', [newStatus, id]);
+    const targetUser = users[0];
+    const isSuper = targetUser.role_id === 1 || (targetUser.email && targetUser.email.toLowerCase().trim() === 'saampark.official@gmail.com');
+    
+    // For primary root super admin, always force activate if inactive
+    let newStatus = targetUser.status === 'active' ? 'inactive' : 'active';
+    if (isSuper && targetUser.status === 'inactive') {
+      newStatus = 'active';
+    }
+
+    await pool.execute('UPDATE users SET status = ?, updated_at = NOW() WHERE id = ?', [newStatus, targetUser.id]);
+
+    // Synchronize to app_data JSON users store
+    try {
+      const [appRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "users"');
+      if (appRows.length > 0 && appRows[0].data_json) {
+        let appUsers = JSON.parse(appRows[0].data_json);
+        if (Array.isArray(appUsers)) {
+          let appChanged = false;
+          appUsers.forEach(u => {
+            const uId = String(u.id || '').toLowerCase().trim();
+            const uEmail = (u.email || '').toLowerCase().trim();
+            const tEmail = (targetUser.email || '').toLowerCase().trim();
+            if (uId === String(targetUser.id) || uEmail === tEmail || (isSuper && uId === 'usr_root_super_admin')) {
+              u.status = newStatus === 'active' ? 'Active' : 'Inactive';
+              appChanged = true;
+            }
+          });
+          if (appChanged) {
+            await pool.execute('UPDATE app_data SET data_json = ?, updated_at = NOW() WHERE module_key = "users"', [JSON.stringify(appUsers)]);
+          }
+        }
+      }
+    } catch (e) {}
 
     return successResponse(res, 200, `User ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully`, { status: newStatus });
   } catch (error) {
@@ -445,10 +573,16 @@ const deleteUser = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    // Prevent deleting Super Admin
-    const [users] = await pool.execute('SELECT role_id FROM users WHERE id = ?', [id]);
-    if (users.length > 0 && users[0].role_id === 1) {
-      return errorResponse(res, 403, 'Super Admin accounts cannot be deleted.');
+    // Prevent deleting Super Admin & Root Super Admin
+    const [users] = await pool.execute('SELECT role_id, email FROM users WHERE id = ? OR email = ?', [id, id]);
+    if (users.length > 0) {
+      const uEmail = (users[0].email || '').toLowerCase().trim();
+      if (uEmail === 'saampark.official@gmail.com') {
+        return errorResponse(res, 403, 'Primary Root Super Admin account cannot be deleted.');
+      }
+      if (users[0].role_id === 1) {
+        return errorResponse(res, 403, 'Super Admin accounts cannot be deleted.');
+      }
     }
 
     // Fetch user details for deleted_items tracking
@@ -639,17 +773,17 @@ const createUser = async (req, res, next) => {
     }
 
     // Resolve branch and sub-branch names
-    let branchName = undefined;
-    let subBranchName = undefined;
-    if (effectiveBranchId) {
+    let branchName = req.body.branch_name || req.body.branchName || undefined;
+    let subBranchName = req.body.sub_branch_name || req.body.subBranchName || undefined;
+    if (effectiveBranchId && !branchName) {
       try {
-        const [bRows] = await pool.execute('SELECT name FROM branches WHERE id = ?', [effectiveBranchId]);
+        const [bRows] = await pool.execute('SELECT name FROM branches WHERE id = ? OR LOWER(name) = LOWER(?)', [effectiveBranchId, effectiveBranchId]);
         if (bRows.length > 0) branchName = bRows[0].name;
       } catch {}
     }
-    if (effectiveSubBranchId) {
+    if (effectiveSubBranchId && !subBranchName) {
       try {
-        const [sbRows] = await pool.execute('SELECT name FROM sub_branches WHERE id = ?', [effectiveSubBranchId]);
+        const [sbRows] = await pool.execute('SELECT name FROM sub_branches WHERE id = ? OR LOWER(name) = LOWER(?)', [effectiveSubBranchId, effectiveSubBranchId]);
         if (sbRows.length > 0) subBranchName = sbRows[0].name;
       } catch {}
     }
@@ -671,7 +805,6 @@ const createUser = async (req, res, next) => {
       status: 'Active',
       department: department || 'General',
       phone: phone || '',
-      password: password || 'Password123',
       lastLogin: 'Just created',
       joinedDate: new Date().toISOString().split('T')[0],
       permissions: permissions || null,

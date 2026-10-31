@@ -514,11 +514,53 @@ const updateUser = async (req, res, next) => {
 const toggleUserStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const [users] = await pool.execute('SELECT status FROM users WHERE id = ? AND deleted_at IS NULL', [id]);
+    const isNum = !isNaN(Number(id)) && Number(id) > 0;
+    let users = [];
+
+    if (isNum) {
+      [users] = await pool.execute('SELECT id, email, role_id, status FROM users WHERE id = ? AND deleted_at IS NULL', [Number(id)]);
+    }
+    if (!users.length) {
+      [users] = await pool.execute(
+        'SELECT id, email, role_id, status FROM users WHERE (email = ? OR (id = 4 AND ? = "usr_root_super_admin")) AND deleted_at IS NULL',
+        [id, id]
+      );
+    }
     if (!users.length) return errorResponse(res, 404, 'User not found.');
 
-    const newStatus = users[0].status === 'active' ? 'inactive' : 'active';
-    await pool.execute('UPDATE users SET status = ?, updated_at = NOW() WHERE id = ?', [newStatus, id]);
+    const targetUser = users[0];
+    const isSuper = targetUser.role_id === 1 || (targetUser.email && targetUser.email.toLowerCase().trim() === 'saampark.official@gmail.com');
+    
+    // For primary root super admin, always force activate if inactive
+    let newStatus = targetUser.status === 'active' ? 'inactive' : 'active';
+    if (isSuper && targetUser.status === 'inactive') {
+      newStatus = 'active';
+    }
+
+    await pool.execute('UPDATE users SET status = ?, updated_at = NOW() WHERE id = ?', [newStatus, targetUser.id]);
+
+    // Synchronize to app_data JSON users store
+    try {
+      const [appRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "users"');
+      if (appRows.length > 0 && appRows[0].data_json) {
+        let appUsers = JSON.parse(appRows[0].data_json);
+        if (Array.isArray(appUsers)) {
+          let appChanged = false;
+          appUsers.forEach(u => {
+            const uId = String(u.id || '').toLowerCase().trim();
+            const uEmail = (u.email || '').toLowerCase().trim();
+            const tEmail = (targetUser.email || '').toLowerCase().trim();
+            if (uId === String(targetUser.id) || uEmail === tEmail || (isSuper && uId === 'usr_root_super_admin')) {
+              u.status = newStatus === 'active' ? 'Active' : 'Inactive';
+              appChanged = true;
+            }
+          });
+          if (appChanged) {
+            await pool.execute('UPDATE app_data SET data_json = ?, updated_at = NOW() WHERE module_key = "users"', [JSON.stringify(appUsers)]);
+          }
+        }
+      }
+    } catch (e) {}
 
     return successResponse(res, 200, `User ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully`, { status: newStatus });
   } catch (error) {
