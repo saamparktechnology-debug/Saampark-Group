@@ -164,57 +164,53 @@ export function OfficialEstimateDocument({
 
   // Parent Company Corporate Details (Stay as is forever; branches/sub-branches appear in their own section)
   const isConsultancy = activeCompany?.id === 'digital' || activeCompany?.id === 'consultancy' || (estimate as any)?.company === 'consultancy' || estimate?.companyId === 'consultancy'
-  const defaultCin = isConsultancy ? "" : "U72900WB2021PTC244243"
-  const defaultPan = "AAGCS9419E"
-  const defaultGstin = "19AAGCS9419E1ZM"
-  const defaultMsme = isConsultancy ? "UDYAM-WB-10-0038922" : "UDYAM-WB-10-0038921"
 
   const resolvedBrandName = activeCompany?.brand_name || activeCompany?.name || "SAAMPARK"
   const resolvedDivisionName = activeCompany?.division_name?.trim() || (isConsultancy ? "CONSULTANCY SERVICES" : "TECHNOLOGY AND RESEARCH PVT. LTD.")
-  const resolvedSubtitle = activeCompany?.subtitle || "TECHNOLOGY, DESIGN & ENTERPRISE DIGITAL SOLUTIONS"
+  const resolvedSubtitle = activeCompany?.subtitle || ""
   const resolvedTrademarkSymbol = (activeCompany?.trademark_symbol || (activeCompany as any)?.invoice_customization?.trademark_symbol || "®").trim()
   const resolvedLogoUrl = getCompanyLogoUrl(activeCompany) || activeCompany?.logo_url || ""
 
-  const resolvedAddress = activeCompany?.address?.trim() || "Kolkata, West Bengal, India"
-  const resolvedPhone = activeCompany?.phone?.trim() || "+91 99015 18567"
-  const resolvedEmail = activeCompany?.email?.trim() || "info@saamparktechnology.com"
-  const resolvedWebsite = activeCompany?.website?.trim() || "www.saamparktechnology.com"
+  const resolvedAddress = activeCompany?.address?.trim() || ""
+  const resolvedPhone = activeCompany?.phone?.trim() || ""
+  const resolvedEmail = activeCompany?.email?.trim() || ""
+  const resolvedWebsite = activeCompany?.website?.trim() || ""
 
-  const resolvedCin = activeCompany?.cin?.trim() || defaultCin
-  const resolvedGstin = activeCompany?.gstin?.trim() || defaultGstin
-  const resolvedPan = activeCompany?.pan?.trim() || defaultPan
-  const resolvedMsme = (activeCompany as any)?.msme_reg?.trim() || (activeCompany as any)?.msme?.trim() || defaultMsme
+  const resolvedCin = activeCompany?.cin?.trim() || ""
+  const resolvedGstin = activeCompany?.gstin?.trim() || ""
+  const resolvedPan = activeCompany?.pan?.trim() || ""
+  const resolvedMsme = ((activeCompany as any)?.msme_reg || (activeCompany as any)?.msme || (activeCompany as any)?.udyam)?.trim() || ""
 
-  // Bank details
+  // Bank details (Strictly real values or blank)
   const resolvedBankName = (isSubBranchIssued 
     ? (activeSubBranch?.bank_name || (activeSubBranch as any)?.bankDetails?.bankName) 
     : isBranchIssued 
     ? activeBranch?.bank_name 
-    : activeCompany?.bank_name)?.trim() || "HDFC Bank Ltd"
+    : activeCompany?.bank_name)?.trim() || ""
 
   const resolvedAccountHolder = (isSubBranchIssued 
     ? (activeSubBranch?.account_holder || (activeSubBranch as any)?.bankDetails?.accountHolder) 
     : isBranchIssued 
     ? activeBranch?.account_holder 
-    : activeCompany?.account_holder)?.trim() || resolvedBrandName
+    : activeCompany?.account_holder)?.trim() || ""
 
   const resolvedAccountNumber = (isSubBranchIssued 
     ? (activeSubBranch?.account_number || (activeSubBranch as any)?.bankDetails?.accountNumber) 
     : isBranchIssued 
     ? activeBranch?.account_number 
-    : activeCompany?.account_number)?.trim() || "50200084920194"
+    : activeCompany?.account_number)?.trim() || ""
 
   const resolvedIfscCode = (isSubBranchIssued 
     ? (activeSubBranch?.ifsc_code || (activeSubBranch as any)?.bankDetails?.ifscCode) 
     : isBranchIssued 
     ? activeBranch?.ifsc_code 
-    : activeCompany?.ifsc_code)?.trim() || "HDFC0001234"
+    : activeCompany?.ifsc_code)?.trim() || ""
 
   const resolvedBankBranch = (isSubBranchIssued 
     ? activeSubBranch?.bank_branch 
     : isBranchIssued 
     ? activeBranch?.bank_branch 
-    : activeCompany?.bank_branch)?.trim() || "Main Branch"
+    : activeCompany?.bank_branch)?.trim() || ""
 
   const resolvedUpiId = (isSubBranchIssued 
     ? (activeSubBranch?.upi_id || (activeSubBranch as any)?.bankDetails?.upiId) 
@@ -419,13 +415,22 @@ export function OfficialEstimateDocument({
                 <h1 className="text-2xl sm:text-3xl md:text-[34px] font-black tracking-wider leading-none text-zinc-950 uppercase font-sans text-center drop-shadow-2xs">
                   {resolvedBrandName}
                 </h1>
-                {resolvedTrademarkSymbol ? (
-                  <span 
-                    className="inline-flex items-center justify-center w-4 h-4 min-w-[16px] min-h-[16px] rounded-full border border-red-500 text-red-600 bg-red-50/60 text-[8.5px] font-black leading-none shrink-0 self-center shadow-2xs"
-                    title={resolvedTrademarkSymbol === "TM" || resolvedTrademarkSymbol === "™" ? "Trademark" : "Registered Trademark"}
-                  >
-                    {resolvedTrademarkSymbol === "R" || resolvedTrademarkSymbol === "®" ? "®" : (resolvedTrademarkSymbol === "TM" || resolvedTrademarkSymbol === "™" ? "™" : resolvedTrademarkSymbol)}
-                  </span>
+                {resolvedTrademarkSymbol && resolvedTrademarkSymbol !== "none" ? (
+                  resolvedTrademarkSymbol === "TM" || resolvedTrademarkSymbol === "™" ? (
+                    <span 
+                      className="inline-flex items-center justify-center w-[23px] h-[23px] min-w-[23px] min-h-[23px] rounded-full border-[1.5px] border-red-600 text-red-600 bg-white font-bold text-[9px] tracking-tight leading-none shrink-0 -translate-y-2 ml-1 shadow-xs select-none"
+                      title="Trademark"
+                    >
+                      TM
+                    </span>
+                  ) : (
+                    <span 
+                      className="inline-flex items-center justify-center w-[20px] h-[20px] min-w-[20px] min-h-[20px] rounded-full border-[1.5px] border-red-600 text-red-600 bg-white font-black text-[11px] leading-none shrink-0 -translate-y-2 ml-1 shadow-xs select-none"
+                      title="Registered Trademark"
+                    >
+                      R
+                    </span>
+                  )
                 ) : null}
               </div>
 
@@ -446,7 +451,7 @@ export function OfficialEstimateDocument({
                   {resolvedCin && <span>CIN: <strong className="text-zinc-900 font-bold">{resolvedCin}</strong></span>}
                   {resolvedGstin && <span>{resolvedCin ? "| " : ""}GSTIN: <strong className="text-zinc-900 font-black">{resolvedGstin}</strong></span>}
                   {resolvedPan && <span>{(resolvedCin || resolvedGstin) ? "| " : ""}PAN: <strong className="text-zinc-900 font-black">{resolvedPan}</strong></span>}
-                  {resolvedMsme && <span>| MSME: <strong className="text-zinc-900 font-semibold">{resolvedMsme}</strong></span>}
+                  {resolvedMsme && <span>{(resolvedCin || resolvedGstin || resolvedPan) ? "| " : ""}MSME: <strong className="text-zinc-900 font-semibold">{resolvedMsme}</strong></span>}
                 </p>
               )}
             </div>
@@ -769,7 +774,7 @@ export function OfficialEstimateDocument({
             {estimate.status === "Accepted" || (estimate as any).clientAccepted ? (
               <div className="py-2 px-3 rounded-lg bg-emerald-50 border border-emerald-300 text-emerald-800 text-center font-sans shadow-2xs">
                 <div className="text-[10px] font-bold uppercase text-emerald-700 flex items-center justify-center gap-1">
-                  <span>✓ Digitally Accepted &amp; Confirmed</span>
+                  <span>Digitally Accepted &amp; Confirmed</span>
                 </div>
                 <div className="text-[9px] text-zinc-600 font-mono mt-0.5">
                   Confirmed by: {(estimate as any).acceptedBy || estimate.client || "Client"}
@@ -781,7 +786,7 @@ export function OfficialEstimateDocument({
             <div className="pt-2 border-t border-zinc-300 text-center">
               <p className="font-bold text-zinc-900">{estimate.client}</p>
               <p className="text-[10px] text-zinc-400">
-                {estimate.status === "Accepted" || (estimate as any).clientAccepted ? "✓ Verified Online Acceptance" : "Authorized Signature & Company Seal"}
+                {estimate.status === "Accepted" || (estimate as any).clientAccepted ? "Verified Online Acceptance" : "Authorized Signature & Company Seal"}
               </p>
             </div>
           </div>
@@ -818,7 +823,7 @@ export function OfficialEstimateDocument({
         <div className="w-full rounded-md border border-zinc-200/90 bg-zinc-50/70 p-2 text-[8px] sm:text-[8.5px] text-zinc-600 leading-tight space-y-1">
           <div className="flex items-center justify-between gap-2 border-b border-zinc-200 pb-1">
             <span className="font-bold uppercase tracking-wider text-zinc-700 text-[8px] flex items-center gap-1">
-              <span>⚖️ Statutory Declaration &amp; Legal Terms:</span>
+              <span>Statutory Declaration &amp; Legal Terms:</span>
             </span>
             <span className="text-[7.5px] text-zinc-500 font-medium">
               Subject to Kolkata Jurisdiction • Formal Corporate Commercial Estimate

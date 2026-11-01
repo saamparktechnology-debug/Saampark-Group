@@ -352,24 +352,11 @@ export function OfficialInvoiceDocument({
   const resolvedTrademarkSymbol = (companyDetails?.trademark_symbol || activeCompany?.trademark_symbol || (activeCompany as any)?.invoice_customization?.trademark_symbol || "®").trim()
   const resolvedLogoUrl = overrideLogoUrl || getCompanyLogoUrl(activeCompany) || activeCompany?.logo_url || companyDetails?.logo_url || ""
 
-  // Specific Entity Legal IDs (Belongs to Company — permanent canonical details)
-  const isConsultancy = activeCompany?.id === 'digital' || activeCompany?.id === 'consultancy' || (invoice as any)?.company === 'consultancy' || invoice?.companyId === 'consultancy'
-  const defaultCin = isConsultancy ? "" : "U72900WB2021PTC244243"
-  const defaultPan = "AAGCS9419E"
-  const defaultGstin = "19AAGCS9419E1ZM"
-  const defaultMsme = isConsultancy ? "UDYAM-WB-10-0038922" : "UDYAM-WB-10-0038921"
-
-  const rawCin = (companyDetails ? companyDetails.cin : activeCompany?.cin)?.trim() || ""
-  const resolvedCin = rawCin || defaultCin
-
-  const rawGstin = (companyDetails ? companyDetails.gstin : activeCompany?.gstin)?.trim() || ""
-  const resolvedGstin = rawGstin || defaultGstin
-
-  const rawPan = (companyDetails ? companyDetails.pan : activeCompany?.pan)?.trim() || ""
-  const resolvedPan = rawPan || defaultPan
-
-  const rawMsme = (companyDetails?.msme_reg || (companyDetails as any)?.msme || activeCompany?.msme_reg || (activeCompany as any)?.msme || (activeCompany as any)?.udyam)?.trim() || ""
-  const resolvedMsme = rawMsme || defaultMsme
+  // Specific Entity Legal IDs (Strictly user-typed values; totally blank if not filled, NO fake examples)
+  const resolvedCin = (companyDetails ? companyDetails.cin : activeCompany?.cin)?.trim() || ""
+  const resolvedGstin = (companyDetails ? companyDetails.gstin : activeCompany?.gstin)?.trim() || ""
+  const resolvedPan = (companyDetails ? companyDetails.pan : activeCompany?.pan)?.trim() || ""
+  const resolvedMsme = (companyDetails?.msme_reg || (companyDetails as any)?.msme || activeCompany?.msme_reg || (activeCompany as any)?.msme || (activeCompany as any)?.udyam)?.trim() || ""
 
   // Address & Contact Information (Corporate entity defaults)
   const resolvedAddress = (companyDetails ? companyDetails.address : activeCompany?.address)?.trim() || ""
@@ -993,13 +980,22 @@ export function OfficialInvoiceDocument({
               fieldKey="brand_name"
               className="text-2xl sm:text-3xl md:text-[34px] font-black tracking-wider leading-none text-zinc-950 uppercase font-sans text-center drop-shadow-2xs"
             />
-            {resolvedTrademarkSymbol ? (
-              <span 
-                className="inline-flex items-center justify-center w-4 h-4 min-w-[16px] min-h-[16px] rounded-full border border-red-500 text-red-600 bg-red-50/60 text-[8.5px] font-black leading-none shrink-0 self-center shadow-2xs"
-                title={resolvedTrademarkSymbol === "TM" || resolvedTrademarkSymbol === "™" ? "Trademark" : "Registered Trademark"}
-              >
-                {resolvedTrademarkSymbol === "R" || resolvedTrademarkSymbol === "®" ? "®" : (resolvedTrademarkSymbol === "TM" || resolvedTrademarkSymbol === "™" ? "™" : resolvedTrademarkSymbol)}
-              </span>
+            {resolvedTrademarkSymbol && resolvedTrademarkSymbol !== "none" ? (
+              resolvedTrademarkSymbol === "TM" || resolvedTrademarkSymbol === "™" ? (
+                <span 
+                  className="inline-flex items-center justify-center w-[23px] h-[23px] min-w-[23px] min-h-[23px] rounded-full border-[1.5px] border-red-600 text-red-600 bg-white font-bold text-[9px] tracking-tight leading-none shrink-0 -translate-y-2 ml-1 shadow-xs select-none"
+                  title="Trademark"
+                >
+                  TM
+                </span>
+              ) : (
+                <span 
+                  className="inline-flex items-center justify-center w-[20px] h-[20px] min-w-[20px] min-h-[20px] rounded-full border-[1.5px] border-red-600 text-red-600 bg-white font-black text-[11px] leading-none shrink-0 -translate-y-2 ml-1 shadow-xs select-none"
+                  title="Registered Trademark"
+                >
+                  R
+                </span>
+              )
             ) : null}
           </div>
 
@@ -2074,7 +2070,7 @@ export function OfficialInvoiceDocument({
         <div className="w-full rounded-md border border-zinc-200/90 bg-zinc-50/70 p-2 text-[8px] sm:text-[8.5px] text-zinc-600 leading-tight space-y-1">
           <div className="flex items-center justify-between gap-2 border-b border-zinc-200 pb-1">
             <span className="font-bold uppercase tracking-wider text-zinc-700 text-[8px] flex items-center gap-1">
-              <span>⚖️ Statutory Declaration &amp; Legal Terms:</span>
+              <span>Statutory Declaration &amp; Compliance Terms:</span>
             </span>
             <span className="text-[7.5px] text-zinc-500 font-medium">
               Subject to Kolkata Jurisdiction • Computer Generated Official Document

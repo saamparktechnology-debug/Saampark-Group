@@ -634,14 +634,17 @@ export default function CompaniesMain() {
   const [previewSaveSuccess, setPreviewSaveSuccess] = React.useState(false)
 
   const saveCompany = async (keepModalOpen = false) => {
-    if (!companyForm.name.trim()) return
+    const finalBrand = (companyForm.brand_name || "").trim()
+    const finalName = (companyForm.name || "").trim() || finalBrand
+    if (!finalBrand && !finalName) return
     setSaving(true)
     try {
       const cur = CURRENCIES.find(c => c.code === companyForm.currency)
       const payload = {
         ...companyForm,
-        name: companyForm.name.trim(),
-        slug: companyForm.slug.trim() || generateSlug(companyForm.name.trim()),
+        brand_name: finalBrand,
+        name: finalName,
+        slug: companyForm.slug.trim() || generateSlug(finalBrand || finalName),
         trademark_symbol: companyForm.trademark_symbol || "",
         currency_symbol: cur?.symbol || "₹",
         signature_position: companySignaturePos,
@@ -1665,29 +1668,83 @@ export default function CompaniesMain() {
                     <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1">
                       {companyTab === "identity" && (
                         <div className="space-y-4">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                            <div><label className="block font-semibold mb-1">Company Registered Name *</label><Input placeholder="Full registered company name" value={companyForm.name} onChange={e => setCompanyForm({ ...companyForm, name: e.target.value })} className="font-bold" /></div>
-                            <div><label className="block font-semibold mb-1">Brand Name / Display Title</label><Input placeholder="e.g. SAAMPARK" value={companyForm.brand_name} onChange={e => setCompanyForm({ ...companyForm, brand_name: e.target.value })} className="font-bold" /></div>
-                            <div><label className="block font-semibold mb-1">Company Slug (Identifier) *</label><Input placeholder="e.g. tech, printspace" value={companyForm.slug} onChange={e => setCompanyForm({ ...companyForm, slug: e.target.value.toLowerCase().replace(/\s+/g, '-') })} className="font-mono font-bold" /></div>
-                            <div><label className="block font-semibold mb-1">Industry</label><select value={companyForm.industry} onChange={e => setCompanyForm({ ...companyForm, industry: e.target.value })} className="w-full px-3 py-2 rounded-md border border-border bg-surface text-foreground text-xs">{INDUSTRIES.map(ind => <option key={ind} value={ind}>{ind}</option>)}</select></div>
-                          </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                            <div><label className="block font-semibold mb-1">Division / Group Tagline</label><Input placeholder="e.g. RESEARCH & INNOVATION" value={companyForm.division_name} onChange={e => setCompanyForm({ ...companyForm, division_name: e.target.value })} /></div>
-                            <div><label className="block font-semibold mb-1">Subtitle / Sub-Header</label><Input placeholder="e.g. Software, Cloud & Security" value={companyForm.subtitle} onChange={e => setCompanyForm({ ...companyForm, subtitle: e.target.value })} /></div>
-                          </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
-                              <label className="block font-semibold mb-1">Trademark / Registered Badge</label>
+                              <label className="block text-xs font-bold text-foreground mb-1.5 uppercase tracking-wider">
+                                Top Brand Name (Header Line 1) *
+                              </label>
+                              <Input 
+                                placeholder="e.g. SAAMPARK" 
+                                value={companyForm.brand_name} 
+                                onChange={e => {
+                                  const val = e.target.value
+                                  setCompanyForm(prev => ({ 
+                                    ...prev, 
+                                    brand_name: val,
+                                    name: prev.name && prev.name !== prev.brand_name ? prev.name : val,
+                                    slug: prev.slug || val.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+                                  }))
+                                }} 
+                                className="font-bold text-sm" 
+                              />
+                              <span className="text-[10px] text-muted-foreground block mt-1">
+                                Main brand title displayed on top of invoices, quotations &amp; estimates.
+                              </span>
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-bold text-foreground mb-1.5 uppercase tracking-wider">
+                                Bottom Secondary Name (Header Line 2)
+                              </label>
+                              <Input 
+                                placeholder="e.g. TECHNOLOGY AND RESEARCH PRIVATE LIMITED" 
+                                value={companyForm.division_name} 
+                                onChange={e => {
+                                  const val = e.target.value
+                                  setCompanyForm(prev => ({ 
+                                    ...prev, 
+                                    division_name: val,
+                                    subtitle: prev.subtitle || val
+                                  }))
+                                }} 
+                                className="font-medium text-xs sm:text-sm"
+                              />
+                              <span className="text-[10px] text-muted-foreground block mt-1">
+                                Division or corporate subtitle displayed directly below the main brand.
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                            <div>
+                              <label className="block text-xs font-bold text-foreground mb-1.5 uppercase tracking-wider">
+                                Trademark / Registered Symbol
+                              </label>
                               <select 
                                 value={companyForm.trademark_symbol} 
                                 onChange={e => setCompanyForm({ ...companyForm, trademark_symbol: e.target.value })}
-                                className="w-full px-3 py-2 rounded-md border border-border bg-surface text-foreground text-xs font-semibold"
+                                className="w-full px-3 py-2 rounded-md border border-border bg-surface text-foreground text-xs font-bold focus:outline-none focus:ring-2 focus:ring-primary"
                               >
-                                <option value="">None (No badge)</option>
+                                <option value="">None (No Symbol)</option>
                                 <option value="TM">TM (Trademark / Applied)</option>
-                                <option value="R">R / ® (Registered Trademark)</option>
+                                <option value="R">® (Registered Trademark)</option>
                               </select>
-                              <span className="text-[10px] text-muted-foreground block mt-0.5">When selected, appears as a stylish pill badge next to SAAMPARK brand on invoices.</span>
+                              <span className="text-[10px] text-muted-foreground block mt-1">
+                                Displayed in a circular red badge at the top-right of your brand name.
+                              </span>
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-bold text-foreground mb-1.5 uppercase tracking-wider">
+                                Industry
+                              </label>
+                              <select 
+                                value={companyForm.industry} 
+                                onChange={e => setCompanyForm({ ...companyForm, industry: e.target.value })} 
+                                className="w-full px-3 py-2 rounded-md border border-border bg-surface text-foreground text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary"
+                              >
+                                {INDUSTRIES.map(ind => <option key={ind} value={ind}>{ind}</option>)}
+                              </select>
                             </div>
                           </div>
                         </div>
@@ -1695,13 +1752,27 @@ export default function CompaniesMain() {
 
                       {companyTab === "tax" && (
                         <div className="space-y-4">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                            <div><label className="block font-semibold mb-1">GSTIN</label><Input placeholder="e.g. 19AAECS1234F1Z8" value={companyForm.gstin} onChange={e => setCompanyForm({ ...companyForm, gstin: e.target.value.toUpperCase() })} className="font-mono font-bold uppercase" /></div>
-                            <div><label className="block font-semibold mb-1">PAN Number</label><Input placeholder="e.g. AAECS1234F" value={companyForm.pan} onChange={e => setCompanyForm({ ...companyForm, pan: e.target.value.toUpperCase() })} className="font-mono font-bold uppercase" /></div>
-                            <div><label className="block font-semibold mb-1">CIN (Corporate ID)</label><Input placeholder="e.g. U72900WB2026PTC123456" value={companyForm.cin} onChange={e => setCompanyForm({ ...companyForm, cin: e.target.value.toUpperCase() })} className="font-mono uppercase" /></div>
-                            <div><label className="block font-semibold mb-1">MSME Registration Number</label><Input placeholder="e.g. UDYAM-WB-00-1234567" value={companyForm.msme_reg} onChange={e => setCompanyForm({ ...companyForm, msme_reg: e.target.value })} className="font-mono" /></div>
+                          <div>
+                            <label className="block text-xs font-bold text-foreground mb-1 uppercase tracking-wider">
+                              Registered Legal Entity Name (Optional)
+                            </label>
+                            <Input 
+                              placeholder="Full registered company name (if different from brand title)" 
+                              value={companyForm.name} 
+                              onChange={e => setCompanyForm({ ...companyForm, name: e.target.value })} 
+                              className="font-bold text-xs sm:text-sm" 
+                            />
+                            <span className="text-[10px] text-muted-foreground block mt-0.5">
+                              Used in official legal contracts, banking records, and statutory declarations.
+                            </span>
                           </div>
-                          <div><label className="block font-semibold mb-1">ISO / Quality Certification Badge</label><Input placeholder="e.g. An ISO 9001:2015 Certified Company" value={companyForm.iso_certification} onChange={e => setCompanyForm({ ...companyForm, iso_certification: e.target.value })} /></div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                            <div><label className="block text-xs font-semibold mb-1">GSTIN</label><Input placeholder="GSTIN (Leave blank if not registered)" value={companyForm.gstin} onChange={e => setCompanyForm({ ...companyForm, gstin: e.target.value.toUpperCase() })} className="font-mono font-bold uppercase text-xs" /></div>
+                            <div><label className="block text-xs font-semibold mb-1">PAN Number</label><Input placeholder="PAN (Leave blank if none)" value={companyForm.pan} onChange={e => setCompanyForm({ ...companyForm, pan: e.target.value.toUpperCase() })} className="font-mono font-bold uppercase text-xs" /></div>
+                            <div><label className="block text-xs font-semibold mb-1">CIN (Corporate ID)</label><Input placeholder="CIN (Leave blank if none)" value={companyForm.cin} onChange={e => setCompanyForm({ ...companyForm, cin: e.target.value.toUpperCase() })} className="font-mono uppercase text-xs" /></div>
+                            <div><label className="block text-xs font-semibold mb-1">MSME Registration Number</label><Input placeholder="MSME / Udyam (Leave blank if none)" value={companyForm.msme_reg} onChange={e => setCompanyForm({ ...companyForm, msme_reg: e.target.value })} className="font-mono text-xs" /></div>
+                          </div>
+                          <div><label className="block text-xs font-semibold mb-1">ISO / Quality Certification Badge</label><Input placeholder="e.g. An ISO 9001:2015 Certified Company (Optional)" value={companyForm.iso_certification} onChange={e => setCompanyForm({ ...companyForm, iso_certification: e.target.value })} className="text-xs" /></div>
                         </div>
                       )}
 
@@ -1936,7 +2007,7 @@ export default function CompaniesMain() {
                       </span>
                       <div className="flex items-center gap-2">
                         <Button variant="outline" size="sm" onClick={() => setShowCompanyModal(false)}>Cancel</Button>
-                        <Button size="sm" onClick={() => saveCompany(false)} disabled={saving || !companyForm.name.trim()} className="font-bold bg-blue-600 hover:bg-blue-700 text-white">
+                        <Button size="sm" onClick={() => saveCompany(false)} disabled={saving || (!companyForm.name.trim() && !companyForm.brand_name.trim())} className="font-bold bg-blue-600 hover:bg-blue-700 text-white">
                           {saving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
                           Update Company Details
                         </Button>
