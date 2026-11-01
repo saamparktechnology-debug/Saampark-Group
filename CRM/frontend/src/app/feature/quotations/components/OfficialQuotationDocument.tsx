@@ -35,6 +35,9 @@ export interface QuotationData {
   tax?: number
   total: number
   status: string
+  clientAccepted?: boolean
+  acceptedAt?: number | string
+  acceptedBy?: string
   approvalStatus?: "pending" | "approved" | "rejected"
   items?: QuotationLineItem[]
   companyId?: string
@@ -49,10 +52,12 @@ export interface QuotationData {
 interface OfficialQuotationDocumentProps {
   quotation: QuotationData
   onClose?: () => void
+  onAccept?: () => void
   onSendEmail?: () => void
   onConvertToInvoice?: () => void
   onConvertToClient?: () => void
   onSendEstimate?: () => void
+  isClientRole?: boolean
 }
 
 export function formatQuotationDate(rawDate?: string | number | Date | null): string {
@@ -117,10 +122,12 @@ export function numberToIndianWords(num: number): string {
 export function OfficialQuotationDocument({
   quotation,
   onClose,
+  onAccept,
   onSendEmail,
   onConvertToInvoice,
   onConvertToClient,
   onSendEstimate,
+  isClientRole = false,
 }: OfficialQuotationDocumentProps) {
   const { 
     companies, 
@@ -376,6 +383,25 @@ export function OfficialQuotationDocument({
             <Printer size={13} />
             <span>Print / PDF</span>
           </button>
+
+          {quotation.status !== "Accepted" && onAccept && (
+            <button
+              type="button"
+              onClick={onAccept}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-all cursor-pointer"
+              title="Formally accept and approve this quotation"
+            >
+              <CheckCircle2 size={13} />
+              <span>{isClientRole ? "Accept Quotation" : "Mark Accepted"}</span>
+            </button>
+          )}
+
+          {(quotation.status === "Accepted" || quotation.clientAccepted) && (
+            <div className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-emerald-300 bg-emerald-950/60 border border-emerald-800 rounded-lg shadow-2xs">
+              <CheckCircle2 size={13} className="text-emerald-400" />
+              <span>Accepted</span>
+            </div>
+          )}
 
           {onConvertToClient && (
             <button
@@ -801,14 +827,32 @@ export function OfficialQuotationDocument({
         {/* 6. Official Dual Signatures & Acceptance Box */}
         <div className="pt-4 border-t-2 border-zinc-300 grid grid-cols-1 sm:grid-cols-2 gap-8 items-end">
           {/* Customer Acceptance Sign */}
-          <div className="p-4 border border-dashed border-zinc-300 rounded-xl space-y-6 bg-zinc-50/40">
+          <div className="p-4 border border-dashed border-zinc-300 rounded-xl space-y-4 bg-zinc-50/40">
             <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider text-zinc-400">
               <span>Client Acceptance &amp; Purchase Order</span>
-              <span>Date: ____________</span>
+              <span>
+                {quotation.acceptedAt 
+                  ? `Accepted: ${formatQuotationDate(quotation.acceptedAt)}` 
+                  : "Date: ____________"}
+              </span>
             </div>
-            <div className="pt-6 border-t border-zinc-300 text-center">
+            {quotation.status === "Accepted" || quotation.clientAccepted ? (
+              <div className="py-2 px-3 rounded-lg bg-emerald-50 border border-emerald-300 text-emerald-800 text-center font-sans shadow-2xs">
+                <div className="text-[10px] font-bold uppercase text-emerald-700 flex items-center justify-center gap-1">
+                  <span>✓ Digitally Accepted &amp; Confirmed</span>
+                </div>
+                <div className="text-[9px] text-zinc-600 font-mono mt-0.5">
+                  Confirmed by: {quotation.acceptedBy || quotation.customer || "Client"}
+                </div>
+              </div>
+            ) : (
+              <div className="h-6" />
+            )}
+            <div className="pt-2 border-t border-zinc-300 text-center">
               <p className="font-bold text-zinc-900">{quotation.customer}</p>
-              <p className="text-[10px] text-zinc-400">Authorized Signature &amp; Company Seal</p>
+              <p className="text-[10px] text-zinc-400">
+                {quotation.status === "Accepted" || quotation.clientAccepted ? "✓ Verified Online Acceptance" : "Authorized Signature & Company Seal"}
+              </p>
             </div>
           </div>
 

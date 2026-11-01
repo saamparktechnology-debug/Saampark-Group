@@ -24,6 +24,8 @@ import {
 import { UserService } from "@/services/apiServices"
 import { QuotationService, EstimateService } from "@/services/salesService"
 import { numberToIndianWords } from "@/app/feature/sales/invoices/components/OfficialInvoiceDocument"
+import { lookupPincode } from "@/lib/pincodeService"
+import { addSubscription } from "@/app/feature/subscriptions/services/subscriptionService"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 
@@ -188,12 +190,36 @@ export function DocumentStudioModal({
   const [isClientSearchOpen, setIsClientSearchOpen] = React.useState(false)
 
   const [clientName, setClientName] = React.useState("")
+  const [clientDesignation, setClientDesignation] = React.useState<string>(initialData?.clientDesignation || "Proprietor")
+  const [customDesignation, setCustomDesignation] = React.useState<string>("")
   const [clientEmail, setClientEmail] = React.useState("")
   const [clientPhone, setClientPhone] = React.useState("")
   const [clientAddress, setClientAddress] = React.useState("")
+  const [clientPincode, setClientPincode] = React.useState(initialData?.clientPincode || initialData?.zip || "")
+  const [clientDistrict, setClientDistrict] = React.useState(initialData?.clientDistrict || initialData?.district || "")
   const [clientCity, setClientCity] = React.useState("")
   const [clientState, setClientState] = React.useState("")
   const [clientGst, setClientGst] = React.useState("")
+  const [pincodePlaces, setPincodePlaces] = React.useState<string[]>([])
+  const [pincodeDistricts, setPincodeDistricts] = React.useState<string[]>([])
+  const [pincodeStates, setPincodeStates] = React.useState<string[]>([])
+  const [isPincodeLoading, setIsPincodeLoading] = React.useState<boolean>(false)
+
+  // Primary Category (Website, Software, Android/Ios, Cloud and domain, Custom)
+  const [primaryCategory, setPrimaryCategory] = React.useState<string>(() => {
+    return initialData?.primaryCategory || initialData?.category || "Website"
+  })
+  const [customPrimaryCategory, setCustomPrimaryCategory] = React.useState<string>("")
+
+  // Payment Plan & Settlement Structure (Order: Full, Part (EMI), Advance, Subscription)
+  const [paymentPlan, setPaymentPlan] = React.useState<"full" | "part" | "advance" | "subscription">(
+    initialData?.paymentPlan || "full"
+  )
+  const [advanceAmount, setAdvanceAmount] = React.useState<number | "">(
+    initialData?.advanceAmount !== undefined ? initialData.advanceAmount : ""
+  )
+  const [subscriptionCycle, setSubscriptionCycle] = React.useState<"Monthly" | "Weekly" | "Quarterly" | "Yearly">("Monthly")
+  const [subscriptionMonths, setSubscriptionMonths] = React.useState<number>(3)
 
   // 3. Document Identification
   const [docNumber, setDocNumber] = React.useState("")
@@ -320,16 +346,40 @@ export function DocumentStudioModal({
     return gen
   }
 
+  const handlePincodeChange = async (pin: string) => {
+    setClientPincode(pin)
+    const cleanPin = pin.trim().replace(/\D/g, "")
+    if (cleanPin.length === 6) {
+      setIsPincodeLoading(true)
+      const res = await lookupPincode(cleanPin)
+      setIsPincodeLoading(false)
+      if (res && res.status === "Success") {
+        setPincodePlaces(res.places || [])
+        setPincodeDistricts(res.districts || [])
+        setPincodeStates(res.states || [])
+        if (res.state) setClientState(res.state)
+        if (res.district) setClientDistrict(res.district)
+        if (res.places && res.places.length > 0) setClientCity(res.places[0])
+      }
+    }
+  }
+
   const handleSelectClient = (c: ClientItem) => {
     setSelectedClient(c)
     setClientName(c.name || "")
+    setClientDesignation((c as any).designation || "Proprietor")
     setClientEmail(c.email || "")
     setClientPhone(c.phone || "")
     setClientAddress(c.address || "")
     setClientCity(c.city || "")
+    setClientDistrict((c as any).district || "")
     setClientState(c.state || "")
+    setClientPincode(c.zip || "")
     setClientGst(c.gstNumber || c.vatNumber || "")
     setIsClientSearchOpen(false)
+    if (c.zip) {
+      handlePincodeChange(c.zip)
+    }
   }
 
   // Load clients, branches, team members & sync document state with initialData or blank state
@@ -642,18 +692,39 @@ export function DocumentStudioModal({
 
     setIsSubmitting(true)
     try {
+      const effectiveCategory = primaryCategory === "Custom" ? (customPrimaryCategory.trim() || "Custom") : primaryCategory
+      const effectiveDesignation = clientDesignation === "Other" ? (customDesignation.trim() || "Client") : clientDesignation
+      const effectiveProjectName = items[0]?.serviceName?.trim() || effectiveCategory || "Client Project"
+
+      const effectiveAdvance = paymentPlan === "full"
+        ? grandTotal
+        : paymentPlan === "advance"
+          ? (typeof advanceAmount === "number" ? advanceAmount : 0)
+          : paymentPlan === "part"
+            ? (typeof advanceAmount === "number" && advanceAmount > 0 ? advanceAmount : Math.round(grandTotal / (subscriptionMonths || 3)))
+            : 0
+
+      const effectiveDue = Math.max(0, grandTotal - effectiveAdvance)
+
       const finalDocPayload: any = {
         id: docNumber,
         invoiceNumber: docNumber,
         number: docNumber,
         client: String(clientName || selectedClient?.name || "Client"),
+        clientDesignation: effectiveDesignation,
         clientEmail: clientEmail || selectedClient?.email,
         clientPhone: clientPhone || selectedClient?.phone,
         clientAddress: clientAddress || selectedClient?.address,
+        clientPincode: clientPincode || selectedClient?.zip,
+        clientDistrict: clientDistrict || (selectedClient as any)?.district,
         clientCity: clientCity || selectedClient?.city,
         clientState: clientState || selectedClient?.state,
         clientGstin: clientGst || selectedClient?.gstNumber,
-        project: projectTitle,
+        category: effectiveCategory,
+        primaryCategory: effectiveCategory,
+        project: effectiveProjectName,
+        paymentPlan: paymentPlan,
+        paymentStructure: paymentPlan === "full" ? "Full Payment" : paymentPlan === "part" ? "Part (EMI)" : paymentPlan === "advance" ? "Advance Payment" : "Subscription",
         overview: projectOverview,
         timeline: projectTimeline,
         turnaroundTime: turnaroundTime,
@@ -675,9 +746,9 @@ export function DocumentStudioModal({
         tax: calculatedGst,
         totalInvoiced: `₹${grandTotal.toLocaleString("en-IN")}`,
         total: grandTotal,
-        paymentReceived: "₹0",
-        due: grandTotal,
-        status: "Draft",
+        paymentReceived: `₹${effectiveAdvance.toLocaleString("en-IN")}`,
+        due: `₹${effectiveDue.toLocaleString("en-IN")}`,
+        status: effectiveDue === 0 ? "Fully paid" : effectiveAdvance > 0 ? "Partially paid" : "Not paid",
         companyId: companyId,
         branchId: branchId || undefined,
         subBranchId: subBranchId || undefined,
@@ -693,6 +764,36 @@ export function DocumentStudioModal({
         memberPayoutValue: assignedMembers.length > 0 ? assignedMembers[0].payoutValue : undefined,
       }
 
+      // Auto-save client if custom or new
+      if (clientMode === "custom" || (!selectedClient && clientName.trim())) {
+        try {
+          await saveStoredClient({
+            id: `cli_${Date.now()}`,
+            name: clientName.trim(),
+            primaryContact: clientName.trim(),
+            designation: effectiveDesignation,
+            phone: clientPhone,
+            email: clientEmail,
+            address: clientAddress,
+            city: clientCity,
+            district: clientDistrict,
+            state: clientState,
+            zip: clientPincode,
+            gstNumber: clientGst,
+            companyId: companyId,
+            group: "Standard",
+            label: "Active",
+            labelColor: "#3B82F6",
+            projectsCount: 1,
+            totalInvoiced: `₹${grandTotal.toLocaleString("en-IN")}`,
+            paymentReceived: `₹${effectiveAdvance.toLocaleString("en-IN")}`,
+            due: `₹${effectiveDue.toLocaleString("en-IN")}`,
+          })
+        } catch (cErr) {
+          console.warn("Auto-save client error:", cErr)
+        }
+      }
+
       if (mode === "invoice") {
         let saved
         if (initialData?.id) {
@@ -701,12 +802,39 @@ export function DocumentStudioModal({
           saved = await addInvoice(finalDocPayload)
         }
 
-        // Auto-link/create project in Projects module if project reference is provided
-        if (projectTitle && projectTitle.trim()) {
+        // If subscription based, auto create in Subscription section
+        if (paymentPlan === "subscription" || paymentPlan === "part") {
+          try {
+            const recurringVal = paymentPlan === "subscription"
+              ? (items[0]?.rate || grandTotal)
+              : Math.round(grandTotal / (subscriptionMonths || 3))
+
+            await addSubscription({
+              clientId: selectedClient?.id ? String(selectedClient.id) : undefined,
+              clientName: String(clientName || selectedClient?.name || "Client"),
+              clientEmail: clientEmail || selectedClient?.email,
+              clientPhone: clientPhone || selectedClient?.phone,
+              clientCompany: selectedClient?.companyName || clientName || "Client",
+              planName: `${effectiveCategory} - ${items[0]?.serviceName || effectiveProjectName} (${paymentPlan === "subscription" ? subscriptionCycle : `${subscriptionMonths}-Month Part Payment / EMI`})`,
+              status: "Active",
+              amount: `₹${recurringVal.toLocaleString("en-IN")}`,
+              numericAmount: recurringVal,
+              billingCycle: paymentPlan === "subscription" ? subscriptionCycle : "Monthly",
+              startDate: issueDate || new Date().toISOString().split("T")[0],
+              nextBillingDate: dueDate || new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
+              notes: `Auto-generated from Invoice #${docNumber} (${paymentPlan.toUpperCase()}) - Primary Category: ${effectiveCategory}`,
+            }, companyId)
+          } catch (subErr) {
+            console.warn("Auto-create subscription error:", subErr)
+          }
+        }
+
+        // Auto-link/create project in Projects module
+        if (effectiveProjectName && effectiveProjectName.trim()) {
           try {
             const { getProjects, addProject } = await import("@/app/feature/projects/services/projectService")
             const existingProjects = await getProjects(companyId)
-            const cleanTitle = projectTitle.trim()
+            const cleanTitle = effectiveProjectName.trim()
             const found = existingProjects.find(p => p.title.toLowerCase().trim() === cleanTitle.toLowerCase())
             if (!found) {
               await addProject({
@@ -717,20 +845,20 @@ export function DocumentStudioModal({
                 price: `₹${grandTotal.toLocaleString("en-IN")}`,
                 startDate: issueDate || new Date().toISOString().split("T")[0],
                 deadline: dueDate || new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
-                progress: 15,
-                status: "In Progress",
-                paymentStatus: "Payment Pending",
+                progress: effectiveAdvance > 0 ? 15 : 0,
+                status: effectiveDue === 0 ? "Completed" : "In Progress",
+                paymentStatus: effectiveDue === 0 ? "Paid" : effectiveAdvance > 0 ? "Partially Paid" : "Payment Pending",
                 baseAmount: taxableBase,
                 totalAmount: grandTotal,
                 companyId: companyId,
                 branchId: branchId || undefined,
                 subBranchId: subBranchId || undefined,
-                labels: ["Client Project", "Invoice Generated"],
-                description: `Project for ${clientName || "Client"} - Invoice #${docNumber}`,
+                labels: ["Client Project", effectiveCategory, paymentPlan.toUpperCase()],
+                description: `Project for ${clientName || "Client"} - Invoice #${docNumber}. Category: ${effectiveCategory}`,
               }, companyId)
             }
-          } catch (err) {
-            console.warn("Auto-create project error:", err)
+          } catch (projErr) {
+            console.warn("Auto-create project error:", projErr)
           }
         }
 
@@ -1894,31 +2022,142 @@ export function DocumentStudioModal({
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
                       <div>
                         <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Client / Organization Name *</label>
-                        <Input value={clientName} onChange={e => setClientName(e.target.value)} placeholder="Client Name" />
+                        <Input value={clientName} onChange={e => setClientName(e.target.value)} placeholder="Client / Company Name" />
                       </div>
+
+                      {/* Designation Dropdown */}
+                      <div>
+                        <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Contact Designation *</label>
+                        <select
+                          value={clientDesignation}
+                          onChange={e => setClientDesignation(e.target.value)}
+                          className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-bold text-xs"
+                        >
+                          <option value="Proprietor">Proprietor</option>
+                          <option value="Manager">Manager</option>
+                          <option value="Founder">Founder</option>
+                          <option value="CEO">CEO</option>
+                          <option value="Director">Director</option>
+                          <option value="Partner">Partner</option>
+                          <option value="Other">Other (Custom)</option>
+                        </select>
+                        {clientDesignation === "Other" && (
+                          <Input
+                            value={customDesignation}
+                            onChange={e => setCustomDesignation(e.target.value)}
+                            placeholder="Type designation..."
+                            className="mt-1.5 text-xs font-bold"
+                          />
+                        )}
+                      </div>
+
+                      {/* Client Phone (Printed in invoice) */}
+                      <div>
+                        <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5 flex items-center justify-between">
+                          <span>Phone Number *</span>
+                          <span className="text-[9px] text-teal-600 font-bold">Printed on Invoice</span>
+                        </label>
+                        <Input
+                          value={clientPhone}
+                          onChange={e => setClientPhone(e.target.value)}
+                          placeholder="+91 98765 43210"
+                          className="font-bold font-mono"
+                        />
+                      </div>
+
                       <div>
                         <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Client Email</label>
                         <Input value={clientEmail} onChange={e => setClientEmail(e.target.value)} placeholder="client@company.com" />
                       </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Client Phone</label>
-                        <Input value={clientPhone} onChange={e => setClientPhone(e.target.value)} placeholder="+91 98765 43210" />
-                      </div>
+
                       <div>
                         <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Client GSTIN (if applicable)</label>
                         <Input value={clientGst} onChange={e => setClientGst(e.target.value.toUpperCase())} className="font-mono uppercase" placeholder="19AAAAA0000A1Z5" />
                       </div>
-                      <div className="sm:col-span-2">
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5 flex items-center justify-between">
+                          <span>Postal PIN Code</span>
+                          {isPincodeLoading ? (
+                            <span className="text-[9px] text-blue-600 font-bold animate-pulse">Fetching API...</span>
+                          ) : (
+                            <span className="text-[9px] text-zinc-400">6-digit PIN</span>
+                          )}
+                        </label>
+                        <Input
+                          value={clientPincode}
+                          onChange={e => handlePincodeChange(e.target.value)}
+                          placeholder="e.g. 700001"
+                          maxLength={6}
+                          className="font-mono font-bold"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-3">
                         <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Street Address</label>
-                        <Input value={clientAddress} onChange={e => setClientAddress(e.target.value)} placeholder="Street address" />
+                        <Input value={clientAddress} onChange={e => setClientAddress(e.target.value)} placeholder="Plot, Suite, Building, Street..." />
+                      </div>
+
+                      {/* City Dropdown / Input */}
+                      <div>
+                        <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">City / Post Office</label>
+                        {pincodePlaces.length > 0 ? (
+                          <select
+                            value={clientCity}
+                            onChange={e => setClientCity(e.target.value)}
+                            className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-bold text-xs"
+                          >
+                            {pincodePlaces.map(p => (
+                              <option key={p} value={p}>{p}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <Input value={clientCity} onChange={e => setClientCity(e.target.value)} placeholder="City" />
+                        )}
+                      </div>
+
+                      {/* District Dropdown / Input */}
+                      <div>
+                        <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">District</label>
+                        {pincodeDistricts.length > 0 ? (
+                          <select
+                            value={clientDistrict}
+                            onChange={e => setClientDistrict(e.target.value)}
+                            className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-bold text-xs"
+                          >
+                            {pincodeDistricts.map(d => (
+                              <option key={d} value={d}>{d}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <Input value={clientDistrict} onChange={e => setClientDistrict(e.target.value)} placeholder="District" />
+                        )}
+                      </div>
+
+                      {/* State Dropdown / Input */}
+                      <div>
+                        <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">State</label>
+                        {pincodeStates.length > 0 ? (
+                          <select
+                            value={clientState}
+                            onChange={e => setClientState(e.target.value)}
+                            className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-bold text-xs"
+                          >
+                            {pincodeStates.map(s => (
+                              <option key={s} value={s}>{s}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <Input value={clientState} onChange={e => setClientState(e.target.value)} placeholder="State" />
+                        )}
                       </div>
                     </div>
                   </div>
 
-                  {/* Invoice Identification */}
+                  {/* Invoice Identification & Primary Category */}
                   <div className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-3">
                     <span className="font-extrabold text-zinc-800 dark:text-zinc-200 block border-b border-zinc-200 dark:border-zinc-700/60 pb-2 text-xs">
-                      Invoice Reference &amp; Dates
+                      Invoice Reference, Dates &amp; Primary Category
                     </span>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
@@ -1933,9 +2172,48 @@ export function DocumentStudioModal({
                         <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Due Date</label>
                         <Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
                       </div>
+
+                      {/* Primary Category (Replacing "Enterprise Solutions") */}
                       <div className="sm:col-span-3">
-                        <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Project Reference / Job</label>
-                        <Input value={projectTitle} onChange={e => setProjectTitle(e.target.value)} placeholder="e.g. ERP System Development" />
+                        <label className="block text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300 mb-1 flex items-center justify-between">
+                          <span className="flex items-center gap-1">
+                            <Tag size={12} className="text-teal-600" />
+                            <span>Primary Billing Category (Replaces static Enterprise Solution) *</span>
+                          </span>
+                          <span className="text-[9.5px] text-teal-600 font-bold">Printed on Invoice Header &amp; Scope</span>
+                        </label>
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                          {[
+                            { id: "Website", label: "🌐 Website" },
+                            { id: "Software", label: "💻 Software" },
+                            { id: "Android/Ios", label: "📱 Android / iOS" },
+                            { id: "Cloud and domain", label: "☁️ Cloud & Domain" },
+                            { id: "Custom", label: "✨ Custom" },
+                          ].map(cat => (
+                            <button
+                              key={cat.id}
+                              type="button"
+                              onClick={() => setPrimaryCategory(cat.id)}
+                              className={`p-2.5 rounded-xl border text-center font-bold text-xs transition-all cursor-pointer ${
+                                primaryCategory === cat.id
+                                  ? "border-teal-600 bg-teal-50 dark:bg-teal-950/60 text-teal-800 dark:text-teal-200 ring-1 ring-teal-500 shadow-2xs"
+                                  : "border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:border-zinc-300"
+                              }`}
+                            >
+                              {cat.label}
+                            </button>
+                          ))}
+                        </div>
+                        {primaryCategory === "Custom" && (
+                          <div className="mt-2">
+                            <Input
+                              value={customPrimaryCategory}
+                              onChange={e => setCustomPrimaryCategory(e.target.value)}
+                              placeholder="Type custom primary category (e.g. AI Automation, Cybersecurity)..."
+                              className="font-bold text-xs"
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -2004,8 +2282,8 @@ export function DocumentStudioModal({
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
-                              <div className="sm:col-span-5">
-                                <label className="block text-[10px] font-bold text-zinc-500 mb-0.5">Service Description *</label>
+                              <div className="sm:col-span-4">
+                                <label className="block text-[10px] font-bold text-zinc-500 mb-0.5">Service / Project Item *</label>
                                 <Input value={item.serviceName} onChange={e => handleUpdateItem(item.id, "serviceName", e.target.value)} className="font-bold" />
                               </div>
                               {docScheme === "gst" && (
@@ -2018,7 +2296,22 @@ export function DocumentStudioModal({
                                 <label className="block text-[10px] font-bold text-zinc-500 mb-0.5">Qty</label>
                                 <Input type="number" min="1" value={item.qty} onChange={e => handleUpdateItem(item.id, "qty", Math.max(1, Number(e.target.value)))} />
                               </div>
-                              <div className={docScheme === "gst" ? "sm:col-span-3" : "sm:col-span-5"}>
+                              {/* Quantity & Unit Dropdown */}
+                              <div className="sm:col-span-2">
+                                <label className="block text-[10px] font-bold text-zinc-500 mb-0.5">Unit</label>
+                                <select
+                                  value={item.unit || "Qty"}
+                                  onChange={e => handleUpdateItem(item.id, "unit", e.target.value)}
+                                  className="w-full px-2 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-bold"
+                                >
+                                  <option value="Qty">Qty</option>
+                                  <option value="Unit">Unit</option>
+                                  <option value="Weekly">Weekly</option>
+                                  <option value="Monthly">Monthly</option>
+                                  <option value="Yearly">Yearly</option>
+                                </select>
+                              </div>
+                              <div className={docScheme === "gst" ? "sm:col-span-2" : "sm:col-span-4"}>
                                 <label className="block text-[10px] font-bold text-zinc-500 mb-0.5">Rate (₹) *</label>
                                 <Input type="number" min="0" value={item.rate} onChange={e => handleUpdateItem(item.id, "rate", Math.max(0, Number(e.target.value)))} className="font-bold text-emerald-600" />
                               </div>
@@ -2073,6 +2366,159 @@ export function DocumentStudioModal({
                         Amount in words: {numberToIndianWords(grandTotal)}
                       </div>
                     </div>
+                  </div>
+
+                  {/* Payment Plan & Settlement Structure (Order: Full, Part (EMI), Advance, Subscription) */}
+                  <div className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-700/60 pb-2">
+                      <span className="font-extrabold text-zinc-800 dark:text-zinc-200 text-xs flex items-center gap-1.5">
+                        <Calculator size={15} className="text-teal-600" />
+                        <span>Payment Plan &amp; Settlement Structure</span>
+                      </span>
+
+                      {/* 1. Full, 2. Part (EMI), 3. Advance, 4. Subscription */}
+                      <div className="flex items-center gap-1 bg-white dark:bg-zinc-900 p-1 rounded-xl border border-zinc-200 dark:border-zinc-700 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => setPaymentPlan("full")}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            paymentPlan === "full" ? "bg-teal-600 text-white shadow-xs" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
+                          }`}
+                        >
+                          1. 💳 Full
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPaymentPlan("part")}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            paymentPlan === "part" ? "bg-teal-600 text-white shadow-xs" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
+                          }`}
+                        >
+                          2. 🔄 Part (EMI)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPaymentPlan("advance")}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            paymentPlan === "advance" ? "bg-teal-600 text-white shadow-xs" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
+                          }`}
+                        >
+                          3. 🪙 Advance
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPaymentPlan("subscription")}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            paymentPlan === "subscription" ? "bg-teal-600 text-white shadow-xs" : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
+                          }`}
+                        >
+                          4. 🗓️ Subscription
+                        </button>
+                      </div>
+                    </div>
+
+                    {paymentPlan === "full" && (
+                      <div className="p-3 bg-white dark:bg-zinc-900 rounded-xl border border-teal-200 dark:border-teal-800 text-xs flex items-center justify-between">
+                        <span className="text-zinc-600 dark:text-zinc-400">
+                          100% Full Payment Settlement. Full invoice balance marked as settled upon receipt.
+                        </span>
+                        <span className="font-mono font-bold text-teal-600">Total: ₹{grandTotal.toLocaleString("en-IN")}</span>
+                      </div>
+                    )}
+
+                    {paymentPlan === "part" && (
+                      <div className="p-3 bg-white dark:bg-zinc-900 rounded-xl border border-blue-200 dark:border-blue-800 space-y-2 text-xs">
+                        <div className="flex items-center justify-between">
+                          <label className="font-bold text-blue-900 dark:text-blue-200">
+                            Part Payment / Installment Period:
+                          </label>
+                          <div className="flex gap-1.5">
+                            {[3, 6, 12].map(m => (
+                              <button
+                                key={m}
+                                type="button"
+                                onClick={() => setSubscriptionMonths(m)}
+                                className={`px-2 py-0.5 rounded text-xs font-bold cursor-pointer ${
+                                  subscriptionMonths === m ? "bg-blue-600 text-white" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600"
+                                }`}
+                              >
+                                {m} Months
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between text-zinc-600 text-[11px] pt-1 border-t border-zinc-100 dark:border-zinc-800">
+                          <span>Monthly EMI: <strong className="font-mono text-blue-600">₹{Math.round(grandTotal / subscriptionMonths).toLocaleString("en-IN")}/mo</strong></span>
+                          <span className="text-blue-600 font-semibold">Auto-registers in Subscription section</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {paymentPlan === "advance" && (
+                      <div className="p-3 bg-white dark:bg-zinc-900 rounded-xl border border-emerald-200 dark:border-emerald-800 space-y-2 text-xs">
+                        <div className="flex items-center justify-between">
+                          <label className="font-bold text-emerald-800 dark:text-emerald-300">
+                            Advance Down Payment Amount (₹)
+                          </label>
+                          <div className="flex gap-1">
+                            {[0.25, 0.50].map(pct => (
+                              <button
+                                key={pct}
+                                type="button"
+                                onClick={() => setAdvanceAmount(Math.round(grandTotal * pct))}
+                                className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-bold cursor-pointer"
+                              >
+                                {pct * 100}%
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={advanceAmount}
+                          onChange={e => setAdvanceAmount(e.target.value === "" ? "" : Math.max(0, Number(e.target.value)))}
+                          placeholder="e.g. 10000"
+                          className="font-mono font-bold"
+                        />
+                        <div className="flex justify-between text-[11px] text-zinc-500 pt-0.5">
+                          <span>Advance Paid: <strong className="text-emerald-600 font-mono">₹{(typeof advanceAmount === "number" ? advanceAmount : 0).toLocaleString("en-IN")}</strong></span>
+                          <span>Balance Due: <strong className="text-rose-600 font-mono">₹{Math.max(0, grandTotal - (typeof advanceAmount === "number" ? advanceAmount : 0)).toLocaleString("en-IN")}</strong></span>
+                        </div>
+                      </div>
+                    )}
+
+                    {paymentPlan === "subscription" && (
+                      <div className="p-3 bg-white dark:bg-zinc-900 rounded-xl border border-purple-200 dark:border-purple-800 space-y-2 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-purple-900 dark:text-purple-200 flex items-center gap-1">
+                            <span>🗓️ Recurring Subscription Cycle</span>
+                          </span>
+                          <span className="text-[10px] text-purple-600 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded font-bold">
+                            Syncs to Subscriptions Section
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-4 gap-2">
+                          {(["Weekly", "Monthly", "Quarterly", "Yearly"] as const).map(cycle => (
+                            <button
+                              key={cycle}
+                              type="button"
+                              onClick={() => setSubscriptionCycle(cycle)}
+                              className={`p-2 rounded-lg border text-center font-bold text-xs cursor-pointer transition-all ${
+                                subscriptionCycle === cycle
+                                  ? "border-purple-600 bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 ring-1 ring-purple-500"
+                                  : "border-zinc-200 dark:border-zinc-700 bg-zinc-50 text-zinc-600"
+                              }`}
+                            >
+                              {cycle}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-[10.5px] text-zinc-500 pt-1">
+                          📌 Project will automatically be added to the <strong>Subscription section</strong> with <strong>{subscriptionCycle}</strong> billing cycle of <strong>₹{(items[0]?.rate || grandTotal).toLocaleString("en-IN")}</strong>.
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Notes & Terms */}

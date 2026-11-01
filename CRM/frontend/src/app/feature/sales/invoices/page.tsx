@@ -77,11 +77,11 @@ function InvoicesPageContent() {
   const { user, activeCompanyId, activeBranchId, branches, subBranches, companies } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
 
+  const isClientRole = user?.role === "Clients" || user?.role?.toLowerCase().includes("client")
   const canViewInvoice = canPerformAction(user, "Invoices", "view")
-  const canAddInvoice = canPerformAction(user, "Invoices", "add")
-  const canEditInvoice = canPerformAction(user, "Invoices", "edit")
-  const canDeleteInvoice = canPerformAction(user, "Invoices", "delete")
-  const isClientRole = user?.role === "Clients"
+  const canAddInvoice = !isClientRole && canPerformAction(user, "Invoices", "add")
+  const canEditInvoice = !isClientRole && canPerformAction(user, "Invoices", "edit")
+  const canDeleteInvoice = !isClientRole && canPerformAction(user, "Invoices", "delete")
   const clientEmailNorm = (user?.email || "").toLowerCase().trim()
   const clientNameNorm = (user?.name || "").toLowerCase().trim()
 
@@ -1309,6 +1309,14 @@ function InvoicesPageContent() {
             <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border ${colorClass}`}>
               {status}
             </span>
+            {inv.clientAccepted && (
+              <span 
+                className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center gap-0.5" 
+                title={`Accepted by client: ${inv.acceptedBy || inv.client || 'Client'}${inv.acceptedAt ? ` on ${new Date(Number(inv.acceptedAt) || inv.acceptedAt).toLocaleDateString('en-IN')}` : ''}`}
+              >
+                ✓ Client Accepted
+              </span>
+            )}
             {overdue && (
               <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold uppercase tracking-wider bg-rose-600 text-white animate-pulse">
                 Overdue
@@ -1507,22 +1515,12 @@ function InvoicesPageContent() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setIsAddClientProjectModalOpen(true)}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm cursor-pointer"
-                title="Create Invoice with Project (Full Billing, Team Attribution, & Milestones)"
-              >
-                <Plus size={14} />
-                <span>+ Create Invoice &amp; Project</span>
-              </button>
-
-              <button
-                type="button"
                 onClick={() => setIsAddModalOpen(true)}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-teal-700 dark:text-teal-300 bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/40 dark:hover:bg-teal-900/60 border border-teal-200 dark:border-teal-800 rounded-lg transition-colors shadow-2xs cursor-pointer"
-                title="Open Interactive Split-Screen Live Document Studio"
+                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-md shadow-blue-500/20 cursor-pointer"
+                title="Create Official Tax Invoice (Select or Type Client, Primary Category, Settlement Plan & Subscription)"
               >
-                <Receipt size={14} />
-                <span>🎨 Studio Invoice</span>
+                <Plus size={15} />
+                <span>+ Create Invoice</span>
               </button>
             </div>
           )}

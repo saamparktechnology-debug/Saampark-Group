@@ -54,13 +54,7 @@ interface EditLeadModalProps {
   onDeleteLead?: (leadId: string) => void
 }
 
-const STANDARD_SERVICES = [
-  "Website Development",
-  "Software Development",
-  "Android/iOS",
-  "Digital Marketing",
-  "Domain & Hosting",
-]
+// Pure custom service input for client leads without hardcoded presets
 
 const STANDARD_SOURCES = [
   "Social Media",
@@ -198,26 +192,10 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
       setSelectedCompanyId(lead.companyId || activeCompanyId || user?.companyId || "tech")
       setSelectedBranchId(lead.branchId || activeBranchId || user?.branchId || "")
 
-      // Multi-service initialization
-      const rawSvcs = (lead.service || "Website Devlopment").split(/,\s*/).filter(Boolean)
-      const stdSelected: string[] = []
-      const customParts: string[] = []
-
-      rawSvcs.forEach((s) => {
-        if (STANDARD_SERVICES.includes(s)) {
-          stdSelected.push(s)
-        } else {
-          customParts.push(s)
-        }
-      })
-
-      if (customParts.length > 0) {
-        stdSelected.push("Others")
-        setCustomService(customParts.join(", "))
-      } else {
-        setCustomService("")
-      }
-      setSelectedServices(stdSelected.length > 0 ? stdSelected : ["Website Devlopment"])
+      // Multi-service initialization (purely custom services)
+      const rawSvcs = (lead.service || "").split(/,\s*/).map(s => s.trim()).filter(Boolean)
+      setSelectedServices(rawSvcs)
+      setCustomService("")
 
       // Reminder Date initialization
       const rawDate = lead.reminderDate || ""
@@ -272,8 +250,8 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
       return
     }
 
-    const activeSvcs = selectedServices.map((s) => (s === "Others" ? (customService.trim() || "Custom Service") : s)).filter(Boolean)
-    const finalService = activeSvcs.length > 0 ? activeSvcs.join(", ") : ""
+    const allEnteredServices = [...selectedServices, customService.trim()].filter(Boolean)
+    const finalService = allEnteredServices.length > 0 ? Array.from(new Set(allEnteredServices)).join(", ") : ""
     const finalSource = source === "Others" ? (customSource.trim() || "Custom Source") : source
     const effectiveCaller = (caller && caller !== "None" && caller !== "Unassigned") ? caller : "None"
     const effectiveOwner = effectiveCaller !== "None" ? effectiveCaller : "None"
@@ -543,51 +521,65 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
             </select>
           </div>
 
-          {/* Services Multi-Select Compact Chips */}
+          {/* Custom Services Tag Input (No preset examples) */}
           <div className="grid grid-cols-4 items-start gap-3">
             <label className="text-zinc-500 font-medium flex items-center gap-1 pt-1">
               <Wrench size={13} className="text-zinc-400" />
               <span>Services</span>
             </label>
-            <div className="col-span-3 space-y-1.5 bg-zinc-50 dark:bg-zinc-800/60 p-2 rounded-lg border border-zinc-200 dark:border-zinc-700">
-              <div className="flex flex-wrap gap-1.5 text-xs">
-                {STANDARD_SERVICES.map((s) => {
-                  const isSelected = selectedServices.includes(s)
-                  return (
-                    <button
-                      type="button"
-                      key={s}
-                      onClick={() => toggleService(s)}
-                      className={`px-2 py-0.5 rounded-md text-[11px] font-medium border transition-all cursor-pointer ${
-                        isSelected
-                          ? "bg-blue-600 text-white border-blue-600 shadow-2xs font-semibold"
-                          : "bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-zinc-400"
-                      }`}
-                    >
-                      {s}
-                    </button>
-                  )
-                })}
-                <button
-                  type="button"
-                  onClick={() => toggleService("Others")}
-                  className={`px-2 py-0.5 rounded-md text-[11px] font-medium border transition-all cursor-pointer ${
-                    selectedServices.includes("Others")
-                      ? "bg-blue-600 text-white border-blue-600 shadow-2xs font-semibold"
-                      : "bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-zinc-400"
-                  }`}
-                >
-                  Others
-                </button>
-              </div>
-              {selectedServices.includes("Others") && (
+            <div className="col-span-3 space-y-2 bg-zinc-50 dark:bg-zinc-800/60 p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700">
+              <div className="flex gap-1.5">
                 <input
                   type="text"
-                  placeholder="Type custom service name..."
+                  placeholder="Type custom service (e.g. ERP Development) & press Enter or Add..."
                   value={customService}
                   onChange={(e) => setCustomService(e.target.value)}
-                  className="w-full mt-1 px-2.5 py-1 bg-white dark:bg-zinc-900 border border-blue-200 dark:border-blue-800 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 text-xs"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === ",") {
+                      e.preventDefault()
+                      const val = customService.trim().replace(/^,+|,+$/g, '')
+                      if (val && !selectedServices.includes(val)) {
+                        setSelectedServices((prev) => [...prev, val])
+                        setCustomService("")
+                      }
+                    }
+                  }}
+                  className="flex-1 px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 text-xs"
                 />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const val = customService.trim().replace(/^,+|,+$/g, '')
+                    if (val && !selectedServices.includes(val)) {
+                      setSelectedServices((prev) => [...prev, val])
+                      setCustomService("")
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold cursor-pointer shrink-0"
+                >
+                  + Add
+                </button>
+              </div>
+
+              {selectedServices.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-0.5">
+                  {selectedServices.map((s) => (
+                    <span
+                      key={s}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
+                    >
+                      <span>{s}</span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedServices((prev) => prev.filter((item) => item !== s))}
+                        className="hover:text-rose-600 ml-0.5 text-zinc-400 font-bold cursor-pointer"
+                        title="Remove service"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
               )}
             </div>
           </div>

@@ -45,14 +45,20 @@ export interface AssignedMemberAttribution {
 export interface InvoiceItem {
   id: string
   client: string
+  clientDesignation?: string
   clientEmail?: string
   clientPhone?: string
   clientAddress?: string
+  clientDistrict?: string
   clientCity?: string
   clientState?: string
   clientGstin?: string
   clientId?: string
   project: string
+  category?: string
+  primaryCategory?: string
+  paymentPlan?: string
+  paymentStructure?: string
   invoiceType?: "gst" | "nongst"
   companyName?: string
   notes?: string
@@ -71,6 +77,10 @@ export interface InvoiceItem {
   paymentReceived: string
   due: string
   status: InvoiceStatus
+  clientAccepted?: boolean
+  acceptedAt?: number | string
+  acceptedBy?: string
+  clientAcceptNotes?: string
   approvalStatus?: "pending" | "approved" | "rejected"
   rejectionReason?: string
   billedBy?: string
@@ -994,4 +1004,39 @@ export const deleteInvoice = async (id: string, companyId?: string): Promise<boo
 
   return true
 }
+
+export const clientAcceptInvoice = async (
+  invoiceId: string, 
+  clientName?: string, 
+  notes?: string, 
+  companyId?: string
+): Promise<InvoiceItem> => {
+  const allInvoices = await getInvoices("all")
+  const strId = String(invoiceId).toUpperCase().trim()
+  const target = allInvoices.find(i => String(i.id).toUpperCase().trim() === strId)
+  if (!target) throw new Error("Invoice not found")
+
+  const updated: InvoiceItem = {
+    ...target,
+    clientAccepted: true,
+    acceptedAt: Date.now(),
+    acceptedBy: clientName || target.client || "Client",
+    clientAcceptNotes: notes || target.clientAcceptNotes,
+  }
+
+  const result = await updateInvoice(updated, companyId || target.companyId)
+
+  recordActivityLog({
+    type: "invoice",
+    module: "Invoices",
+    action: "Invoice Accepted by Client",
+    description: `Invoice #${target.id} was accepted online by client "${updated.acceptedBy}"`,
+    companyId: target.companyId || companyId,
+    branchId: target.branchId,
+    branchName: target.branchName,
+  }).catch(() => {})
+
+  return result
+}
+
 

@@ -34,6 +34,9 @@ export interface EstimateItem {
   branchCode?: string
   createdAdmin?: string
   acceptedAt?: string
+  clientAccepted?: boolean
+  acceptedBy?: string
+  clientAcceptNotes?: string
   revisionNote?: string
 }
 
@@ -122,7 +125,12 @@ export const addEstimate = async (estimateData: Omit<EstimateItem, "id" | "estim
   return newEst
 }
 
-export const updateEstimateStatus = async (id: string, status: EstimateStatus, extra?: { revisionNote?: string; acceptedAt?: string }, companyId?: string): Promise<EstimateItem> => {
+export const updateEstimateStatus = async (
+  id: string, 
+  status: EstimateStatus, 
+  extra?: { revisionNote?: string; acceptedAt?: string; clientAccepted?: boolean; acceptedBy?: string; clientAcceptNotes?: string }, 
+  companyId?: string
+): Promise<EstimateItem> => {
   const strId = String(id).toLowerCase().trim()
   const current = await getEstimates(companyId)
   const idx = current.findIndex(e => String(e.id).toLowerCase().trim() === strId)
@@ -131,6 +139,7 @@ export const updateEstimateStatus = async (id: string, status: EstimateStatus, e
   current[idx] = { 
     ...current[idx], 
     status,
+    ...(status === "Accepted" ? { clientAccepted: true } : {}),
     ...(extra || {})
   }
   await saveModuleDataToDB("estimates", current, companyId)

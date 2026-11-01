@@ -45,10 +45,10 @@ interface Estimate {
 
 export default function EstimatesMain() {
   const { user, activeCompanyId, activeBranchId, branches, companies } = useAuthStore()
-  const { canPerformAction } = usePermissionStore()
-  const canAdd = canPerformAction(user, "Estimates", "add")
-  const canEdit = canPerformAction(user, "Estimates", "edit")
-  const canDelete = canPerformAction(user, "Estimates", "delete")
+  const isClientRole = user?.role === "Clients" || user?.role?.toLowerCase().includes("client")
+  const canAdd = !isClientRole && canPerformAction(user, "Estimates", "add")
+  const canEdit = !isClientRole && canPerformAction(user, "Estimates", "edit")
+  const canDelete = !isClientRole && canPerformAction(user, "Estimates", "delete")
 
   const activeCompany = companies.find(c => c.id === activeCompanyId) || companies[0]
   const companyName = getCompanyFullName(activeCompany)
@@ -432,9 +432,16 @@ export default function EstimatesMain() {
                     <td className="py-3 px-4 text-zinc-500 font-mono text-[11px]">{item.date}</td>
                     <td className="py-3 px-4 font-bold text-zinc-900 dark:text-zinc-100">₹{(item.total || 0).toLocaleString("en-IN")}</td>
                     <td className="py-3 px-4">
-                      <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${item.status === "Approved" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : item.status === "Sent" ? "bg-blue-50 text-blue-700 border-blue-200" : item.status === "Rejected" ? "bg-rose-50 text-rose-700 border-rose-200" : "bg-zinc-100 text-zinc-600 border-zinc-200"}`}>
-                        {item.status}
-                      </span>
+                      <div className="flex flex-col gap-0.5 items-start">
+                        <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${item.status === "Approved" || item.status === "Accepted" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : item.status === "Sent" ? "bg-blue-50 text-blue-700 border-blue-200" : item.status === "Rejected" ? "bg-rose-50 text-rose-700 border-rose-200" : "bg-zinc-100 text-zinc-600 border-zinc-200"}`}>
+                          {item.status}
+                        </span>
+                        {(item.status === "Approved" || item.status === "Accepted" || (item as any).clientAccepted) && (
+                          <span className="text-[9px] text-emerald-600 font-bold flex items-center gap-0.5">
+                            ✓ Accepted by Client
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center justify-center gap-1.5">

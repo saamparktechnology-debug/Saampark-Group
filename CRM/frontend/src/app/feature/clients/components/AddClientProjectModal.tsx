@@ -21,6 +21,7 @@ import { taskService } from "@/app/feature/tasks/services/taskService"
 import { saveStoredClient, getClients, formatDisplayEmail } from "../services/clientService"
 import { useAuthStore, getSelectableCompanies } from "@/store/useAuthStore"
 import { sendInvoiceDetailsEmailNotification, sendPaymentReceiptEmailNotification } from "@/services/emailNotificationService"
+import { lookupPincode } from "@/lib/pincodeService"
 
 interface AddClientProjectModalProps {
   isOpen: boolean
@@ -224,25 +225,51 @@ export function AddClientProjectModal({
   const [discountsList, setDiscountsList] = React.useState<FormDiscountItem[]>([])
 
   // 3. Payment Structure State
-  const [paymentModel, setPaymentModel] = React.useState<"advance" | "part" | "full">("advance")
+  const [paymentModel, setPaymentModel] = React.useState<"full" | "part" | "advance" | "subscription">("full")
   const [advanceAmount, setAdvanceAmount] = React.useState<number | "">("")
   const [partInitialPayment, setPartInitialPayment] = React.useState<number | "">("")
   const [installmentsCount, setInstallmentsCount] = React.useState<number>(3)
   const [subscriptionMonths, setSubscriptionMonths] = React.useState<number>(3)
   const [partPayTiming, setPartPayTiming] = React.useState<"pay_now" | "pay_after_3_months">("pay_now")
-  const [billingCycle, setBillingCycle] = React.useState<"Monthly" | "Quarterly">("Monthly")
+  const [billingCycle, setBillingCycle] = React.useState<"Monthly" | "Quarterly" | "Yearly">("Monthly")
   const [autoCreateSubscription, setAutoCreateSubscription] = React.useState<boolean>(true)
   const [paymentStatus, setPaymentStatus] = React.useState<"Payment Pending" | "Paid">("Paid")
   const [description, setDescription] = React.useState("")
   const [isSubmitting, setIsSubmitting] = React.useState(false)
 
   // Client Details State (Prefilled & Editable)
+  const [clientDesignation, setClientDesignation] = React.useState(client?.designation || "Proprietor")
+  const [clientCustomDesignation, setClientCustomDesignation] = React.useState("")
   const [clientEmail, setClientEmail] = React.useState(client?.email || "")
   const [clientPhone, setClientPhone] = React.useState(client?.phone || "")
   const [clientAddress, setClientAddress] = React.useState(client?.address || "")
+  const [clientDistrict, setClientDistrict] = React.useState(client?.district || "")
   const [clientCity, setClientCity] = React.useState(client?.city || "")
   const [clientState, setClientState] = React.useState(client?.state || "")
+  const [clientZip, setClientZip] = React.useState(client?.zip || "")
   const [clientGst, setClientGst] = React.useState(client?.gstNumber || client?.vatNumber || "")
+  const [pincodePlaces, setPincodePlaces] = React.useState<string[]>([])
+  const [pincodeDistricts, setPincodeDistricts] = React.useState<string[]>([])
+  const [pincodeStates, setPincodeStates] = React.useState<string[]>([])
+  const [isPincodeLoading, setIsPincodeLoading] = React.useState(false)
+
+  const handlePincodeChange = async (pin: string) => {
+    setClientZip(pin)
+    const cleanPin = pin.trim().replace(/\D/g, "")
+    if (cleanPin.length === 6) {
+      setIsPincodeLoading(true)
+      const res = await lookupPincode(cleanPin)
+      setIsPincodeLoading(false)
+      if (res && res.status === "Success") {
+        setPincodePlaces(res.places || [])
+        setPincodeDistricts(res.districts || [])
+        setPincodeStates(res.states || [])
+        if (res.state) setClientState(res.state)
+        if (res.district) setClientDistrict(res.district)
+        if (res.places && res.places.length > 0) setClientCity(res.places[0])
+      }
+    }
+  }
 
   const [adminsList, setAdminsList] = React.useState<{ id: string; name: string }[]>([])
   const [teamsList, setTeamsList] = React.useState<{ id: string; name: string; email?: string; role?: string; avatar?: string }[]>([])
@@ -626,6 +653,8 @@ export function AddClientProjectModal({
     effectiveAdvance = Math.min(numAdvance, totalAmount)
   } else if (paymentModel === "part") {
     effectiveAdvance = partPayTiming === "pay_after_3_months" ? 0 : Math.min(numPartInitial, totalAmount)
+  } else if (paymentModel === "subscription") {
+    effectiveAdvance = paymentStatus === "Paid" ? Math.round(totalAmount / (subscriptionMonths || 1)) : 0
   }
 
   const remainingDue = Math.max(0, totalAmount - effectiveAdvance)
@@ -840,6 +869,15 @@ export function AddClientProjectModal({
         client: effectiveClient.name,
         clientEmail: clientEmail.trim() || effectiveClient.email,
         clientId: effectiveClient.id,
+        clientDesignation: clientDesignation === "Other" ? (clientCustomDesignation.trim() || "Other") : clientDesignation,
+        clientPhone: clientPhone.trim() || effectiveClient.phone,
+        clientAddress: clientAddress.trim() || effectiveClient.address,
+        clientDistrict: clientDistrict.trim() || effectiveClient.district,
+        clientCity: clientCity.trim() || effectiveClient.city,
+        clientState: clientState.trim() || effectiveClient.state,
+        clientZip: clientZip.trim() || effectiveClient.zip,
+        clientGst: clientGst.trim() || effectiveClient.gstNumber,
+        category: effectiveCategory,
         project: projectTitle,
         billDate: startDate || now.toISOString().split("T")[0],
         billTime: billTime,
@@ -919,8 +957,8 @@ export function AddClientProjectModal({
         sendInvoiceDetailsEmailNotification(createdInvoice, effectiveClient.email || clientEmail).catch(() => null)
       }
 
-      // 4. Automatically add to Installments & Subscriptions if Part Payment is selected
-      if (paymentModel === "part") {
+      // 4. Automatically add to Installments & Subscriptions if Part Payment or Subscription is selected
+      if (paymentModel === "part" || paymentModel === "subscription") {
         const scheduleItems = []
         const baseDate = startDate ? new Date(startDate) : new Date()
         const validBase = isNaN(baseDate.getTime()) ? new Date() : baseDate
@@ -946,46 +984,52 @@ export function AddClientProjectModal({
 
         const currentProjId = createdProject?.id || String(Date.now())
 
-        followUpTasks.push(
-          saveInstallmentRecord({
-            id: `inst_proj_${currentProjId}`,
-            projectId: currentProjId,
-            clientId: effectiveClient.id,
-            invoiceId: invoiceId,
-            clientName: effectiveClient.name,
-            clientEmail: effectiveClient.email || clientEmail,
-            clientPhone: effectiveClient.phone || clientPhone,
-            clientCompany: effectiveClient.companyName || effectiveClient.name,
-            clientGst: effectiveClient.gstNumber || clientGst,
-            projectTitle: projectTitle,
-            totalContractValue: totalAmount,
-            totalAdvancePaid: effectiveAdvance,
-            totalPaid: effectiveAdvance,
-            remainingBalance: remainingDue,
-            totalInstallments: subscriptionMonths,
-            currentInstallmentNumber: effectiveAdvance > 0 ? 2 : 1,
-            currentInstallmentAmount: perInstallment,
-            currentDueDate: effectiveDeadline,
-            status: overallStatus,
-            schedule: scheduleItems,
-            companyId: targetCompany,
-            assignedMembers: assignedMembers,
-            billedBy: billedByAdmin,
-            createdById: user?.id ? String(user.id) : undefined,
-            createdAt: startDate || new Date().toISOString().split("T")[0],
-          }, targetCompany),
+        if (paymentModel === "part") {
+          followUpTasks.push(
+            saveInstallmentRecord({
+              id: `inst_proj_${currentProjId}`,
+              projectId: currentProjId,
+              clientId: effectiveClient.id,
+              invoiceId: invoiceId,
+              clientName: effectiveClient.name,
+              clientEmail: effectiveClient.email || clientEmail,
+              clientPhone: effectiveClient.phone || clientPhone,
+              clientCompany: effectiveClient.companyName || effectiveClient.name,
+              clientGst: effectiveClient.gstNumber || clientGst,
+              projectTitle: projectTitle,
+              totalContractValue: totalAmount,
+              totalAdvancePaid: effectiveAdvance,
+              totalPaid: effectiveAdvance,
+              remainingBalance: remainingDue,
+              totalInstallments: subscriptionMonths,
+              currentInstallmentNumber: effectiveAdvance > 0 ? 2 : 1,
+              currentInstallmentAmount: perInstallment,
+              currentDueDate: effectiveDeadline,
+              status: overallStatus,
+              schedule: scheduleItems,
+              companyId: targetCompany,
+              assignedMembers: assignedMembers,
+              billedBy: billedByAdmin,
+              createdById: user?.id ? String(user.id) : undefined,
+              createdAt: startDate || new Date().toISOString().split("T")[0],
+            }, targetCompany)
+          )
+        }
 
+        followUpTasks.push(
           addSubscription({
             clientId: effectiveClient.id,
             clientName: effectiveClient.name,
             clientEmail: effectiveClient.email || clientEmail,
             clientPhone: effectiveClient.phone || clientPhone,
             clientCompany: effectiveClient.companyName || effectiveClient.name,
-            planName: `${projectTitle} (${subscriptionMonths}-Month Part Payment / EMI)`,
+            planName: paymentModel === "subscription" 
+              ? `${projectTitle} (${billingCycle} Subscription)`
+              : `${projectTitle} (${subscriptionMonths}-Month Part Payment / EMI)`,
             status: "Active",
-            amount: `₹${perInstallment.toLocaleString("en-IN")}`,
-            numericAmount: perInstallment,
-            billingCycle: "Monthly",
+            amount: paymentModel === "subscription" ? `₹${totalAmount.toLocaleString("en-IN")}` : `₹${perInstallment.toLocaleString("en-IN")}`,
+            numericAmount: paymentModel === "subscription" ? totalAmount : perInstallment,
+            billingCycle: paymentModel === "subscription" ? billingCycle : "Monthly",
             startDate: startDate || new Date().toISOString().split("T")[0],
             nextBillingDate: effectiveDeadline,
             autoRenew: true,
@@ -1010,6 +1054,9 @@ export function AddClientProjectModal({
 
           await saveStoredClient({
             ...currentStored,
+            designation: clientDesignation === "Other" ? (clientCustomDesignation.trim() || "Other") : clientDesignation,
+            district: clientDistrict.trim() || currentStored.district,
+            zip: clientZip.trim() || currentStored.zip,
             email: clientEmail.trim() || currentStored.email,
             phone: clientPhone.trim() || currentStored.phone,
             address: clientAddress.trim() || currentStored.address,
@@ -1310,16 +1357,34 @@ export function AddClientProjectModal({
 
               <div>
                 <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1 flex items-center gap-1">
-                  <Mail size={12} /> Email
+                  <UserCheck size={12} /> Contact Designation
                 </label>
-                <input
-                  type="email"
-                  placeholder="client@example.com"
-                  value={clientEmail}
-                  onChange={(e) => setClientEmail(e.target.value)}
-                  className="w-full px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-medium text-xs focus:outline-none focus:ring-2 focus:ring-violet-500"
-                />
+                <div className="flex gap-1.5">
+                  <select
+                    value={clientDesignation}
+                    onChange={(e) => setClientDesignation(e.target.value)}
+                    className="flex-1 px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  >
+                    <option value="Proprietor">Proprietor</option>
+                    <option value="Manager">Manager</option>
+                    <option value="Founder">Founder</option>
+                    <option value="CEO">CEO</option>
+                    <option value="Director">Director</option>
+                    <option value="Partner">Partner</option>
+                    <option value="Other">Other</option>
+                  </select>
+                  {clientDesignation === "Other" && (
+                    <input
+                      type="text"
+                      placeholder="Title..."
+                      value={clientCustomDesignation}
+                      onChange={(e) => setClientCustomDesignation(e.target.value)}
+                      className="w-24 px-2 py-1.5 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs font-medium"
+                    />
+                  )}
+                </div>
               </div>
+
               <div>
                 <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1 flex items-center gap-1">
                   <Phone size={12} /> Phone
@@ -1334,11 +1399,23 @@ export function AddClientProjectModal({
               </div>
             </div>
 
-            {/* Row 2: Address + City + State + GST */}
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
-              <div className="sm:col-span-2">
+            {/* Row 2: Email + Address */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div>
                 <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1 flex items-center gap-1">
-                  <MapPin size={12} /> Address
+                  <Mail size={12} /> Email
+                </label>
+                <input
+                  type="email"
+                  placeholder="client@example.com"
+                  value={clientEmail}
+                  onChange={(e) => setClientEmail(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-medium text-xs focus:outline-none focus:ring-2 focus:ring-violet-500"
+                />
+              </div>
+              <div>
+                <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1 flex items-center gap-1">
+                  <MapPin size={12} /> Street / Building Address
                 </label>
                 <input
                   type="text"
@@ -1348,21 +1425,75 @@ export function AddClientProjectModal({
                   className="w-full px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-medium text-xs focus:outline-none focus:ring-2 focus:ring-violet-500"
                 />
               </div>
+            </div>
+
+            {/* Row 3: PIN Code (Postal Lookup) + District + City + State */}
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
               <div>
-                <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1 flex items-center gap-1">
-                  <MapPin size={12} /> City
+                <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1 flex items-center justify-between">
+                  <span className="flex items-center gap-1"><MapPin size={12} /> PIN Code</span>
+                  {isPincodeLoading && <span className="text-[9px] text-violet-500 animate-pulse font-normal">Lookup...</span>}
                 </label>
                 <input
                   type="text"
-                  placeholder="City"
-                  value={clientCity}
-                  onChange={(e) => setClientCity(e.target.value)}
-                  className="w-full px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-medium text-xs focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  maxLength={6}
+                  placeholder="e.g. 700001"
+                  value={clientZip}
+                  onChange={(e) => handlePincodeChange(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-mono font-bold text-xs focus:outline-none focus:ring-2 focus:ring-violet-500"
                 />
               </div>
               <div>
                 <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1 flex items-center gap-1">
-                  <MapPin size={12} /> State
+                  District
+                </label>
+                {pincodeDistricts.length > 0 ? (
+                  <select
+                    value={clientDistrict}
+                    onChange={(e) => setClientDistrict(e.target.value)}
+                    className="w-full px-2 py-1.5 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs font-medium"
+                  >
+                    {pincodeDistricts.map((d) => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    placeholder="District"
+                    value={clientDistrict}
+                    onChange={(e) => setClientDistrict(e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-medium text-xs focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  />
+                )}
+              </div>
+              <div>
+                <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1 flex items-center gap-1">
+                  City
+                </label>
+                {pincodePlaces.length > 0 ? (
+                  <select
+                    value={clientCity}
+                    onChange={(e) => setClientCity(e.target.value)}
+                    className="w-full px-2 py-1.5 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs font-medium"
+                  >
+                    {pincodePlaces.map((p) => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    placeholder="City"
+                    value={clientCity}
+                    onChange={(e) => setClientCity(e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-medium text-xs focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  />
+                )}
+              </div>
+              <div>
+                <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1 flex items-center gap-1">
+                  State
                 </label>
                 <input
                   type="text"
@@ -1374,7 +1505,7 @@ export function AddClientProjectModal({
               </div>
             </div>
 
-            {/* Row 3: GST + Company name (for invoice) */}
+            {/* Row 4: GST + Note */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <div>
                 <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1 flex items-center gap-1">
@@ -1390,7 +1521,7 @@ export function AddClientProjectModal({
               </div>
               <div className="flex items-end">
                 <p className="text-[10px] text-violet-600 dark:text-violet-400 font-medium leading-relaxed">
-                  ℹ️ These details appear on the invoice and are saved back to the client record automatically.
+                  ℹ️ Designation, contact phone, and address are automatically printed on the official invoice & saved to client profile.
                 </p>
               </div>
             </div>
@@ -2015,13 +2146,26 @@ export function AddClientProjectModal({
                             onChange={(e) => handleUpdateService(item.id, "qty", Math.max(1, Number(e.target.value)))}
                             className="w-12 px-1.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono text-center font-bold"
                           />
-                          <input
-                            type="text"
-                            placeholder="Unit"
-                            value={item.unit}
-                            onChange={(e) => handleUpdateService(item.id, "unit", e.target.value)}
-                            className="w-full px-2 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-[11px]"
-                          />
+                          <select
+                            value={["Qty", "Unit", "Weekly", "Monthly", "Yearly", "Project"].includes(item.unit) ? item.unit : "custom"}
+                            onChange={(e) => {
+                              if (e.target.value === "custom") {
+                                const customVal = prompt("Enter custom unit name:") || "Unit"
+                                handleUpdateService(item.id, "unit", customVal)
+                              } else {
+                                handleUpdateService(item.id, "unit", e.target.value)
+                              }
+                            }}
+                            className="w-full px-2 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-[11px] font-semibold text-zinc-900 dark:text-zinc-100"
+                          >
+                            <option value="Qty">Qty</option>
+                            <option value="Unit">Unit</option>
+                            <option value="Weekly">Weekly</option>
+                            <option value="Monthly">Monthly</option>
+                            <option value="Yearly">Yearly</option>
+                            <option value="Project">Project</option>
+                            <option value="custom">Other...</option>
+                          </select>
                         </div>
                       </div>
 
@@ -2230,6 +2374,28 @@ export function AddClientProjectModal({
               <div className="flex items-center gap-1 bg-white dark:bg-zinc-900 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-700">
                 <button
                   type="button"
+                  onClick={() => setPaymentModel("full")}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                    paymentModel === "full"
+                      ? "bg-blue-600 text-white shadow-xs"
+                      : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
+                  }`}
+                >
+                  💳 Full (100%)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentModel("part")}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                    paymentModel === "part"
+                      ? "bg-blue-600 text-white shadow-xs"
+                      : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
+                  }`}
+                >
+                  🔄 Part (EMI)
+                </button>
+                <button
+                  type="button"
                   onClick={() => setPaymentModel("advance")}
                   className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
                     paymentModel === "advance"
@@ -2241,76 +2407,60 @@ export function AddClientProjectModal({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPaymentModel("part")}
+                  onClick={() => setPaymentModel("subscription")}
                   className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
-                    paymentModel === "part"
+                    paymentModel === "subscription"
                       ? "bg-blue-600 text-white shadow-xs"
                       : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
                   }`}
                 >
-                  🔄 Part Payment
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPaymentModel("full")}
-                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
-                    paymentModel === "full"
-                      ? "bg-blue-600 text-white shadow-xs"
-                      : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
-                  }`}
-                >
-                  💳 Full (100%)
+                  📅 Subscription
                 </button>
               </div>
             </div>
 
-            {/* Advance Option */}
-            {paymentModel === "advance" && (
-              <div className="p-3 bg-white dark:bg-zinc-900 rounded-xl border border-emerald-300 dark:border-emerald-800 space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
-                    <Coins size={13} /> Advance Down Payment (₹)
-                  </label>
-                  <div className="flex items-center gap-1">
-                    {[0.25, 0.40, 0.50].map((pct) => (
-                      <button
-                        key={pct}
-                        type="button"
-                        onClick={() => setAdvanceAmount(Math.round(totalAmount * pct))}
-                        className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-[9px] font-bold cursor-pointer"
-                      >
-                        {pct * 100}%
-                      </button>
-                    ))}
-                  </div>
+            {/* 1. Full Payment Option */}
+            {paymentModel === "full" && (
+              <div className="p-3 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-700 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div>
+                  <div className="font-bold text-xs text-zinc-900 dark:text-zinc-100">Full 100% Invoice Settlement</div>
+                  <div className="text-[10.5px] text-zinc-500">Collect complete payment amount: <strong>₹{totalAmount.toLocaleString("en-IN")}</strong></div>
                 </div>
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="Enter initial advance (e.g. 20000)"
-                  value={advanceAmount}
-                  onChange={(e) => {
-                    const val = e.target.value
-                    setAdvanceAmount(val === "" ? "" : Math.max(0, Number(val)))
-                  }}
-                  className="w-full px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-emerald-200 dark:border-emerald-800 font-mono font-bold text-zinc-900 dark:text-zinc-100"
-                />
-                <div className="flex justify-between text-[10.5px] pt-1">
-                  <span className="text-zinc-500">Initial Paid: <strong className="text-emerald-600 font-mono">₹{effectiveAdvance.toLocaleString("en-IN")}</strong></span>
-                  <span className="text-zinc-500">Balance Due on Delivery: <strong className="text-rose-600 font-mono">₹{remainingDue.toLocaleString("en-IN")}</strong></span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentStatus("Paid")}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                      paymentStatus === "Paid"
+                        ? "bg-emerald-600 text-white shadow-xs"
+                        : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300"
+                    }`}
+                  >
+                    ✓ Paid in Full
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentStatus("Payment Pending")}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                      paymentStatus === "Payment Pending"
+                        ? "bg-amber-600 text-white shadow-xs"
+                        : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300"
+                    }`}
+                  >
+                    ⏳ Payment Pending
+                  </button>
                 </div>
               </div>
             )}
 
-            {/* Part Payment (Subscription) Option */}
+            {/* 2. Part Payment (EMI) Option */}
             {paymentModel === "part" && (
               <div className="p-3.5 bg-white dark:bg-zinc-900 rounded-xl border border-blue-300 dark:border-blue-800 space-y-3 shadow-2xs">
-                
-                {/* 1. Subscription Duration & Price Breakdown */}
+                {/* 1. EMI Duration & Price Breakdown */}
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="text-[11px] font-bold text-blue-900 dark:text-blue-200 flex items-center gap-1">
-                      <span>🗓️ Subscription Plan & Duration</span>
+                      <span>🗓️ Part Payment / EMI Duration</span>
                     </label>
                     <span className="text-[10px] font-mono font-bold text-blue-700 dark:text-blue-300">
                       Total: ₹{totalAmount.toLocaleString("en-IN")}
@@ -2319,9 +2469,9 @@ export function AddClientProjectModal({
 
                   <div className="grid grid-cols-3 gap-2">
                     {[
-                      { months: 3, label: "3 Months", subtitle: "Quarterly Plan", badge: "Recommended" },
-                      { months: 6, label: "6 Months", subtitle: "Half-Yearly", badge: "Standard" },
-                      { months: 12, label: "12 Months", subtitle: "Annual Plan", badge: "Extended" }
+                      { months: 3, label: "3 Months", subtitle: "Quarterly EMI", badge: "Recommended" },
+                      { months: 6, label: "6 Months", subtitle: "Half-Yearly EMI", badge: "Standard" },
+                      { months: 12, label: "12 Months", subtitle: "Annual EMI", badge: "Extended" }
                     ].map((plan) => {
                       const isSelected = subscriptionMonths === plan.months
                       const monthlyRate = Math.round(totalAmount / plan.months)
@@ -2353,7 +2503,7 @@ export function AddClientProjectModal({
                   </div>
                 </div>
 
-                {/* 2. Timing Choice: Pay Now / Advance Pay vs Pay After 3 Months Due Date */}
+                {/* 2. Timing Choice */}
                 <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800 space-y-2">
                   <label className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200 block">
                     ⚡ Payment Settlement Schedule
@@ -2397,7 +2547,7 @@ export function AddClientProjectModal({
                   </div>
                 </div>
 
-                {/* 3. Dynamic Inputs / Calculations */}
+                {/* 3. Inputs / Calculations */}
                 {partPayTiming === "pay_now" ? (
                   <div className="p-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 space-y-2">
                     <div className="flex items-center justify-between">
@@ -2439,6 +2589,116 @@ export function AddClientProjectModal({
                     </p>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* 3. Advance Down Payment Option */}
+            {paymentModel === "advance" && (
+              <div className="p-3 bg-white dark:bg-zinc-900 rounded-xl border border-emerald-300 dark:border-emerald-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
+                    <Coins size={13} /> Advance Down Payment (₹)
+                  </label>
+                  <div className="flex items-center gap-1">
+                    {[0.25, 0.40, 0.50].map((pct) => (
+                      <button
+                        key={pct}
+                        type="button"
+                        onClick={() => setAdvanceAmount(Math.round(totalAmount * pct))}
+                        className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-[9px] font-bold cursor-pointer"
+                      >
+                        {pct * 100}%
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="Enter initial advance (e.g. 20000)"
+                  value={advanceAmount}
+                  onChange={(e) => {
+                    const val = e.target.value
+                    setAdvanceAmount(val === "" ? "" : Math.max(0, Number(val)))
+                  }}
+                  className="w-full px-3 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-emerald-200 dark:border-emerald-800 font-mono font-bold text-zinc-900 dark:text-zinc-100"
+                />
+                <div className="flex justify-between text-[10.5px] pt-1">
+                  <span className="text-zinc-500">Initial Paid: <strong className="text-emerald-600 font-mono">₹{effectiveAdvance.toLocaleString("en-IN")}</strong></span>
+                  <span className="text-zinc-500">Balance Due on Delivery: <strong className="text-rose-600 font-mono">₹{remainingDue.toLocaleString("en-IN")}</strong></span>
+                </div>
+              </div>
+            )}
+
+            {/* 4. Recurring Subscription Option */}
+            {paymentModel === "subscription" && (
+              <div className="p-3.5 bg-white dark:bg-zinc-900 rounded-xl border border-purple-300 dark:border-purple-800 space-y-3 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 font-bold text-xs text-purple-900 dark:text-purple-200">
+                    <RefreshCw size={14} className="text-purple-600" />
+                    <span>Recurring Client Subscription</span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 font-bold text-[10px]">
+                    Auto-Records to Subscriptions
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                      Billing Cycle
+                    </label>
+                    <select
+                      value={billingCycle}
+                      onChange={(e) => setBillingCycle(e.target.value as any)}
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-bold text-xs"
+                    >
+                      <option value="Monthly">Monthly Recurring</option>
+                      <option value="Quarterly">Quarterly (Every 3 Months)</option>
+                      <option value="Yearly">Yearly (Annual Plan)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                      Initial Billing Status
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPaymentStatus("Paid")}
+                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors ${
+                          paymentStatus === "Paid"
+                            ? "bg-purple-600 text-white shadow-xs"
+                            : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300"
+                        }`}
+                      >
+                        Paid (Cycle 1)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentStatus("Payment Pending")}
+                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors ${
+                          paymentStatus === "Payment Pending"
+                            ? "bg-amber-600 text-white shadow-xs"
+                            : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300"
+                        }`}
+                      >
+                        Pending Due
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded-lg bg-purple-50/70 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/60 text-xs">
+                  <div className="flex justify-between font-bold text-purple-900 dark:text-purple-200">
+                    <span>Subscription Fee:</span>
+                    <strong className="font-mono text-purple-700 dark:text-purple-300">₹{totalAmount.toLocaleString("en-IN")} / {billingCycle}</strong>
+                  </div>
+                  <p className="text-[10px] text-purple-700 dark:text-purple-300/80 mt-1">
+                    ℹ️ Saving this setup creates an active Subscription record automatically in the CRM Subscriptions management module.
+                  </p>
+                </div>
               </div>
             )}
           </div>

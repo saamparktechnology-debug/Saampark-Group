@@ -37,6 +37,10 @@ const quotationController = {
   },
   async delete(req, res) {
     try {
+      const userRole = String(req.user?.role || req.user?.role_name || '').toLowerCase().trim();
+      if (userRole.includes('client')) {
+        return errorResponse(res, 403, 'Clients are not permitted to delete quotations');
+      }
       await quotationModel.delete(req.params.id);
       return successResponse(res, 200, 'Quotation deleted');
     } catch (err) { return errorResponse(res, 500, err.message); }
@@ -87,6 +91,10 @@ const estimateController = {
   },
   async delete(req, res) {
     try {
+      const userRole = String(req.user?.role || req.user?.role_name || '').toLowerCase().trim();
+      if (userRole.includes('client')) {
+        return errorResponse(res, 403, 'Clients are not permitted to delete estimates');
+      }
       await estimateModel.delete(req.params.id);
       return successResponse(res, 200, 'Estimate deleted');
     } catch (err) { return errorResponse(res, 500, err.message); }
@@ -444,6 +452,10 @@ const invoiceController = {
 
       const userRoleId = Number(req.user?.role_id);
       const userRole = String(req.user?.role || req.user?.role_name || '').toLowerCase().trim();
+      if (userRole.includes('client')) {
+        conn.release();
+        return errorResponse(res, 403, 'Clients are not permitted to delete invoices');
+      }
       const isSuperAdmin = userRoleId === 1 || userRole === 'super admin' || userRole === 'superadmin';
 
       const [inv] = await conn.execute('SELECT company_id FROM invoices WHERE id = ?', [req.params.id]);

@@ -4,9 +4,10 @@ import * as React from "react"
 import { useSearchParams } from "next/navigation"
 import { 
   Building2, ShieldCheck, 
-  Printer, AlertCircle, Share2
+  Printer, AlertCircle, Share2,
+  CheckCircle2, Check
 } from "lucide-react"
-import { getInvoices, InvoiceItem } from "@/app/feature/sales/invoices/services/invoiceService"
+import { getInvoices, InvoiceItem, clientAcceptInvoice } from "@/app/feature/sales/invoices/services/invoiceService"
 import { getCompanyPaymentSettings, CompanyPaymentSettings, DEFAULT_COMPANY_PAYMENT_SETTINGS } from "@/app/feature/settings/services/companyPaymentService"
 import { getClients } from "@/app/feature/clients/services/clientService"
 import { ClientItem } from "@/app/feature/clients/types"
@@ -25,6 +26,23 @@ function PublicInvoiceContent() {
   const [resolvedCompany, setResolvedCompany] = React.useState<Company | null>(null)
   const [isLoading, setIsLoading] = React.useState(true)
   const [isCopied, setIsCopied] = React.useState(false)
+  const [isAccepting, setIsAccepting] = React.useState(false)
+  const [acceptSuccess, setAcceptSuccess] = React.useState(false)
+
+  const handleAcceptInvoice = async () => {
+    if (!invoice || isAccepting) return
+    setIsAccepting(true)
+    try {
+      const updated = await clientAcceptInvoice(invoice.id, invoice.client, "Accepted via digital portal", invoice.companyId)
+      setInvoice(updated)
+      setAcceptSuccess(true)
+      setTimeout(() => setAcceptSuccess(false), 5000)
+    } catch (err) {
+      console.error("Accept invoice failed:", err)
+    } finally {
+      setIsAccepting(false)
+    }
+  }
 
   React.useEffect(() => {
     const loadData = async () => {
@@ -160,6 +178,24 @@ function PublicInvoiceContent() {
         </div>
 
         <div className="flex items-center gap-2">
+          {invoice.clientAccepted ? (
+            <div className="px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-bold text-xs flex items-center gap-1.5 shadow-2xs">
+              <CheckCircle2 size={14} className="text-emerald-600 dark:text-emerald-400" />
+              <span>Accepted</span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={handleAcceptInvoice}
+              disabled={isAccepting}
+              className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-600/20 transition-all cursor-pointer disabled:opacity-50"
+              title="Formally accept and confirm this invoice"
+            >
+              <CheckCircle2 size={14} />
+              <span>{isAccepting ? "Accepting..." : acceptSuccess ? "Accepted ✓" : "Accept Invoice"}</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={handleShare}
@@ -179,6 +215,53 @@ function PublicInvoiceContent() {
           </button>
         </div>
       </div>
+
+      {/* Acceptance Status Banner */}
+      {invoice.clientAccepted ? (
+        <div className="w-full max-w-[840px] mb-4 p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between gap-3 text-emerald-900 dark:text-emerald-200 print:hidden shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
+              <CheckCircle2 size={18} />
+            </div>
+            <div>
+              <p className="text-xs font-bold leading-tight">
+                Digital Invoice Formally Accepted by Client
+              </p>
+              <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-mono mt-0.5">
+                Confirmed by {invoice.acceptedBy || invoice.client || "Client"}
+                {invoice.acceptedAt ? ` on ${new Date(Number(invoice.acceptedAt) || invoice.acceptedAt).toLocaleDateString("en-IN", { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}` : ""}
+              </p>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[10px] font-black uppercase tracking-wider shrink-0 shadow-2xs">
+            ✓ Verified
+          </span>
+        </div>
+      ) : (
+        <div className="w-full max-w-[840px] mb-4 p-3 rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 flex items-center justify-between gap-3 text-blue-900 dark:text-blue-200 print:hidden shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0">
+              <ShieldCheck size={18} />
+            </div>
+            <div>
+              <p className="text-xs font-bold leading-tight">
+                Please review this official invoice and click &ldquo;Accept Invoice&rdquo;
+              </p>
+              <p className="text-[11px] text-blue-700 dark:text-blue-400 mt-0.5">
+                Confirming registers your formal acceptance directly with the administration team.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleAcceptInvoice}
+            disabled={isAccepting}
+            className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shrink-0 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+          >
+            {isAccepting ? "Accepting..." : "Accept Now"}
+          </button>
+        </div>
+      )}
 
       {/* Verified Official Document */}
       <OfficialInvoiceDocument 

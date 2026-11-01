@@ -774,7 +774,7 @@ export function OfficialInvoiceDocument({
         return {
           ...it,
           id: it.id || `row_${idx}`,
-          serviceName: it.serviceName || invoice.project || "Enterprise Solutions",
+          serviceName: it.serviceName || invoice.project || invoice.primaryCategory || invoice.category || "Technology Services",
           itemRate,
           itemQty,
           itemCharges,
@@ -1334,14 +1334,34 @@ export function OfficialInvoiceDocument({
             className="font-black text-[10px] uppercase tracking-wider text-zinc-700"
           />
         </div>
-        <EditableText
-          value={invoice.client || "Client Name"}
-          interactive={interactive}
-          className="font-black text-xs sm:text-sm text-zinc-900 leading-tight block"
-        />
-        {(invoice.clientEmail || invoice.clientPhone || clientDetails?.email || clientDetails?.phone) && (
-          <p className="text-[9.5px] text-zinc-500 font-mono">
-            {[invoice.clientEmail || clientDetails?.email, invoice.clientPhone || clientDetails?.phone].filter(Boolean).join(" • ")}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <EditableText
+            value={invoice.client || "Client Name"}
+            interactive={interactive}
+            className="font-black text-xs sm:text-sm text-zinc-900 leading-tight block"
+          />
+          {isValidField(invoice.clientDesignation || clientDetails?.designation) && (
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wide bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200 border border-blue-200">
+              <EditableText value={invoice.clientDesignation || clientDetails?.designation} interactive={interactive} />
+            </span>
+          )}
+          {invoice.clientAccepted && (
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wide bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs">
+              ✓ Accepted by Client
+            </span>
+          )}
+        </div>
+        {(invoice.clientPhone || clientDetails?.phone) && (
+          <p className="text-[9.5px] text-zinc-800 font-bold flex items-center gap-1">
+            <Phone size={9} className="text-blue-600 shrink-0" />
+            <EditableText value="Phone:" interactive={interactive} className="font-bold mr-0.5 text-zinc-600" />
+            <EditableText value={invoice.clientPhone || clientDetails?.phone} interactive={interactive} className="font-mono text-zinc-900 font-bold" />
+          </p>
+        )}
+        {(invoice.clientEmail || clientDetails?.email) && (
+          <p className="text-[9.5px] text-zinc-500 font-mono flex items-center gap-1">
+            <Mail size={9} className="text-zinc-400 shrink-0" />
+            <EditableText value={invoice.clientEmail || clientDetails?.email} interactive={interactive} />
           </p>
         )}
         {isValidField(invoice.clientAddress || clientDetails?.address) && (
@@ -1353,12 +1373,12 @@ export function OfficialInvoiceDocument({
             />
           </p>
         )}
-        {isValidField([invoice.clientCity, invoice.clientState].filter(Boolean).join(", ") || [clientDetails?.city, clientDetails?.state].filter(Boolean).join(", ")) && (
+        {isValidField([invoice.clientCity, (invoice as any).clientDistrict || (clientDetails as any)?.district, invoice.clientState].filter(Boolean).join(", ") || [clientDetails?.city, (clientDetails as any)?.district, clientDetails?.state].filter(Boolean).join(", ")) && (
           <p className="text-[9.5px] text-zinc-600 flex items-center gap-1">
             <MapPin size={9} className="text-zinc-500 shrink-0" />
             <EditableText value="Location:" interactive={interactive} className="font-bold mr-1" />
             <EditableText
-              value={[invoice.clientCity, invoice.clientState].filter(Boolean).join(", ") || [clientDetails?.city, clientDetails?.state].filter(Boolean).join(", ")}
+              value={[invoice.clientCity, (invoice as any).clientDistrict || (clientDetails as any)?.district, invoice.clientState].filter(Boolean).join(", ") || [clientDetails?.city, (clientDetails as any)?.district, clientDetails?.state].filter(Boolean).join(", ")}
               interactive={interactive}
             />
           </p>
@@ -1385,13 +1405,13 @@ export function OfficialInvoiceDocument({
               <Briefcase size={9} />
             </span>
             <EditableText
-              value="PROJECT / SERVICE SCOPE"
+              value="PRIMARY CATEGORY &amp; DOMAIN"
               interactive={interactive}
               className="font-black text-[10px] uppercase tracking-wider text-zinc-700"
             />
           </div>
           <EditableText
-            value={invoice.project || "Enterprise Solutions"}
+            value={invoice.primaryCategory || invoice.category || invoice.project || "Website"}
             interactive={interactive}
             className="font-bold text-xs sm:text-sm text-zinc-900 truncate block"
           />
@@ -1400,8 +1420,8 @@ export function OfficialInvoiceDocument({
             <EditableText value={isGstInvoice ? 'GST Tax Invoice' : 'Non-GST Direct Invoice'} interactive={interactive} />
           </p>
           <p className="text-[9.5px] text-zinc-600 truncate">
-            <EditableText value="Services:" interactive={interactive} className="font-bold mr-1" />
-            <EditableText value={invoice.project || (invoice as any)?.serviceScope || "Professional & Enterprise IT Services"} interactive={interactive} />
+            <EditableText value="Primary Category:" interactive={interactive} className="font-bold mr-1" />
+            <EditableText value={invoice.primaryCategory || invoice.category || "Website"} interactive={interactive} />
           </p>
           {isSubBranchIssued ? (
             <p className="text-[9px] text-emerald-800 dark:text-emerald-300 truncate font-semibold">
@@ -1794,8 +1814,22 @@ export function OfficialInvoiceDocument({
         <div className="flex flex-row justify-between items-end gap-3 pt-2.5 border-t border-zinc-200 dark:border-zinc-800">
           {/* Left: Customer Acceptance */}
           <div className="text-center space-y-1">
-            <div className="h-12 flex items-end justify-center">
-              {/* Blank space for physical signing */}
+            <div className="h-12 flex flex-col items-center justify-end pb-1">
+              {invoice.clientAccepted ? (
+                <div className="px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-center font-sans shadow-2xs">
+                  <div className="text-[8px] font-black uppercase text-emerald-700 dark:text-emerald-400 flex items-center justify-center gap-1">
+                    <span>✓ Accepted Online</span>
+                  </div>
+                  <div className="text-[7px] text-zinc-600 dark:text-zinc-400 font-mono truncate max-w-[150px]">
+                    {invoice.acceptedBy || invoice.client || "Client"}
+                  </div>
+                  {invoice.acceptedAt && (
+                    <div className="text-[6.5px] text-zinc-500 font-mono">
+                      {new Date(Number(invoice.acceptedAt) || invoice.acceptedAt).toLocaleDateString("en-IN", { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </div>
+                  )}
+                </div>
+              ) : null}
             </div>
             <div className="w-44 border-t-2 border-zinc-400 dark:border-zinc-600 pt-1">
               <EditableText
@@ -1804,9 +1838,9 @@ export function OfficialInvoiceDocument({
                 className="text-[9px] font-black uppercase text-zinc-700 dark:text-zinc-300 block"
               />
               <EditableText
-                value="Accepted & Confirmed"
+                value={invoice.clientAccepted ? "✓ Digitally Accepted & Confirmed" : "Accepted & Confirmed"}
                 interactive={interactive}
-                className="text-[7.5px] text-zinc-500 font-medium block"
+                className={`text-[7.5px] font-medium block ${invoice.clientAccepted ? "text-emerald-600 font-bold" : "text-zinc-500"}`}
               />
             </div>
           </div>

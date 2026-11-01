@@ -24,11 +24,10 @@ export default function EstimatesPage() {
   const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
   
-  const canAddEstimate = canPerformAction(user, "Estimates", "add")
-  const canEditEstimate = canPerformAction(user, "Estimates", "edit")
-  const canDeleteEstimate = canPerformAction(user, "Estimates", "delete")
-  
-  const isClientRole = user?.role === "Clients"
+  const isClientRole = user?.role === "Clients" || user?.role?.toLowerCase().includes("client")
+  const canAddEstimate = !isClientRole && canPerformAction(user, "Estimates", "add")
+  const canEditEstimate = !isClientRole && canPerformAction(user, "Estimates", "edit")
+  const canDeleteEstimate = !isClientRole && canPerformAction(user, "Estimates", "delete")
   const clientEmailNorm = (user?.email || "").toLowerCase().trim()
   const clientNameNorm = (user?.name || "").toLowerCase().trim()
 
@@ -204,7 +203,11 @@ export default function EstimatesPage() {
   // Client actions
   const handleClientAccept = async (est: EstimateItem) => {
     await executeWithFeedback(async () => {
-      await updateEstimateStatus(est.id, "Accepted", { acceptedAt: new Date().toLocaleDateString("en-GB") })
+      await updateEstimateStatus(est.id, "Accepted", { 
+        acceptedAt: new Date().toLocaleDateString("en-GB"),
+        clientAccepted: true,
+        acceptedBy: est.client || user?.name || "Client"
+      })
       setIsDetailModalOpen(false)
       loadData()
     }, {
@@ -647,9 +650,19 @@ export default function EstimatesPage() {
                         {est.formattedTotal}
                       </td>
                       <td className="py-3 px-4">
-                        <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${statusBadge}`}>
-                          {est.status}
-                        </span>
+                        <div className="flex flex-col gap-0.5 items-start">
+                          <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${statusBadge}`}>
+                            {est.status}
+                          </span>
+                          {(est.status === "Accepted" || est.clientAccepted) && (
+                            <span 
+                              className="text-[9px] text-emerald-600 font-bold flex items-center gap-0.5"
+                              title={est.acceptedAt ? `Accepted on ${est.acceptedAt}` : "Accepted by Client"}
+                            >
+                              ✓ Client Accepted
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center justify-center gap-1.5">

@@ -8,7 +8,7 @@ import { getUsers } from "@/app/feature/users/services/userService"
 import { useAuthStore } from "@/store/useAuthStore"
 import { sendClientWelcomeEmailNotification } from "@/services/emailNotificationService"
 import { formatDisplayEmail } from "../services/clientService"
-
+import { lookupPincode } from "@/lib/pincodeService"
 
 interface AddClientModalProps {
   isOpen: boolean
@@ -27,12 +27,19 @@ export function AddClientModal({
 
   const [type, setType] = React.useState<"Organization" | "Person">("Organization")
   const [companyName, setCompanyName] = React.useState("")
+  const [designation, setDesignation] = React.useState("Proprietor")
+  const [customDesignation, setCustomDesignation] = React.useState("")
   const [owner, setOwner] = React.useState("")
   const [managers, setManagers] = React.useState("")
   const [address, setAddress] = React.useState("")
+  const [district, setDistrict] = React.useState("")
   const [city, setCity] = React.useState("")
   const [state, setState] = React.useState("")
   const [zip, setZip] = React.useState("")
+  const [pincodePlaces, setPincodePlaces] = React.useState<string[]>([])
+  const [pincodeDistricts, setPincodeDistricts] = React.useState<string[]>([])
+  const [pincodeStates, setPincodeStates] = React.useState<string[]>([])
+  const [isPincodeLoading, setIsPincodeLoading] = React.useState(false)
   const [country, setCountry] = React.useState("India")
   const [phone, setPhone] = React.useState("")
   const [email, setEmail] = React.useState("")
@@ -65,6 +72,8 @@ export function AddClientModal({
 
       if (initialData) {
         setCompanyName(initialData.name || "")
+        setDesignation(initialData.designation || "Proprietor")
+        setCustomDesignation("")
         setPhone(initialData.phone || "")
         setEmail(formatDisplayEmail(initialData.email) || "")
         setClientGroup(initialData.group || "VIP")
@@ -72,6 +81,7 @@ export function AddClientModal({
         setOwner(initialData.owner || user?.name || "")
         setManagers(initialData.managers || "")
         setAddress(initialData.address || "")
+        setDistrict(initialData.district || "")
         setCity(initialData.city || "")
         setState(initialData.state || "")
         setZip(initialData.zip || "")
@@ -83,9 +93,12 @@ export function AddClientModal({
         setDisableOnlinePayment(!!initialData.disableOnlinePayment)
       } else {
         setCompanyName("")
+        setDesignation("Proprietor")
+        setCustomDesignation("")
         setPhone("")
         setEmail("")
         setCountry("India")
+        setDistrict("")
         setCity("")
         setState("")
         setZip("")
@@ -104,6 +117,24 @@ export function AddClientModal({
 
   if (!isOpen) return null
 
+  const handlePincodeChange = async (pin: string) => {
+    setZip(pin)
+    const cleanPin = pin.trim().replace(/\D/g, "")
+    if (cleanPin.length === 6) {
+      setIsPincodeLoading(true)
+      const res = await lookupPincode(cleanPin)
+      setIsPincodeLoading(false)
+      if (res && res.status === "Success") {
+        setPincodePlaces(res.places || [])
+        setPincodeDistricts(res.districts || [])
+        setPincodeStates(res.states || [])
+        if (res.state) setState(res.state)
+        if (res.district) setDistrict(res.district)
+        if (res.places && res.places.length > 0) setCity(res.places[0])
+      }
+    }
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!companyName.trim()) return
@@ -111,10 +142,13 @@ export function AddClientModal({
     const currentBranchObj = branches.find(b => b.id === (activeBranchId || user?.branchId))
     const finalBranchName = currentBranchObj?.name || user?.branchName || undefined
 
+    const effectiveDesignation = designation === "Other" ? (customDesignation.trim() || "Client") : designation
+
     const newClient: ClientItem = {
       id: initialData ? initialData.id : `cli_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       name: companyName.trim(),
       primaryContact: companyName.trim(),
+      designation: effectiveDesignation,
       phone: phone.trim(),
       email: email.trim(),
       group: clientGroup || "VIP",
@@ -128,6 +162,7 @@ export function AddClientModal({
       owner: owner || "Admin",
       managers,
       address,
+      district,
       city,
       state,
       zip,
@@ -217,6 +252,35 @@ export function AddClientModal({
               />
             </div>
 
+            {/* Designation / Role */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
+              <label className="text-slate-600 dark:text-slate-400 font-medium">Designation</label>
+              <div className="md:col-span-3 flex flex-col sm:flex-row gap-2">
+                <select
+                  value={designation}
+                  onChange={(e) => setDesignation(e.target.value)}
+                  className="px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-medium text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1"
+                >
+                  <option value="Proprietor">Proprietor</option>
+                  <option value="Manager">Manager</option>
+                  <option value="Founder">Founder</option>
+                  <option value="CEO">CEO</option>
+                  <option value="Director">Director</option>
+                  <option value="Partner">Partner</option>
+                  <option value="Other">Other (Custom)</option>
+                </select>
+                {designation === "Other" && (
+                  <input
+                    type="text"
+                    value={customDesignation}
+                    onChange={(e) => setCustomDesignation(e.target.value)}
+                    placeholder="Enter custom title..."
+                    className="flex-1 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                )}
+              </div>
+            </div>
+
             {/* Owner */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
               <label className="text-slate-600 dark:text-slate-400 font-medium flex items-center gap-1">
@@ -258,45 +322,110 @@ export function AddClientModal({
                 rows={2}
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
-                placeholder="Address"
+                placeholder="Address / Street name"
                 className="md:col-span-3 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
               />
             </div>
 
+            {/* Zip / Pincode with Postal Lookup */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
+              <label className="text-slate-600 dark:text-slate-400 font-medium flex items-center justify-between">
+                <span>PIN Code</span>
+                {isPincodeLoading && (
+                  <span className="text-xs text-blue-500 animate-pulse font-normal">Lookup...</span>
+                )}
+              </label>
+              <div className="md:col-span-3 flex items-center gap-2">
+                <input
+                  type="text"
+                  maxLength={6}
+                  value={zip}
+                  onChange={(e) => handlePincodeChange(e.target.value)}
+                  placeholder="e.g. 700001 (auto-fills city & state)"
+                  className="flex-1 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
             {/* City */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
-              <label className="text-slate-600 dark:text-slate-400 font-medium">City</label>
-              <input
-                type="text"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                placeholder="Mumbai"
-                className="md:col-span-3 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              <label className="text-slate-600 dark:text-slate-400 font-medium">City / Area</label>
+              {pincodePlaces.length > 0 ? (
+                <div className="md:col-span-3 flex gap-2">
+                  <select
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    className="flex-1 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {pincodePlaces.map((p) => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    placeholder="Or type city"
+                    className="w-1/3 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
+                  />
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder="e.g. Kolkata / Mumbai"
+                  className="md:col-span-3 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              )}
+            </div>
+
+            {/* District */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
+              <label className="text-slate-600 dark:text-slate-400 font-medium">District</label>
+              {pincodeDistricts.length > 0 ? (
+                <select
+                  value={district}
+                  onChange={(e) => setDistrict(e.target.value)}
+                  className="md:col-span-3 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {pincodeDistricts.map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={district}
+                  onChange={(e) => setDistrict(e.target.value)}
+                  placeholder="e.g. Central Delhi / Howrah"
+                  className="md:col-span-3 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              )}
             </div>
 
             {/* State */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
               <label className="text-slate-600 dark:text-slate-400 font-medium">State</label>
-              <input
-                type="text"
-                value={state}
-                onChange={(e) => setState(e.target.value)}
-                placeholder="Maharashtra"
-                className="md:col-span-3 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            {/* Zip */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
-              <label className="text-slate-600 dark:text-slate-400 font-medium">Zip</label>
-              <input
-                type="text"
-                value={zip}
-                onChange={(e) => setZip(e.target.value)}
-                placeholder="400001"
-                className="md:col-span-3 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              {pincodeStates.length > 0 ? (
+                <select
+                  value={state}
+                  onChange={(e) => setState(e.target.value)}
+                  className="md:col-span-3 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {pincodeStates.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={state}
+                  onChange={(e) => setState(e.target.value)}
+                  placeholder="e.g. West Bengal / Maharashtra"
+                  className="md:col-span-3 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              )}
             </div>
 
             {/* Country - India */}

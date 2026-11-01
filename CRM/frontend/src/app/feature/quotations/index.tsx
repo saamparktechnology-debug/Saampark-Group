@@ -22,9 +22,10 @@ export default function QuotationsMain() {
   const { user, activeCompanyId, activeBranchId, branches, companies } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
   
-  const canAdd = canPerformAction(user, "Quotations", "add") || user?.role === "Super Admin"
-  const canEdit = canPerformAction(user, "Quotations", "edit") || user?.role === "Super Admin"
-  const canDelete = canPerformAction(user, "Quotations", "delete") || user?.role === "Super Admin"
+  const isClientUser = user?.role === "Clients" || user?.role?.toLowerCase().includes("client")
+  const canAdd = !isClientUser && (canPerformAction(user, "Quotations", "add") || user?.role === "Super Admin")
+  const canEdit = !isClientUser && (canPerformAction(user, "Quotations", "edit") || user?.role === "Super Admin")
+  const canDelete = !isClientUser && (canPerformAction(user, "Quotations", "delete") || user?.role === "Super Admin")
 
   const activeCompany = companies.find(c => c.id === activeCompanyId) || companies[0]
 
@@ -324,6 +325,24 @@ export default function QuotationsMain() {
       successTitle: "Quotation Deleted",
       successMsg: `Quotation ${deleteConfirm.number} removed.`,
     })
+  }
+
+  const handleAcceptQuotation = async (quotation: QuotationData) => {
+    const updated: QuotationData = {
+      ...quotation,
+      status: "Accepted",
+      clientAccepted: true,
+      acceptedAt: Date.now(),
+      acceptedBy: quotation.customer || user?.name || "Client",
+    }
+    await QuotationService.update(quotation.id, updated).catch(() => {})
+    setQuotations(prev => prev.map(q => q.id === quotation.id ? updated : q))
+    if (viewingItem && viewingItem.id === quotation.id) {
+      setViewingItem(updated)
+    }
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+    }
   }
 
   const handleConvertToInvoice = async (quotation: QuotationData) => {
@@ -668,14 +687,21 @@ export default function QuotationsMain() {
                       ₹{(q.total || 0).toLocaleString("en-IN")}
                     </td>
                     <td className="py-3 px-4">
-                      <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
-                        q.status === "Accepted" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                        q.status === "Sent" ? "bg-blue-50 text-blue-700 border-blue-200" :
-                        q.status === "Declined" ? "bg-rose-50 text-rose-700 border-rose-200" :
-                        "bg-zinc-100 text-zinc-700 border-zinc-200"
-                      }`}>
-                        {q.status}
-                      </span>
+                      <div className="flex flex-col gap-0.5 items-start">
+                        <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
+                          q.status === "Accepted" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                          q.status === "Sent" ? "bg-blue-50 text-blue-700 border-blue-200" :
+                          q.status === "Declined" ? "bg-rose-50 text-rose-700 border-rose-200" :
+                          "bg-zinc-100 text-zinc-700 border-zinc-200"
+                        }`}>
+                          {q.status}
+                        </span>
+                        {(q.status === "Accepted" || (q as any).clientAccepted) && (
+                          <span className="text-[9px] text-emerald-600 font-bold flex items-center gap-0.5">
+                            ✓ Accepted by Client
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center justify-center gap-1.5">
@@ -746,6 +772,7 @@ export default function QuotationsMain() {
             <OfficialQuotationDocument 
               quotation={viewingItem}
               onClose={() => setViewingItem(null)}
+              onAccept={() => handleAcceptQuotation(viewingItem)}
               onConvertToClient={() => handleConvertToClient(viewingItem)}
               onSendEstimate={() => handleCreateEstimateFromQuote(viewingItem)}
               onSendEmail={() => {
@@ -756,6 +783,7 @@ export default function QuotationsMain() {
                 setSendMessage(`Dear ${target.customer},\n\nPlease find attached our commercial quotation ${target.number} totaling ₹${(target.total || 0).toLocaleString("en-IN")}.\n\nBest regards,\n${user?.name || "SAAMPARK Group"}`)
               }}
               onConvertToInvoice={() => handleConvertToInvoice(viewingItem)}
+              isClientRole={isClientUser}
             />
           </div>
         )}
