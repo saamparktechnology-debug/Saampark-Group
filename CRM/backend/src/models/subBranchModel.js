@@ -160,7 +160,7 @@ const subBranchModel = {
       }
     }
 
-    const generatedId = insertId ? `sb-${insertId}` : (data.id || `subbranch_${Date.now()}`);
+    const generatedId = insertId ? `sb-${insertId}` : generatedSubId;
 
     // Always sync newly created sub-branch to app_data for guaranteed persistence
     try {

@@ -119,7 +119,7 @@ const branchModel = {
       }
     }
 
-    const generatedId = insertId ? `br-${insertId}` : (data.id || `branch_${Date.now()}`);
+    const finalReturnId = insertId ? `br-${insertId}` : generatedId;
 
     // Always sync newly created branch to app_data for guaranteed persistence
     try {
@@ -131,7 +131,7 @@ const branchModel = {
       if (!Array.isArray(list)) list = [];
       const branchObj = {
         ...data,
-        id: generatedId,
+        id: finalReturnId,
         numeric_id: insertId || undefined,
         company_id: numCompanyId,
         companyId: String(data.companyId || (numCompanyId === 1 ? 'tech' : 'consultancy')),
@@ -146,7 +146,7 @@ const branchModel = {
       ).catch(() => {});
     } catch {}
 
-    return insertId || generatedId;
+    return insertId || finalReturnId;
   },
 
   async findById(id) {
