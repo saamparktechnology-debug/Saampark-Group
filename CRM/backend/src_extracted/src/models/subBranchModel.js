@@ -226,10 +226,8 @@ const subBranchModel = {
     let sqlSub = [];
     try {
       const [rows] = await pool.execute(
-        `SELECT sb.*, u.full_name as manager_name,
-         (SELECT COUNT(*) FROM users u2 WHERE u2.sub_branch_id = sb.id) as user_count
-         FROM sub_branches sb LEFT JOIN users u ON sb.manager_id = u.id
-         WHERE sb.branch_id = ? ORDER BY sb.name`, [branch_id]
+        `SELECT sb.* FROM sub_branches sb WHERE sb.branch_id = ? ORDER BY sb.name`,
+        [branch_id]
       );
       sqlSub = rows || [];
     } catch {}
@@ -261,11 +259,10 @@ const subBranchModel = {
     const placeholders = matches.map(() => '?').join(', ');
     try {
       const [rows] = await pool.execute(
-        `SELECT sb.*, b.name as branch_name, u.full_name as manager_name
+        `SELECT sb.*, b.name as branch_name
          FROM sub_branches sb
-         LEFT JOIN branches b ON sb.branch_id = b.id
-         LEFT JOIN users u ON sb.manager_id = u.id
-         WHERE sb.company_id IN (${placeholders}) OR sb.company_id = ? ORDER BY sb.name`,
+         INNER JOIN branches b ON sb.branch_id = b.id
+         WHERE b.company_id IN (${placeholders}) OR b.company_id = ? ORDER BY sb.name`,
         [...matches, String(num)]
       );
       sqlSub = rows || [];

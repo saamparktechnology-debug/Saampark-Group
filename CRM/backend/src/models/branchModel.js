@@ -64,6 +64,12 @@ const branchModel = {
       }
     }
 
+    const generatedId = data.id || ('br_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7));
+    if (!fields.includes('id') && existingCols.includes('id')) {
+      fields.push('id');
+      placeholders.push('?');
+      values.push(generatedId);
+    }
     if (!fields.includes('name') && existingCols.includes('name')) {
       fields.push('name');
       placeholders.push('?');
@@ -74,10 +80,10 @@ const branchModel = {
       placeholders.push('?');
       values.push(numCompanyId);
     }
-    if (!fields.includes('is_active') && existingCols.includes('is_active')) {
-      fields.push('is_active');
+    if (!fields.includes('status') && existingCols.includes('status')) {
+      fields.push('status');
       placeholders.push('?');
-      values.push(1);
+      values.push('active');
     }
 
     let insertId = null;
@@ -173,10 +179,9 @@ const branchModel = {
     const placeholders = matches.map(() => '?').join(', ');
     try {
       const [rows] = await pool.execute(
-        `SELECT b.*, u.full_name as manager_name,
-         (SELECT COUNT(*) FROM sub_branches sb WHERE sb.branch_id = b.id) as sub_branch_count,
-         (SELECT COUNT(*) FROM users u2 WHERE u2.branch_id = b.id) as user_count
-         FROM branches b LEFT JOIN users u ON b.manager_id = u.id
+        `SELECT b.*,
+         (SELECT COUNT(*) FROM sub_branches sb WHERE sb.branch_id = b.id) as sub_branch_count
+         FROM branches b
          WHERE b.company_id IN (${placeholders}) OR b.company_id = ? ORDER BY b.name`,
         [...matches, String(num)]
       );
