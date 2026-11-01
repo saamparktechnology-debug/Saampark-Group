@@ -283,14 +283,16 @@ html, body, input, textarea, select, button, table, span, div, p {
 @media print {
   @page {
     size: A4 portrait;
-    margin: 8mm;
+    margin: 0;
   }
 
-  body {
+  html, body {
     background: #ffffff !important;
     color: #000000 !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   /* Hide standard CRM web chrome when printing documents */
@@ -333,13 +335,23 @@ html, body, input, textarea, select, button, table, span, div, p {
   .a4-page {
     page-break-after: always !important;
     break-after: page !important;
+    box-sizing: border-box !important;
+    width: 210mm !important;
+    max-width: 210mm !important;
     min-height: 297mm !important;
     height: 297mm !important;
-    width: 210mm !important;
-    margin: 0 !important;
-    padding: 10mm !important;
+    max-height: 297mm !important;
+    margin: 0 auto !important;
+    padding: 8mm 10mm !important;
+    overflow: hidden !important;
     box-shadow: none !important;
     border: none !important;
+    background: #ffffff !important;
+  }
+
+  .a4-page:last-child {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
   }
 }
 

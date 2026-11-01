@@ -134,6 +134,7 @@ export interface Branch {
 
 export interface SubBranch {
   id: string
+  numeric_id?: number | string
   branch_id: string
   company_id: string
   name: string

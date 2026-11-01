@@ -162,24 +162,28 @@ export function OfficialEstimateDocument({
   const isSubBranchIssued = Boolean(activeSubBranch)
   const isBranchIssued = Boolean(activeBranch) && !isSubBranchIssued
 
-  const resolvedBrandName = activeSubBranch?.brand_name || activeSubBranch?.name || activeBranch?.brand_name || activeCompany?.brand_name || activeCompany?.name || "SAAMPARK"
-  const resolvedDivisionName = (activeSubBranch?.division_name && activeSubBranch.division_name.trim()) 
-    ? activeSubBranch.division_name.trim() 
-    : ((activeBranch?.division_name && activeBranch.division_name.trim()) 
-      ? activeBranch.division_name.trim() 
-      : (activeCompany?.division_name?.trim() || ""))
-  const resolvedSubtitle = activeSubBranch?.subtitle || activeBranch?.subtitle || activeCompany?.subtitle || "TECHNOLOGY, DESIGN & ENTERPRISE DIGITAL SOLUTIONS"
-  const resolvedLogoUrl = activeSubBranch?.logo_url || activeBranch?.logo_url || getCompanyLogoUrl(activeCompany) || activeCompany?.logo_url || ""
+  // Parent Company Corporate Details (Stay as is forever; branches/sub-branches appear in their own section)
+  const isConsultancy = activeCompany?.id === 'digital' || activeCompany?.id === 'consultancy' || (estimate as any)?.company === 'consultancy' || estimate?.companyId === 'consultancy'
+  const defaultCin = isConsultancy ? "" : "U72900WB2021PTC244243"
+  const defaultPan = "AAGCS9419E"
+  const defaultGstin = "19AAGCS9419E1ZM"
+  const defaultMsme = isConsultancy ? "UDYAM-WB-10-0038922" : "UDYAM-WB-10-0038921"
 
-  const resolvedAddress = (isSubBranchIssued ? activeSubBranch?.address : isBranchIssued ? activeBranch?.address : activeCompany?.address)?.trim() || "Kolkata, West Bengal, India"
-  const resolvedPhone = (isSubBranchIssued ? (activeSubBranch?.phone || (activeSubBranch as any)?.partnerPhone) : isBranchIssued ? activeBranch?.phone : activeCompany?.phone)?.trim() || "+91 99015 18567"
-  const resolvedEmail = (isSubBranchIssued ? (activeSubBranch?.email || (activeSubBranch as any)?.partnerEmail) : isBranchIssued ? activeBranch?.email : activeCompany?.email)?.trim() || "info@saamparktechnology.com"
-  const resolvedWebsite = (isSubBranchIssued ? activeSubBranch?.website : isBranchIssued ? activeBranch?.website : activeCompany?.website)?.trim() || "www.saamparktechnology.com"
+  const resolvedBrandName = activeCompany?.brand_name || activeCompany?.name || "SAAMPARK"
+  const resolvedDivisionName = activeCompany?.division_name?.trim() || (isConsultancy ? "CONSULTANCY SERVICES" : "TECHNOLOGY AND RESEARCH PVT. LTD.")
+  const resolvedSubtitle = activeCompany?.subtitle || "TECHNOLOGY, DESIGN & ENTERPRISE DIGITAL SOLUTIONS"
+  const resolvedTrademarkSymbol = (activeCompany?.trademark_symbol || (activeCompany as any)?.invoice_customization?.trademark_symbol || "®").trim()
+  const resolvedLogoUrl = getCompanyLogoUrl(activeCompany) || activeCompany?.logo_url || ""
 
-  const resolvedGstin = (isSubBranchIssued ? activeSubBranch?.gstin : isBranchIssued ? activeBranch?.gstin : activeCompany?.gstin)?.trim() || ""
-  const resolvedPan = (isSubBranchIssued ? activeSubBranch?.pan : isBranchIssued ? activeBranch?.pan : activeCompany?.pan)?.trim() || ""
-  const resolvedCin = (isSubBranchIssued ? activeSubBranch?.cin : isBranchIssued ? activeBranch?.cin : activeCompany?.cin)?.trim() || ""
-  const resolvedMsme = (isSubBranchIssued ? activeSubBranch?.msme_reg : (activeCompany as any)?.msme_reg)?.trim() || ""
+  const resolvedAddress = activeCompany?.address?.trim() || "Kolkata, West Bengal, India"
+  const resolvedPhone = activeCompany?.phone?.trim() || "+91 99015 18567"
+  const resolvedEmail = activeCompany?.email?.trim() || "info@saamparktechnology.com"
+  const resolvedWebsite = activeCompany?.website?.trim() || "www.saamparktechnology.com"
+
+  const resolvedCin = activeCompany?.cin?.trim() || defaultCin
+  const resolvedGstin = activeCompany?.gstin?.trim() || defaultGstin
+  const resolvedPan = activeCompany?.pan?.trim() || defaultPan
+  const resolvedMsme = (activeCompany as any)?.msme_reg?.trim() || (activeCompany as any)?.msme?.trim() || defaultMsme
 
   // Bank details
   const resolvedBankName = (isSubBranchIssued 
@@ -385,9 +389,9 @@ export function OfficialEstimateDocument({
         </div>
       </div>
 
-      {/* ── PRINTABLE DOCUMENT BODY (Standard A4 Corporate Format with horizontal scroll on mobile) ── */}
-      <div className="w-full overflow-x-auto">
-        <div id="printable-estimate" className="min-w-[620px] sm:min-w-0 p-5 sm:p-10 space-y-5 text-xs leading-relaxed bg-white print:min-w-0 print:p-6 print:space-y-4">
+      {/* ── PRINTABLE DOCUMENT BODY (Standard A4 Corporate Format) ── */}
+      <div className="w-full flex flex-col items-center gap-6 py-2 print:p-0 print:gap-0 print:m-0 overflow-x-auto">
+        <div id="printable-estimate" className="a4-page bg-white text-zinc-900 font-sans p-5 sm:p-6 text-xs shadow-2xl border border-zinc-200/90 rounded-lg w-full max-w-[794px] min-h-[1080px] mx-auto relative flex flex-col justify-between gap-3 sm:gap-3.5 overflow-visible print:w-[210mm] print:max-w-[210mm] print:h-[282mm] print:min-h-[282mm] print:max-h-[282mm] print:p-[6mm_8mm] print:gap-2 print:m-0 print:shadow-none print:border-none print:rounded-none">
         
         {/* 1. Top Header: Company Brand, Logo, Statutory IDs & Document Header Card */}
         <div className="flex flex-col gap-2.5 border-b-2 border-zinc-900 pb-3">
@@ -411,9 +415,19 @@ export function OfficialEstimateDocument({
 
             {/* Center: BIG SAAMPARK and in below BIGGER SECONDARY LINE */}
             <div className="flex-1 flex flex-col items-center justify-center text-center min-w-0 px-2 sm:px-4">
-              <h1 className="text-2xl sm:text-3xl md:text-[34px] font-black tracking-wider leading-none text-zinc-950 uppercase font-sans text-center drop-shadow-2xs">
-                {resolvedBrandName}
-              </h1>
+              <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                <h1 className="text-2xl sm:text-3xl md:text-[34px] font-black tracking-wider leading-none text-zinc-950 uppercase font-sans text-center drop-shadow-2xs">
+                  {resolvedBrandName}
+                </h1>
+                {resolvedTrademarkSymbol ? (
+                  <span 
+                    className="inline-flex items-center justify-center w-4 h-4 min-w-[16px] min-h-[16px] rounded-full border border-red-500 text-red-600 bg-red-50/60 text-[8.5px] font-black leading-none shrink-0 self-center shadow-2xs"
+                    title={resolvedTrademarkSymbol === "TM" || resolvedTrademarkSymbol === "™" ? "Trademark" : "Registered Trademark"}
+                  >
+                    {resolvedTrademarkSymbol === "R" || resolvedTrademarkSymbol === "®" ? "®" : (resolvedTrademarkSymbol === "TM" || resolvedTrademarkSymbol === "™" ? "™" : resolvedTrademarkSymbol)}
+                  </span>
+                ) : null}
+              </div>
 
               {/* Secondary Line */}
               <h2 className="text-xs sm:text-sm md:text-[15px] font-black tracking-widest text-zinc-800 uppercase font-sans mt-1.5 block leading-tight text-center">
@@ -800,8 +814,23 @@ export function OfficialEstimateDocument({
           </div>
         </div>
 
+        {/* Dedicated Bottom Declarations & Terms Section */}
+        <div className="w-full rounded-md border border-zinc-200/90 bg-zinc-50/70 p-2 text-[8px] sm:text-[8.5px] text-zinc-600 leading-tight space-y-1">
+          <div className="flex items-center justify-between gap-2 border-b border-zinc-200 pb-1">
+            <span className="font-bold uppercase tracking-wider text-zinc-700 text-[8px] flex items-center gap-1">
+              <span>⚖️ Statutory Declaration &amp; Legal Terms:</span>
+            </span>
+            <span className="text-[7.5px] text-zinc-500 font-medium">
+              Subject to Kolkata Jurisdiction • Formal Corporate Commercial Estimate
+            </span>
+          </div>
+          <p className="text-zinc-600 italic leading-relaxed">
+            {(estimate as any).bottomNote || (estimate as any).bottomDetails || "We declare that this commercial estimate reflects the agreed technical scope and deliverables. All services and project deliverables are subject to standard enterprise terms and local jurisdiction."}
+          </p>
+        </div>
+
         {/* 7. Footer Jurisdiction Notice */}
-        <div className="text-center text-[10px] text-zinc-400 pt-3 border-t border-zinc-200">
+        <div className="text-center text-[10px] text-zinc-400 pt-2 border-t border-zinc-200">
           Corporate Office: {resolvedAddress} • Registered under the Companies Act • All disputes subject to local jurisdiction only.
         </div>
       </div>

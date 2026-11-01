@@ -98,6 +98,7 @@ export interface Branch {
 
 export interface SubBranch {
   id: string
+  numeric_id?: number | string
   parentBranchId: string
   companyId: string
   name: string
@@ -1021,26 +1022,42 @@ export const useAuthStore = create<AuthState>()(
             return false
           }
 
-          const dbSubBranches = await fetchModuleDataFromDB<SubBranch[]>('sub_branches', [], 'all').catch(() => null)
-          
-          let list: SubBranch[] = []
+          // Fetch from both app_data and MySQL API in parallel
+          const [dbSubBranches, apiRes] = await Promise.all([
+            fetchModuleDataFromDB<SubBranch[]>('sub_branches', [], 'all').catch(() => null),
+            api.get('/branches/sub-branches/all', { headers: { 'x-company-id': 'all' } }).catch(() => null),
+          ])
+
+          const subMap = new Map<string, SubBranch>()
+
           if (Array.isArray(dbSubBranches) && dbSubBranches.length > 0) {
-            list = dbSubBranches
-          } else {
-            const res: any = await api.get('/branches/sub-branches/all', { headers: { 'x-company-id': 'all' } }).catch(() => null)
-            if (res && (Array.isArray(res.data) || Array.isArray(res))) {
-              list = Array.isArray(res.data) ? res.data : res
-            }
+            dbSubBranches.forEach(sb => {
+              if (!isSubBranchDeleted(sb.id, sb.code)) {
+                subMap.set(String(sb.id), { ...sb })
+              }
+            })
           }
 
-          const filtered = list.filter(sb => !isSubBranchDeleted(sb.id, sb.code))
+          const apiList = apiRes && (Array.isArray(apiRes.data) || Array.isArray(apiRes))
+            ? (Array.isArray(apiRes.data) ? apiRes.data : apiRes)
+            : []
+          apiList.forEach((sb: SubBranch) => {
+            if (!isSubBranchDeleted(sb.id, sb.code)) {
+              const strKey = String(sb.id)
+              const existing = subMap.get(strKey)
+              subMap.set(strKey, { ...(existing || {}), ...sb })
+            }
+          })
+
+          const filtered = Array.from(subMap.values())
           set({ subBranches: filtered })
           return filtered
         } catch (err) {
           console.warn("fetchSubBranches warning:", err)
         }
         const localDeleted = getLocalDeletedIds()
-        const currentFiltered = (get().subBranches || []).filter(sb => !isGlobalItemDeleted(sb.id, localDeleted, 'sub_branches'))
+        const currentFiltered = (get().subBranches || [])
+          .filter(sb => !isGlobalItemDeleted(sb.id, localDeleted, 'sub_branches') && (!sb.code || !isGlobalItemDeleted(sb.code, localDeleted, 'sub_branches')))
         set({ subBranches: currentFiltered })
         return currentFiltered
       },
@@ -1300,13 +1317,19 @@ export const useAuthStore = create<AuthState>()(
 
       addSubBranch: async (subBranchData: Partial<SubBranch>) => {
         const { subBranches, branches, activeCompanyId } = get()
-        const parentBranch = branches.find(b => b.id === subBranchData.parentBranchId)
+        const rawParentId = subBranchData.parentBranchId || (subBranchData as any)?.branch_id
+        const parentBranch = (branches || []).find(b => 
+          String(b.id).toLowerCase() === String(rawParentId || '').toLowerCase() ||
+          (b.code && String(b.code).toLowerCase() === String(rawParentId || '').toLowerCase())
+        ) || branches[0]
+        const targetParentId = parentBranch?.id || rawParentId || ''
+        const numericParentId = (parentBranch as any)?.numeric_id || (!isNaN(Number(targetParentId)) ? Number(targetParentId) : undefined)
         const targetCompId = getCanonicalCompanyId(subBranchData.companyId || parentBranch?.companyId || activeCompanyId || 'tech') || 'tech'
 
         const newSubBranch: SubBranch = {
           ...subBranchData,
           id: subBranchData.id || `subbranch_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-          parentBranchId: subBranchData.parentBranchId || parentBranch?.id || '',
+          parentBranchId: targetParentId,
           companyId: targetCompId,
           name: subBranchData.name || 'New Sub-Branch',
           code: subBranchData.code || `SB-${Math.floor(100 + Math.random() * 900)}`,
@@ -1322,11 +1345,15 @@ export const useAuthStore = create<AuthState>()(
         }
 
         try {
-          await api.post('/branches/sub-branches', {
+          const apiRes = await api.post('/branches/sub-branches', {
             ...newSubBranch,
-            branch_id: (parentBranch as any)?.numeric_id || newSubBranch.parentBranchId,
+            branch_id: numericParentId || targetParentId,
+            parentBranchId: targetParentId,
             company_id: targetCompId === 'tech' ? 1 : 2
-          }).catch(() => {})
+          }).catch(() => null)
+          if (apiRes?.data?.id) {
+            newSubBranch.numeric_id = apiRes.data.id
+          }
         } catch {}
 
         const updated = [...(subBranches || []).filter(sb => sb.id !== newSubBranch.id), newSubBranch]

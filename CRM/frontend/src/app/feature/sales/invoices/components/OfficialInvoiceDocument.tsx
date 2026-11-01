@@ -349,13 +349,27 @@ export function OfficialInvoiceDocument({
   const resolvedBrandName = companyDetails?.brand_name || activeCompany?.brand_name || activeCompany?.name || "SAAMPARK"
   const resolvedDivisionName = companyDetails?.division_name !== undefined ? companyDetails.division_name : (activeCompany?.division_name || "")
   const resolvedSubtitle = companyDetails?.subtitle !== undefined ? companyDetails.subtitle : (activeCompany?.subtitle || "")
-  const resolvedTrademarkSymbol = (companyDetails?.trademark_symbol || activeCompany?.trademark_symbol || (activeCompany as any)?.invoice_customization?.trademark_symbol || "").trim()
+  const resolvedTrademarkSymbol = (companyDetails?.trademark_symbol || activeCompany?.trademark_symbol || (activeCompany as any)?.invoice_customization?.trademark_symbol || "®").trim()
   const resolvedLogoUrl = overrideLogoUrl || getCompanyLogoUrl(activeCompany) || activeCompany?.logo_url || companyDetails?.logo_url || ""
 
-  // Specific Entity Legal IDs (Belongs to Company)
-  const resolvedCin = (companyDetails ? companyDetails.cin : activeCompany?.cin)?.trim() || ""
-  const resolvedGstin = (companyDetails ? companyDetails.gstin : activeCompany?.gstin)?.trim() || ""
-  const resolvedPan = (companyDetails ? companyDetails.pan : activeCompany?.pan)?.trim() || ""
+  // Specific Entity Legal IDs (Belongs to Company — permanent canonical details)
+  const isConsultancy = activeCompany?.id === 'digital' || activeCompany?.id === 'consultancy' || (invoice as any)?.company === 'consultancy' || invoice?.companyId === 'consultancy'
+  const defaultCin = isConsultancy ? "" : "U72900WB2021PTC244243"
+  const defaultPan = "AAGCS9419E"
+  const defaultGstin = "19AAGCS9419E1ZM"
+  const defaultMsme = isConsultancy ? "UDYAM-WB-10-0038922" : "UDYAM-WB-10-0038921"
+
+  const rawCin = (companyDetails ? companyDetails.cin : activeCompany?.cin)?.trim() || ""
+  const resolvedCin = rawCin || defaultCin
+
+  const rawGstin = (companyDetails ? companyDetails.gstin : activeCompany?.gstin)?.trim() || ""
+  const resolvedGstin = rawGstin || defaultGstin
+
+  const rawPan = (companyDetails ? companyDetails.pan : activeCompany?.pan)?.trim() || ""
+  const resolvedPan = rawPan || defaultPan
+
+  const rawMsme = (companyDetails?.msme_reg || (companyDetails as any)?.msme || activeCompany?.msme_reg || (activeCompany as any)?.msme || (activeCompany as any)?.udyam)?.trim() || ""
+  const resolvedMsme = rawMsme || defaultMsme
 
   // Address & Contact Information (Corporate entity defaults)
   const resolvedAddress = (companyDetails ? companyDetails.address : activeCompany?.address)?.trim() || ""
@@ -875,9 +889,10 @@ export function OfficialInvoiceDocument({
 
   const hasContactInfo = Boolean(isValidField(resolvedPhone) || isValidField(resolvedWebsite) || isValidField(resolvedEmail))
   const hasCin = isValidField(resolvedCin)
-  const hasGstin = Boolean(isGstInvoice && isValidField(resolvedGstin))
+  const hasGstin = isValidField(resolvedGstin)
   const hasPan = isValidField(resolvedPan)
-  const hasLegalIds = Boolean(hasCin || hasGstin || hasPan)
+  const hasMsme = isValidField(resolvedMsme)
+  const hasLegalIds = Boolean(hasCin || hasGstin || hasPan || hasMsme)
 
 
 
@@ -969,7 +984,7 @@ export function OfficialInvoiceDocument({
 
         {/* Center: BIG SAAMPARK and in below BIGGER SECONDARY LINE (TECHNOLOGY AND RESEARCH PVT LTD / CONSULTANCY SERVICES) */}
         <div className="flex-1 flex flex-col items-center justify-center text-center min-w-0 px-2 sm:px-4">
-          <div className="flex items-center justify-center gap-2 flex-wrap">
+          <div className="flex items-center justify-center gap-1.5 flex-wrap">
             <EditableText
               as="h1"
               value={headerBrandName}
@@ -979,8 +994,11 @@ export function OfficialInvoiceDocument({
               className="text-2xl sm:text-3xl md:text-[34px] font-black tracking-wider leading-none text-zinc-950 uppercase font-sans text-center drop-shadow-2xs"
             />
             {resolvedTrademarkSymbol ? (
-              <span className="inline-flex items-center justify-center border border-zinc-700/60 text-zinc-800 text-[9px] font-black px-1.5 py-0.5 rounded-full uppercase leading-none shadow-2xs">
-                {resolvedTrademarkSymbol === "R" || resolvedTrademarkSymbol === "®" ? "®" : resolvedTrademarkSymbol}
+              <span 
+                className="inline-flex items-center justify-center w-4 h-4 min-w-[16px] min-h-[16px] rounded-full border border-red-500 text-red-600 bg-red-50/60 text-[8.5px] font-black leading-none shrink-0 self-center shadow-2xs"
+                title={resolvedTrademarkSymbol === "TM" || resolvedTrademarkSymbol === "™" ? "Trademark" : "Registered Trademark"}
+              >
+                {resolvedTrademarkSymbol === "R" || resolvedTrademarkSymbol === "®" ? "®" : (resolvedTrademarkSymbol === "TM" || resolvedTrademarkSymbol === "™" ? "™" : resolvedTrademarkSymbol)}
               </span>
             ) : null}
           </div>
@@ -1010,9 +1028,9 @@ export function OfficialInvoiceDocument({
             </div>
           )}
 
-          {/* Legal IDs: CIN, GSTIN, PAN centered */}
+          {/* Legal IDs: CIN, GSTIN, PAN, MSME centered */}
           {hasLegalIds && (
-            <p className="text-[10px] sm:text-[10.5px] font-semibold text-zinc-600 font-mono pt-1.5 flex items-center justify-center gap-2.5 flex-wrap">
+            <p className="text-[10px] sm:text-[10.5px] font-semibold text-zinc-600 font-mono pt-1.5 flex items-center justify-center gap-2 sm:gap-2.5 flex-wrap">
               {hasCin && (
                 <span className="inline-flex items-center gap-1">
                   <EditableText value="CIN:" interactive={interactive} className="text-zinc-500 font-sans text-[9.5px] font-bold" />
@@ -1031,6 +1049,13 @@ export function OfficialInvoiceDocument({
                   {(hasCin || hasGstin) ? <span className="text-zinc-300 mr-0.5">|</span> : null}
                   <EditableText value="PAN:" interactive={interactive} className="text-zinc-500 font-sans text-[9.5px] font-bold" />
                   <EditableText value={resolvedPan} onChange={(val) => onFieldChange?.("pan", val)} interactive={interactive} fieldKey="pan" placeholder="PAN..." className="text-zinc-900 font-black" />
+                </span>
+              )}
+              {hasMsme && (
+                <span className="inline-flex items-center gap-1">
+                  {(hasCin || hasGstin || hasPan) ? <span className="text-zinc-300 mr-0.5">|</span> : null}
+                  <EditableText value="MSME:" interactive={interactive} className="text-zinc-500 font-sans text-[9.5px] font-bold" />
+                  <EditableText value={resolvedMsme} onChange={(val) => onFieldChange?.("msme_reg", val)} interactive={interactive} fieldKey="msme_reg" placeholder="MSME Reg..." className="text-zinc-900 font-semibold" />
                 </span>
               )}
             </p>
@@ -2043,6 +2068,26 @@ export function OfficialInvoiceDocument({
               />
             </div>
           </motion.div>
+        </div>
+
+        {/* DEDICATED BOTTOM FILLING OPTION: Custom Declarations, Jurisdiction, Branch Operational Notes */}
+        <div className="w-full rounded-md border border-zinc-200/90 bg-zinc-50/70 p-2 text-[8px] sm:text-[8.5px] text-zinc-600 leading-tight space-y-1">
+          <div className="flex items-center justify-between gap-2 border-b border-zinc-200 pb-1">
+            <span className="font-bold uppercase tracking-wider text-zinc-700 text-[8px] flex items-center gap-1">
+              <span>⚖️ Statutory Declaration &amp; Legal Terms:</span>
+            </span>
+            <span className="text-[7.5px] text-zinc-500 font-medium">
+              Subject to Kolkata Jurisdiction • Computer Generated Official Document
+            </span>
+          </div>
+          <EditableText
+            value={(invoice as any).bottomNote || (invoice as any).bottomDetails || (invoice as any).declaration || activeCompany?.invoice_notes || "We declare that this invoice shows the actual price of the goods/services described and that all particulars are true and correct. All disputes are subject to Kolkata jurisdiction."}
+            onChange={(val) => onFieldChange?.("bottomNote", val)}
+            interactive={interactive}
+            fieldKey="bottomNote"
+            placeholder="Click to fill custom bottom notes, compliance declarations, or branch operational details..."
+            className="text-zinc-600 italic block leading-relaxed"
+          />
         </div>
 
         {/* BOTTOM BANNER WITH PAGE NUMBER */}

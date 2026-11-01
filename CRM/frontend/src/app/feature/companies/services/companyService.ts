@@ -66,10 +66,11 @@ export const BranchApiService = {
     return unpackArray(res)
   },
   create: async (companyId: string, data: any) => {
+    const numComp = companyId === 'consultancy' || companyId === 'digital' || companyId === 'print' ? '2' : (companyId === 'tech' ? '1' : companyId);
     const res = await fetchWithAuth('/branches', {
       method: 'POST',
-      headers: { 'x-company-id': companyId },
-      body: JSON.stringify({ ...data, company_id: companyId }),
+      headers: { 'x-company-id': numComp },
+      body: JSON.stringify({ ...data, company_id: numComp }),
     })
     return unpack(res)
   },
@@ -87,10 +88,11 @@ export const SubBranchApiService = {
     return unpackArray(res)
   },
   create: async (companyId: string, data: any) => {
+    const numComp = companyId === 'consultancy' || companyId === 'digital' || companyId === 'print' ? '2' : (companyId === 'tech' ? '1' : companyId);
     const res = await fetchWithAuth('/branches/sub-branches', {
       method: 'POST',
-      headers: { 'x-company-id': companyId },
-      body: JSON.stringify({ ...data, company_id: companyId }),
+      headers: { 'x-company-id': numComp },
+      body: JSON.stringify({ ...data, company_id: numComp }),
     })
     return unpack(res)
   },
