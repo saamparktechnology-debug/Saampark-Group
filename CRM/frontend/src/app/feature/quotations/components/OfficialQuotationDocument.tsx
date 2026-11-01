@@ -208,7 +208,7 @@ export function OfficialQuotationDocument({
   const isConsultancy = activeCompany?.id === 'digital' || activeCompany?.id === 'consultancy' || (quotation as any)?.company === 'consultancy' || quotation?.companyId === 'consultancy'
 
   const resolvedBrandName = activeCompany?.brand_name || activeCompany?.name || "SAAMPARK"
-  const resolvedDivisionName = activeCompany?.division_name?.trim() || (isConsultancy ? "CONSULTANCY SERVICES" : "TECHNOLOGY AND RESEARCH PVT. LTD.")
+  const resolvedDivisionName = activeCompany?.division_name !== undefined ? activeCompany.division_name : ""
   const resolvedSubtitle = activeCompany?.subtitle || ""
   const resolvedTrademarkSymbol = (activeCompany?.trademark_symbol || (activeCompany as any)?.invoice_customization?.trademark_symbol || "®").trim()
   const resolvedLogoUrl = getCompanyLogoUrl(activeCompany) || activeCompany?.logo_url || ""
@@ -511,9 +511,11 @@ export function OfficialQuotationDocument({
               </div>
 
               {/* Secondary Line */}
-              <h2 className="text-xs sm:text-sm md:text-[15px] font-black tracking-widest text-zinc-800 uppercase font-sans mt-1.5 block leading-tight text-center">
-                {resolvedDivisionName || (activeCompany?.id === "digital" ? "CONSULTANCY SERVICES" : "TECHNOLOGY AND RESEARCH PVT. LTD.")}
-              </h2>
+              {resolvedDivisionName ? (
+                <h2 className="text-xs sm:text-sm md:text-[15px] font-black tracking-widest text-zinc-800 uppercase font-sans mt-1.5 block leading-tight text-center">
+                  {resolvedDivisionName}
+                </h2>
+              ) : null}
 
               {resolvedSubtitle && (
                 <p className="text-[8.5px] sm:text-[9px] font-semibold text-zinc-500 tracking-wider uppercase mt-0.5 text-center">

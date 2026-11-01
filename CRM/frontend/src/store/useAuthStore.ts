@@ -324,23 +324,21 @@ export function getCompanyFullName(company?: Partial<Company> | null): string {
   const brand = (company.brand_name || "SAAMPARK").trim()
   
   if (canon === "tech" || canon === "1") {
-    let div = (company.division_name || "").trim()
-    if (!div || div.toLowerCase().includes("consult")) div = "TECHNOLOGY"
+    const div = company.division_name !== undefined ? company.division_name.trim() : "TECHNOLOGY"
     const sub = (company.subtitle || "").trim()
     if (sub && !sub.toLowerCase().includes("consult")) {
-      return `${brand} ${div} ${sub}`.trim()
+      return [brand, div, sub].filter(Boolean).join(" ").trim()
     }
-    return `${brand} ${div}`.trim()
+    return [brand, div].filter(Boolean).join(" ").trim() || brand
   }
 
   if (canon === "consultancy" || canon === "2") {
-    let div = (company.division_name || "").trim()
-    if (!div || div.toLowerCase().includes("tech")) div = "CONSULTANCY SERVICE"
+    const div = company.division_name !== undefined ? company.division_name.trim() : "CONSULTANCY SERVICE"
     const sub = (company.subtitle || "").trim()
     if (sub && !sub.toLowerCase().includes("tech")) {
-      return `${brand} ${div} ${sub}`.trim()
+      return [brand, div, sub].filter(Boolean).join(" ").trim()
     }
-    return `${brand} ${div}`.trim()
+    return [brand, div].filter(Boolean).join(" ").trim() || brand
   }
 
   const rawBrand = (company.brand_name || "").trim()
@@ -361,8 +359,7 @@ export function getCanonicalCompanyId(val: string | number | null | undefined): 
   const str = String(val).toLowerCase().trim()
   if (!str) return ""
   if (str === "all") return "all"
-  if (str === "digital" || str.includes("digital") || str.includes("marketing")) return "digital"
-  if (str === "consultancy" || str.includes("consult")) return "consultancy"
+  if (str === "2" || str === "consultancy" || str.includes("consult") || str === "digital" || str.includes("digital") || str === "print" || str.includes("print")) return "consultancy"
   if (str === "1" || str === "tech" || str.includes("tech") || str.includes("research")) return "tech"
   if (str === "saampark-ai-solutions" || str.includes("ai-solutions") || str.includes("ai")) return "saampark-ai-solutions"
   return str

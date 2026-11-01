@@ -1,5 +1,6 @@
 export interface Company {
   id: string
+  numeric_id?: number
   name: string
   slug?: string
   brand_name?: string

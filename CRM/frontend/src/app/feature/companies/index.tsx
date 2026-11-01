@@ -7,7 +7,7 @@ import {
   MapPin, Phone, Mail, Globe, Users, Briefcase, DollarSign, Building, 
   Loader2, AlertCircle, Shield, CreditCard, Award, CheckCircle2, Image,
   X, Sparkles, Eye, Landmark, QrCode, FileText, Check, ShieldCheck,
-  Columns, Maximize2, Minimize2, Split, LayoutTemplate, Save, Copy
+  Columns, Maximize2, Minimize2, Split, LayoutTemplate, Save, Copy, Layers
 } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
@@ -40,6 +40,7 @@ const PARTNER_TYPES = [
 const CANONICAL_COMPANIES: Company[] = [
   {
     id: "tech",
+    numeric_id: 1,
     name: "SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED",
     slug: "tech",
     brand_name: "SAAMPARK",
@@ -64,6 +65,7 @@ const CANONICAL_COMPANIES: Company[] = [
   },
   {
     id: "consultancy",
+    numeric_id: 2,
     name: "SAAMPARK CONSULTANCY SERVICE",
     slug: "consultancy",
     brand_name: "SAAMPARK",
@@ -891,14 +893,19 @@ export default function CompaniesMain() {
 
   const [branchPreviewSaveSuccess, setBranchPreviewSaveSuccess] = React.useState(false)
 
+  const resolveNumericCompId = (c?: any, fallback?: any): number => {
+    const s = String(c?.numeric_id || c?.id || c?.slug || fallback || "").toLowerCase().trim()
+    if (s === "2" || s === "consultancy" || s.includes("consult") || s === "digital" || s === "print") return 2
+    return 1
+  }
+
   const saveBranch = async (keepModalOpen = false) => {
     if (!branchForm.name.trim()) return
     setSaving(true)
     try {
       const curComp = companies.find(c => isMatchingCompany(c, branchCompanyId))
-      const resolvedCompSlug = curComp?.slug || String(curComp?.id || branchCompanyId || "tech")
-      // Use actual numeric ID from the company object (populated from MySQL API response)
-      const resolvedCompNumeric = (curComp as any)?.numeric_id || (Number.isFinite(Number(curComp?.id)) ? Number(curComp?.id) : null) || 1
+      const resolvedCompNumeric = resolveNumericCompId(curComp, branchCompanyId)
+      const resolvedCompSlug = curComp?.slug || (resolvedCompNumeric === 2 ? "consultancy" : "tech")
 
       const payload: any = {
         ...branchForm,
@@ -1177,9 +1184,8 @@ export default function CompaniesMain() {
       const curBranch = branches.find(b => String(b.id) === String(subBranchBranchId) || (b.code && b.code === subBranchBranchId))
       const resolvedBranchId = curBranch?.id || subBranchBranchId
       const curComp = companies.find(c => isMatchingCompany(c, subBranchCompanyId))
-      const resolvedCompSlug = curComp?.slug || String(curComp?.id || subBranchCompanyId || "tech")
-      // Use actual numeric ID from the company object (populated from MySQL API response)
-      const resolvedCompNumeric = (curComp as any)?.numeric_id || (Number.isFinite(Number(curComp?.id)) ? Number(curComp?.id) : null) || (Number.isFinite(Number((curBranch as any)?.company_id)) ? Number((curBranch as any)?.company_id) : null) || 1
+      const resolvedCompNumeric = resolveNumericCompId(curComp, subBranchCompanyId || (curBranch as any)?.company_id)
+      const resolvedCompSlug = curComp?.slug || (resolvedCompNumeric === 2 ? "consultancy" : "tech")
 
       const payload: any = {
         branch_id: resolvedBranchId,
@@ -1503,8 +1509,8 @@ export default function CompaniesMain() {
                                       <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">{branch.status || "active"}</span>
                                     </div>
                                     <div className="text-[11px] text-muted-foreground flex items-center gap-3 mt-0.5">
-                                      {branch.city && <span>📍 {branch.city}{branch.state ? `, ${branch.state}` : ""}</span>}
-                                      <span>🌿 {bSubBranches.length} Sub-Branches</span>
+                                      {branch.city && <span className="inline-flex items-center gap-1"><MapPin size={11} className="text-muted-foreground" /> {branch.city}{branch.state ? `, ${branch.state}` : ""}</span>}
+                                      <span className="inline-flex items-center gap-1"><Layers size={11} className="text-muted-foreground" /> {bSubBranches.length} Sub-Branches</span>
                                     </div>
                                   </div>
                                 </div>
@@ -1539,8 +1545,8 @@ export default function CompaniesMain() {
                                             </span>
                                           </div>
                                           <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-3">
-                                            {sb.partner_name && <span>👤 Partner: {sb.partner_name}</span>}
-                                            {sb.partner_type && <span>🏷️ {sb.partner_type}</span>}
+                                            {sb.partner_name && <span className="inline-flex items-center gap-1"><Users size={11} className="text-muted-foreground" /> Partner: {sb.partner_name}</span>}
+                                            {sb.partner_type && <span className="inline-flex items-center gap-1"><Briefcase size={11} className="text-muted-foreground" /> {sb.partner_type}</span>}
                                           </div>
                                         </div>
                                         <div className="flex items-center gap-1">
@@ -1704,7 +1710,7 @@ export default function CompaniesMain() {
                                   setCompanyForm(prev => ({ 
                                     ...prev, 
                                     division_name: val,
-                                    subtitle: prev.subtitle || val
+                                    subtitle: val
                                   }))
                                 }} 
                                 className="font-medium text-xs sm:text-sm"
@@ -2139,7 +2145,7 @@ export default function CompaniesMain() {
                     {/* Interactive Placement & Live Edit Notice */}
                     <div className="px-3 py-1.5 bg-amber-50/90 dark:bg-amber-950/40 border-b border-amber-200/80 dark:border-amber-900/50 text-[10px] text-amber-900 dark:text-amber-300 flex flex-wrap items-center justify-between gap-2 shrink-0">
                       <span className="flex items-center gap-1 font-semibold">
-                        <span>✍ <strong>Live Canvas:</strong> Touch/click any text to edit • ✥ Drag Logo, Seal, Signature &amp; Notes independently</span>
+                        <span className="flex items-center gap-1.5 font-medium"><Sparkles size={12} className="text-amber-600 dark:text-amber-400" /> <strong className="font-semibold">Interactive Studio:</strong> Direct document editing and dynamic positioning</span>
                       </span>
                       <div className="flex items-center gap-2 font-mono text-[9px] font-bold">
                         <span className="bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300 px-1.5 py-0.2 rounded border border-blue-200">
@@ -2782,7 +2788,7 @@ export default function CompaniesMain() {
                     {/* Interactive Placement Coordinates */}
                     <div className="px-3 py-1.5 bg-amber-50/90 dark:bg-amber-950/40 border-b border-amber-200/80 dark:border-amber-900/50 text-[10px] text-amber-900 dark:text-amber-300 flex flex-wrap items-center justify-between gap-2 shrink-0">
                       <span className="flex items-center gap-1 font-semibold">
-                        <span>✍ <strong>Live Canvas:</strong> Touch/click any text to edit • ✥ Drag Logo, Seal, Signature &amp; Notes independently</span>
+                        <span className="flex items-center gap-1.5 font-medium"><Sparkles size={12} className="text-amber-600 dark:text-amber-400" /> <strong className="font-semibold">Interactive Studio:</strong> Direct document editing and dynamic positioning</span>
                       </span>
                       <div className="flex items-center gap-2 font-mono text-[9px] font-bold">
                         <span className="bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300 px-1.5 py-0.2 rounded border border-blue-200">
@@ -3451,7 +3457,7 @@ export default function CompaniesMain() {
                     {/* Interactive Placement Coordinates */}
                     <div className="px-3 py-1.5 bg-amber-50/90 dark:bg-amber-950/40 border-b border-amber-200/80 dark:border-amber-900/50 text-[10px] text-amber-900 dark:text-amber-300 flex flex-wrap items-center justify-between gap-2 shrink-0">
                       <span className="flex items-center gap-1 font-semibold">
-                        <span>✍ <strong>Live Canvas:</strong> Touch/click any text to edit • ✥ Drag Logo, Seal, Signature &amp; Notes independently</span>
+                        <span className="flex items-center gap-1.5 font-medium"><Sparkles size={12} className="text-amber-600 dark:text-amber-400" /> <strong className="font-semibold">Interactive Studio:</strong> Direct document editing and dynamic positioning</span>
                       </span>
                       <div className="flex items-center gap-2 font-mono text-[9px] font-bold">
                         <span className="bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300 px-1.5 py-0.2 rounded border border-blue-200">

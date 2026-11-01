@@ -85,7 +85,7 @@ const branchController = {
         if (compRows && compRows.length > 0) {
           resolvedCompanyId = compRows[0].id;
         } else {
-          resolvedCompanyId = 1;
+          resolvedCompanyId = String(companyId).toLowerCase().includes('consult') || String(companyId) === '2' ? 2 : 1;
         }
       }
 

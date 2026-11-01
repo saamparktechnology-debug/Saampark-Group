@@ -24,6 +24,19 @@ async function getExistingSubBranchColumns() {
   return ALLOWED_SUB_BRANCH_FIELDS;
 }
 
+function resolveSubCompanyNumericId(company_id) {
+  const str = String(company_id || '').toLowerCase().trim();
+  if (str === '2' || str === 'consultancy' || str.includes('consult') || str === 'print' || str === 'digital') {
+    return 2;
+  }
+  return 1;
+}
+
+function getSubCompanyMatchingList(company_id) {
+  const num = resolveSubCompanyNumericId(company_id);
+  return num === 2 ? [2, '2', 'consultancy', 'digital', 'print'] : [1, '1', 'tech', 'technology'];
+}
+
 const subBranchModel = {
   async create(data) {
     const existingCols = await getExistingSubBranchColumns();
@@ -32,12 +45,7 @@ const subBranchModel = {
     const values = [];
 
     // Ensure company_id is valid integer
-    let cleanCompanyId = 1;
-    if (!isNaN(parseInt(data.company_id, 10)) && parseInt(data.company_id, 10) > 0) {
-      cleanCompanyId = parseInt(data.company_id, 10);
-    } else if (String(data.company_id || data.companyId).toLowerCase().includes('consult') || String(data.company_id || data.companyId).toLowerCase().includes('print')) {
-      cleanCompanyId = 2;
-    }
+    const cleanCompanyId = resolveSubCompanyNumericId(data.company_id || data.companyId);
 
     // Ensure branch_id resolves to an existing branch in MySQL branches table
     let cleanBranchId = !isNaN(parseInt(data.branch_id, 10)) && parseInt(data.branch_id, 10) > 0 ? parseInt(data.branch_id, 10) : null;
@@ -63,7 +71,8 @@ const subBranchModel = {
 
     // Fallback: pick any active branch for this company
     if (!cleanBranchId) {
-      const [compBranches] = await pool.execute('SELECT id FROM branches WHERE company_id = ? ORDER BY id ASC LIMIT 1', [cleanCompanyId]).catch(() => [[]]);
+      const compMatches = getSubCompanyMatchingList(cleanCompanyId);
+      const [compBranches] = await pool.execute(`SELECT id FROM branches WHERE company_id IN (${compMatches.map(()=>'?').join(',')}) OR company_id = ? ORDER BY id ASC LIMIT 1`, [...compMatches, String(cleanCompanyId)]).catch(() => [[]]);
       if (compBranches && compBranches.length > 0) {
         cleanBranchId = compBranches[0].id;
       }
@@ -247,13 +256,17 @@ const subBranchModel = {
 
   async findByCompany(company_id) {
     let sqlSub = [];
+    const num = resolveSubCompanyNumericId(company_id);
+    const matches = getSubCompanyMatchingList(company_id);
+    const placeholders = matches.map(() => '?').join(', ');
     try {
       const [rows] = await pool.execute(
         `SELECT sb.*, b.name as branch_name, u.full_name as manager_name
          FROM sub_branches sb
          LEFT JOIN branches b ON sb.branch_id = b.id
          LEFT JOIN users u ON sb.manager_id = u.id
-         WHERE sb.company_id = ? ORDER BY sb.name`, [company_id]
+         WHERE sb.company_id IN (${placeholders}) OR sb.company_id = ? ORDER BY sb.name`,
+        [...matches, String(num)]
       );
       sqlSub = rows || [];
     } catch {}

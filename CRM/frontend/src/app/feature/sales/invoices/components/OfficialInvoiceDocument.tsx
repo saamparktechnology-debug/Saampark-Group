@@ -105,7 +105,7 @@ export function EditableText({
       suppressContentEditableWarning
       className={`${className} outline-none transition-all rounded px-0.5 -mx-0.5 hover:bg-blue-100/70 hover:ring-1 hover:ring-blue-400 focus:bg-white focus:text-zinc-950 focus:ring-2 focus:ring-blue-600 focus:shadow-xs cursor-text inline-block min-w-[12px]`}
       onBlur={(e: React.FocusEvent<HTMLElement>) => {
-        const text = e.currentTarget.innerText.trim()
+        const text = (e.currentTarget.textContent || "").replace(/\r?\n|\r/g, "")
         setInternalVal(text)
         if (onChange) onChange(text)
       }}
@@ -395,29 +395,15 @@ export function OfficialInvoiceDocument({
   ).trim()
 
   // Split Corporate Brand & Division for Top Header Typography
-  // Top line: SAAMPARK (with optional TM/R pill badge)
-  // Second line: TECHNOLOGY AND RESEARCH PRIVATE LIMITED (or CONSULTANCY SERVICES / division_name)
-  let headerBrandName = (resolvedBrandName || "SAAMPARK").toUpperCase().trim()
-  let headerSecondaryLine = (resolvedDivisionName || "").toUpperCase().trim()
-  
-  if (!headerSecondaryLine && fullRegisteredCompanyName) {
-    const upperFull = fullRegisteredCompanyName.toUpperCase().trim()
-    if (upperFull.startsWith(headerBrandName + " ")) {
-      headerSecondaryLine = upperFull.substring(headerBrandName.length + 1).trim()
-    } else if (upperFull.startsWith("SAAMPARK ")) {
-      headerBrandName = "SAAMPARK"
-      headerSecondaryLine = upperFull.substring(9).trim()
-    }
-  }
+  // Top line: SAAMPARK (with optional TM/R badge)
+  // Second line: Header Line 2 (division_name) - strictly respects blank when cleared and preserves spaces
+  let headerBrandName = (resolvedBrandName || "SAAMPARK").toUpperCase()
+  let headerSecondaryLine = resolvedDivisionName !== undefined
+    ? resolvedDivisionName.toUpperCase()
+    : (activeCompany?.division_name ? activeCompany.division_name.toUpperCase() : "")
 
-  if (resolvedSubtitle && !headerSecondaryLine.includes(resolvedSubtitle.toUpperCase())) {
-    headerSecondaryLine = headerSecondaryLine ? `${headerSecondaryLine} ${resolvedSubtitle.toUpperCase()}` : resolvedSubtitle.toUpperCase()
-  }
-
-  if (!headerSecondaryLine) {
-    headerSecondaryLine = (activeCompany?.id === "digital" || activeCompany?.id === "consultancy")
-      ? "CONSULTANCY SERVICES"
-      : "TECHNOLOGY AND RESEARCH PVT. LTD."
+  if (resolvedSubtitle && headerSecondaryLine && !headerSecondaryLine.includes(resolvedSubtitle.toUpperCase())) {
+    headerSecondaryLine = `${headerSecondaryLine} ${resolvedSubtitle.toUpperCase()}`
   }
 
   // Helper to validate non-empty string fields (strictly ignores empty, null, and placeholder text)
@@ -999,16 +985,18 @@ export function OfficialInvoiceDocument({
             ) : null}
           </div>
 
-          {/* Secondary Line: TECHNOLOGY AND RESEARCH PVT LTD / CONSULTANCY SERVICES (editable) */}
-          <EditableText
-            as="h2"
-            value={headerSecondaryLine}
-            onChange={(val) => onFieldChange?.("division_name", val)}
-            interactive={interactive}
-            fieldKey="division_name"
-            placeholder="TECHNOLOGY AND RESEARCH PVT. LTD."
-            className="text-xs sm:text-sm md:text-[15px] font-black tracking-widest text-zinc-800 uppercase font-sans mt-1.5 block leading-tight text-center"
-          />
+          {/* Secondary Line (Header Line 2): Cleanly renders when provided, stays blank when cleared */}
+          {(headerSecondaryLine || interactive) ? (
+            <EditableText
+              as="h2"
+              value={headerSecondaryLine}
+              onChange={(val) => onFieldChange?.("division_name", val)}
+              interactive={interactive}
+              fieldKey="division_name"
+              placeholder="CORPORATE SUBTITLE / DIVISION (OPTIONAL)"
+              className="text-xs sm:text-sm md:text-[15px] font-black tracking-widest text-zinc-800 uppercase font-sans mt-1.5 block leading-tight text-center"
+            />
+          ) : null}
 
           {/* Editable ISO Certification Badge */}
           {(resolvedIsoCertification || interactive) && (

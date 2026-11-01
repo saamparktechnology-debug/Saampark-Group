@@ -24,6 +24,19 @@ async function getExistingColumns() {
   return ALLOWED_BRANCH_FIELDS;
 }
 
+function resolveCompanyNumericId(company_id) {
+  const str = String(company_id || '').toLowerCase().trim();
+  if (str === '2' || str === 'consultancy' || str.includes('consult') || str === 'print' || str === 'digital') {
+    return 2;
+  }
+  return 1;
+}
+
+function getCompanyMatchingList(company_id) {
+  const num = resolveCompanyNumericId(company_id);
+  return num === 2 ? [2, '2', 'consultancy', 'digital', 'print'] : [1, '1', 'tech', 'technology'];
+}
+
 const branchModel = {
   async create(data) {
     const existingCols = await getExistingColumns();
@@ -31,7 +44,7 @@ const branchModel = {
     const placeholders = [];
     const values = [];
 
-    const numCompanyId = !isNaN(Number(data.company_id)) && Number(data.company_id) > 0 ? Number(data.company_id) : 1;
+    const numCompanyId = resolveCompanyNumericId(data.company_id || data.companyId);
 
     for (const key of ALLOWED_BRANCH_FIELDS) {
       if (data[key] !== undefined && existingCols.includes(key)) {
@@ -155,13 +168,17 @@ const branchModel = {
 
   async findByCompany(company_id) {
     let sqlBranches = [];
+    const num = resolveCompanyNumericId(company_id);
+    const matches = getCompanyMatchingList(company_id);
+    const placeholders = matches.map(() => '?').join(', ');
     try {
       const [rows] = await pool.execute(
         `SELECT b.*, u.full_name as manager_name,
          (SELECT COUNT(*) FROM sub_branches sb WHERE sb.branch_id = b.id) as sub_branch_count,
          (SELECT COUNT(*) FROM users u2 WHERE u2.branch_id = b.id) as user_count
          FROM branches b LEFT JOIN users u ON b.manager_id = u.id
-         WHERE b.company_id = ? ORDER BY b.name`, [company_id]
+         WHERE b.company_id IN (${placeholders}) OR b.company_id = ? ORDER BY b.name`,
+        [...matches, String(num)]
       );
       sqlBranches = rows || [];
     } catch (e) {
