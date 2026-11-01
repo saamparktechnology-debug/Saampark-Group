@@ -242,7 +242,7 @@ export function ClientHistoryModal({
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-lg font-black text-zinc-900 dark:text-zinc-100 tracking-tight">{client.name}</h2>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                  {client.group || "VIP Client"}
+                  {client.group || "Standard"}
                 </span>
                 {client.label && (
                   <span 

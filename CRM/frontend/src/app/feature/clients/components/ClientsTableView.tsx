@@ -59,6 +59,12 @@ export function ClientsTableView({
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
+  const filterOptions = React.useMemo(() => {
+    const customCategories = Array.from(new Set(clients.map(c => c.group).filter(Boolean)))
+    const standardFilters = ["All clients", "Has due", "Has open projects"]
+    return Array.from(new Set([...standardFilters, ...customCategories]))
+  }, [clients])
+
   const filteredClients = React.useMemo(() => {
     return clients.filter((c) => {
       const matchesSearch =
@@ -71,7 +77,7 @@ export function ClientsTableView({
 
       if (activeFilter === "Has due") return c.due !== "$0.00" && c.due !== "₹0.00" && c.due !== "₹0"
       if (activeFilter === "Has open projects") return c.projectsCount > 0
-      if (activeFilter === "VIP") return c.group === "VIP"
+      if (activeFilter !== "All clients") return (c.group || "").toLowerCase() === activeFilter.toLowerCase()
 
       return true
     })
@@ -142,7 +148,7 @@ export function ClientsTableView({
 
             {isFilterDropdownOpen && (
               <div className="absolute left-0 mt-1 w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-20 overflow-hidden py-1">
-                {["All clients", "Has due", "Has open projects", "VIP"].map((f) => {
+                {filterOptions.map((f) => {
                   const isSelected = activeFilter === f
                   return (
                     <button
@@ -272,7 +278,7 @@ export function ClientsTableView({
               <th className="py-3 px-3">Name</th>
               <th className="py-3 px-3">Primary Contact</th>
               <th className="py-3 px-3">Phone</th>
-              <th className="py-3 px-3">Client groups</th>
+              <th className="py-3 px-3">Category / Level</th>
               <th className="py-3 px-3">Labels</th>
               <th className="py-3 px-3">Projects</th>
               <th className="py-3 px-3">Total invoiced</th>
@@ -363,9 +369,9 @@ export function ClientsTableView({
                   </td>
                   <td className="py-3 px-3 text-slate-600 dark:text-slate-400">{client.phone}</td>
                   <td className="py-3 px-3">
-                    <span className="inline-flex items-center gap-1 text-slate-600 dark:text-slate-300">
-                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-                      {client.group}
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />
+                      {client.group || "Standard"}
                     </span>
                   </td>
                   <td className="py-3 px-3">

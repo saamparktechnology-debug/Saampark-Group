@@ -7,7 +7,7 @@ import { ClientItem } from "../types"
 import { getUsers } from "@/app/feature/users/services/userService"
 import { useAuthStore } from "@/store/useAuthStore"
 import { sendClientWelcomeEmailNotification } from "@/services/emailNotificationService"
-import { formatDisplayEmail } from "../services/clientService"
+import { formatDisplayEmail, getClientCategories, saveClientCategory, DEFAULT_CLIENT_CATEGORIES } from "../services/clientService"
 import { lookupPincode } from "@/lib/pincodeService"
 
 interface AddClientModalProps {
@@ -46,7 +46,13 @@ export function AddClientModal({
   const [website, setWebsite] = React.useState("")
   const [vatNumber, setVatNumber] = React.useState("")
   const [gstNumber, setGstNumber] = React.useState("")
-  const [clientGroup, setClientGroup] = React.useState("VIP")
+  
+  // Category / Level State & Dynamic Creator
+  const [availableCategories, setAvailableCategories] = React.useState<string[]>(DEFAULT_CLIENT_CATEGORIES)
+  const [clientGroup, setClientGroup] = React.useState("Level 1")
+  const [isAddingCategory, setIsAddingCategory] = React.useState(false)
+  const [newCategoryInput, setNewCategoryInput] = React.useState("")
+
   const [currency, setCurrency] = React.useState("INR")
   const [currencySymbol, setCurrencySymbol] = React.useState("₹")
   const [label, setLabel] = React.useState("Corporate")
@@ -108,12 +114,33 @@ export function AddClientModal({
         setWebsite("")
         setVatNumber("")
         setGstNumber("")
-        setClientGroup("VIP")
+        setClientGroup("Level 1")
         setLabel("Corporate")
         setDisableOnlinePayment(false)
       }
+
+      getClientCategories(activeCompanyId || undefined).then((cats) => {
+        if (Array.isArray(cats) && cats.length > 0) {
+          setAvailableCategories(cats)
+          if (initialData?.group) {
+            setClientGroup(initialData.group)
+          } else if (!initialData) {
+            setClientGroup(cats[0])
+          }
+        }
+      }).catch(() => {})
     }
-  }, [initialData, isOpen, user])
+  }, [initialData, isOpen, user, activeCompanyId])
+
+  const handleAddCategory = async () => {
+    if (!newCategoryInput.trim()) return
+    const trimmed = newCategoryInput.trim()
+    const updated = await saveClientCategory(trimmed, activeCompanyId || undefined)
+    setAvailableCategories(updated)
+    setClientGroup(trimmed)
+    setNewCategoryInput("")
+    setIsAddingCategory(false)
+  }
 
   if (!isOpen) return null
 
@@ -505,18 +532,68 @@ export function AddClientModal({
               />
             </div>
 
-            {/* Client groups */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
-              <label className="text-slate-600 dark:text-slate-400 font-medium">Client groups</label>
-              <select
-                value={clientGroup}
-                onChange={(e) => setClientGroup(e.target.value)}
-                className="md:col-span-3 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="VIP">VIP</option>
-                <option value="Silver">Silver</option>
-                <option value="Gold">Gold</option>
-              </select>
+            {/* Category / Level (with dynamic '+ Add Category') */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-start">
+              <label className="text-slate-600 dark:text-slate-400 font-medium pt-2">Category / Level</label>
+              <div className="md:col-span-3 space-y-2">
+                <div className="flex gap-2">
+                  <select
+                    value={clientGroup}
+                    onChange={(e) => setClientGroup(e.target.value)}
+                    className="flex-1 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {availableCategories.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingCategory(!isAddingCategory)}
+                    className="px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 text-xs font-bold flex items-center gap-1 cursor-pointer shrink-0"
+                  >
+                    + Add Category
+                  </button>
+                </div>
+
+                {/* Inline Add Category / Level Creator */}
+                {isAddingCategory && (
+                  <div className="p-2.5 rounded-xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="e.g. Diamond, Level 4, Priority Partner..."
+                      value={newCategoryInput}
+                      onChange={(e) => setNewCategoryInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault()
+                          handleAddCategory()
+                        }
+                      }}
+                      className="flex-1 px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddCategory}
+                      className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs cursor-pointer shadow-xs"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAddingCategory(false)
+                        setNewCategoryInput("")
+                      }}
+                      className="px-2 py-1.5 text-xs text-slate-500 hover:text-slate-700 cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Currency - Default INR */}

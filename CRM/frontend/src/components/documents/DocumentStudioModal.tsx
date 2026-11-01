@@ -192,6 +192,9 @@ export function DocumentStudioModal({
   const [clientName, setClientName] = React.useState("")
   const [clientDesignation, setClientDesignation] = React.useState<string>(initialData?.clientDesignation || "Proprietor")
   const [customDesignation, setCustomDesignation] = React.useState<string>("")
+  const [contactPersonName, setContactPersonName] = React.useState<string>(
+    initialData?.contactPersonName || initialData?.primaryContact || initialData?.clientContactPerson || ""
+  )
   const [clientEmail, setClientEmail] = React.useState("")
   const [clientPhone, setClientPhone] = React.useState("")
   const [clientAddress, setClientAddress] = React.useState("")
@@ -204,6 +207,34 @@ export function DocumentStudioModal({
   const [pincodeDistricts, setPincodeDistricts] = React.useState<string[]>([])
   const [pincodeStates, setPincodeStates] = React.useState<string[]>([])
   const [isPincodeLoading, setIsPincodeLoading] = React.useState<boolean>(false)
+
+  // Customer Credit Notes (for credit deduction on next invoice)
+  const [availableCredit, setAvailableCredit] = React.useState<number>(0)
+  const [applyCredit, setApplyCredit] = React.useState<boolean>(Boolean(initialData?.creditDeduction))
+  const [creditToDeduct, setCreditToDeduct] = React.useState<number>(Number(initialData?.creditDeduction) || 0)
+
+  // Look up available credit notes when client changes
+  React.useEffect(() => {
+    const targetName = (clientName || selectedClient?.name || "").trim()
+    if (!targetName || mode !== "invoice") {
+      if (!initialData?.creditDeduction) {
+        setAvailableCredit(0)
+        setApplyCredit(false)
+        setCreditToDeduct(0)
+      }
+      return
+    }
+
+    import("@/app/feature/sales/credit-notes/services/creditNoteService").then(({ getAvailableCreditForClient }) => {
+      getAvailableCreditForClient(targetName, companyId).then(res => {
+        setAvailableCredit(res.totalAvailableCredit)
+        if (res.totalAvailableCredit > 0 && !initialData?.creditDeduction) {
+          // prefill default credit to deduct up to available
+          setCreditToDeduct(res.totalAvailableCredit)
+        }
+      }).catch(() => {})
+    })
+  }, [clientName, selectedClient, companyId, mode, initialData?.creditDeduction])
 
   // Primary Category (Website, Software, Android/Ios, Cloud and domain, Custom)
   const [primaryCategory, setPrimaryCategory] = React.useState<string>(() => {
@@ -368,6 +399,7 @@ export function DocumentStudioModal({
     setSelectedClient(c)
     setClientName(c.name || "")
     setClientDesignation((c as any).designation || "Proprietor")
+    setContactPersonName(c.primaryContact || "")
     setClientEmail(c.email || "")
     setClientPhone(c.phone || "")
     setClientAddress(c.address || "")
@@ -421,6 +453,8 @@ export function DocumentStudioModal({
           setSelectedClient(match)
           setClientMode("select")
           setClientName(match.name)
+          setClientDesignation(initialData.clientDesignation || (match as any).designation || "Proprietor")
+          setContactPersonName(initialData.contactPersonName || initialData.primaryContact || initialData.clientContactPerson || match.primaryContact || "")
           setClientEmail(initEmail || match.email || "")
           setClientPhone(initPhone || match.phone || "")
           setClientAddress(initAddress || match.address || "")
@@ -431,6 +465,8 @@ export function DocumentStudioModal({
           setSelectedClient(null)
           setClientMode("custom")
           setClientName(initClient)
+          setClientDesignation(initialData.clientDesignation || "Proprietor")
+          setContactPersonName(initialData.contactPersonName || initialData.primaryContact || initialData.clientContactPerson || "")
           setClientEmail(initEmail)
           setClientPhone(initPhone)
           setClientAddress(initAddress)
@@ -441,6 +477,7 @@ export function DocumentStudioModal({
           setSelectedClient(null)
           setClientMode("select")
           setClientName("")
+          setContactPersonName("")
           setClientEmail("")
           setClientPhone("")
           setClientAddress("")
@@ -678,6 +715,8 @@ export function DocumentStudioModal({
   }, [items, docScheme])
 
   const grandTotal = taxableBase + calculatedGst
+  const effectiveCreditDeduction = (applyCredit && creditToDeduct > 0) ? Math.min(creditToDeduct, grandTotal) : 0
+  const netPayable = Math.max(0, grandTotal - effectiveCreditDeduction)
 
   // Save Document handler
   const handleSaveDocument = async () => {
@@ -697,20 +736,23 @@ export function DocumentStudioModal({
       const effectiveProjectName = items[0]?.serviceName?.trim() || effectiveCategory || "Client Project"
 
       const effectiveAdvance = paymentPlan === "full"
-        ? grandTotal
+        ? netPayable
         : paymentPlan === "advance"
           ? (typeof advanceAmount === "number" ? advanceAmount : 0)
           : paymentPlan === "part"
-            ? (typeof advanceAmount === "number" && advanceAmount > 0 ? advanceAmount : Math.round(grandTotal / (subscriptionMonths || 3)))
+            ? (typeof advanceAmount === "number" && advanceAmount > 0 ? advanceAmount : Math.round(netPayable / (subscriptionMonths || 3)))
             : 0
 
-      const effectiveDue = Math.max(0, grandTotal - effectiveAdvance)
+      const effectiveDue = Math.max(0, netPayable - effectiveAdvance)
 
       const finalDocPayload: any = {
         id: docNumber,
         invoiceNumber: docNumber,
         number: docNumber,
         client: String(clientName || selectedClient?.name || "Client"),
+        contactPersonName: contactPersonName.trim(),
+        primaryContact: contactPersonName.trim(),
+        clientContactPerson: contactPersonName.trim(),
         clientDesignation: effectiveDesignation,
         clientEmail: clientEmail || selectedClient?.email,
         clientPhone: clientPhone || selectedClient?.phone,
@@ -740,12 +782,13 @@ export function DocumentStudioModal({
         baseAmount: taxableBase,
         subtotal: taxableBase,
         discount: calculatedDiscount,
+        creditDeduction: effectiveCreditDeduction,
         setupCharge: numSetupCharge,
         gstRate: mode === "invoice" && docScheme === "gst" ? 18 : 0,
         gstAmount: calculatedGst,
         tax: calculatedGst,
-        totalInvoiced: `₹${grandTotal.toLocaleString("en-IN")}`,
-        total: grandTotal,
+        totalInvoiced: `₹${netPayable.toLocaleString("en-IN")}`,
+        total: netPayable,
         paymentReceived: `₹${effectiveAdvance.toLocaleString("en-IN")}`,
         due: `₹${effectiveDue.toLocaleString("en-IN")}`,
         status: effectiveDue === 0 ? "Fully paid" : effectiveAdvance > 0 ? "Partially paid" : "Not paid",
@@ -770,7 +813,7 @@ export function DocumentStudioModal({
           await saveStoredClient({
             id: `cli_${Date.now()}`,
             name: clientName.trim(),
-            primaryContact: clientName.trim(),
+            primaryContact: contactPersonName.trim() || clientName.trim(),
             designation: effectiveDesignation,
             phone: clientPhone,
             email: clientEmail,
@@ -802,6 +845,21 @@ export function DocumentStudioModal({
           saved = await addInvoice(finalDocPayload)
         }
 
+        // If credit note balance was deducted against this invoice, update customer's credit note(s)
+        if (effectiveCreditDeduction > 0) {
+          try {
+            const { applyCreditNoteDeduction } = await import("@/app/feature/sales/credit-notes/services/creditNoteService")
+            await applyCreditNoteDeduction(
+              String(clientName || selectedClient?.name),
+              effectiveCreditDeduction,
+              docNumber,
+              companyId
+            )
+          } catch (cnErr) {
+            console.warn("Could not apply credit note deduction:", cnErr)
+          }
+        }
+
         // If subscription based, auto create in Subscription section
         if (paymentPlan === "subscription" || paymentPlan === "part") {
           try {
@@ -819,10 +877,10 @@ export function DocumentStudioModal({
               status: "Active",
               amount: `₹${recurringVal.toLocaleString("en-IN")}`,
               numericAmount: recurringVal,
-              billingCycle: paymentPlan === "subscription" ? subscriptionCycle : "Monthly",
+              billingCycle: (paymentPlan === "subscription" ? (subscriptionCycle === "Yearly" ? "Annually" : subscriptionCycle) : "Monthly") as any,
               startDate: issueDate || new Date().toISOString().split("T")[0],
               nextBillingDate: dueDate || new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
-              notes: `Auto-generated from Invoice #${docNumber} (${paymentPlan.toUpperCase()}) - Primary Category: ${effectiveCategory}`,
+              description: `Auto-generated from Invoice #${docNumber} (${paymentPlan.toUpperCase()}) - Primary Category: ${effectiveCategory}`,
             }, companyId)
           } catch (subErr) {
             console.warn("Auto-create subscription error:", subErr)
@@ -1330,6 +1388,42 @@ export function DocumentStudioModal({
                         <Input value={clientName} onChange={e => setClientName(e.target.value)} placeholder="e.g. Acme Innovations Ltd" />
                       </div>
                       <div>
+                        <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Contact Designation *</label>
+                        <select
+                          value={clientDesignation}
+                          onChange={e => setClientDesignation(e.target.value)}
+                          className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-bold text-xs"
+                        >
+                          <option value="Proprietor">Proprietor</option>
+                          <option value="Manager">Manager</option>
+                          <option value="Founder">Founder</option>
+                          <option value="CEO">CEO</option>
+                          <option value="Director">Director</option>
+                          <option value="Partner">Partner</option>
+                          <option value="Other">Other (Custom)</option>
+                        </select>
+                        {clientDesignation === "Other" && (
+                          <Input
+                            value={customDesignation}
+                            onChange={e => setCustomDesignation(e.target.value)}
+                            placeholder="Type designation..."
+                            className="mt-1.5 text-xs font-bold"
+                          />
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5 flex items-center justify-between">
+                          <span>{clientDesignation === "Other" && customDesignation ? `${customDesignation} Name` : `${clientDesignation} Name`}</span>
+                          <span className="text-[9px] text-indigo-600 font-bold">Contact Person</span>
+                        </label>
+                        <Input
+                          value={contactPersonName}
+                          onChange={e => setContactPersonName(e.target.value)}
+                          placeholder={`Full name of ${clientDesignation === "Other" && customDesignation ? customDesignation.toLowerCase() : clientDesignation.toLowerCase()}...`}
+                          className="font-bold text-xs"
+                        />
+                      </div>
+                      <div>
                         <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Contact Email</label>
                         <Input value={clientEmail} onChange={e => setClientEmail(e.target.value)} placeholder="contact@acme.com" />
                       </div>
@@ -1337,13 +1431,13 @@ export function DocumentStudioModal({
                         <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Contact Phone</label>
                         <Input value={clientPhone} onChange={e => setClientPhone(e.target.value)} placeholder="+91 98765 43210" />
                       </div>
-                      <div className="sm:col-span-2">
-                        <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Address</label>
-                        <Input value={clientAddress} onChange={e => setClientAddress(e.target.value)} placeholder="Full street address" />
-                      </div>
                       <div>
                         <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">City &amp; State</label>
                         <Input value={clientCity} onChange={e => setClientCity(e.target.value)} placeholder="City, State" />
+                      </div>
+                      <div className="sm:col-span-3">
+                        <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Address</label>
+                        <Input value={clientAddress} onChange={e => setClientAddress(e.target.value)} placeholder="Full street address" />
                       </div>
                     </div>
                   </div>
@@ -2019,7 +2113,7 @@ export function DocumentStudioModal({
                       </div>
                     )}
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
                       <div>
                         <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Client / Organization Name *</label>
                         <Input value={clientName} onChange={e => setClientName(e.target.value)} placeholder="Client / Company Name" />
@@ -2049,6 +2143,20 @@ export function DocumentStudioModal({
                             className="mt-1.5 text-xs font-bold"
                           />
                         )}
+                      </div>
+
+                      {/* Contact Person Name (Founder, CEO, Proprietor Name, etc.) */}
+                      <div>
+                        <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5 flex items-center justify-between">
+                          <span>{clientDesignation === "Other" && customDesignation ? `${customDesignation} Name` : `${clientDesignation} Name`}</span>
+                          <span className="text-[9px] text-teal-600 font-bold">Contact Person</span>
+                        </label>
+                        <Input
+                          value={contactPersonName}
+                          onChange={e => setContactPersonName(e.target.value)}
+                          placeholder={`Full name of ${clientDesignation === "Other" && customDesignation ? customDesignation.toLowerCase() : clientDesignation.toLowerCase()}...`}
+                          className="font-bold text-xs"
+                        />
                       </div>
 
                       {/* Client Phone (Printed in invoice) */}
@@ -2322,6 +2430,63 @@ export function DocumentStudioModal({
                     </div>
                   </div>
 
+                  {/* Customer Credit Note Balance & Deduction Section */}
+                  {(availableCredit > 0 || Boolean(initialData?.creditDeduction)) && (
+                    <div className="p-4 rounded-2xl border-2 border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/20 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <Receipt className="w-5 h-5 text-indigo-600" />
+                          <div>
+                            <h4 className="text-xs font-bold text-indigo-950 dark:text-indigo-100">Customer Available Credit Note</h4>
+                            <p className="text-[11px] text-indigo-600/90">
+                              Available credit balance: <span className="font-black font-mono">₹{availableCredit.toLocaleString("en-IN")}</span>
+                              {initialData?.creditDeduction ? ` (Currently deducted: ₹${Number(initialData.creditDeduction).toLocaleString("en-IN")})` : ""}
+                            </p>
+                          </div>
+                        </div>
+                        <label className="flex items-center gap-2 cursor-pointer bg-white dark:bg-zinc-900 px-3 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800 shadow-xs">
+                          <input
+                            type="checkbox"
+                            checked={applyCredit}
+                            onChange={(e) => {
+                              const checked = e.target.checked
+                              setApplyCredit(checked)
+                              if (checked && (!creditToDeduct || creditToDeduct === 0)) {
+                                setCreditToDeduct(Math.min(availableCredit || (Number(initialData?.creditDeduction) || 0), grandTotal))
+                              }
+                            }}
+                            className="w-4 h-4 text-indigo-600 rounded border-zinc-300 focus:ring-indigo-500"
+                          />
+                          <span className="text-xs font-bold text-indigo-900 dark:text-indigo-200">Deduct Credit Note Balance</span>
+                        </label>
+                      </div>
+
+                      {applyCredit && (
+                        <div className="pt-2 border-t border-indigo-100 dark:border-indigo-900/60 grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                          <div>
+                            <label className="block text-[10.5px] font-bold text-indigo-950 dark:text-indigo-200 mb-1">
+                              Amount to Deduct (₹) (Max ₹{Math.min(availableCredit || creditToDeduct, grandTotal).toLocaleString("en-IN")})
+                            </label>
+                            <Input
+                              type="number"
+                              min="0"
+                              max={availableCredit || creditToDeduct}
+                              value={creditToDeduct}
+                              onChange={(e) => {
+                                const val = Number(e.target.value) || 0
+                                setCreditToDeduct(Math.min(val, grandTotal))
+                              }}
+                              className="font-bold font-mono text-indigo-600 bg-white dark:bg-zinc-900"
+                            />
+                          </div>
+                          <div className="text-xs text-zinc-600 dark:text-zinc-400">
+                            Applying credit reduces the customer payable invoice total from <strong className="font-mono text-zinc-800 dark:text-zinc-200">₹{grandTotal.toLocaleString("en-IN")}</strong> to <strong className="font-mono text-emerald-600">₹{netPayable.toLocaleString("en-IN")}</strong>.
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Calculations Summary */}
                   <div className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 space-y-3">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -2352,18 +2517,36 @@ export function DocumentStudioModal({
                         <span>Subtotal:</span>
                         <span className="font-mono font-bold text-zinc-900 dark:text-zinc-100">₹{calculatedSubtotal.toLocaleString("en-IN")}</span>
                       </div>
+                      {calculatedDiscount > 0 && (
+                        <div className="flex items-center justify-between text-rose-600 text-xs">
+                          <span>Discount:</span>
+                          <span className="font-mono font-bold">-₹{calculatedDiscount.toLocaleString("en-IN")}</span>
+                        </div>
+                      )}
+                      {numSetupCharge > 0 && (
+                        <div className="flex items-center justify-between text-zinc-600 text-xs">
+                          <span>Platform / Setup:</span>
+                          <span className="font-mono font-bold">+₹{numSetupCharge.toLocaleString("en-IN")}</span>
+                        </div>
+                      )}
                       {docScheme === "gst" && (
                         <div className="flex items-center justify-between text-teal-600 text-xs">
                           <span>Statutory GST (18%):</span>
                           <span className="font-mono font-bold">+₹{calculatedGst.toLocaleString("en-IN")}</span>
                         </div>
                       )}
+                      {effectiveCreditDeduction > 0 && (
+                        <div className="flex items-center justify-between text-indigo-700 dark:text-indigo-300 font-bold text-xs bg-indigo-50/80 dark:bg-indigo-950/40 px-2 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                          <span>Less: Credit Note Applied:</span>
+                          <span className="font-mono">-₹{effectiveCreditDeduction.toLocaleString("en-IN")}</span>
+                        </div>
+                      )}
                       <div className="border-t border-zinc-200 dark:border-zinc-700 pt-2 flex items-center justify-between text-sm">
-                        <span className="font-black text-zinc-900 dark:text-zinc-100">Grand Total Payable:</span>
-                        <span className="font-black font-mono text-emerald-600 dark:text-emerald-400 text-base">₹{grandTotal.toLocaleString("en-IN")}</span>
+                        <span className="font-black text-zinc-900 dark:text-zinc-100">Net Payable Total:</span>
+                        <span className="font-black font-mono text-emerald-600 dark:text-emerald-400 text-base">₹{netPayable.toLocaleString("en-IN")}</span>
                       </div>
                       <div className="text-[10px] text-zinc-400 font-medium italic">
-                        Amount in words: {numberToIndianWords(grandTotal)}
+                        Amount in words: {numberToIndianWords(netPayable)}
                       </div>
                     </div>
                   </div>

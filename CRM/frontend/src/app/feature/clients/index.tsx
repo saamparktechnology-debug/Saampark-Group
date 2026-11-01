@@ -32,6 +32,7 @@ import { getInvoices } from "@/app/feature/sales/invoices/services/invoiceServic
 import { getPayments } from "@/app/feature/sales/payments/services/paymentService"
 
 import { getUsers } from "@/app/feature/users/services/userService"
+import { normalizeCompanyId } from "../leads/services/leadService"
 
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
@@ -115,10 +116,11 @@ export default function ClientsMain() {
       const clientUsers = allUsers.filter((u) => {
         if (u.role !== "Clients") return false
         if (targetComp && targetComp !== "all") {
+          const canonTarget = normalizeCompanyId(targetComp)
           const uCompIds = (u.companyIds && u.companyIds.length > 0)
-            ? u.companyIds.map(id => String(id).toLowerCase().trim())
-            : [String(u.companyId || "tech").toLowerCase().trim()]
-          if (!uCompIds.includes(targetComp)) return false
+            ? u.companyIds.map(id => normalizeCompanyId(String(id)))
+            : [normalizeCompanyId(String(u.companyId || "tech"))]
+          if (!uCompIds.includes(canonTarget)) return false
         }
         if (targetBranch && !checkBranch(u)) {
           return false
@@ -140,9 +142,10 @@ export default function ClientsMain() {
 
       let storedClients = storedClientsRaw
       if (targetComp && targetComp !== "all") {
+        const canonTarget = normalizeCompanyId(targetComp)
         storedClients = storedClients.filter(c => {
-          const cComp = (c.companyId || (c as any).company || "").toLowerCase().trim()
-          return cComp === targetComp || (targetComp === "tech" && !c.companyId)
+          const cComp = normalizeCompanyId(c.companyId || (c as any).company)
+          return cComp === canonTarget
         })
       }
       if (targetBranch && targetBranch !== "all") {

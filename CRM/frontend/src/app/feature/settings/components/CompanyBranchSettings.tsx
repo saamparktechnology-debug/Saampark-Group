@@ -871,24 +871,10 @@ export function CompanyBranchSettings() {
   }
 
   const handleDeleteCompany = async (compId: string, compName: string) => {
-    if (!isSuperAdmin) {
-      useActionFeedbackStore.getState().showError({
-        title: "Permission Denied",
-        message: "Only Super Admin can delete companies.",
-        actionType: "delete",
-      })
-      return
-    }
-    await executeWithFeedback(async () => {
-      await deleteCompany(compId)
-      await fetchCompanies().catch(() => {})
-    }, {
+    useActionFeedbackStore.getState().showError({
+      title: "Action Not Allowed",
+      message: "Core companies (SAAMPARK Technology and Saampark Consultancy) cannot be deleted.",
       actionType: "delete",
-      loadingTitle: "Deleting Company...",
-      loadingMsg: `Permanently removing ${compName} and associated branches...`,
-      successTitle: "Company Deleted",
-      successMsg: `Company ${compName} has been removed.`,
-      errorTitle: "Delete Failed",
     })
   }
 
@@ -1760,7 +1746,7 @@ export function CompanyBranchSettings() {
                   </div>
                   <div>
                     <h3 className="font-bold text-base text-foreground">
-                      {editingCompany ? `Modify Entity: ${editingCompany.name}` : "Create New Company Entity"}
+                      {editingCompany ? `Configure Entity: ${editingCompany.name}` : "Configure Company Details"}
                     </h3>
                     <p className="text-[11px] text-muted-foreground">
                       Customize branding names (e.g. SAAMPARK + Technology/Consultancy), upload official signatures & stamps, and invoice settings.

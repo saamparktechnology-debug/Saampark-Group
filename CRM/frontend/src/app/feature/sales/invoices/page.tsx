@@ -770,6 +770,8 @@ function InvoicesPageContent() {
     if (!paymentModalInvoice) return
     const isPart = paymentTypeOption === "part" && customPartPaymentAmount > 0
     const invId = paymentModalInvoice.id
+    const dueNum = parseInt(paymentModalInvoice.due.replace(/[^0-9]/g, "")) || 0
+    const isOverpaid = isPart && customPartPaymentAmount > dueNum
 
     await executeWithFeedback(async () => {
       if (isPart) {
@@ -779,7 +781,7 @@ function InvoicesPageContent() {
           paymentMethod,
           paymentRef
         )
-        if (!updated) throw new Error("Could not record partial payment.")
+        if (!updated) throw new Error("Could not record payment.")
       } else {
         const updated = await markPaymentCompleted(invId, paymentMethod, paymentRef)
         if (!updated) throw new Error("Could not record full payment.")
@@ -792,8 +794,10 @@ function InvoicesPageContent() {
       actionType: "payment",
       loadingTitle: "Recording Payment...",
       loadingMsg: `Processing ${isPart ? `₹${customPartPaymentAmount.toLocaleString("en-IN")}` : "full"} payment settlement for ${invId}...`,
-      successTitle: "Payment Recorded!",
-      successMsg: `Payment for ${invId} has been successfully recorded and synced.`,
+      successTitle: isOverpaid ? "Payment & Credit Note Created!" : "Payment Recorded!",
+      successMsg: isOverpaid 
+        ? `Invoice #${invId} settled in full! Overpayment of ₹${(customPartPaymentAmount - dueNum).toLocaleString("en-IN")} has been credited to ${paymentModalInvoice.client}'s Credit Notes.`
+        : `Payment for ${invId} has been successfully recorded and synced.`,
       errorTitle: "Payment Failed",
     })
   }
@@ -1699,14 +1703,14 @@ function InvoicesPageContent() {
                           : "bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300"
                       }`}
                     >
-                      Full Due Settlement ({paymentModalInvoice.due})
+                      Exact Due ({paymentModalInvoice.due})
                     </button>
                     <button
                       type="button"
                       onClick={() => {
                         setPaymentTypeOption("part")
                         const dueNum = parseInt(paymentModalInvoice.due.replace(/[^0-9]/g, "")) || 0
-                        if (customPartPaymentAmount === 0) setCustomPartPaymentAmount(Math.round(dueNum / 2))
+                        if (customPartPaymentAmount === 0) setCustomPartPaymentAmount(dueNum)
                       }}
                       className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-all ${
                         paymentTypeOption === "part"
@@ -1714,25 +1718,40 @@ function InvoicesPageContent() {
                           : "bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300"
                       }`}
                     >
-                      Partial Installment
+                      Custom / Overpayment Amount
                     </button>
                   </div>
                 </div>
 
                 {paymentTypeOption === "part" && (
-                  <div className="space-y-1">
-                    <label className="block text-zinc-500 font-medium">Installment Amount Paid Now (₹) *</label>
+                  <div className="space-y-1.5">
+                    <label className="block text-zinc-500 font-medium">Amount Paid Now (₹) *</label>
                     <input
                       type="number"
                       min={1}
-                      max={parseInt(paymentModalInvoice.due.replace(/[^0-9]/g, "")) || 99999999}
                       value={customPartPaymentAmount || ""}
                       onChange={(e) => setCustomPartPaymentAmount(Number(e.target.value))}
                       placeholder="e.g. 15000"
                       className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-bold"
                     />
+
+                    {/* Overpayment banner */}
+                    {customPartPaymentAmount > (parseInt(paymentModalInvoice.due.replace(/[^0-9]/g, "")) || 0) && (
+                      <div className="p-2.5 rounded-xl bg-teal-50 dark:bg-teal-950/40 border border-teal-300 dark:border-teal-800 text-[11px] text-teal-900 dark:text-teal-200 flex items-start gap-2">
+                        <span className="text-teal-600 font-bold text-base leading-none">💰</span>
+                        <div>
+                          <span className="font-bold">
+                            Overpayment of ₹{(customPartPaymentAmount - (parseInt(paymentModalInvoice.due.replace(/[^0-9]/g, "")) || 0)).toLocaleString("en-IN")} detected!
+                          </span>
+                          <p className="text-[10px] text-teal-700 dark:text-teal-400 mt-0.5">
+                            This invoice will be marked Fully Paid, and the excess ₹{(customPartPaymentAmount - (parseInt(paymentModalInvoice.due.replace(/[^0-9]/g, "")) || 0)).toLocaleString("en-IN")} will be automatically added as a Credit Note for {paymentModalInvoice.client}.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="flex gap-1.5 pt-1">
-                      {[0.25, 0.5, 0.75].map((pct) => {
+                      {[0.25, 0.5, 0.75, 1.0].map((pct) => {
                         const dueNum = parseInt(paymentModalInvoice.due.replace(/[^0-9]/g, "")) || 0
                         const amt = Math.round(dueNum * pct)
                         return (
@@ -1790,7 +1809,11 @@ function InvoicesPageContent() {
                   onClick={handleConfirmPayment}
                   className="px-5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm"
                 >
-                  {paymentTypeOption === "part" ? "Record Partial Payment" : "Confirm Full Settlement"}
+                  {paymentTypeOption === "part" && customPartPaymentAmount > (parseInt(paymentModalInvoice.due.replace(/[^0-9]/g, "")) || 0)
+                    ? "Confirm Settlement & Issue Credit Note"
+                    : paymentTypeOption === "part"
+                      ? "Record Partial Payment"
+                      : "Confirm Full Settlement"}
                 </button>
               </div>
             </motion.div>

@@ -45,6 +45,7 @@ interface Estimate {
 
 export default function EstimatesMain() {
   const { user, activeCompanyId, activeBranchId, branches, companies } = useAuthStore()
+  const { canPerformAction } = usePermissionStore()
   const isClientRole = user?.role === "Clients" || user?.role?.toLowerCase().includes("client")
   const canAdd = !isClientRole && canPerformAction(user, "Estimates", "add")
   const canEdit = !isClientRole && canPerformAction(user, "Estimates", "edit")

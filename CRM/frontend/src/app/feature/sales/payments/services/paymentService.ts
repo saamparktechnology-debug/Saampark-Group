@@ -1,6 +1,7 @@
 import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted, filterGlobalDeletedItems } from "@/lib/storageSync"
 import { getInvoices, updateInvoiceStatus, InvoiceItem } from "@/app/feature/sales/invoices/services/invoiceService"
 import { getClients, saveStoredClient } from "@/app/feature/clients/services/clientService"
+import { normalizeCompanyId } from "@/app/feature/leads/services/leadService"
 
 export interface PaymentItem {
   id: string
@@ -32,31 +33,47 @@ export const getPayments = async (companyId?: string): Promise<PaymentItem[]> =>
   }
 
   if (!targetComp || targetComp === "all") {
-    const knownCompanies = ["all", "tech", "infotech", "fashion", "digital", "consultancy", "jewellers"]
+    const knownCompanies = ["all", "tech", "consultancy", "print"]
     const results = await Promise.all(
       knownCompanies.map(c => fetchModuleDataFromDB<PaymentItem[]>("payments", [], c).catch(() => []))
     )
     const map = new Map<string, PaymentItem>()
     for (const p of results.flat()) {
-      if (p && p.id) map.set(String(p.id).toLowerCase().trim(), p)
+      if (p && p.id) {
+        const id = String(p.id).toLowerCase().trim()
+        if (!map.has(id)) {
+          map.set(id, { ...p, companyId: normalizeCompanyId(p.companyId) })
+        }
+      }
     }
     return filterGlobalDeletedItems(Array.from(map.values()))
   }
 
-  const scopedData = await fetchModuleDataFromDB<PaymentItem[]>("payments", [], targetComp)
-  const allMaster = await fetchModuleDataFromDB<PaymentItem[]>("payments", [], "all").catch(() => [])
+  const canonicalTarget = normalizeCompanyId(targetComp)
+  const toFetch = [canonicalTarget]
+  if (canonicalTarget === "consultancy") toFetch.push("print")
+
+  const [allMaster, ...scopedResults] = await Promise.all([
+    fetchModuleDataFromDB<PaymentItem[]>("payments", [], "all").catch(() => []),
+    ...toFetch.map(c => fetchModuleDataFromDB<PaymentItem[]>("payments", [], c).catch(() => []))
+  ])
 
   const map = new Map<string, PaymentItem>()
-  for (const p of (Array.isArray(allMaster) ? allMaster : [])) {
-    if (p && p.id) {
-      const pComp = p.companyId || (p as any).company || "tech"
-      if (pComp === targetComp || (targetComp === "tech" && !p.companyId)) {
-        map.set(String(p.id).toLowerCase().trim(), p)
+  for (const res of scopedResults) {
+    for (const p of (Array.isArray(res) ? res : [])) {
+      if (p && p.id) {
+        map.set(String(p.id).toLowerCase().trim(), { ...p, companyId: canonicalTarget })
       }
     }
   }
-  for (const p of (Array.isArray(scopedData) ? scopedData : [])) {
-    if (p && p.id) map.set(String(p.id).toLowerCase().trim(), p)
+
+  for (const p of (Array.isArray(allMaster) ? allMaster : [])) {
+    if (p && p.id && normalizeCompanyId(p.companyId) === canonicalTarget) {
+      const id = String(p.id).toLowerCase().trim()
+      if (!map.has(id)) {
+        map.set(id, { ...p, companyId: canonicalTarget })
+      }
+    }
   }
 
   return filterGlobalDeletedItems(Array.from(map.values()))
@@ -70,9 +87,9 @@ export const addPayment = async (paymentData: Omit<PaymentItem, "id"> & { id?: s
       targetComp = useAuthStore.getState().activeCompanyId || undefined
     } catch {}
   }
-  targetComp = targetComp || "tech"
+  const effComp = normalizeCompanyId(targetComp || "tech")
 
-  const current = await getPayments(targetComp)
+  const current = await getPayments(effComp)
   const nextId = paymentData.id || `P-${Math.floor(1000 + Math.random() * 9000)}`
   const numAmount = typeof paymentData.amountNum === "number" ? paymentData.amountNum : (parseInt(String(paymentData.amount).replace(/[^0-9]/g, "")) || 0)
   const formattedAmount = paymentData.amount.startsWith("₹") ? paymentData.amount : `₹${paymentData.amount}`
@@ -88,7 +105,7 @@ export const addPayment = async (paymentData: Omit<PaymentItem, "id"> & { id?: s
   const newPayment: PaymentItem = {
     ...paymentData,
     id: nextId,
-    companyId: targetComp,
+    companyId: effComp,
     branchId: (paymentData as any).branchId || activeBranch || undefined,
     amount: formattedAmount,
     amountNum: numAmount,
@@ -96,13 +113,13 @@ export const addPayment = async (paymentData: Omit<PaymentItem, "id"> & { id?: s
   }
 
   const updatedScoped = [newPayment, ...current.filter(p => String(p.id).toLowerCase().trim() !== nextId.toLowerCase().trim())]
-  await saveModuleDataToDB("payments", updatedScoped, targetComp)
+  const currentAll = await fetchModuleDataFromDB<PaymentItem[]>("payments", [], "all").catch(() => [])
+  const updatedAll = [newPayment, ...(Array.isArray(currentAll) ? currentAll.filter(p => String(p.id).toLowerCase().trim() !== nextId.toLowerCase().trim()) : [])]
 
-  if (targetComp !== "all") {
-    const currentAll = await fetchModuleDataFromDB<PaymentItem[]>("payments", [], "all").catch(() => [])
-    const updatedAll = [newPayment, ...(Array.isArray(currentAll) ? currentAll.filter(p => String(p.id).toLowerCase().trim() !== nextId.toLowerCase().trim()) : [])]
-    await saveModuleDataToDB("payments", updatedAll, "all")
-  }
+  await Promise.all([
+    saveModuleDataToDB("payments", updatedScoped, effComp),
+    saveModuleDataToDB("payments", updatedAll, "all"),
+  ]).catch(() => {})
 
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("storage"))
@@ -129,6 +146,22 @@ export const addPayment = async (paymentData: Omit<PaymentItem, "id"> & { id?: s
         const effectivePaid = Math.min(invTotalNum, totalCompletedPaid)
         const remainingDue = Math.max(0, invTotalNum - effectivePaid)
 
+        // If overpayment occurred, automatically issue a Credit Note
+        if (totalCompletedPaid > invTotalNum) {
+          const overpaidAmt = totalCompletedPaid - invTotalNum
+          try {
+            const { createCreditNoteFromOverpayment } = await import("@/app/feature/sales/credit-notes/services/creditNoteService")
+            await createCreditNoteFromOverpayment({
+              id: targetInv.id,
+              client: targetInv.client,
+              clientEmail: targetInv.clientEmail,
+              companyId: targetComp,
+              branchId: targetInv.branchId,
+            }, overpaidAmt)
+          } catch (cnErr) {
+            console.warn("Could not auto-generate credit note for overpayment in paymentService:", cnErr)
+          }
+        }
 
         const newStatus = remainingDue === 0 
           ? "Fully paid" 

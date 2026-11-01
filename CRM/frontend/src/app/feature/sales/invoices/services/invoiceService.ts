@@ -45,6 +45,9 @@ export interface AssignedMemberAttribution {
 export interface InvoiceItem {
   id: string
   client: string
+  contactPersonName?: string
+  primaryContact?: string
+  clientContactPerson?: string
   clientDesignation?: string
   clientEmail?: string
   clientPhone?: string
@@ -54,6 +57,9 @@ export interface InvoiceItem {
   clientState?: string
   clientGstin?: string
   clientId?: string
+  creditDeduction?: number
+  appliedCreditNotes?: string[]
+  creditNoteNumber?: string
   project: string
   category?: string
   primaryCategory?: string
@@ -650,15 +656,25 @@ export const recordPartialPayment = async (
   const target = current[idx]
   const prevReceivedNum = parseInt((target.paymentReceived || "0").replace(/[^0-9]/g, "")) || 0
   const totalInvoicedNum = parseInt((target.totalInvoiced || "0").replace(/[^0-9]/g, "")) || 0
+  const prevDueNum = Math.max(0, totalInvoicedNum - prevReceivedNum)
   
-  const newReceivedNum = prevReceivedNum + paidAmountNum
-  const newDueNum = Math.max(0, totalInvoicedNum - newReceivedNum)
+  // Check for overpayment
+  let excessOverpayment = 0
+  let effectiveReceivedNum = prevReceivedNum + paidAmountNum
+  let newDueNum = Math.max(0, totalInvoicedNum - effectiveReceivedNum)
+
+  if (paidAmountNum > prevDueNum) {
+    excessOverpayment = paidAmountNum - prevDueNum
+    effectiveReceivedNum = totalInvoicedNum
+    newDueNum = 0
+  }
+
   const isFullySettled = newDueNum <= 0
 
   const updated: InvoiceItem = {
     ...target,
     status: isFullySettled ? "Fully paid" : "Partially paid",
-    paymentReceived: `₹${newReceivedNum.toLocaleString("en-IN")}`,
+    paymentReceived: `₹${effectiveReceivedNum.toLocaleString("en-IN")}`,
     due: `₹${newDueNum.toLocaleString("en-IN")}`,
   }
 
@@ -669,10 +685,27 @@ export const recordPartialPayment = async (
     await saveModuleDataToDB("invoices", current, "all")
   }
 
+  // If overpayment occurred, automatically issue a Credit Note
+  if (excessOverpayment > 0) {
+    try {
+      const { createCreditNoteFromOverpayment } = await import("@/app/feature/sales/credit-notes/services/creditNoteService")
+      await createCreditNoteFromOverpayment({
+        id: target.id,
+        client: target.client,
+        clientEmail: target.clientEmail,
+        companyId: targetComp,
+        branchId: target.branchId,
+      }, excessOverpayment)
+    } catch (cnErr) {
+      console.warn("Could not auto-generate credit note for overpayment:", cnErr)
+    }
+  }
+
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("saampark_data_synced"))
     window.dispatchEvent(new Event("saampark_team_payouts_updated"))
     window.dispatchEvent(new Event("saampark_invoices_updated"))
+    window.dispatchEvent(new Event("saampark_credit_notes_updated"))
     window.dispatchEvent(new Event("storage"))
   }
 
@@ -700,9 +733,9 @@ export const recordPartialPayment = async (
       if (pIdx !== -1) {
         payments[pIdx] = {
           ...payments[pIdx],
-          amount: `₹${newReceivedNum.toLocaleString("en-IN")}`,
-          amountNum: newReceivedNum,
-          note: `Installment payment updated: ₹${newReceivedNum.toLocaleString("en-IN")} received for ${target.project}`,
+          amount: `₹${effectiveReceivedNum.toLocaleString("en-IN")}`,
+          amountNum: effectiveReceivedNum,
+          note: `Installment payment updated: ₹${effectiveReceivedNum.toLocaleString("en-IN")} received for ${target.project}`,
           paymentDate: new Date().toLocaleDateString("en-GB"),
         }
         await saveModuleDataToDB("payments", payments)

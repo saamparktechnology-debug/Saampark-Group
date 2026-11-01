@@ -14,46 +14,7 @@ import { getClients } from "@/app/feature/clients/services/clientService"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
 
-export interface CreditNoteItem {
-  id: string
-  creditNoteNumber: string
-  invoiceNumber: string
-  client: string
-  clientEmail?: string
-  date: string
-  amount: number
-  reason: string
-  status: "Issued" | "Applied" | "Void"
-  companyId?: string
-  branchId?: string
-}
-
-const DEFAULT_CREDIT_NOTES: CreditNoteItem[] = [
-  {
-    id: "cn_1",
-    creditNoteNumber: "CN-2026-001",
-    invoiceNumber: "INV-101",
-    client: "Acme Global Solutions",
-    clientEmail: "billing@acmeglobal.com",
-    date: "12-09-2026",
-    amount: 15000,
-    reason: "Pre-payment adjustment for server milestone SLA rebate",
-    status: "Issued",
-    companyId: "tech"
-  },
-  {
-    id: "cn_2",
-    creditNoteNumber: "CN-2026-002",
-    invoiceNumber: "INV-104",
-    client: "Nexus Enterprise Ltd",
-    clientEmail: "accounts@nexus.com",
-    date: "10-09-2026",
-    amount: 8500,
-    reason: "Service discount concession applied after scope optimization",
-    status: "Applied",
-    companyId: "tech"
-  }
-]
+import { getCreditNotes, createCreditNote, deleteCreditNote, CreditNoteItem } from "./services/creditNoteService"
 
 export default function CreditNotesPage() {
   const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
@@ -62,7 +23,7 @@ export default function CreditNotesPage() {
   const canAdd = canPerformAction(user, "Credit Notes", "add") || user?.role === "Super Admin"
   const canDelete = canPerformAction(user, "Credit Notes", "delete") || user?.role === "Super Admin"
 
-  const [notes, setNotes] = React.useState<CreditNoteItem[]>(DEFAULT_CREDIT_NOTES)
+  const [notes, setNotes] = React.useState<CreditNoteItem[]>([])
   const [searchQuery, setSearchQuery] = React.useState("")
   const [statusFilter, setStatusFilter] = React.useState("all")
   const [isModalOpen, setIsModalOpen] = React.useState(false)
@@ -82,17 +43,34 @@ export default function CreditNotesPage() {
   const loadData = React.useCallback(async () => {
     try {
       const [cnData, cData] = await Promise.all([
-        CreditNoteService.getAll().catch(() => []),
+        getCreditNotes(activeCompanyId || "tech").catch(() => []),
         getClients(activeCompanyId || "tech").catch(() => [])
       ])
-      if (Array.isArray(cnData) && cnData.length > 0) {
+      if (Array.isArray(cnData)) {
         setNotes(cnData)
       }
       setClients(Array.isArray(cData) ? cData : [])
     } catch {}
   }, [activeCompanyId])
 
-  React.useEffect(() => { loadData() }, [loadData])
+  React.useEffect(() => { 
+    loadData() 
+
+    const handleUpdate = () => loadData()
+    window.addEventListener("saampark_credit_notes_updated", handleUpdate)
+    window.addEventListener("saampark_company_switched", handleUpdate)
+    window.addEventListener("saampark_branch_switched", handleUpdate)
+    window.addEventListener("saampark_data_synced", handleUpdate)
+    window.addEventListener("storage", handleUpdate)
+
+    return () => {
+      window.removeEventListener("saampark_credit_notes_updated", handleUpdate)
+      window.removeEventListener("saampark_company_switched", handleUpdate)
+      window.removeEventListener("saampark_branch_switched", handleUpdate)
+      window.removeEventListener("saampark_data_synced", handleUpdate)
+      window.removeEventListener("storage", handleUpdate)
+    }
+  }, [loadData])
 
   const filteredNotes = notes.filter(n => {
     const match = n.creditNoteNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -119,17 +97,15 @@ export default function CreditNotesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const payload: CreditNoteItem = {
-      id: `cn_${Date.now()}`,
+    const payload: Partial<CreditNoteItem> = {
       ...form,
-      date: new Date().toLocaleDateString("en-GB"),
       companyId: activeCompanyId || "tech",
       branchId: activeBranchId || undefined,
     }
 
     await executeWithFeedback(async () => {
-      await CreditNoteService.create(payload).catch(() => {})
-      setNotes(prev => [payload, ...prev])
+      const created = await createCreditNote(payload, activeCompanyId || "tech")
+      setNotes(prev => [created, ...prev.filter(n => n.id !== created.id)])
       setIsModalOpen(false)
     }, {
       actionType: "create",
@@ -138,6 +114,14 @@ export default function CreditNotesPage() {
       successTitle: "Credit Note Issued",
       successMsg: `${payload.creditNoteNumber} registered successfully.`
     })
+  }
+
+  const handleDeleteNote = async (note: CreditNoteItem) => {
+    if (!canDelete) return
+    if (confirm(`Are you sure you want to delete Credit Note ${note.creditNoteNumber}?`)) {
+      await deleteCreditNote(note.id, activeCompanyId || "tech")
+      setNotes(prev => prev.filter(x => x.id !== note.id))
+    }
   }
 
   return (
@@ -296,20 +280,40 @@ export default function CreditNotesPage() {
               ) : (
                 filteredNotes.map((n) => (
                   <tr key={n.id} className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/50 transition-colors">
-                    <td className="py-3 px-4 font-bold font-mono text-teal-600 dark:text-teal-400">
-                      {n.creditNoteNumber}
+                    <td className="py-3 px-4">
+                      <div className="font-bold font-mono text-teal-600 dark:text-teal-400">
+                        {n.creditNoteNumber}
+                      </div>
+                      {n.isOverpayment && (
+                        <span className="inline-block mt-0.5 px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300">
+                          ⚡ From Overpayment
+                        </span>
+                      )}
                     </td>
                     <td className="py-3 px-4 font-mono font-semibold text-zinc-800 dark:text-zinc-200">
                       {n.invoiceNumber}
                     </td>
                     <td className="py-3 px-4 font-semibold text-zinc-900 dark:text-zinc-100">
-                      {n.client}
+                      <div>{n.client}</div>
+                      {n.clientEmail && <div className="text-[10px] text-zinc-400 font-mono">{n.clientEmail}</div>}
                     </td>
                     <td className="py-3 px-4 font-mono text-zinc-500 text-[11px]">{n.date}</td>
                     <td className="py-3 px-4 font-bold font-mono text-zinc-950 dark:text-zinc-50">
                       ₹{n.amount.toLocaleString("en-IN")}
+                      {n.originalAmount && n.originalAmount > n.amount && (
+                        <span className="block text-[9.5px] text-zinc-400 font-normal">
+                          Orig: ₹{n.originalAmount.toLocaleString("en-IN")}
+                        </span>
+                      )}
                     </td>
-                    <td className="py-3 px-4 text-zinc-500 max-w-xs truncate">{n.reason}</td>
+                    <td className="py-3 px-4 text-zinc-500 max-w-xs">
+                      <p className="truncate">{n.reason}</p>
+                      {n.appliedToInvoice && (
+                        <span className="text-[9.5px] text-teal-600 dark:text-teal-400 font-mono font-bold block">
+                          Applied to: {n.appliedToInvoice}
+                        </span>
+                      )}
+                    </td>
                     <td className="py-3 px-4">
                       <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
                         n.status === "Applied" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
@@ -322,9 +326,9 @@ export default function CreditNotesPage() {
                     <td className="py-3 px-4 text-center">
                       {canDelete && (
                         <button
-                          onClick={() => setNotes(prev => prev.filter(x => x.id !== n.id))}
+                          onClick={() => handleDeleteNote(n)}
                           className="p-1 hover:text-rose-600 transition-colors cursor-pointer"
-                          title="Delete"
+                          title="Delete Credit Note"
                         >
                           <Trash2 size={14} />
                         </button>

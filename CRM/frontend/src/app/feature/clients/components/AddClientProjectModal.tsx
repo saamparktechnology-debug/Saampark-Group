@@ -101,6 +101,8 @@ export function AddClientProjectModal({
 
   const handleSelectClient = (c: ClientItem) => {
     setSelectedClient(c)
+    setClientDesignation(c.designation || "Proprietor")
+    setClientContactPersonName(c.primaryContact || "")
     setClientEmail(formatDisplayEmail(c.email) || "")
     setClientPhone(c.phone || "")
     setClientAddress(c.address || "")
@@ -240,6 +242,7 @@ export function AddClientProjectModal({
   // Client Details State (Prefilled & Editable)
   const [clientDesignation, setClientDesignation] = React.useState(client?.designation || "Proprietor")
   const [clientCustomDesignation, setClientCustomDesignation] = React.useState("")
+  const [clientContactPersonName, setClientContactPersonName] = React.useState(client?.primaryContact || "")
   const [clientEmail, setClientEmail] = React.useState(client?.email || "")
   const [clientPhone, setClientPhone] = React.useState(client?.phone || "")
   const [clientAddress, setClientAddress] = React.useState(client?.address || "")
@@ -867,6 +870,9 @@ export function AddClientProjectModal({
 
       const createdInvoice = await addInvoice({
         client: effectiveClient.name,
+        contactPersonName: clientContactPersonName.trim(),
+        primaryContact: clientContactPersonName.trim(),
+        clientContactPerson: clientContactPersonName.trim(),
         clientEmail: clientEmail.trim() || effectiveClient.email,
         clientId: effectiveClient.id,
         clientDesignation: clientDesignation === "Other" ? (clientCustomDesignation.trim() || "Other") : clientDesignation,
@@ -1029,7 +1035,7 @@ export function AddClientProjectModal({
             status: "Active",
             amount: paymentModel === "subscription" ? `₹${totalAmount.toLocaleString("en-IN")}` : `₹${perInstallment.toLocaleString("en-IN")}`,
             numericAmount: paymentModel === "subscription" ? totalAmount : perInstallment,
-            billingCycle: paymentModel === "subscription" ? billingCycle : "Monthly",
+            billingCycle: (paymentModel === "subscription" ? (billingCycle === "Yearly" ? "Annually" : billingCycle) : "Monthly") as any,
             startDate: startDate || new Date().toISOString().split("T")[0],
             nextBillingDate: effectiveDeadline,
             autoRenew: true,
@@ -1054,6 +1060,7 @@ export function AddClientProjectModal({
 
           await saveStoredClient({
             ...currentStored,
+            primaryContact: clientContactPersonName.trim() || currentStored.primaryContact,
             designation: clientDesignation === "Other" ? (clientCustomDesignation.trim() || "Other") : clientDesignation,
             district: clientDistrict.trim() || currentStored.district,
             zip: clientZip.trim() || currentStored.zip,
@@ -1295,8 +1302,8 @@ export function AddClientProjectModal({
               <span className="ml-auto text-[10px] text-violet-500 font-medium">Search · select · editable</span>
             </div>
 
-            {/* Row 1: Searchable Client Selector + Email + Phone */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            {/* Row 1: Searchable Client Selector + Designation + Contact Person Name + Phone */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
               <div className="relative">
                 <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1 flex items-center justify-between">
                   <span className="flex items-center gap-1"><UserCheck size={12} /> Select Client *</span>
@@ -1383,6 +1390,22 @@ export function AddClientProjectModal({
                     />
                   )}
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1 flex items-center justify-between">
+                  <span className="flex items-center gap-1">
+                    <UserCheck size={12} /> {clientDesignation === "Other" && clientCustomDesignation ? `${clientCustomDesignation} Name` : `${clientDesignation} Name`}
+                  </span>
+                  <span className="text-[9px] text-violet-600 font-bold">Contact Person</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder={`Name of ${clientDesignation === "Other" && clientCustomDesignation ? clientCustomDesignation.toLowerCase() : clientDesignation.toLowerCase()}...`}
+                  value={clientContactPersonName}
+                  onChange={(e) => setClientContactPersonName(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-medium text-xs focus:outline-none focus:ring-2 focus:ring-violet-500"
+                />
               </div>
 
               <div>

@@ -5,6 +5,7 @@ import { api } from "@/lib/api"
 import { filterGlobalDeletedItems, markGlobalItemDeleted, fetchModuleDataFromDB, saveModuleDataToDB } from "@/lib/storageSync"
 import { markUserAsDeleted, recordUserAccount } from "@/app/feature/users/services/userService"
 import { recordActivityLog } from "@/services/activityLogService"
+import { normalizeCompanyId } from "../../leads/services/leadService"
 
 // ── Default client labels seeded to DB ─────────────────────────────────────
 const DEFAULT_CLIENT_LABELS: ClientLabelItem[] = [
@@ -31,31 +32,60 @@ export function getClientTimestamp(c: ClientItem): number {
 // ── Clients ─────────────────────────────────────────────────────────────────
 
 export async function getClients(companyId?: string): Promise<ClientItem[]> {
-  // When a specific company is requested, fetch only that scope
-  // (avoid cross-company data leakage by NOT merging other company scopes)
   const scopeId = companyId || "all"
   
   if (scopeId !== "all") {
-    const data = await fetchModuleDataFromDB<ClientItem[]>("clients", [], scopeId).catch(() => [])
-    const enriched = (Array.isArray(data) ? data : []).map(c => ({
-      ...c,
-      companyId: c.companyId || scopeId,
-    }))
-    const filtered = filterGlobalDeletedItems(enriched, undefined, "clients")
+    const canonical = normalizeCompanyId(scopeId)
+    const toFetch = [canonical]
+    if (canonical === "consultancy") {
+      toFetch.push("print")
+    }
+
+    const [allData, ...scopedResults] = await Promise.all([
+      fetchModuleDataFromDB<ClientItem[]>("clients", [], "all").catch(() => []),
+      ...toFetch.map(c => fetchModuleDataFromDB<ClientItem[]>("clients", [], c).catch(() => []))
+    ])
+
+    const map = new Map<string, ClientItem>()
+    for (const res of scopedResults) {
+      for (const c of (Array.isArray(res) ? res : [])) {
+        if (c && c.id) {
+          map.set(String(c.id).toLowerCase().trim(), {
+            ...c,
+            companyId: canonical,
+          })
+        }
+      }
+    }
+
+    for (const c of (Array.isArray(allData) ? allData : [])) {
+      if (c && c.id && normalizeCompanyId(c.companyId) === canonical) {
+        const cId = String(c.id).toLowerCase().trim()
+        if (!map.has(cId)) {
+          map.set(cId, { ...c, companyId: canonical })
+        }
+      }
+    }
+
+    const filtered = filterGlobalDeletedItems(Array.from(map.values()), undefined, "clients")
     return filtered.sort((a, b) => getClientTimestamp(b) - getClientTimestamp(a))
   }
 
   // For "all" scope (Super Admin): merge across all company scopes
-  const [dbData, techData] = await Promise.all([
-    fetchModuleDataFromDB<ClientItem[]>("clients", [], "all").catch(() => []),
-    fetchModuleDataFromDB<ClientItem[]>("clients", [], "tech").catch(() => [])
-  ])
+  const known = ["all", "tech", "consultancy", "print"]
+  const results = await Promise.all(
+    known.map(c => fetchModuleDataFromDB<ClientItem[]>("clients", [], c).catch(() => []))
+  )
   const map = new Map<string, ClientItem>()
-  for (const c of (Array.isArray(dbData) ? dbData : [])) {
-    if (c && c.id) map.set(String(c.id).toLowerCase().trim(), c)
-  }
-  for (const c of (Array.isArray(techData) ? techData : [])) {
-    if (c && c.id) map.set(String(c.id).toLowerCase().trim(), c)
+  for (const list of results) {
+    for (const c of (Array.isArray(list) ? list : [])) {
+      if (c && c.id) {
+        const cId = String(c.id).toLowerCase().trim()
+        if (!map.has(cId)) {
+          map.set(cId, { ...c, companyId: normalizeCompanyId(c.companyId) })
+        }
+      }
+    }
   }
   const list = filterGlobalDeletedItems(Array.from(map.values()), undefined, "clients")
   return list.sort((a, b) => getClientTimestamp(b) - getClientTimestamp(a))
@@ -97,8 +127,8 @@ export async function saveStoredClient(client: ClientItem, companyId?: string): 
     } catch {}
   }
 
-  const effectiveCompanyId = companyId || client.companyId || activeCompany || "tech"
-  const effectiveCompanyName = client.companyName || foundCompanyName || (effectiveCompanyId === "print" ? "Print Space India" : "SAAMPARK Technology")
+  const effectiveCompanyId = normalizeCompanyId(companyId || client.companyId || activeCompany || "tech")
+  const effectiveCompanyName = client.companyName || foundCompanyName || (effectiveCompanyId === "consultancy" ? "Saampark Consultancy" : "SAAMPARK Technology")
   const effectiveBranchId = client.branchId || activeBranch || undefined
   const effectiveBranchName = client.branchName || foundBranchName || undefined
   const effectiveBranchCode = client.branchCode || foundBranchCode || undefined
@@ -119,8 +149,8 @@ export async function saveStoredClient(client: ClientItem, companyId?: string): 
       c.id === client.id ||
       (client.email && c.email && c.email.toLowerCase().trim() === client.email.toLowerCase().trim())
   )
-  const oldCompanyId = (existingClient?.companyId || "").toLowerCase().trim()
-  const newCompanyId = effectiveCompanyId.toLowerCase().trim()
+  const oldCompanyId = normalizeCompanyId(existingClient?.companyId)
+  const newCompanyId = effectiveCompanyId
 
   // If transferred to a different company, remove from old company
   if (oldCompanyId && oldCompanyId !== newCompanyId && oldCompanyId !== "all") {
@@ -130,7 +160,7 @@ export async function saveStoredClient(client: ClientItem, companyId?: string): 
         c.id !== enrichedClient.id &&
         c.email?.toLowerCase().trim() !== enrichedClient.email?.toLowerCase().trim()
     )
-    await saveModuleDataToDB("clients", filteredOld, oldCompanyId)
+    saveModuleDataToDB("clients", filteredOld, oldCompanyId).catch(() => {})
   }
 
   const current = await getClients(effectiveCompanyId)
@@ -142,18 +172,19 @@ export async function saveStoredClient(client: ClientItem, companyId?: string): 
         c.email?.toLowerCase().trim() !== enrichedClient.email?.toLowerCase().trim()
     ),
   ]
-  await saveModuleDataToDB("clients", updated, effectiveCompanyId)
-  if (effectiveCompanyId !== "all") {
-    const updatedAll = [
-      enrichedClient,
-      ...allClients.filter(
-        (c) =>
-          c.id !== enrichedClient.id &&
-          c.email?.toLowerCase().trim() !== enrichedClient.email?.toLowerCase().trim()
-      ),
-    ]
-    await saveModuleDataToDB("clients", updatedAll, "all")
-  }
+  const updatedAll = [
+    enrichedClient,
+    ...allClients.filter(
+      (c) =>
+        c.id !== enrichedClient.id &&
+        c.email?.toLowerCase().trim() !== enrichedClient.email?.toLowerCase().trim()
+    ),
+  ]
+
+  await Promise.all([
+    saveModuleDataToDB("clients", updated, effectiveCompanyId),
+    saveModuleDataToDB("clients", updatedAll, "all"),
+  ]).catch(() => {})
 
   const clientEmailNorm = (
     enrichedClient.email ||
@@ -529,6 +560,51 @@ export function formatDisplayEmail(email?: string): string {
     return ""
   }
   return clean
+}
+
+// ── Client Categories & Levels ──────────────────────────────────────────────
+
+export const DEFAULT_CLIENT_CATEGORIES: string[] = [
+  "Level 1",
+  "Level 2",
+  "Level 3",
+  "Enterprise",
+  "Corporate",
+  "Standard",
+  "VIP",
+  "Gold",
+  "Silver",
+  "Wholesale",
+  "Retail",
+  "Partner",
+]
+
+/** Fetch all client categories/levels from MySQL */
+export async function getClientCategories(companyId?: string): Promise<string[]> {
+  const data = await fetchModuleDataFromDB<string[]>("client_categories", DEFAULT_CLIENT_CATEGORIES, companyId)
+  if (!Array.isArray(data) || data.length === 0) {
+    await saveModuleDataToDB("client_categories", DEFAULT_CLIENT_CATEGORIES, companyId)
+    return DEFAULT_CLIENT_CATEGORIES
+  }
+  const merged = Array.from(new Set([...DEFAULT_CLIENT_CATEGORIES, ...data]))
+  return merged
+}
+
+/** Save/create a new client category or level to MySQL */
+export async function saveClientCategory(categoryName: string, companyId?: string): Promise<string[]> {
+  const trimmed = categoryName.trim()
+  if (!trimmed) return getClientCategories(companyId)
+  const current = await getClientCategories(companyId)
+  if (!current.includes(trimmed)) {
+    const updated = [...current, trimmed]
+    await saveModuleDataToDB("client_categories", updated, companyId)
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("saampark_client_categories_updated"))
+      window.dispatchEvent(new Event("storage"))
+    }
+    return updated
+  }
+  return current
 }
 
 

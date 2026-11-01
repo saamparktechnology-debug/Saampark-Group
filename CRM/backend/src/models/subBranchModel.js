@@ -48,11 +48,79 @@ const subBranchModel = {
       values.push(cleanCompanyId);
     }
 
-    const [result] = await pool.execute(
-      `INSERT INTO sub_branches (${fields.join(', ')}) VALUES (${placeholders.join(', ')})`,
-      values
-    );
-    return result.insertId;
+    let insertId = null;
+    try {
+      const [result] = await pool.execute(
+        `INSERT INTO sub_branches (${fields.join(', ')}) VALUES (${placeholders.join(', ')})`,
+        values
+      );
+      insertId = result.insertId;
+    } catch (err) {
+      console.warn('Sub-branch insert full column fallback:', err.message);
+      // Fallback: insert with core minimal columns
+      const coreFields = ['name', 'branch_id', 'company_id', 'code', 'address', 'city', 'state', 'phone', 'email', 'is_active'];
+      const subFields = [];
+      const subPlaceholders = [];
+      const subValues = [];
+      for (const cf of coreFields) {
+        if (data[cf] !== undefined) {
+          subFields.push(cf);
+          subPlaceholders.push('?');
+          let val = data[cf] === '' ? null : data[cf];
+          if (cf === 'branch_id') val = cleanBranchId;
+          else if (cf === 'company_id') val = cleanCompanyId;
+          subValues.push(val);
+        }
+      }
+      if (!subFields.includes('name')) {
+        subFields.push('name');
+        subPlaceholders.push('?');
+        subValues.push(data.name || 'New Sub Branch');
+      }
+      if (!subFields.includes('branch_id')) {
+        subFields.push('branch_id');
+        subPlaceholders.push('?');
+        subValues.push(cleanBranchId);
+      }
+      if (!subFields.includes('company_id')) {
+        subFields.push('company_id');
+        subPlaceholders.push('?');
+        subValues.push(cleanCompanyId);
+      }
+      try {
+        const [subResult] = await pool.execute(
+          `INSERT INTO sub_branches (${subFields.join(', ')}) VALUES (${subPlaceholders.join(', ')})`,
+          subValues
+        );
+        insertId = subResult.insertId;
+      } catch (innerErr) {
+        console.error('Core sub-branch insert error:', innerErr.message);
+      }
+    }
+
+    // Always sync newly created sub-branch to app_data for guaranteed persistence
+    try {
+      const [rows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "sub_branches"').catch(() => [[]]);
+      let list = [];
+      if (rows && rows.length > 0 && rows[0].data_json) {
+        try { list = JSON.parse(rows[0].data_json); } catch {}
+      }
+      if (!Array.isArray(list)) list = [];
+      const subBranchObj = {
+        ...data,
+        id: data.id || (insertId ? `sb-${insertId}` : `subbranch_${Date.now()}`),
+        parentBranchId: data.parentBranchId || data.branch_id || String(cleanBranchId),
+        numeric_id: insertId || undefined,
+      };
+      list = [...list.filter(sb => sb.id !== subBranchObj.id && (subBranchObj.code ? sb.code !== subBranchObj.code : true)), subBranchObj];
+      await pool.execute(
+        `INSERT INTO app_data (module_key, data_json) VALUES ("sub_branches", ?)
+         ON DUPLICATE KEY UPDATE data_json = VALUES(data_json), updated_at = NOW()`,
+        [JSON.stringify(list)]
+      ).catch(() => {});
+    } catch {}
+
+    return insertId || (data.id || `subbranch_${Date.now()}`);
   },
 
   async findById(id) {

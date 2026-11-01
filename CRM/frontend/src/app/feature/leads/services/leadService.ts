@@ -229,6 +229,15 @@ export async function syncLeadReminderTask(lead: Lead): Promise<void> {
   }
 }
 
+export function normalizeCompanyId(comp?: string | null): string {
+  if (!comp) return "tech"
+  const s = String(comp).toLowerCase().trim()
+  if (s === "consultancy" || s === "print" || s.includes("consult") || s === "2" || s.includes("print space")) {
+    return "consultancy"
+  }
+  return "tech"
+}
+
 export const getLeads = async (companyId?: string): Promise<Lead[]> => {
   let targetComp = companyId
   if (!targetComp && typeof window !== "undefined") {
@@ -249,7 +258,7 @@ export const getLeads = async (companyId?: string): Promise<Lead[]> => {
         map.set(String(l.id).toLowerCase().trim(), l)
       }
     }
-    const knownCompanies = ["tech", "consultancy", "digital", "saampark-ai-solutions", "fashion", "print"]
+    const knownCompanies = ["tech", "consultancy", "print"]
     const results = await Promise.all(
       knownCompanies.map(c => fetchModuleDataFromDB<Lead[]>("leads", [], c).catch(() => []))
     )
@@ -259,31 +268,44 @@ export const getLeads = async (companyId?: string): Promise<Lead[]> => {
         if (l && l.id) {
           const lId = String(l.id).toLowerCase().trim()
           if (!map.has(lId)) {
-            map.set(lId, { ...l, companyId: l.companyId || knownCompanies[i] })
+            map.set(lId, { ...l, companyId: normalizeCompanyId(l.companyId || knownCompanies[i]) })
           }
         }
       }
     }
     list = Array.from(map.values())
   } else {
-    const scopedData = await fetchModuleDataFromDB<Lead[]>("leads", [], effectiveComp).catch(() => [])
+    const canonicalTarget = normalizeCompanyId(effectiveComp)
+    const toFetch = [canonicalTarget]
+    if (canonicalTarget === "consultancy") {
+      toFetch.push("print")
+    }
+
+    const [allData, ...scopedResults] = await Promise.all([
+      fetchModuleDataFromDB<Lead[]>("leads", [], "all").catch(() => []),
+      ...toFetch.map(c => fetchModuleDataFromDB<Lead[]>("leads", [], c).catch(() => []))
+    ])
+
     const map = new Map<string, Lead>()
-    for (const l of (Array.isArray(scopedData) ? scopedData : [])) {
-      if (l && l.id) {
-        map.set(String(l.id).toLowerCase().trim(), { ...l, companyId: l.companyId || effectiveComp })
+    for (const res of scopedResults) {
+      for (const l of (Array.isArray(res) ? res : [])) {
+        if (l && l.id) {
+          map.set(String(l.id).toLowerCase().trim(), { ...l, companyId: canonicalTarget })
+        }
       }
     }
-    const allData = await fetchModuleDataFromDB<Lead[]>("leads", [], "all").catch(() => [])
+
     for (const l of (Array.isArray(allData) ? allData : [])) {
-      if (l && l.id && String(l.companyId || "").toLowerCase().trim() === effectiveComp.toLowerCase().trim()) {
+      if (l && l.id && normalizeCompanyId(l.companyId) === canonicalTarget) {
         const lId = String(l.id).toLowerCase().trim()
         const existing = map.get(lId)
         if (!existing) {
-          map.set(lId, l)
+          map.set(lId, { ...l, companyId: canonicalTarget })
         } else {
           map.set(lId, {
             ...existing,
             ...l,
+            companyId: canonicalTarget,
             branchId: l.branchId !== undefined ? l.branchId : existing.branchId,
             branchName: l.branchName !== undefined ? l.branchName : existing.branchName,
             assignedBranchId: l.assignedBranchId !== undefined ? l.assignedBranchId : existing.assignedBranchId,
@@ -335,22 +357,21 @@ export const getLeads = async (companyId?: string): Promise<Lead[]> => {
       return lead
     }
 
-    // 2. Explicitly unlocked leads MUST STAY UNLOCKED:
+    // 2. Explicitly unlocked leads MUST STAY UNLOCKED
     const isExplicitlyUnlocked =
-      lead.isLocked === false && (
-        (lead as any).isExplicitlyUnlocked === true ||
-        lead.lockedReason?.includes("Unlocked") ||
-        (lead as any).unlockedByAdmin === true ||
-        (lead as any).unlockedByClient === true
-      )
+      lead.isLocked === false ||
+      (lead as any).isExplicitlyUnlocked === true ||
+      lead.lockedReason?.includes("Unlocked") ||
+      (lead as any).unlockedByAdmin === true ||
+      (lead as any).unlockedByClient === true
 
-    if (isExplicitlyUnlocked) {
+    if (isExplicitlyUnlocked && lead.isLocked === false) {
       return lead
     }
 
     // 3. Active leads: check if reminder date is overdue (passed end of date 23:59:59)
     const overdue = isReminderDateOverdue(lead.reminderDate)
-    if (overdue && !lead.isLocked) {
+    if (overdue && !lead.isLocked && !lead.lockedReason?.includes("Unlocked") && !(lead as any).isExplicitlyUnlocked) {
       hasChanges = true
       return {
         ...lead,
@@ -358,7 +379,6 @@ export const getLeads = async (companyId?: string): Promise<Lead[]> => {
         lockedReason: "Overdue: Lead reminder date expired without updates.",
       }
     } else if (!overdue && lead.isLocked && !lead.lockedReason?.includes("Manually locked")) {
-      // If reminder date was updated to valid/future date, automatically unlock
       hasChanges = true
       return {
         ...lead,
@@ -371,11 +391,10 @@ export const getLeads = async (companyId?: string): Promise<Lead[]> => {
   })
 
   if (hasChanges) {
-    saveModuleDataToDB("leads", processed, effectiveComp !== "all" ? effectiveComp : undefined).catch(() => {})
+    saveModuleDataToDB("leads", processed, effectiveComp !== "all" ? normalizeCompanyId(effectiveComp) : undefined).catch(() => {})
   }
 
   // Client Isolation: If client user, only return their private leads.
-  // If Super Admin, Admin, or Teams, never show client private leads.
   let currentUser: any = null
   if (typeof window !== "undefined") {
     try {
@@ -406,7 +425,8 @@ export async function checkAndAutoConvertLeadToClient(lead: Lead, companyId?: st
   if (!lead || lead.status !== "Won") return
 
   try {
-    const storedClients = await getClients()
+    const effLeadComp = normalizeCompanyId(lead.companyId || companyId || "tech")
+    const storedClients = await getClients(effLeadComp)
     const rawEmail = (lead.email || "").trim()
     const internalEmail = rawEmail || `lead_${lead.id}@saampark.in`
     const clientName = lead.name || "Won Client"
@@ -433,13 +453,11 @@ export async function checkAndAutoConvertLeadToClient(lead: Lead, companyId?: st
         branchId: lead.branchId,
         branchName: lead.branchName,
         branchCode: (lead as any).branchCode,
-        companyId: lead.companyId || companyId || "tech",
+        companyId: effLeadComp,
       }
 
-      const effLeadComp = lead.companyId || companyId || "tech"
       await saveStoredClient(newClient as any, effLeadComp)
 
-      // Register client account for login in background
       recordUserAccount({
         id: `usr_cli_${lead.id}`,
         name: lead.primaryContact || lead.name,
@@ -467,12 +485,8 @@ export const addLead = async (leadData: Omit<Lead, "id">, companyId?: string): P
       authState = useAuthStore.getState()
     } catch {}
   }
-  const targetComp = companyId || leadData.companyId || authState?.activeCompanyId || "tech"
-  const effComp = (targetComp && targetComp !== "all") ? targetComp : "tech"
+  const targetComp = normalizeCompanyId(companyId || leadData.companyId || authState?.activeCompanyId || "tech")
 
-  const current = await fetchModuleDataFromDB<Lead[]>("leads", [], effComp).catch(() => [])
-
-  // Unique collision-free ID generation
   const timestamp = Date.now()
   const randomSuffix = Math.random().toString(36).substring(2, 6)
   const newId = `lead_${timestamp}_${randomSuffix}`
@@ -483,7 +497,7 @@ export const addLead = async (leadData: Omit<Lead, "id">, companyId?: string): P
   const newLead: Lead = {
     ...leadData,
     id: newId,
-    companyId: effComp,
+    companyId: targetComp,
     branchId: leadData.branchId || authState?.activeBranchId || authState?.user?.branchId || undefined,
     createdAt: leadData.createdAt || `${new Date().toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' })}`,
     service: leadData.service !== undefined ? leadData.service : "",
@@ -497,21 +511,28 @@ export const addLead = async (leadData: Omit<Lead, "id">, companyId?: string): P
     createdByEmail: isClientRole ? currentUser?.email : leadData.createdByEmail,
     createdByRole: isClientRole ? "Clients" : leadData.createdByRole,
   }
-  const updated = [newLead, ...current.filter((l) => l.id !== newId)]
-  await saveModuleDataToDB("leads", updated, effComp)
 
-  // Also update "all" aggregation
-  const allCurrent = await fetchModuleDataFromDB<Lead[]>("leads", [], "all").catch(() => [])
-  const updatedAll = [newLead, ...allCurrent.filter(l => l.id !== newId)]
-  await saveModuleDataToDB("leads", updatedAll, "all").catch(() => {})
+  const [current, allCurrent] = await Promise.all([
+    fetchModuleDataFromDB<Lead[]>("leads", [], targetComp).catch(() => []),
+    fetchModuleDataFromDB<Lead[]>("leads", [], "all").catch(() => []),
+  ])
+
+  const updated = [newLead, ...current.filter((l) => l.id !== newId)]
+  const updatedAll = [newLead, ...allCurrent.filter((l) => l.id !== newId)]
+
+  await Promise.all([
+    saveModuleDataToDB("leads", updated, targetComp),
+    saveModuleDataToDB("leads", updatedAll, "all"),
+  ]).catch(() => {})
 
   if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("saampark_leads_updated"))
     window.dispatchEvent(new CustomEvent("saampark_data_synced"))
     window.dispatchEvent(new Event("storage"))
   }
 
-  syncLeadReminderTask(newLead)
-  checkAndAutoConvertLeadToClient(newLead, effComp)
+  syncLeadReminderTask(newLead).catch(() => {})
+  checkAndAutoConvertLeadToClient(newLead, targetComp).catch(() => {})
 
   recordActivityLog({
     type: "lead",
@@ -542,28 +563,31 @@ export const updateLead = async (id: string, updates: Partial<Lead>, userRole?: 
     currentUserObj?.role === "Super Admin" ||
     currentUserObj?.role === "Admin"
 
-  // Find target lead across specified company or all partitions
-  let target: Lead | null = null
-  let foundComp: string | undefined = companyId
+  const targetComp = companyId ? normalizeCompanyId(companyId) : undefined
 
-  if (companyId && companyId !== "all") {
-    const scopedList = await fetchModuleDataFromDB<Lead[]>("leads", [], companyId).catch(() => [])
-    target = scopedList.find(l => l.id === id) || null
-  }
+  // Find target lead fast across DB partitions in parallel
+  const [scopedList, allLeads] = await Promise.all([
+    targetComp ? fetchModuleDataFromDB<Lead[]>("leads", [], targetComp).catch(() => []) : Promise.resolve([]),
+    fetchModuleDataFromDB<Lead[]>("leads", [], "all").catch(() => []),
+  ])
+
+  let target: Lead | null =
+    scopedList.find(l => l.id === id) ||
+    allLeads.find(l => l.id === id) ||
+    null
+
+  let foundComp: string = targetComp || (target?.companyId ? normalizeCompanyId(target.companyId) : "tech")
 
   if (!target) {
-    const allLeads = await fetchModuleDataFromDB<Lead[]>("leads", [], "all").catch(() => [])
-    target = allLeads.find(l => l.id === id) || null
-    if (target) foundComp = target.companyId
-  }
-
-  if (!target) {
-    for (const c of ["tech", "consultancy", "digital", "saampark-ai-solutions", "print"]) {
-      const cList = await fetchModuleDataFromDB<Lead[]>("leads", [], c).catch(() => [])
-      const found = cList.find(l => l.id === id)
+    const fallbackComps = ["tech", "consultancy", "print"]
+    const results = await Promise.all(
+      fallbackComps.map(c => fetchModuleDataFromDB<Lead[]>("leads", [], c).catch(() => []))
+    )
+    for (let i = 0; i < fallbackComps.length; i++) {
+      const found = results[i].find(l => l.id === id)
       if (found) {
         target = found
-        foundComp = c
+        foundComp = normalizeCompanyId(fallbackComps[i])
         break
       }
     }
@@ -598,12 +622,10 @@ export const updateLead = async (id: string, updates: Partial<Lead>, userRole?: 
 
   // Priority order for lock status:
   if (updates.isLocked === false) {
-    // Explicit Unlock ALWAYS clears lock and preserves unlock reason
     nextIsLocked = false
     nextReason = updates.lockedReason || "Unlocked"
     nextIsExplicitlyUnlocked = true
   } else if (updates.isLocked === true) {
-    // Explicit Lock ALWAYS locks
     nextIsLocked = true
     nextReason = updates.lockedReason || (isClientCreator ? "Manually locked by Client" : "Manually locked by Admin")
     nextIsExplicitlyUnlocked = false
@@ -616,14 +638,13 @@ export const updateLead = async (id: string, updates: Partial<Lead>, userRole?: 
     nextReason = undefined
     nextIsExplicitlyUnlocked = false
   } else if (target.isLocked && target.lockedReason?.includes("Manually locked")) {
-    // Retain manual lock unless explicitly unlocked
     nextIsLocked = true
     nextReason = target.lockedReason
     nextIsExplicitlyUnlocked = false
   } else if (target.isLocked === false && (nextIsExplicitlyUnlocked || target.lockedReason?.includes("Unlocked"))) {
-    // Retain unlocked state! Never auto-relock a lead that was unlocked!
     nextIsLocked = false
     nextReason = target.lockedReason || "Unlocked"
+    nextIsExplicitlyUnlocked = true
   } else if (finalReminderDate && isReminderDateOverdue(finalReminderDate)) {
     nextIsLocked = true
     nextReason = "Overdue: Lead reminder date expired."
@@ -634,8 +655,8 @@ export const updateLead = async (id: string, updates: Partial<Lead>, userRole?: 
     nextIsExplicitlyUnlocked = false
   }
 
-  const oldCompanyId = (target.companyId || foundComp || "tech").toLowerCase().trim()
-  const newCompanyId = (updates.companyId || oldCompanyId).toLowerCase().trim()
+  const oldCompanyId = normalizeCompanyId(target.companyId || foundComp)
+  const newCompanyId = updates.companyId ? normalizeCompanyId(updates.companyId) : oldCompanyId
 
   const updatedLead: Lead = {
     ...target,
@@ -646,32 +667,37 @@ export const updateLead = async (id: string, updates: Partial<Lead>, userRole?: 
     isExplicitlyUnlocked: nextIsExplicitlyUnlocked,
   }
 
-  // Save to new company
-  const newList = await fetchModuleDataFromDB<Lead[]>("leads", [], newCompanyId).catch(() => [])
-  const updatedNew = [updatedLead, ...newList.filter(l => l.id !== id)]
-  await saveModuleDataToDB("leads", updatedNew, newCompanyId)
+  // Fast concurrent write to DB: save to newCompanyId and 'all' in parallel
+  const updatePromises: Promise<any>[] = []
 
-  // If company changed, clean up from old company
+  const updatedNew = [updatedLead, ...scopedList.filter(l => l.id !== id)]
+  updatePromises.push(saveModuleDataToDB("leads", updatedNew, newCompanyId))
+
+  const updatedAll = [updatedLead, ...allLeads.filter(l => l.id !== id)]
+  updatePromises.push(saveModuleDataToDB("leads", updatedAll, "all"))
+
   if (newCompanyId !== oldCompanyId) {
-    const oldList = await fetchModuleDataFromDB<Lead[]>("leads", [], oldCompanyId).catch(() => [])
-    const filteredOld = oldList.filter(l => l.id !== id)
-    await saveModuleDataToDB("leads", filteredOld, oldCompanyId)
+    const oldList = scopedList.filter(l => l.id !== id)
+    updatePromises.push(saveModuleDataToDB("leads", oldList, oldCompanyId))
   }
 
-  // Update in "all" aggregation
-  const allList = await fetchModuleDataFromDB<Lead[]>("leads", [], "all").catch(() => [])
-  const updatedAll = [updatedLead, ...allList.filter(l => l.id !== id)]
-  await saveModuleDataToDB("leads", updatedAll, "all")
+  // Execute all DB partition saves concurrently
+  await Promise.all(updatePromises).catch((err) => {
+    console.warn("DB leads write error:", err)
+  })
 
+  // Fire UI notifications immediately
   if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("saampark_leads_updated"))
     window.dispatchEvent(new CustomEvent("saampark_data_synced"))
     window.dispatchEvent(new Event("storage"))
   }
 
-  syncLeadReminderTask(updatedLead)
-  checkAndAutoConvertLeadToClient(updatedLead, newCompanyId)
+  // Run side tasks in the background without blocking the UI response
+  syncLeadReminderTask(updatedLead).catch(() => {})
+  checkAndAutoConvertLeadToClient(updatedLead, newCompanyId).catch(() => {})
 
-  // Automated Activity Logging for Lead Events
+  // Background activity logging
   if (statusLower === "won" && (target.status || "").toLowerCase().trim() !== "won") {
     recordActivityLog({
       type: "lead",
@@ -715,28 +741,39 @@ export const updateLead = async (id: string, updates: Partial<Lead>, userRole?: 
     }).catch(() => {})
   }
 
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(new Event("storage"))
-    window.dispatchEvent(new CustomEvent("saampark_data_synced"))
-    window.dispatchEvent(new CustomEvent("saampark_leads_updated"))
-  }
-
   return updatedLead
 }
 
 export const deleteLead = async (id: string, companyId?: string): Promise<boolean> => {
   await markGlobalItemDeleted(id, "leads")
-  const current = await fetchModuleDataFromDB<Lead[]>("leads", [], companyId)
-  const target = current.find(l => l.id === id)
-  const filtered = current.filter((l) => l.id !== id)
-  await saveModuleDataToDB("leads", filtered, companyId)
+  const targetComp = normalizeCompanyId(companyId)
+  
+  const [currentScoped, allCurrent] = await Promise.all([
+    fetchModuleDataFromDB<Lead[]>("leads", [], targetComp).catch(() => []),
+    fetchModuleDataFromDB<Lead[]>("leads", [], "all").catch(() => []),
+  ])
+
+  const target = currentScoped.find(l => l.id === id) || allCurrent.find(l => l.id === id)
+  const filteredScoped = currentScoped.filter((l) => l.id !== id)
+  const filteredAll = allCurrent.filter((l) => l.id !== id)
+
+  await Promise.all([
+    saveModuleDataToDB("leads", filteredScoped, targetComp),
+    saveModuleDataToDB("leads", filteredAll, "all"),
+  ]).catch(() => {})
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("saampark_leads_updated"))
+    window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+    window.dispatchEvent(new Event("storage"))
+  }
 
   recordActivityLog({
     type: "lead",
     module: "Leads",
     action: "Lead Deleted",
     description: `Lead "${target?.name || id}" removed from the system`,
-    companyId: target?.companyId || companyId,
+    companyId: target?.companyId || targetComp,
     branchId: target?.branchId,
     branchName: target?.branchName,
   }).catch(() => {})
@@ -771,15 +808,19 @@ export const unlockLead = async (
     } catch {}
   }
 
-  const allLeads = await fetchModuleDataFromDB<Lead[]>("leads", [], "all").catch(() => [])
-  const compLeads = targetComp ? await fetchModuleDataFromDB<Lead[]>("leads", [], targetComp).catch(() => []) : []
-  const lead =
-    allLeads.find(l => String(l.id).toLowerCase().trim() === String(id).toLowerCase().trim()) ||
-    compLeads.find(l => String(l.id).toLowerCase().trim() === String(id).toLowerCase().trim())
+  const canonComp = targetComp ? normalizeCompanyId(targetComp) : undefined
 
-  if (lead?.companyId) {
-    targetComp = lead.companyId
-  }
+  // Concurrently fetch DB partitions for fastest response
+  const [allLeads, compLeads] = await Promise.all([
+    fetchModuleDataFromDB<Lead[]>("leads", [], "all").catch(() => []),
+    canonComp ? fetchModuleDataFromDB<Lead[]>("leads", [], canonComp).catch(() => []) : Promise.resolve([]),
+  ])
+
+  const lead =
+    compLeads.find(l => String(l.id).toLowerCase().trim() === String(id).toLowerCase().trim()) ||
+    allLeads.find(l => String(l.id).toLowerCase().trim() === String(id).toLowerCase().trim())
+
+  const resolvedComp = normalizeCompanyId(lead?.companyId || targetComp)
 
   if (currentUser && lead && !canUserUnlockLead(currentUser, lead)) {
     if (isLeadClientPrivate(lead)) {
@@ -791,7 +832,7 @@ export const unlockLead = async (
   const isClient = (currentUser?.role || "").toLowerCase().includes("client")
   const unlockReason = isClient ? "Unlocked by Client" : "Unlocked by Admin"
 
-  // Advance reminder date to tomorrow in DD MMM YYYY format so SLA has ample time
+  // Advance reminder date to tomorrow in DD MMM YYYY format
   const tomorrow = new Date()
   tomorrow.setDate(tomorrow.getDate() + 1)
   const d = String(tomorrow.getDate()).padStart(2, "0")
@@ -811,12 +852,11 @@ export const unlockLead = async (
     unlockedAt: new Date().toISOString(),
   }
 
-  // If reminder date is overdue or missing, advance it to tomorrow so SLA has plenty of time
   if (!lead?.reminderDate || isReminderDateOverdue(lead.reminderDate)) {
     updates.reminderDate = futureReminderDate
   }
 
-  return updateLead(id, updates as any, currentUser || "Super Admin", targetComp)
+  return updateLead(id, updates as any, currentUser || "Super Admin", resolvedComp)
 }
 
 export const lockLead = async (
@@ -847,15 +887,18 @@ export const lockLead = async (
     } catch {}
   }
 
-  const allLeads = await fetchModuleDataFromDB<Lead[]>("leads", [], "all").catch(() => [])
-  const compLeads = targetComp ? await fetchModuleDataFromDB<Lead[]>("leads", [], targetComp).catch(() => []) : []
-  const lead =
-    allLeads.find(l => String(l.id).toLowerCase().trim() === String(id).toLowerCase().trim()) ||
-    compLeads.find(l => String(l.id).toLowerCase().trim() === String(id).toLowerCase().trim())
+  const canonComp = targetComp ? normalizeCompanyId(targetComp) : undefined
 
-  if (lead?.companyId) {
-    targetComp = lead.companyId
-  }
+  const [allLeads, compLeads] = await Promise.all([
+    fetchModuleDataFromDB<Lead[]>("leads", [], "all").catch(() => []),
+    canonComp ? fetchModuleDataFromDB<Lead[]>("leads", [], canonComp).catch(() => []) : Promise.resolve([]),
+  ])
+
+  const lead =
+    compLeads.find(l => String(l.id).toLowerCase().trim() === String(id).toLowerCase().trim()) ||
+    allLeads.find(l => String(l.id).toLowerCase().trim() === String(id).toLowerCase().trim())
+
+  const resolvedComp = normalizeCompanyId(lead?.companyId || targetComp)
 
   if (currentUser && lead && !canUserLockLead(currentUser, lead)) {
     if (isLeadClientPrivate(lead)) {
@@ -865,19 +908,25 @@ export const lockLead = async (
   }
 
   const isClient = (currentUser?.role || "").toLowerCase().includes("client")
-  const defaultReason = isClient ? "Manually locked by Client" : "Manually locked by Admin"
+  const defaultReason = reason || (isClient ? "Manually locked by Client" : "Manually locked by Admin")
+
+  const updates: Partial<Lead> & Record<string, any> = {
+    isLocked: true,
+    lockedReason: defaultReason,
+    isExplicitlyUnlocked: false,
+    unlockedByAdmin: false,
+    unlockedByClient: false,
+    lockedBy: currentUser?.name || currentUser?.email || (isClient ? "Client" : "Admin"),
+    lockedByRole: currentUser?.role || (isClient ? "Clients" : "Admin"),
+    lockedById: currentUser?.id ? String(currentUser.id) : undefined,
+    lockedAt: new Date().toISOString(),
+  }
 
   return updateLead(
     id,
-    {
-      isLocked: true,
-      lockedReason: reason || defaultReason,
-      isExplicitlyUnlocked: false,
-      unlockedByAdmin: false,
-      unlockedByClient: false,
-    } as any,
+    updates as any,
     currentUser || "Super Admin",
-    targetComp
+    resolvedComp
   )
 }
 

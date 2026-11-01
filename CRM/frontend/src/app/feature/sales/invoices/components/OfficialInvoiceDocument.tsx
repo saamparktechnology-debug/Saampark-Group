@@ -1351,6 +1351,18 @@ export function OfficialInvoiceDocument({
             </span>
           )}
         </div>
+        {isValidField(invoice.contactPersonName || (invoice as any).primaryContact || (invoice as any).clientContactPerson || clientDetails?.primaryContact) && (
+          <p className="text-[10px] text-zinc-900 font-bold flex items-center gap-1 pt-0.5">
+            <span className="text-[8.5px] text-zinc-500 font-extrabold uppercase tracking-wider">
+              {isValidField(invoice.clientDesignation || clientDetails?.designation) ? `${invoice.clientDesignation || clientDetails?.designation}:` : "Attn:"}
+            </span>
+            <EditableText
+              value={invoice.contactPersonName || (invoice as any).primaryContact || (invoice as any).clientContactPerson || clientDetails?.primaryContact}
+              interactive={interactive}
+              className="text-zinc-900 font-extrabold text-[10.5px]"
+            />
+          </p>
+        )}
         {(invoice.clientPhone || clientDetails?.phone) && (
           <p className="text-[9.5px] text-zinc-800 font-bold flex items-center gap-1">
             <Phone size={9} className="text-blue-600 shrink-0" />
@@ -1761,6 +1773,13 @@ export function OfficialInvoiceDocument({
                     <span className="font-mono">₹{sgstAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
                   </div>
                 </>
+              )}
+
+              {(Number(invoice.creditDeduction) > 0 || Number((invoice as any).appliedCreditNotes) > 0) && (
+                <div className="flex justify-between py-0.5 text-indigo-700 dark:text-indigo-400 font-bold bg-indigo-50/80 dark:bg-indigo-950/40 px-1 rounded">
+                  <EditableText value="Less: Credit Note Applied" interactive={interactive} />
+                  <span className="font-mono">(-) ₹{(Number(invoice.creditDeduction) || Number((invoice as any).appliedCreditNotes) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                </div>
               )}
             </div>
 

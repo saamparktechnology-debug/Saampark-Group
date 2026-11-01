@@ -1258,8 +1258,12 @@ export default function CompaniesMain() {
 
   // ── DELETE HANDLER ─────────────────────────────────────────────────────────
   const confirmDelete = (type: "company" | "branch" | "sub_branch", id: string) => {
+    if (type === "company") {
+      alert("Company deletion is disabled. The CRM operates strictly with SAAMPARK Technology and Saampark Consultancy.")
+      return
+    }
     if (!isSuperAdmin) {
-      alert("Permission denied: Only Super Admin can delete companies or branches.")
+      alert("Permission denied: Only Super Admin can delete records.")
       return
     }
     setDeleteTarget({ type, id })
@@ -1405,12 +1409,6 @@ export default function CompaniesMain() {
           </h1>
           <p className="text-xs text-muted-foreground mt-1">Configure corporate entities, divisions, legal tax IDs, authorized stamps, and percentage-share franchise sub-branches</p>
         </div>
-        {isSuperAdmin && (
-          <Button onClick={openAddCompany} className="flex items-center gap-1.5 self-start sm:self-auto shadow-sm">
-            <Plus className="h-4 w-4" />
-            <span>Add Company</span>
-          </Button>
-        )}
       </div>
 
       {/* Filter Toolbar */}
@@ -1464,9 +1462,6 @@ export default function CompaniesMain() {
                   <Button variant="ghost" size="sm" onClick={() => { openEditCompany(company); setCompanyModalViewMode("preview") }} title="Live Preview Document & Stamps" className="h-8 gap-1 text-xs text-primary font-bold"><Eye className="h-4 w-4" />Preview</Button>
                   <Button variant="ghost" size="sm" onClick={() => openAddBranch(company.id)} title="Add Branch"><Plus className="h-4 w-4" /></Button>
                   <Button variant="ghost" size="sm" onClick={() => openEditCompany(company)} title="Edit Full Company Details"><Edit2 className="h-4 w-4" /></Button>
-                  {isSuperAdmin && (
-                    <Button variant="ghost" size="sm" onClick={() => confirmDelete("company", company.id)} title="Delete Company" className="text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" /></Button>
-                  )}
                 </div>
               </div>
 
@@ -1594,7 +1589,7 @@ export default function CompaniesMain() {
                   </div>
                   <div className="min-w-0">
                     <h2 className="text-base font-bold text-foreground truncate">
-                      {editingCompany ? `Edit Company: ${editingCompany.name}` : "Create New Company Entity"}
+                      {editingCompany ? `Edit Company: ${editingCompany.name}` : "Configure Company Details"}
                     </h2>
                     <p className="text-[11px] text-muted-foreground truncate">
                       Split-screen live studio for corporate settings, bank accounts &amp; live document calibration
@@ -1943,7 +1938,7 @@ export default function CompaniesMain() {
                         <Button variant="outline" size="sm" onClick={() => setShowCompanyModal(false)}>Cancel</Button>
                         <Button size="sm" onClick={() => saveCompany(false)} disabled={saving || !companyForm.name.trim()} className="font-bold bg-blue-600 hover:bg-blue-700 text-white">
                           {saving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
-                          {editingCompany ? "Update Company" : "Create Company"}
+                          Update Company Details
                         </Button>
                       </div>
                     </div>

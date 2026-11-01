@@ -20,6 +20,7 @@ export interface ClientItem {
   due: string;
   type?: "Organization" | "Person";
   owner?: string;
+  managers?: string;
   designation?: string; // e.g. "Proprietor", "Manager", "Founder", "CEO"
   address?: string;
   district?: string;

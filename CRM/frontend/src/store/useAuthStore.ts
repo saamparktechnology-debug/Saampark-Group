@@ -807,21 +807,43 @@ export const useAuthStore = create<AuthState>()(
             })
           })
 
+          // Helper to merge fields without overwriting non-empty fields with null/empty
+          const mergeNonEmpty = (targetObj: any, sourceObj: any) => {
+            if (!sourceObj || typeof sourceObj !== 'object') return targetObj
+            const result = { ...targetObj }
+            for (const [k, v] of Object.entries(sourceObj)) {
+              if (v !== null && v !== undefined) {
+                if (typeof v === 'string') {
+                  if (v.trim() !== '') {
+                    result[k] = v
+                  }
+                } else if (typeof v === 'object') {
+                  if (Array.isArray(v)) {
+                    if (v.length > 0) result[k] = v
+                  } else {
+                    result[k] = mergeNonEmpty(result[k] || {}, v)
+                  }
+                } else {
+                  result[k] = v
+                }
+              }
+            }
+            return result
+          }
+
           // 2. Overlay currently cached store companies (preserves custom local fields)
           const currentStoreCompanies = get().companies || []
           currentStoreCompanies.forEach(c => {
             const key = getCanonicalKey(c)
             const existing = map.get(key)
-            map.set(key, {
-              ...existing,
-              ...c,
-              id: key,
-              slug: key,
-              brand_name: c.brand_name || existing?.brand_name || 'SAAMPARK',
-              division_name: c.division_name !== undefined ? c.division_name : (existing?.division_name || ''),
-              subtitle: c.subtitle !== undefined ? c.subtitle : (existing?.subtitle || ''),
-              name: getCompanyFullName({ ...existing, ...c }),
-            })
+            if (existing) {
+              map.set(key, {
+                ...mergeNonEmpty(existing, c),
+                id: key,
+                slug: key,
+                name: getCompanyFullName({ ...existing, ...c }),
+              })
+            }
           })
 
           // 3. Overlay DB module store (app_data table)
@@ -829,36 +851,30 @@ export const useAuthStore = create<AuthState>()(
             dbCompanies.forEach(c => {
               const key = getCanonicalKey(c)
               const existing = map.get(key)
-              map.set(key, {
-                ...existing,
-                ...c,
-                id: key,
-                slug: key,
-                logo_url: (c.logo_url && c.logo_url.trim() !== '') ? c.logo_url : (existing?.logo_url || ''),
-                brand_name: c.brand_name || existing?.brand_name || 'SAAMPARK',
-                division_name: c.division_name !== undefined ? c.division_name : (existing?.division_name || ''),
-                subtitle: c.subtitle !== undefined ? c.subtitle : (existing?.subtitle || ''),
-                name: getCompanyFullName({ ...existing, ...c }),
-              })
+              if (existing) {
+                map.set(key, {
+                  ...mergeNonEmpty(existing, c),
+                  id: key,
+                  slug: key,
+                  name: getCompanyFullName({ ...existing, ...c }),
+                })
+              }
             })
           }
 
-          // 4. Overlay Live Backend API (MySQL companies table) - highest source of truth
+          // 4. Overlay Live Backend API (MySQL companies table) - safely without wiping non-empty fields
           apiList.forEach(c => {
             const key = getCanonicalKey(c)
             const existing = map.get(key)
-            const mergedComp = {
-              ...existing,
-              ...c,
-              id: key,
-              slug: key,
-              logo_url: (c.logo_url && c.logo_url.trim() !== '') ? c.logo_url : (existing?.logo_url || ''),
-              brand_name: (c.brand_name && c.brand_name.trim() !== '') ? c.brand_name : (existing?.brand_name || 'SAAMPARK'),
-              division_name: c.division_name !== undefined ? c.division_name : (existing?.division_name || ''),
-              subtitle: c.subtitle !== undefined ? c.subtitle : (existing?.subtitle || ''),
-              name: (c.name && c.name.trim() !== '') ? c.name : getCompanyFullName({ ...existing, ...c }),
+            if (existing) {
+              const mergedComp = {
+                ...mergeNonEmpty(existing, c),
+                id: key,
+                slug: key,
+                name: (c.name && c.name.trim() !== '') ? c.name : getCompanyFullName({ ...existing, ...c }),
+              }
+              map.set(key, mergedComp)
             }
-            map.set(key, mergedComp)
           })
 
           const rawTech = map.get('tech') || DEFAULT_COMPANIES[0]
@@ -905,18 +921,8 @@ export const useAuthStore = create<AuthState>()(
             invoice_customization: rawConsult.invoice_customization || { hidden_fields: [] },
           }
 
+          // Strictly the 2 predefined SAAMPARK companies
           const combined: Company[] = [sanitizedTech, sanitizedConsult]
-          map.forEach((comp, key) => {
-            if (key !== 'tech' && key !== 'consultancy') {
-              combined.push({
-                ...comp,
-                id: comp.id || key,
-                slug: comp.slug || key,
-                name: (comp.name && comp.name.trim() !== '') ? comp.name : getCompanyFullName(comp),
-              })
-            }
-          })
-
           set({ companies: combined })
           return combined
         } catch (err) {
@@ -1040,116 +1046,15 @@ export const useAuthStore = create<AuthState>()(
       },
 
       addCompany: async (newComp: Partial<Company>) => {
-        const { user, companies } = get()
-        if (user?.role !== 'Super Admin') {
-          throw new Error('Only Super Admin can create companies.')
+        // CRM strictly operates with the 2 permanent predefined companies: SAAMPARK Technology & Saampark Consultancy.
+        // Company creation is disabled as per system governance.
+        console.warn('Company creation is disabled: CRM operates strictly with SAAMPARK Technology and Saampark Consultancy.')
+        const canon = getCanonicalCompanyId(newComp.slug || newComp.id || newComp.name)
+        const target = get().companies.find(c => isMatchingCompany(c, canon))
+        if (target) {
+          return get().updateCompany(target.id, newComp)
         }
-
-        try {
-          const compSlug = newComp.slug || newComp.name?.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || `comp_${Date.now()}`
-          unmarkGlobalItemDeleted(compSlug)
-          unmarkGlobalItemDeleted(newComp.name || '')
-
-          await api.post('/companies', {
-            name: newComp.name,
-            slug: compSlug,
-            currency: newComp.currency || 'INR',
-            currency_symbol: newComp.currency_symbol || '₹',
-            logo_url: newComp.logo_url,
-          }).catch((err) => {
-            console.warn('Create company API warning:', err)
-          })
-
-          const created: Company = {
-            id: compSlug,
-            name: getCompanyFullName(newComp),
-            brand_name: newComp.brand_name || 'SAAMPARK',
-            division_name: newComp.division_name || '',
-            subtitle: newComp.subtitle || '',
-            slug: compSlug,
-            logo: newComp.logo || '🏢',
-            logo_url: newComp.logo_url || '',
-            currency: newComp.currency || 'INR',
-            currency_symbol: newComp.currency_symbol || '₹',
-            cin: newComp.cin || '',
-            gstin: newComp.gstin || '',
-            pan: newComp.pan || '',
-            address: newComp.address || '',
-            city: newComp.city || '',
-            state: newComp.state || '',
-            zip: newComp.zip || '',
-            country: newComp.country || 'India',
-            phone: newComp.phone || '',
-            email: newComp.email || '',
-            website: newComp.website || '',
-            upi_id: newComp.upi_id || '',
-            account_holder: newComp.account_holder || '',
-            bank_name: newComp.bank_name || '',
-            account_number: newComp.account_number || '',
-            ifsc_code: newComp.ifsc_code || '',
-            bank_branch: newComp.bank_branch || '',
-            swift_code: newComp.swift_code || '',
-            payment_qr_url: newComp.payment_qr_url || '',
-            terms_conditions: newComp.terms_conditions || '',
-            invoice_notes: newComp.invoice_notes || '',
-            quotation_notes: newComp.quotation_notes || '',
-            signatory_name: newComp.signatory_name || '',
-            signatory_designation: newComp.signatory_designation || '',
-            signature_image_url: newComp.signature_image_url || '',
-            stamp_image_url: newComp.stamp_image_url || '',
-          }
-
-          unmarkGlobalItemDeleted(created.id)
-
-          const current = get().companies
-          const updated = [...current.filter(c => c.id !== created.id && c.slug !== created.slug), created]
-          
-          // Ensure Super Admin and creator has the newly created company in their companyIds and immediately activate it
-          const currentUser = get().user
-          let updatedUser = currentUser
-          if (currentUser) {
-            const currentCompIds = currentUser.companyIds || (currentUser.companyId ? [currentUser.companyId] : ['tech'])
-            const newCompIds = Array.from(new Set([...currentCompIds, created.id, created.slug].filter(Boolean))) as string[]
-            updatedUser = {
-              ...currentUser,
-              companyId: created.id as any,
-              companyIds: newCompIds,
-            }
-          }
-
-          set({ 
-            companies: updated,
-            activeCompanyId: created.id,
-            activeBranchId: null,
-            activeSubBranchId: null,
-            user: updatedUser,
-          })
-
-          invalidateModuleCache('companies')
-
-          // Persist to MySQL database single source of truth
-          await saveModuleDataToDB('companies', updated, 'all').catch(() => {})
-          if (updatedUser) {
-            import('@/app/feature/users/services/userService').then(({ recordUserAccount }) => {
-              recordUserAccount({
-                ...updatedUser,
-                id: String(updatedUser.id),
-              })
-            }).catch(() => {})
-          }
-
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new Event('storage'))
-            window.dispatchEvent(new CustomEvent('saampark_data_synced'))
-            window.dispatchEvent(new CustomEvent('saampark_company_switched', { detail: { companyId: created.id } }))
-            window.dispatchEvent(new CustomEvent('saampark_company_updated', { detail: created }))
-          }
-
-          return created
-        } catch (err) {
-          console.error("addCompany error:", err)
-          return null
-        }
+        return get().companies[0] || null
       },
 
       updateCompany: async (companyId: string, updates: Partial<Company>) => {
@@ -1278,107 +1183,17 @@ export const useAuthStore = create<AuthState>()(
       },
 
       deleteCompany: async (companyId: string) => {
-        const { user, companies, branches, activeCompanyId } = get()
-        const isSuperAdmin = user?.role === 'Super Admin' || String(user?.role || '').toLowerCase().includes('super') || (user as any)?.role_id === 1
-        if (!isSuperAdmin) {
-          throw new Error('Only Super Admin can delete companies.')
-        }
-
-        const compToDelete = companies.find(c => isMatchingCompany(c, companyId))
-        const targetId = compToDelete?.id || companyId
-        const targetSlug = compToDelete?.slug || companyId
-        const targetNumericId = (compToDelete as any)?.numeric_id ? String((compToDelete as any).numeric_id) : ''
-
-        // Mark deleted in universal tombstone registry with module 'companies'
-        await markGlobalItemDeleted(targetId, 'companies')
-        if (targetSlug && targetSlug !== targetId) {
-          await markGlobalItemDeleted(targetSlug, 'companies')
-        }
-        if (targetNumericId) {
-          await markGlobalItemDeleted(targetNumericId, 'companies')
-        }
-
-        try {
-          await api.delete(`/companies/${targetId}`).catch(() => {})
-        } catch {}
-
-        const remainingCompanies = companies.filter(c => 
-          !isMatchingCompany(c, targetId) && 
-          !isMatchingCompany(c, targetSlug) && 
-          c.id !== companyId && 
-          c.slug !== companyId
-        )
-
-        // ONLY remove branches belonging strictly to the deleted company!
-        const remainingBranches = branches.filter(b => {
-          const bComp = b.companyId || (b as any).company_id
-          const isTargetBranch = isMatchingCompany({ id: targetId, slug: targetSlug, numeric_id: targetNumericId } as any, bComp)
-          return !isTargetBranch
-        })
-
-        // For users belonging to deleted company: keep their company affiliation as the deleted company
-        // and mark their status as Inactive / Company Deleted so login is blocked
-        try {
-          const currentUsers = await fetchModuleDataFromDB<any[]>('users', [], 'all')
-          if (Array.isArray(currentUsers)) {
-            const updatedUsers = currentUsers.map((u: any) => {
-              const uCompId = String(u.companyId || u.company_id || (Array.isArray(u.companyIds) ? u.companyIds[0] : '')).toLowerCase().trim()
-              const isTargetComp = 
-                uCompId === String(companyId).toLowerCase().trim() ||
-                uCompId === String(targetSlug).toLowerCase().trim() ||
-                (targetNumericId && uCompId === targetNumericId)
-
-              if (isTargetComp) {
-                return {
-                  ...u,
-                  status: 'Inactive',
-                  companyDeleted: true,
-                  companyStatus: 'deleted',
-                }
-              }
-              return u
-            })
-            await saveModuleDataToDB('users', updatedUsers, 'all')
-          }
-        } catch (e) {
-          console.warn('Error flagging deleted company users:', e)
-        }
-
-        let newActiveCompany = activeCompanyId
-        if (
-          activeCompanyId === companyId || 
-          activeCompanyId === targetSlug || 
-          activeCompanyId?.toLowerCase() === companyId.toLowerCase() ||
-          activeCompanyId?.toLowerCase() === targetSlug.toLowerCase()
-        ) {
-          newActiveCompany = remainingCompanies[0]?.id || remainingCompanies[0]?.slug || 'tech'
-        }
-
-        set({
-          companies: remainingCompanies,
-          branches: remainingBranches,
-          activeCompanyId: newActiveCompany,
-        })
-        
-        await Promise.all([
-          saveModuleDataToDB('companies', remainingCompanies, 'all'),
-          saveModuleDataToDB('branches', remainingBranches, 'all'),
-        ]).catch(() => {})
-
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new Event('storage'))
-          window.dispatchEvent(new CustomEvent('saampark_company_switched', { detail: { companyId: newActiveCompany } }))
-          window.dispatchEvent(new CustomEvent('saampark_data_synced'))
-        }
-        return true
+        // Core companies (SAAMPARK Technology & Saampark Consultancy) cannot be deleted
+        console.warn('Company deletion is disabled: Core corporate entities cannot be deleted.')
+        return false
       },
 
       addBranch: async (branchData: Partial<Branch>) => {
-        const { user, branches } = get()
+        const { user, branches, activeCompanyId } = get()
         
-        let targetCompanyId = branchData.companyId || 'tech'
+        let targetCompanyId = getCanonicalCompanyId(branchData.companyId || activeCompanyId || 'tech') || 'tech'
         if (user && user.role !== 'Super Admin') {
-          const allowedCompIds = user.companyIds || (user.companyId ? [user.companyId] : ['tech'])
+          const allowedCompIds = (user.companyIds || (user.companyId ? [user.companyId] : ['tech'])).map(id => getCanonicalCompanyId(id))
           const matches = allowedCompIds.some(id => id.toLowerCase() === targetCompanyId.toLowerCase())
           if (!matches) {
             targetCompanyId = allowedCompIds[0] || 'tech'
@@ -1484,14 +1299,14 @@ export const useAuthStore = create<AuthState>()(
       },
 
       addSubBranch: async (subBranchData: Partial<SubBranch>) => {
-        const { subBranches, branches } = get()
+        const { subBranches, branches, activeCompanyId } = get()
         const parentBranch = branches.find(b => b.id === subBranchData.parentBranchId)
-        const targetCompId = subBranchData.companyId || parentBranch?.companyId || 'tech'
+        const targetCompId = getCanonicalCompanyId(subBranchData.companyId || parentBranch?.companyId || activeCompanyId || 'tech') || 'tech'
 
         const newSubBranch: SubBranch = {
           ...subBranchData,
           id: subBranchData.id || `subbranch_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-          parentBranchId: subBranchData.parentBranchId || '',
+          parentBranchId: subBranchData.parentBranchId || parentBranch?.id || '',
           companyId: targetCompId,
           name: subBranchData.name || 'New Sub-Branch',
           code: subBranchData.code || `SB-${Math.floor(100 + Math.random() * 900)}`,
@@ -1507,7 +1322,11 @@ export const useAuthStore = create<AuthState>()(
         }
 
         try {
-          await api.post('/branches/sub-branches', newSubBranch).catch(() => {})
+          await api.post('/branches/sub-branches', {
+            ...newSubBranch,
+            branch_id: (parentBranch as any)?.numeric_id || newSubBranch.parentBranchId,
+            company_id: targetCompId === 'tech' ? 1 : 2
+          }).catch(() => {})
         } catch {}
 
         const updated = [...(subBranches || []).filter(sb => sb.id !== newSubBranch.id), newSubBranch]

@@ -1,5 +1,6 @@
 import { fetchModuleDataFromDB, saveModuleDataToDB, markGlobalItemDeleted, filterGlobalDeletedItems } from "@/lib/storageSync"
 import { recordActivityLog } from "@/services/activityLogService"
+import { normalizeCompanyId } from "@/app/feature/leads/services/leadService"
 
 export interface EstimateServiceItem {
   id: string
@@ -48,28 +49,49 @@ export const getEstimates = async (companyId?: string): Promise<EstimateItem[]> 
       targetComp = useAuthStore.getState().activeCompanyId || undefined
     } catch {}
   }
-  const effectiveComp = targetComp || "tech"
-  const targetNorm = effectiveComp.toLowerCase().trim()
 
-  const [scopedData, allMaster] = await Promise.all([
-    fetchModuleDataFromDB<EstimateItem[]>("estimates", [], effectiveComp).catch(() => []),
+  if (!targetComp || targetComp === "all") {
+    const known = ["all", "tech", "consultancy", "print"]
+    const results = await Promise.all(
+      known.map(c => fetchModuleDataFromDB<EstimateItem[]>("estimates", [], c).catch(() => []))
+    )
+    const map = new Map<string, EstimateItem>()
+    for (const list of results) {
+      for (const e of (Array.isArray(list) ? list : [])) {
+        if (e && e.id) {
+          const id = String(e.id).toLowerCase().trim()
+          if (!map.has(id)) {
+            map.set(id, { ...e, companyId: normalizeCompanyId(e.companyId) })
+          }
+        }
+      }
+    }
+    return filterGlobalDeletedItems(Array.from(map.values()))
+  }
+
+  const canonicalTarget = normalizeCompanyId(targetComp)
+  const toFetch = [canonicalTarget]
+  if (canonicalTarget === "consultancy") toFetch.push("print")
+
+  const [allMaster, ...scopedResults] = await Promise.all([
     fetchModuleDataFromDB<EstimateItem[]>("estimates", [], "all").catch(() => []),
+    ...toFetch.map(c => fetchModuleDataFromDB<EstimateItem[]>("estimates", [], c).catch(() => []))
   ])
 
   const map = new Map<string, EstimateItem>()
-  for (const e of (Array.isArray(allMaster) ? allMaster : [])) {
-    if (e && e.id) {
-      const eComp = (e.companyId || (e as any).company || "tech").toLowerCase().trim()
-      if (eComp === targetNorm || (targetNorm === "tech" && !e.companyId)) {
-        map.set(String(e.id).toLowerCase().trim(), e)
+  for (const res of scopedResults) {
+    for (const e of (Array.isArray(res) ? res : [])) {
+      if (e && e.id) {
+        map.set(String(e.id).toLowerCase().trim(), { ...e, companyId: canonicalTarget })
       }
     }
   }
-  for (const e of (Array.isArray(scopedData) ? scopedData : [])) {
-    if (e && e.id) {
-      const eComp = (e.companyId || (e as any).company || effectiveComp).toLowerCase().trim()
-      if (eComp === targetNorm || (targetNorm === "tech" && !e.companyId) || !e.companyId) {
-        map.set(String(e.id).toLowerCase().trim(), e)
+
+  for (const e of (Array.isArray(allMaster) ? allMaster : [])) {
+    if (e && e.id && normalizeCompanyId(e.companyId) === canonicalTarget) {
+      const id = String(e.id).toLowerCase().trim()
+      if (!map.has(id)) {
+        map.set(id, { ...e, companyId: canonicalTarget })
       }
     }
   }
@@ -85,7 +107,7 @@ export const addEstimate = async (estimateData: Omit<EstimateItem, "id" | "estim
       targetComp = useAuthStore.getState().activeCompanyId || undefined
     } catch {}
   }
-  const effectiveComp = targetComp || "tech"
+  const effectiveComp = normalizeCompanyId(targetComp || "tech")
 
   const current = await getEstimates(effectiveComp)
   const nextId = estimateData.id || `est_${Date.now()}`
@@ -109,7 +131,13 @@ export const addEstimate = async (estimateData: Omit<EstimateItem, "id" | "estim
   }
 
   const updated = [newEst, ...current.filter(e => e.id !== nextId)]
-  await saveModuleDataToDB("estimates", updated, effectiveComp)
+  const currentAll = await fetchModuleDataFromDB<EstimateItem[]>("estimates", [], "all").catch(() => [])
+  const updatedAll = [newEst, ...(Array.isArray(currentAll) ? currentAll.filter(e => e.id !== nextId) : [])]
+
+  await Promise.all([
+    saveModuleDataToDB("estimates", updated, effectiveComp),
+    saveModuleDataToDB("estimates", updatedAll, "all"),
+  ]).catch(() => {})
 
   recordActivityLog({
     type: "estimate",
@@ -132,7 +160,8 @@ export const updateEstimateStatus = async (
   companyId?: string
 ): Promise<EstimateItem> => {
   const strId = String(id).toLowerCase().trim()
-  const current = await getEstimates(companyId)
+  const targetComp = normalizeCompanyId(companyId || "tech")
+  const current = await getEstimates(targetComp)
   const idx = current.findIndex(e => String(e.id).toLowerCase().trim() === strId)
   if (idx === -1) throw new Error("Estimate not found")
 
@@ -142,7 +171,17 @@ export const updateEstimateStatus = async (
     ...(status === "Accepted" ? { clientAccepted: true } : {}),
     ...(extra || {})
   }
-  await saveModuleDataToDB("estimates", current, companyId)
+
+  const currentAll = await fetchModuleDataFromDB<EstimateItem[]>("estimates", [], "all").catch(() => [])
+  const allIdx = currentAll.findIndex(e => String(e.id).toLowerCase().trim() === strId)
+  if (allIdx !== -1) {
+    currentAll[allIdx] = { ...currentAll[allIdx], ...current[idx] }
+  }
+
+  await Promise.all([
+    saveModuleDataToDB("estimates", current, targetComp),
+    saveModuleDataToDB("estimates", currentAll, "all"),
+  ]).catch(() => {})
 
   recordActivityLog({
     type: "estimate",

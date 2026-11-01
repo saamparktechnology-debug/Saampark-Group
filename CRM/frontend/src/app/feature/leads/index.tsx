@@ -3,7 +3,7 @@
 import * as React from "react"
 import { motion } from "framer-motion"
 import { Lead } from "./types"
-import { getLeads, deleteLead, updateLead } from "./services/leadService"
+import { getLeads, deleteLead, updateLead, normalizeCompanyId } from "./services/leadService"
 import { LeadList } from "./components/LeadList"
 import { LeadKanban } from "./components/LeadKanban"
 import { AddLeadModal } from "./components/AddLeadModal"
@@ -260,9 +260,9 @@ export default function LeadsMain() {
         if (isClientPrivate) return false
 
         if (userComp && userComp !== "all") {
-          const lComp = (l.companyId || (l as any).company || "").toLowerCase().trim()
-          if (lComp && lComp !== userComp) return false
-          if (!lComp && userComp !== "tech") return false
+          const lComp = normalizeCompanyId(l.companyId || (l as any).company)
+          const targetComp = normalizeCompanyId(userComp)
+          if (lComp !== targetComp) return false
         }
 
         if (targetBranch && targetBranch !== "all") {
@@ -307,6 +307,12 @@ export default function LeadsMain() {
       // Exclude client-private leads
       if ((l as any).isClientPrivate === true || l.createdByRole === "Clients") {
         return false
+      }
+
+      if (userComp && userComp !== "all") {
+        const lComp = normalizeCompanyId(l.companyId || (l as any).company)
+        const targetComp = normalizeCompanyId(userComp)
+        if (lComp !== targetComp) return false
       }
 
       if (targetBranch && !matchLeadBranch(l, targetBranch)) return false
