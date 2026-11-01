@@ -106,6 +106,12 @@ const subBranchModel = {
       }
     }
 
+    const generatedSubId = data.id || ('sub_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7));
+    if (!fields.includes('id') && existingCols.includes('id')) {
+      fields.push('id');
+      placeholders.push('?');
+      values.push(generatedSubId);
+    }
     if (!fields.includes('name') && existingCols.includes('name')) {
       fields.push('name');
       placeholders.push('?');
@@ -116,15 +122,10 @@ const subBranchModel = {
       placeholders.push('?');
       values.push(cleanBranchId);
     }
-    if (!fields.includes('company_id') && existingCols.includes('company_id')) {
-      fields.push('company_id');
+    if (!fields.includes('status') && existingCols.includes('status')) {
+      fields.push('status');
       placeholders.push('?');
-      values.push(cleanCompanyId);
-    }
-    if (!fields.includes('is_active') && existingCols.includes('is_active')) {
-      fields.push('is_active');
-      placeholders.push('?');
-      values.push(1);
+      values.push('active');
     }
 
     let insertId = null;
@@ -140,12 +141,12 @@ const subBranchModel = {
       console.warn('Sub-branch insert error, falling back to core columns:', err.message);
       try {
         const [subResult] = await pool.execute(
-          `INSERT INTO sub_branches (name, branch_id, company_id, code, address, city, state, phone, email, is_active)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+          `INSERT INTO sub_branches (id, name, branch_id, code, address, city, state, phone, email, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
           [
+            generatedSubId,
             data.name || 'New Sub Branch',
             cleanBranchId,
-            cleanCompanyId,
             data.code || `SB-${Math.floor(100 + Math.random() * 900)}`,
             data.address || null,
             data.city || null,
@@ -160,7 +161,7 @@ const subBranchModel = {
       }
     }
 
-    const generatedId = insertId ? `sb-${insertId}` : generatedSubId;
+    const finalSubId = insertId ? (String(insertId).startsWith('sb_') ? insertId : `sb-${insertId}`) : generatedSubId;
 
     // Always sync newly created sub-branch to app_data for guaranteed persistence
     try {
@@ -172,7 +173,7 @@ const subBranchModel = {
       if (!Array.isArray(list)) list = [];
       const subBranchObj = {
         ...data,
-        id: generatedId,
+        id: finalSubId,
         parentBranchId: data.parentBranchId || data.branch_id || String(cleanBranchId),
         branch_id: cleanBranchId,
         numeric_id: insertId || undefined,
@@ -189,7 +190,7 @@ const subBranchModel = {
       ).catch(() => {});
     } catch {}
 
-    return insertId || generatedId;
+    return insertId || finalSubId;
   },
 
   async findById(id) {
