@@ -16,7 +16,7 @@ import { addInvoice } from "@/app/feature/sales/invoices/services/invoiceService
 import { addOrder } from "@/app/feature/sales/orders/services/orderService"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 import { executeWithFeedback, useActionFeedbackStore } from "@/store/useActionFeedbackStore"
-import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
+import { isRecordAssignedToClient, isRecordAssignedToTeamMember } from "@/lib/clientScopeUtils"
 import { OfficialEstimateDocument } from "./components/OfficialEstimateDocument"
 import { DocumentStudioModal } from "@/components/documents/DocumentStudioModal"
 
@@ -89,15 +89,20 @@ export default function EstimatesPage() {
     }
   }, [isCreateModalOpen])
 
-  // Client vs Admin filtering
+  // Client vs Admin vs Team filtering
   const displayedEstimates = React.useMemo(() => {
     let filtered = estimates
     if (isClientRole) {
       filtered = filtered.filter((e) => isRecordAssignedToClient(e, user))
+    } else if (user?.role === "Teams" || (user?.role as string) === "Team") {
+      filtered = filtered.filter((e) => isRecordAssignedToTeamMember(e, user))
     }
     const targetBranch = user?.branchId || activeBranchId
     if (targetBranch) {
-      const bObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === targetBranch.toLowerCase())
+      const bObj = (branches || []).find(b => 
+        String(b.id) === String(targetBranch) || 
+        String(b.name || "").toLowerCase() === String(targetBranch || "").toLowerCase()
+      )
       const bId = String(bObj?.id || targetBranch).toLowerCase().trim()
       const bName = bObj?.name?.toLowerCase().trim() || ""
       filtered = filtered.filter((e) => {
@@ -754,7 +759,7 @@ export default function EstimatesPage() {
       {/* ---------------- ESTIMATE DETAIL & QUOTE MODAL (OFFICIAL PDF DOCUMENT) ---------------- */}
       <AnimatePresence>
         {isDetailModalOpen && selectedEstimate && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/75 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto print:p-0 print:bg-white">
+          <div className="fixed inset-0 z-[9999] flex items-start justify-center bg-black/75 backdrop-blur-sm p-2 sm:p-6 py-6 sm:py-10 overflow-y-auto print:p-0 print:bg-white">
             <OfficialEstimateDocument
               estimate={selectedEstimate}
               onClose={() => setIsDetailModalOpen(false)}

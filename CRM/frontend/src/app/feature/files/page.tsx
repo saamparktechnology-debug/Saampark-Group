@@ -9,7 +9,7 @@ import {
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { fetchModuleDataFromDB, saveModuleDataToDB, filterGlobalDeletedItems, markGlobalItemDeleted } from "@/lib/storageSync"
-import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
+import { isRecordAssignedToClient, isRecordAssignedToTeamMember } from "@/lib/clientScopeUtils"
 
 export interface CloudFileItem {
   id: string
@@ -76,6 +76,8 @@ export default function FilesPage() {
     let list = files
     if (user?.role === "Clients" || (user?.role as string) === "Client") {
       list = list.filter(f => isRecordAssignedToClient(f, user) || (f.uploadedBy && f.uploadedBy.toLowerCase() === (user?.name || "").toLowerCase()))
+    } else if (user?.role === "Teams" || (user?.role as string) === "Team") {
+      list = list.filter(f => isRecordAssignedToTeamMember(f, user) || (f.uploadedBy && f.uploadedBy.toLowerCase() === (user?.name || "").toLowerCase()))
     }
     return list.filter((f) => {
       const matchSearch =

@@ -21,12 +21,19 @@ const quotationController = {
   },
   async create(req, res) {
     try {
-      const companyId = req.headers['x-company-id'] || req.user?.company_id || req.query?.company_id || req.body?.company_id;
-      if (!companyId) return errorResponse(res, 400, 'Company ID is required');
-      const [count] = await require('../config/db').execute('SELECT COUNT(*) as cnt FROM quotations WHERE company_id = ?', [companyId]);
-      const num = `QUO-${new Date().getFullYear()}-${String(count[0].cnt + 1).padStart(3, '0')}`;
-      const id = await quotationModel.create({ ...req.body, company_id: companyId, quotation_number: num, created_by: req.user?.id });
-      return successResponse(res, 201, 'Quotation created', { id, quotation_number: num });
+      const companyId = req.headers['x-company-id'] || req.user?.company_id || req.query?.company_id || req.body?.company_id || req.body?.companyId || 'tech';
+      let num = req.body.number || req.body.quotation_number;
+      if (!num) {
+        try {
+          const [count] = await require('../config/db').execute('SELECT COUNT(*) as cnt FROM quotations WHERE company_id = ?', [companyId]);
+          num = `QT-${new Date().getFullYear()}-${String((count[0]?.cnt || 0) + 1).padStart(3, '0')}`;
+        } catch {
+          num = `QT-${Date.now().toString().slice(-6)}`;
+        }
+      }
+      const quoteData = { ...req.body, company_id: companyId, quotation_number: num, number: num, created_by: req.user?.id };
+      const id = await quotationModel.create(quoteData);
+      return successResponse(res, 201, 'Quotation created', { id, quotation_number: num, quotation: { ...quoteData, id } });
     } catch (err) { return errorResponse(res, 500, err.message); }
   },
   async update(req, res) {
@@ -75,12 +82,19 @@ const estimateController = {
   },
   async create(req, res) {
     try {
-      const companyId = req.headers['x-company-id'] || req.user?.company_id || req.query?.company_id || req.body?.company_id;
-      if (!companyId) return errorResponse(res, 400, 'Company ID is required');
-      const [count] = await require('../config/db').execute('SELECT COUNT(*) as cnt FROM estimates WHERE company_id = ?', [companyId]);
-      const num = `EST-${new Date().getFullYear()}-${String(count[0].cnt + 1).padStart(3, '0')}`;
-      const id = await estimateModel.create({ ...req.body, company_id: companyId, estimate_number: num, created_by: req.user?.id });
-      return successResponse(res, 201, 'Estimate created', { id, estimate_number: num });
+      const companyId = req.headers['x-company-id'] || req.user?.company_id || req.query?.company_id || req.body?.company_id || req.body?.companyId || 'tech';
+      let num = req.body.number || req.body.estimate_number;
+      if (!num) {
+        try {
+          const [count] = await require('../config/db').execute('SELECT COUNT(*) as cnt FROM estimates WHERE company_id = ?', [companyId]);
+          num = `EST-${new Date().getFullYear()}-${String((count[0]?.cnt || 0) + 1).padStart(3, '0')}`;
+        } catch {
+          num = `EST-${Date.now().toString().slice(-6)}`;
+        }
+      }
+      const estData = { ...req.body, company_id: companyId, estimate_number: num, number: num, created_by: req.user?.id };
+      const id = await estimateModel.create(estData);
+      return successResponse(res, 201, 'Estimate created', { id, estimate_number: num, estimate: { ...estData, id } });
     } catch (err) { return errorResponse(res, 500, err.message); }
   },
   async update(req, res) {

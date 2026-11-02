@@ -186,7 +186,7 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
                             <Shield size={12} />
                             {u.role}
                           </span>
-                          {u.kycStatus && u.kycStatus !== "Pending" && (
+                          {u.role !== "Clients" && !u.role?.toLowerCase().includes("client") && u.kycStatus && u.kycStatus !== "Pending" && (
                             <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${
                               u.kycStatus === "Verified"
                                 ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
@@ -287,14 +287,23 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
 
                       {/* Status */}
                       <td className="py-3.5 px-4">
-                        <button
-                          onClick={() => canEditUsers && onToggleStatus(u.id)}
-                          disabled={!canEditUsers}
-                          className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg border border-border transition-colors ${canEditUsers ? "hover:bg-surface-hover cursor-pointer" : "opacity-70 cursor-not-allowed"}`}
-                        >
-                          {STATUS_ICONS[u.status]}
-                          <span>{u.status}</span>
-                        </button>
+                        {u.role === "Super Admin" || u.email === "saampark.official@gmail.com" ? (
+                          <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                            {STATUS_ICONS.Active}
+                            <span>Active</span>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => canEditUsers && onToggleStatus(u.id)}
+                            disabled={!canEditUsers}
+                            className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg border border-border transition-colors ${canEditUsers ? "hover:bg-surface-hover cursor-pointer" : "opacity-70 cursor-not-allowed"}`}
+                            title={`Click to change account status to ${u.status === "Active" ? "Inactive" : "Active"}`}
+                          >
+                            {STATUS_ICONS[u.status]}
+                            <span>{u.status}</span>
+                          </button>
+                        )}
                       </td>
 
                       {/* Actions */}

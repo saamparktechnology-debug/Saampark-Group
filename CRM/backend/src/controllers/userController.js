@@ -8,9 +8,21 @@ async function ensureUsersColumns() {
     await pool.execute('ALTER TABLE users ADD COLUMN sub_branch_id INT NULL').catch(() => {});
     await pool.execute('ALTER TABLE users ADD COLUMN username VARCHAR(100) NULL').catch(() => {});
     await pool.execute('ALTER TABLE users ADD COLUMN company_ids TEXT NULL').catch(() => {});
+    await pool.execute('ALTER TABLE users MODIFY COLUMN phone VARCHAR(100) NULL').catch(() => {});
   } catch {}
 }
 ensureUsersColumns();
+
+const COMP_ALIASES = {
+  '1': 'tech',
+  'tech': '1',
+  '2': 'digital',
+  'digital': '2',
+  '3': 'saampark-ai-solutions',
+  'saampark-ai-solutions': '3',
+  '4': 'consultancy',
+  'consultancy': '4'
+};
 
 // Helper: Resolve requesting user info from authenticated JWT token
 async function resolveRequester(req) {
@@ -30,6 +42,7 @@ async function resolveRequester(req) {
 // Helper: Check if target company is in requester's assigned company scope
 function isCompanyInScope(creator, targetComp) {
   if (!creator || creator.role_id === 1) return true; // Super Admin can access any company
+  if (!targetComp || targetComp === 'all') return true;
   const targetNorm = String(targetComp || '').toLowerCase().trim();
   let allowed = [];
   if (creator.company_ids) {
@@ -41,7 +54,8 @@ function isCompanyInScope(creator, targetComp) {
   if (creator.company_id) {
     allowed.push(String(creator.company_id).toLowerCase().trim());
   }
-  return allowed.includes(targetNorm);
+  if (allowed.length === 0) return true;
+  return allowed.some(a => a === targetNorm || COMP_ALIASES[a] === targetNorm || COMP_ALIASES[targetNorm] === a);
 }
 
 // ─── GET ALL USERS ────────────────────────────────────────────────────────────
@@ -531,12 +545,12 @@ const toggleUserStatus = async (req, res, next) => {
     const targetUser = users[0];
     const isSuper = targetUser.role_id === 1 || (targetUser.email && targetUser.email.toLowerCase().trim() === 'saampark.official@gmail.com');
     
-    // For primary root super admin, always force activate if inactive
-    let newStatus = targetUser.status === 'active' ? 'inactive' : 'active';
-    if (isSuper && targetUser.status === 'inactive') {
-      newStatus = 'active';
+    // Super Admin accounts are permanently Active and cannot be deactivated
+    if (isSuper) {
+      return errorResponse(res, 400, 'Super Admin accounts are permanently active and cannot be deactivated.');
     }
 
+    let newStatus = targetUser.status === 'active' ? 'inactive' : 'active';
     await pool.execute('UPDATE users SET status = ?, updated_at = NOW() WHERE id = ?', [newStatus, targetUser.id]);
 
     // Synchronize to app_data JSON users store
@@ -675,20 +689,26 @@ const createUser = async (req, res, next) => {
     const requester = await resolveRequester(req);
 
     // RBAC Hierarchy Enforcement:
-    // Super Admin (1) and Admin (2) can ONLY be created by a Super Admin (1)
-    if (targetRoleId === 1 || targetRoleId === 2) {
+    // Only Super Admin (1) can create or assign Super Admin accounts (1).
+    // Admin (2) can create Admins (for their branch/company), Teams (3), and Clients (4).
+    if (targetRoleId === 1) {
       if (requester.role_id !== 1) {
-        return errorResponse(res, 403, 'Access denied: Only a Super Admin can create or assign Admin accounts.');
+        return errorResponse(res, 403, 'Access denied: Only a Super Admin can create or assign Super Admin accounts.');
       }
     }
 
     // Company Scoping for Admin:
-    // Admin can ONLY create teams/clients in their assigned company
-    const targetComp = company_id || (company_ids && company_ids[0]) || (companyIds && companyIds[0]) || 'tech';
+    // Admin can ONLY create users in their assigned company scope
+    let targetComp = company_id || (company_ids && company_ids[0]) || (companyIds && companyIds[0]) || null;
     if (requester.role_id === 2) {
+      if (!targetComp || targetComp === 'all') {
+        targetComp = requester.company_id || 'tech';
+      }
       if (!isCompanyInScope(requester, targetComp)) {
         return errorResponse(res, 403, 'Access denied: Admins can only add users to their assigned company.');
       }
+    } else if (!targetComp) {
+      targetComp = 'tech';
     }
 
     // Branch Scoping for Branch Admin:
@@ -704,14 +724,15 @@ const createUser = async (req, res, next) => {
 
     const { hashPassword } = require('../utils/passwordHash');
     const hashedPassword = await hashPassword(password);
+    const safePhone = phone ? String(phone).slice(0, 50) : null;
 
     const roleName = targetRoleId === 1 ? 'Super Admin' : targetRoleId === 2 ? 'Admin' : targetRoleId === 4 ? 'Clients' : 'Teams';
     const permStr = permissions ? (typeof permissions === 'string' ? permissions : JSON.stringify(permissions)) : null;
 
     // Multi-company handling
-    const compList = company_ids || companyIds || (company_id ? [company_id] : ['tech']);
+    const compList = company_ids || companyIds || [targetComp];
     const parsedCompList = Array.isArray(compList) ? compList : [compList];
-    const compVal = parsedCompList[0] || company_id || 'tech';
+    const compVal = parsedCompList[0] || targetComp || 'tech';
     const compIdsStr = JSON.stringify(parsedCompList);
 
     let userId = null;
@@ -726,7 +747,7 @@ const createUser = async (req, res, next) => {
                company_id = ?, company_ids = ?, branch_id = ?, sub_branch_id = ?, role_id = ?, permissions = ?, 
                is_verified = 1, status = 'active', deleted_at = NULL, updated_at = NOW() 
            WHERE id = ?`,
-          [displayName, normUsername, hashedPassword, phone || null, department || null, 
+          [displayName, normUsername, hashedPassword, safePhone, department || null, 
            compVal, compIdsStr, effectiveBranchId || null, effectiveSubBranchId || null, targetRoleId, permStr, userId]
         );
       } catch (updErr) {
@@ -737,7 +758,7 @@ const createUser = async (req, res, next) => {
                  company_id = ?, company_ids = ?, branch_id = ?, sub_branch_id = ?, role_id = ?, permissions = ?, 
                  is_verified = 1, status = 'active', deleted_at = NULL, updated_at = NOW() 
              WHERE id = ?`,
-            [displayName, hashedPassword, phone || null, department || null, 
+            [displayName, hashedPassword, safePhone, department || null, 
              compVal, compIdsStr, effectiveBranchId || null, effectiveSubBranchId || null, targetRoleId, permStr, userId]
           );
         } else {
@@ -752,7 +773,7 @@ const createUser = async (req, res, next) => {
           `INSERT INTO users 
            (role_id, full_name, email, username, password_hash, phone, department, company_id, company_ids, branch_id, sub_branch_id, permissions, is_verified, status) 
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
-          [targetRoleId, displayName, normEmail, normUsername, hashedPassword, phone || null, department || null, 
+          [targetRoleId, displayName, normEmail, normUsername, hashedPassword, safePhone, department || null, 
            compVal, compIdsStr, effectiveBranchId || null, effectiveSubBranchId || null, permStr, 'active']
         );
         userId = result.insertId;
@@ -762,7 +783,7 @@ const createUser = async (req, res, next) => {
             `INSERT INTO users 
              (role_id, full_name, email, password_hash, phone, department, company_id, company_ids, branch_id, sub_branch_id, permissions, is_verified, status) 
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
-            [targetRoleId, displayName, normEmail, hashedPassword, phone || null, department || null, 
+            [targetRoleId, displayName, normEmail, hashedPassword, safePhone, department || null, 
              compVal, compIdsStr, effectiveBranchId || null, effectiveSubBranchId || null, permStr, 'active']
           );
           userId = result.insertId;

@@ -70,7 +70,7 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { printPDFReport, exportToExcel } from "@/lib/exportUtils"
 import { executeWithFeedback, useActionFeedbackStore } from "@/store/useActionFeedbackStore"
-import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
+import { isRecordAssignedToClient, isRecordAssignedToTeamMember } from "@/lib/clientScopeUtils"
 import { confirmTwoStepDelete } from "@/lib/confirmDialog"
 
 function InvoicesPageContent() {
@@ -1166,6 +1166,9 @@ function InvoicesPageContent() {
     if (isClientRole) {
       filtered = filtered.filter((i) => isRecordAssignedToClient(i, user))
     } else {
+      if (user?.role === "Teams" || (user?.role as string) === "Team") {
+        filtered = filtered.filter((i) => isRecordAssignedToTeamMember(i, user))
+      }
       if (userComp && userComp !== "all") {
         filtered = filtered.filter((i) => {
           const iComp = (i.companyId || (i as any).company || "tech").toLowerCase().trim()

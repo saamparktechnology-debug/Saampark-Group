@@ -14,7 +14,7 @@ import { addProject } from "@/app/feature/projects/services/projectService"
 import { addInvoice } from "@/app/feature/sales/invoices/services/invoiceService"
 import { addOrder } from "@/app/feature/sales/orders/services/orderService"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
-import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
+import { isRecordAssignedToClient, isRecordAssignedToTeamMember } from "@/lib/clientScopeUtils"
 import { confirmTwoStepDelete } from "@/lib/confirmDialog"
 
 export interface ProposalItem {
@@ -124,6 +124,8 @@ export default function ProposalsMain() {
       }
       // Client role: only their own proposals
       if (isClientRole) return isRecordAssignedToClient(p, user)
+      // Team role: only their assigned proposals
+      if (user?.role === "Teams" || (user?.role as string) === "Team") return isRecordAssignedToTeamMember(p, user)
       return true
     })
   }, [proposals, isClientRole, user, activeCompanyId, activeBranchId, branches])

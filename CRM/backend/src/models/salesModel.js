@@ -1,31 +1,163 @@
 const pool = require('../config/db');
 
+// Auto-migrate tables for Quotations and Estimates
+async function ensureSalesTables() {
+  try {
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS quotations (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        company_id VARCHAR(100) NULL,
+        branch_id VARCHAR(100) NULL,
+        customer_id INT NULL,
+        customer VARCHAR(255) NULL,
+        customer_name VARCHAR(255) NULL,
+        customer_email VARCHAR(255) NULL,
+        customer_phone VARCHAR(100) NULL,
+        quotation_number VARCHAR(100) NOT NULL,
+        title VARCHAR(255) NULL,
+        description TEXT NULL,
+        subtotal DECIMAL(15,2) DEFAULT 0,
+        discount_percent DECIMAL(5,2) DEFAULT 0,
+        discount_amount DECIMAL(15,2) DEFAULT 0,
+        tax_percent DECIMAL(5,2) DEFAULT 0,
+        tax_amount DECIMAL(15,2) DEFAULT 0,
+        total DECIMAL(15,2) DEFAULT 0,
+        validity_days INT DEFAULT 30,
+        terms TEXT NULL,
+        notes TEXT NULL,
+        status VARCHAR(50) DEFAULT 'Draft',
+        created_by INT NULL,
+        data_json LONGTEXT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `).catch(() => {});
+
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS quotation_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        quotation_id INT NOT NULL,
+        product_id INT NULL,
+        name VARCHAR(255) NULL,
+        description TEXT NULL,
+        sac VARCHAR(50) NULL,
+        quantity DECIMAL(10,2) DEFAULT 1,
+        unit_price DECIMAL(15,2) DEFAULT 0,
+        discount_percent DECIMAL(5,2) DEFAULT 0,
+        tax_percent DECIMAL(5,2) DEFAULT 0,
+        total DECIMAL(15,2) DEFAULT 0
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `).catch(() => {});
+
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS estimates (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        company_id VARCHAR(100) NULL,
+        branch_id VARCHAR(100) NULL,
+        customer_id INT NULL,
+        customer VARCHAR(255) NULL,
+        customer_name VARCHAR(255) NULL,
+        customer_email VARCHAR(255) NULL,
+        customer_phone VARCHAR(100) NULL,
+        estimate_number VARCHAR(100) NOT NULL,
+        title VARCHAR(255) NULL,
+        description TEXT NULL,
+        subtotal DECIMAL(15,2) DEFAULT 0,
+        discount_percent DECIMAL(5,2) DEFAULT 0,
+        discount_amount DECIMAL(15,2) DEFAULT 0,
+        tax_percent DECIMAL(5,2) DEFAULT 0,
+        tax_amount DECIMAL(15,2) DEFAULT 0,
+        total DECIMAL(15,2) DEFAULT 0,
+        validity_days INT DEFAULT 30,
+        terms TEXT NULL,
+        notes TEXT NULL,
+        status VARCHAR(50) DEFAULT 'Draft',
+        created_by INT NULL,
+        data_json LONGTEXT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `).catch(() => {});
+
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS estimate_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        estimate_id INT NOT NULL,
+        product_id INT NULL,
+        name VARCHAR(255) NULL,
+        description TEXT NULL,
+        sac VARCHAR(50) NULL,
+        quantity DECIMAL(10,2) DEFAULT 1,
+        unit_price DECIMAL(15,2) DEFAULT 0,
+        discount_percent DECIMAL(5,2) DEFAULT 0,
+        tax_percent DECIMAL(5,2) DEFAULT 0,
+        total DECIMAL(15,2) DEFAULT 0
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `).catch(() => {});
+  } catch (err) {
+    console.warn('ensureSalesTables error:', err.message);
+  }
+}
+ensureSalesTables();
+
 const quotationModel = {
   async create(data) {
+    await ensureSalesTables().catch(() => {});
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
+      const num = data.number || data.quotation_number || `QT-${Date.now().toString().slice(-6)}`;
+      const safeCustId = (!isNaN(Number(data.customer_id)) && Number(data.customer_id) > 0) ? Number(data.customer_id) : null;
+      const custName = data.customer || data.customer_name || 'Client';
+      const custEmail = data.customerEmail || data.customer_email || null;
+      const custPhone = data.customerPhone || data.customer_phone || null;
+      const subtotal = Number(data.subtotal) || 0;
+      const total = Number(data.total) || Number(data.grandTotal) || subtotal;
+      const taxAmount = Number(data.tax) || Number(data.tax_amount) || 0;
+
       const [result] = await conn.execute(
-        `INSERT INTO quotations (company_id, branch_id, customer_id, quotation_number, title, description, subtotal, discount_percent, discount_amount, tax_percent, tax_amount, total, validity_days, terms, notes, status, created_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [data.company_id, data.branch_id || null, data.customer_id, data.quotation_number, data.title || null,
-         data.description || null, data.subtotal || 0, data.discount_percent || 0, data.discount_amount || 0,
-         data.tax_percent || 0, data.tax_amount || 0, data.total || 0, data.validity_days || 30,
-         data.terms || null, data.notes || null, data.status || 'draft', data.created_by || null]
+        `INSERT INTO quotations (company_id, branch_id, customer_id, customer, customer_name, customer_email, customer_phone, quotation_number, title, description, subtotal, discount_percent, discount_amount, tax_percent, tax_amount, total, validity_days, terms, notes, status, created_by, data_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [data.company_id || 'tech', data.branch_id || null, safeCustId, custName, custName, custEmail, custPhone,
+         num, data.title || null, data.description || null, subtotal, data.discount_percent || 0,
+         data.discount_amount || 0, data.tax_percent || 0, taxAmount, total, data.validity_days || 30,
+         data.terms || null, data.notes || null, data.status || 'Draft', data.created_by || null, JSON.stringify(data)]
       );
       const quoteId = result.insertId;
 
-      if (data.items && data.items.length > 0) {
+      if (data.items && Array.isArray(data.items) && data.items.length > 0) {
         for (const item of data.items) {
+          const itemTotal = Number(item.total) || (Number(item.quantity || 1) * Number(item.unitPrice || item.unit_price || 0));
           await conn.execute(
-            `INSERT INTO quotation_items (quotation_id, product_id, description, quantity, unit_price, discount_percent, tax_percent, total)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [quoteId, item.product_id || null, item.description, item.quantity || 1, item.unit_price || 0,
-             item.discount_percent || 0, item.tax_percent || 0, item.total || 0]
+            `INSERT INTO quotation_items (quotation_id, product_id, name, description, sac, quantity, unit_price, discount_percent, tax_percent, total)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [quoteId, item.product_id || null, item.name || null, item.description || null, item.sac || null,
+             Number(item.quantity) || 1, Number(item.unitPrice || item.unit_price) || 0,
+             item.discount_percent || 0, item.tax_percent || item.gstRate || 0, itemTotal]
           );
         }
       }
       await conn.commit();
+
+      // Sync to app_data JSON store
+      try {
+        const [rows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "quotations"');
+        let quotesList = [];
+        if (rows.length > 0 && rows[0].data_json) {
+          try { quotesList = JSON.parse(rows[0].data_json); } catch {}
+        }
+        if (!Array.isArray(quotesList)) quotesList = [];
+        const newRecord = { ...data, id: String(quoteId), quotation_number: num, number: num };
+        quotesList.unshift(newRecord);
+        await pool.execute(
+          `INSERT INTO app_data (module_key, data_json) VALUES ('quotations', ?)
+           ON DUPLICATE KEY UPDATE data_json = VALUES(data_json), updated_at = NOW()`,
+          [JSON.stringify(quotesList)]
+        );
+      } catch (appErr) {
+        console.warn('Quotation app_data sync warning:', appErr.message);
+      }
+
       return quoteId;
     } catch (err) {
       await conn.rollback();
@@ -36,25 +168,64 @@ const quotationModel = {
   },
 
   async findById(id) {
-    const [rows] = await pool.execute(
-      `SELECT q.*, c.name as customer_name FROM quotations q
-       LEFT JOIN customers c ON q.customer_id = c.id WHERE q.id = ?`, [id]
-    );
-    if (!rows[0]) return null;
-    const [items] = await pool.execute('SELECT * FROM quotation_items WHERE quotation_id = ?', [id]);
-    return { ...rows[0], items };
+    await ensureSalesTables().catch(() => {});
+    try {
+      const [rows] = await pool.execute(
+        `SELECT q.*, COALESCE(q.customer, q.customer_name, c.name) as customer_name FROM quotations q
+         LEFT JOIN customers c ON q.customer_id = c.id WHERE q.id = ? OR q.quotation_number = ?`, [id, id]
+      );
+      if (rows[0]) {
+        const [items] = await pool.execute('SELECT * FROM quotation_items WHERE quotation_id = ?', [rows[0].id]);
+        return { ...rows[0], items };
+      }
+    } catch {}
+    
+    // Fallback to app_data
+    try {
+      const [appRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "quotations"');
+      if (appRows.length > 0 && appRows[0].data_json) {
+        const quotes = JSON.parse(appRows[0].data_json);
+        if (Array.isArray(quotes)) {
+          return quotes.find(q => String(q.id) === String(id) || q.number === id || q.quotation_number === id) || null;
+        }
+      }
+    } catch {}
+    return null;
   },
 
   async findByCompany(company_id, { status, branch_id, page = 1, limit = 50 } = {}) {
-    let query = 'SELECT q.*, c.name as customer_name FROM quotations q LEFT JOIN customers c ON q.customer_id = c.id WHERE q.company_id = ?';
-    const params = [company_id];
-    if (branch_id && branch_id !== 'all') { query += ' AND (q.branch_id = ? OR q.branch_id IS NULL)'; params.push(branch_id); }
-    if (status) { query += ' AND q.status = ?'; params.push(status); }
-    const offset = (page - 1) * limit;
-    query += ` ORDER BY q.created_at DESC LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`;
-    const [rows] = await pool.execute(query, params);
-    const [count] = await pool.execute('SELECT COUNT(*) as total FROM quotations WHERE company_id = ?', [company_id]);
-    return { data: rows, total: count[0].total, page, limit };
+    await ensureSalesTables().catch(() => {});
+    try {
+      let query = 'SELECT q.*, COALESCE(q.customer, q.customer_name, c.name) as customer_name FROM quotations q LEFT JOIN customers c ON q.customer_id = c.id WHERE 1=1';
+      const params = [];
+      if (company_id && company_id !== 'all') {
+        query += ' AND (q.company_id = ? OR q.company_id = ?)';
+        params.push(String(company_id), company_id === 'tech' ? '1' : (company_id === '1' ? 'tech' : company_id));
+      }
+      if (branch_id && branch_id !== 'all') { query += ' AND (q.branch_id = ? OR q.branch_id IS NULL)'; params.push(branch_id); }
+      if (status && status !== 'all') { query += ' AND q.status = ?'; params.push(status); }
+      const offset = (page - 1) * limit;
+      query += ` ORDER BY q.id DESC LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`;
+      const [rows] = await pool.execute(query, params);
+      const [count] = await pool.execute('SELECT COUNT(*) as total FROM quotations');
+      if (rows.length > 0) {
+        return { data: rows, total: count[0]?.total || rows.length, page, limit };
+      }
+    } catch (err) {
+      console.warn('quotations SQL query fallback:', err.message);
+    }
+
+    // Fallback to app_data
+    try {
+      const [appRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "quotations"');
+      if (appRows.length > 0 && appRows[0].data_json) {
+        let quotes = JSON.parse(appRows[0].data_json);
+        if (Array.isArray(quotes)) {
+          return { data: quotes, total: quotes.length, page: 1, limit: 50 };
+        }
+      }
+    } catch {}
+    return { data: [], total: 0, page, limit };
   },
 
   async update(id, data) {
@@ -127,48 +298,131 @@ const quotationModel = {
 
 const estimateModel = {
   async create(data) {
+    await ensureSalesTables().catch(() => {});
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
+      const num = data.number || data.estimate_number || `EST-${Date.now().toString().slice(-6)}`;
+      const safeCustId = (!isNaN(Number(data.customer_id)) && Number(data.customer_id) > 0) ? Number(data.customer_id) : null;
+      const custName = data.customer || data.customer_name || data.client || 'Client';
+      const custEmail = data.customerEmail || data.customer_email || data.clientEmail || null;
+      const custPhone = data.customerPhone || data.customer_phone || data.clientPhone || null;
+      const subtotal = Number(data.subtotal) || 0;
+      const total = Number(data.total) || Number(data.totalAmount) || subtotal;
+      const taxAmount = Number(data.tax) || Number(data.tax_amount) || Number(data.gstAmount) || 0;
+
       const [result] = await conn.execute(
-        `INSERT INTO estimates (company_id, branch_id, customer_id, estimate_number, title, description, subtotal, discount_percent, discount_amount, tax_percent, tax_amount, total, validity_days, terms, notes, status, created_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [data.company_id, data.branch_id || null, data.customer_id, data.estimate_number, data.title || null,
-         data.description || null, data.subtotal || 0, data.discount_percent || 0, data.discount_amount || 0,
-         data.tax_percent || 0, data.tax_amount || 0, data.total || 0, data.validity_days || 30,
-         data.terms || null, data.notes || null, data.status || 'draft', data.created_by || null]
+        `INSERT INTO estimates (company_id, branch_id, customer_id, customer, customer_name, customer_email, customer_phone, estimate_number, title, description, subtotal, discount_percent, discount_amount, tax_percent, tax_amount, total, validity_days, terms, notes, status, created_by, data_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [data.company_id || 'tech', data.branch_id || null, safeCustId, custName, custName, custEmail, custPhone,
+         num, data.title || data.project || null, data.description || null, subtotal, data.discount_percent || 0,
+         data.discount_amount || 0, data.tax_percent || 0, taxAmount, total, data.validity_days || 30,
+         data.terms || null, data.notes || null, data.status || 'Draft', data.created_by || null, JSON.stringify(data)]
       );
       const estId = result.insertId;
-      if (data.items && data.items.length > 0) {
+
+      if (data.items && Array.isArray(data.items) && data.items.length > 0) {
         for (const item of data.items) {
+          const itemTotal = Number(item.total) || (Number(item.quantity || 1) * Number(item.unitPrice || item.unit_price || item.rate || 0));
           await conn.execute(
-            `INSERT INTO estimate_items (estimate_id, product_id, description, quantity, unit_price, discount_percent, tax_percent, total) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [estId, item.product_id || null, item.description, item.quantity || 1, item.unit_price || 0, item.discount_percent || 0, item.tax_percent || 0, item.total || 0]
+            `INSERT INTO estimate_items (estimate_id, product_id, name, description, sac, quantity, unit_price, discount_percent, tax_percent, total)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [estId, item.product_id || null, item.name || item.serviceName || null, item.description || null,
+             item.sac || item.sacCode || null, Number(item.quantity || item.qty) || 1,
+             Number(item.unitPrice || item.unit_price || item.rate) || 0, item.discount_percent || 0,
+             item.tax_percent || item.gstRate || 0, itemTotal]
           );
         }
       }
       await conn.commit();
+
+      // Sync to app_data JSON store
+      try {
+        const [rows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "estimates"');
+        let estList = [];
+        if (rows.length > 0 && rows[0].data_json) {
+          try { estList = JSON.parse(rows[0].data_json); } catch {}
+        }
+        if (!Array.isArray(estList)) estList = [];
+        const newRecord = { ...data, id: String(estId), estimate_number: num, number: num };
+        estList.unshift(newRecord);
+        await pool.execute(
+          `INSERT INTO app_data (module_key, data_json) VALUES ('estimates', ?)
+           ON DUPLICATE KEY UPDATE data_json = VALUES(data_json), updated_at = NOW()`,
+          [JSON.stringify(estList)]
+        );
+      } catch (appErr) {
+        console.warn('Estimate app_data sync warning:', appErr.message);
+      }
+
       return estId;
-    } catch (err) { await conn.rollback(); throw err; } finally { conn.release(); }
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
   },
 
   async findById(id) {
-    const [rows] = await pool.execute('SELECT e.*, c.name as customer_name FROM estimates e LEFT JOIN customers c ON e.customer_id = c.id WHERE e.id = ?', [id]);
-    if (!rows[0]) return null;
-    const [items] = await pool.execute('SELECT * FROM estimate_items WHERE estimate_id = ?', [id]);
-    return { ...rows[0], items };
+    await ensureSalesTables().catch(() => {});
+    try {
+      const [rows] = await pool.execute(
+        `SELECT e.*, COALESCE(e.customer, e.customer_name, c.name) as customer_name FROM estimates e
+         LEFT JOIN customers c ON e.customer_id = c.id WHERE e.id = ? OR e.estimate_number = ?`, [id, id]
+      );
+      if (rows[0]) {
+        const [items] = await pool.execute('SELECT * FROM estimate_items WHERE estimate_id = ?', [rows[0].id]);
+        return { ...rows[0], items };
+      }
+    } catch {}
+
+    // Fallback to app_data
+    try {
+      const [appRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "estimates"');
+      if (appRows.length > 0 && appRows[0].data_json) {
+        const ests = JSON.parse(appRows[0].data_json);
+        if (Array.isArray(ests)) {
+          return ests.find(e => String(e.id) === String(id) || e.number === id || e.estimate_number === id) || null;
+        }
+      }
+    } catch {}
+    return null;
   },
 
   async findByCompany(company_id, { status, branch_id, page = 1, limit = 50 } = {}) {
-    let query = 'SELECT e.*, c.name as customer_name FROM estimates e LEFT JOIN customers c ON e.customer_id = c.id WHERE e.company_id = ?';
-    const params = [company_id];
-    if (branch_id && branch_id !== 'all') { query += ' AND (e.branch_id = ? OR e.branch_id IS NULL)'; params.push(branch_id); }
-    if (status) { query += ' AND e.status = ?'; params.push(status); }
-    const offset = (page - 1) * limit;
-    query += ` ORDER BY e.created_at DESC LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`;
-    const [rows] = await pool.execute(query, params);
-    const [count] = await pool.execute('SELECT COUNT(*) as total FROM estimates WHERE company_id = ?', [company_id]);
-    return { data: rows, total: count[0].total, page, limit };
+    await ensureSalesTables().catch(() => {});
+    try {
+      let query = 'SELECT e.*, COALESCE(e.customer, e.customer_name, c.name) as customer_name FROM estimates e LEFT JOIN customers c ON e.customer_id = c.id WHERE 1=1';
+      const params = [];
+      if (company_id && company_id !== 'all') {
+        query += ' AND (e.company_id = ? OR e.company_id = ?)';
+        params.push(String(company_id), company_id === 'tech' ? '1' : (company_id === '1' ? 'tech' : company_id));
+      }
+      if (branch_id && branch_id !== 'all') { query += ' AND (e.branch_id = ? OR e.branch_id IS NULL)'; params.push(branch_id); }
+      if (status && status !== 'all') { query += ' AND e.status = ?'; params.push(status); }
+      const offset = (page - 1) * limit;
+      query += ` ORDER BY e.id DESC LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`;
+      const [rows] = await pool.execute(query, params);
+      const [count] = await pool.execute('SELECT COUNT(*) as total FROM estimates');
+      if (rows.length > 0) {
+        return { data: rows, total: count[0]?.total || rows.length, page, limit };
+      }
+    } catch (err) {
+      console.warn('estimates SQL query fallback:', err.message);
+    }
+
+    // Fallback to app_data
+    try {
+      const [appRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "estimates"');
+      if (appRows.length > 0 && appRows[0].data_json) {
+        let ests = JSON.parse(appRows[0].data_json);
+        if (Array.isArray(ests)) {
+          return { data: ests, total: ests.length, page: 1, limit: 50 };
+        }
+      }
+    } catch {}
+    return { data: [], total: 0, page, limit };
   },
 
   async update(id, data) {

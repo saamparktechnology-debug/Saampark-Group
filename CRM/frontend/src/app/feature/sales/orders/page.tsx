@@ -46,7 +46,7 @@ import { exportToExcel, printPDFReport, exportToCSV } from "@/lib/exportUtils"
 import { confirmTwoStepDelete } from "@/lib/confirmDialog"
 import { getUserAvatar } from "@/app/feature/users/services/userService"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
-import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
+import { isRecordAssignedToClient, isRecordAssignedToTeamMember } from "@/lib/clientScopeUtils"
 
 import { usePermissionStore } from "@/store/usePermissionStore"
 
@@ -194,8 +194,13 @@ export default function OrderListPage() {
   }, [isAddModalOpen])
 
   const displayedOrders = React.useMemo(() => {
-    if (!isClientRole) return orders
-    return orders.filter((o) => isRecordAssignedToClient(o, user))
+    if (isClientRole) {
+      return orders.filter((o) => isRecordAssignedToClient(o, user))
+    }
+    if (user?.role === "Teams" || (user?.role as string) === "Team") {
+      return orders.filter((o) => isRecordAssignedToTeamMember(o, user))
+    }
+    return orders
   }, [orders, isClientRole, user])
 
   const filteredOrders = React.useMemo(() => {

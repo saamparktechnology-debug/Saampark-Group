@@ -29,7 +29,7 @@ import { getPayments, addPayment, deletePayment, PaymentItem } from "./services/
 import { getInvoices, InvoiceItem } from "../invoices/services/invoiceService"
 
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
-import { isRecordAssignedToClient } from "@/lib/clientScopeUtils"
+import { isRecordAssignedToClient, isRecordAssignedToTeamMember } from "@/lib/clientScopeUtils"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { confirmTwoStepDelete } from "@/lib/confirmDialog"
 
@@ -180,6 +180,9 @@ export default function PaymentsPage() {
         return isRecordAssignedToClient(p, user)
       })
     } else {
+      if (user?.role === "Teams" || (user?.role as string) === "Team") {
+        filtered = filtered.filter((p) => isRecordAssignedToTeamMember(p, user))
+      }
       if (userComp && userComp !== "all") {
         filtered = filtered.filter((p) => {
           const pComp = (p.companyId || (p as any).company || "tech").toLowerCase().trim()

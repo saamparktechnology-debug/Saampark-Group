@@ -198,10 +198,11 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
         { id: "Super Admin" as UserRole, label: "Super Admin", desc: "Full Master Access", icon: "👑", color: "purple", activeBorder: "border-purple-500/80 shadow-purple-500/25", glow: "from-purple-500/20 to-transparent" },
       ]
     }
-    // Admin can ONLY add team members and client accounts
+    // Admin can create Team members, Client accounts, or Branch/Co. Admins
     return [
       { id: "Teams" as UserRole, label: "Team Member", desc: "Staff & Employee", icon: "👥", color: "blue", activeBorder: "border-blue-500/80 shadow-blue-500/25", glow: "from-blue-500/20 to-transparent" },
       { id: "Clients" as UserRole, label: "Client Account", desc: "Portal Customer", icon: "💼", color: "amber", activeBorder: "border-amber-500/80 shadow-amber-500/25", glow: "from-amber-500/20 to-transparent" },
+      { id: "Admin" as UserRole, label: "Branch / Co. Admin", desc: "Operational Manager", icon: "🛡️", color: "indigo", activeBorder: "border-indigo-500/80 shadow-indigo-500/25", glow: "from-indigo-500/20 to-transparent" },
     ]
   }, [isCurrentSuperAdmin])
 
@@ -482,16 +483,21 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
     const companyIds = isAllCompanies ? allCompIds : [canonCompId]
     const companyNameToSave = isAllCompanies ? "SAAMPARK Group (All Companies)" : getCompanyFullName(targetCompanyObj)
 
+    const safeSubBranches = Array.isArray(subBranches) ? subBranches : []
+    const safeBranches = Array.isArray(branches) ? branches : []
+
     const effectiveSubBranchId = scopeType === "subbranch" ? (selectedSubBranchId || activeSubBranchId || undefined) : undefined
-    const matchedSubBranch = effectiveSubBranchId ? subBranches.find(sb => String(sb.id) === String(effectiveSubBranchId) || sb.name.toLowerCase() === String(effectiveSubBranchId).toLowerCase()) : undefined
+    const matchedSubBranch = effectiveSubBranchId ? safeSubBranches.find(sb => String(sb.id) === String(effectiveSubBranchId) || String(sb.name || (sb as any).sub_branch_name || '').toLowerCase() === String(effectiveSubBranchId).toLowerCase()) : undefined
     const subBranchNameToSave = matchedSubBranch?.name || (effectiveSubBranchId ? (isNaN(Number(effectiveSubBranchId)) ? effectiveSubBranchId : `Sub-Branch (${effectiveSubBranchId})`) : undefined)
 
     const effectiveBranchId = scopeType === "subbranch"
       ? (selectedBranchId || matchedSubBranch?.parentBranchId || undefined)
       : (scopeType === "branch" ? (selectedBranchId || activeBranchId || undefined) : undefined)
 
-    const matchedBranch = effectiveBranchId ? branches.find(b => String(b.id) === String(effectiveBranchId) || b.name.toLowerCase() === String(effectiveBranchId).toLowerCase()) : undefined
+    const matchedBranch = effectiveBranchId ? safeBranches.find(b => String(b.id) === String(effectiveBranchId) || String(b.name || (b as any).branch_name || '').toLowerCase() === String(effectiveBranchId).toLowerCase()) : undefined
     const branchNameToSave = matchedBranch?.name || (effectiveBranchId ? (isNaN(Number(effectiveBranchId)) ? effectiveBranchId : `Branch (${effectiveBranchId})`) : undefined)
+
+    const finalStatus: UserStatus = (finalRoleToSave === "Super Admin" || role === "Super Admin") ? "Active" : status
 
     const userData: Partial<UserType> = {
       ...(editingUser ? { id: editingUser.id } : {}),
@@ -512,9 +518,9 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
       ...(editingUser
         ? (password.trim() ? { password: password.trim() } : (editingUser.password ? { password: editingUser.password } : {}))
         : { password: password.trim() || "Password123" }),
-      status,
+      status: finalStatus,
       avatarUrl: avatarUrl || undefined,
-      kycStatus,
+      kycStatus: role === "Clients" ? undefined : kycStatus,
       joinedDate: joiningDate || editingUser?.joinedDate || new Date().toISOString().split("T")[0],
       employeeId: employeeId.trim() || editingUser?.employeeId || undefined,
       designation: designation.trim() || (role === "Teams" ? "Technical Specialist" : undefined),
@@ -1131,43 +1137,47 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                     </>
                   )}
 
-                  {/* KYC Status */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                      KYC Verification Status
-                    </label>
-                    <select
-                      value={kycStatus}
-                      onChange={(e) => setKycStatus(e.target.value as any)}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#090d16]/90 border border-slate-300 dark:border-white/15 text-xs text-slate-900 dark:text-white focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3)] shadow-xs dark:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-medium transition-all"
-                    >
-                      <option value="Pending">⏳ Pending Verification</option>
-                      <option value="Processing">🔄 In Processing</option>
-                      <option value="Verified">✅ Verified Account</option>
-                      <option value="Rejected">❌ Rejected / Incomplete</option>
-                    </select>
-                  </div>
-
-                  {/* Account Status */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                      Account Status
-                    </label>
-                    <div className="flex items-center gap-3 h-10">
-                      {(["Active", "Inactive", "Pending"] as UserStatus[]).map((st) => (
-                        <label key={st} className="flex items-center gap-1.5 text-xs font-semibold cursor-pointer text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white">
-                          <input
-                            type="radio"
-                            name="accountStatus"
-                            checked={status === st}
-                            onChange={() => setStatus(st)}
-                            className="text-blue-600 focus:ring-blue-500"
-                          />
-                          <span>{st}</span>
-                        </label>
-                      ))}
+                  {/* KYC Status - Only required for Teams and Admin! Clients do NOT need KYC */}
+                  {role !== "Clients" && (
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                        KYC Verification Status
+                      </label>
+                      <select
+                        value={kycStatus}
+                        onChange={(e) => setKycStatus(e.target.value as any)}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#090d16]/90 border border-slate-300 dark:border-white/15 text-xs text-slate-900 dark:text-white focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3)] shadow-xs dark:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-medium transition-all"
+                      >
+                        <option value="Pending">⏳ Pending Verification</option>
+                        <option value="Processing">🔄 In Processing</option>
+                        <option value="Verified">✅ Verified Account</option>
+                        <option value="Rejected">❌ Rejected / Incomplete</option>
+                      </select>
                     </div>
-                  </div>
+                  )}
+
+                  {/* Account Status - Super Admin is permanently Active (cannot be made inactive) */}
+                  {role !== "Super Admin" && !isEditingRootSuperAdmin && (
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                        Account Status
+                      </label>
+                      <div className="flex items-center gap-3 h-10">
+                        {(["Active", "Inactive", "Pending"] as UserStatus[]).map((st) => (
+                          <label key={st} className="flex items-center gap-1.5 text-xs font-semibold cursor-pointer text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white">
+                            <input
+                              type="radio"
+                              name="accountStatus"
+                              checked={status === st}
+                              onChange={() => setStatus(st)}
+                              className="text-blue-600 focus:ring-blue-500"
+                            />
+                            <span>{st}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

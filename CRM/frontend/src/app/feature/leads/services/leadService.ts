@@ -357,21 +357,19 @@ export const getLeads = async (companyId?: string): Promise<Lead[]> => {
       return lead
     }
 
-    // 2. Explicitly unlocked leads MUST STAY UNLOCKED
+    // 2. Explicitly unlocked leads by Admin
     const isExplicitlyUnlocked =
-      lead.isLocked === false ||
       (lead as any).isExplicitlyUnlocked === true ||
-      lead.lockedReason?.includes("Unlocked") ||
-      (lead as any).unlockedByAdmin === true ||
-      (lead as any).unlockedByClient === true
+      (lead.lockedReason?.includes("Unlocked") && !isReminderDateOverdue(lead.reminderDate)) ||
+      (lead as any).unlockedByAdmin === true
 
-    if (isExplicitlyUnlocked && lead.isLocked === false) {
+    if (isExplicitlyUnlocked && lead.isLocked === false && !isReminderDateOverdue(lead.reminderDate)) {
       return lead
     }
 
     // 3. Active leads: check if reminder date is overdue (passed end of date 23:59:59)
     const overdue = isReminderDateOverdue(lead.reminderDate)
-    if (overdue && !lead.isLocked && !lead.lockedReason?.includes("Unlocked") && !(lead as any).isExplicitlyUnlocked) {
+    if (overdue && !lead.isLocked && !lead.lockedReason?.includes("Unlocked by Admin")) {
       hasChanges = true
       return {
         ...lead,
@@ -394,7 +392,7 @@ export const getLeads = async (companyId?: string): Promise<Lead[]> => {
     saveModuleDataToDB("leads", processed, effectiveComp !== "all" ? normalizeCompanyId(effectiveComp) : undefined).catch(() => {})
   }
 
-  // Client Isolation: If client user, only return their private leads.
+  // Client Isolation: If client user, strictly only return their leads.
   let currentUser: any = null
   if (typeof window !== "undefined") {
     try {
@@ -403,9 +401,10 @@ export const getLeads = async (companyId?: string): Promise<Lead[]> => {
     } catch {}
   }
 
-  if (currentUser?.role === "Clients") {
+  if (currentUser?.role === "Clients" || currentUser?.role?.toLowerCase().includes("client")) {
     const cId = String(currentUser.id || "").toLowerCase().trim()
     const cEmail = (currentUser.email || "").toLowerCase().trim()
+    const cName = (currentUser.name || "").toLowerCase().trim()
     return processed.filter((l) => {
       const leadCreatorId = String(l.createdById || "").toLowerCase().trim()
       const leadCreatorEmail = (l.createdByEmail || "").toLowerCase().trim()
@@ -413,7 +412,29 @@ export const getLeads = async (companyId?: string): Promise<Lead[]> => {
       return (
         (cId && leadCreatorId === cId) ||
         (cEmail && leadCreatorEmail === cEmail) ||
-        (cEmail && leadCreatedBy === cEmail)
+        (cEmail && leadCreatedBy === cEmail) ||
+        (cName && leadCreatedBy === cName)
+      )
+    })
+  }
+
+  // Team Member Scoping: Team members only see leads assigned to them or created by them
+  if (currentUser?.role === "Teams" || (currentUser?.role as string) === "Team") {
+    const uId = String(currentUser.id || "").toLowerCase().trim()
+    const uEmail = (currentUser.email || "").toLowerCase().trim()
+    const uName = (currentUser.name || "").toLowerCase().trim()
+    return processed.filter((l) => {
+      if ((l as any).isClientPrivate === true || l.createdByRole === "Clients") return false
+      const assigned = String(l.assignedTo || (l as any).assigned_to || l.caller || l.owner || "").toLowerCase().trim()
+      const creatorId = String(l.createdById || "").toLowerCase().trim()
+      const creatorEmail = (l.createdByEmail || "").toLowerCase().trim()
+      const createdBy = (l.createdBy || "").toLowerCase().trim()
+      const mgrs = (l.managers || "").toLowerCase().trim()
+
+      return (
+        (uId && (assigned === uId || creatorId === uId)) ||
+        (uEmail && (assigned === uEmail || creatorEmail === uEmail)) ||
+        (uName && (assigned === uName || createdBy === uName || mgrs.includes(uName)))
       )
     })
   }

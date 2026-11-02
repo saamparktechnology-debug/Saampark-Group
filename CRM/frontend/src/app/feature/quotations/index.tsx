@@ -17,6 +17,7 @@ import { executeWithFeedback } from "@/store/useActionFeedbackStore"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 import { OfficialQuotationDocument, QuotationData, QuotationLineItem } from "./components/OfficialQuotationDocument"
 import { DocumentStudioModal } from "@/components/documents/DocumentStudioModal"
+import { isRecordAssignedToClient, isRecordAssignedToTeamMember } from "@/lib/clientScopeUtils"
 
 export default function QuotationsMain() {
   const { user, activeCompanyId, activeBranchId, branches, companies } = useAuthStore()
@@ -81,8 +82,8 @@ export default function QuotationsMain() {
       ])
       
       let list: QuotationData[] = Array.isArray(qData) ? qData : []
-      if (list.length === 0) {
-        // Fallback default sample quotation
+      if (list.length === 0 && !isClientUser) {
+        // Fallback default sample quotation only for internal admins when empty
         list = [
           {
             id: "qt_sample_1",
@@ -112,7 +113,7 @@ export default function QuotationsMain() {
     } catch (err) { 
       console.warn("Quotation load warning:", err)
     }
-  }, [activeCompanyId])
+  }, [activeCompanyId, isClientUser])
 
   React.useEffect(() => {
     loadData()
@@ -131,11 +132,24 @@ export default function QuotationsMain() {
     const { activeCompanyId: freshComp, activeBranchId: freshBranch, branches: freshBranches } = useAuthStore.getState()
     const userComp = (freshComp || user?.companyId || "").toLowerCase().trim()
     const targetBranch = freshBranch
-    const branchObj = freshBranches.find(b => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
+    const branchObj = (freshBranches || []).find(b => 
+      String(b.id) === String(targetBranch) || 
+      String(b.name || "").toLowerCase() === String(targetBranch || "").toLowerCase()
+    )
     const targetBranchId = String(branchObj?.id || targetBranch || "").toLowerCase().trim()
     const targetBranchName = branchObj?.name?.toLowerCase().trim() || ""
 
     return quotations.filter(q => {
+      // 1. Client Scoping: Client users strictly only see quotations created for them
+      if (isClientUser) {
+        if (!isRecordAssignedToClient(q, user)) return false
+      }
+
+      // 2. Team Member Scoping: Team members only see quotations they created, are assigned to, or for their projects
+      if (user?.role === "Teams" || (user?.role as string) === "Team") {
+        if (!isRecordAssignedToTeamMember(q, user)) return false
+      }
+
       // Company filter
       if (userComp && userComp !== "all") {
         const qComp = (q.companyId || "").toLowerCase().trim()
@@ -156,7 +170,7 @@ export default function QuotationsMain() {
         (q.customerEmail && q.customerEmail.toLowerCase().includes(searchQuery.toLowerCase()))
       return match
     })
-  }, [quotations, activeCompanyId, activeBranchId, branches, searchQuery, statusFilter, user])
+  }, [quotations, activeCompanyId, activeBranchId, branches, searchQuery, statusFilter, user, isClientUser])
 
   const subtotal = items.reduce((s, i) => s + (Number(i.quantity) * Number(i.unitPrice)), 0)
   const tax = Math.round(subtotal * 0.18)
@@ -768,7 +782,7 @@ export default function QuotationsMain() {
       {/* ── OFFICIAL PDF DOCUMENT VIEWER MODAL ───────────────────────── */}
       <AnimatePresence>
         {viewingItem && (
-          <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/75 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto print:p-0 print:bg-white">
+          <div className="fixed inset-0 z-[99999] flex items-start justify-center bg-black/75 backdrop-blur-sm p-2 sm:p-6 py-6 sm:py-10 overflow-y-auto print:p-0 print:bg-white">
             <OfficialQuotationDocument 
               quotation={viewingItem}
               onClose={() => setViewingItem(null)}

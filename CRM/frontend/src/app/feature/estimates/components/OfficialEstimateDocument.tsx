@@ -387,7 +387,7 @@ export function OfficialEstimateDocument({
 
       {/* ── PRINTABLE DOCUMENT BODY (Standard A4 Corporate Format) ── */}
       <div className="w-full flex flex-col items-center gap-6 py-2 print:p-0 print:gap-0 print:m-0 overflow-x-auto">
-        <div id="printable-estimate" className="a4-page bg-white text-zinc-900 font-sans p-5 sm:p-6 text-xs shadow-2xl border border-zinc-200/90 rounded-lg w-full max-w-[794px] min-h-[1080px] mx-auto relative flex flex-col justify-between gap-3 sm:gap-3.5 overflow-visible print:w-[210mm] print:max-w-[210mm] print:h-[282mm] print:min-h-[282mm] print:max-h-[282mm] print:p-[6mm_8mm] print:gap-2 print:m-0 print:shadow-none print:border-none print:rounded-none">
+        <div id="printable-estimate" className="a4-page bg-white text-zinc-900 font-sans p-5 sm:p-6 text-xs shadow-2xl border border-zinc-200/90 rounded-lg w-full max-w-[794px] min-h-[1080px] mx-auto relative flex flex-col justify-between gap-3 sm:gap-3.5 overflow-visible print:w-[210mm] print:max-w-[210mm] print:h-auto print:min-h-[282mm] print:max-h-none print:overflow-visible print:p-[6mm_8mm] print:gap-2 print:m-0 print:shadow-none print:border-none print:rounded-none">
         
         {/* 1. Top Header: Company Brand, Logo, Statutory IDs & Document Header Card */}
         <div className="flex flex-col gap-2.5 border-b-2 border-zinc-900 pb-3">

@@ -37,13 +37,15 @@ import { normalizeCompanyId } from "../leads/services/leadService"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { ThreeDotLoader } from "@/components/ui/ThreeDotLoader"
+import { isRecordAssignedToClient, isRecordAssignedToTeamMember } from "@/lib/clientScopeUtils"
 
 export default function ClientsMain() {
   const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
 
-  const canAddClient = canPerformAction(user, "Clients", "add")
-  const canDeleteClient = canPerformAction(user, "Clients", "delete")
+  const isClientRole = user?.role === "Clients" || user?.role?.toLowerCase().includes("client")
+  const canAddClient = !isClientRole && canPerformAction(user, "Clients", "add")
+  const canDeleteClient = !isClientRole && canPerformAction(user, "Clients", "delete")
 
   const [activeTab, setActiveTab] = React.useState<ClientTabMode>("overview")
 
@@ -204,7 +206,7 @@ export default function ClientsMain() {
       })
 
       // 3. Enrich each client with live projects count and financial ledger totals
-      const mergedClients = Array.from(new Set(userClientsMap.values())).map(c => {
+      let mergedClients = Array.from(new Set(userClientsMap.values())).map(c => {
         const cId = (c.id || "").toLowerCase().trim()
         const cName = (c.name || "").toLowerCase().trim()
         const cEmail = (c.email || "").toLowerCase().trim()
@@ -307,6 +309,26 @@ export default function ClientsMain() {
 .sort(
         (a, b) => getClientTimestamp(b) - getClientTimestamp(a)
       )
+      const currentUser = freshUser
+      const isClient = currentUser?.role === "Clients" || currentUser?.role?.toLowerCase().includes("client")
+      const isTeam = currentUser?.role === "Teams" || (currentUser?.role as string) === "Team"
+
+      if (isClient) {
+        // Strictly filter to the client user's own company/profile
+        mergedClients = mergedClients.filter(c => isRecordAssignedToClient(c, currentUser))
+      } else if (isTeam) {
+        // Team member: only see clients with projects/leads assigned to or created by this team member
+        const teamAssignedProjects = (allProjects || []).filter(p => isRecordAssignedToTeamMember(p, currentUser))
+        const teamClientNames = new Set(teamAssignedProjects.map(p => (p.client || "").toLowerCase().trim()).filter(Boolean))
+        const teamClientIds = new Set(teamAssignedProjects.map(p => String(p.clientId || "").toLowerCase().trim()).filter(Boolean))
+        mergedClients = mergedClients.filter(c => {
+          const cId = String(c.id || "").toLowerCase().trim()
+          const cName = (c.name || "").toLowerCase().trim()
+          const cPrimary = (c.primaryContact || "").toLowerCase().trim()
+          return teamClientNames.has(cName) || teamClientNames.has(cPrimary) || (cId && teamClientIds.has(cId))
+        })
+      }
+
       setClients(mergedClients)
 
       // Convert registered client users into ContactItem format
@@ -334,7 +356,20 @@ export default function ClientsMain() {
         }
       })
 
-      setContacts(Array.from(new Set(userContactsMap.values())))
+      let finalContacts = Array.from(new Set(userContactsMap.values()))
+      if (isClient) {
+        const allowedClientNames = new Set(mergedClients.map(c => c.name.toLowerCase().trim()))
+        const allowedClientEmails = new Set(mergedClients.map(c => (c.email || "").toLowerCase().trim()).filter(Boolean))
+        finalContacts = finalContacts.filter(cnt => 
+          allowedClientNames.has(cnt.clientName.toLowerCase().trim()) || 
+          (cnt.email && allowedClientEmails.has(cnt.email.toLowerCase().trim()))
+        )
+      } else if (isTeam) {
+        const allowedClientNames = new Set(mergedClients.map(c => c.name.toLowerCase().trim()))
+        finalContacts = finalContacts.filter(cnt => allowedClientNames.has(cnt.clientName.toLowerCase().trim()))
+      }
+
+      setContacts(finalContacts)
       setLabels(storedLabels)
     } catch (err) {
       console.warn("Client sync warning:", err)
@@ -453,9 +488,6 @@ export default function ClientsMain() {
       errorTitle: "Delete Failed",
     })
   }
-
-
-  const isClientRole = user?.role === "Clients"
 
   return (
     <motion.div

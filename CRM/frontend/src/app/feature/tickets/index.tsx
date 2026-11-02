@@ -181,7 +181,10 @@ export default function TicketsMain() {
       if (!targetBranch || targetBranch === "all") return true
       const tBranch = String(t.branchId || "").toLowerCase().trim()
       if (!tBranch) return false // strict: if branch selected, ticket must have one
-      const branchObj = freshBranches.find(b => b.id === targetBranch || b.name.toLowerCase() === targetBranch.toLowerCase())
+      const branchObj = (freshBranches || []).find(b => 
+        String(b.id) === String(targetBranch) || 
+        String(b.name || "").toLowerCase() === String(targetBranch || "").toLowerCase()
+      )
       const targetBranchId = String(branchObj?.id || targetBranch).toLowerCase().trim()
       const targetBranchName = branchObj?.name?.toLowerCase().trim() || ""
       return tBranch === targetBranchId || (targetBranchName && tBranch === targetBranchName)
