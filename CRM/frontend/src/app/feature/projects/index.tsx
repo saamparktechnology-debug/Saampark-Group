@@ -84,11 +84,19 @@ export default function ProjectsMain() {
     const userComp = (activeCompanyId || user?.companyId || "").toLowerCase().trim()
     const targetBranch = activeBranchId || (user?.role !== "Super Admin" && user?.role !== "Admin" ? user?.branchId : null)
 
-    const targetBranchObj = branches.find(b => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
+    const safeBranches = Array.isArray(branches) ? branches : []
+    const targetBranchObj = safeBranches.find((b: any) => {
+      if (!b) return false
+      const bId = String(b.id || "").toLowerCase().trim()
+      const bName = String(b.name || b.branch_name || b.code || "").toLowerCase().trim()
+      const t = String(targetBranch || "").toLowerCase().trim()
+      return bId === t || bName === t
+    })
     const targetBranchId = String(targetBranchObj?.id || targetBranch || "").toLowerCase().trim()
-    const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
+    const targetBranchName = String(targetBranchObj?.name || (targetBranchObj as any)?.branch_name || "").toLowerCase().trim()
 
     const checkBranch = (p: any) => {
+      if (!p) return false
       if (!targetBranch || targetBranch === "all") return true
       const pBranch = String(p.branchId || p.branch_id || "").toLowerCase().trim()
       const pBranchName = String(p.branchName || p.branch_name || "").toLowerCase().trim()
@@ -98,10 +106,11 @@ export default function ProjectsMain() {
 
     // 1. Super Admin & Company Admin: filter strictly by active company and branch
     if (isSuperAdmin || isAdmin) {
-      let filtered = projects
+      let filtered = Array.isArray(projects) ? projects : []
       if (userComp && userComp !== "all") {
         filtered = filtered.filter((p) => {
-          const pComp = (p.companyId || (p as any).company || "").toLowerCase().trim()
+          if (!p) return false
+          const pComp = String(p.companyId || (p as any).company || "").toLowerCase().trim()
           return pComp === userComp || (userComp === "tech" && !p.companyId)
         })
       }
@@ -111,35 +120,36 @@ export default function ProjectsMain() {
       return filtered
     }
 
-    const normName = (user.name || "").toLowerCase().trim()
-    const normEmail = (user.email || "").toLowerCase().trim()
+    const normName = String(user.name || "").toLowerCase().trim()
+    const normEmail = String(user.email || "").toLowerCase().trim()
     const uId = String(user.id || "").toLowerCase().trim()
 
     // 3. Client: ONLY projects created for / assigned to this client
     if (isClient) {
-      return projects.filter((p) => {
-        if (!checkBranch(p)) return false
+      return (Array.isArray(projects) ? projects : []).filter((p) => {
+        if (!p || !checkBranch(p)) return false
         return isRecordAssignedToClient(p, user)
       })
     }
 
     // 4. Team Member (Staff / Developer / Employee): ONLY projects assigned to them or created by them
-    return projects.filter((p) => {
-      if (!checkBranch(p)) return false
+    return (Array.isArray(projects) ? projects : []).filter((p) => {
+      if (!p || !checkBranch(p)) return false
 
       const pCreatorId = String((p as any).createdById || "").toLowerCase().trim()
-      const pCreatorEmail = ((p as any).createdByEmail || "").toLowerCase().trim()
+      const pCreatorEmail = String((p as any).createdByEmail || "").toLowerCase().trim()
       const pBilledBy = String(p.billedBy || "").toLowerCase().trim()
 
       if (uId && pCreatorId === uId) return true
       if (normEmail && pCreatorEmail === normEmail) return true
       if (normName && pBilledBy === normName) return true
 
-      const members = p.members || []
-      return members.some((m) => {
-        const mName = (m.name || "").toLowerCase().trim()
-        const mEmail = (m.email || "").toLowerCase().trim()
-        const mId = String(m.id || "").toLowerCase().trim()
+      const members = Array.isArray(p.members) ? p.members : []
+      return members.some((m: any) => {
+        if (!m) return false
+        const mName = String(typeof m === "string" ? m : m.name || "").toLowerCase().trim()
+        const mEmail = String(typeof m === "string" ? "" : m.email || "").toLowerCase().trim()
+        const mId = String(typeof m === "string" ? "" : m.id || "").toLowerCase().trim()
         return (
           (uId && mId === uId) ||
           mName === normName ||

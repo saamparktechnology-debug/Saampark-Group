@@ -51,14 +51,18 @@ export function ProjectList({
   const [isFiltersDropdownOpen, setIsFiltersDropdownOpen] = React.useState(false)
 
   // Filtering projects based on active filter pill / dropdown & search query
-  const filteredProjects = projects.filter((p) => {
-    const matchesSearch =
-      p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.client.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.id.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredProjects = (Array.isArray(projects) ? projects : []).filter((p) => {
+    if (!p) return false
+    const q = (searchQuery || "").toLowerCase().trim()
+    const pTitle = String(p.title || "").toLowerCase()
+    const pClient = String(p.client || "").toLowerCase()
+    const pId = String(p.id || "").toLowerCase()
+
+    const matchesSearch = !q || pTitle.includes(q) || pClient.includes(q) || pId.includes(q)
+    const pLabels = Array.isArray(p.labels) ? p.labels : []
 
     if (activeFilter === "Completed") return matchesSearch && (p.status === "Completed" || p.status === "Finished")
-    if (activeFilter === "High Priority") return matchesSearch && (p.labels?.includes("Urgent") || p.labels?.includes("High"))
+    if (activeFilter === "High Priority") return matchesSearch && (pLabels.includes("Urgent") || pLabels.includes("High"))
     if (activeFilter === "Open projects") return matchesSearch && (p.status === "Open" || p.status === "In Progress" || p.status === "Payment Pending")
     if (activeFilter === "Upcoming") return matchesSearch && (p.status === "Open" || p.status === "Hold" || p.status === "Payment Pending")
 
@@ -323,7 +327,7 @@ export function ProjectList({
                             </span>
                           )}
 
-                          {p.labels.length > 0 &&
+                          {Array.isArray(p.labels) && p.labels.length > 0 &&
                             p.labels.map((lbl) => (
                               <span
                                 key={lbl}

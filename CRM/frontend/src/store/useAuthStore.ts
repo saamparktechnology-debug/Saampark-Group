@@ -985,8 +985,11 @@ export const useAuthStore = create<AuthState>()(
             const matchedComp = currentCompanies.find(c => isMatchingCompany(c, rawComp))
             const compSlug = matchedComp?.slug || matchedComp?.id || (b as any).company_slug || String(rawComp || 'tech')
             const numericId = matchedComp?.numeric_id || (compSlug === 'tech' ? 1 : compSlug === 'digital' ? 2 : compSlug === 'saampark-ai-solutions' ? 3 : Number((b as any).company_id) || 1)
+            const branchName = String(b.name || (b as any).branch_name || b.code || 'Branch').trim()
             return {
               ...b,
+              name: branchName,
+              branch_name: branchName,
               companyId: b.companyId || compSlug,
               company_id: (b as any).company_id || numericId,
               code: b.code ? b.code.toUpperCase() : b.code,

@@ -111,11 +111,15 @@ export function ProjectDetailView({
   }
 
   // Left sidebar filtering
-  const filteredProjects = projects.filter((p) => {
-    const matchesSearch = p.title.toLowerCase().includes(leftSearch.toLowerCase()) ||
-      p.client.toLowerCase().includes(leftSearch.toLowerCase())
+  const filteredProjects = (Array.isArray(projects) ? projects : []).filter((p) => {
+    if (!p) return false
+    const q = (leftSearch || "").toLowerCase().trim()
+    const pTitle = String(p.title || "").toLowerCase()
+    const pClient = String(p.client || "").toLowerCase()
+    const matchesSearch = !q || pTitle.includes(q) || pClient.includes(q)
+    const pLabels = Array.isArray(p.labels) ? p.labels : []
     if (leftFilter === "Completed") return matchesSearch && p.status === "Completed"
-    if (leftFilter === "High Priority") return matchesSearch && p.labels.includes("Urgent")
+    if (leftFilter === "High Priority") return matchesSearch && pLabels.includes("Urgent")
     return matchesSearch
   })
 
