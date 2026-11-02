@@ -201,14 +201,16 @@ export default function LeadsMain() {
       const lBranchName = String(l.branchName || (l as any).assignedBranchName || (l as any).branch_name || "").toLowerCase().trim()
       const targetStr = String(bTarget).toLowerCase().trim()
 
-      const targetBranchObj = freshBranches.find(b => 
-        String(b.id).toLowerCase().trim() === targetStr || 
-        String(b.code || "").toLowerCase().trim() === targetStr || 
-        b.name.toLowerCase().trim() === targetStr
-      )
+      const safeBranches = Array.isArray(freshBranches) ? freshBranches : []
+      const targetBranchObj = safeBranches.find((b: any) => {
+        if (!b) return false
+        return String(b.id || "").toLowerCase().trim() === targetStr || 
+               String(b.code || "").toLowerCase().trim() === targetStr || 
+               String(b.name || b.branch_name || "").toLowerCase().trim() === targetStr
+      })
       const targetBranchId = String(targetBranchObj?.id || bTarget).toLowerCase().trim()
       const targetBranchCode = String(targetBranchObj?.code || "").toLowerCase().trim()
-      const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
+      const targetBranchName = String(targetBranchObj?.name || (targetBranchObj as any)?.branch_name || "").toLowerCase().trim()
 
       return Boolean(
         (lBranch && (
@@ -230,14 +232,16 @@ export default function LeadsMain() {
       const lSubBranchName = String((l as any).subBranchName || (l as any).sub_branch_name || (l as any).assignedSubBranchName || "").toLowerCase().trim()
       const targetStr = String(sbTarget).toLowerCase().trim()
 
-      const targetSbObj = freshSubBranches?.find(sb =>
-        String(sb.id).toLowerCase().trim() === targetStr ||
-        String(sb.code || "").toLowerCase().trim() === targetStr ||
-        sb.name.toLowerCase().trim() === targetStr
-      )
+      const safeSubBranches = Array.isArray(freshSubBranches) ? freshSubBranches : []
+      const targetSbObj = safeSubBranches.find((sb: any) => {
+        if (!sb) return false
+        return String(sb.id || "").toLowerCase().trim() === targetStr ||
+               String(sb.code || "").toLowerCase().trim() === targetStr ||
+               String(sb.name || sb.sub_branch_name || "").toLowerCase().trim() === targetStr
+      })
       const targetSbId = String(targetSbObj?.id || sbTarget).toLowerCase().trim()
       const targetSbCode = String(targetSbObj?.code || "").toLowerCase().trim()
-      const targetSbName = targetSbObj?.name?.toLowerCase().trim() || ""
+      const targetSbName = String(targetSbObj?.name || (targetSbObj as any)?.sub_branch_name || "").toLowerCase().trim()
 
       return Boolean(
         (lSubBranch && (

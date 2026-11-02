@@ -252,10 +252,10 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
     const finalReminderTime = (isNoReminder || finalReminderDate === "None") ? "None" : (reminderTime || "11:30 AM")
 
     const cleanBranchId = selectedBranchId.trim()
-    const targetBranchObj = cleanBranchId ? branches.find(b => 
-      String(b.id).toLowerCase().trim() === cleanBranchId.toLowerCase() ||
+    const targetBranchObj = cleanBranchId ? (branches || []).find((b: any) => 
+      String(b.id || "").toLowerCase().trim() === cleanBranchId.toLowerCase() ||
       String(b.code || "").toLowerCase().trim() === cleanBranchId.toLowerCase() ||
-      b.name.toLowerCase().trim() === cleanBranchId.toLowerCase()
+      String(b.name || b.branch_name || "").toLowerCase().trim() === cleanBranchId.toLowerCase()
     ) : undefined
 
     const finalBranchId = targetBranchObj ? String(targetBranchObj.id) : (cleanBranchId || undefined)

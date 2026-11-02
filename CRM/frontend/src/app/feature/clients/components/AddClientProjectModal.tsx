@@ -133,16 +133,22 @@ export function AddClientProjectModal({
   const isBranchLocked = Boolean(user?.branchId && user?.role !== "Super Admin")
 
   const availableBranches = React.useMemo(() => {
-    return (branches || []).filter((b) => {
+    return (branches || []).filter((b: any) => {
+      if (!b) return false
       if (!selectedCompanyId || selectedCompanyId === "all") return true
-      return b.companyId?.toLowerCase() === selectedCompanyId.toLowerCase()
+      const bComp = String(b.companyId || b.company_id || "").toLowerCase().trim()
+      const selComp = String(selectedCompanyId).toLowerCase().trim()
+      return bComp === selComp || (selComp === "tech" && (bComp === "1" || !bComp)) || (selComp === "consultancy" && bComp === "2")
     })
   }, [branches, selectedCompanyId])
 
   const availableSubBranches = React.useMemo(() => {
-    return (subBranches || []).filter((sb) => {
+    return (subBranches || []).filter((sb: any) => {
+      if (!sb) return false
       if (!selectedCompanyId || selectedCompanyId === "all") return true
-      return sb.companyId?.toLowerCase() === selectedCompanyId.toLowerCase()
+      const sbComp = String(sb.companyId || sb.company_id || "").toLowerCase().trim()
+      const selComp = String(selectedCompanyId).toLowerCase().trim()
+      return sbComp === selComp || (selComp === "tech" && (sbComp === "1" || !sbComp)) || (selComp === "consultancy" && sbComp === "2")
     })
   }, [subBranches, selectedCompanyId])
 
@@ -719,7 +725,12 @@ export function AddClientProjectModal({
         }))
 
       const targetCompany = selectedCompanyId || activeCompanyId || user?.companyId || "tech"
-      const matchedBranch = branches.find(b => b.id === (selectedBranchId || (isBranchLocked ? user?.branchId : activeBranchId)) || b.name.toLowerCase() === ((selectedBranchId || user?.branchId || activeBranchId) || "").toLowerCase())
+      const matchedBranch = (branches || []).find((b: any) => {
+        if (!b) return false
+        const target = String(selectedBranchId || (isBranchLocked ? user?.branchId : activeBranchId) || "").toLowerCase().trim()
+        return String(b.id || "").toLowerCase().trim() === target ||
+               String(b.name || b.branch_name || b.code || "").toLowerCase().trim() === target
+      })
       const matchedSubBranch = subBranches.find(sb => sb.id === selectedSubBranchId)
 
       const effectiveBranchId = (selectedBranchId || (isBranchLocked ? user?.branchId : (activeBranchId || matchedSubBranch?.parentBranchId))) || undefined

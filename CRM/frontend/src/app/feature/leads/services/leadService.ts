@@ -986,10 +986,10 @@ export const transferLeadsToBranch = async (
 
   // Also sync per-company stores for all touched companies
   const touchedCompanies = new Set<string>()
-  if (companyId && companyId !== "all") touchedCompanies.add(companyId.toLowerCase().trim())
-  if (targetBranchCompanyId && targetBranchCompanyId !== "all") touchedCompanies.add(targetBranchCompanyId)
+  if (companyId && companyId !== "all") touchedCompanies.add(String(companyId).toLowerCase().trim())
+  if (targetBranchCompanyId && targetBranchCompanyId !== "all") touchedCompanies.add(String(targetBranchCompanyId).toLowerCase().trim())
   updatedLeads.forEach(l => {
-    if (l.companyId && l.companyId !== "all") touchedCompanies.add(l.companyId.toLowerCase().trim())
+    if (l.companyId && l.companyId !== "all") touchedCompanies.add(String(l.companyId).toLowerCase().trim())
   })
   touchedCompanies.add("tech")
 

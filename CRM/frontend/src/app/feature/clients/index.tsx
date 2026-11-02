@@ -80,9 +80,15 @@ export default function ClientsMain() {
       const targetBranch = freshBranchId || (freshUser?.role !== "Super Admin" && freshUser?.role !== "Admin" ? freshUser?.branchId : null)
       const targetSubBranch = freshSubBranchId || (freshUser?.role !== "Super Admin" && freshUser?.role !== "Admin" ? freshUser?.subBranchId : null)
 
-      const targetBranchObj = freshBranches.find(b => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
+      const safeBranches = Array.isArray(freshBranches) ? freshBranches : []
+      const targetBranchObj = safeBranches.find((b: any) => {
+        if (!b) return false
+        const target = String(targetBranch || "").toLowerCase().trim()
+        return String(b.id || "").toLowerCase().trim() === target ||
+               String(b.name || b.branch_name || b.code || "").toLowerCase().trim() === target
+      })
       const targetBranchId = String(targetBranchObj?.id || targetBranch || "").toLowerCase().trim()
-      const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
+      const targetBranchName = String(targetBranchObj?.name || (targetBranchObj as any)?.branch_name || "").toLowerCase().trim()
 
       const checkBranch = (c: any) => {
         if (!targetBranch || targetBranch === "all") return true
@@ -96,9 +102,15 @@ export default function ClientsMain() {
                uBranchIds.includes(targetBranchId)
       }
 
-      const targetSubBranchObj = (freshSubBranches || []).find(sb => sb.id === targetSubBranch || sb.name.toLowerCase() === (targetSubBranch || "").toLowerCase())
+      const safeSubBranches = Array.isArray(freshSubBranches) ? freshSubBranches : []
+      const targetSubBranchObj = safeSubBranches.find((sb: any) => {
+        if (!sb) return false
+        const target = String(targetSubBranch || "").toLowerCase().trim()
+        return String(sb.id || "").toLowerCase().trim() === target ||
+               String(sb.name || sb.sub_branch_name || sb.code || "").toLowerCase().trim() === target
+      })
       const targetSubBranchId = String(targetSubBranchObj?.id || targetSubBranch || "").toLowerCase().trim()
-      const targetSubBranchName = targetSubBranchObj?.name?.toLowerCase().trim() || ""
+      const targetSubBranchName = String(targetSubBranchObj?.name || (targetSubBranchObj as any)?.sub_branch_name || "").toLowerCase().trim()
 
       const checkSubBranch = (c: any) => {
         if (!targetSubBranch || targetSubBranch === "all") return true

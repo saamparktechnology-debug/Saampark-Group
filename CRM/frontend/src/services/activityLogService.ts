@@ -112,8 +112,8 @@ export async function getActivityLogs(companyId?: string): Promise<ActivityLog[]
     let list = Array.from(map.values())
 
     if (companyId && companyId !== "all") {
-      const cNorm = companyId.toLowerCase().trim()
-      list = list.filter(l => !l.companyId || l.companyId.toLowerCase().trim() === cNorm)
+      const cNorm = String(companyId).toLowerCase().trim()
+      list = list.filter(l => !l.companyId || String(l.companyId).toLowerCase().trim() === cNorm)
     }
 
     return list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
