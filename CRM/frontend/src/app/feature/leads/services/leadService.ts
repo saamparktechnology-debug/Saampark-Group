@@ -357,26 +357,33 @@ export const getLeads = async (companyId?: string): Promise<Lead[]> => {
       return lead
     }
 
-    // 2. Explicitly unlocked leads by Admin
-    const isExplicitlyUnlocked =
-      (lead as any).isExplicitlyUnlocked === true ||
-      (lead.lockedReason?.includes("Unlocked") && !isReminderDateOverdue(lead.reminderDate)) ||
-      (lead as any).unlockedByAdmin === true
-
-    if (isExplicitlyUnlocked && lead.isLocked === false && !isReminderDateOverdue(lead.reminderDate)) {
+    // 2. Active leads: check if reminder date is overdue (passed end of date 23:59:59)
+    // Any lead whose reminder date has expired MUST be locked (unless Won/Lost)
+    const overdue = isReminderDateOverdue(lead.reminderDate)
+    if (overdue) {
+      if (!lead.isLocked || lead.lockedReason?.includes("Unlocked")) {
+        hasChanges = true
+        return {
+          ...lead,
+          isLocked: true,
+          lockedReason: "Overdue: Lead reminder date expired.",
+          isExplicitlyUnlocked: false,
+        }
+      }
       return lead
     }
 
-    // 3. Active leads: check if reminder date is overdue (passed end of date 23:59:59)
-    const overdue = isReminderDateOverdue(lead.reminderDate)
-    if (overdue && !lead.isLocked && !lead.lockedReason?.includes("Unlocked by Admin")) {
-      hasChanges = true
-      return {
-        ...lead,
-        isLocked: true,
-        lockedReason: "Overdue: Lead reminder date expired without updates.",
-      }
-    } else if (!overdue && lead.isLocked && !lead.lockedReason?.includes("Manually locked")) {
+    // 3. Not overdue leads: preserve explicit unlock or release automatic lock
+    const isExplicitlyUnlocked =
+      (lead as any).isExplicitlyUnlocked === true ||
+      lead.lockedReason?.includes("Unlocked") ||
+      (lead as any).unlockedByAdmin === true
+
+    if (isExplicitlyUnlocked && lead.isLocked === false) {
+      return lead
+    }
+
+    if (!overdue && lead.isLocked && !lead.lockedReason?.includes("Manually locked")) {
       hasChanges = true
       return {
         ...lead,
@@ -662,14 +669,14 @@ export const updateLead = async (id: string, updates: Partial<Lead>, userRole?: 
     nextIsLocked = true
     nextReason = target.lockedReason
     nextIsExplicitlyUnlocked = false
-  } else if (target.isLocked === false && (nextIsExplicitlyUnlocked || target.lockedReason?.includes("Unlocked"))) {
-    nextIsLocked = false
-    nextReason = target.lockedReason || "Unlocked"
-    nextIsExplicitlyUnlocked = true
   } else if (finalReminderDate && isReminderDateOverdue(finalReminderDate)) {
     nextIsLocked = true
     nextReason = "Overdue: Lead reminder date expired."
     nextIsExplicitlyUnlocked = false
+  } else if (target.isLocked === false && (nextIsExplicitlyUnlocked || target.lockedReason?.includes("Unlocked"))) {
+    nextIsLocked = false
+    nextReason = target.lockedReason || "Unlocked"
+    nextIsExplicitlyUnlocked = true
   } else if (finalReminderDate && !isReminderDateOverdue(finalReminderDate)) {
     nextIsLocked = false
     nextReason = undefined
