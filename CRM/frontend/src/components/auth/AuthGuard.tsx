@@ -153,7 +153,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       const currentRole = state.user.role
 
       // Super Admins should never be logged out by status checks
-      if (currentRole === "Super Admin" || ["hiisupriya@gmail.com", "saampark.official@gmail.com", "supriyo.main@gmail.com"].includes(currentEmail)) {
+      if (currentRole === "Super Admin" || currentEmail === "saampark.official@gmail.com") {
         return
       }
 

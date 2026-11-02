@@ -191,7 +191,7 @@ export default function PermissionsMain() {
       filtered = filtered.filter((u) => {
         if (u.role === "Super Admin") {
           const sCompIds = (u.companyIds || [u.companyId]).map(id => String(id || "").toLowerCase().trim())
-          return sCompIds.some(id => validTargetCompIds.has(id)) || u.email === "hiisupriya@gmail.com"
+          return sCompIds.some(id => validTargetCompIds.has(id)) || u.email === "saampark.official@gmail.com"
         }
 
         const uCompIds = (u.companyIds && u.companyIds.length > 0)

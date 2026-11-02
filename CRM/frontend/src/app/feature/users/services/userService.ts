@@ -49,21 +49,7 @@ export const DEFAULT_SYSTEM_ACCOUNTS: UserItem[] = [
     lastLogin: "Active Session",
     joinedDate: "2024-01-01",
   },
-  {
-    id: "usr_super_admin_visible",
-    name: "Supriya (Super Admin)",
-    email: "hiisupriya@gmail.com",
-    role: "Super Admin",
-    companyId: "tech",
-    companyIds: ["tech", "digital"],
-    companyName: "SAAMPARK Group (All Companies)",
-    status: "Active",
-    department: "Executive Management",
-    phone: "+91 98765 43210",
-    password: "123456",
-    lastLogin: "Active Session",
-    joinedDate: "2024-01-01",
-  },
+
   {
     id: "usr_admin_main",
     name: "Chiranjit Mahapatra",
@@ -843,7 +829,7 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
   
   const isSuperAdminEmail = (email: string) => {
     const e = email.toLowerCase().trim();
-    return e === "hiisupriya@gmail.com" || e === "supriyo.main@gmail.com" || e === "saampark.official@gmail.com";
+    return e === "saampark.official@gmail.com";
   };
 
   const deletedEmails = (await getDeletedUserEmailsAsync()).map((e) => e.toLowerCase().trim());

@@ -429,7 +429,7 @@ export function getUserEntityScope(
     }
   }
 
-  const isSuper = user.role === 'Super Admin' || (user as any).role_id === 1 || String((user as any).role_name || '').toLowerCase().includes('super') || user.email === 'hiisupriya@gmail.com' || user.email === 'saampark.official@gmail.com'
+  const isSuper = user.role === 'Super Admin' || (user as any).role_id === 1 || user.email === 'saampark.official@gmail.com'
   if (isSuper) {
     return {
       isSuperAdmin: true,
@@ -1076,7 +1076,7 @@ export const useAuthStore = create<AuthState>()(
 
       updateCompany: async (companyId: string, updates: Partial<Company>) => {
         const { user, companies } = get()
-        const isSuperAdmin = user?.role === 'Super Admin' || (user as any)?.role_id === 1 || String((user as any)?.role_name || '').toLowerCase().includes('super') || user?.email === 'hiisupriya@gmail.com' || user?.email === 'saampark.official@gmail.com'
+        const isSuperAdmin = user?.role === 'Super Admin' || (user as any)?.role_id === 1 || user?.email === 'saampark.official@gmail.com'
         const isAdmin = user?.role === 'Admin' || (user as any)?.role_id === 2 || String((user as any)?.role_name || '').toLowerCase().includes('admin')
 
         if (!isSuperAdmin && !isAdmin) {
@@ -1430,17 +1430,14 @@ export const useAuthStore = create<AuthState>()(
       loginAs: (role: Role | string, customUser?: Partial<User>) => {
         let normalizedRole: Role = 'Teams'
         const userEmail = (customUser?.email || '').toLowerCase().trim()
-        if (
-          userEmail === 'hiisupriya@gmail.com' || 
-          userEmail === 'supriyo.main@gmail.com' || 
-          userEmail === 'saampark.official@gmail.com'
-        ) {
+        if (userEmail === 'saampark.official@gmail.com') {
           normalizedRole = 'Super Admin'
         } else {
-          const rLower = String(role || '').toLowerCase().trim()
+          const rLower = String(role || customUser?.role || '').toLowerCase().trim()
           if (rLower.includes('super')) normalizedRole = 'Super Admin'
           else if (rLower.includes('admin')) normalizedRole = 'Admin'
           else if (rLower.includes('client')) normalizedRole = 'Clients'
+          else normalizedRole = 'Teams'
         }
 
         const assignedCompanyIds = customUser?.companyIds || (normalizedRole === 'Super Admin' ? ['tech', 'consultancy'] : [customUser?.companyId || 'tech'])
@@ -1461,8 +1458,8 @@ export const useAuthStore = create<AuthState>()(
 
         const user: User = {
           id: customUser?.id || `u_${Date.now()}`,
-          name: (userEmail === 'hiisupriya@gmail.com' || userEmail === 'supriyo.main@gmail.com' || userEmail === 'saampark.official@gmail.com')
-            ? 'Supriya (Super Admin)'
+          name: userEmail === 'saampark.official@gmail.com'
+            ? (customUser?.name || 'Saampark Group (Super Admin)')
             : (customUser?.name || `${normalizedRole} User`),
           email: (customUser?.email || 'user@saampark.in').toLowerCase().trim(),
           username: (customUser as any)?.username || undefined,

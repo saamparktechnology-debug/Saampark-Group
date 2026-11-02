@@ -109,7 +109,7 @@ const CANONICAL_BRANCHES: Branch[] = [
 
 export default function CompaniesMain() {
   const { user, fetchCompanies, activeCompanyId } = useAuthStore()
-  const isSuperAdmin = user?.role === "Super Admin" || (user as any)?.role_id === 1 || String((user as any)?.role_name || "").toLowerCase().includes("super") || user?.email === "hiisupriya@gmail.com" || user?.email === "saampark.official@gmail.com"
+  const isSuperAdmin = user?.role === "Super Admin" || (user as any)?.role_id === 1 || user?.email === "saampark.official@gmail.com"
 
   const userAssignedComps = React.useMemo(() => {
     if (!user) return []

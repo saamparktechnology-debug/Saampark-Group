@@ -266,7 +266,7 @@ export default function LoginPage() {
 
         // If backend auth didn't succeed, verify password with stored database password
         if (!backendUser) {
-          const isRootSuper = ['hiisupriya@gmail.com', 'saampark.official@gmail.com', 'supriyo.main@gmail.com'].includes(normalizedInput) || matchedRole === "Super Admin";
+          const isRootSuper = normalizedInput === 'saampark.official@gmail.com' || matchedRole === "Super Admin";
           const validPasswords = [
             dbAccount.password,
             dbAccount.password?.trim(),
@@ -352,11 +352,7 @@ export default function LoginPage() {
 
       // ── ROLE & PORTAL AUTO-ALIGNMENT (Initial fallback only if no role assigned) ──
       if (!matchedAccount?.role) {
-        if (
-          effectiveEmail === "hiisupriya@gmail.com" || 
-          effectiveEmail === "supriyo.main@gmail.com" || 
-          effectiveEmail === "saampark.official@gmail.com"
-        ) {
+        if (effectiveEmail === "saampark.official@gmail.com") {
           matchedRole = "Super Admin"
         } else if (effectiveEmail === "saamparktechnologyresearch@gmail.com") {
           matchedRole = "Admin"
@@ -364,8 +360,8 @@ export default function LoginPage() {
       }
 
       // ── SUCCESS ──────────────────────────────────────────────────────────────
-      const displayName = effectiveEmail === "hiisupriya@gmail.com" 
-        ? "Supriya (Super Admin)" 
+      const displayName = effectiveEmail === "saampark.official@gmail.com" 
+        ? "Saampark Group (Super Admin)" 
         : (matchedAccount.full_name || matchedAccount.name || dbAccount?.name || effectiveEmail)
       recordUserAccount({ ...matchedAccount, name: displayName, email: effectiveEmail, lastLogin: "Just now" })
       setSuccessMessage(`Welcome back, ${displayName}! 👋`)
@@ -410,13 +406,7 @@ export default function LoginPage() {
       })
 
       setTimeout(() => {
-        if (matchedRole === "Clients") {
-          router.push("/feature/projects")
-        } else if (matchedRole === "Teams") {
-          router.push("/feature/tasks")
-        } else {
-          router.push("/feature/dashboard")
-        }
+        router.push("/feature/dashboard")
       }, 900)
 
     } catch (err: any) {
