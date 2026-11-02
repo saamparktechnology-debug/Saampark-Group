@@ -17,6 +17,13 @@ import { recordActivityLog } from "@/services/activityLogService";
 // Deleted user emails tracked in MySQL via markGlobalItemDeleted
 const DELETED_KEY = "saampark_deleted_user_emails"
 
+// ── Users Cache Declarations ──────────────────────────────────────────────────
+const USERS_CACHE_TTL_MS = 60_000; // 1 minute
+let _usersCacheData: UserItem[] | null = null;
+let _usersCacheTime = 0;
+let _usersCacheKey = ""; // tracks last company scope used
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Helper: Root Super Admin is permanent and immutable
 export const isRootSuperAdminEmail = (email?: string): boolean => {
   if (!email) return false;
@@ -799,13 +806,7 @@ export async function deleteUser(id: string, email?: string): Promise<boolean> {
 }
 
 
-// ── Users Cache ──────────────────────────────────────────────────────────────
-// Prevents repeated API calls on every render — only fetches fresh when
-// company/branch switches or after a write (add/edit/delete user).
-const USERS_CACHE_TTL_MS = 60_000; // 1 minute
-let _usersCacheData: UserItem[] | null = null;
-let _usersCacheTime = 0;
-let _usersCacheKey = ""; // tracks last company scope used
+// ── Users Cache Functions ────────────────────────────────────────────────────
 
 export function invalidateUsersCache(): void {
   _usersCacheData = null;

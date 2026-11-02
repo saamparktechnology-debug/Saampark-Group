@@ -23,9 +23,14 @@ export default function ProjectsError({
       <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-2">
         Unable to load projects
       </h2>
-      <p className="text-sm text-zinc-500 dark:text-zinc-400 max-w-md mb-6">
+      <p className="text-sm text-zinc-500 dark:text-zinc-400 max-w-md mb-2">
         An error occurred while loading your projects. You can reload this view or return to the dashboard.
       </p>
+      {error?.message && (
+        <pre className="text-xs text-rose-500 bg-rose-50 dark:bg-rose-950/40 p-2.5 rounded-lg border border-rose-200 dark:border-rose-800 max-w-lg mb-6 overflow-x-auto text-left font-mono">
+          {error.message}
+        </pre>
+      )}
       <div className="flex items-center gap-3">
         <button
           type="button"

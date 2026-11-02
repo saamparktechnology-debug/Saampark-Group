@@ -25,7 +25,7 @@ export const getProjects = async (companyId?: string): Promise<Project[]> => {
         if (p && p.id) map.set(String(p.id).toLowerCase().trim(), p)
       }
     }
-    return filterGlobalDeletedItems(Array.from(map.values()))
+    return filterGlobalDeletedItems(Array.from(map.values())).map(normalizeProject)
   }
 
   const { isMatchingCompany } = await import("@/store/useAuthStore")
@@ -45,7 +45,24 @@ export const getProjects = async (companyId?: string): Promise<Project[]> => {
     if (p && p.id) map.set(String(p.id).toLowerCase().trim(), { ...p, companyId: p.companyId || targetComp })
   }
 
-  return filterGlobalDeletedItems(Array.from(map.values()))
+  return filterGlobalDeletedItems(Array.from(map.values())).map(normalizeProject)
+}
+
+function normalizeProject(p: any): Project {
+  return {
+    ...p,
+    id: String(p?.id || ""),
+    title: String(p?.title || "Untitled Project"),
+    client: String(p?.client || "Client"),
+    labels: Array.isArray(p?.labels) ? p.labels : [],
+    members: Array.isArray(p?.members) ? p.members : [],
+    milestones: Array.isArray(p?.milestones) ? p.milestones : [],
+    activityLogs: Array.isArray(p?.activityLogs) ? p.activityLogs : [],
+    taskBreakdown: p?.taskBreakdown || { todo: 0, inProgress: 0, review: 0, done: 0 },
+    progress: typeof p?.progress === "number" ? p.progress : 0,
+    status: p?.status || "Open",
+    price: String(p?.price || "₹0"),
+  }
 }
 
 export const addProject = async (project: Omit<Project, "id">, companyId?: string): Promise<Project> => {
