@@ -16,8 +16,10 @@ import { createNotification } from "@/services/notificationService"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 import { OfficialQuotationDocument, QuotationData, QuotationLineItem } from "./components/OfficialQuotationDocument"
+import { sendQuotationDetailsEmailNotification } from "@/services/emailNotificationService"
 import { DocumentStudioModal } from "@/components/documents/DocumentStudioModal"
 import { isRecordAssignedToClient, isRecordAssignedToTeamMember } from "@/lib/clientScopeUtils"
+import { formatDisplayDate } from "@/lib/utils"
 
 export default function QuotationsMain() {
   const { user, activeCompanyId, activeBranchId, branches, companies } = useAuthStore()
@@ -76,44 +78,59 @@ export default function QuotationsMain() {
 
   const loadData = React.useCallback(async () => {
     try { 
-      const [qData, cData] = await Promise.all([
+      const { fetchModuleDataFromDB } = await import("@/lib/storageSync")
+      const [qData, appQuotes, cData] = await Promise.all([
         QuotationService.getAll({}).catch(() => []),
+        fetchModuleDataFromDB<any[]>("quotations", [], "all").catch(() => []),
         getClients(activeCompanyId || "all").catch(() => [])
       ])
-      
-      let list: QuotationData[] = Array.isArray(qData) ? qData : []
-      if (list.length === 0 && !isClientUser) {
-        // Fallback default sample quotation only for internal admins when empty
-        list = [
-          {
-            id: "qt_sample_1",
-            number: "QT-2026-001",
-            customer: "Acme Global Solutions",
-            customerEmail: "contact@acmeglobal.com",
-            customerPhone: "+91 98300 12345",
-            customerAddress: "Park Street, Kolkata - 700016",
-            date: new Date().toLocaleDateString("en-GB"),
-            validTill: new Date(Date.now() + 30 * 86400000).toLocaleDateString("en-GB"),
-            subtotal: 110000,
-            tax: 19800,
-            total: 129800,
-            status: "Sent",
-            items: [
-              { id: "1", name: "Custom Enterprise Portal Engineering", description: "Full-stack cloud portal", sac: "998311", quantity: 1, unitPrice: 75000, total: 75000 },
-              { id: "2", name: "UI/UX Design Systems & Brand Prototype", description: "Figma design system & mockups", sac: "998311", quantity: 1, unitPrice: 35000, total: 35000 }
-            ],
-            notes: "Complete scope includes staging testing, security audit, and 90 days warranty.",
-            terms: "1. Quotation valid for 30 days.\n2. 50% mobilization advance on approval.\n3. GST 18% as applicable.",
-            companyId: activeCompanyId || "tech"
+
+      const map = new Map<string, any>()
+      // First populate from app_data
+      if (Array.isArray(appQuotes)) {
+        for (const item of appQuotes) {
+          if (item && (item.id || item.number || item.quotation_number)) {
+            const key = String(item.number || item.quotation_number || item.id).toLowerCase().trim()
+            map.set(key, item)
           }
-        ]
+        }
       }
+      // Then merge from backend REST API
+      if (Array.isArray(qData)) {
+        for (const item of qData) {
+          if (item && (item.id || item.number || item.quotation_number)) {
+            const key = String(item.number || item.quotation_number || item.id).toLowerCase().trim()
+            map.set(key, { ...map.get(key), ...item })
+          }
+        }
+      }
+
+      const combinedRaw = Array.from(map.values())
+      
+      let list: QuotationData[] = combinedRaw.map((q: any) => ({
+        ...q,
+        id: String(q.id || q.number),
+        number: q.number || q.quotation_number || `QT-${q.id}`,
+        customer: q.customer || q.customer_name || q.client || "Client",
+        customerEmail: q.customerEmail || q.customer_email || "",
+        customerPhone: q.customerPhone || q.customer_phone || "",
+        customerAddress: q.customerAddress || q.customer_address || "",
+        total: Number(q.total || q.totalAmount) || 0,
+        subtotal: Number(q.subtotal) || 0,
+        tax: Number(q.tax || q.tax_amount) || 0,
+        date: q.date || (q.created_at ? new Date(q.created_at).toLocaleDateString("en-GB") : new Date().toLocaleDateString("en-GB")),
+        validTill: q.validTill || q.valid_till || "",
+        status: q.status || "Draft",
+        companyId: q.companyId || (q.company_id === "1" ? "tech" : (q.company_id === "2" ? "consultancy" : q.company_id)) || "tech",
+        items: (q.items && q.items.length > 0) ? q.items : [{ id: "1", name: q.title || "", description: q.description || "", quantity: 1, unitPrice: Number(q.total) || 0, total: Number(q.total) || 0 }]
+      }))
+
       setQuotations(list)
       setClients(Array.isArray(cData) ? cData : [])
     } catch (err) { 
       console.warn("Quotation load warning:", err)
     }
-  }, [activeCompanyId, isClientUser])
+  }, [activeCompanyId])
 
   React.useEffect(() => {
     loadData()
@@ -152,9 +169,11 @@ export default function QuotationsMain() {
 
       // Company filter
       if (userComp && userComp !== "all") {
-        const qComp = (q.companyId || "").toLowerCase().trim()
-        if (qComp && qComp !== userComp) return false
-        if (!qComp && userComp !== "tech") return false
+        const qCompRaw = String(q.companyId || (q as any).company_id || "").toLowerCase().trim()
+        const normQComp = qCompRaw === "1" ? "tech" : (qCompRaw === "2" ? "consultancy" : qCompRaw)
+        const normUserComp = userComp === "1" ? "tech" : (userComp === "2" ? "consultancy" : userComp)
+        if (normQComp && normQComp !== normUserComp) return false
+        if (!normQComp && normUserComp !== "tech") return false
       }
       // Branch filter (strict)
       if (targetBranch && targetBranch !== "all") {
@@ -359,6 +378,43 @@ export default function QuotationsMain() {
     }
   }
 
+  const handleSendQuotation = async () => {
+    if (!sendingItem || !sendEmail.trim()) {
+      alert("Please specify a valid recipient email.")
+      return
+    }
+    setIsSending(true)
+    try {
+      await executeWithFeedback(async () => {
+        const updated: QuotationData = {
+          ...sendingItem,
+          customerEmail: sendEmail.trim(),
+          status: "Sent" as const,
+        }
+        await QuotationService.update(sendingItem.id, updated).catch(() => {})
+        setQuotations(prev => prev.map(q => q.id === sendingItem.id ? updated : q))
+
+        await sendQuotationDetailsEmailNotification(
+          { ...sendingItem, customerEmail: sendEmail.trim() },
+          sendEmail.trim()
+        )
+
+        setSendingItem(null)
+      }, {
+        actionType: "sync",
+        loadingTitle: "Dispatching Price Quotation...",
+        loadingMsg: `Sending formal quotation #${sendingItem.number} with action buttons to ${sendEmail.trim()}...`,
+        successTitle: "Quotation Delivered Successfully!",
+        successMsg: `Quotation #${sendingItem.number} has been dispatched to client's email inbox.`,
+        minLoadingMs: 650,
+      })
+    } catch (err) {
+      console.error("Error sending quotation:", err)
+    } finally {
+      setIsSending(false)
+    }
+  }
+
   const handleConvertToInvoice = async (quotation: QuotationData) => {
     const invId = `INV-${Math.floor(100 + Math.random() * 900)}`
     await executeWithFeedback(async () => {
@@ -479,7 +535,7 @@ export default function QuotationsMain() {
     setIsEstimateStudioOpen(true)
   }
 
-  const totalPipeline = quotations.reduce((acc, q) => acc + (q.total || 0), 0)
+  const totalPipeline = filtered.reduce((acc, q) => acc + (q.total || 0), 0)
 
   return (
     <motion.div 
@@ -569,7 +625,7 @@ export default function QuotationsMain() {
         <div className="kpi-card-premium flex items-center justify-between">
           <div>
             <p className="text-xs text-muted-foreground font-semibold">Total Quotations</p>
-            <h3 className="text-2xl font-black text-foreground mt-0.5">{quotations.length}</h3>
+            <h3 className="text-2xl font-black text-foreground mt-0.5">{filtered.length}</h3>
             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mt-1">
               <span>●</span> Active commercial proposals
             </span>
@@ -595,7 +651,7 @@ export default function QuotationsMain() {
         <div className="kpi-card-premium flex items-center justify-between">
           <div>
             <p className="text-xs text-muted-foreground font-semibold">Sent &amp; Pending</p>
-            <h3 className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-0.5">{quotations.filter(q => q.status === "Sent").length}</h3>
+            <h3 className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-0.5">{filtered.filter(q => q.status === "Sent").length}</h3>
             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 dark:text-blue-400 mt-1">
               <span>⏱</span> Under client evaluation
             </span>
@@ -608,7 +664,7 @@ export default function QuotationsMain() {
         <div className="kpi-card-premium flex items-center justify-between">
           <div>
             <p className="text-xs text-muted-foreground font-semibold">Accepted</p>
-            <h3 className="text-2xl font-black text-purple-600 dark:text-purple-400 mt-0.5">{quotations.filter(q => q.status === "Accepted").length}</h3>
+            <h3 className="text-2xl font-black text-purple-600 dark:text-purple-400 mt-0.5">{filtered.filter(q => q.status === "Accepted").length}</h3>
             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-purple-600 dark:text-purple-400 mt-1">
               <span>✓</span> Approved for execution
             </span>
@@ -690,8 +746,8 @@ export default function QuotationsMain() {
                       <div className="font-semibold text-zinc-900 dark:text-zinc-100">{q.customer}</div>
                       {q.customerEmail && <div className="text-[10px] text-zinc-400 font-mono">{q.customerEmail}</div>}
                     </td>
-                    <td className="py-3 px-4 font-mono text-[11px] text-zinc-500">{q.date}</td>
-                    <td className="py-3 px-4 font-mono text-[11px] text-rose-600 font-semibold">{q.validTill || "-"}</td>
+                    <td className="py-3 px-4 font-mono text-[11px] text-zinc-500">{formatDisplayDate(q.date)}</td>
+                    <td className="py-3 px-4 font-mono text-[11px] text-rose-600 font-semibold">{q.validTill ? formatDisplayDate(q.validTill) : "-"}</td>
                     <td className="py-3 px-4">
                       <span className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-[11px] font-medium">
                         {q.items?.length || 1} items
@@ -805,15 +861,17 @@ export default function QuotationsMain() {
 
       {/* ── INTERACTIVE SPLIT-SCREEN DOCUMENT STUDIO (QUOTATION) ────────── */}
       <DocumentStudioModal
-        isOpen={isModalOpen}
+        isOpen={isModalOpen || isStudioOpen}
         mode="quotation"
         initialData={editingItem}
         onClose={() => {
           setIsModalOpen(false)
+          setIsStudioOpen(false)
           setEditingItem(null)
         }}
         onSaveSuccess={() => {
           setIsModalOpen(false)
+          setIsStudioOpen(false)
           setEditingItem(null)
           loadData()
         }}
@@ -834,20 +892,76 @@ export default function QuotationsMain() {
         }}
       />
 
-      {/* INTERACTIVE SPLIT-SCREEN DOCUMENT STUDIO (QUOTATION) */}
-      <DocumentStudioModal
-        isOpen={isStudioOpen}
-        mode="quotation"
-        onClose={() => {
-          setIsStudioOpen(false)
-          setEditingItem(null)
-        }}
-        onSaveSuccess={() => {
-          setIsStudioOpen(false)
-          setEditingItem(null)
-          loadData()
-        }}
-      />
+      {/* SEND QUOTATION EMAIL MODAL */}
+      <AnimatePresence>
+        {sendingItem && (
+          <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4 text-xs">
+              <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400">
+                    <Send size={16} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-zinc-900 dark:text-zinc-100">Send Commercial Quotation</h3>
+                    <p className="text-[11px] text-zinc-400">Recipient will receive official PDF and direct action buttons (Accept, Modify, Decline)</p>
+                  </div>
+                </div>
+                <button onClick={() => setSendingItem(null)} className="p-1 text-zinc-400 hover:text-zinc-600 rounded-lg cursor-pointer">
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Recipient Email Address *</label>
+                  <input
+                    type="email"
+                    value={sendEmail}
+                    onChange={(e) => setSendEmail(e.target.value)}
+                    placeholder="client@company.com"
+                    className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono text-xs focus:ring-2 focus:ring-blue-500/20 focus:outline-none"
+                  />
+                </div>
+
+                <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 space-y-1.5 text-[11px]">
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Quotation No:</span>
+                    <span className="font-mono font-bold text-blue-600 dark:text-blue-400">{sendingItem.number}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Client:</span>
+                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">{sendingItem.customer}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Total Tender Value:</span>
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400">₹{(sendingItem.total || 0).toLocaleString("en-IN")}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSendingItem(null)}
+                  className="px-3 py-2 text-zinc-500 hover:text-zinc-700 font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isSending || !sendEmail.trim()}
+                  onClick={handleSendQuotation}
+                  className="px-5 py-2 font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Send size={13} />
+                  <span>{isSending ? "Sending..." : "Dispatch Email"}</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* DELETE CONFIRM */}
       <AnimatePresence>

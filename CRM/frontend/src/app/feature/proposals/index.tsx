@@ -16,6 +16,7 @@ import { addOrder } from "@/app/feature/sales/orders/services/orderService"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 import { isRecordAssignedToClient, isRecordAssignedToTeamMember } from "@/lib/clientScopeUtils"
 import { confirmTwoStepDelete } from "@/lib/confirmDialog"
+import { formatDisplayDate } from "@/lib/utils"
 
 export interface ProposalItem {
   id: string
@@ -60,7 +61,7 @@ export default function ProposalsMain() {
   const [amount, setAmount] = React.useState("")
   const [validUntil, setValidUntil] = React.useState("")
   const [description, setDescription] = React.useState("")
-  const [deliverablesInput, setDeliverablesInput] = React.useState("Architecture & Planning, High-Fidelity Design, Frontend & API Integration, QA & Launch")
+  const [deliverablesInput, setDeliverablesInput] = React.useState("")
   const [availableClients, setAvailableClients] = React.useState<{ name: string; email: string }[]>([])
 
   const showToast = (msg: string) => {
@@ -452,8 +453,8 @@ export default function ProposalsMain() {
                       <div className="font-semibold text-zinc-900 dark:text-zinc-100">{p.client}</div>
                       <div className="text-[10px] text-zinc-400">{p.clientEmail}</div>
                     </td>
-                    <td className="py-3 px-4 text-zinc-500 font-mono text-[11px]">{p.proposalDate}</td>
-                    <td className="py-3 px-4 text-red-600 dark:text-red-400 font-bold font-mono text-[11px]">{p.validUntil}</td>
+                    <td className="py-3 px-4 text-zinc-500 font-mono text-[11px]">{formatDisplayDate(p.proposalDate)}</td>
+                    <td className="py-3 px-4 text-red-600 dark:text-red-400 font-bold font-mono text-[11px]">{p.validUntil ? formatDisplayDate(p.validUntil) : "-"}</td>
                     <td className="py-3 px-4 font-bold text-zinc-900 dark:text-zinc-100">{p.amount}</td>
                     <td className="py-3 px-4">
                       <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${statusBadge}`}>
@@ -550,11 +551,11 @@ export default function ProposalsMain() {
                   </div>
                   <div>
                     <span className="text-zinc-400 block text-[10px] uppercase font-bold">Date</span>
-                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">{selectedProposal.proposalDate}</span>
+                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">{formatDisplayDate(selectedProposal.proposalDate)}</span>
                   </div>
                   <div>
                     <span className="text-zinc-400 block text-[10px] uppercase font-bold">Valid Until</span>
-                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">{selectedProposal.validUntil}</span>
+                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">{selectedProposal.validUntil ? formatDisplayDate(selectedProposal.validUntil) : "-"}</span>
                   </div>
                   <div>
                     <span className="text-zinc-400 block text-[10px] uppercase font-bold">Amount</span>

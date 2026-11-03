@@ -3,7 +3,7 @@ import { getClients, saveStoredClient } from "@/app/feature/clients/services/cli
 import { sendPaymentReceiptEmailNotification, sendPaymentDueReminderEmailNotification } from "@/services/emailNotificationService"
 import { recordActivityLog } from "@/services/activityLogService"
 
-export type InvoiceStatus = "Draft" | "Partially paid" | "Fully paid" | "Not paid" | "Credited" | "Payment Pending" | "Pending Approval" | "Rejected"
+export type InvoiceStatus = "Draft" | "Partially paid" | "Fully paid" | "Not paid" | "Credited" | "Payment Pending" | "Pending Approval" | "Rejected" | "Pending Verification"
 
 export interface InvoiceLineCharge {
   id: string
@@ -15,6 +15,7 @@ export interface InvoiceLineItem {
   id: string
   serviceName: string
   description?: string
+  deliverableTime?: string
   sacCode?: string
   qty: number
   unit: string
@@ -83,6 +84,12 @@ export interface InvoiceItem {
   paymentReceived: string
   due: string
   status: InvoiceStatus
+  paymentProofUtr?: string
+  paymentProofMethod?: string
+  paymentProofAmount?: number
+  paymentProofDate?: string
+  paymentProofNotes?: string
+  paymentProofSubmittedBy?: string
   clientAccepted?: boolean
   acceptedAt?: number | string
   acceptedBy?: string
@@ -765,6 +772,36 @@ export const recordPartialPayment = async (
       paymentMethod,
       txnRef: transactionRef,
     }).catch(() => null)
+
+    // Notify Specific Admin who billed this invoice
+    try {
+      const { createNotification } = await import("@/services/notificationService")
+      const adminInCharge = await resolveInvoiceAdmin(target)
+
+      await createNotification({
+        title: isFullySettled ? "Invoice Fully Paid" : "Payment Received",
+        message: `Payment of ₹${paidAmountNum.toLocaleString("en-IN")} received for Invoice #${target.id} (${target.client}). Current status: ${isFullySettled ? "Fully paid" : "Partially paid"}.`,
+        type: "payment",
+        linkUrl: "/feature/sales/invoices",
+        targetEmail: adminInCharge.email,
+        targetRole: "Admin",
+        sendEmailNotification: true,
+      })
+
+      if (adminInCharge.email.toLowerCase() !== "saampark.official@gmail.com") {
+        await createNotification({
+          title: isFullySettled ? "Invoice Fully Paid" : "Payment Received",
+          message: `Payment of ₹${paidAmountNum.toLocaleString("en-IN")} (Invoice #${target.id} - ${target.client}) received for Admin ${adminInCharge.name}.`,
+          type: "payment",
+          linkUrl: "/feature/sales/invoices",
+          targetEmail: "saampark.official@gmail.com",
+          targetRole: "Super Admin",
+          sendEmailNotification: false,
+        })
+      }
+    } catch (notifErr) {
+      console.warn("Error notifying specific admin of payment:", notifErr)
+    }
   } catch (err) {
     console.warn("Error updating payment entry in recordPartialPayment:", err)
   }
@@ -833,6 +870,36 @@ export const markPaymentCompleted = async (
       paymentMethod,
       txnRef: transactionRef,
     }).catch(() => null)
+
+    // Notify Specific Admin who billed this invoice
+    try {
+      const { createNotification } = await import("@/services/notificationService")
+      const adminInCharge = await resolveInvoiceAdmin(target)
+
+      await createNotification({
+        title: "Invoice Fully Paid",
+        message: `Invoice #${target.id} (${target.client}) for ₹${target.totalInvoiced} has been verified and settled in full!`,
+        type: "payment",
+        linkUrl: "/feature/sales/invoices",
+        targetEmail: adminInCharge.email,
+        targetRole: "Admin",
+        sendEmailNotification: true,
+      })
+
+      if (adminInCharge.email.toLowerCase() !== "saampark.official@gmail.com") {
+        await createNotification({
+          title: "Invoice Fully Paid",
+          message: `Invoice #${target.id} (${target.client}) for ₹${target.totalInvoiced} (Admin: ${adminInCharge.name}) is settled in full.`,
+          type: "payment",
+          linkUrl: "/feature/sales/invoices",
+          targetEmail: "saampark.official@gmail.com",
+          targetRole: "Super Admin",
+          sendEmailNotification: false,
+        })
+      }
+    } catch (notifErr) {
+      console.warn("Error notifying specific admin in markPaymentCompleted:", notifErr)
+    }
   } catch (err) {
     console.warn("Error settling payment entry in markPaymentCompleted:", err)
   }
@@ -849,6 +916,202 @@ export const markPaymentCompleted = async (
   }).catch(() => {})
 
   return updated
+}
+
+/**
+ * Resolves the specific Admin (name, email) in charge of an invoice based on billedBy or createdByName.
+ */
+export const resolveInvoiceAdmin = async (
+  invoice: InvoiceItem
+): Promise<{ name: string; email: string }> => {
+  try {
+    const { getUsers } = await import("@/app/feature/users/services/userService")
+    const allUsers = await getUsers()
+
+    const billedBy = (invoice.billedBy || "").toLowerCase().trim()
+    const createdBy = (invoice.createdByName || "").toLowerCase().trim()
+
+    // 1. Try to find user matching billedBy
+    if (billedBy) {
+      const match = allUsers.find(
+        (u) =>
+          (u.name && u.name.toLowerCase().trim() === billedBy) ||
+          (u.email && u.email.toLowerCase().trim() === billedBy)
+      )
+      if (match?.email) {
+        return { name: match.name, email: match.email }
+      }
+    }
+
+    // 2. Try to find user matching createdByName
+    if (createdBy) {
+      const match = allUsers.find(
+        (u) =>
+          (u.name && u.name.toLowerCase().trim() === createdBy) ||
+          (u.email && u.email.toLowerCase().trim() === createdBy)
+      )
+      if (match?.email) {
+        return { name: match.name, email: match.email }
+      }
+    }
+
+    // 3. Fallback: Find active Admin or Super Admin
+    const adminUser = allUsers.find(
+      (u) =>
+        u.status !== "Inactive" &&
+        (u.role === "Admin" || u.role === "Super Admin" || (u.role && u.role.toLowerCase().includes("admin")))
+    )
+    if (adminUser?.email) {
+      return { name: adminUser.name, email: adminUser.email }
+    }
+  } catch (err) {
+    console.warn("Could not resolve invoice admin:", err)
+  }
+
+  return { name: "Admin", email: "saampark.official@gmail.com" }
+}
+
+/**
+ * Client submits payment proof with mandatory UTR number.
+ * Status becomes "Pending Verification" and sends instant notification to specific Admin/Super Admin.
+ */
+export const submitClientPaymentProof = async (
+  invoiceId: string,
+  utr: string,
+  amount: number,
+  paymentMethod: string = "UPI / Net Banking",
+  notes: string = "",
+  submittedBy: string = ""
+): Promise<InvoiceItem | null> => {
+  const current = await getInvoices()
+  const strId = String(invoiceId).toLowerCase().trim()
+  const idx = current.findIndex((i) => String(i.id).toLowerCase().trim() === strId)
+  if (idx === -1) return null
+
+  const target = current[idx]
+  const updated: InvoiceItem = {
+    ...target,
+    status: "Pending Verification",
+    paymentProofUtr: utr.trim(),
+    paymentProofMethod: paymentMethod,
+    paymentProofAmount: amount,
+    paymentProofDate: new Date().toISOString(),
+    paymentProofNotes: notes.trim(),
+    paymentProofSubmittedBy: submittedBy || target.client,
+  }
+  current[idx] = updated
+  await saveModuleDataToDB("invoices", current)
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("saampark_data_synced"))
+    window.dispatchEvent(new Event("saampark_invoices_updated"))
+    window.dispatchEvent(new Event("storage"))
+  }
+
+  // Notify Specific Admin and Super Admin
+  try {
+    const { createNotification } = await import("@/services/notificationService")
+    const adminInCharge = await resolveInvoiceAdmin(target)
+
+    // Send direct notification to specific Admin
+    await createNotification({
+      title: "New Payment Proof Submitted",
+      message: `${target.client} submitted payment of ₹${amount.toLocaleString("en-IN")} with UTR: ${utr.trim()} for Invoice #${target.id} (Billed by: ${adminInCharge.name}). Please verify UTR and confirm!`,
+      type: "payment",
+      linkUrl: "/feature/sales/invoices",
+      targetEmail: adminInCharge.email,
+      targetRole: "Admin",
+      sendEmailNotification: true,
+    })
+
+    // Also notify Super Admin if different
+    if (adminInCharge.email.toLowerCase() !== "saampark.official@gmail.com") {
+      await createNotification({
+        title: "New Payment Proof Submitted",
+        message: `${target.client} submitted payment of ₹${amount.toLocaleString("en-IN")} with UTR: ${utr.trim()} for Invoice #${target.id} (In-Charge: ${adminInCharge.name}).`,
+        type: "payment",
+        linkUrl: "/feature/sales/invoices",
+        targetEmail: "saampark.official@gmail.com",
+        targetRole: "Super Admin",
+        sendEmailNotification: false,
+      })
+    }
+  } catch (notifErr) {
+    console.warn("Notification error:", notifErr)
+  }
+
+  recordActivityLog({
+    type: "payment",
+    module: "Billing",
+    action: "Payment Proof Submitted",
+    description: `Payment proof of ₹${amount.toLocaleString("en-IN")} with UTR ${utr.trim()} submitted for Invoice #${target.id} by ${target.client}`,
+    companyId: target.companyId,
+    branchId: target.branchId,
+    details: `UTR: ${utr.trim()} | Method: ${paymentMethod}`
+  }).catch(() => {})
+
+  return updated
+}
+
+/**
+ * Admin verifies the submitted UTR and confirms or rejects payment settlement.
+ */
+export const verifyAndConfirmPayment = async (
+  invoiceId: string,
+  verified: boolean,
+  adminNotes: string = ""
+): Promise<InvoiceItem | null> => {
+  const current = await getInvoices()
+  const strId = String(invoiceId).toLowerCase().trim()
+  const idx = current.findIndex((i) => String(i.id).toLowerCase().trim() === strId)
+  if (idx === -1) return null
+
+  const target = current[idx]
+  if (!verified) {
+    // Reject payment proof
+    const updated: InvoiceItem = {
+      ...target,
+      status: "Not paid",
+      rejectionReason: adminNotes || "Payment UTR could not be verified.",
+    }
+    current[idx] = updated
+    await saveModuleDataToDB("invoices", current)
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("saampark_data_synced"))
+      window.dispatchEvent(new Event("saampark_invoices_updated"))
+      window.dispatchEvent(new Event("storage"))
+    }
+
+    // Notify client of rejection if client email exists
+    try {
+      const { createNotification } = await import("@/services/notificationService")
+      if (target.clientEmail) {
+        await createNotification({
+          title: "Payment Verification Rejected",
+          message: `Your payment proof (UTR: ${target.paymentProofUtr || "N/A"}) for Invoice #${target.id} could not be verified: ${adminNotes || "Please check UTR and re-submit."}`,
+          type: "payment",
+          linkUrl: "/feature/sales/invoices",
+          targetEmail: target.clientEmail,
+          sendEmailNotification: true,
+        })
+      }
+    } catch {}
+
+    return updated
+  }
+
+  // Verified & Confirmed! Settle invoice using the UTR submitted
+  const utr = target.paymentProofUtr || ""
+  const method = target.paymentProofMethod || "UPI / Net Banking"
+  const proofAmount = target.paymentProofAmount || parseInt(target.due.replace(/[^0-9]/g, "")) || 0
+  const totalDue = parseInt(target.due.replace(/[^0-9]/g, "")) || 0
+
+  if (proofAmount < totalDue && proofAmount > 0) {
+    return await recordPartialPayment(target.id, proofAmount, method, utr)
+  } else {
+    return await markPaymentCompleted(target.id, method, utr)
+  }
 }
 
 

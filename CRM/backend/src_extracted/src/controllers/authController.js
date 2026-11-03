@@ -9,13 +9,14 @@ const {
   verifyOTP,
 } = require('../utils/emailService');
 
-// Ensure required columns exist in users table (auto-migrate if missing on any domain / environment)
 async function ensureUsersColumns() {
   try {
     await pool.execute('ALTER TABLE users ADD COLUMN username VARCHAR(100) NULL').catch(() => {});
     await pool.execute('ALTER TABLE users ADD COLUMN avatar_url TEXT NULL').catch(() => {});
     await pool.execute('ALTER TABLE users ADD COLUMN sub_branch_id INT NULL').catch(() => {});
     await pool.execute('ALTER TABLE users ADD COLUMN company_ids TEXT NULL').catch(() => {});
+    await pool.execute('ALTER TABLE users ADD COLUMN pin_hash VARCHAR(255) NULL').catch(() => {});
+    await pool.execute('ALTER TABLE users ADD COLUMN pin_setup_completed TINYINT(1) DEFAULT 0').catch(() => {});
   } catch {}
 }
 ensureUsersColumns();
@@ -190,20 +191,8 @@ const login = async (req, res, next) => {
 
       if (softDeleted.length > 0) {
         const candidate = softDeleted[0];
-        // Verify password first before auto-restoring
-        const pwdMatch = await comparePassword(password, candidate.password_hash);
-        if (pwdMatch) {
-          // Auto-restore this user account in MySQL
-          await pool.execute(
-            'UPDATE users SET deleted_at = NULL, status = "active", is_verified = 1, updated_at = NOW() WHERE id = ?',
-            [candidate.id]
-          );
-          await pool.execute('DELETE FROM deleted_items WHERE item_id = ? AND module_name = "users"', [candidate.email.toLowerCase().trim()]);
-          candidate.deleted_at = null;
-          candidate.status = 'active';
-          users = [candidate];
-        } else {
-          return errorResponse(res, 401, 'Invalid password. Please try again.');
+        if (candidate.deleted_at || (candidate.status && candidate.status.toLowerCase() === 'inactive')) {
+          return errorResponse(res, 403, 'Your account has been deactivated or deleted. Please contact your administrator.');
         }
       } else {
         // Fallback check in app_data JSON users store
@@ -279,6 +268,17 @@ const login = async (req, res, next) => {
       } else {
         return errorResponse(res, 403, 'Your account is on inactive stage, please contact your administration.');
       }
+    }
+
+    // Check if account was deleted in deleted_items
+    const uEmailNorm = (user.email || '').toLowerCase().trim();
+    const uIdStr = String(user.id || '').toLowerCase().trim();
+    const [delRows] = await pool.execute(
+      'SELECT 1 FROM deleted_items WHERE (LOWER(TRIM(item_id)) = ? OR LOWER(TRIM(item_id)) = ?) AND module_name = "users"',
+      [uEmailNorm, uIdStr]
+    );
+    if (delRows.length > 0 && user.role_id !== 1 && uEmailNorm !== 'saampark.official@gmail.com') {
+      return errorResponse(res, 403, 'Your account has been deleted. Please contact your administrator.');
     }
 
     let isMatch = await comparePassword(password, user.password_hash);
@@ -368,11 +368,14 @@ const login = async (req, res, next) => {
     const token = generateToken({ id: user.id, email: user.email, role_id: user.role_id });
 
     // Update last login
-    await pool.execute('UPDATE users SET last_login = NOW() WHERE id = ?', [user.id]);
-
+    const hasPin = Boolean(user.pin_hash);
+    const mustSetupPin = !hasPin && !user.pin_setup_completed;
     delete user.password_hash;
+    delete user.pin_hash;
+    user.hasPin = hasPin;
+    user.mustSetupPin = mustSetupPin;
 
-    return successResponse(res, 200, 'Login successful', { user, token });
+    return successResponse(res, 200, 'Login successful', { user, token, hasPin, mustSetupPin });
   } catch (error) {
     next(error);
   }
@@ -516,7 +519,33 @@ const resetPassword = async (req, res, next) => {
     }
 
     const hashedPassword = await hashPassword(newPassword);
-    await pool.execute('UPDATE users SET password_hash = ? WHERE email = ?', [hashedPassword, email.toLowerCase().trim()]);
+    const canonEmail = email.toLowerCase().trim();
+    const [updateRes] = await pool.execute('UPDATE users SET password_hash = ? WHERE LOWER(email) = ?', [hashedPassword, canonEmail]);
+
+    // If user was not yet in SQL users table, ensure they are inserted
+    if (updateRes.affectedRows === 0) {
+      try {
+        const [appDataRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "users"');
+        if (appDataRows.length > 0) {
+          const list = JSON.parse(appDataRows[0].data_json);
+          const matched = Array.isArray(list) ? list.find((u) => u.email && u.email.toLowerCase().trim() === canonEmail) : null;
+          if (matched) {
+            let role_id = 3;
+            const r = (matched.role || '').toLowerCase();
+            if (r.includes('super')) role_id = 1;
+            else if (r.includes('admin')) role_id = 2;
+            else if (r.includes('client')) role_id = 4;
+            await pool.execute(
+              `INSERT INTO users (full_name, email, password_hash, role_id, status, created_at, updated_at) 
+               VALUES (?, ?, ?, ?, 'active', NOW(), NOW())`,
+              [matched.name || matched.full_name || canonEmail, canonEmail, hashedPassword, role_id]
+            );
+          }
+        }
+      } catch (insErr) {
+        console.warn('Auto-insert into users on resetPassword failed:', insErr.message);
+      }
+    }
 
     // Also update password in app_data JSON users store
     try {
@@ -524,7 +553,7 @@ const resetPassword = async (req, res, next) => {
       if (appDataRows.length > 0) {
         let list = JSON.parse(appDataRows[0].data_json);
         if (Array.isArray(list)) {
-          const idx = list.findIndex((u) => u.email && u.email.toLowerCase().trim() === email.toLowerCase().trim());
+          const idx = list.findIndex((u) => u.email && u.email.toLowerCase().trim() === canonEmail);
           if (idx >= 0) {
             list[idx].password_hash = hashedPassword;
             delete list[idx].password;
@@ -574,4 +603,215 @@ const getProfile = async (req, res, next) => {
   }
 };
 
-module.exports = { register, verifyEmail, login, checkUsername, sendForgotPasswordOTP, verifyResetOTP, resetPassword, getProfile };
+// ─── LOGIN WITH 4-DIGIT PIN ──────────────────────────────────────────────────
+const loginWithPin = async (req, res, next) => {
+  try {
+    const { email, identifier, pin } = req.body;
+    const targetEmail = (email || identifier || '').toLowerCase().trim();
+    if (!targetEmail || !pin) {
+      return errorResponse(res, 400, 'Email/Username and 4-digit PIN are required.');
+    }
+    const cleanPin = String(pin).trim();
+    if (!/^\d{4}$/.test(cleanPin)) {
+      return errorResponse(res, 400, 'PIN must be exactly 4 numeric digits.');
+    }
+
+    let [users] = await pool.execute(
+      `SELECT u.*, COALESCE(r.name, 'Teams') as role_name 
+       FROM users u 
+       LEFT JOIN roles r ON u.role_id = r.id 
+       WHERE (LOWER(u.email) = ? OR LOWER(COALESCE(u.username, '')) = ?)`,
+      [targetEmail, targetEmail]
+    );
+
+    let user = users[0];
+
+    // Check app_data JSON fallback if not found or pin_hash missing in SQL
+    try {
+      const [appDataRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "users"');
+      if (appDataRows.length > 0) {
+        const list = JSON.parse(appDataRows[0].data_json);
+        if (Array.isArray(list)) {
+          const matched = list.find((u) => 
+            (u.email && u.email.toLowerCase().trim() === targetEmail) ||
+            (u.username && u.username.toLowerCase().trim() === targetEmail)
+          );
+          if (matched) {
+            if (!user) user = { ...matched, id: matched.id || 1, email: matched.email };
+            if (!user.pin_hash && (matched.pin_hash || matched.pin)) {
+              user.pin_hash = matched.pin_hash || matched.pin;
+            }
+          }
+        }
+      }
+    } catch {}
+
+    if (!user) {
+      return errorResponse(res, 404, 'Account not found. Please verify your email.');
+    }
+
+    if (!user.pin_hash) {
+      return errorResponse(res, 400, 'Security PIN has not been set up yet for this account. Please sign in with your password.');
+    }
+
+    // Verify PIN against pin_hash
+    let isMatch = await comparePassword(cleanPin, user.pin_hash);
+    if (!isMatch && user.pin_hash === cleanPin) {
+      isMatch = true; // Plaintext fallback if legacy
+    }
+
+    if (!isMatch) {
+      return errorResponse(res, 401, 'Invalid Security PIN. Please try again.');
+    }
+
+    // Check deactivated status
+    if (user.status && user.status.toLowerCase() === 'inactive') {
+      const isSuper = user.role_id === 1 || String(user.role_name || user.role || '').toLowerCase().includes('super') || (user.email && user.email.toLowerCase().trim() === 'saampark.official@gmail.com');
+      if (!isSuper) {
+        return errorResponse(res, 403, 'Your account is on inactive stage, please contact your administration.');
+      }
+    }
+
+    const token = generateToken({ id: user.id, email: user.email, role_id: user.role_id });
+    await pool.execute('UPDATE users SET last_login = NOW() WHERE id = ?', [user.id]).catch(() => {});
+
+    delete user.password_hash;
+    delete user.pin_hash;
+    user.hasPin = true;
+    user.mustSetupPin = false;
+
+    return successResponse(res, 200, 'PIN authentication successful', { user, token, hasPin: true });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ─── SETUP 4-DIGIT PIN ───────────────────────────────────────────────────────
+const setupPin = async (req, res, next) => {
+  try {
+    const { email, pin } = req.body;
+    const targetEmail = (email || req.user?.email || '').toLowerCase().trim();
+    if (!targetEmail || !pin) {
+      return errorResponse(res, 400, 'User email and 4-digit PIN are required.');
+    }
+    const cleanPin = String(pin).trim();
+    if (!/^\d{4}$/.test(cleanPin)) {
+      return errorResponse(res, 400, 'PIN must be exactly 4 numeric digits.');
+    }
+
+    const pinHash = await hashPassword(cleanPin);
+
+    // Update in MySQL users table
+    await pool.execute(
+      'UPDATE users SET pin_hash = ?, pin_setup_completed = 1, updated_at = NOW() WHERE LOWER(email) = ?',
+      [pinHash, targetEmail]
+    );
+
+    // Sync to app_data JSON users store
+    try {
+      const [appDataRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "users"');
+      if (appDataRows.length > 0) {
+        let list = JSON.parse(appDataRows[0].data_json);
+        if (Array.isArray(list)) {
+          const idx = list.findIndex(u => u.email && u.email.toLowerCase().trim() === targetEmail);
+          if (idx >= 0) {
+            list[idx].pin_hash = pinHash;
+            list[idx].pin_setup_completed = true;
+            list[idx].hasPin = true;
+            await pool.execute('UPDATE app_data SET data_json = ?, updated_at = NOW() WHERE module_key = "users"', [JSON.stringify(list)]);
+          }
+        }
+      }
+    } catch {}
+
+    return successResponse(res, 200, '4-Digit Security PIN successfully created and enabled!');
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ─── SEND PIN RESET / CHANGE OTP ────────────────────────────────────────────
+const sendPinResetOTPHandler = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    const targetEmail = (email || req.user?.email || '').toLowerCase().trim();
+    if (!targetEmail) {
+      return errorResponse(res, 400, 'Email address is required.');
+    }
+
+    const [users] = await pool.execute('SELECT full_name, email, company_id FROM users WHERE LOWER(email) = ?', [targetEmail]);
+    const name = users[0]?.full_name || req.user?.name || 'User';
+    const compId = users[0]?.company_id || req.user?.company_id || null;
+
+    const { sendPinResetOTP } = require('../utils/emailService');
+    await sendPinResetOTP(targetEmail, name, compId);
+
+    return successResponse(res, 200, `A 6-digit verification code has been sent to ${targetEmail}`);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ─── RESET PIN WITH OTP ─────────────────────────────────────────────────────
+const resetPinWithOTP = async (req, res, next) => {
+  try {
+    const { email, otp, newPin } = req.body;
+    const targetEmail = (email || req.user?.email || '').toLowerCase().trim();
+    if (!targetEmail || !otp || !newPin) {
+      return errorResponse(res, 400, 'Email, OTP code, and new 4-digit PIN are required.');
+    }
+    const cleanPin = String(newPin).trim();
+    if (!/^\d{4}$/.test(cleanPin)) {
+      return errorResponse(res, 400, 'PIN must be exactly 4 numeric digits.');
+    }
+
+    const { verifyOTP } = require('../utils/emailService');
+    const isValid = verifyOTP(targetEmail, String(otp).trim(), 'pin_reset');
+    if (!isValid) {
+      return errorResponse(res, 400, 'Invalid or expired verification code. Please request a new code.');
+    }
+
+    const pinHash = await hashPassword(cleanPin);
+
+    await pool.execute(
+      'UPDATE users SET pin_hash = ?, pin_setup_completed = 1, updated_at = NOW() WHERE LOWER(email) = ?',
+      [pinHash, targetEmail]
+    );
+
+    // Sync to app_data JSON users store
+    try {
+      const [appDataRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "users"');
+      if (appDataRows.length > 0) {
+        let list = JSON.parse(appDataRows[0].data_json);
+        if (Array.isArray(list)) {
+          const idx = list.findIndex(u => u.email && u.email.toLowerCase().trim() === targetEmail);
+          if (idx >= 0) {
+            list[idx].pin_hash = pinHash;
+            list[idx].pin_setup_completed = true;
+            list[idx].hasPin = true;
+            await pool.execute('UPDATE app_data SET data_json = ?, updated_at = NOW() WHERE module_key = "users"', [JSON.stringify(list)]);
+          }
+        }
+      }
+    } catch {}
+
+    return successResponse(res, 200, '4-Digit Security PIN successfully updated!');
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = {
+  register,
+  verifyEmail,
+  login,
+  loginWithPin,
+  setupPin,
+  sendPinResetOTPHandler,
+  resetPinWithOTP,
+  checkUsername,
+  sendForgotPasswordOTP,
+  verifyResetOTP,
+  resetPassword,
+  getProfile,
+};

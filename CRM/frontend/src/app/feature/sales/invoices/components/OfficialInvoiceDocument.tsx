@@ -696,7 +696,8 @@ export function OfficialInvoiceDocument({
 
   const cgstAmt = Math.round(gstAmt / 2)
   const sgstAmt = gstAmt - cgstAmt
-  const totalVal = taxableBase + gstAmt
+  const calculatedTotal = taxableBase + gstAmt
+  const totalVal = Math.max(calculatedTotal, parsedInvoiced, typeof (invoice as any).total === "number" ? (invoice as any).total : 0)
 
   const rawReceived = parseCurrencyNumber(invoice.paymentReceived)
   const parsedReceived = Math.min(rawReceived, totalVal)
@@ -773,7 +774,7 @@ export function OfficialInvoiceDocument({
     : [
         {
           id: "row_single_service",
-          serviceName: invoice.project || "Custom Enterprise Consulting & Development",
+          serviceName: invoice.project || (invoice as any).title || "Services",
           itemRate: baseNum,
           itemQty: 1,
           unit: "Project",
@@ -1349,11 +1350,6 @@ export function OfficialInvoiceDocument({
             interactive={interactive}
             className="font-black text-xs sm:text-sm text-zinc-900 leading-tight block"
           />
-          {isValidField(invoice.clientDesignation || clientDetails?.designation) && (
-            <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wide bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200 border border-blue-200">
-              <EditableText value={invoice.clientDesignation || clientDetails?.designation} interactive={interactive} />
-            </span>
-          )}
           {invoice.clientAccepted && (
             <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wide bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs">
               ✓ Accepted by Client
@@ -1812,6 +1808,13 @@ export function OfficialInvoiceDocument({
                 <EditableText value="Next Due Date" interactive={interactive} />
                 <span className="font-mono font-bold text-zinc-800 dark:text-zinc-200">{hasDue ? formatInvoiceDate(invoice.dueDate) : "-"}</span>
               </div>
+
+              {invoice.paymentStructure && invoice.paymentStructure !== "Full Payment" && (
+                <div className="pt-1 mt-0.5 border-t border-zinc-200 dark:border-zinc-700/80 text-[8.5px] text-zinc-600 dark:text-zinc-400">
+                  <EditableText value="Plan:" interactive={interactive} className="font-bold mr-1 text-zinc-500" />
+                  <EditableText value={invoice.paymentStructure} interactive={interactive} className="font-semibold text-zinc-800 dark:text-zinc-200" />
+                </div>
+              )}
             </div>
           </div>
         </div>

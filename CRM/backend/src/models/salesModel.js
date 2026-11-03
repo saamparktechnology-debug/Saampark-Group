@@ -171,7 +171,7 @@ const quotationModel = {
     await ensureSalesTables().catch(() => {});
     try {
       const [rows] = await pool.execute(
-        `SELECT q.*, COALESCE(q.customer, q.customer_name, c.name) as customer_name FROM quotations q
+        `SELECT q.*, COALESCE(q.customer, q.customer_name, c.company_name, c.primary_contact_name) as customer_name FROM quotations q
          LEFT JOIN customers c ON q.customer_id = c.id WHERE q.id = ? OR q.quotation_number = ?`, [id, id]
       );
       if (rows[0]) {
@@ -196,7 +196,7 @@ const quotationModel = {
   async findByCompany(company_id, { status, branch_id, page = 1, limit = 50 } = {}) {
     await ensureSalesTables().catch(() => {});
     try {
-      let query = 'SELECT q.*, COALESCE(q.customer, q.customer_name, c.name) as customer_name FROM quotations q LEFT JOIN customers c ON q.customer_id = c.id WHERE 1=1';
+      let query = 'SELECT q.*, COALESCE(q.customer, q.customer_name, c.company_name, c.primary_contact_name) as customer_name FROM quotations q LEFT JOIN customers c ON q.customer_id = c.id WHERE 1=1';
       const params = [];
       if (company_id && company_id !== 'all') {
         query += ' AND (q.company_id = ? OR q.company_id = ?)';
@@ -344,7 +344,38 @@ const estimateModel = {
           try { estList = JSON.parse(rows[0].data_json); } catch {}
         }
         if (!Array.isArray(estList)) estList = [];
-        const newRecord = { ...data, id: String(estId), estimate_number: num, number: num };
+        const newRecord = {
+          ...data,
+          id: String(estId),
+          estimateNumber: num,
+          estimate_number: num,
+          number: num,
+          client: custName,
+          customer: custName,
+          clientEmail: custEmail,
+          customerEmail: custEmail,
+          clientPhone: custPhone,
+          customerPhone: custPhone,
+          title: data.title || data.project || 'Project Estimate',
+          project: data.title || data.project || 'Project Estimate',
+          totalAmount: total,
+          total: total,
+          formattedTotal: `₹${total.toLocaleString('en-IN')}`,
+          services: data.items || data.services || [],
+          items: data.items || data.services || [],
+          subtotal: subtotal,
+          gstRate: data.gstRate || data.tax_percent || 18,
+          gstAmount: taxAmount,
+          tax: taxAmount,
+          tax_amount: taxAmount,
+          date: data.date || new Date().toLocaleDateString('en-GB'),
+          validUntil: data.validUntil || data.validTill || new Date(Date.now() + 30 * 86400000).toLocaleDateString('en-GB'),
+          status: data.status || 'Draft',
+          notes: data.notes || '',
+          terms: data.terms || '',
+          companyId: data.company_id || data.companyId || 'tech',
+          branchId: data.branch_id || data.branchId || null
+        };
         estList.unshift(newRecord);
         await pool.execute(
           `INSERT INTO app_data (module_key, data_json) VALUES ('estimates', ?)
@@ -368,7 +399,7 @@ const estimateModel = {
     await ensureSalesTables().catch(() => {});
     try {
       const [rows] = await pool.execute(
-        `SELECT e.*, COALESCE(e.customer, e.customer_name, c.name) as customer_name FROM estimates e
+        `SELECT e.*, COALESCE(e.customer, e.customer_name, c.company_name, c.primary_contact_name) as customer_name FROM estimates e
          LEFT JOIN customers c ON e.customer_id = c.id WHERE e.id = ? OR e.estimate_number = ?`, [id, id]
       );
       if (rows[0]) {
@@ -383,7 +414,7 @@ const estimateModel = {
       if (appRows.length > 0 && appRows[0].data_json) {
         const ests = JSON.parse(appRows[0].data_json);
         if (Array.isArray(ests)) {
-          return ests.find(e => String(e.id) === String(id) || e.number === id || e.estimate_number === id) || null;
+          return ests.find(e => String(e.id) === String(id) || e.number === id || e.estimate_number === id || e.estimateNumber === id) || null;
         }
       }
     } catch {}
@@ -393,7 +424,7 @@ const estimateModel = {
   async findByCompany(company_id, { status, branch_id, page = 1, limit = 50 } = {}) {
     await ensureSalesTables().catch(() => {});
     try {
-      let query = 'SELECT e.*, COALESCE(e.customer, e.customer_name, c.name) as customer_name FROM estimates e LEFT JOIN customers c ON e.customer_id = c.id WHERE 1=1';
+      let query = 'SELECT e.*, COALESCE(e.customer, e.customer_name, c.company_name, c.primary_contact_name) as customer_name FROM estimates e LEFT JOIN customers c ON e.customer_id = c.id WHERE 1=1';
       const params = [];
       if (company_id && company_id !== 'all') {
         query += ' AND (e.company_id = ? OR e.company_id = ?)';
@@ -429,14 +460,16 @@ const estimateModel = {
     const fields = [];
     const values = [];
     for (const [key, val] of Object.entries(data)) {
-      if (val !== undefined && key !== 'items') { fields.push(`${key} = ?`); values.push(val); }
+      if (val !== undefined && key !== 'items' && key !== 'services') { fields.push(`${key} = ?`); values.push(val); }
     }
     if (fields.length > 0) { values.push(id); await pool.execute(`UPDATE estimates SET ${fields.join(', ')} WHERE id = ?`, values); }
-    if (data.items) {
+    const itemsList = data.items || data.services;
+    if (itemsList && Array.isArray(itemsList)) {
       await pool.execute('DELETE FROM estimate_items WHERE estimate_id = ?', [id]);
-      for (const item of data.items) {
-        await pool.execute('INSERT INTO estimate_items (estimate_id, product_id, description, quantity, unit_price, discount_percent, tax_percent, total) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-          [id, item.product_id || null, item.description, item.quantity || 1, item.unit_price || 0, item.discount_percent || 0, item.tax_percent || 0, item.total || 0]);
+      for (const item of itemsList) {
+        const itemTotal = Number(item.total) || (Number(item.quantity || item.qty || 1) * Number(item.unit_price || item.unitPrice || item.rate || 0));
+        await pool.execute('INSERT INTO estimate_items (estimate_id, product_id, name, description, sac, quantity, unit_price, discount_percent, tax_percent, total) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [id, item.product_id || null, item.name || item.serviceName || null, item.description || null, item.sac || item.sacCode || null, Number(item.quantity || item.qty) || 1, Number(item.unit_price || item.unitPrice || item.rate) || 0, item.discount_percent || 0, item.tax_percent || item.gstRate || 0, itemTotal]);
       }
     }
     return true;

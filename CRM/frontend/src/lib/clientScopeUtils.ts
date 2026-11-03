@@ -165,23 +165,28 @@ export function isRecordAssignedToTeamMember(
   const rCreatorEmail = String(record.createdByEmail || "").toLowerCase().trim()
   if (uEmail && (rAssignedEmail === uEmail || rCreatorEmail === uEmail)) return true
 
-  // 3. Name matches
-  const rAssigned = String(record.assignedTo || record.assignee || record.caller || record.owner || "").toLowerCase().trim()
+  // 3. Name matches (exclude generic admin / super admin strings)
+  const rAssigned = String(record.assignedTo || record.assignee || record.caller || "").toLowerCase().trim()
   const rCreator = String(record.createdBy || record.created_by || record.billedBy || "").toLowerCase().trim()
-  if (uName && (
-    rAssigned === uName ||
-    rCreator === uName ||
-    (rAssigned && (rAssigned.includes(uName) || uName.includes(rAssigned))) ||
-    (rCreator && (rCreator.includes(uName) || uName.includes(rCreator)))
-  )) {
-    return true
-  }
-
-  // 4. Managers field (comma-separated or string)
-  if (record.managers && typeof record.managers === "string") {
-    const mgrs = record.managers.toLowerCase()
-    if (uName && mgrs.includes(uName)) return true
-    if (uEmail && mgrs.includes(uEmail)) return true
+  
+  const isSuperAdminStr = (s: string) => s.includes("super admin") || s.includes("(super admin)") || s.includes("(admin)")
+  
+  if (uName) {
+    if (rAssigned && !isSuperAdminStr(rAssigned) && rAssigned === uName) return true
+    if (rCreator && !isSuperAdminStr(rCreator) && rCreator === uName) return true
+    
+    // Multi-word name match
+    const uParts = uName.split(/\s+/).filter(Boolean)
+    if (uParts.length > 1) {
+      if (rAssigned && !isSuperAdminStr(rAssigned)) {
+        const aParts = rAssigned.split(/\s+/).filter(Boolean)
+        if (aParts.length > 1 && uParts.every(p => aParts.includes(p)) && aParts.every(p => uParts.includes(p))) return true
+      }
+      if (rCreator && !isSuperAdminStr(rCreator)) {
+        const cParts = rCreator.split(/\s+/).filter(Boolean)
+        if (cParts.length > 1 && uParts.every(p => cParts.includes(p)) && cParts.every(p => uParts.includes(p))) return true
+      }
+    }
   }
 
   // 5. Members / Collaborators array

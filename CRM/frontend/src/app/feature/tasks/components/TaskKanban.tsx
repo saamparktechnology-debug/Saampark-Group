@@ -14,6 +14,7 @@ import { Task, TaskStatus, getTaskCountdownChip } from "../types"
 import { taskService } from "../services/taskService"
 import { getUsers, getUserAvatar } from "@/app/feature/users/services/userService"
 import { UserItem } from "@/app/feature/users/types"
+import { formatDisplayDate } from "@/lib/utils"
 
 interface TaskKanbanProps {
   tasks: Task[]
@@ -467,7 +468,7 @@ export function TaskKanban({
                       return (
                         <div className="flex items-center justify-between pt-1 border-t border-zinc-100 dark:border-zinc-700/50 text-[10.5px]">
                           <span className="text-red-600 dark:text-red-400 font-bold font-mono">
-                            {t.deadline}{t.dueTime ? ` (${t.dueTime})` : ''}
+                            {t.deadline ? formatDisplayDate(t.deadline) : "-"}{t.dueTime ? ` (${t.dueTime})` : ''}
                           </span>
                           {chip && (
                             <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9.5px] border ${chip.colorClass}`}>

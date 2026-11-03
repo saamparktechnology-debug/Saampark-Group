@@ -25,9 +25,10 @@ import { UserService } from "@/services/apiServices"
 import { QuotationService, EstimateService } from "@/services/salesService"
 import { numberToIndianWords } from "@/app/feature/sales/invoices/components/OfficialInvoiceDocument"
 import { lookupPincode } from "@/lib/pincodeService"
-import { addSubscription } from "@/app/feature/subscriptions/services/subscriptionService"
+import { addSubscription, saveInstallmentRecord } from "@/app/feature/subscriptions/services/subscriptionService"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
+import { executeWithFeedback } from "@/store/useActionFeedbackStore"
 
 export interface DocumentStudioModalProps {
   isOpen: boolean
@@ -249,7 +250,31 @@ export function DocumentStudioModal({
   const [advanceAmount, setAdvanceAmount] = React.useState<number | "">(
     initialData?.advanceAmount !== undefined ? initialData.advanceAmount : ""
   )
-  const [subscriptionCycle, setSubscriptionCycle] = React.useState<"Monthly" | "Weekly" | "Quarterly" | "Yearly">("Monthly")
+  // Part (EMI) State (Advance Down Payment Minus Option)
+  const [emiAdvanceAmount, setEmiAdvanceAmount] = React.useState<number | "">(
+    initialData?.advanceAmount !== undefined ? initialData.advanceAmount : ""
+  )
+  const [emiTenureMonths, setEmiTenureMonths] = React.useState<number>(
+    initialData?.emiMonths || initialData?.subscriptionMonths || 3
+  )
+  const [isCustomEmi, setIsCustomEmi] = React.useState<boolean>(() => {
+    const m = Number(initialData?.emiMonths || initialData?.subscriptionMonths || 3)
+    return ![2, 3, 4, 6, 12].includes(m)
+  })
+
+  // Subscription State (Duration, Recurring Rate & Advance Payment)
+  const [subscriptionCycle, setSubscriptionCycle] = React.useState<"Monthly" | "Weekly" | "Quarterly" | "Yearly">(
+    initialData?.subscriptionCycle || "Monthly"
+  )
+  const [subscriptionDurationMonths, setSubscriptionDurationMonths] = React.useState<number>(
+    initialData?.subscriptionDurationMonths || initialData?.subscriptionDuration || 6
+  )
+  const [subscriptionRate, setSubscriptionRate] = React.useState<number | "">(
+    initialData?.subscriptionRate !== undefined ? initialData.subscriptionRate : ""
+  )
+  const [subscriptionAdvance, setSubscriptionAdvance] = React.useState<number | "">(
+    initialData?.subscriptionAdvance !== undefined ? initialData.subscriptionAdvance : (initialData?.advanceAmount || "")
+  )
   const [subscriptionMonths, setSubscriptionMonths] = React.useState<number>(3)
 
   // 3. Document Identification
@@ -282,64 +307,38 @@ export function DocumentStudioModal({
   })
 
   // Quotation Specific Fields
-  const [projectTitle, setProjectTitle] = React.useState(initialData?.project || "Custom Enterprise Software & Cloud Infrastructure")
-  const [projectOverview, setProjectOverview] = React.useState(
-    initialData?.overview || 
-    "Comprehensive end-to-end software architecture, development, deployment, and ongoing support tailored to accelerate operational efficiency and digital transformation."
-  )
-  const [projectTimeline, setProjectTimeline] = React.useState(initialData?.timeline || "6 to 8 Weeks / 3 Sprints")
-  const [turnaroundTime, setTurnaroundTime] = React.useState(initialData?.turnaroundTime || "5 Business Days")
+  const [projectTitle, setProjectTitle] = React.useState(initialData?.project || initialData?.projectTitle || "")
+  const [projectOverview, setProjectOverview] = React.useState(initialData?.overview || "")
+  const [projectTimeline, setProjectTimeline] = React.useState(initialData?.timeline || "")
+  const [turnaroundTime, setTurnaroundTime] = React.useState(initialData?.turnaroundTime || "")
   
   // Deliverables Breakdown (For Quotation)
-  const [deliverables, setDeliverables] = React.useState<Array<{ id: string; title: string; description: string; duration: string }>>([
-    {
-      id: "del_1",
-      title: "UI/UX Experience Design & Interactive Wireframing",
-      description: "High-fidelity Figma prototypes, design system tokens, and client design sign-off.",
-      duration: "1-2 Weeks"
-    },
-    {
-      id: "del_2",
-      title: "Core Platform Development & Database Architecture",
-      description: "High-performance backend services, database schema design, and secure REST/GraphQL APIs.",
-      duration: "3-4 Weeks"
-    },
-    {
-      id: "del_3",
-      title: "Quality Assurance, Security Audits & Handover",
-      description: "Automated test suites, end-to-end penetration testing, cloud deployment, and team onboarding.",
-      duration: "1-2 Weeks"
-    }
-  ])
+  const [deliverables, setDeliverables] = React.useState<Array<{ id: string; title: string; description: string; duration: string }>>(
+    initialData?.deliverables && Array.isArray(initialData.deliverables) ? initialData.deliverables : []
+  )
 
   // Scope Inclusions & Exclusions (For Quotation)
-  const [scopeInclusions, setScopeInclusions] = React.useState(
-    "• Complete source code ownership & documentation\n• 60 days of complimentary post-deployment warranty support\n• Production cloud deployment & DNS configuration\n• Admin dashboard and role-based access controls"
-  )
-  const [scopeExclusions, setScopeExclusions] = React.useState(
-    "• 3rd party API subscription fees (e.g. AWS, Twilio, OpenAI)\n• Domain name registration costs\n• Scope additions outside the agreed sprint backlog"
-  )
+  const [scopeInclusions, setScopeInclusions] = React.useState(initialData?.scopeInclusions || "")
+  const [scopeExclusions, setScopeExclusions] = React.useState(initialData?.scopeExclusions || "")
 
   // Milestone Payment Terms Schedule (For Quotation)
-  const [paymentMilestones, setPaymentMilestones] = React.useState<Array<{ milestone: string; percentage: number; stage: string }>>([
-    { milestone: "Milestone 1: Project Kickoff & Advance", percentage: 50, stage: "Upon agreement signing & kickoff" },
-    { milestone: "Milestone 2: Prototype & Functional Demo", percentage: 30, stage: "Upon successful staging demo" },
-    { milestone: "Milestone 3: Final Production Handover", percentage: 20, stage: "Upon final sign-off & code handover" }
-  ])
+  const [paymentMilestones, setPaymentMilestones] = React.useState<Array<{ milestone: string; percentage: number; stage: string }>>(
+    initialData?.paymentMilestones && Array.isArray(initialData.paymentMilestones) ? initialData.paymentMilestones : []
+  )
 
   // 4. Line Items
   const [items, setItems] = React.useState<InvoiceLineItem[]>([
     {
       id: `item_${Date.now()}`,
-      serviceName: mode === "quotation" ? "Enterprise Software Design & Cloud Architecture" : "Custom Enterprise Consulting & Development",
-      sacCode: mode === "invoice" ? "998313" : "",
+      serviceName: "",
+      sacCode: "",
       qty: 1,
       unit: "Project",
-      rate: mode === "quotation" ? 45000 : 25000,
+      rate: "" as any,
       gstRate: mode === "invoice" && docScheme === "gst" ? 18 : 0,
       gstAmount: 0,
       charges: [],
-      totalAmount: mode === "quotation" ? 45000 : 25000
+      totalAmount: 0
     }
   ])
 
@@ -543,6 +542,8 @@ export function DocumentStudioModal({
         setItems(initialData.items.map((it: any) => ({
           id: it.id || `item_${Date.now()}_${Math.random()}`,
           serviceName: it.serviceName || it.name || it.description || "Service",
+          description: it.description || "",
+          deliverableTime: it.deliverableTime || it.duration || it.timeline || "1-2 Weeks",
           sacCode: it.sacCode || it.sac || (resolvedScheme === "gst" ? "998313" : ""),
           qty: it.qty || it.quantity || 1,
           unit: it.unit || "Project",
@@ -592,18 +593,26 @@ export function DocumentStudioModal({
       setBranchId(activeBranchId || "")
       setSubBranchId("")
       generateDocNumber(docScheme)
+      setProjectTitle("")
+      setProjectOverview("")
+      setProjectTimeline("")
+      setTurnaroundTime("")
+      setDeliverables([])
+      setScopeInclusions("")
+      setScopeExclusions("")
+      setPaymentMilestones([])
       setItems([
         {
           id: `item_${Date.now()}`,
-          serviceName: mode === "quotation" ? "Enterprise Software Design & Cloud Architecture" : "Custom Enterprise Consulting & Development",
-          sacCode: mode === "invoice" ? "998313" : "",
+          serviceName: "",
+          sacCode: "",
           qty: 1,
           unit: "Project",
-          rate: mode === "quotation" ? 45000 : 25000,
+          rate: "" as any,
           gstRate: mode === "invoice" && docScheme === "gst" ? 18 : 0,
           gstAmount: 0,
           charges: [],
-          totalAmount: mode === "quotation" ? 45000 : 25000
+          totalAmount: 0
         }
       ])
       setDiscountValue("")
@@ -662,8 +671,8 @@ export function DocumentStudioModal({
     setItems(prev => prev.map(it => {
       if (it.id !== id) return it
       const updated = { ...it, [field]: val }
-      const rate = typeof updated.rate === "number" ? updated.rate : 0
-      const qty = updated.qty > 0 ? updated.qty : 1
+      const rate = typeof updated.rate === "number" ? updated.rate : (updated.rate === "" ? 0 : Number(updated.rate) || 0)
+      const qty = typeof updated.qty === "number" ? updated.qty : (updated.qty === "" ? 1 : Number(updated.qty) || 1)
       const base = rate * qty
       const isGstActive = docScheme === "gst"
       const gst = isGstActive ? (typeof updated.gstRate === "number" ? updated.gstRate : 18) : 0
@@ -718,6 +727,56 @@ export function DocumentStudioModal({
   const effectiveCreditDeduction = (applyCredit && creditToDeduct > 0) ? Math.min(creditToDeduct, grandTotal) : 0
   const netPayable = Math.max(0, grandTotal - effectiveCreditDeduction)
 
+  // Helper to project future dates based on billing cycles
+  const calculateCycleFutureDate = (baseDateStr: string, cycle: string, count: number): string => {
+    const d = baseDateStr ? new Date(baseDateStr) : new Date()
+    const valid = isNaN(d.getTime()) ? new Date() : new Date(d.getTime())
+    const cyclesToAdd = count > 0 ? count : 1
+    if (cycle === "Weekly") {
+      valid.setDate(valid.getDate() + 7 * cyclesToAdd)
+    } else if (cycle === "Quarterly") {
+      const curDay = valid.getDate()
+      valid.setDate(1)
+      valid.setMonth(valid.getMonth() + 3 * cyclesToAdd)
+      const maxDays = new Date(valid.getFullYear(), valid.getMonth() + 1, 0).getDate()
+      valid.setDate(Math.min(curDay, maxDays))
+    } else if (cycle === "Yearly") {
+      const curDay = valid.getDate()
+      const curMonth = valid.getMonth()
+      valid.setFullYear(valid.getFullYear() + cyclesToAdd)
+      const maxDays = new Date(valid.getFullYear(), curMonth + 1, 0).getDate()
+      valid.setDate(Math.min(curDay, maxDays))
+    } else {
+      // Monthly default
+      const curDay = valid.getDate()
+      valid.setDate(1)
+      valid.setMonth(valid.getMonth() + cyclesToAdd)
+      const maxDays = new Date(valid.getFullYear(), valid.getMonth() + 1, 0).getDate()
+      valid.setDate(Math.min(curDay, maxDays))
+    }
+    const y = valid.getFullYear()
+    const m = String(valid.getMonth() + 1).padStart(2, "0")
+    const dt = String(valid.getDate()).padStart(2, "0")
+    return `${y}-${m}-${dt}`
+  }
+
+  // 1. Part Payment (EMI) Calculations (Total - Advance = Remaining / Months)
+  const numEmiAdvance = typeof emiAdvanceAmount === "number" ? Math.max(0, emiAdvanceAmount) : 0
+  const effectiveEmiAdvance = Math.min(netPayable, numEmiAdvance)
+  const emiRemainingBalance = Math.max(0, netPayable - effectiveEmiAdvance)
+  const emiMonthlyAmount = emiTenureMonths > 0 ? Math.round(emiRemainingBalance / emiTenureMonths) : emiRemainingBalance
+
+  // 2. Subscription Calculations (Multi-month + Advance prepaid)
+  const defaultSubRate = items.length > 0 ? (items[0]?.rate || 100) : 100
+  const activeSubRate = typeof subscriptionRate === "number" && subscriptionRate > 0 ? subscriptionRate : defaultSubRate
+  const subContractTotal = activeSubRate * (subscriptionDurationMonths || 6)
+  const numSubAdvance = typeof subscriptionAdvance === "number" ? Math.max(0, subscriptionAdvance) : 0
+  const effectiveSubAdvance = Math.min(subContractTotal, numSubAdvance)
+  const subPrepaidCycles = activeSubRate > 0 ? Math.min(subscriptionDurationMonths, Math.floor(effectiveSubAdvance / activeSubRate)) : 0
+  const subRemainingCycles = Math.max(0, subscriptionDurationMonths - subPrepaidCycles)
+  const subBalanceDue = Math.max(0, subContractTotal - effectiveSubAdvance)
+  const subNextBillingDate = calculateCycleFutureDate(issueDate, subscriptionCycle, subPrepaidCycles > 0 ? subPrepaidCycles : 1)
+
   // Save Document handler
   const handleSaveDocument = async () => {
     if (!clientName.trim() && !selectedClient?.name) {
@@ -729,21 +788,58 @@ export function DocumentStudioModal({
       return
     }
 
+    const docLabel = mode === "invoice" ? "Invoice" : mode === "quotation" ? "Quotation" : "Estimate"
+    const actionLabel = initialData?.id ? "Updating" : "Generating"
+
     setIsSubmitting(true)
     try {
-      const effectiveCategory = primaryCategory === "Custom" ? (customPrimaryCategory.trim() || "Custom") : primaryCategory
+      await executeWithFeedback(async () => {
+        const effectiveCategory = primaryCategory === "Custom" ? (customPrimaryCategory.trim() || "Custom") : primaryCategory
       const effectiveDesignation = clientDesignation === "Other" ? (customDesignation.trim() || "Client") : clientDesignation
       const effectiveProjectName = items[0]?.serviceName?.trim() || effectiveCategory || "Client Project"
 
-      const effectiveAdvance = paymentPlan === "full"
-        ? netPayable
-        : paymentPlan === "advance"
-          ? (typeof advanceAmount === "number" ? advanceAmount : 0)
-          : paymentPlan === "part"
-            ? (typeof advanceAmount === "number" && advanceAmount > 0 ? advanceAmount : Math.round(netPayable / (subscriptionMonths || 3)))
-            : 0
+      // Combined Project + Subscription Total
+      // When subscription plan is active, contract total is added to netPayable (project deliverables)
+      const combinedDocTotal = paymentPlan === "subscription"
+        ? (netPayable + (subContractTotal > 0 ? subContractTotal : 0))
+        : netPayable
 
-      const effectiveDue = Math.max(0, netPayable - effectiveAdvance)
+      const effectiveAdvance = paymentPlan === "full"
+        ? combinedDocTotal
+        : paymentPlan === "advance"
+          ? (typeof advanceAmount === "number" ? Math.min(combinedDocTotal, advanceAmount) : 0)
+          : paymentPlan === "part"
+            ? effectiveEmiAdvance
+            : paymentPlan === "subscription"
+              ? Math.min(combinedDocTotal, effectiveSubAdvance + (typeof advanceAmount === "number" ? advanceAmount : 0))
+              : 0
+
+      const effectiveDue = Math.max(0, combinedDocTotal - effectiveAdvance)
+
+      const effectiveDocTotal = combinedDocTotal
+
+      // If subscription plan, ensure items contains the recurring subscription plan item if not already present
+      let finalItemsToSave = [...items]
+      if (mode === "invoice" && paymentPlan === "subscription" && subContractTotal > 0) {
+        const hasSubItem = finalItemsToSave.some(it => 
+          it.serviceName.toLowerCase().includes("subscription") || 
+          it.serviceName.toLowerCase().includes("retainer")
+        )
+        if (!hasSubItem) {
+          finalItemsToSave.push({
+            id: `sub_retainer_${Date.now()}`,
+            serviceName: `Recurring Subscription Plan (${subscriptionDurationMonths} Months @ ₹${activeSubRate}/${subscriptionCycle})`,
+            sacCode: docScheme === "gst" ? "998313" : "",
+            qty: subscriptionDurationMonths,
+            unit: subscriptionCycle,
+            rate: activeSubRate,
+            gstRate: 0,
+            gstAmount: 0,
+            charges: [],
+            totalAmount: subContractTotal
+          })
+        }
+      }
 
       const finalDocPayload: any = {
         id: docNumber,
@@ -766,7 +862,13 @@ export function DocumentStudioModal({
         primaryCategory: effectiveCategory,
         project: effectiveProjectName,
         paymentPlan: paymentPlan,
-        paymentStructure: paymentPlan === "full" ? "Full Payment" : paymentPlan === "part" ? "Part (EMI)" : paymentPlan === "advance" ? "Advance Payment" : "Subscription",
+        paymentStructure: paymentPlan === "full" 
+          ? "Full Payment" 
+          : paymentPlan === "part" 
+            ? `Part (EMI) - ${emiTenureMonths} Mo (${effectiveEmiAdvance > 0 ? `₹${effectiveEmiAdvance.toLocaleString("en-IN")} Adv Paid, ` : ""}₹${emiMonthlyAmount.toLocaleString("en-IN")}/mo)`
+            : paymentPlan === "advance" 
+              ? "Advance Payment" 
+              : `Subscription - ${subscriptionDurationMonths} Mo @ ₹${activeSubRate}/${subscriptionCycle} (${effectiveSubAdvance > 0 ? `₹${effectiveSubAdvance.toLocaleString("en-IN")} Adv Paid, ` : ""}Next: ${subNextBillingDate})`,
         overview: projectOverview,
         timeline: projectTimeline,
         turnaroundTime: turnaroundTime,
@@ -787,8 +889,8 @@ export function DocumentStudioModal({
         gstRate: mode === "invoice" && docScheme === "gst" ? 18 : 0,
         gstAmount: calculatedGst,
         tax: calculatedGst,
-        totalInvoiced: `₹${netPayable.toLocaleString("en-IN")}`,
-        total: netPayable,
+        totalInvoiced: `₹${effectiveDocTotal.toLocaleString("en-IN")}`,
+        total: effectiveDocTotal,
         paymentReceived: `₹${effectiveAdvance.toLocaleString("en-IN")}`,
         due: `₹${effectiveDue.toLocaleString("en-IN")}`,
         status: effectiveDue === 0 ? "Fully paid" : effectiveAdvance > 0 ? "Partially paid" : "Not paid",
@@ -796,7 +898,7 @@ export function DocumentStudioModal({
         branchId: branchId || undefined,
         subBranchId: subBranchId || undefined,
         companyDetails: activeCompany,
-        items: items,
+        items: finalItemsToSave,
         notes: notes,
         terms: terms,
         assignedMembers: assignedMembers.length > 0 ? assignedMembers : undefined,
@@ -805,6 +907,19 @@ export function DocumentStudioModal({
         assignedMemberRole: assignedMembers.length > 0 ? assignedMembers[0].memberRole : undefined,
         memberPayoutType: assignedMembers.length > 0 ? assignedMembers[0].payoutType : undefined,
         memberPayoutValue: assignedMembers.length > 0 ? assignedMembers[0].payoutValue : undefined,
+        // Part Payment (EMI) specific fields
+        emiMonths: emiTenureMonths,
+        emiAdvanceAmount: effectiveEmiAdvance,
+        emiRemainingBalance: emiRemainingBalance,
+        emiMonthlyAmount: emiMonthlyAmount,
+        // Subscription specific fields
+        subscriptionCycle: subscriptionCycle,
+        subscriptionDurationMonths: subscriptionDurationMonths,
+        subscriptionRate: activeSubRate,
+        subscriptionAdvance: effectiveSubAdvance,
+        prepaidCycles: subPrepaidCycles,
+        remainingCycles: subRemainingCycles,
+        nextBillingDate: paymentPlan === "subscription" ? subNextBillingDate : dueDate,
       }
 
       // Auto-save client if custom or new
@@ -828,7 +943,7 @@ export function DocumentStudioModal({
             label: "Active",
             labelColor: "#3B82F6",
             projectsCount: 1,
-            totalInvoiced: `₹${grandTotal.toLocaleString("en-IN")}`,
+            totalInvoiced: `₹${effectiveDocTotal.toLocaleString("en-IN")}`,
             paymentReceived: `₹${effectiveAdvance.toLocaleString("en-IN")}`,
             due: `₹${effectiveDue.toLocaleString("en-IN")}`,
           })
@@ -843,6 +958,22 @@ export function DocumentStudioModal({
           saved = await updateInvoice(finalDocPayload)
         } else {
           saved = await addInvoice(finalDocPayload)
+        }
+
+        // Automatically create a user account with role "Clients" for this invoice recipient
+        const targetClientEmail = clientEmail || selectedClient?.email
+        if (targetClientEmail) {
+          try {
+            const { ensureClientUserAccount } = await import("@/app/feature/users/services/userService")
+            await ensureClientUserAccount({
+              email: targetClientEmail,
+              name: contactPersonName.trim() || clientName.trim(),
+              phone: clientPhone || selectedClient?.phone,
+              companyId: companyId,
+            })
+          } catch (uErr) {
+            console.warn("Auto-create client user error:", uErr)
+          }
         }
 
         // If credit note balance was deducted against this invoice, update customer's credit note(s)
@@ -860,27 +991,81 @@ export function DocumentStudioModal({
           }
         }
 
-        // If subscription based, auto create in Subscription section
-        if (paymentPlan === "subscription" || paymentPlan === "part") {
+        // If Part Payment (EMI), auto-create Milestone Tracking Plan in /feature/emi
+        if (paymentPlan === "part") {
           try {
-            const recurringVal = paymentPlan === "subscription"
-              ? (items[0]?.rate || grandTotal)
-              : Math.round(grandTotal / (subscriptionMonths || 3))
+            const now = issueDate || new Date().toISOString().split("T")[0]
+            const installmentSchedule = Array.from({ length: emiTenureMonths }, (_, i) => {
+              const instNum = i + 1
+              const dueDateStr = calculateCycleFutureDate(now, "Monthly", instNum)
+              const isLast = instNum === emiTenureMonths
+              const amount = isLast 
+                ? Math.max(0, emiRemainingBalance - emiMonthlyAmount * (emiTenureMonths - 1))
+                : emiMonthlyAmount
 
+              return {
+                installmentNumber: instNum,
+                amount: Math.max(0, amount),
+                formattedAmount: `₹${Math.max(0, amount).toLocaleString("en-IN")}`,
+                dueDate: dueDateStr,
+                status: "Pending" as const,
+                notes: `Installment #${instNum} of ${emiTenureMonths} for Invoice #${docNumber}`,
+              }
+            })
+
+            await saveInstallmentRecord({
+              id: `inst_${docNumber}_${Date.now()}`,
+              invoiceId: docNumber,
+              clientName: String(clientName || selectedClient?.name || "Client"),
+              clientEmail: clientEmail || selectedClient?.email,
+              clientPhone: clientPhone || selectedClient?.phone,
+              clientCompany: selectedClient?.companyName || clientName,
+              projectTitle: effectiveProjectName,
+              totalContractValue: netPayable,
+              totalAdvancePaid: effectiveEmiAdvance,
+              totalPaid: effectiveEmiAdvance,
+              remainingBalance: emiRemainingBalance,
+              totalInstallments: emiTenureMonths,
+              currentInstallmentNumber: 1,
+              currentInstallmentAmount: emiMonthlyAmount,
+              currentDueDate: installmentSchedule[0]?.dueDate || dueDate,
+              status: emiRemainingBalance === 0 ? "Paid" : "Partially Paid",
+              schedule: installmentSchedule,
+              companyId: companyId,
+              branchId: branchId || undefined,
+              createdAt: now,
+            }, companyId)
+          } catch (emiErr) {
+            console.warn("Auto-create EMI milestone error:", emiErr)
+          }
+        }
+
+        // If Subscription based, auto create in Subscriptions section
+        if (paymentPlan === "subscription") {
+          try {
             await addSubscription({
               clientId: selectedClient?.id ? String(selectedClient.id) : undefined,
               clientName: String(clientName || selectedClient?.name || "Client"),
               clientEmail: clientEmail || selectedClient?.email,
               clientPhone: clientPhone || selectedClient?.phone,
               clientCompany: selectedClient?.companyName || clientName || "Client",
-              planName: `${effectiveCategory} - ${items[0]?.serviceName || effectiveProjectName} (${paymentPlan === "subscription" ? subscriptionCycle : `${subscriptionMonths}-Month Part Payment / EMI`})`,
+              planName: `${effectiveCategory} - ${items[0]?.serviceName || effectiveProjectName} (${subscriptionDurationMonths}-Month ${subscriptionCycle} @ ₹${activeSubRate})`,
               status: "Active",
-              amount: `₹${recurringVal.toLocaleString("en-IN")}`,
-              numericAmount: recurringVal,
-              billingCycle: (paymentPlan === "subscription" ? (subscriptionCycle === "Yearly" ? "Annually" : subscriptionCycle) : "Monthly") as any,
+              amount: `₹${activeSubRate.toLocaleString("en-IN")}`,
+              numericAmount: activeSubRate,
+              billingCycle: (subscriptionCycle === "Yearly" ? "Annually" : subscriptionCycle) as any,
               startDate: issueDate || new Date().toISOString().split("T")[0],
-              nextBillingDate: dueDate || new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
-              description: `Auto-generated from Invoice #${docNumber} (${paymentPlan.toUpperCase()}) - Primary Category: ${effectiveCategory}`,
+              firstPaymentDate: issueDate || new Date().toISOString().split("T")[0],
+              firstPaymentAmount: effectiveSubAdvance,
+              nextBillingDate: subNextBillingDate,
+              totalDurationMonths: subscriptionDurationMonths,
+              totalCycles: subscriptionDurationMonths,
+              prepaidCycles: subPrepaidCycles,
+              remainingCycles: subRemainingCycles,
+              advanceAmount: effectiveSubAdvance,
+              balanceDue: subBalanceDue,
+              prepaidUntilDate: subNextBillingDate,
+              description: `Auto-generated from Invoice #${docNumber} (${subscriptionDurationMonths}-Month ${subscriptionCycle} Plan @ ₹${activeSubRate}/${subscriptionCycle}. ₹${effectiveSubAdvance} paid in advance [${subPrepaidCycles} months prepaid upfront]. Next recurring invoice starts on ${subNextBillingDate})`,
             }, companyId)
           } catch (subErr) {
             console.warn("Auto-create subscription error:", subErr)
@@ -900,14 +1085,14 @@ export function DocumentStudioModal({
                 client: String(clientName || selectedClient?.name || "Client"),
                 clientId: selectedClient?.id ? String(selectedClient.id) : undefined,
                 projectType: "Client Project",
-                price: `₹${grandTotal.toLocaleString("en-IN")}`,
+                price: `₹${effectiveDocTotal.toLocaleString("en-IN")}`,
                 startDate: issueDate || new Date().toISOString().split("T")[0],
                 deadline: dueDate || new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
                 progress: effectiveAdvance > 0 ? 15 : 0,
                 status: effectiveDue === 0 ? "Completed" : "In Progress",
                 paymentStatus: effectiveDue === 0 ? "Paid" : effectiveAdvance > 0 ? "Partially Paid" : "Payment Pending",
                 baseAmount: taxableBase,
-                totalAmount: grandTotal,
+                totalAmount: effectiveDocTotal,
                 companyId: companyId,
                 branchId: branchId || undefined,
                 subBranchId: subBranchId || undefined,
@@ -923,15 +1108,30 @@ export function DocumentStudioModal({
         onSaveSuccess?.(saved || finalDocPayload)
       } else if (mode === "quotation") {
         const quotationPayload = {
+          id: initialData?.id || docNumber,
           number: docNumber,
           customer: String(clientName || selectedClient?.name || "Client"),
-          customerEmail: clientEmail,
-          customerPhone: clientPhone,
-          customerAddress: clientAddress,
-          clientGstin: clientGst,
-          project: projectTitle,
+          client: String(clientName || selectedClient?.name || "Client"),
+          customerEmail: clientEmail || selectedClient?.email,
+          clientEmail: clientEmail || selectedClient?.email,
+          customerPhone: clientPhone || selectedClient?.phone,
+          clientPhone: clientPhone || selectedClient?.phone,
+          customerAddress: clientAddress || selectedClient?.address,
+          clientAddress: clientAddress || selectedClient?.address,
+          clientGstin: clientGst || selectedClient?.gstNumber,
+          primaryContact: contactPersonName.trim(),
+          contactPersonName: contactPersonName.trim(),
+          clientDesignation: effectiveDesignation,
+          clientCity: clientCity || selectedClient?.city,
+          clientDistrict: clientDistrict || (selectedClient as any)?.district,
+          clientState: clientState || selectedClient?.state,
+          clientPincode: clientPincode || selectedClient?.zip,
+          category: effectiveCategory,
+          primaryCategory: effectiveCategory,
+          project: effectiveProjectName || projectTitle,
           overview: projectOverview,
           timeline: projectTimeline,
+          turnaroundTime: turnaroundTime,
           deliverables: deliverables,
           scopeInclusions: scopeInclusions,
           scopeExclusions: scopeExclusions,
@@ -945,33 +1145,95 @@ export function DocumentStudioModal({
           isNonGst: docScheme === "nongst",
           tax: docScheme === "gst" ? calculatedGst : 0,
           total: grandTotal,
-          status: "Draft",
+          totalAmount: grandTotal,
+          formattedTotal: `₹${grandTotal.toLocaleString("en-IN")}`,
+          status: initialData?.status || "Draft",
           companyId: companyId,
           branchId: branchId,
           subBranchId: subBranchId,
-          items: items.map(it => ({
+          services: items.map(it => ({
             id: it.id,
             name: it.serviceName,
+            serviceName: it.serviceName,
             sac: it.sacCode,
             quantity: it.qty,
             unitPrice: it.rate,
-            gstRate: docScheme === "gst" ? 18 : 0,
-            gstAmount: docScheme === "gst" ? Math.round((it.rate * it.qty) * 0.18) : 0,
+            rate: it.rate,
+            description: it.description || "",
+            deliverableTime: (it as any).deliverableTime || "1-2 Weeks",
+            gstRate: docScheme === "gst" ? (it.gstRate ?? 18) : 0,
+            gstAmount: docScheme === "gst" ? Math.round((it.rate * it.qty) * ((it.gstRate ?? 18) / 100)) : 0,
+            total: it.totalAmount || (it.rate * it.qty)
+          })),
+          items: items.map(it => ({
+            id: it.id,
+            name: it.serviceName,
+            serviceName: it.serviceName,
+            description: it.description || "",
+            deliverableTime: (it as any).deliverableTime || "1-2 Weeks",
+            sac: it.sacCode,
+            quantity: it.qty,
+            unitPrice: it.rate,
+            rate: it.rate,
+            gstRate: docScheme === "gst" ? (it.gstRate ?? 18) : 0,
+            gstAmount: docScheme === "gst" ? Math.round((it.rate * it.qty) * ((it.gstRate ?? 18) / 100)) : 0,
             total: it.totalAmount || (it.rate * it.qty)
           }))
         }
-        const saved = await QuotationService.create(quotationPayload)
+
+        let saved: any = null
+        try {
+          if (initialData?.id) {
+            saved = await QuotationService.update(initialData.id, quotationPayload)
+          } else {
+            saved = await QuotationService.create(quotationPayload)
+          }
+        } catch (apiErr) {
+          console.warn("QuotationService API warning:", apiErr)
+        }
+
+        // Also save to app_data / local DB fallback so it immediately appears in quotations list
+        try {
+          const { fetchModuleDataFromDB, saveModuleDataToDB } = await import("@/lib/storageSync")
+          const currentList = await fetchModuleDataFromDB<any[]>("quotations", [], companyId)
+          const itemToSave = { ...quotationPayload, id: initialData?.id || (saved as any)?.data?.id || `qt_${Date.now()}` }
+          const updated = [itemToSave, ...(Array.isArray(currentList) ? currentList.filter(x => x.id !== itemToSave.id && x.number !== itemToSave.number) : [])]
+          await Promise.all([
+            saveModuleDataToDB("quotations", updated, companyId),
+            saveModuleDataToDB("quotations", updated, "all")
+          ])
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new Event("storage"))
+            window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+          }
+        } catch {}
+
         onSaveSuccess?.(saved || quotationPayload)
       } else if (mode === "estimate") {
         const estimatePayload = {
+          id: initialData?.id || docNumber,
           number: docNumber,
           customer: String(clientName || selectedClient?.name || "Client"),
-          customerEmail: clientEmail,
-          customerPhone: clientPhone,
-          customerAddress: clientAddress,
-          clientGstin: clientGst,
-          project: projectTitle,
+          client: String(clientName || selectedClient?.name || "Client"),
+          customerEmail: clientEmail || selectedClient?.email,
+          clientEmail: clientEmail || selectedClient?.email,
+          customerPhone: clientPhone || selectedClient?.phone,
+          clientPhone: clientPhone || selectedClient?.phone,
+          customerAddress: clientAddress || selectedClient?.address,
+          clientAddress: clientAddress || selectedClient?.address,
+          clientGstin: clientGst || selectedClient?.gstNumber,
+          primaryContact: contactPersonName.trim(),
+          contactPersonName: contactPersonName.trim(),
+          clientDesignation: effectiveDesignation,
+          clientCity: clientCity || selectedClient?.city,
+          clientDistrict: clientDistrict || (selectedClient as any)?.district,
+          clientState: clientState || selectedClient?.state,
+          clientPincode: clientPincode || selectedClient?.zip,
+          category: effectiveCategory,
+          primaryCategory: effectiveCategory,
+          project: effectiveProjectName || projectTitle,
           turnaroundTime: turnaroundTime,
+          overview: projectOverview,
           date: issueDate,
           validTill: dueDate,
           notes: notes,
@@ -981,28 +1243,79 @@ export function DocumentStudioModal({
           isNonGst: docScheme === "nongst",
           tax: docScheme === "gst" ? calculatedGst : 0,
           total: grandTotal,
-          status: "Draft",
+          totalAmount: grandTotal,
+          formattedTotal: `₹${grandTotal.toLocaleString("en-IN")}`,
+          status: initialData?.status || "Draft",
           companyId: companyId,
           branchId: branchId,
           subBranchId: subBranchId,
-          items: items.map(it => ({
+          services: items.map(it => ({
             id: it.id,
             name: it.serviceName,
+            serviceName: it.serviceName,
             sac: it.sacCode,
             quantity: it.qty,
             unitPrice: it.rate,
-            gstRate: docScheme === "gst" ? 18 : 0,
-            gstAmount: docScheme === "gst" ? Math.round((it.rate * it.qty) * 0.18) : 0,
+            rate: it.rate,
+            gstRate: docScheme === "gst" ? (it.gstRate ?? 18) : 0,
+            gstAmount: docScheme === "gst" ? Math.round((it.rate * it.qty) * ((it.gstRate ?? 18) / 100)) : 0,
+            total: it.totalAmount || (it.rate * it.qty)
+          })),
+          items: items.map(it => ({
+            id: it.id,
+            name: it.serviceName,
+            serviceName: it.serviceName,
+            sac: it.sacCode,
+            quantity: it.qty,
+            unitPrice: it.rate,
+            rate: it.rate,
+            gstRate: docScheme === "gst" ? (it.gstRate ?? 18) : 0,
+            gstAmount: docScheme === "gst" ? Math.round((it.rate * it.qty) * ((it.gstRate ?? 18) / 100)) : 0,
             total: it.totalAmount || (it.rate * it.qty)
           }))
         }
-        const saved = await EstimateService.create(estimatePayload)
+
+        let saved: any = null
+        try {
+          if (initialData?.id) {
+            saved = await EstimateService.update(initialData.id, estimatePayload)
+          } else {
+            saved = await EstimateService.create(estimatePayload)
+          }
+        } catch (apiErr) {
+          console.warn("EstimateService API warning:", apiErr)
+        }
+
+        // Also save to app_data / local DB fallback so it immediately appears in estimates list
+        try {
+          const { fetchModuleDataFromDB, saveModuleDataToDB } = await import("@/lib/storageSync")
+          const currentList = await fetchModuleDataFromDB<any[]>("estimates", [], companyId)
+          const itemToSave = { ...estimatePayload, id: initialData?.id || (saved as any)?.data?.id || `est_${Date.now()}` }
+          const updated = [itemToSave, ...(Array.isArray(currentList) ? currentList.filter(x => x.id !== itemToSave.id && x.number !== itemToSave.number) : [])]
+          await Promise.all([
+            saveModuleDataToDB("estimates", updated, companyId),
+            saveModuleDataToDB("estimates", updated, "all")
+          ])
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new Event("storage"))
+            window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+          }
+        } catch {}
+
         onSaveSuccess?.(saved || estimatePayload)
       }
       onClose()
+    }, {
+      actionType: initialData?.id ? "update" : "create",
+      loadingTitle: `${actionLabel} Official ${docLabel}...`,
+      loadingMsg: `Compiling line items, recalculating GST/discounts, and updating CRM records for ${clientName || "Client"}...`,
+      successTitle: `${docLabel} ${initialData?.id ? "Updated" : "Created"} Successfully!`,
+      successMsg: `Official ${docLabel} #${docNumber} has been safely saved and synchronized with your workspace.`,
+      minLoadingMs: 650,
+      autoCloseMs: 2200,
+    })
     } catch (err: any) {
       console.error("Save Document error:", err)
-      alert("Error saving document: " + (err?.message || "Unknown error"))
     } finally {
       setIsSubmitting(false)
     }
@@ -1585,8 +1898,8 @@ export function DocumentStudioModal({
                             <Input
                               type="number"
                               min="0"
-                              value={item.rate}
-                              onChange={e => handleUpdateItem(item.id, "rate", Math.max(0, Number(e.target.value)))}
+                              value={item.rate === 0 ? "" : (item.rate ?? "")}
+                              onChange={e => handleUpdateItem(item.id, "rate", e.target.value === "" ? "" : Math.max(0, Number(e.target.value)))}
                               placeholder="30000"
                               className="font-bold text-emerald-600 font-mono"
                             />
@@ -1792,11 +2105,11 @@ export function DocumentStudioModal({
                           </div>
                           <div className="sm:col-span-2">
                             <label className="block text-[10px] font-bold text-zinc-500 mb-0.5">Hours / Qty</label>
-                            <Input type="number" min="1" value={item.qty} onChange={e => handleUpdateItem(item.id, "qty", Math.max(1, Number(e.target.value)))} />
+                            <Input type="number" min="1" value={item.qty === 0 ? "" : (item.qty ?? "")} onChange={e => handleUpdateItem(item.id, "qty", e.target.value === "" ? "" : Math.max(1, Number(e.target.value)))} />
                           </div>
                           <div className="sm:col-span-2">
                             <label className="block text-[10px] font-bold text-zinc-500 mb-0.5">Rate (₹)</label>
-                            <Input type="number" min="0" value={item.rate} onChange={e => handleUpdateItem(item.id, "rate", Math.max(0, Number(e.target.value)))} className="font-bold font-mono" />
+                            <Input type="number" min="0" value={item.rate === 0 ? "" : (item.rate ?? "")} onChange={e => handleUpdateItem(item.id, "rate", e.target.value === "" ? "" : Math.max(0, Number(e.target.value)))} className="font-bold font-mono" />
                           </div>
                           <div className="sm:col-span-2 font-mono font-bold text-emerald-600 text-xs">
                             ₹{(item.rate * item.qty).toLocaleString("en-IN")}
@@ -2011,8 +2324,8 @@ export function DocumentStudioModal({
                               </label>
                               <Input
                                 type="number"
-                                value={m.payoutValue}
-                                onChange={(e) => handleUpdateAssignedMember(idx, "payoutValue", Number(e.target.value))}
+                                value={m.payoutValue === 0 ? "" : (m.payoutValue ?? "")}
+                                onChange={(e) => handleUpdateAssignedMember(idx, "payoutValue", e.target.value === "" ? "" : Number(e.target.value))}
                                 placeholder={m.payoutType === "percentage" ? "30" : "5000"}
                                 className="font-bold"
                               />
@@ -2391,7 +2704,9 @@ export function DocumentStudioModal({
 
                             <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
                               <div className="sm:col-span-4">
-                                <label className="block text-[10px] font-bold text-zinc-500 mb-0.5">Service / Project Item *</label>
+                                <label className="block text-[10px] font-bold text-zinc-500 mb-0.5">
+                                  {(mode as any) === "quotation" ? "Module / Feature Name *" : "Service / Project Item *"}
+                                </label>
                                 <Input value={item.serviceName} onChange={e => handleUpdateItem(item.id, "serviceName", e.target.value)} className="font-bold" />
                               </div>
                               {docScheme === "gst" && (
@@ -2402,7 +2717,7 @@ export function DocumentStudioModal({
                               )}
                               <div className="sm:col-span-2">
                                 <label className="block text-[10px] font-bold text-zinc-500 mb-0.5">Qty</label>
-                                <Input type="number" min="1" value={item.qty} onChange={e => handleUpdateItem(item.id, "qty", Math.max(1, Number(e.target.value)))} />
+                                <Input type="number" min="1" value={item.qty === 0 ? "" : (item.qty ?? "")} onChange={e => handleUpdateItem(item.id, "qty", e.target.value === "" ? "" : Math.max(1, Number(e.target.value)))} />
                               </div>
                               {/* Quantity & Unit Dropdown */}
                               <div className="sm:col-span-2">
@@ -2414,6 +2729,8 @@ export function DocumentStudioModal({
                                 >
                                   <option value="Qty">Qty</option>
                                   <option value="Unit">Unit</option>
+                                  <option value="Module">Module</option>
+                                  <option value="Sprint">Sprint</option>
                                   <option value="Weekly">Weekly</option>
                                   <option value="Monthly">Monthly</option>
                                   <option value="Yearly">Yearly</option>
@@ -2421,7 +2738,35 @@ export function DocumentStudioModal({
                               </div>
                               <div className={docScheme === "gst" ? "sm:col-span-2" : "sm:col-span-4"}>
                                 <label className="block text-[10px] font-bold text-zinc-500 mb-0.5">Rate (₹) *</label>
-                                <Input type="number" min="0" value={item.rate} onChange={e => handleUpdateItem(item.id, "rate", Math.max(0, Number(e.target.value)))} className="font-bold text-emerald-600" />
+                                <Input type="number" min="0" value={item.rate === 0 ? "" : (item.rate ?? "")} onChange={e => handleUpdateItem(item.id, "rate", e.target.value === "" ? "" : Math.max(0, Number(e.target.value)))} className="font-bold text-emerald-600" />
+                              </div>
+
+                              {/* Deliverable Time & Detailed Description Fields */}
+                              <div className="sm:col-span-12 grid grid-cols-1 sm:grid-cols-12 gap-2 pt-1 border-t border-zinc-100 dark:border-zinc-800">
+                                <div className="sm:col-span-4">
+                                  <label className="block text-[10px] font-bold text-teal-700 dark:text-teal-400 mb-0.5 flex items-center gap-1">
+                                    <Clock size={11} />
+                                    <span>Deliverable Time (Timeline SLA) *</span>
+                                  </label>
+                                  <Input
+                                    value={(item as any).deliverableTime || ""}
+                                    onChange={e => handleUpdateItem(item.id, "deliverableTime", e.target.value)}
+                                    placeholder="e.g. 2 Weeks / 10 Business Days"
+                                    className="font-semibold text-xs text-teal-800 dark:text-teal-300"
+                                  />
+                                </div>
+                                <div className="sm:col-span-8">
+                                  <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">
+                                    Module Description &amp; Technical Scope (Features &amp; Specifications)
+                                  </label>
+                                  <textarea
+                                    rows={2}
+                                    value={item.description || ""}
+                                    onChange={e => handleUpdateItem(item.id, "description", e.target.value)}
+                                    placeholder="Detailed specifications, features, technical architecture, database schemas, deliverables checklist..."
+                                    className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-normal resize-y"
+                                  />
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -2471,9 +2816,9 @@ export function DocumentStudioModal({
                               type="number"
                               min="0"
                               max={availableCredit || creditToDeduct}
-                              value={creditToDeduct}
+                              value={creditToDeduct === 0 ? "" : creditToDeduct}
                               onChange={(e) => {
-                                const val = Number(e.target.value) || 0
+                                const val = e.target.value === "" ? 0 : Number(e.target.value)
                                 setCreditToDeduct(Math.min(val, grandTotal))
                               }}
                               className="font-bold font-mono text-indigo-600 bg-white dark:bg-zinc-900"
@@ -2495,7 +2840,7 @@ export function DocumentStudioModal({
                         <Input
                           type="number"
                           min="0"
-                          value={discountValue}
+                          value={discountValue === 0 ? "" : discountValue}
                           onChange={e => setDiscountValue(e.target.value === "" ? "" : Math.max(0, Number(e.target.value)))}
                           placeholder="e.g. 1000"
                         />
@@ -2505,7 +2850,7 @@ export function DocumentStudioModal({
                         <Input
                           type="number"
                           min="0"
-                          value={setupCharge}
+                          value={setupCharge === 0 ? "" : setupCharge}
                           onChange={e => setSetupCharge(e.target.value === "" ? "" : Math.max(0, Number(e.target.value)))}
                           placeholder="e.g. 1500"
                         />
@@ -2610,29 +2955,126 @@ export function DocumentStudioModal({
                     )}
 
                     {paymentPlan === "part" && (
-                      <div className="p-3 bg-white dark:bg-zinc-900 rounded-xl border border-blue-200 dark:border-blue-800 space-y-2 text-xs">
+                      <div className="p-3.5 bg-blue-50/60 dark:bg-blue-950/30 rounded-xl border border-blue-200 dark:border-blue-800/80 space-y-3 text-xs">
                         <div className="flex items-center justify-between">
-                          <label className="font-bold text-blue-900 dark:text-blue-200">
-                            Part Payment / Installment Period:
-                          </label>
-                          <div className="flex gap-1.5">
-                            {[3, 6, 12].map(m => (
-                              <button
-                                key={m}
-                                type="button"
-                                onClick={() => setSubscriptionMonths(m)}
-                                className={`px-2 py-0.5 rounded text-xs font-bold cursor-pointer ${
-                                  subscriptionMonths === m ? "bg-blue-600 text-white" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600"
-                                }`}
-                              >
-                                {m} Months
-                              </button>
-                            ))}
+                          <span className="font-bold text-blue-950 dark:text-blue-200 flex items-center gap-1.5 text-xs">
+                            <span>🔄 Part Payment / EMI Milestone Structure</span>
+                          </span>
+                          <span className="text-[10.5px] text-blue-700 dark:text-blue-300 bg-blue-100/70 dark:bg-blue-900/50 px-2 py-0.5 rounded-full font-bold">
+                            Advance Minus Option
+                          </span>
+                        </div>
+
+                        {/* Advance Down Payment Input */}
+                        <div className="space-y-1.5 bg-white dark:bg-zinc-900 p-2.5 rounded-lg border border-blue-100 dark:border-blue-900/50">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300">
+                              Advance Down Payment (Paid Upfront)
+                            </label>
+                            <div className="flex gap-1">
+                              {[0, 0.20, 0.30, 0.50].map(pct => (
+                                <button
+                                  key={pct}
+                                  type="button"
+                                  onClick={() => setEmiAdvanceAmount(pct === 0 ? 0 : Math.round(netPayable * pct))}
+                                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors ${
+                                    (pct === 0 && (emiAdvanceAmount === 0 || emiAdvanceAmount === "")) ||
+                                    (pct > 0 && emiAdvanceAmount === Math.round(netPayable * pct))
+                                      ? "bg-blue-600 text-white"
+                                      : "bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 hover:bg-blue-100"
+                                  }`}
+                                >
+                                  {pct === 0 ? "0% (No Adv)" : `${pct * 100}%`}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="relative">
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold">₹</span>
+                            <Input
+                              type="number"
+                              min="0"
+                              max={netPayable}
+                              value={emiAdvanceAmount === 0 ? "" : emiAdvanceAmount}
+                              onChange={e => setEmiAdvanceAmount(e.target.value === "" ? "" : Math.max(0, Number(e.target.value)))}
+                              placeholder="Enter upfront advance amount..."
+                              className="font-mono font-bold pl-7 h-8 text-xs"
+                            />
                           </div>
                         </div>
-                        <div className="flex items-center justify-between text-zinc-600 text-[11px] pt-1 border-t border-zinc-100 dark:border-zinc-800">
-                          <span>Monthly EMI: <strong className="font-mono text-blue-600">₹{Math.round(grandTotal / subscriptionMonths).toLocaleString("en-IN")}/mo</strong></span>
-                          <span className="text-blue-600 font-semibold">Auto-registers in Subscription section</span>
+
+                        {/* Tenure Selection with Dropdown: 2 Mo, 3 Mo, 4 Mo, 6 Mo, 12 M and custom */}
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300">
+                              Installment Period (Tenure):
+                            </label>
+                            <select
+                              value={isCustomEmi ? "custom" : String(emiTenureMonths)}
+                              onChange={(e) => {
+                                const val = e.target.value
+                                if (val === "custom") {
+                                  setIsCustomEmi(true)
+                                } else {
+                                  setIsCustomEmi(false)
+                                  setEmiTenureMonths(Number(val))
+                                }
+                              }}
+                              className="px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border border-zinc-300 dark:border-zinc-700 font-bold text-xs shadow-xs focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                            >
+                              <option value="2">2 Mo</option>
+                              <option value="3">3 Mo</option>
+                              <option value="4">4 Mo</option>
+                              <option value="6">6 Mo</option>
+                              <option value="12">12 M</option>
+                              <option value="custom">Custom</option>
+                            </select>
+                          </div>
+
+                          {isCustomEmi && (
+                            <div className="p-2.5 bg-blue-50/70 dark:bg-blue-950/40 rounded-xl border border-blue-200 dark:border-blue-900 flex items-center justify-between gap-3">
+                              <label className="text-[10.5px] font-bold text-blue-950 dark:text-blue-300 shrink-0">
+                                Enter Custom Months (Tenure):
+                              </label>
+                              <Input
+                                type="number"
+                                min="1"
+                                max="60"
+                                value={emiTenureMonths === 0 ? "" : (emiTenureMonths || "")}
+                                onChange={(e) => setEmiTenureMonths(e.target.value === "" ? ("" as any) : Math.max(1, Number(e.target.value)))}
+                                placeholder="e.g. 5, 8, 9, 18, 24"
+                                className="font-mono font-bold text-xs h-8 text-right bg-white dark:bg-zinc-900 max-w-[120px]"
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Visual Equation Matrix */}
+                        <div className="p-2.5 bg-blue-100/50 dark:bg-blue-950/60 rounded-lg border border-blue-200 dark:border-blue-800 text-[11px] space-y-1.5 font-mono">
+                          <div className="flex justify-between text-zinc-700 dark:text-zinc-300 font-sans">
+                            <span>Total Contract Amount:</span>
+                            <strong className="font-mono">₹{netPayable.toLocaleString("en-IN")}</strong>
+                          </div>
+                          <div className="flex justify-between text-emerald-700 dark:text-emerald-400 font-sans">
+                            <span>Less: Advance Down Payment:</span>
+                            <strong className="font-mono">(-) ₹{effectiveEmiAdvance.toLocaleString("en-IN")}</strong>
+                          </div>
+                          <div className="flex justify-between text-blue-900 dark:text-blue-200 font-bold border-t border-blue-200 dark:border-blue-800 pt-1 font-sans">
+                            <span>Remaining Balance for EMI:</span>
+                            <strong className="font-mono text-blue-700 dark:text-blue-300">₹{emiRemainingBalance.toLocaleString("en-IN")}</strong>
+                          </div>
+                          <div className="flex justify-between text-indigo-700 dark:text-indigo-300 font-extrabold bg-white dark:bg-zinc-900 p-1.5 rounded border border-blue-200 dark:border-blue-800 font-sans">
+                            <span>Monthly EMI ({emiTenureMonths} Installments):</span>
+                            <strong className="font-mono text-sm text-indigo-600 dark:text-indigo-400">
+                              ₹{emiMonthlyAmount.toLocaleString("en-IN")}<span className="text-[10px] font-normal text-zinc-500">/mo</span>
+                            </strong>
+                          </div>
+                        </div>
+
+                        {/* Quick schedule breakdown hint */}
+                        <div className="flex items-center justify-between text-[10.5px] text-zinc-500 pt-0.5">
+                          <span>🛡️ Auto-syncs to <strong>EMI Milestone Plans (/feature/emi)</strong></span>
+                          <span>1st EMI Due: <strong>{calculateCycleFutureDate(issueDate, "Monthly", 1)}</strong></span>
                         </div>
                       </div>
                     )}
@@ -2659,7 +3101,7 @@ export function DocumentStudioModal({
                         <Input
                           type="number"
                           min="0"
-                          value={advanceAmount}
+                          value={advanceAmount === 0 ? "" : advanceAmount}
                           onChange={e => setAdvanceAmount(e.target.value === "" ? "" : Math.max(0, Number(e.target.value)))}
                           placeholder="e.g. 10000"
                           className="font-mono font-bold"
@@ -2672,33 +3114,156 @@ export function DocumentStudioModal({
                     )}
 
                     {paymentPlan === "subscription" && (
-                      <div className="p-3 bg-white dark:bg-zinc-900 rounded-xl border border-purple-200 dark:border-purple-800 space-y-2 text-xs">
+                      <div className="p-3.5 bg-purple-50/60 dark:bg-purple-950/30 rounded-xl border border-purple-200 dark:border-purple-800/80 space-y-3 text-xs">
                         <div className="flex items-center justify-between">
-                          <span className="font-bold text-purple-900 dark:text-purple-200 flex items-center gap-1">
-                            <span>🗓️ Recurring Subscription Cycle</span>
+                          <span className="font-bold text-purple-950 dark:text-purple-200 flex items-center gap-1.5 text-xs">
+                            <span>🗓️ Subscription & Retainer Configuration</span>
                           </span>
-                          <span className="text-[10px] text-purple-600 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded font-bold">
-                            Syncs to Subscriptions Section
+                          <span className="text-[10.5px] text-purple-700 dark:text-purple-300 bg-purple-100/70 dark:bg-purple-900/50 px-2 py-0.5 rounded-full font-bold">
+                            Multi-Month + Advance
                           </span>
                         </div>
-                        <div className="grid grid-cols-4 gap-2">
-                          {(["Weekly", "Monthly", "Quarterly", "Yearly"] as const).map(cycle => (
-                            <button
-                              key={cycle}
-                              type="button"
-                              onClick={() => setSubscriptionCycle(cycle)}
-                              className={`p-2 rounded-lg border text-center font-bold text-xs cursor-pointer transition-all ${
-                                subscriptionCycle === cycle
-                                  ? "border-purple-600 bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 ring-1 ring-purple-500"
-                                  : "border-zinc-200 dark:border-zinc-700 bg-zinc-50 text-zinc-600"
-                              }`}
-                            >
-                              {cycle}
-                            </button>
-                          ))}
+
+                        {/* Cycle & Duration */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
+                              Billing Frequency
+                            </label>
+                            <div className="grid grid-cols-4 gap-1">
+                              {(["Weekly", "Monthly", "Quarterly", "Yearly"] as const).map(cycle => (
+                                <button
+                                  key={cycle}
+                                  type="button"
+                                  onClick={() => setSubscriptionCycle(cycle)}
+                                  className={`py-1 text-center rounded text-[11px] font-bold cursor-pointer transition-all ${
+                                    subscriptionCycle === cycle
+                                      ? "bg-purple-600 text-white shadow-xs"
+                                      : "bg-white dark:bg-zinc-800 text-zinc-600 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100"
+                                  }`}
+                                >
+                                  {cycle.slice(0, 3)}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
+                              Subscription Duration
+                            </label>
+                            <div className="flex gap-1">
+                              {[1, 3, 6, 12, 24].map(m => (
+                                <button
+                                  key={m}
+                                  type="button"
+                                  onClick={() => setSubscriptionDurationMonths(m)}
+                                  className={`flex-1 py-1 text-center rounded text-[11px] font-bold cursor-pointer transition-all ${
+                                    subscriptionDurationMonths === m
+                                      ? "bg-purple-600 text-white shadow-xs"
+                                      : "bg-white dark:bg-zinc-800 text-zinc-600 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100"
+                                  }`}
+                                >
+                                  {m}M
+                                </button>
+                              ))}
+                            </div>
+                          </div>
                         </div>
-                        <p className="text-[10.5px] text-zinc-500 pt-1">
-                          📌 Project will automatically be added to the <strong>Subscription section</strong> with <strong>{subscriptionCycle}</strong> billing cycle of <strong>₹{(items[0]?.rate || grandTotal).toLocaleString("en-IN")}</strong>.
+
+                        {/* Recurring Rate & Advance Payment */}
+                        <div className="grid grid-cols-2 gap-2.5">
+                          <div className="space-y-1 bg-white dark:bg-zinc-900 p-2.5 rounded-lg border border-purple-100 dark:border-purple-900/50">
+                            <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 block">
+                              Rate per {subscriptionCycle} (₹)
+                            </label>
+                            <div className="relative">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold">₹</span>
+                              <Input
+                                type="number"
+                                min="0"
+                                value={subscriptionRate}
+                                onChange={e => setSubscriptionRate(e.target.value === "" ? "" : Math.max(0, Number(e.target.value)))}
+                                placeholder={`e.g. ${defaultSubRate}`}
+                                className="font-mono font-bold pl-7 h-8 text-xs"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-1 bg-white dark:bg-zinc-900 p-2.5 rounded-lg border border-purple-100 dark:border-purple-900/50">
+                            <div className="flex items-center justify-between">
+                              <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400">
+                                Advance Amount Paid (₹)
+                              </label>
+                              <div className="flex gap-1">
+                                {[1, 3].map(c => {
+                                  const val = activeSubRate * c
+                                  if (c > subscriptionDurationMonths) return null
+                                  return (
+                                    <button
+                                      key={c}
+                                      type="button"
+                                      onClick={() => setSubscriptionAdvance(val)}
+                                      className="px-1 py-0.2 rounded bg-purple-50 text-purple-700 text-[9px] font-bold cursor-pointer"
+                                    >
+                                      {c}M
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                            <div className="relative">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold">₹</span>
+                              <Input
+                                type="number"
+                                min="0"
+                                max={subContractTotal}
+                                value={subscriptionAdvance === 0 ? "" : subscriptionAdvance}
+                                onChange={e => setSubscriptionAdvance(e.target.value === "" ? "" : Math.max(0, Number(e.target.value)))}
+                                placeholder="e.g. 300"
+                                className="font-mono font-bold pl-7 h-8 text-xs"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Live Subscription Breakdown Matrix */}
+                        <div className="p-2.5 bg-purple-100/50 dark:bg-purple-950/60 rounded-lg border border-purple-200 dark:border-purple-800 text-[11px] space-y-1 font-mono">
+                          <div className="flex justify-between text-zinc-700 dark:text-zinc-300 font-sans">
+                            <span>Project Deliverables Base:</span>
+                            <strong className="font-mono">₹{netPayable.toLocaleString("en-IN")}</strong>
+                          </div>
+                          <div className="flex justify-between text-purple-900 dark:text-purple-200 font-sans">
+                            <span>Subscription Retainer ({subscriptionDurationMonths} Mo @ ₹{activeSubRate.toLocaleString("en-IN")}):</span>
+                            <strong className="font-mono">₹{subContractTotal.toLocaleString("en-IN")}</strong>
+                          </div>
+                          <div className="flex justify-between text-zinc-900 dark:text-zinc-100 font-bold border-t border-purple-200 dark:border-purple-800 pt-1 font-sans">
+                            <span>Combined Invoice Grand Total:</span>
+                            <strong className="font-mono text-purple-700 dark:text-purple-300">
+                              ₹{(netPayable + subContractTotal).toLocaleString("en-IN")}
+                            </strong>
+                          </div>
+                          <div className="flex justify-between text-emerald-700 dark:text-emerald-400 font-sans">
+                            <span>Advance Paid Upfront:</span>
+                            <strong className="font-mono">
+                              (-) ₹{effectiveSubAdvance.toLocaleString("en-IN")}
+                              {subPrepaidCycles > 0 && <span className="text-[10px] font-normal text-emerald-600 ml-1">({subPrepaidCycles} Mo prepaid)</span>}
+                            </strong>
+                          </div>
+                          <div className="flex justify-between text-rose-700 dark:text-rose-400 font-bold border-t border-purple-200 dark:border-purple-800 pt-1 font-sans">
+                            <span>Net Balance Due:</span>
+                            <strong className="font-mono">
+                              ₹{Math.max(0, (netPayable + subContractTotal) - effectiveSubAdvance).toLocaleString("en-IN")}
+                            </strong>
+                          </div>
+                          <div className="flex justify-between text-indigo-700 dark:text-indigo-300 font-sans pt-0.5">
+                            <span>Next Recurring Billing Date:</span>
+                            <strong className="font-mono text-indigo-700 dark:text-indigo-400">{subNextBillingDate}</strong>
+                          </div>
+                        </div>
+
+                        <p className="text-[10px] text-zinc-500 pt-0.5">
+                          📌 Syncs to <strong>Subscriptions section</strong> with first recurring billing cycle scheduled on <strong>{subNextBillingDate}</strong>.
                         </p>
                       </div>
                     )}

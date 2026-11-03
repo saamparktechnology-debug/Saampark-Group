@@ -3,7 +3,7 @@
 import * as React from "react"
 import { X, Plus, Check, Calendar, Clock, Wrench, FileText, User as UserIcon, Trash2, MapPin, Building, Info } from "lucide-react"
 import { Lead, LeadStatus, LeadType } from "../types"
-import { updateLead, unlockLead, parseLeadDate, formatLeadReminderDate, MONTH_NAMES_SHORT, canUserUnlockLead, isLeadClientPrivate } from "../services/leadService"
+import { updateLead, unlockLead, parseLeadDate, formatLeadReminderDate, isReminderDateOverdue, MONTH_NAMES_SHORT, canUserUnlockLead, isLeadClientPrivate } from "../services/leadService"
 import { useAuthStore } from "@/store/useAuthStore"
 
 // Helper to convert date string to "YYYY-MM-DD" for input[type="date"] (Zero UTC Timezone Shift)
@@ -110,7 +110,7 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
   const [secondaryPhone, setSecondaryPhone] = React.useState("")
   const [email, setEmail] = React.useState("")
   const [status, setStatus] = React.useState<LeadStatus>("New")
-  const [selectedServices, setSelectedServices] = React.useState<string[]>(["Website Devlopment"])
+  const [selectedServices, setSelectedServices] = React.useState<string[]>([])
   const [customService, setCustomService] = React.useState("")
   const [isNoReminder, setIsNoReminder] = React.useState(false)
   const [reminderDate, setReminderDate] = React.useState(() => {
@@ -216,8 +216,8 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
       setReminderTime(lead.reminderTime || "11:30 AM")
 
       setReminderNotes(lead.reminderNotes || "")
-      setCaller(lead.caller || lead.owner || "John Doe")
-      setOwner(lead.owner || "John Doe")
+      setCaller(lead.caller || lead.owner || "")
+      setOwner(lead.owner || "")
       setManagers(lead.managers || "")
 
       // Source & Custom Source initialization
@@ -271,6 +271,9 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
     const branchCompId = targetBranchObj?.companyId || (targetBranchObj as any)?.company_id
     const finalCompanyId = branchCompId || (isSuperOrAdmin ? (selectedCompanyId || "tech") : (lead.companyId || activeCompanyId || user?.companyId || "tech"))
 
+    const isNewReminderOverdue = isReminderDateOverdue(finalReminderDate, finalReminderTime)
+    const shouldUnlock = !isNewReminderOverdue || unlockedLocally
+
     setIsSubmitting(true)
     try {
       const updated = await updateLead(lead.id, {
@@ -304,6 +307,9 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
         branchId: finalBranchId,
         branchName: finalBranchName,
         companyId: finalCompanyId,
+        isLocked: shouldUnlock ? false : undefined,
+        isExplicitlyUnlocked: shouldUnlock ? true : undefined,
+        lockedReason: shouldUnlock ? undefined : undefined,
       }, user?.role, finalCompanyId)
 
       onLeadUpdated(updated)
@@ -315,17 +321,40 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
     }
   }
 
+  const [unlockedLocally, setUnlockedLocally] = React.useState(false)
+
+  React.useEffect(() => {
+    setUnlockedLocally(false)
+  }, [lead?.id, isOpen])
+
   const handleUnlock = async () => {
     if (!lead) return
     try {
       const unlocked = await unlockLead(lead.id, user, lead.companyId || selectedCompanyId)
+      setUnlockedLocally(true)
+      if (unlocked.reminderDate && unlocked.reminderDate !== "None") {
+        setReminderDate(formatLeadReminderDate(unlocked.reminderDate))
+        setIsNoReminder(false)
+      }
       onLeadUpdated(unlocked)
-      alert("Lead unlocked successfully! Updates can now be saved.")
-      onClose()
     } catch (err: any) {
       alert(err?.message || "Failed to unlock lead")
     }
   }
+
+  const isWonOrLost = (lead?.status || "").toLowerCase().trim() === "won" || (lead?.status || "").toLowerCase().trim() === "lost"
+  const isOverdue = lead ? isReminderDateOverdue(lead.reminderDate, lead.reminderTime) : false
+  const isLeadExplicitlyUnlocked = Boolean(
+    (lead as any)?.isExplicitlyUnlocked === true ||
+    lead?.lockedReason?.includes("Unlocked") ||
+    (lead as any)?.unlockedByAdmin === true ||
+    (lead as any)?.unlockedByClient === true
+  )
+  const isEffectiveLocked = !unlockedLocally && Boolean(
+    !isWonOrLost &&
+    !isLeadExplicitlyUnlocked &&
+    (lead?.isLocked || isOverdue)
+  )
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
@@ -338,7 +367,7 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
             <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300">
               {status}
             </span>
-            {lead?.isLocked && (
+            {isEffectiveLocked && (
               <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 flex items-center gap-1">
                 🔒 LOCKED
               </span>
@@ -354,13 +383,13 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
         </div>
 
         {/* Locked Lead Alert Banner */}
-        {lead?.isLocked && (
+        {isEffectiveLocked && (
           <div className="bg-red-50 dark:bg-red-950/50 border-b border-red-200 dark:border-red-800 px-6 py-3 flex items-center justify-between gap-3 text-xs text-red-700 dark:text-red-300">
             <div className="flex items-center gap-2">
               <span className="text-base">🔒</span>
               <div>
                 <p className="font-bold">Lead Auto-Locked</p>
-                <p className="text-[11px] opacity-90">{lead.lockedReason || "Daily status or reminder date update missed."}</p>
+                <p className="text-[11px] opacity-90">{lead.lockedReason || (isOverdue ? "Overdue: Lead reminder date expired." : "Daily status or reminder date update missed.")}</p>
               </div>
             </div>
             {canUserUnlockLead(user, lead) ? (

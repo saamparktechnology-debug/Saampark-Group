@@ -96,11 +96,26 @@ export async function getUserNotifications(userEmail?: string, userRole?: string
   return all.filter(n => {
     // If targeted to specific email
     if (n.targetEmail && emailNorm) {
-      if (n.targetEmail === emailNorm) return true
+      if (n.targetEmail.toLowerCase().trim() === emailNorm) return true
     }
     // If targeted to role
     if (n.targetRole && roleNorm) {
-      if (n.targetRole.toLowerCase().trim() === roleNorm) return true
+      const targetRoleLower = n.targetRole.toLowerCase().trim()
+      if (targetRoleLower === roleNorm) return true
+      // Also allow Super Admin, Owner, or any Admin to see Admin-level notifications
+      if (
+        (targetRoleLower === "admin" || targetRoleLower.includes("admin")) &&
+        (roleNorm.includes("admin") || roleNorm.includes("super") || roleNorm === "owner")
+      ) {
+        return true
+      }
+      // If notification was targeted to Super Admin and user has super admin privileges
+      if (
+        targetRoleLower.includes("super") &&
+        (roleNorm.includes("super") || emailNorm === "saampark.official@gmail.com")
+      ) {
+        return true
+      }
     }
     // Global notification (no specific email or role)
     if (!n.targetEmail && !n.targetRole) return true

@@ -19,6 +19,7 @@ import { executeWithFeedback, useActionFeedbackStore } from "@/store/useActionFe
 import { isRecordAssignedToClient, isRecordAssignedToTeamMember } from "@/lib/clientScopeUtils"
 import { OfficialEstimateDocument } from "./components/OfficialEstimateDocument"
 import { DocumentStudioModal } from "@/components/documents/DocumentStudioModal"
+import { formatDisplayDate } from "@/lib/utils"
 
 export default function EstimatesPage() {
   const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
@@ -646,10 +647,10 @@ export default function EstimatesPage() {
                         </span>
                       </td>
                       <td className="py-3 px-4 text-zinc-500 font-mono text-[11px]">
-                        {est.date}
+                        {formatDisplayDate(est.date)}
                       </td>
                       <td className="py-3 px-4 text-red-600 dark:text-red-400 font-bold font-mono text-[11px]">
-                        {est.validUntil}
+                        {est.validUntil ? formatDisplayDate(est.validUntil) : "-"}
                       </td>
                       <td className="py-3 px-4 font-bold text-zinc-900 dark:text-zinc-100">
                         {est.formattedTotal}

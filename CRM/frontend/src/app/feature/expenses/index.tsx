@@ -16,6 +16,7 @@ import { getProjects } from "@/app/feature/projects/services/projectService"
 import { Project, ProjectMember } from "@/app/feature/projects/types"
 import { getInvoices, InvoiceItem } from "@/app/feature/sales/invoices/services/invoiceService"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
+import { formatDisplayDate } from "@/lib/utils"
 
 export interface ProjectExtraCharge {
   id: string
@@ -657,7 +658,7 @@ export default function ExpensesMain() {
                         <td className="py-3 px-4 font-bold text-rose-600 dark:text-rose-400 font-mono">
                           {exp.amount}
                         </td>
-                        <td className="py-3 px-4 text-zinc-500 font-mono text-[11px]">{exp.date}</td>
+                        <td className="py-3 px-4 text-zinc-500 font-mono text-[11px]">{formatDisplayDate(exp.date)}</td>
                         <td className="py-3 px-4 font-medium text-zinc-800 dark:text-zinc-200">{exp.member}</td>
                         <td className="py-3 px-4">
                           <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${statusBadge}`}>
@@ -1018,7 +1019,7 @@ export default function ExpensesMain() {
                           </span>
                         </td>
                         <td className="py-2.5 px-3.5 text-zinc-600 dark:text-zinc-400">{c.payee || c.vendor || "Direct Payee"}</td>
-                        <td className="py-2.5 px-3.5 font-mono text-zinc-500 text-[11px]">{c.date}</td>
+                        <td className="py-2.5 px-3.5 font-mono text-zinc-500 text-[11px]">{formatDisplayDate(c.date)}</td>
                         <td className="py-2.5 px-3.5 text-right font-mono font-bold text-purple-600 dark:text-purple-400">
                           ₹{c.amount.toLocaleString("en-IN")}
                         </td>
@@ -1075,7 +1076,7 @@ export default function ExpensesMain() {
                         <td className="py-2.5 px-3.5 font-bold text-zinc-900 dark:text-zinc-100">{exp.title}</td>
                         <td className="py-2.5 px-3.5 text-zinc-600 dark:text-zinc-400">{exp.category}</td>
                         <td className="py-2.5 px-3.5 font-semibold text-zinc-800 dark:text-zinc-200">{exp.member}</td>
-                        <td className="py-2.5 px-3.5 font-mono text-zinc-500 text-[11px]">{exp.date}</td>
+                        <td className="py-2.5 px-3.5 font-mono text-zinc-500 text-[11px]">{formatDisplayDate(exp.date)}</td>
                         <td className="py-2.5 px-3.5 text-right font-mono font-bold text-rose-600 dark:text-rose-400">{exp.amount}</td>
                         <td className="py-2.5 px-3.5">
                           <span className={`px-2 py-0.5 rounded text-[9.5px] font-bold uppercase ${

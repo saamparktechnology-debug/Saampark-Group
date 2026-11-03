@@ -13,6 +13,7 @@ import { DebitNoteService } from "@/services/salesService"
 import { getClients } from "@/app/feature/clients/services/clientService"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
+import { formatDisplayDate } from "@/lib/utils"
 
 export interface DebitNoteItem {
   id: string
@@ -304,7 +305,7 @@ export default function DebitNotesPage() {
                     <td className="py-3 px-4 font-semibold text-zinc-900 dark:text-zinc-100">
                       {n.client}
                     </td>
-                    <td className="py-3 px-4 font-mono text-zinc-500 text-[11px]">{n.date}</td>
+                    <td className="py-3 px-4 font-mono text-zinc-500 text-[11px]">{formatDisplayDate(n.date)}</td>
                     <td className="py-3 px-4 font-bold font-mono text-zinc-950 dark:text-zinc-50">
                       ₹{n.amount.toLocaleString("en-IN")}
                     </td>
@@ -377,7 +378,7 @@ export default function DebitNotesPage() {
 
                 <div>
                   <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Supplementary Amount (₹)</label>
-                  <input type="number" required min={1} value={form.amount} onChange={e => setForm({ ...form, amount: Number(e.target.value) })} className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 font-mono font-bold" />
+                  <input type="number" required min={1} value={form.amount === 0 ? "" : (form.amount ?? "")} onChange={e => setForm({ ...form, amount: e.target.value === "" ? ("" as any) : Number(e.target.value) })} className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 font-mono font-bold" />
                 </div>
 
                 <div>

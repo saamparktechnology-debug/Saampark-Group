@@ -23,6 +23,7 @@ import { usePermissionStore } from "@/store/usePermissionStore"
 import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 import { getUserAvatar } from "@/app/feature/users/services/userService"
 import { confirmTwoStepDelete } from "@/lib/confirmDialog"
+import { formatDisplayDate } from "@/lib/utils"
 
 interface ProjectListProps {
   projects: Project[]
@@ -409,12 +410,12 @@ export function ProjectList({
                     </td>
 
                     {/* Start date */}
-                    <td className="py-3.5 px-4 text-zinc-600 dark:text-zinc-400">{p.startDate}</td>
+                    <td className="py-3.5 px-4 text-zinc-600 dark:text-zinc-400">{formatDisplayDate(p.startDate)}</td>
 
                     {/* Deadline */}
                     <td className="py-3.5 px-4">
                       <span className="text-red-600 dark:text-red-400 font-bold font-mono text-xs">
-                        {p.deadline}
+                        {p.deadline ? formatDisplayDate(p.deadline) : "-"}
                       </span>
                     </td>
 

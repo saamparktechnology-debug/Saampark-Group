@@ -1398,6 +1398,51 @@ export async function createTeamMember(memberData: Partial<UserItem>, companyId?
   return newMember;
 }
 
+/**
+ * Automatically creates or ensures an active User account with role "Clients"
+ * when an invoice or project is generated for a client.
+ */
+export async function ensureClientUserAccount(params: {
+  email?: string;
+  name?: string;
+  phone?: string;
+  companyId?: string;
+}): Promise<UserItem | null> {
+  const cleanEmail = (params.email || "").toLowerCase().trim();
+  if (!cleanEmail || cleanEmail.includes("@example.com")) return null;
 
+  try {
+    const allUsers = await getUsers("all");
+    const found = allUsers.find((u) => (u.email || "").toLowerCase().trim() === cleanEmail);
+    if (found) {
+      // User already exists; ensure role is "Clients" if not an admin/super admin
+      const r = (found.role || "").toLowerCase();
+      if (!r.includes("admin") && !r.includes("super") && found.role !== "Clients") {
+        await recordUserAccountAsync({ ...found, role: "Clients" });
+      }
+      return found;
+    }
 
+    // Auto-create client user
+    const newUser = await recordUserAccountAsync(
+      {
+        name: params.name?.trim() || "Client",
+        email: cleanEmail,
+        phone: params.phone?.trim() || "",
+        role: "Clients",
+        companyId: params.companyId || "tech",
+        companyIds: [params.companyId || "tech"],
+        status: "Active",
+        department: "Client Portal",
+        password: "Client@123",
+        joinedDate: new Date().toISOString().split("T")[0],
+      },
+      true
+    );
 
+    return newUser;
+  } catch (err) {
+    console.warn("Could not auto-create client user account:", err);
+    return null;
+  }
+}

@@ -93,13 +93,26 @@ export function formatLeadReminderDate(dateStr?: string): string {
   return `${day} ${month} ${year}`
 }
 
-export function isReminderDateOverdue(dateStr?: string): boolean {
+export function isReminderDateOverdue(dateStr?: string, timeStr?: string): boolean {
   const parsed = parseLeadDate(dateStr)
   if (!parsed) return false
   const now = new Date()
-  
-  // Set parsed to the very end of that reminder date (23:59:59.999)
-  // The lead remains active during the reminder day and locks once the date ends (at midnight)
+
+  // If time is provided, parse time (e.g. "11:30 AM", "06:00 PM", "14:30")
+  if (timeStr && timeStr !== "None" && typeof timeStr === "string") {
+    const timeMatch = timeStr.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i)
+    if (timeMatch) {
+      let hours = parseInt(timeMatch[1], 10)
+      const minutes = parseInt(timeMatch[2], 10)
+      const ampm = (timeMatch[3] || "").toUpperCase()
+      if (ampm === "PM" && hours < 12) hours += 12
+      if (ampm === "AM" && hours === 12) hours = 0
+      parsed.setHours(hours, minutes, 0, 0)
+      return now.getTime() > parsed.getTime()
+    }
+  }
+
+  // If no time is specified, the lead remains active during the reminder day and locks once the date ends (at midnight 23:59:59.999)
   parsed.setHours(23, 59, 59, 999)
   return now.getTime() > parsed.getTime()
 }
@@ -238,17 +251,136 @@ export function normalizeCompanyId(comp?: string | null): string {
   return "tech"
 }
 
+export function isTeamMemberRole(userOrRole?: any): boolean {
+  if (!userOrRole) return false
+  const roleStr = typeof userOrRole === "string" ? userOrRole : String(userOrRole.role || userOrRole.role_name || "")
+  const roleId = typeof userOrRole === "object" ? userOrRole.role_id : undefined
+  const rLower = roleStr.toLowerCase().trim()
+
+  if (rLower === "super admin" || rLower.includes("super")) return false
+  if (rLower === "admin") return false
+  if (rLower === "clients" || rLower.includes("client")) return false
+
+  return (
+    roleId === 3 ||
+    rLower === "teams" ||
+    rLower === "team" ||
+    rLower.includes("team") ||
+    rLower.includes("sales") ||
+    rLower.includes("caller") ||
+    rLower.includes("member") ||
+    rLower.includes("representative")
+  )
+}
+
+export function isLeadAssignedToUser(lead: Lead, user: any): boolean {
+  if (!user || !lead) return false
+
+  // Client-private leads are excluded for non-creators
+  if ((lead as any).isClientPrivate === true || lead.createdByRole === "Clients") {
+    const uId = String(user.id || "").toLowerCase().trim()
+    const uEmail = String(user.email || "").toLowerCase().trim()
+    const cId = String((lead as any).createdById || "").toLowerCase().trim()
+    const cEmail = ((lead as any).createdByEmail || "").toLowerCase().trim()
+    return Boolean((uId && cId === uId) || (uEmail && cEmail === uEmail))
+  }
+
+  const uId = String(user.id || "").toLowerCase().trim()
+  const uEmail = String(user.email || "").toLowerCase().trim()
+  const uName = String(user.name || (user as any).full_name || "").toLowerCase().trim()
+
+  // 1. Check Creator (Only exact ID, email, or exact non-admin creator name)
+  const cId = String((lead as any).createdById || "").toLowerCase().trim()
+  const cEmail = ((lead as any).createdByEmail || "").toLowerCase().trim()
+  const createdBy = (lead.createdBy || "").toLowerCase().trim()
+
+  if (uId && cId && cId === uId) return true
+  if (uEmail && ((cEmail && cEmail === uEmail) || (createdBy && createdBy === uEmail))) return true
+  if (
+    uName &&
+    createdBy &&
+    !createdBy.includes("super admin") &&
+    !createdBy.includes("(super admin)") &&
+    !createdBy.includes("(admin)") &&
+    !createdBy.includes("admin") &&
+    createdBy !== "team" &&
+    createdBy !== "teams" &&
+    createdBy === uName
+  ) {
+    return true
+  }
+
+  // 2. Check Assigned candidates (ONLY assignedTo and caller! NEVER lead.owner or lead.managers!)
+  const candidateFields = [
+    lead.assignedTo,
+    (lead as any).assigned_to,
+    lead.caller,
+  ]
+
+  for (const rawVal of candidateFields) {
+    if (!rawVal) continue
+    const str = String(rawVal).toLowerCase().trim()
+    if (!str || str === "none" || str === "unassigned" || str === "team" || str === "teams" || str === "all") continue
+
+    // Split multiple assignees by comma, semicolon, slash, or " & "
+    const tokens = str.split(/[,;\/&]+/).map((s) => s.trim()).filter(Boolean)
+    if (tokens.length === 0) tokens.push(str)
+
+    for (const t of tokens) {
+      if (
+        !t ||
+        t === "none" ||
+        t === "unassigned" ||
+        t === "team" ||
+        t === "teams" ||
+        t === "all" ||
+        t.includes("super admin") ||
+        t.includes("(super admin)") ||
+        t.includes("(admin)")
+      ) {
+        continue
+      }
+
+      // Check ID match
+      if (uId && (t === uId || t === `usr_${uId}`)) return true
+
+      // Check Email match
+      if (uEmail && t === uEmail) return true
+
+      // Check Exact Name match
+      if (uName) {
+        if (t === uName) return true
+
+        // If both have multiple words (first and last name, e.g. "Rakhi Ghosh" or "Supriya Naskar"), match full words
+        const uParts = uName.split(/\s+/).filter(Boolean)
+        const tParts = t.split(/\s+/).filter(Boolean)
+        if (uParts.length > 1 && tParts.length > 1) {
+          const matchAll = uParts.every((p) => tParts.includes(p)) && tParts.every((p) => uParts.includes(p))
+          if (matchAll) return true
+        }
+      }
+    }
+  }
+
+  return false
+}
+
 export const getLeads = async (companyId?: string): Promise<Lead[]> => {
   let targetComp = companyId
-  if (!targetComp && typeof window !== "undefined") {
+  let currentUser: any = null
+  if (typeof window !== "undefined") {
     try {
       const { useAuthStore } = require("@/store/useAuthStore")
-      targetComp = useAuthStore.getState().activeCompanyId || undefined
+      targetComp = targetComp || useAuthStore.getState().activeCompanyId || undefined
+      currentUser = useAuthStore.getState().user
     } catch {}
   }
 
-  const effectiveComp = targetComp || "all"
+  const isTeam = isTeamMemberRole(currentUser)
+  const effectiveComp = isTeam ? "all" : (targetComp || "all")
   let list: Lead[] = []
+
+  const knownCompanies = ["tech", "consultancy", "print", "saampark"]
 
   if (effectiveComp === "all") {
     const allData = await fetchModuleDataFromDB<Lead[]>("leads", [], "all").catch(() => [])
@@ -258,7 +390,6 @@ export const getLeads = async (companyId?: string): Promise<Lead[]> => {
         map.set(String(l.id).toLowerCase().trim(), l)
       }
     }
-    const knownCompanies = ["tech", "consultancy", "print"]
     const results = await Promise.all(
       knownCompanies.map(c => fetchModuleDataFromDB<Lead[]>("leads", [], c).catch(() => []))
     )
@@ -279,6 +410,9 @@ export const getLeads = async (companyId?: string): Promise<Lead[]> => {
     const toFetch = [canonicalTarget]
     if (canonicalTarget === "consultancy") {
       toFetch.push("print")
+    }
+    if (canonicalTarget === "tech") {
+      toFetch.push("saampark")
     }
 
     const [allData, ...scopedResults] = await Promise.all([
@@ -357,11 +491,30 @@ export const getLeads = async (companyId?: string): Promise<Lead[]> => {
       return lead
     }
 
-    // 2. Active leads: check if reminder date is overdue (passed end of date 23:59:59)
-    // Any lead whose reminder date has expired MUST be locked (unless Won/Lost)
-    const overdue = isReminderDateOverdue(lead.reminderDate)
+    // 2. Explicitly unlocked leads: PRESERVE unlocked state unconditionally
+    const isExplicitlyUnlocked =
+      (lead as any).isExplicitlyUnlocked === true ||
+      lead.lockedReason?.includes("Unlocked") ||
+      (lead as any).unlockedByAdmin === true ||
+      (lead as any).unlockedByClient === true
+
+    if (isExplicitlyUnlocked) {
+      if (lead.isLocked) {
+        hasChanges = true
+        return {
+          ...lead,
+          isLocked: false,
+          lockedReason: lead.lockedReason || "Unlocked",
+          isExplicitlyUnlocked: true,
+        }
+      }
+      return lead
+    }
+
+    // 3. Active leads: check if reminder date is overdue (passed reminder time or end of date)
+    const overdue = isReminderDateOverdue(lead.reminderDate, lead.reminderTime)
     if (overdue) {
-      if (!lead.isLocked || lead.lockedReason?.includes("Unlocked")) {
+      if (!lead.isLocked) {
         hasChanges = true
         return {
           ...lead,
@@ -373,22 +526,14 @@ export const getLeads = async (companyId?: string): Promise<Lead[]> => {
       return lead
     }
 
-    // 3. Not overdue leads: preserve explicit unlock or release automatic lock
-    const isExplicitlyUnlocked =
-      (lead as any).isExplicitlyUnlocked === true ||
-      lead.lockedReason?.includes("Unlocked") ||
-      (lead as any).unlockedByAdmin === true
-
-    if (isExplicitlyUnlocked && lead.isLocked === false) {
-      return lead
-    }
-
+    // 4. Not overdue leads: release automatic lock
     if (!overdue && lead.isLocked && !lead.lockedReason?.includes("Manually locked")) {
       hasChanges = true
       return {
         ...lead,
         isLocked: false,
         lockedReason: undefined,
+        isExplicitlyUnlocked: false,
       }
     }
 
@@ -396,18 +541,12 @@ export const getLeads = async (companyId?: string): Promise<Lead[]> => {
   })
 
   if (hasChanges) {
-    saveModuleDataToDB("leads", processed, effectiveComp !== "all" ? normalizeCompanyId(effectiveComp) : undefined).catch(() => {})
+    saveModuleDataToDB("leads", processed, "all").catch(() => {})
+    const comp = effectiveComp !== "all" ? normalizeCompanyId(effectiveComp) : "tech"
+    saveModuleDataToDB("leads", processed, comp).catch(() => {})
   }
 
   // Client Isolation: If client user, strictly only return their leads.
-  let currentUser: any = null
-  if (typeof window !== "undefined") {
-    try {
-      const { useAuthStore } = require("@/store/useAuthStore")
-      currentUser = useAuthStore.getState().user
-    } catch {}
-  }
-
   if (currentUser?.role === "Clients" || currentUser?.role?.toLowerCase().includes("client")) {
     const cId = String(currentUser.id || "").toLowerCase().trim()
     const cEmail = (currentUser.email || "").toLowerCase().trim()
@@ -426,24 +565,8 @@ export const getLeads = async (companyId?: string): Promise<Lead[]> => {
   }
 
   // Team Member Scoping: Team members only see leads assigned to them or created by them
-  if (currentUser?.role === "Teams" || (currentUser?.role as string) === "Team") {
-    const uId = String(currentUser.id || "").toLowerCase().trim()
-    const uEmail = (currentUser.email || "").toLowerCase().trim()
-    const uName = (currentUser.name || "").toLowerCase().trim()
-    return processed.filter((l) => {
-      if ((l as any).isClientPrivate === true || l.createdByRole === "Clients") return false
-      const assigned = String(l.assignedTo || (l as any).assigned_to || l.caller || l.owner || "").toLowerCase().trim()
-      const creatorId = String(l.createdById || "").toLowerCase().trim()
-      const creatorEmail = (l.createdByEmail || "").toLowerCase().trim()
-      const createdBy = (l.createdBy || "").toLowerCase().trim()
-      const mgrs = (l.managers || "").toLowerCase().trim()
-
-      return (
-        (uId && (assigned === uId || creatorId === uId)) ||
-        (uEmail && (assigned === uEmail || creatorEmail === uEmail)) ||
-        (uName && (assigned === uName || createdBy === uName || mgrs.includes(uName)))
-      )
-    })
+  if (isTeam) {
+    return processed.filter((l) => isLeadAssignedToUser(l, currentUser))
   }
 
   return processed.filter((l) => (l as any).isClientPrivate !== true && l.createdByRole !== "Clients")
@@ -634,15 +757,30 @@ export const updateLead = async (id: string, updates: Partial<Lead>, userRole?: 
 
   const isAllowedToEditLocked = isSuperOrAdmin || isClientCreator
 
-  // Prevent callers/teams from updating a locked lead unless being explicitly unlocked or moving to Won/Lost
-  if (target.isLocked && !isAllowedToEditLocked && updates.isLocked !== false && !isWonOrLost) {
+  const finalReminderDate = updates.reminderDate !== undefined ? updates.reminderDate : target.reminderDate
+  const finalReminderTime = updates.reminderTime !== undefined ? updates.reminderTime : target.reminderTime
+  const isTargetOverdue = isReminderDateOverdue(target.reminderDate, target.reminderTime)
+  const isNewReminderOverdue = isReminderDateOverdue(finalReminderDate, finalReminderTime)
+
+  const isLeadExplicitlyUnlocked =
+    (target as any).isExplicitlyUnlocked === true ||
+    target.lockedReason?.includes("Unlocked") ||
+    (target as any).unlockedByAdmin === true ||
+    (target as any).unlockedByClient === true
+
+  const isCurrentlyLocked = Boolean(
+    target.isLocked && !isLeadExplicitlyUnlocked && !isWonOrLost
+  )
+
+  const isAdvancingOrClearingReminder = updates.reminderDate !== undefined && !isNewReminderOverdue
+
+  // Prevent callers/teams from updating a locked lead unless being explicitly unlocked, moving to Won/Lost, or updating an expired reminder date
+  if (isCurrentlyLocked && !isAllowedToEditLocked && updates.isLocked !== false && !isWonOrLost && !isAdvancingOrClearingReminder) {
     if (isLeadClientPrivate(target)) {
       throw new Error("This lead was added by a client and is locked. Only that specific client (or Super Admin) can unlock or edit it.")
     }
-    throw new Error("This lead is locked due to missing daily updates. Only an Admin or Super Admin can unlock it.")
+    throw new Error("This lead is locked because its reminder date has expired. Only an Admin or Super Admin can unlock it.")
   }
-
-  const finalReminderDate = updates.reminderDate !== undefined ? updates.reminderDate : target.reminderDate
 
   let nextIsLocked = target.isLocked
   let nextReason = target.lockedReason
@@ -669,15 +807,20 @@ export const updateLead = async (id: string, updates: Partial<Lead>, userRole?: 
     nextIsLocked = true
     nextReason = target.lockedReason
     nextIsExplicitlyUnlocked = false
-  } else if (finalReminderDate && isReminderDateOverdue(finalReminderDate)) {
-    nextIsLocked = true
-    nextReason = "Overdue: Lead reminder date expired."
-    nextIsExplicitlyUnlocked = false
-  } else if (target.isLocked === false && (nextIsExplicitlyUnlocked || target.lockedReason?.includes("Unlocked"))) {
+  } else if (updates.reminderDate !== undefined && !isNewReminderOverdue) {
+    // Setting a new valid future date or clearing reminder automatically unlocks the lead!
+    nextIsLocked = false
+    nextReason = undefined
+    nextIsExplicitlyUnlocked = true
+  } else if (isLeadExplicitlyUnlocked) {
     nextIsLocked = false
     nextReason = target.lockedReason || "Unlocked"
     nextIsExplicitlyUnlocked = true
-  } else if (finalReminderDate && !isReminderDateOverdue(finalReminderDate)) {
+  } else if (finalReminderDate && isNewReminderOverdue) {
+    nextIsLocked = true
+    nextReason = "Overdue: Lead reminder date expired."
+    nextIsExplicitlyUnlocked = false
+  } else if (!isNewReminderOverdue) {
     nextIsLocked = false
     nextReason = undefined
     nextIsExplicitlyUnlocked = false

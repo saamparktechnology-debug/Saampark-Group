@@ -28,7 +28,7 @@ import {
 } from "lucide-react"
 import { Lead, LeadStatus } from "../types"
 import { LeadFiltersDropdown } from "./LeadFiltersDropdown"
-import { updateLead, parseLeadDate, formatLeadReminderDate, canUserUnlockLead, isLeadClientPrivate } from "../services/leadService"
+import { updateLead, parseLeadDate, formatLeadReminderDate, isReminderDateOverdue, canUserUnlockLead, isLeadClientPrivate, isLeadAssignedToUser, isTeamMemberRole } from "../services/leadService"
 import { LabelItem } from "./ManageLabelsModal"
 import { WhatsAppTemplateModal } from "./WhatsAppTemplateModal"
 import { CallOutcomeModal } from "./CallOutcomeModal"
@@ -329,15 +329,18 @@ export function LeadKanban({
   const [isFiltersDropdownOpen, setIsFiltersDropdownOpen] = React.useState(false)
   const [draggedLeadId, setDraggedLeadId] = React.useState<string | null>(null)
 
-  const [selectedBranchFilter, setSelectedBranchFilter] = React.useState<string>(activeBranchId || "all")
+  const isTeamMember = isTeamMemberRole(user)
+  const [selectedBranchFilter, setSelectedBranchFilter] = React.useState<string>(isTeamMember ? "all" : (activeBranchId || "all"))
 
   React.useEffect(() => {
-    if (activeBranchId) {
+    if (isTeamMember) {
+      setSelectedBranchFilter("all")
+    } else if (activeBranchId) {
       setSelectedBranchFilter(activeBranchId)
     } else {
       setSelectedBranchFilter("all")
     }
-  }, [activeBranchId])
+  }, [activeBranchId, isTeamMember])
 
   const [selectedStageFilter, setSelectedStageFilter] = React.useState<string>("all")
   const [isStageDropdownOpen, setIsStageDropdownOpen] = React.useState(false)
@@ -515,9 +518,10 @@ export function LeadKanban({
       } else {
         const targetMemberNorm = selectedMember.toLowerCase().trim()
         const isMatch =
-          (l.assignedTo && l.assignedTo.toLowerCase().trim() === targetMemberNorm) ||
-          (l.caller && l.caller.toLowerCase().trim() === targetMemberNorm) ||
-          (l.owner && l.owner.toLowerCase().trim() === targetMemberNorm) ||
+          isLeadAssignedToUser(l, { name: selectedMember }) ||
+          (l.assignedTo && l.assignedTo.toLowerCase().trim().includes(targetMemberNorm)) ||
+          (l.caller && l.caller.toLowerCase().trim().includes(targetMemberNorm)) ||
+          (l.owner && l.owner.toLowerCase().trim().includes(targetMemberNorm)) ||
           (l.managers && l.managers.toLowerCase().includes(targetMemberNorm))
         if (!isMatch) return false
 
@@ -531,9 +535,12 @@ export function LeadKanban({
     }
 
     // ── BRANCH FILTER ──
-    const effectiveBranch = selectedBranchFilter !== "all" ? selectedBranchFilter : (activeBranchId || "all")
-    if (effectiveBranch !== "all") {
-      if (effectiveBranch === "unassigned") {
+    const effectiveBranch = selectedBranchFilter
+    if (effectiveBranch && effectiveBranch !== "all") {
+      const isAssignedToMe = isLeadAssignedToUser(l, user)
+      if (isTeamMember && isAssignedToMe && !l.branchId && !l.assignedBranchId && !(l as any).branch_id) {
+        // Keep visible for assigned team member
+      } else if (effectiveBranch === "unassigned") {
         if (l.branchId || l.assignedBranchId || l.branchName || l.assignedBranchName) return false
       } else {
         const targetStr = String(effectiveBranch).toLowerCase().trim()
@@ -561,7 +568,7 @@ export function LeadKanban({
             (targetBranchCode && lBranchName === targetBranchCode)
           ))
 
-        if (!bMatch) return false
+        if (!bMatch && !(isTeamMember && isAssignedToMe && (!lBranch && !lBranchName))) return false
       }
     }
 
@@ -571,27 +578,8 @@ export function LeadKanban({
       return true
     }
 
-    if (activeFilter === "My leads") {
-      const currentUserName = (user?.name || "").toLowerCase().trim()
-      const currentUserEmail = (user?.email || "").toLowerCase().trim()
-      const currentUserId = String(user?.id || "").toLowerCase().trim()
-      const cId = String((l as any).createdById || "").toLowerCase().trim()
-      const cEmail = ((l as any).createdByEmail || "").toLowerCase().trim()
-      const cName = ((l as any).createdByName || l.createdBy || "").toLowerCase().trim()
-
-      const isMyLead =
-        (currentUserId && cId === currentUserId) ||
-        (currentUserEmail && cEmail === currentUserEmail) ||
-        (currentUserName && cName === currentUserName) ||
-        (currentUserName && (
-          (l.caller || "").toLowerCase() === currentUserName ||
-          (l.assignedTo || "").toLowerCase() === currentUserName ||
-          (l.owner || "").toLowerCase() === currentUserName
-        )) ||
-        (currentUserEmail && (
-          (l.owner || "").toLowerCase() === currentUserEmail
-        ))
-      return Boolean(isMyLead)
+    if (activeFilter === "My leads" || activeFilter === "my_leads") {
+      return isLeadAssignedToUser(l, user)
     }
 
     // Check if activeFilter matches a source (e.g. Social Media, Meta Ads, Google Ads, Local Market)
@@ -1258,7 +1246,18 @@ export function LeadKanban({
               >
                 {columnLeads.map((l) => {
                   const isWonOrLost = (l.status || "").toLowerCase().trim() === "won" || (l.status || "").toLowerCase().trim() === "lost"
-                  const isLocked = !!l.isLocked
+                  const isOverdue = isReminderDateOverdue(l.reminderDate, l.reminderTime)
+                  const isExplicitlyUnlocked = Boolean(
+                    (l as any)?.isExplicitlyUnlocked === true ||
+                    l.lockedReason?.includes("Unlocked") ||
+                    (l as any)?.unlockedByAdmin === true ||
+                    (l as any)?.unlockedByClient === true
+                  )
+                  const isLocked = Boolean(
+                    !isWonOrLost &&
+                    !isExplicitlyUnlocked &&
+                    (l.isLocked || isOverdue)
+                  )
 
                   return (
                     <div

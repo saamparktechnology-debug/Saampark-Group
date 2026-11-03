@@ -28,11 +28,12 @@ import {
 } from "lucide-react"
 import { Lead } from "../types"
 import { LeadFiltersDropdown } from "./LeadFiltersDropdown"
-import { formatLeadReminderDate, transferLeadsToBranch, parseLeadDate, canUserUnlockLead, isLeadClientPrivate } from "../services/leadService"
+import { formatLeadReminderDate, transferLeadsToBranch, parseLeadDate, isReminderDateOverdue, canUserUnlockLead, isLeadClientPrivate, isLeadAssignedToUser, isTeamMemberRole } from "../services/leadService"
 import { LabelItem } from "./ManageLabelsModal"
 import { LabelSelectorPopover } from "./LabelSelectorPopover"
 import { WhatsAppTemplateModal } from "./WhatsAppTemplateModal"
 import { CallOutcomeModal } from "./CallOutcomeModal"
+import { formatDisplayDate } from "@/lib/utils"
 import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { getUsers } from "@/app/feature/users/services/userService"
@@ -111,16 +112,19 @@ export function LeadList({
   const [selectedLeadIds, setSelectedLeadIds] = React.useState<string[]>([])
   const [isTransferModalOpen, setIsTransferModalOpen] = React.useState(false)
   const [selectedTargetBranchId, setSelectedTargetBranchId] = React.useState<string>("")
-  const [selectedBranchFilter, setSelectedBranchFilter] = React.useState<string>(activeBranchId || "all")
+  const isTeamMember = isTeamMemberRole(user)
+  const [selectedBranchFilter, setSelectedBranchFilter] = React.useState<string>(isTeamMember ? "all" : (activeBranchId || "all"))
   const [isTransferring, setIsTransferring] = React.useState(false)
 
   React.useEffect(() => {
-    if (activeBranchId) {
+    if (isTeamMember) {
+      setSelectedBranchFilter("all")
+    } else if (activeBranchId) {
       setSelectedBranchFilter(activeBranchId)
     } else {
       setSelectedBranchFilter("all")
     }
-  }, [activeBranchId])
+  }, [activeBranchId, isTeamMember])
 
   const [allUsers, setAllUsers] = React.useState<{ id: string; name: string; role?: string; department?: string; email?: string; avatar?: string; avatarUrl?: string }[]>([])
   const [usersMap, setUsersMap] = React.useState<Record<string, { department?: string; role?: string; avatarUrl?: string }>>({})
@@ -357,9 +361,10 @@ export function LeadList({
       } else {
         const targetMemberNorm = selectedMember.toLowerCase().trim()
         const isMatch =
-          (l.assignedTo && l.assignedTo.toLowerCase().trim() === targetMemberNorm) ||
-          (l.caller && l.caller.toLowerCase().trim() === targetMemberNorm) ||
-          (l.owner && l.owner.toLowerCase().trim() === targetMemberNorm) ||
+          isLeadAssignedToUser(l, { name: selectedMember }) ||
+          (l.assignedTo && l.assignedTo.toLowerCase().trim().includes(targetMemberNorm)) ||
+          (l.caller && l.caller.toLowerCase().trim().includes(targetMemberNorm)) ||
+          (l.owner && l.owner.toLowerCase().trim().includes(targetMemberNorm)) ||
           (l.managers && l.managers.toLowerCase().includes(targetMemberNorm))
         if (!isMatch) return false
 
@@ -373,9 +378,12 @@ export function LeadList({
     }
 
     // ── BRANCH FILTER ──
-    const effectiveBranch = selectedBranchFilter !== "all" ? selectedBranchFilter : (activeBranchId || "all")
-    if (effectiveBranch !== "all") {
-      if (effectiveBranch === "unassigned") {
+    const effectiveBranch = selectedBranchFilter
+    if (effectiveBranch && effectiveBranch !== "all") {
+      const isAssignedToMe = isLeadAssignedToUser(l, user)
+      if (isTeamMember && isAssignedToMe && !l.branchId && !l.assignedBranchId && !(l as any).branch_id) {
+        // Keep visible for assigned team member
+      } else if (effectiveBranch === "unassigned") {
         if (l.branchId || l.assignedBranchId || l.branchName || l.assignedBranchName) return false
       } else {
         const targetStr = String(effectiveBranch).toLowerCase().trim()
@@ -403,7 +411,7 @@ export function LeadList({
             (targetBranchCode && lBranchName === targetBranchCode)
           ))
 
-        if (!bMatch) return false
+        if (!bMatch && !(isTeamMember && isAssignedToMe && (!lBranch && !lBranchName))) return false
       }
     }
 
@@ -413,27 +421,8 @@ export function LeadList({
       return true
     }
 
-    if (activeFilter === "My leads") {
-      const currentUserName = (user?.name || "").toLowerCase().trim()
-      const currentUserEmail = (user?.email || "").toLowerCase().trim()
-      const currentUserId = String(user?.id || "").toLowerCase().trim()
-      const cId = String((l as any).createdById || "").toLowerCase().trim()
-      const cEmail = ((l as any).createdByEmail || "").toLowerCase().trim()
-      const cName = ((l as any).createdByName || l.createdBy || "").toLowerCase().trim()
-
-      const isMyLead =
-        (currentUserId && cId === currentUserId) ||
-        (currentUserEmail && cEmail === currentUserEmail) ||
-        (currentUserName && cName === currentUserName) ||
-        (currentUserName && (
-          (l.caller || "").toLowerCase() === currentUserName ||
-          (l.assignedTo || "").toLowerCase() === currentUserName ||
-          (l.owner || "").toLowerCase() === currentUserName
-        )) ||
-        (currentUserEmail && (
-          (l.owner || "").toLowerCase() === currentUserEmail
-        ))
-      return Boolean(isMyLead)
+    if (activeFilter === "My leads" || activeFilter === "my_leads") {
+      return isLeadAssignedToUser(l, user)
     }
 
     // Check if activeFilter matches a source (e.g. Social Media, Meta Ads, Google Ads, Local Market)
@@ -1261,7 +1250,18 @@ export function LeadList({
             <tbody className="divide-y divide-zinc-200/80 dark:divide-zinc-800">
               {paginatedLeads.map((l) => {
                 const isWonOrLost = (l.status || "").toLowerCase().trim() === "won" || (l.status || "").toLowerCase().trim() === "lost"
-                const isLocked = l.isLocked === true
+                const isOverdue = isReminderDateOverdue(l.reminderDate, l.reminderTime)
+                const isExplicitlyUnlocked = Boolean(
+                  (l as any)?.isExplicitlyUnlocked === true ||
+                  l.lockedReason?.includes("Unlocked") ||
+                  (l as any)?.unlockedByAdmin === true ||
+                  (l as any)?.unlockedByClient === true
+                )
+                const isLocked = Boolean(
+                  !isWonOrLost &&
+                  !isExplicitlyUnlocked &&
+                  (l.isLocked || isOverdue)
+                )
 
                 return (
                   <tr
@@ -1567,7 +1567,7 @@ export function LeadList({
 
                     {/* Created at */}
                     <td className={`py-3.5 px-4 text-zinc-500 font-mono text-[11px] ${isLocked ? "blur-[1px] opacity-60" : ""}`}>
-                      {l.createdAt}
+                      {formatDisplayDate(l.createdAt)}
                     </td>
 
                     {/* Status */}

@@ -161,8 +161,8 @@ export function AddClientProjectModal({
   }
 
   const [creationMode, setCreationMode] = React.useState<"project_and_invoice" | "invoice_only">(initialMode || "project_and_invoice")
-  const [projectTitle, setProjectTitle] = React.useState("Website Development")
-  const [category, setCategory] = React.useState("Website Development")
+  const [projectTitle, setProjectTitle] = React.useState("")
+  const [category, setCategory] = React.useState("")
   const [customCategory, setCustomCategory] = React.useState("")
   const [isCustomCategory, setIsCustomCategory] = React.useState(false)
 
@@ -923,6 +923,19 @@ export function AddClientProjectModal({
       } as any, targetCompany)
 
       const invoiceId = createdInvoice.id
+
+      // Auto-create client user account with role "Clients"
+      const targetClientEmail = clientEmail.trim() || effectiveClient.email
+      if (targetClientEmail) {
+        import("@/app/feature/users/services/userService").then(({ ensureClientUserAccount }) => {
+          ensureClientUserAccount({
+            email: targetClientEmail,
+            name: clientContactPersonName.trim() || effectiveClient.name,
+            phone: clientPhone.trim() || effectiveClient.phone,
+            companyId: targetCompany,
+          }).catch(() => {})
+        }).catch(() => {})
+      }
 
       // 3. Concurrently create Order and Initial Payment (if advance paid)
       const followUpTasks: Promise<any>[] = [
@@ -1983,7 +1996,7 @@ export function AddClientProjectModal({
                                 min="0"
                                 step={m.payoutType === "percentage" ? "0.5" : "1"}
                                 placeholder={m.payoutType === "percentage" ? "e.g. 15%" : "e.g. 5000"}
-                                value={m.payoutValue}
+                                value={m.payoutValue === 0 ? "" : (m.payoutValue ?? "")}
                                 onChange={(e) => {
                                   const v = e.target.value === "" ? "" : Math.max(0, Number(e.target.value))
                                   handleUpdateMemberAllocation(m.id || m.name, "payoutValue", v)
@@ -2159,7 +2172,7 @@ export function AddClientProjectModal({
                           min="0"
                           required
                           placeholder="e.g. 35000"
-                          value={item.rate}
+                          value={item.rate === 0 ? "" : (item.rate ?? "")}
                           onChange={(e) => {
                             const val = e.target.value
                             handleUpdateService(item.id, "rate", val === "" ? "" : Math.max(0, Number(val)))
@@ -2176,8 +2189,8 @@ export function AddClientProjectModal({
                           <input
                             type="number"
                             min="1"
-                            value={item.qty}
-                            onChange={(e) => handleUpdateService(item.id, "qty", Math.max(1, Number(e.target.value)))}
+                            value={item.qty === 0 ? "" : (item.qty ?? "")}
+                            onChange={(e) => handleUpdateService(item.id, "qty", e.target.value === "" ? "" : Math.max(1, Number(e.target.value)))}
                             className="w-12 px-1.5 py-1.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-mono text-center font-bold"
                           />
                           <select
@@ -2253,7 +2266,7 @@ export function AddClientProjectModal({
                                   type="number"
                                   min="0"
                                   placeholder="Price"
-                                  value={chg.amount}
+                                  value={chg.amount === 0 ? "" : (chg.amount ?? "")}
                                   onChange={(e) => {
                                     const val = e.target.value
                                     handleUpdateCharge(item.id, chg.id, "amount", val === "" ? "" : Math.max(0, Number(val)))
@@ -2327,7 +2340,7 @@ export function AddClientProjectModal({
                         type="number"
                         min="0"
                         placeholder="Amount"
-                        value={disc.amount}
+                        value={disc.amount === 0 ? "" : (disc.amount ?? "")}
                         onChange={(e) => {
                           const val = e.target.value
                           handleUpdateDiscount(disc.id, "amount", val === "" ? "" : Math.max(0, Number(val)))
@@ -2599,7 +2612,7 @@ export function AddClientProjectModal({
                     <input
                       type="number"
                       min="0"
-                      value={partInitialPayment}
+                      value={partInitialPayment === 0 ? "" : (partInitialPayment ?? "")}
                       onChange={(e) => {
                         const val = e.target.value
                         setPartInitialPayment(val === "" ? "" : Math.max(0, Number(val)))
@@ -2650,7 +2663,7 @@ export function AddClientProjectModal({
                   type="number"
                   min="0"
                   placeholder="Enter initial advance (e.g. 20000)"
-                  value={advanceAmount}
+                  value={advanceAmount === 0 ? "" : (advanceAmount ?? "")}
                   onChange={(e) => {
                     const val = e.target.value
                     setAdvanceAmount(val === "" ? "" : Math.max(0, Number(val)))

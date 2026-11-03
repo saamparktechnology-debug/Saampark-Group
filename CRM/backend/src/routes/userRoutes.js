@@ -18,7 +18,7 @@ router.put('/:id', authenticate, requireRole(1, 2), updateUser);
 // TOGGLE status (Admin / Super Admin)
 router.patch('/:id/status', authenticate, requireRole(1, 2), toggleUserStatus);
 
-// DELETE user (soft) (Super Admin only)
-router.delete('/:id', authenticate, requireRole(1), deleteUser);
+// DELETE user (soft) (Admin / Super Admin)
+router.delete('/:id', authenticate, requireRole(1, 2), deleteUser);
 
 module.exports = router;

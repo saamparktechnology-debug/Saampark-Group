@@ -24,6 +24,7 @@ import { exportToExcel, printPDFReport } from "@/lib/exportUtils"
 import { confirmTwoStepBulkDelete } from "@/lib/confirmDialog"
 import { getUsers, getUserAvatar } from "@/app/feature/users/services/userService"
 import { UserItem } from "@/app/feature/users/types"
+import { formatDisplayDate } from "@/lib/utils"
 
 interface TaskListProps {
   tasks: Task[]
@@ -585,7 +586,7 @@ export function TaskList({
 
                     {/* Start Date */}
                     <td className="py-3 px-3 text-zinc-400 font-mono">
-                      {t.startDate || "-"}
+                      {t.startDate ? formatDisplayDate(t.startDate) : "-"}
                     </td>
 
                     {/* Deadline & Remaining Days Countdown */}
@@ -595,7 +596,7 @@ export function TaskList({
                         return (
                           <div className="flex flex-col gap-1">
                             <span className="font-bold text-red-600 dark:text-red-400">
-                              {t.deadline}{t.dueTime ? ` (${t.dueTime})` : ''}
+                              {t.deadline ? formatDisplayDate(t.deadline) : "-"}{t.dueTime ? ` (${t.dueTime})` : ''}
                             </span>
                             {chip && (
                               <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] border ${chip.colorClass} w-fit`}>

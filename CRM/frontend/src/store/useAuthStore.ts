@@ -1490,14 +1490,22 @@ export const useAuthStore = create<AuthState>()(
         const activeBranchId = (normalizedRole !== 'Super Admin' && rawBranch) ? rawBranch : null
         const activeSubBranchId = (normalizedRole !== 'Super Admin' && rawSubBranch) ? rawSubBranch : null
 
+        const effectiveToken = (customUser as any)?.token || ((customUser as any)?.auth_token) || (typeof window !== 'undefined' ? localStorage.getItem('saampark_token') : null)
+
         if (typeof window !== 'undefined') {
           sessionStorage.setItem('saampark_session_active', 'true')
           localStorage.setItem('saampark_session_active', 'true')
           localStorage.setItem('saampark_last_activity_time', String(Date.now()))
+          sessionStorage.removeItem('saampark_inactivity_logout')
+          sessionStorage.removeItem('saampark_inactive_logout')
+          if (effectiveToken) {
+            localStorage.setItem('saampark_token', effectiveToken)
+          }
         }
 
         set({
           isAuthenticated: true,
+          token: effectiveToken,
           user,
           activeCompanyId,
           activeBranchId,

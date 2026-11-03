@@ -34,8 +34,31 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
     // If on a public verification page or login page, do NOT enforce session expiry or login redirects!
     if (isPublicPage) {
-      if (isAuth && pathname === "/login") {
-        router.replace("/feature/dashboard")
+      if (pathname === "/login" || pathname?.startsWith("/login")) {
+        // If user is already authenticated (or just logged in), navigate directly to dashboard
+        if (isAuth) {
+          if (typeof window !== "undefined") {
+            sessionStorage.removeItem("saampark_inactivity_logout")
+            sessionStorage.removeItem("saampark_inactive_logout")
+            sessionStorage.setItem("saampark_session_active", "true")
+            localStorage.setItem("saampark_session_active", "true")
+            localStorage.setItem("saampark_last_activity_time", String(Date.now()))
+            if (window.location.search) {
+              window.history.replaceState({}, document.title, window.location.pathname)
+            }
+          }
+          router.replace("/feature/dashboard")
+          return
+        }
+
+        // On login page when unauthenticated: cleanly reset any leftover flags without wiping out future login attempts!
+        if (typeof window !== "undefined") {
+          sessionStorage.removeItem("saampark_inactivity_logout")
+          sessionStorage.removeItem("saampark_inactive_logout")
+          if (window.location.search.includes("expired") || window.location.search.includes("inactivity")) {
+            window.history.replaceState({}, document.title, window.location.pathname)
+          }
+        }
       }
       return
     }
@@ -57,14 +80,28 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     }
   }, [isAuthenticated, user, pathname, router, isMounted])
 
+  // Reset activity tracker immediately upon authentication
+  React.useEffect(() => {
+    if (!isMounted) return
+    if (isAuthenticated) {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("saampark_last_activity_time", String(Date.now()))
+        sessionStorage.setItem("saampark_session_active", "true")
+        localStorage.setItem("saampark_session_active", "true")
+        sessionStorage.removeItem("saampark_inactivity_logout")
+        sessionStorage.removeItem("saampark_inactive_logout")
+      }
+    }
+  }, [isAuthenticated, isMounted])
+
   // 2. 30-Minute Inactivity Tracker & Auto-Logout
   React.useEffect(() => {
     if (!isMounted) return
 
-    const INACTIVITY_LIMIT_MS = 60 * 60 * 1000 // 60 minutes
+    const INACTIVITY_LIMIT_MS = 30 * 60 * 1000 // 30 minutes
     let lastActivityTime = Date.now()
 
-    // Initialize stored activity timestamp
+    // Always ensure fresh last activity time upon mounting
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("saampark_last_activity_time")
       if (stored && !isNaN(Number(stored))) {
@@ -76,36 +113,57 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
           localStorage.setItem("saampark_last_activity_time", String(lastActivityTime))
         }
       } else {
+        lastActivityTime = Date.now()
         localStorage.setItem("saampark_last_activity_time", String(lastActivityTime))
       }
     }
 
     let throttleTimer: any = null
     const updateActivity = () => {
+      lastActivityTime = Date.now()
       if (throttleTimer) return
       throttleTimer = setTimeout(() => {
         throttleTimer = null
       }, 5000) // Throttle to write at most once every 5 seconds
 
-      lastActivityTime = Date.now()
       if (typeof window !== "undefined") {
-        localStorage.setItem("saampark_last_activity_time", String(lastActivityTime))
+        localStorage.setItem("saampark_last_activity_time", String(Date.now()))
       }
     }
 
-    const activityEvents = ["mousemove", "mousedown", "keydown", "scroll", "touchstart", "click"]
+    const activityEvents = ["mousemove", "mousedown", "keydown", "scroll", "touchstart", "click", "focus"]
     activityEvents.forEach((ev) => window.addEventListener(ev, updateActivity, { passive: true }))
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        updateActivity()
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange)
 
     // Check inactivity periodically every 10 seconds
     const inactivityInterval = setInterval(() => {
       const state = useAuthStore.getState()
-      if (!state.isAuthenticated) return
+      // If user is not authenticated, keep lastActivityTime fresh so when they log in they don't get kicked out!
+      if (!state.isAuthenticated) {
+        lastActivityTime = Date.now()
+        if (typeof window !== "undefined") {
+          localStorage.setItem("saampark_last_activity_time", String(Date.now()))
+        }
+        return
+      }
 
       let effectiveLastActivity = lastActivityTime
       if (typeof window !== "undefined") {
         const stored = localStorage.getItem("saampark_last_activity_time")
         if (stored && !isNaN(Number(stored))) {
-          effectiveLastActivity = Math.max(lastActivityTime, Number(stored))
+          const storedNum = Number(stored)
+          effectiveLastActivity = Math.max(lastActivityTime, storedNum)
+        } else {
+          // If stored is missing, reset it now to prevent premature logout
+          lastActivityTime = Date.now()
+          localStorage.setItem("saampark_last_activity_time", String(Date.now()))
+          return
         }
       }
 
@@ -124,6 +182,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       clearInterval(inactivityInterval)
       if (throttleTimer) clearTimeout(throttleTimer)
       activityEvents.forEach((ev) => window.removeEventListener(ev, updateActivity))
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
     }
   }, [isMounted, router])
 

@@ -41,6 +41,49 @@ export interface EstimateItem {
   revisionNote?: string
 }
 
+export const normalizeEstimate = (raw: any): EstimateItem => {
+  const num = raw.estimateNumber || raw.estimate_number || raw.number || `EST #${raw.id}`
+  const clientName = raw.client || raw.customer || raw.customer_name || 'Client'
+  const total = Number(raw.totalAmount || raw.total) || 0
+  const sub = Number(raw.subtotal) || 0
+  const rawServices = raw.services || raw.items || []
+  const services: EstimateServiceItem[] = Array.isArray(rawServices) && rawServices.length > 0
+    ? rawServices.map((s: any, idx: number) => ({
+        id: String(s.id || `s_${idx}`),
+        name: s.name || s.serviceName || s.description || 'Service',
+        description: s.description || '',
+        quantity: Number(s.quantity || s.qty || 1),
+        unitPrice: Number(s.unitPrice || s.unit_price || s.rate || 0),
+        total: Number(s.total || s.totalAmount || 0) || (Number(s.quantity || s.qty || 1) * Number(s.unitPrice || s.unit_price || s.rate || 0))
+      }))
+    : [{ id: 's_1', name: raw.title || 'Professional Services', quantity: 1, unitPrice: sub || total, total: sub || total }]
+
+  return {
+    id: String(raw.id),
+    estimateNumber: num,
+    client: clientName,
+    clientEmail: raw.clientEmail || raw.customerEmail || raw.customer_email || '',
+    title: raw.title || raw.project || 'Project Estimate',
+    date: raw.date || new Date().toLocaleDateString('en-GB'),
+    validUntil: raw.validUntil || raw.validTill || new Date(Date.now() + 30 * 86400000).toLocaleDateString('en-GB'),
+    services,
+    subtotal: sub,
+    gstRate: Number(raw.gstRate || raw.tax_percent || 18),
+    gstAmount: Number(raw.gstAmount || raw.tax_amount || raw.tax || 0),
+    totalAmount: total,
+    formattedTotal: raw.formattedTotal || `₹${total.toLocaleString('en-IN')}`,
+    status: (raw.status as EstimateStatus) || 'Draft',
+    notes: raw.notes || '',
+    companyId: normalizeCompanyId(raw.companyId || raw.company_id || 'tech'),
+    branchId: raw.branchId || raw.branch_id,
+    branchName: raw.branchName || raw.branch_name,
+    acceptedAt: raw.acceptedAt,
+    clientAccepted: Boolean(raw.clientAccepted || raw.status === 'Accepted'),
+    acceptedBy: raw.acceptedBy,
+    revisionNote: raw.revisionNote
+  }
+}
+
 export const getEstimates = async (companyId?: string): Promise<EstimateItem[]> => {
   let targetComp = companyId
   if (!targetComp && typeof window !== "undefined") {
@@ -50,18 +93,34 @@ export const getEstimates = async (companyId?: string): Promise<EstimateItem[]> 
     } catch {}
   }
 
+  const map = new Map<string, EstimateItem>()
+
+  // 1. Fetch from backend API
+  try {
+    const { EstimateService } = await import("@/services/salesService")
+    const apiList = await EstimateService.getAll({ company_id: targetComp }).catch(() => [])
+    if (Array.isArray(apiList)) {
+      for (const item of apiList) {
+        if (item && item.id) {
+          const norm = normalizeEstimate(item)
+          map.set(String(norm.id).toLowerCase().trim(), norm)
+        }
+      }
+    }
+  } catch {}
+
+  // 2. Fetch from DB storage
   if (!targetComp || targetComp === "all") {
     const known = ["all", "tech", "consultancy", "print"]
     const results = await Promise.all(
       known.map(c => fetchModuleDataFromDB<EstimateItem[]>("estimates", [], c).catch(() => []))
     )
-    const map = new Map<string, EstimateItem>()
     for (const list of results) {
       for (const e of (Array.isArray(list) ? list : [])) {
         if (e && e.id) {
           const id = String(e.id).toLowerCase().trim()
           if (!map.has(id)) {
-            map.set(id, { ...e, companyId: normalizeCompanyId(e.companyId) })
+            map.set(id, normalizeEstimate({ ...e, companyId: normalizeCompanyId(e.companyId) }))
           }
         }
       }
@@ -78,11 +137,13 @@ export const getEstimates = async (companyId?: string): Promise<EstimateItem[]> 
     ...toFetch.map(c => fetchModuleDataFromDB<EstimateItem[]>("estimates", [], c).catch(() => []))
   ])
 
-  const map = new Map<string, EstimateItem>()
   for (const res of scopedResults) {
     for (const e of (Array.isArray(res) ? res : [])) {
       if (e && e.id) {
-        map.set(String(e.id).toLowerCase().trim(), { ...e, companyId: canonicalTarget })
+        const id = String(e.id).toLowerCase().trim()
+        if (!map.has(id)) {
+          map.set(id, normalizeEstimate({ ...e, companyId: canonicalTarget }))
+        }
       }
     }
   }
@@ -91,7 +152,7 @@ export const getEstimates = async (companyId?: string): Promise<EstimateItem[]> 
     if (e && e.id && normalizeCompanyId(e.companyId) === canonicalTarget) {
       const id = String(e.id).toLowerCase().trim()
       if (!map.has(id)) {
-        map.set(id, { ...e, companyId: canonicalTarget })
+        map.set(id, normalizeEstimate({ ...e, companyId: canonicalTarget }))
       }
     }
   }
@@ -129,6 +190,36 @@ export const addEstimate = async (estimateData: Omit<EstimateItem, "id" | "estim
     services: estimateData.services || [],
     status: estimateData.status || "Sent",
   }
+
+  // Also sync to backend API in background
+  try {
+    const { EstimateService } = await import("@/services/salesService")
+    EstimateService.create({
+      id: nextId,
+      number: estimateNumber,
+      estimate_number: estimateNumber,
+      estimateNumber,
+      customer: newEst.client,
+      client: newEst.client,
+      customerEmail: newEst.clientEmail,
+      clientEmail: newEst.clientEmail,
+      title: newEst.title,
+      project: newEst.title,
+      subtotal: newEst.subtotal,
+      tax: newEst.gstAmount,
+      total: newEst.totalAmount,
+      totalAmount: newEst.totalAmount,
+      formattedTotal: newEst.formattedTotal,
+      date: newEst.date,
+      validUntil: newEst.validUntil,
+      status: newEst.status,
+      items: newEst.services,
+      services: newEst.services,
+      companyId: effectiveComp,
+      branchId: newEst.branchId,
+      notes: newEst.notes,
+    }).catch(() => {})
+  } catch {}
 
   const updated = [newEst, ...current.filter(e => e.id !== nextId)]
   const currentAll = await fetchModuleDataFromDB<EstimateItem[]>("estimates", [], "all").catch(() => [])

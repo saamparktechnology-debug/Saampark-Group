@@ -22,7 +22,31 @@ export interface ApiResponse<T = any> {
 
 export function getAuthToken(): string | null {
   if (typeof window === 'undefined') return null
-  return localStorage.getItem('saampark_token')
+  const directToken = localStorage.getItem('saampark_token')
+  if (directToken) return directToken
+
+  try {
+    const raw = localStorage.getItem('saampark-auth-v3')
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      const token = parsed?.state?.token
+      if (token && typeof token === 'string') {
+        localStorage.setItem('saampark_token', token)
+        return token
+      }
+    }
+  } catch {}
+
+  try {
+    const { useAuthStore } = require('@/store/useAuthStore')
+    const storeToken = useAuthStore.getState()?.token
+    if (storeToken && typeof storeToken === 'string') {
+      localStorage.setItem('saampark_token', storeToken)
+      return storeToken
+    }
+  } catch {}
+
+  return null
 }
 
 export function setAuthToken(token: string | null) {
@@ -31,6 +55,7 @@ export function setAuthToken(token: string | null) {
     localStorage.setItem('saampark_token', token)
   } else {
     localStorage.removeItem('saampark_token')
+    localStorage.removeItem('token')
   }
 }
 
@@ -112,18 +137,37 @@ async function request<T = any>(endpoint: string, options: RequestInit = {}): Pr
       console.warn(`API Http Status Warning [${options.method || 'GET'} ${endpoint}]:`, errorMessage)
 
       if (response.status === 401 && typeof window !== 'undefined') {
-        const isAuthEndpoint = endpoint.includes('/auth/login') || endpoint.includes('/auth/register') || endpoint.includes('/auth/forgot-password')
-        if (!isAuthEndpoint && !window.location.pathname.includes('/login')) {
-          try {
-            localStorage.removeItem('auth-storage')
-            localStorage.removeItem('token')
-            sessionStorage.clear()
-          } catch {}
-          window.location.href = '/login?expired=1'
+        const isAuthVerification = endpoint.includes('/auth/me') || endpoint.includes('/auth/check') || endpoint.includes('/auth/verify')
+        const isLoginPage = window.location.pathname.includes('/login')
+        if (isAuthVerification && !isLoginPage) {
+          // Grace period: do not kick out if user just logged in within last 30 seconds
+          const lastLoginTime = Number(localStorage.getItem('saampark_last_activity_time') || 0)
+          const justLoggedIn = Date.now() - lastLoginTime < 30000
+          if (!justLoggedIn) {
+            try {
+              const { useAuthStore } = require("@/store/useAuthStore")
+              useAuthStore.getState().logout()
+            } catch {}
+            try {
+              localStorage.removeItem('saampark-auth-v3')
+              localStorage.removeItem('saampark_token')
+              localStorage.removeItem('auth-storage')
+              localStorage.removeItem('token')
+              sessionStorage.clear()
+            } catch {}
+            window.location.href = '/login?expired=1'
+          }
         }
       }
 
       return { status: "error", message: errorMessage, data: null, error: true } as any
+    }
+
+    // Refresh last active timestamp on every successful API communication
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('saampark_last_activity_time', String(Date.now()))
+      } catch {}
     }
 
     // Handle 204 No Content
@@ -142,6 +186,7 @@ async function request<T = any>(endpoint: string, options: RequestInit = {}): Pr
 export function unwrapList<T = any>(res: any): T[] {
   if (Array.isArray(res)) return res
   if (res && Array.isArray(res.data)) return res.data
+  if (res && res.data && Array.isArray(res.data.data)) return res.data.data
   if (res && res.data && Array.isArray(res.data.items)) return res.data.items
   return []
 }

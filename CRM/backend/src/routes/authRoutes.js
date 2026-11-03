@@ -6,6 +6,10 @@ const {
   register,
   verifyEmail,
   login,
+  loginWithPin,
+  setupPin,
+  sendPinResetOTPHandler,
+  resetPinWithOTP,
   checkUsername,
   sendForgotPasswordOTP,
   verifyResetOTP,
@@ -35,6 +39,10 @@ const otpLimiter = rateLimit({
 router.post('/register', register);
 router.post('/verify-email', verifyEmail);
 router.post('/login', loginLimiter, login);
+router.post('/pin-login', loginLimiter, loginWithPin);
+router.post('/setup-pin', setupPin);
+router.post('/send-pin-otp', otpLimiter, sendPinResetOTPHandler);
+router.post('/reset-pin', resetPinWithOTP);
 router.get('/check-username/:username', checkUsername);
 router.get('/check-username', checkUsername);
 router.post('/forgot-password', otpLimiter, sendForgotPasswordOTP);

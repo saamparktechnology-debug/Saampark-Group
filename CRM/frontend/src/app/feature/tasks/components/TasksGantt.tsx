@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Task } from "../types"
 import { Calendar, Plus } from "lucide-react"
+import { formatDisplayDate } from "@/lib/utils"
 
 interface TasksGanttProps {
   tasks: Task[]
@@ -101,7 +102,7 @@ export function TasksGantt({
                     style={{ left: `${offsetPct}%`, width: `${widthPct}%` }}
                     className="absolute top-1 bottom-1 rounded bg-blue-600 dark:bg-blue-500 text-white text-[10px] font-semibold flex items-center px-2 shadow-xs truncate"
                   >
-                    {t.deadline}
+                    {t.deadline ? formatDisplayDate(t.deadline) : "-"}
                   </div>
                 </div>
               </div>

@@ -9,6 +9,7 @@ import {
 } from "lucide-react"
 import { Subscription, SubscriptionStatus, SubscriptionType, calculateOverdueDetails } from "../types"
 import { useAuthStore } from "@/store/useAuthStore"
+import { formatDisplayDate } from "@/lib/utils"
 
 interface SubscriptionListProps {
   subscriptions: Subscription[]
@@ -330,9 +331,17 @@ export function SubscriptionList({
                               {sub.totalTenureMonths || 12} Months Tenure
                             </span>
                           ) : (
-                            <span className="px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-bold text-[10px] border border-zinc-200/80 dark:border-zinc-700/60">
-                              {sub.billingCycle === "Custom Days" ? `${sub.customDaysCount || 30} Days` : sub.billingCycle}
-                            </span>
+                            <div className="flex flex-col gap-0.5">
+                              <span className="px-2.5 py-0.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-bold text-[10px] border border-zinc-200/80 dark:border-zinc-700/60 w-fit">
+                                {sub.billingCycle === "Custom Days" ? `${sub.customDaysCount || 30} Days` : sub.billingCycle}
+                                {sub.totalDurationMonths ? ` (${sub.totalDurationMonths} Mo)` : ""}
+                              </span>
+                              {typeof sub.prepaidCycles === "number" && sub.prepaidCycles > 0 && (
+                                <span className="text-[9.5px] font-bold text-emerald-600 dark:text-emerald-400">
+                                  ✓ {sub.prepaidCycles} Mo Prepaid
+                                </span>
+                              )}
+                            </div>
                           )}
                         </td>
 
@@ -340,7 +349,7 @@ export function SubscriptionList({
                         <td className="py-3.5 px-3 whitespace-nowrap">
                           <div className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-300 font-medium">
                             <Calendar size={12} className="text-blue-500 shrink-0" />
-                            <span>{sub.firstPaymentDate || sub.startDate || "Initial"}</span>
+                            <span>{sub.firstPaymentDate ? formatDisplayDate(sub.firstPaymentDate) : (sub.startDate ? formatDisplayDate(sub.startDate) : "Initial")}</span>
                           </div>
                         </td>
 
@@ -350,7 +359,7 @@ export function SubscriptionList({
                             <div>
                               <div className="flex items-center gap-1 text-rose-600 dark:text-rose-400 font-bold">
                                 <AlertTriangle size={12} className="shrink-0 animate-pulse" />
-                                <span>{sub.nextBillingDate}</span>
+                                <span>{formatDisplayDate(sub.nextBillingDate)}</span>
                               </div>
                               <div className="text-[10px] text-rose-600 dark:text-rose-400 font-bold">
                                 ⚠️ Overdue {overdueInfo.daysOverdue} {overdueInfo.daysOverdue === 1 ? 'day' : 'days'}
@@ -365,10 +374,10 @@ export function SubscriptionList({
                             <div>
                               <div className="flex items-center gap-1.5 text-zinc-900 dark:text-zinc-100 font-bold">
                                 <Calendar size={12} className="text-emerald-500 shrink-0" />
-                                <span>{sub.nextBillingDate}</span>
+                                <span>{formatDisplayDate(sub.nextBillingDate)}</span>
                               </div>
                               <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
-                                {sub.lastRenewedDate ? `Renewed: ${sub.lastRenewedDate}` : "Next Due"}
+                                {sub.lastRenewedDate ? `Renewed: ${formatDisplayDate(sub.lastRenewedDate)}` : "Next Due"}
                               </div>
                             </div>
                           )}

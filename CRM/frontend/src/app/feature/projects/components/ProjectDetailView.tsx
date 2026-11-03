@@ -48,6 +48,7 @@ import { taskService } from "@/app/feature/tasks/services/taskService"
 import { Task, TaskPriority, TaskStatus, getTaskCountdownChip } from "@/app/feature/tasks/types"
 import { fetchModuleDataFromDB, saveModuleDataToDB, filterGlobalDeletedItems } from "@/lib/storageSync"
 import { printPDFReport, exportToExcel } from "@/lib/exportUtils"
+import { formatDisplayDate } from "@/lib/utils"
 
 interface ProjectDetailViewProps {
   projects: Project[]
@@ -746,8 +747,8 @@ export function ProjectDetailView({
                         <td className="py-3 px-4 font-mono font-bold text-blue-600 dark:text-blue-400">
                           {inv.id}
                         </td>
-                        <td className="py-3 px-4 text-zinc-600 dark:text-zinc-300">{inv.billDate}</td>
-                        <td className="py-3 px-4 text-red-600 dark:text-red-400 font-mono font-semibold">{inv.dueDate}</td>
+                        <td className="py-3 px-4 text-zinc-600 dark:text-zinc-300">{formatDisplayDate(inv.billDate)}</td>
+                        <td className="py-3 px-4 text-red-600 dark:text-red-400 font-mono font-semibold">{inv.dueDate ? formatDisplayDate(inv.dueDate) : "-"}</td>
                         <td className="py-3 px-4 max-w-xs truncate text-zinc-700 dark:text-zinc-300">
                           {inv.items?.[0]?.serviceName || inv.project || "Deliverable"}
                         </td>
@@ -1094,7 +1095,7 @@ export function ProjectDetailView({
                       <td className="py-3 px-4 font-semibold text-zinc-900 dark:text-zinc-100">{exp.title}</td>
                       <td className="py-3 px-4 text-zinc-500">{exp.category}</td>
                       <td className="py-3 px-4 text-zinc-700 dark:text-zinc-300 font-medium">{exp.member}</td>
-                      <td className="py-3 px-4 text-zinc-500">{exp.date}</td>
+                      <td className="py-3 px-4 text-zinc-500">{formatDisplayDate(exp.date)}</td>
                       <td className="py-3 px-4 text-right font-bold text-rose-600 dark:text-rose-400">{exp.amount}</td>
                       <td className="py-3 px-4">
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800">
@@ -1188,7 +1189,7 @@ export function ProjectDetailView({
                   </div>
                   <div className="text-[11px] text-zinc-400 truncate">{p.client}</div>
                   <div className="flex items-center gap-2 pt-1 text-[10px] text-zinc-400">
-                    <span className="text-red-600 dark:text-red-400 font-bold font-mono">{p.deadline}</span>
+                    <span className="text-red-600 dark:text-red-400 font-bold font-mono">{p.deadline ? formatDisplayDate(p.deadline) : "-"}</span>
                     <span>•</span>
                     <span className="font-medium text-emerald-600 dark:text-emerald-400">{p.price}</span>
                   </div>
@@ -1330,8 +1331,8 @@ export function ProjectDetailView({
                     </div>
 
                     <div className="w-full space-y-1.5 pt-4 text-xs text-zinc-500 border-t border-zinc-100 dark:border-zinc-800">
-                      <div><strong className="text-zinc-700 dark:text-zinc-300">Start date:</strong> {selectedProject.startDate}</div>
-                      <div><strong className="text-zinc-700 dark:text-zinc-300">Deadline:</strong> <span className="text-red-600 dark:text-red-400 font-bold font-mono">{selectedProject.deadline}</span></div>
+                      <div><strong className="text-zinc-700 dark:text-zinc-300">Start date:</strong> {formatDisplayDate(selectedProject.startDate)}</div>
+                      <div><strong className="text-zinc-700 dark:text-zinc-300">Deadline:</strong> <span className="text-red-600 dark:text-red-400 font-bold font-mono">{selectedProject.deadline ? formatDisplayDate(selectedProject.deadline) : "-"}</span></div>
                       <div><strong className="text-zinc-700 dark:text-zinc-300">Status:</strong> {selectedProject.status}</div>
                     </div>
                   </div>

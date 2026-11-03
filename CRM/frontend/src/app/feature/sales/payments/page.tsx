@@ -23,6 +23,7 @@ import { ColumnDef } from "@tanstack/react-table"
 
 import { DataTable } from "@/components/ui/DataTable"
 import { Button } from "@/components/ui/Button"
+import { formatDisplayDate } from "@/lib/utils"
 import { Tabs } from "@/components/ui/Tabs"
 import { useAuthStore } from "@/store/useAuthStore"
 import { getPayments, addPayment, deletePayment, PaymentItem } from "./services/paymentService"
@@ -232,7 +233,7 @@ export default function PaymentsPage() {
     {
       accessorKey: "paymentDate",
       header: "Payment date",
-      cell: ({ row }) => <div className="text-zinc-500 font-mono text-xs">{row.getValue("paymentDate")}</div>,
+      cell: ({ row }) => <div className="text-zinc-500 font-mono text-xs">{formatDisplayDate(row.getValue("paymentDate"))}</div>,
     },
     {
       accessorKey: "paymentMethod",
@@ -656,7 +657,7 @@ export default function PaymentsPage() {
                   </div>
                   <div>
                     <span className="text-zinc-400 block text-[11px]">Payment Date:</span>
-                    <span className="font-mono text-zinc-800 dark:text-zinc-200">{selectedPayment.paymentDate}</span>
+                    <span className="font-mono text-zinc-800 dark:text-zinc-200">{formatDisplayDate(selectedPayment.paymentDate)}</span>
                   </div>
                   <div>
                     <span className="text-zinc-400 block text-[11px]">Method:</span>

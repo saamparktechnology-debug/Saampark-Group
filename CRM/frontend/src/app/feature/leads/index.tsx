@@ -3,7 +3,7 @@
 import * as React from "react"
 import { motion } from "framer-motion"
 import { Lead } from "./types"
-import { getLeads, deleteLead, updateLead, normalizeCompanyId } from "./services/leadService"
+import { getLeads, deleteLead, updateLead, normalizeCompanyId, isLeadAssignedToUser, isTeamMemberRole } from "./services/leadService"
 import { LeadList } from "./components/LeadList"
 import { LeadKanban } from "./components/LeadKanban"
 import { AddLeadModal } from "./components/AddLeadModal"
@@ -177,7 +177,14 @@ export default function LeadsMain() {
     handleLeadUpdated(updated)
   }
 
-  const isSuperOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
+  const userRole = (user?.role || "").trim()
+  const userRoleId = Number((user as any)?.role_id)
+  const userEmail = (user?.email || "").toLowerCase().trim()
+
+  const isSuperAdmin = userRole === "Super Admin" || userRoleId === 1 || userEmail === "saampark.official@gmail.com"
+  const isAdmin = !isSuperAdmin && (userRole === "Admin" || userRoleId === 2 || userRole.toLowerCase().includes("admin") || (user as any)?.role_name?.toLowerCase().includes("admin") || (user as any)?.role_name?.toLowerCase().includes("manager"))
+  const isClient = userRole === "Clients" || userRole === "Client" || userRoleId === 4 || userRole.toLowerCase().includes("client")
+  const isTeam = !isSuperAdmin && !isAdmin && !isClient
 
   const visibleLeads = React.useMemo(() => {
     if (!user) return []
@@ -191,9 +198,8 @@ export default function LeadsMain() {
       user: freshUser 
     } = useAuthStore.getState()
     const userComp = (freshCompanyId || freshUser?.companyId || "").toLowerCase().trim()
-    // activeBranchId takes priority; fall back to user's assigned branch only for non-admin
-    const targetBranch = freshBranchId || (isSuperOrAdmin ? null : freshUser?.branchId)
-    const targetSubBranch = freshSubBranchId || (isSuperOrAdmin ? null : freshUser?.subBranchId)
+    const targetBranch = freshBranchId || (isSuperAdmin ? null : freshUser?.branchId)
+    const targetSubBranch = freshSubBranchId || (isSuperAdmin ? null : freshUser?.subBranchId)
 
     const matchLeadBranch = (l: Lead, bTarget: string | null) => {
       if (!bTarget || bTarget === "all") return true
@@ -257,8 +263,34 @@ export default function LeadsMain() {
       )
     }
 
-    // Admins see all leads across companies and branches (or scoped to their assigned branch / sub-branch)
-    if (isSuperOrAdmin) {
+    // ── 1. SUPER ADMIN ROLE ──
+    // Full system governance across companies & branches (unless filtered)
+    if (isSuperAdmin) {
+      return leads.filter((l) => {
+        const isClientPrivate = (l as any).isClientPrivate === true || l.createdByRole === "Clients"
+        if (isClientPrivate) return false
+
+        if (userComp && userComp !== "all") {
+          const lComp = normalizeCompanyId(l.companyId || (l as any).company)
+          const targetComp = normalizeCompanyId(userComp)
+          if (lComp !== targetComp) return false
+        }
+
+        if (freshBranchId && freshBranchId !== "all") {
+          if (!matchLeadBranch(l, freshBranchId)) return false
+        }
+
+        if (freshSubBranchId && freshSubBranchId !== "all") {
+          if (!matchLeadSubBranch(l, freshSubBranchId)) return false
+        }
+
+        return true
+      })
+    }
+
+    // ── 2. ADMIN ROLE ──
+    // Company / Branch Admin sees leads within their assigned company and branch scope
+    if (isAdmin) {
       return leads.filter((l) => {
         const isClientPrivate = (l as any).isClientPrivate === true || l.createdByRole === "Clients"
         if (isClientPrivate) return false
@@ -285,16 +317,13 @@ export default function LeadsMain() {
     const uEmail = (user.email || "").toLowerCase().trim()
     const uId = String(user.id || "").toLowerCase().trim()
 
-    // ── CLIENT ROLE VIEW ──
+    // ── 3. CLIENT ROLE ──
     // Clients only see leads created by this specific client
-    if (user.role === "Clients") {
+    if (isClient) {
       return leads.filter((l) => {
         const cId = String((l as any).createdById || "").toLowerCase().trim()
         const cEmail = ((l as any).createdByEmail || "").toLowerCase().trim()
         const createdBy = (l.createdBy || "").toLowerCase().trim()
-
-        if (targetBranch && !matchLeadBranch(l, targetBranch)) return false
-        if (targetSubBranch && !matchLeadSubBranch(l, targetSubBranch)) return false
 
         return (
           (uId && cId === uId) ||
@@ -305,70 +334,28 @@ export default function LeadsMain() {
       })
     }
 
-    // ── TEAM MEMBER ROLE VIEW ──
-    // Teams see leads assigned directly to them OR created by this specific team member
+    // ── 4. TEAM MEMBER ROLE (Strictly ONLY Assigned Leads) ──
+    // Team members see ONLY leads assigned directly to them (or created by them).
+    // They NEVER see unassigned leads or leads assigned to other members!
     return leads.filter((l) => {
       // Exclude client-private leads
       if ((l as any).isClientPrivate === true || l.createdByRole === "Clients") {
         return false
       }
 
-      if (userComp && userComp !== "all") {
-        const lComp = normalizeCompanyId(l.companyId || (l as any).company)
-        const targetComp = normalizeCompanyId(userComp)
-        if (lComp !== targetComp) return false
+      const isAssigned = isLeadAssignedToUser(l, user)
+      if (!isAssigned) return false
+
+      if (freshBranchId && freshBranchId !== "all") {
+        if (l.branchId && !matchLeadBranch(l, freshBranchId)) return false
+      }
+      if (freshSubBranchId && freshSubBranchId !== "all") {
+        if ((l as any).subBranchId && !matchLeadSubBranch(l, freshSubBranchId)) return false
       }
 
-      if (targetBranch && !matchLeadBranch(l, targetBranch)) return false
-      if (targetSubBranch && !matchLeadSubBranch(l, targetSubBranch)) return false
-
-      const caller = (l.caller || "").toLowerCase().trim()
-      const owner = (l.owner || "").toLowerCase().trim()
-      const createdBy = (l.createdBy || "").toLowerCase().trim()
-      const cId = String((l as any).createdById || "").toLowerCase().trim()
-      const cEmail = ((l as any).createdByEmail || "").toLowerCase().trim()
-      const assignedTo = (l.assignedTo || (l as any).assigned_to || "").toString().toLowerCase().trim()
-      const managers = (l.managers || "").toLowerCase().trim()
-
-      const checkExplicitMatch = (val: string) => {
-        if (!val || val === "none" || val === "unassigned" || val === "team" || val === "teams" || val === "all") {
-          return false
-        }
-
-        const targets = val.split(/[,;]+/).map((s) => s.trim()).filter(Boolean)
-        if (targets.length === 0) targets.push(val)
-
-        return targets.some((t) => {
-          if (!t || t === "none" || t === "unassigned" || t === "team" || t === "teams" || t === "all") return false
-          if (uEmail && t === uEmail) return true
-          if (uName && t === uName) return true
-          if (uId && t === uId) return true
-          if (uName && (t === uName || t.includes(uName) || uName.includes(t))) return true
-          if (uEmail && (t === uEmail || t.includes(uEmail) || uEmail.includes(t))) return true
-          if (uName) {
-            const parts = uName.split(/\s+/).filter((p: string) => p.length > 2)
-            if (parts.some((p: string) => t.includes(p))) return true
-          }
-          return false
-        })
-      }
-
-      // Check if created specifically by this team member
-      const isCreator = 
-        (uId && cId === uId) ||
-        (uEmail && cEmail === uEmail) ||
-        ((createdBy && createdBy !== "team" && createdBy !== "teams" && createdBy !== "admin") && 
-          (createdBy === uEmail || createdBy === uName || (uEmail && createdBy.includes(uEmail)) || (uName && createdBy.includes(uName))))
-
-      return (
-        checkExplicitMatch(assignedTo) ||
-        checkExplicitMatch(caller) ||
-        checkExplicitMatch(owner) ||
-        checkExplicitMatch(managers) ||
-        isCreator
-      )
+      return true
     })
-  }, [leads, user, isSuperOrAdmin, activeCompanyId, activeBranchId, activeSubBranchId, branches, subBranches])
+  }, [leads, user, isSuperAdmin, isAdmin, isClient, isTeam, activeCompanyId, activeBranchId, activeSubBranchId, branches, subBranches])
 
   if (isLoading) {
     return <ThreeDotLoader text="Loading leads & opportunities..." fullScreen={false} />

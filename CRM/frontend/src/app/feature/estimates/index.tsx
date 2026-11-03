@@ -15,6 +15,8 @@ import { createNotification } from "@/services/notificationService"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
 import { DocumentStudioModal } from "@/components/documents/DocumentStudioModal"
 import { addInvoice } from "@/app/feature/sales/invoices/services/invoiceService"
+import { sendEstimateDetailsEmailNotification } from "@/services/emailNotificationService"
+import { formatDisplayDate } from "@/lib/utils"
 
 interface LineItem { 
   id: string
@@ -290,29 +292,32 @@ export default function EstimatesMain() {
     }
     setIsSending(true)
     try {
-      // 1. Update status to Sent and save customer email
-      await EstimateService.update(sendingItem.id, {
-        ...sendingItem,
-        customerEmail: sendEmail.trim(),
-        status: "Sent"
-      })
+      await executeWithFeedback(async () => {
+        // 1. Update status to Sent and save customer email
+        await EstimateService.update(sendingItem.id, {
+          ...sendingItem,
+          customerEmail: sendEmail.trim(),
+          status: "Sent"
+        })
 
-      // 2. Dispatch in-app notification to client
-      await createNotification({
-        title: `Project Estimate Received: ${sendingItem.number}`,
-        message: `A new commercial project estimate (${sendingItem.number}) for ₹${(sendingItem.total || 0).toLocaleString("en-IN")} has been sent to you by ${companyName}.`,
-        type: "invoice",
-        targetEmail: sendEmail.trim(),
-        linkUrl: `/feature/estimates`,
-        sendEmailNotification: true,
-      })
+        // 2. Dispatch real interactive email with PDF download and Accept/Modify/Decline buttons
+        await sendEstimateDetailsEmailNotification(
+          { ...sendingItem, customerEmail: sendEmail.trim() },
+          sendEmail.trim()
+        )
 
-      setSendingItem(null)
-      loadData()
-      alert(`✅ Estimate ${sendingItem.number} dispatched successfully to ${sendEmail}!`)
+        setSendingItem(null)
+        loadData()
+      }, {
+        actionType: "sync",
+        loadingTitle: "Dispatching Commercial Estimate...",
+        loadingMsg: `Sending estimate #${sendingItem.number} with action buttons to ${sendEmail.trim()}...`,
+        successTitle: "Estimate Delivered Successfully!",
+        successMsg: `Estimate #${sendingItem.number} has been dispatched to client's email inbox.`,
+        minLoadingMs: 650,
+      })
     } catch (err) {
       console.error("Error sending estimate:", err)
-      alert("Failed to dispatch estimate.")
     } finally {
       setIsSending(false)
     }
@@ -346,7 +351,7 @@ export default function EstimatesMain() {
         <div className="kpi-card-premium flex items-center justify-between">
           <div>
             <p className="text-xs text-muted-foreground font-semibold">Total Estimates</p>
-            <h3 className="text-2xl font-black text-foreground mt-0.5">{estimates.length}</h3>
+            <h3 className="text-2xl font-black text-foreground mt-0.5">{filtered.length}</h3>
             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 dark:text-blue-400 mt-1">
               <span>●</span> Projected cost proposals
             </span>
@@ -359,7 +364,7 @@ export default function EstimatesMain() {
         <div className="kpi-card-premium flex items-center justify-between">
           <div>
             <p className="text-xs text-muted-foreground font-semibold">Total Value</p>
-            <h3 className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-0.5">₹{estimates.reduce((acc, e) => acc + (e.total || 0), 0).toLocaleString("en-IN")}</h3>
+            <h3 className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-0.5">₹{filtered.reduce((acc, e) => acc + (e.total || 0), 0).toLocaleString("en-IN")}</h3>
             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 dark:text-blue-400 mt-1">
               <span>₹</span> Total estimate pipeline
             </span>
@@ -372,7 +377,7 @@ export default function EstimatesMain() {
         <div className="kpi-card-premium flex items-center justify-between">
           <div>
             <p className="text-xs text-muted-foreground font-semibold">Sent &amp; Pending</p>
-            <h3 className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-0.5">{estimates.filter(e => e.status === "Sent").length}</h3>
+            <h3 className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-0.5">{filtered.filter(e => e.status === "Sent").length}</h3>
             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400 mt-1">
               <span>⏱</span> Awaiting review
             </span>
@@ -385,7 +390,7 @@ export default function EstimatesMain() {
         <div className="kpi-card-premium flex items-center justify-between">
           <div>
             <p className="text-xs text-muted-foreground font-semibold">Approved</p>
-            <h3 className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5">{estimates.filter(e => e.status === "Approved").length}</h3>
+            <h3 className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5">{filtered.filter(e => e.status === "Approved").length}</h3>
             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mt-1">
               <span>✓</span> Confirmed by customer
             </span>
@@ -772,8 +777,8 @@ export default function EstimatesMain() {
                   <div className="text-right text-xs space-y-1">
                     <h2 className="text-lg font-black uppercase tracking-wider text-blue-600 dark:text-blue-400 print:text-black">PROJECT ESTIMATE</h2>
                     <p className="font-mono font-bold">{viewingItem.number}</p>
-                    <p className="text-[11px] text-zinc-500">Date: {viewingItem.date}</p>
-                    {viewingItem.validTill && <p className="text-[10px] text-zinc-400">Valid Till: {viewingItem.validTill}</p>}
+                    <p className="text-[11px] text-zinc-500">Date: {formatDisplayDate(viewingItem.date)}</p>
+                    {viewingItem.validTill && <p className="text-[10px] text-zinc-400">Valid Till: {formatDisplayDate(viewingItem.validTill)}</p>}
                   </div>
                 </div>
 

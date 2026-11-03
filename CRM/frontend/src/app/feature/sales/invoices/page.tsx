@@ -28,7 +28,10 @@ import {
   Pencil,
   MapPin,
   User,
-  Receipt
+  Receipt,
+  QrCode,
+  Copy,
+  ShieldCheck
 } from "lucide-react"
 import { ColumnDef } from "@tanstack/react-table"
 
@@ -50,6 +53,8 @@ import {
   markPaymentCompleted,
   recordPartialPayment,
   sendPaymentReminder,
+  submitClientPaymentProof,
+  verifyAndConfirmPayment,
   parseCurrencyNumber,
   isInvoiceOverdue,
   getInvoiceDaysOverdue,
@@ -72,6 +77,8 @@ import { printPDFReport, exportToExcel } from "@/lib/exportUtils"
 import { executeWithFeedback, useActionFeedbackStore } from "@/store/useActionFeedbackStore"
 import { isRecordAssignedToClient, isRecordAssignedToTeamMember } from "@/lib/clientScopeUtils"
 import { confirmTwoStepDelete } from "@/lib/confirmDialog"
+import { formatDisplayDate } from "@/lib/utils"
+import { ensureClientUserAccount } from "@/app/feature/users/services/userService"
 
 function InvoicesPageContent() {
   const { user, activeCompanyId, activeBranchId, branches, subBranches, companies } = useAuthStore()
@@ -125,6 +132,20 @@ function InvoicesPageContent() {
   const [paymentRef, setPaymentRef] = React.useState("")
   const [paymentTypeOption, setPaymentTypeOption] = React.useState<"full" | "part">("full")
   const [customPartPaymentAmount, setCustomPartPaymentAmount] = React.useState<number>(0)
+
+  // Dedicated Client Pay Now Modal state (with dynamic UPI QR & mandatory UTR)
+  const [clientPayNowInvoice, setClientPayNowInvoice] = React.useState<InvoiceItem | null>(null)
+  const [clientUtr, setClientUtr] = React.useState("")
+  const [clientPayMethod, setClientPayMethod] = React.useState("UPI / PhonePe / GPay")
+  const [clientPayNotes, setClientPayNotes] = React.useState("")
+  const [clientPayError, setClientPayError] = React.useState<string | null>(null)
+  const [isCopied, setIsCopied] = React.useState<string | null>(null)
+  const [isSubmittingProof, setIsSubmittingProof] = React.useState(false)
+
+  // Dedicated Admin Verify UTR Modal state
+  const [verifyingInvoice, setVerifyingInvoice] = React.useState<InvoiceItem | null>(null)
+  const [adminVerifyNotes, setAdminVerifyNotes] = React.useState("")
+  const [isVerifyingProof, setIsVerifyingProof] = React.useState(false)
 
   // Add Invoice Form state
   const [clientSelectionMode, setClientSelectionMode] = React.useState<"existing" | "custom">("existing")
@@ -1074,6 +1095,20 @@ function InvoicesPageContent() {
         console.warn("Could not auto-create sales order:", err)
       }
 
+      // Auto-create client user account with role "Clients"
+      if (finalClientEmail) {
+        try {
+          ensureClientUserAccount({
+            email: finalClientEmail,
+            name: finalClientName,
+            phone: clientSelectionMode === "custom" ? customClientPhone : clientPhone,
+            companyId: targetComp,
+          }).catch(() => {})
+        } catch (uErr) {
+          console.warn("Auto-create client user warning:", uErr)
+        }
+      }
+
       // 4. Automatically record upfront / advance payment if received
       if (receivedNum > 0) {
         try {
@@ -1252,7 +1287,7 @@ function InvoicesPageContent() {
     {
       accessorKey: "billDate",
       header: "Bill date",
-      cell: ({ row }) => <div className="text-zinc-500 text-xs font-mono">{row.getValue("billDate")}</div>,
+      cell: ({ row }) => <div className="text-zinc-500 text-xs font-mono">{formatDisplayDate(row.getValue("billDate"))}</div>,
     },
     {
       accessorKey: "dueDate",
@@ -1264,7 +1299,7 @@ function InvoicesPageContent() {
         return (
           <div className="space-y-0.5">
             <div className={`text-xs font-mono font-bold ${overdue ? "text-rose-600 dark:text-rose-400" : "text-zinc-600 dark:text-zinc-400"}`}>
-              {inv.dueDate || "-"}
+              {formatDisplayDate(inv.dueDate)}
             </div>
             {overdue && (
               <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-300 dark:border-rose-800">
@@ -1310,12 +1345,19 @@ function InvoicesPageContent() {
         if (status === "Fully paid") colorClass = "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
         if (status === "Not paid") colorClass = "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800"
         if (status === "Partially paid" || status === "Payment Pending") colorClass = "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800"
+        if (status === "Pending Verification") colorClass = "bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-700"
         
         return (
           <div className="flex flex-col gap-1 items-start">
-            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border ${colorClass}`}>
+            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border ${colorClass} flex items-center gap-1`}>
+              {status === "Pending Verification" && <Clock size={10} className="animate-spin text-purple-600" />}
               {status}
             </span>
+            {inv.paymentProofUtr && (
+              <span className="px-1.5 py-0.5 rounded bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 font-mono text-[9.5px] font-bold border border-purple-200 dark:border-purple-800 flex items-center gap-0.5" title={`Submitted UTR: ${inv.paymentProofUtr}`}>
+                UTR: {inv.paymentProofUtr}
+              </span>
+            )}
             {inv.clientAccepted && (
               <span 
                 className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center gap-0.5" 
@@ -1339,28 +1381,58 @@ function InvoicesPageContent() {
       cell: ({ row }) => {
         const inv = row.original
         const isUnpaid = inv.status !== "Fully paid" && inv.status !== "Credited"
+        const isPendingVerification = inv.status === "Pending Verification"
 
         return (
           <div className="flex items-center gap-1.5">
-            {/* Client View: "Pay Now" Button */}
-            {isClientRole && isUnpaid && (
+            {/* Client View: "Pay Now" Button (UPI QR + Mandatory UTR) */}
+            {isClientRole && isUnpaid && !isPendingVerification && (
               <button
                 type="button"
-                onClick={() => setPaymentModalInvoice(inv)}
-                className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold flex items-center gap-1 shadow-xs transition-colors"
-                title="Pay Invoice Online"
+                onClick={() => {
+                  setClientPayNowInvoice(inv)
+                  setClientUtr("")
+                  setClientPayNotes("")
+                  setClientPayError(null)
+                }}
+                className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
+                title="Pay Invoice Online via UPI QR"
               >
                 <DollarSign size={13} />
                 <span>Pay Now</span>
               </button>
             )}
 
+            {/* Client View: UTR Submitted Status Badge */}
+            {isClientRole && isPendingVerification && (
+              <span className="px-2 py-1 rounded-lg bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 text-[11px] font-bold flex items-center gap-1 border border-purple-300 dark:border-purple-800">
+                <Clock size={11} className="animate-spin" />
+                <span>Verification Pending</span>
+              </span>
+            )}
+
+            {/* Admin View: Verify UTR Button (when client submitted proof) */}
+            {!isClientRole && isPendingVerification && (
+              <button
+                type="button"
+                onClick={() => {
+                  setVerifyingInvoice(inv)
+                  setAdminVerifyNotes("")
+                }}
+                className="px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-bold flex items-center gap-1 shadow-xs transition-colors cursor-pointer animate-pulse"
+                title="Verify Client's Submitted UTR and Confirm Payment"
+              >
+                <ShieldCheck size={13} />
+                <span>Verify UTR</span>
+              </button>
+            )}
+
             {/* Admin View: Payment Reminder */}
-            {!isClientRole && isUnpaid && (
+            {!isClientRole && isUnpaid && !isPendingVerification && (
               <button
                 type="button"
                 onClick={() => handleSendReminder(inv)}
-                className="px-2 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 hover:bg-amber-100 text-[11px] font-semibold flex items-center gap-1 border border-amber-200/80 dark:border-amber-800"
+                className="px-2 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 hover:bg-amber-100 text-[11px] font-semibold flex items-center gap-1 border border-amber-200/80 dark:border-amber-800 cursor-pointer"
                 title={inv.lastReminderSent ? `Last sent: ${inv.lastReminderSent}` : "Send Payment Reminder to client"}
               >
                 <BellRing size={12} className="text-amber-600" />
@@ -1369,11 +1441,11 @@ function InvoicesPageContent() {
             )}
 
             {/* Admin View: Mark Payment Completed */}
-            {!isClientRole && isUnpaid && (
+            {!isClientRole && isUnpaid && !isPendingVerification && (
               <button
                 type="button"
                 onClick={() => setPaymentModalInvoice(inv)}
-                className="px-2 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 text-[11px] font-semibold flex items-center gap-1 border border-emerald-200/80 dark:border-emerald-800"
+                className="px-2 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 text-[11px] font-semibold flex items-center gap-1 border border-emerald-200/80 dark:border-emerald-800 cursor-pointer"
                 title="Mark Payment Completed & sync to Payments"
               >
                 <CheckCircle2 size={12} className="text-emerald-600" />
@@ -1870,6 +1942,405 @@ function InvoicesPageContent() {
           loadInvoices()
         }}
       />
+
+      {/* ── CLIENT PAY NOW MODAL (UPI QR + MANDATORY UTR) ── */}
+      <AnimatePresence>
+        {clientPayNowInvoice && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden text-xs my-4"
+            >
+              <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-white/20 rounded-xl backdrop-blur-xs">
+                    <QrCode size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-sm sm:text-base">Pay Invoice #{clientPayNowInvoice.id}</h3>
+                    <p className="text-[11px] text-emerald-100 font-medium">Scan UPI QR &amp; Enter Transaction UTR</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setClientPayNowInvoice(null)}
+                  className="p-1.5 hover:bg-white/20 rounded-lg transition-colors cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+                {/* Amount Due Card */}
+                <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10.5px] font-bold text-emerald-800 dark:text-emerald-300 block">Total Due Amount</span>
+                    <span className="text-zinc-600 dark:text-zinc-400 text-[11px]">{clientPayNowInvoice.project || "Invoice Settlement"}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xl font-black font-mono text-emerald-700 dark:text-emerald-300">
+                      ₹{(parseCurrencyNumber(clientPayNowInvoice.due) || parseCurrencyNumber(clientPayNowInvoice.totalInvoiced)).toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                </div>
+
+                {/* QR Code Container */}
+                {(() => {
+                  const activeCompObj = companies.find(c => c.id === clientPayNowInvoice.companyId || c.slug === clientPayNowInvoice.companyId) || companies[0]
+                  const upiId = activeCompObj?.nongst_upi_id || activeCompObj?.gst_upi_id || activeCompObj?.upi_id || "saampark@sbi"
+                  const upiHolder = activeCompObj?.brand_name || activeCompObj?.name || "SAAMPARK TECHNOLOGY"
+                  const dueAmt = parseCurrencyNumber(clientPayNowInvoice.due) || parseCurrencyNumber(clientPayNowInvoice.totalInvoiced)
+                  const upiString = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(upiHolder)}&am=${dueAmt}&cu=INR&tn=Invoice%20${encodeURIComponent(clientPayNowInvoice.id)}`
+                  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&margin=1&ecc=M&data=${encodeURIComponent(upiString)}`
+
+                  const handleCopy = (text: string, key: string) => {
+                    navigator.clipboard.writeText(text)
+                    setIsCopied(key)
+                    setTimeout(() => setIsCopied(null), 2000)
+                  }
+
+                  return (
+                    <div className="space-y-3">
+                      <div className="flex flex-col sm:flex-row items-center gap-4 bg-zinc-50 dark:bg-zinc-800/40 p-4 rounded-xl border border-zinc-200 dark:border-zinc-700">
+                        <div className="bg-white p-2.5 rounded-xl shadow-xs border border-zinc-200 shrink-0">
+                          <img
+                            src={qrCodeUrl}
+                            alt="Payment UPI QR"
+                            className="w-36 h-36 object-contain rounded"
+                          />
+                        </div>
+                        <div className="space-y-2 flex-1 text-left w-full">
+                          <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-bold text-xs">
+                            <span>📲 Instant UPI Scan &amp; Pay</span>
+                          </div>
+                          <p className="text-[10.5px] text-zinc-500 leading-snug">
+                            Scan with Google Pay, PhonePe, Paytm, BHIM, Cred or any banking UPI app.
+                          </p>
+                          <div className="pt-1">
+                            <span className="text-[10px] text-zinc-400 font-bold block">Verified Merchant UPI ID:</span>
+                            <div className="flex items-center justify-between gap-1 mt-0.5 bg-white dark:bg-zinc-900 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 font-mono text-[11px] font-bold text-zinc-800 dark:text-zinc-200">
+                              <span>{upiId}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleCopy(upiId, "upi")}
+                                className="text-blue-600 hover:text-blue-700 p-0.5 cursor-pointer"
+                                title="Copy UPI ID"
+                              >
+                                {isCopied === "upi" ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Bank Details Strip */}
+                      {(activeCompObj?.gst_account_number || activeCompObj?.nongst_account_number || activeCompObj?.account_number) && (
+                        <div className="bg-zinc-50 dark:bg-zinc-800/30 p-3 rounded-xl border border-zinc-200 dark:border-zinc-700 text-[11px] space-y-1">
+                          <div className="flex justify-between text-zinc-500">
+                            <span>Bank Account:</span>
+                            <span className="font-mono font-bold text-zinc-800 dark:text-zinc-200">
+                              {activeCompObj.gst_account_number || activeCompObj.nongst_account_number || activeCompObj.account_number}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-zinc-500">
+                            <span>IFSC Code:</span>
+                            <span className="font-mono font-bold text-zinc-800 dark:text-zinc-200">
+                              {activeCompObj.gst_ifsc_code || activeCompObj.nongst_ifsc_code || activeCompObj.ifsc_code}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
+
+                {/* Form: Mandatory UTR */}
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault()
+                    if (!clientUtr.trim()) {
+                      setClientPayError("UTR / Transaction Reference Number is mandatory to verify payment.")
+                      return
+                    }
+                    setClientPayError(null)
+                    setIsSubmittingProof(true)
+                    try {
+                      const dueAmt = parseCurrencyNumber(clientPayNowInvoice.due) || parseCurrencyNumber(clientPayNowInvoice.totalInvoiced)
+                      await submitClientPaymentProof(
+                        clientPayNowInvoice.id,
+                        clientUtr.trim(),
+                        dueAmt,
+                        clientPayMethod,
+                        clientPayNotes,
+                        user?.name || clientPayNowInvoice.client
+                      )
+                      setToastMessage(`Payment proof with UTR ${clientUtr.trim()} submitted! Admin has been notified for verification.`)
+                      setTimeout(() => setToastMessage(null), 5000)
+                      setClientPayNowInvoice(null)
+                      loadInvoices()
+                    } catch (err: any) {
+                      setClientPayError(err?.message || "Failed to submit payment proof.")
+                    } finally {
+                      setIsSubmittingProof(false)
+                    }
+                  }}
+                  className="space-y-3 pt-2 border-t border-zinc-100 dark:border-zinc-800"
+                >
+                  <div>
+                    <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                      Transaction UTR / Reference No. (12 Digits) <span className="text-rose-600 font-black">* Mandatory</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. 430291847192 (from GPay / PhonePe / Bank SMS)"
+                      value={clientUtr}
+                      onChange={(e) => {
+                        setClientUtr(e.target.value)
+                        if (clientPayError) setClientPayError(null)
+                      }}
+                      className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border-2 border-emerald-500/80 rounded-xl font-mono text-sm font-bold text-zinc-900 dark:text-zinc-100 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+                    />
+                    <p className="text-[10px] text-zinc-400 mt-1">
+                      📌 Enter the 12-digit UPI Transaction ID or Bank UTR shown in your payment confirmation screen.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
+                        Payment App / Channel
+                      </label>
+                      <select
+                        value={clientPayMethod}
+                        onChange={(e) => setClientPayMethod(e.target.value)}
+                        className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-medium"
+                      >
+                        <option value="Google Pay">Google Pay (GPay)</option>
+                        <option value="PhonePe">PhonePe</option>
+                        <option value="Paytm">Paytm UPI</option>
+                        <option value="BHIM UPI">BHIM UPI</option>
+                        <option value="Bank IMPS/NEFT">Bank IMPS / NEFT / RTGS</option>
+                        <option value="Other UPI">Other UPI App</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
+                        Remarks / Notes (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Paid from HDFC account"
+                        value={clientPayNotes}
+                        onChange={(e) => setClientPayNotes(e.target.value)}
+                        className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg"
+                      />
+                    </div>
+                  </div>
+
+                  {clientPayError && (
+                    <div className="p-2.5 bg-rose-50 dark:bg-rose-950/50 rounded-xl border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs font-semibold flex items-center gap-2">
+                      <AlertCircle size={15} className="shrink-0" />
+                      <span>{clientPayError}</span>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-100 dark:border-zinc-800">
+                    <button
+                      type="button"
+                      onClick={() => setClientPayNowInvoice(null)}
+                      className="px-4 py-2 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmittingProof || !clientUtr.trim()}
+                      className="px-5 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+                    >
+                      {isSubmittingProof ? (
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <span>Submitting Proof...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 size={14} />
+                          <span>Submit UTR &amp; Payment Proof</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── ADMIN VERIFY UTR & CONFIRM PAYMENT MODAL ── */}
+      <AnimatePresence>
+        {verifyingInvoice && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden text-xs my-4"
+            >
+              <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-gradient-to-r from-purple-700 via-indigo-700 to-purple-800 text-white">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-white/20 rounded-xl backdrop-blur-xs">
+                    <ShieldCheck size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-sm sm:text-base">Verify Payment UTR</h3>
+                    <p className="text-[11px] text-purple-100 font-medium">Invoice #{verifyingInvoice.id} • {verifyingInvoice.client}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setVerifyingInvoice(null)}
+                  className="p-1.5 hover:bg-white/20 rounded-lg transition-colors cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-4">
+                {/* UTR Showcase Card */}
+                <div className="p-4 bg-purple-50/80 dark:bg-purple-950/40 rounded-xl border border-purple-200 dark:border-purple-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10.5px] font-bold text-purple-900 dark:text-purple-300">
+                      Submitted Transaction UTR Number:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (verifyingInvoice.paymentProofUtr) {
+                          navigator.clipboard.writeText(verifyingInvoice.paymentProofUtr)
+                          setToastMessage("UTR copied to clipboard!")
+                          setTimeout(() => setToastMessage(null), 2000)
+                        }
+                      }}
+                      className="px-2 py-0.5 rounded bg-purple-200/80 dark:bg-purple-900 text-purple-800 dark:text-purple-200 text-[10px] font-bold flex items-center gap-1 cursor-pointer hover:bg-purple-300"
+                    >
+                      <Copy size={11} /> Copy UTR
+                    </button>
+                  </div>
+                  <div className="font-mono text-base font-black text-purple-950 dark:text-purple-100 bg-white dark:bg-zinc-900 p-2.5 rounded-lg border border-purple-200 dark:border-purple-800 tracking-wider">
+                    {verifyingInvoice.paymentProofUtr || "No UTR Entered"}
+                  </div>
+                </div>
+
+                {/* Proof Details Grid */}
+                <div className="grid grid-cols-2 gap-3 p-3.5 bg-zinc-50 dark:bg-zinc-800/40 rounded-xl border border-zinc-200 dark:border-zinc-700 text-[11px]">
+                  <div>
+                    <span className="text-zinc-400 block text-[10px]">Client / Payer</span>
+                    <strong className="text-zinc-800 dark:text-zinc-200">{verifyingInvoice.paymentProofSubmittedBy || verifyingInvoice.client}</strong>
+                  </div>
+                  <div>
+                    <span className="text-zinc-400 block text-[10px]">Claimed Amount</span>
+                    <strong className="text-emerald-600 dark:text-emerald-400 font-mono font-bold text-xs">
+                      ₹{(verifyingInvoice.paymentProofAmount || parseCurrencyNumber(verifyingInvoice.due)).toLocaleString("en-IN")}
+                    </strong>
+                  </div>
+                  <div>
+                    <span className="text-zinc-400 block text-[10px]">Payment Method</span>
+                    <span className="text-zinc-700 dark:text-zinc-300 font-medium">{verifyingInvoice.paymentProofMethod || "UPI"}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-400 block text-[10px]">Submitted Date &amp; Time</span>
+                    <span className="text-zinc-700 dark:text-zinc-300 font-mono text-[10.5px]">
+                      {verifyingInvoice.paymentProofDate ? formatDisplayDate(verifyingInvoice.paymentProofDate) : "Recent"}
+                    </span>
+                  </div>
+                  {verifyingInvoice.paymentProofNotes && (
+                    <div className="col-span-2 pt-1 border-t border-zinc-200 dark:border-zinc-700">
+                      <span className="text-zinc-400 block text-[10px]">Client Remarks</span>
+                      <span className="text-zinc-700 dark:text-zinc-300 italic">"{verifyingInvoice.paymentProofNotes}"</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Admin Verification Decision */}
+                <div className="space-y-1.5">
+                  <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300">
+                    Admin Notes / Rejection Reason (if rejecting)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. UTR verified in bank statement / UTR not found"
+                    value={adminVerifyNotes}
+                    onChange={(e) => setAdminVerifyNotes(e.target.value)}
+                    className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between gap-2 pt-3 border-t border-zinc-100 dark:border-zinc-800">
+                  <button
+                    type="button"
+                    disabled={isVerifyingProof}
+                    onClick={async () => {
+                      if (!confirm("Are you sure you want to reject this payment proof? Invoice will return to Not Paid status.")) return
+                      setIsVerifyingProof(true)
+                      try {
+                        await verifyAndConfirmPayment(verifyingInvoice.id, false, adminVerifyNotes)
+                        setToastMessage(`Payment proof for #${verifyingInvoice.id} was rejected.`)
+                        setTimeout(() => setToastMessage(null), 4000)
+                        setVerifyingInvoice(null)
+                        loadInvoices()
+                      } catch (err: any) {
+                        alert(err?.message || "Error rejecting proof.")
+                      } finally {
+                        setIsVerifyingProof(false)
+                      }
+                    }}
+                    className="px-4 py-2 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded-xl cursor-pointer"
+                  >
+                    ✕ Reject / Invalid UTR
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isVerifyingProof}
+                    onClick={async () => {
+                      setIsVerifyingProof(true)
+                      try {
+                        await verifyAndConfirmPayment(verifyingInvoice.id, true, adminVerifyNotes)
+                        setToastMessage(`Payment for #${verifyingInvoice.id} verified and confirmed successfully!`)
+                        setTimeout(() => setToastMessage(null), 4000)
+                        setVerifyingInvoice(null)
+                        loadInvoices()
+                      } catch (err: any) {
+                        alert(err?.message || "Error confirming payment.")
+                      } finally {
+                        setIsVerifyingProof(false)
+                      }
+                    }}
+                    className="px-5 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    {isVerifyingProof ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Confirming...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 size={14} />
+                        <span>✓ Confirm &amp; Mark Paid</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }

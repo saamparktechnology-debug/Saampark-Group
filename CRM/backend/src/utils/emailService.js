@@ -1,6 +1,30 @@
 const nodemailer = require('nodemailer');
 const pool = require('../config/db');
 
+// ─── Group Email Config (Saampark Group official for OTPs and Verification) ──
+function getGroupEmailConfig() {
+  const user = (process.env.GROUP_SMTP_USER || 'saampark.official@gmail.com').trim();
+  const pass = (process.env.GROUP_SMTP_PASS || 'wtsydhlysuvldjdb').replace(/\s+/g, '');
+  const host = (process.env.GROUP_SMTP_HOST || 'smtp.gmail.com').trim();
+  const port = parseInt(process.env.GROUP_SMTP_PORT || '587', 10);
+  const fromName = 'SAAMPARK Group';
+
+  const transporter = nodemailer.createTransport({
+    host,
+    port,
+    secure: port === 465,
+    auth: { user, pass },
+    tls: { rejectUnauthorized: false },
+  });
+
+  return {
+    transporter,
+    from: `"${fromName}" <${user}>`,
+    fromEmail: user,
+    fromName,
+  };
+}
+
 /**
  * Resolve SMTP Transporter and From identity dynamically for a given company or global fallback
  */
@@ -19,7 +43,7 @@ async function getEmailConfig(companyId = null, overrideConfig = null) {
       secure,
       auth: {
         user: overrideConfig.user.trim(),
-        pass: overrideConfig.pass.trim(),
+        pass: overrideConfig.pass.replace(/\s+/g, ''),
       },
       tls: {
         rejectUnauthorized: false,
@@ -60,7 +84,7 @@ async function getEmailConfig(companyId = null, overrideConfig = null) {
             secure,
             auth: {
               user: comp.smtp_user.trim(),
-              pass: comp.smtp_pass.trim(),
+              pass: comp.smtp_pass.replace(/\s+/g, ''),
             },
             tls: {
               rejectUnauthorized: false,
@@ -75,15 +99,26 @@ async function getEmailConfig(companyId = null, overrideConfig = null) {
           };
         }
 
-        // If this is Saampark Consultancy and consultancy SMTP is NOT configured yet:
+        // If this is Saampark Consultancy and company record didn't have pass, use default Consultancy credentials
         if (canonId === 'consultancy' || canonId === '2' || canonId.includes('consult') || (comp && String(comp.name || '').toLowerCase().includes('consult'))) {
-          throw new Error('SMTP configuration is not set up for SAAMPARK Consultancy. Please configure SMTP credentials in Super Admin Settings > Email / SMTP Setup.');
+          const consultUser = 'saamparkconsultancyservice@gmail.com';
+          const consultPass = 'flrnjwhvghdeizdv';
+          const transporter = nodemailer.createTransport({
+            host: 'smtp.gmail.com',
+            port: 587,
+            secure: false,
+            auth: { user: consultUser, pass: consultPass },
+            tls: { rejectUnauthorized: false },
+          });
+          return {
+            transporter,
+            from: `"SAAMPARK Consultancy Services" <${consultUser}>`,
+            fromEmail: consultUser,
+            fromName: 'SAAMPARK Consultancy Services',
+          };
         }
       }
     } catch (err) {
-      if (err.message && err.message.includes('SMTP configuration is not set up')) {
-        throw err;
-      }
       console.warn('Company SMTP lookup error:', err.message);
     }
   }
@@ -106,7 +141,7 @@ async function getEmailConfig(companyId = null, overrideConfig = null) {
           secure,
           auth: {
             user: settings.smtpUser.trim(),
-            pass: settings.smtpPass.trim(),
+            pass: settings.smtpPass.replace(/\s+/g, ''),
           },
           tls: {
             rejectUnauthorized: false,
@@ -125,9 +160,9 @@ async function getEmailConfig(companyId = null, overrideConfig = null) {
     console.warn('Global Settings SMTP lookup error:', err.message);
   }
 
-  // 4. Default Fallback (for Saampark Technology)
-  const defaultUser = process.env.SMTP_USER || 'supriyogod@gmail.com';
-  const defaultPass = process.env.SMTP_PASS || 'vctonocakbbgbvib';
+  // 4. Default Fallback (for Saampark Technology & Research Private Limited)
+  const defaultUser = process.env.SMTP_USER || 'saamparktechnologyresearch@gmail.com';
+  const defaultPass = (process.env.SMTP_PASS || 'jvdnpuiozmqbiwtx').replace(/\s+/g, '');
   const defaultHost = process.env.SMTP_HOST || 'smtp.gmail.com';
   const defaultPort = parseInt(process.env.SMTP_PORT || '587', 10);
 
@@ -146,9 +181,9 @@ async function getEmailConfig(companyId = null, overrideConfig = null) {
 
   return {
     transporter,
-    from: `"SAAMPARK Technology" <${defaultUser}>`,
+    from: `"SAAMPARK Technology & Research" <${defaultUser}>`,
     fromEmail: defaultUser,
-    fromName: 'SAAMPARK Technology',
+    fromName: 'SAAMPARK Technology & Research Private Limited',
   };
 }
 
@@ -254,13 +289,13 @@ async function testSmtpConnection(config) {
 }
 
 /**
- * Send OTP email for password reset
+ * Send OTP email for password reset (Uses Saampark Group Official Email)
  */
 async function sendPasswordResetOTP(email, name = 'User', companyId = null) {
   const otp = generateOTP();
   storeOTP(email, otp, 'reset');
 
-  const { transporter, from } = await getEmailConfig(companyId);
+  const { transporter, from } = getGroupEmailConfig();
 
   const html = `
     <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 520px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden;">
@@ -299,13 +334,13 @@ async function sendPasswordResetOTP(email, name = 'User', companyId = null) {
 }
 
 /**
- * Send OTP email for email verification after registration
+ * Send OTP email for email verification after registration (Uses Saampark Group Official Email)
  */
 async function sendEmailVerificationOTP(email, name = 'User', companyId = null) {
   const otp = generateOTP();
   storeOTP(email, otp, 'verify');
 
-  const { transporter, from } = await getEmailConfig(companyId);
+  const { transporter, from } = getGroupEmailConfig();
 
   const html = `
     <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 520px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden;">
@@ -425,9 +460,12 @@ async function sendInvoiceDetailsEmail({
   dueAmount = '₹0',
   items = [],
   viewUrl = `https://crm.saampark.com/sales/invoices?view=${invoiceId}`,
+  downloadUrl = null,
   companyId = null,
 }) {
   const { transporter, from } = await getEmailConfig(companyId);
+
+  const effectiveDownloadUrl = downloadUrl || (viewUrl.includes('?') ? `${viewUrl}&action=download` : `${viewUrl}?action=download`);
 
   const itemsHtml = (items && items.length > 0)
     ? items.map(it => `
@@ -507,8 +545,11 @@ async function sendInvoiceDetailsEmail({
         </div>
 
         <div style="text-align: center; margin-bottom: 20px;">
-          <a href="${viewUrl}" style="display: inline-block; background: linear-gradient(135deg, #059669, #10b981); color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 10px; font-weight: 700; font-size: 14px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);">
-            View & Pay Digital Invoice →
+          <a href="${viewUrl}" style="display: inline-block; background: linear-gradient(135deg, #059669, #10b981); color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 10px; font-weight: 700; font-size: 13px; margin: 4px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);">
+            💳 View & Pay Digital Invoice →
+          </a>
+          <a href="${effectiveDownloadUrl}" style="display: inline-block; background: #2563eb; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 10px; font-weight: 700; font-size: 13px; margin: 4px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);">
+            📥 Download Official PDF
           </a>
         </div>
       </div>
@@ -526,6 +567,337 @@ async function sendInvoiceDetailsEmail({
     subject: `📄 Invoice ${invoiceId} for ${project} - Saampark Technology`,
     html,
   });
+}
+
+/**
+ * Send quotation details with 3 response buttons + Download PDF
+ */
+async function sendQuotationDetailsEmail({
+  to,
+  clientName = 'Valued Client',
+  quotationId,
+  quotationNumber,
+  totalAmount,
+  validUntil = '',
+  items = [],
+  viewUrl,
+  downloadUrl,
+  acceptUrl,
+  modifyUrl,
+  declineUrl,
+  adminName = 'SAAMPARK Admin',
+  companyId = null,
+}) {
+  const { transporter, from } = await getEmailConfig(companyId);
+
+  const displayNum = quotationNumber || quotationId;
+  const vUrl = viewUrl || `https://crm.saampark.com/public/quotation?id=${quotationId}`;
+  const dUrl = downloadUrl || `${vUrl}&action=download`;
+  const aUrl = acceptUrl || `${vUrl}&action=accept`;
+  const mUrl = modifyUrl || `${vUrl}&action=modify`;
+  const decUrl = declineUrl || `${vUrl}&action=decline`;
+
+  const itemsHtml = (items && items.length > 0)
+    ? items.map(it => `
+        <tr style="border-bottom: 1px solid #2d2d3d;">
+          <td style="padding: 10px 12px; color: #e2e8f0; font-size: 13px;">${it.name || it.serviceName || 'Item'}</td>
+          <td style="padding: 10px 12px; color: #94a3b8; font-size: 13px; text-align: center;">${it.quantity || it.qty || 1}</td>
+          <td style="padding: 10px 12px; color: #e2e8f0; font-size: 13px; text-align: right;">₹${(it.unitPrice || it.rate || 0).toLocaleString('en-IN')}</td>
+          <td style="padding: 10px 12px; color: #10b981; font-weight: 700; font-size: 13px; text-align: right;">₹${(it.total || it.totalAmount || 0).toLocaleString('en-IN')}</td>
+        </tr>
+      `).join('')
+    : `
+        <tr style="border-bottom: 1px solid #2d2d3d;">
+          <td style="padding: 10px 12px; color: #e2e8f0; font-size: 13px;">Commercial Scope Proposal</td>
+          <td style="padding: 10px 12px; color: #94a3b8; font-size: 13px; text-align: center;">1</td>
+          <td style="padding: 10px 12px; color: #e2e8f0; font-size: 13px; text-align: right;">${totalAmount}</td>
+          <td style="padding: 10px 12px; color: #10b981; font-weight: 700; font-size: 13px; text-align: right;">${totalAmount}</td>
+        </tr>
+      `;
+
+  const html = `
+    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden; border: 1px solid #1e1e2e;">
+      <div style="background: linear-gradient(135deg, #2563eb, #1d4ed8); padding: 32px 40px; text-align: center;">
+        <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">SAAMPARK GROUP</h1>
+        <p style="color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">OFFICIAL COMMERCIAL QUOTATION</p>
+      </div>
+
+      <div style="padding: 32px 36px; background: #16161e;">
+        <p style="color: #e2e8f0; font-size: 15px; margin: 0 0 12px;">Dear <strong>${clientName}</strong>,</p>
+        <p style="color: #94a3b8; font-size: 13px; line-height: 1.6; margin: 0 0 20px;">
+          We have prepared official Quotation <strong style="color: #38bdf8;">${displayNum}</strong> for your project requirements. Please review the pricing breakdown below and select your response:
+        </p>
+
+        <div style="background: #1e1e2e; border: 1px solid #2d2d3d; border-radius: 12px; padding: 18px; margin-bottom: 20px;">
+          <table style="width: 100%; font-size: 13px; color: #cbd5e1; border-collapse: collapse;">
+            <tr>
+              <td style="padding: 5px 0; color: #94a3b8;">Quotation Number:</td>
+              <td style="padding: 5px 0; text-align: right; font-weight: 700; color: #38bdf8; font-family: monospace;">${displayNum}</td>
+            </tr>
+            <tr>
+              <td style="padding: 5px 0; color: #94a3b8;">Prepared By:</td>
+              <td style="padding: 5px 0; text-align: right; color: #e2e8f0;">${adminName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 5px 0; color: #94a3b8;">Valid Until:</td>
+              <td style="padding: 5px 0; text-align: right; color: #f59e0b; font-weight: 600;">${validUntil || '30 Days from issue'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 5px 0; color: #94a3b8;">Total Value:</td>
+              <td style="padding: 5px 0; text-align: right; font-weight: 800; color: #10b981; font-size: 15px;">${totalAmount}</td>
+            </tr>
+          </table>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+          <thead>
+            <tr style="background: #1e1e2e; border-bottom: 2px solid #2d2d3d;">
+              <th style="padding: 10px 12px; color: #94a3b8; font-size: 11px; text-align: left; text-transform: uppercase;">Item / Service</th>
+              <th style="padding: 10px 12px; color: #94a3b8; font-size: 11px; text-align: center; text-transform: uppercase;">Qty</th>
+              <th style="padding: 10px 12px; color: #94a3b8; font-size: 11px; text-align: right; text-transform: uppercase;">Rate</th>
+              <th style="padding: 10px 12px; color: #94a3b8; font-size: 11px; text-align: right; text-transform: uppercase;">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemsHtml}
+          </tbody>
+        </table>
+
+        <!-- Interactive Action Buttons -->
+        <div style="background: #111118; border: 1px solid #27273a; border-radius: 12px; padding: 22px; text-align: center; margin: 24px 0 16px;">
+          <p style="color: #cbd5e1; font-size: 13px; font-weight: 700; margin: 0 0 14px; text-transform: uppercase; letter-spacing: 0.5px;">Please select your action below:</p>
+          
+          <div style="margin-bottom: 14px;">
+            <!-- Button 1: Accept -->
+            <a href="${aUrl}" style="display: inline-block; background: #16a34a; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-weight: 700; font-size: 13px; margin: 4px; box-shadow: 0 4px 10px rgba(22, 163, 74, 0.3);">
+              ✅ Accept Quotation
+            </a>
+            <!-- Button 2: Need Modification -->
+            <a href="${mUrl}" style="display: inline-block; background: #d97706; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-weight: 700; font-size: 13px; margin: 4px; box-shadow: 0 4px 10px rgba(217, 119, 6, 0.3);">
+              ✏️ Need Modification
+            </a>
+            <!-- Button 3: Decline / Don't Accept -->
+            <a href="${decUrl}" style="display: inline-block; background: #dc2626; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-weight: 700; font-size: 13px; margin: 4px; box-shadow: 0 4px 10px rgba(220, 38, 38, 0.3);">
+              ❌ Decline / Don't Accept
+            </a>
+          </div>
+
+          <div style="border-top: 1px solid #27273a; padding-top: 14px; margin-top: 14px;">
+            <!-- Download Button in Mail -->
+            <a href="${dUrl}" style="display: inline-block; background: #2563eb; color: #ffffff; text-decoration: none; padding: 10px 22px; border-radius: 8px; font-weight: 700; font-size: 12px; margin: 4px; box-shadow: 0 4px 10px rgba(37, 99, 235, 0.3);">
+              📥 Download Official Quotation (PDF)
+            </a>
+            <a href="${vUrl}" style="display: inline-block; background: #334155; color: #e2e8f0; text-decoration: none; padding: 10px 22px; border-radius: 8px; font-weight: 600; font-size: 12px; margin: 4px;">
+              👁️ View Online Portal
+            </a>
+          </div>
+        </div>
+
+        <p style="color: #64748b; font-size: 12px; text-align: center; margin: 0;">
+          Upon acceptance, this quotation will automatically proceed to official project Estimation.
+        </p>
+      </div>
+
+      <div style="padding: 20px 36px; background: #0f0f13; text-align: center; border-top: 1px solid #1e1e2e;">
+        <p style="color: #64748b; font-size: 12px; margin: 0 0 4px;">📞 +91 9901518567 / +91 9901518569 | 🌐 www.saamparktechnology.com</p>
+        <p style="color: #475569; font-size: 11px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
+      </div>
+    </div>
+  `;
+
+  await transporter.sendMail({
+    from,
+    to,
+    subject: `📑 Commercial Quotation ${displayNum} (${totalAmount}) - Saampark Group`,
+    html,
+  });
+}
+
+/**
+ * Send estimate details with 3 response buttons + Download PDF
+ */
+async function sendEstimateDetailsEmail({
+  to,
+  clientName = 'Valued Client',
+  estimateId,
+  estimateNumber,
+  projectTitle = 'Project Estimate',
+  totalAmount,
+  validUntil = '',
+  items = [],
+  viewUrl,
+  downloadUrl,
+  acceptUrl,
+  modifyUrl,
+  declineUrl,
+  adminName = 'SAAMPARK Admin',
+  companyId = null,
+}) {
+  const { transporter, from } = await getEmailConfig(companyId);
+
+  const displayNum = estimateNumber || estimateId;
+  const vUrl = viewUrl || `https://crm.saampark.com/public/estimate?id=${estimateId}`;
+  const dUrl = downloadUrl || `${vUrl}&action=download`;
+  const aUrl = acceptUrl || `${vUrl}&action=accept`;
+  const mUrl = modifyUrl || `${vUrl}&action=modify`;
+  const decUrl = declineUrl || `${vUrl}&action=decline`;
+
+  const itemsHtml = (items && items.length > 0)
+    ? items.map(it => `
+        <tr style="border-bottom: 1px solid #2d2d3d;">
+          <td style="padding: 10px 12px; color: #e2e8f0; font-size: 13px;">${it.name || it.serviceName || 'Service'}</td>
+          <td style="padding: 10px 12px; color: #94a3b8; font-size: 13px; text-align: center;">${it.quantity || it.qty || 1}</td>
+          <td style="padding: 10px 12px; color: #e2e8f0; font-size: 13px; text-align: right;">₹${(it.unitPrice || it.rate || 0).toLocaleString('en-IN')}</td>
+          <td style="padding: 10px 12px; color: #10b981; font-weight: 700; font-size: 13px; text-align: right;">₹${(it.total || it.totalAmount || 0).toLocaleString('en-IN')}</td>
+        </tr>
+      `).join('')
+    : `
+        <tr style="border-bottom: 1px solid #2d2d3d;">
+          <td style="padding: 10px 12px; color: #e2e8f0; font-size: 13px;">${projectTitle}</td>
+          <td style="padding: 10px 12px; color: #94a3b8; font-size: 13px; text-align: center;">1</td>
+          <td style="padding: 10px 12px; color: #e2e8f0; font-size: 13px; text-align: right;">${totalAmount}</td>
+          <td style="padding: 10px 12px; color: #10b981; font-weight: 700; font-size: 13px; text-align: right;">${totalAmount}</td>
+        </tr>
+      `;
+
+  const html = `
+    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden; border: 1px solid #1e1e2e;">
+      <div style="background: linear-gradient(135deg, #0284c7, #0369a1); padding: 32px 40px; text-align: center;">
+        <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">SAAMPARK GROUP</h1>
+        <p style="color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">PROJECT COST ESTIMATE</p>
+      </div>
+
+      <div style="padding: 32px 36px; background: #16161e;">
+        <p style="color: #e2e8f0; font-size: 15px; margin: 0 0 12px;">Dear <strong>${clientName}</strong>,</p>
+        <p style="color: #94a3b8; font-size: 13px; line-height: 1.6; margin: 0 0 20px;">
+          Here is your cost estimate <strong style="color: #38bdf8;">${displayNum}</strong> for <strong>${projectTitle}</strong>. Please review the itemized breakdown and confirm your response:
+        </p>
+
+        <div style="background: #1e1e2e; border: 1px solid #2d2d3d; border-radius: 12px; padding: 18px; margin-bottom: 20px;">
+          <table style="width: 100%; font-size: 13px; color: #cbd5e1; border-collapse: collapse;">
+            <tr>
+              <td style="padding: 5px 0; color: #94a3b8;">Estimate Number:</td>
+              <td style="padding: 5px 0; text-align: right; font-weight: 700; color: #38bdf8; font-family: monospace;">${displayNum}</td>
+            </tr>
+            <tr>
+              <td style="padding: 5px 0; color: #94a3b8;">Project:</td>
+              <td style="padding: 5px 0; text-align: right; color: #e2e8f0;">${projectTitle}</td>
+            </tr>
+            <tr>
+              <td style="padding: 5px 0; color: #94a3b8;">Valid Until:</td>
+              <td style="padding: 5px 0; text-align: right; color: #f59e0b; font-weight: 600;">${validUntil || '30 Days from issue'}</td>
+            </tr>
+            <tr>
+              <td style="padding: 5px 0; color: #94a3b8;">Estimated Total:</td>
+              <td style="padding: 5px 0; text-align: right; font-weight: 800; color: #10b981; font-size: 15px;">${totalAmount}</td>
+            </tr>
+          </table>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+          <thead>
+            <tr style="background: #1e1e2e; border-bottom: 2px solid #2d2d3d;">
+              <th style="padding: 10px 12px; color: #94a3b8; font-size: 11px; text-align: left; text-transform: uppercase;">Service / Scope</th>
+              <th style="padding: 10px 12px; color: #94a3b8; font-size: 11px; text-align: center; text-transform: uppercase;">Qty</th>
+              <th style="padding: 10px 12px; color: #94a3b8; font-size: 11px; text-align: right; text-transform: uppercase;">Rate</th>
+              <th style="padding: 10px 12px; color: #94a3b8; font-size: 11px; text-align: right; text-transform: uppercase;">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemsHtml}
+          </tbody>
+        </table>
+
+        <!-- Interactive Action Buttons -->
+        <div style="background: #111118; border: 1px solid #27273a; border-radius: 12px; padding: 22px; text-align: center; margin: 24px 0 16px;">
+          <p style="color: #cbd5e1; font-size: 13px; font-weight: 700; margin: 0 0 14px; text-transform: uppercase; letter-spacing: 0.5px;">Please select your action below:</p>
+          
+          <div style="margin-bottom: 14px;">
+            <!-- Button 1: Accept -->
+            <a href="${aUrl}" style="display: inline-block; background: #16a34a; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-weight: 700; font-size: 13px; margin: 4px; box-shadow: 0 4px 10px rgba(22, 163, 74, 0.3);">
+              ✅ Accept Estimate
+            </a>
+            <!-- Button 2: Need Modification -->
+            <a href="${mUrl}" style="display: inline-block; background: #d97706; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-weight: 700; font-size: 13px; margin: 4px; box-shadow: 0 4px 10px rgba(217, 119, 6, 0.3);">
+              ✏️ Need Modification
+            </a>
+            <!-- Button 3: Decline / Don't Accept -->
+            <a href="${decUrl}" style="display: inline-block; background: #dc2626; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-weight: 700; font-size: 13px; margin: 4px; box-shadow: 0 4px 10px rgba(220, 38, 38, 0.3);">
+              ❌ Decline / Don't Accept
+            </a>
+          </div>
+
+          <div style="border-top: 1px solid #27273a; padding-top: 14px; margin-top: 14px;">
+            <!-- Download Button in Mail -->
+            <a href="${dUrl}" style="display: inline-block; background: #0284c7; color: #ffffff; text-decoration: none; padding: 10px 22px; border-radius: 8px; font-weight: 700; font-size: 12px; margin: 4px; box-shadow: 0 4px 10px rgba(2, 132, 199, 0.3);">
+              📥 Download Official Estimate (PDF)
+            </a>
+            <a href="${vUrl}" style="display: inline-block; background: #334155; color: #e2e8f0; text-decoration: none; padding: 10px 22px; border-radius: 8px; font-weight: 600; font-size: 12px; margin: 4px;">
+              👁️ View Online Portal
+            </a>
+          </div>
+        </div>
+
+        <p style="color: #64748b; font-size: 12px; text-align: center; margin: 0;">
+          Upon acceptance, this estimate can be immediately converted into a tax invoice and project deliverables schedule.
+        </p>
+      </div>
+
+      <div style="padding: 20px 36px; background: #0f0f13; text-align: center; border-top: 1px solid #1e1e2e;">
+        <p style="color: #64748b; font-size: 12px; margin: 0 0 4px;">📞 +91 9901518567 / +91 9901518569 | 🌐 www.saamparktechnology.com</p>
+        <p style="color: #475569; font-size: 11px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
+      </div>
+    </div>
+  `;
+
+  await transporter.sendMail({
+    from,
+    to,
+    subject: `📋 Cost Estimate ${displayNum} for ${projectTitle} (${totalAmount}) - Saampark Group`,
+    html,
+  });
+}
+
+/**
+ * Send Security PIN verification OTP email
+ */
+async function sendPinResetOTP(email, name = 'User', companyId = null) {
+  const otp = generateOTP();
+  storeOTP(email, otp, 'pin_reset');
+
+  const { transporter, from } = await getEmailConfig(companyId);
+
+  const html = `
+    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 500px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden; border: 1px solid #1e1e2e;">
+      <div style="background: linear-gradient(135deg, #6366f1, #4f46e5); padding: 28px 36px; text-align: center;">
+        <h1 style="color: #ffffff; margin: 0; font-size: 22px; font-weight: 800;">SAAMPARK CRM</h1>
+        <p style="color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 13px;">Security PIN Verification</p>
+      </div>
+      <div style="padding: 30px 36px; background: #16161e; text-align: center;">
+        <p style="color: #e2e8f0; font-size: 14px; margin: 0 0 16px;">Hello <strong>${name}</strong>,</p>
+        <p style="color: #94a3b8; font-size: 13px; line-height: 1.6; margin: 0 0 24px;">
+          Use the following 6-digit verification code to configure or update your 4-digit security PIN:
+        </p>
+        <div style="background: #1e1e2e; border: 2px dashed #4f46e5; border-radius: 12px; padding: 18px 24px; display: inline-block; margin-bottom: 24px;">
+          <span style="font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #a5b4fc; font-family: monospace;">${otp}</span>
+        </div>
+        <p style="color: #64748b; font-size: 12px; margin: 0 0 6px;">This OTP will expire in <strong>10 minutes</strong>.</p>
+        <p style="color: #64748b; font-size: 11px; margin: 0;">If you did not request this code, please secure your account immediately.</p>
+      </div>
+      <div style="padding: 16px 36px; background: #0f0f13; text-align: center; border-top: 1px solid #1e1e2e;">
+        <p style="color: #475569; font-size: 11px; margin: 0;">© 2026 SAAMPARK Group. All rights reserved.</p>
+      </div>
+    </div>
+  `;
+
+  await transporter.sendMail({
+    from,
+    to: email,
+    subject: `🔐 Your Security PIN Verification Code: ${otp} - SAAMPARK CRM`,
+    html,
+  });
+
+  return { success: true, email };
 }
 
 /**
@@ -785,6 +1157,9 @@ module.exports = {
   sendWelcomeEmail,
   sendAdminCreatedAccountEmail,
   sendInvoiceDetailsEmail,
+  sendQuotationDetailsEmail,
+  sendEstimateDetailsEmail,
+  sendPinResetOTP,
   sendProjectCompletionEmail,
   sendClientWelcomeEmail,
   sendPaymentReceiptEmail,

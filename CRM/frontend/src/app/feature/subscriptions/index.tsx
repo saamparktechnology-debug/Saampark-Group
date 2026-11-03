@@ -124,6 +124,7 @@ export default function SubscriptionsMain() {
   const [emiTotalAmount, setEmiTotalAmount] = React.useState("120000")
   const [emiDownPayment, setEmiDownPayment] = React.useState("20000")
   const [emiTenureMonths, setEmiTenureMonths] = React.useState<number>(6)
+  const [isEmiCustomTenure, setIsEmiCustomTenure] = React.useState(false)
   const [emiStartDate, setEmiStartDate] = React.useState(new Date().toISOString().split("T")[0])
 
   // Tax & Overdue Late Fee Configuration
@@ -1781,14 +1782,36 @@ export default function SubscriptionsMain() {
                           Tenure (Months)
                         </label>
                         <select
-                          value={emiTenureMonths}
-                          onChange={(e) => setEmiTenureMonths(Number(e.target.value))}
-                          className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl font-bold"
+                          value={isEmiCustomTenure ? "custom" : String(emiTenureMonths)}
+                          onChange={(e) => {
+                            const val = e.target.value
+                            if (val === "custom") {
+                              setIsEmiCustomTenure(true)
+                            } else {
+                              setIsEmiCustomTenure(false)
+                              setEmiTenureMonths(Number(val))
+                            }
+                          }}
+                          className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl font-bold cursor-pointer"
                         >
-                          {[3, 4, 6, 8, 9, 12, 18, 24].map(n => (
-                            <option key={n} value={n}>{n} Months</option>
-                          ))}
+                          <option value="2">2 Mo</option>
+                          <option value="3">3 Mo</option>
+                          <option value="4">4 Mo</option>
+                          <option value="6">6 Mo</option>
+                          <option value="12">12 M</option>
+                          <option value="custom">Custom</option>
                         </select>
+                        {isEmiCustomTenure && (
+                          <input
+                            type="number"
+                            min="1"
+                            max="60"
+                            value={emiTenureMonths}
+                            onChange={(e) => setEmiTenureMonths(Math.max(1, Number(e.target.value)))}
+                            placeholder="Custom months..."
+                            className="mt-1.5 w-full px-3 py-1.5 bg-white dark:bg-zinc-900 border border-teal-300 dark:border-teal-700 rounded-xl text-xs font-bold text-right"
+                          />
+                        )}
                       </div>
                     </div>
 

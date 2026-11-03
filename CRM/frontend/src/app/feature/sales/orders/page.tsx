@@ -43,6 +43,7 @@ import { getProjects } from "@/app/feature/projects/services/projectService"
 import { Project, ProjectMilestone } from "@/app/feature/projects/types"
 
 import { exportToExcel, printPDFReport, exportToCSV } from "@/lib/exportUtils"
+import { formatDisplayDate } from "@/lib/utils"
 import { confirmTwoStepDelete } from "@/lib/confirmDialog"
 import { getUserAvatar } from "@/app/feature/users/services/userService"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
@@ -657,10 +658,10 @@ export default function OrderListPage() {
                       {ord.project}
                     </td>
                     <td className="py-3 px-4 text-zinc-500 font-mono text-[11px]">
-                      {ord.orderDate}
+                      {formatDisplayDate(ord.orderDate)}
                     </td>
                     <td className="py-3 px-4 text-zinc-500 font-mono text-[11px]">
-                      {ord.deliveryDate}
+                      {formatDisplayDate(ord.deliveryDate)}
                     </td>
                     <td className="py-3 px-4 font-bold text-zinc-900 dark:text-zinc-100">
                       {ord.totalAmount}
@@ -847,7 +848,7 @@ export default function OrderListPage() {
                     </div>
                     <div>
                       <span className="text-zinc-400 text-[11px] block">Delivery Due Date</span>
-                      <p className="font-medium text-xs text-zinc-700 dark:text-zinc-300 mt-0.5">{selectedOrder.deliveryDate}</p>
+                      <p className="font-medium text-xs text-zinc-700 dark:text-zinc-300 mt-0.5">{formatDisplayDate(selectedOrder.deliveryDate)}</p>
                     </div>
                   </div>
 
@@ -863,7 +864,7 @@ export default function OrderListPage() {
                           <p className="text-[10px] text-zinc-500">
                             Billed By: <strong className="text-zinc-700 dark:text-zinc-300">{linkedProject?.billedBy || "Admin In-Charge"}</strong>
                             {linkedProject?.deadline && (
-                              <span> • Deadline: <strong className="text-red-600 dark:text-red-400 font-bold font-mono">{linkedProject.deadline}</strong></span>
+                              <span> • Deadline: <strong className="text-red-600 dark:text-red-400 font-bold font-mono">{formatDisplayDate(linkedProject.deadline)}</strong></span>
                             )}
                           </p>
                         </div>

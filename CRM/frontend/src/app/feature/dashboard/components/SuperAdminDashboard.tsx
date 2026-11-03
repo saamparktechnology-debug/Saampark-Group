@@ -618,36 +618,6 @@ export function SuperAdminDashboard() {
     return list
   }, [dbUsers, activeCompanyId, activeBranchId, activeSubBranchId, isBranchSelected, isSubBranchSelected])
 
-  // Company baseline fallback for canonical companies if no user invoices yet created
-  const companyBaseline = React.useMemo(() => {
-    if (isBranchSelected) {
-      return { invoiced: 0, received: 0, due: 0, expenses: 0, paidCount: 0, partCount: 0, dueCount: 0 }
-    }
-    if (!activeCompanyId || activeCompanyId === "all") {
-      return { 
-        invoiced: 2565000 + 1535000 + 954200, 
-        received: 1925000 + 1115000 + 659700, 
-        due: 640000 + 420000 + 294500, 
-        expenses: 485000 + 260000 + 175000, 
-        paidCount: 14 + 8 + 4, 
-        partCount: 3 + 2 + 1, 
-        dueCount: 4 + 3 + 2 
-      }
-    }
-    const c = getCanonicalCompanyId(activeCompanyId)
-    if (c === "tech") {
-      return { invoiced: 2565000, received: 1925000, due: 640000, expenses: 485000, paidCount: 14, partCount: 3, dueCount: 4 }
-    }
-    if (c === "digital") {
-      return { invoiced: 1535000, received: 1115000, due: 420000, expenses: 260000, paidCount: 8, partCount: 2, dueCount: 3 }
-    }
-    if (c === "saampark-ai-solutions") {
-      return { invoiced: 954200, received: 659700, due: 294500, expenses: 175000, paidCount: 4, partCount: 1, dueCount: 2 }
-    }
-    // Custom/newly created companies default to real 0 data
-    return { invoiced: 0, received: 0, due: 0, expenses: 0, paidCount: 0, partCount: 0, dueCount: 0 }
-  }, [activeCompanyId, isBranchSelected])
-
   const realInvoicedSum = scopedInvoices.reduce((acc, i) => acc + parseAmt(i.totalInvoiced || i.baseAmount), 0)
   const realReceivedSum = scopedInvoices.reduce((acc, i) => {
     const rec = parseAmt(i.paymentReceived)
@@ -660,11 +630,10 @@ export function SuperAdminDashboard() {
   const realExpenseSum = scopedExpenses.reduce((acc, e) => acc + parseAmt(e.amount), 0)
 
   // Real company financial totals
-  const hasRealInvoices = scopedInvoices.length > 0
-  const activeCompanyInvoiced = hasRealInvoices ? realInvoicedSum : (isBranchSelected ? 0 : companyBaseline.invoiced)
-  const activeCompanyReceived = hasRealInvoices ? realReceivedSum : (isBranchSelected ? 0 : companyBaseline.received)
-  const activeCompanyDue = hasRealInvoices ? realDueSum : (isBranchSelected ? 0 : companyBaseline.due)
-  const activeCompanyExpenses = scopedExpenses.length > 0 ? realExpenseSum : (isBranchSelected ? 0 : companyBaseline.expenses)
+  const activeCompanyInvoiced = realInvoicedSum
+  const activeCompanyReceived = realReceivedSum
+  const activeCompanyDue = realDueSum
+  const activeCompanyExpenses = realExpenseSum
   const activeCompanyMargin = activeCompanyReceived - activeCompanyExpenses
 
   // Invoice categorization & accurate sums
@@ -693,13 +662,11 @@ export function SuperAdminDashboard() {
 
   // Invoices with outstanding due
   const invoicesWithDue = scopedInvoices.filter(i => parseAmt(i.due) > 0)
-  const invoicesWithDueCount = hasRealInvoices 
-    ? invoicesWithDue.length 
-    : (isBranchSelected ? 0 : (companyBaseline.dueCount + companyBaseline.partCount))
+  const invoicesWithDueCount = invoicesWithDue.length
 
-  const paidInvoicesCount = hasRealInvoices ? paidInvoices.length : (isBranchSelected ? 0 : companyBaseline.paidCount)
-  const partialInvoicesCount = hasRealInvoices ? partialInvoices.length : (isBranchSelected ? 0 : companyBaseline.partCount)
-  const dueInvoicesCount = hasRealInvoices ? dueInvoices.length : (isBranchSelected ? 0 : companyBaseline.dueCount)
+  const paidInvoicesCount = paidInvoices.length
+  const partialInvoicesCount = partialInvoices.length
+  const dueInvoicesCount = dueInvoices.length
 
   const paidInvoicesReceived = paidInvoices.reduce((acc, i) => acc + (parseAmt(i.paymentReceived) || parseAmt(i.totalInvoiced)), 0)
   const partialInvoicesReceived = partialInvoices.reduce((acc, i) => acc + parseAmt(i.paymentReceived), 0)
@@ -1312,7 +1279,7 @@ export function SuperAdminDashboard() {
             subtextNode={
               <div className="mt-1 flex items-center justify-end">
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/60 pill-badge-3d">
-                  {scopedInvoices.length || (companyBaseline.paidCount + companyBaseline.partCount + companyBaseline.dueCount)} Invoices
+                  {scopedInvoices.length} {scopedInvoices.length === 1 ? "Invoice" : "Invoices"}
                 </span>
               </div>
             }
@@ -1388,7 +1355,7 @@ export function SuperAdminDashboard() {
                   color: "bg-emerald-500", 
                   text: "text-emerald-600 dark:text-emerald-400", 
                   percent: activeCompanyInvoiced > 0 ? Math.min(100, Math.round((paidInvoicesReceived / activeCompanyInvoiced) * 100)) : 0, 
-                  amount: hasRealInvoices ? formatINR(paidInvoicesReceived) : formatINR(Math.round(companyBaseline.received * 0.8))
+                  amount: formatINR(paidInvoicesReceived)
                 },
                 { 
                   label: "Partially Paid", 
@@ -1396,7 +1363,7 @@ export function SuperAdminDashboard() {
                   color: "bg-amber-500", 
                   text: "text-amber-600 dark:text-amber-400", 
                   percent: activeCompanyInvoiced > 0 ? Math.min(100, Math.round((partialInvoicesReceived / activeCompanyInvoiced) * 100)) : 0, 
-                  amount: hasRealInvoices ? formatINR(partialInvoicesReceived) : formatINR(Math.round(companyBaseline.received * 0.2))
+                  amount: formatINR(partialInvoicesReceived)
                 },
                 { 
                   label: "Outstanding Due", 
@@ -1430,7 +1397,7 @@ export function SuperAdminDashboard() {
                 <p className="text-muted-foreground font-semibold text-[11px]">Total Invoiced</p>
                 <p className="font-black text-sm text-slate-900 dark:text-white">{formatINR(activeCompanyInvoiced)}</p>
                 <p className="text-[10.5px] text-slate-400 font-medium">
-                  {scopedInvoices.length || (companyBaseline.paidCount + companyBaseline.partCount + companyBaseline.dueCount)} Invoices Issued
+                  {scopedInvoices.length} {scopedInvoices.length === 1 ? "Invoice Issued" : "Invoices Issued"}
                 </p>
               </div>
               <div className="text-right">

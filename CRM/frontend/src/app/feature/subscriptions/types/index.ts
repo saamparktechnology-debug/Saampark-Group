@@ -200,6 +200,15 @@ export interface Subscription {
   overdueDays?: number
   accumulatedLateFee?: number
   overduePaymentAdded?: number
+
+  // Multi-Month & Prepaid Cycles Retainer Configuration
+  totalDurationMonths?: number
+  totalCycles?: number
+  prepaidCycles?: number
+  remainingCycles?: number
+  advanceAmount?: number
+  balanceDue?: number
+  prepaidUntilDate?: string
 }
 
 export interface SubscriptionKPIs {

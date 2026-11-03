@@ -147,6 +147,15 @@ export default function LoginPage() {
     setIsLoading(true)
     setError("")
 
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("saampark_inactivity_logout")
+      sessionStorage.removeItem("saampark_inactive_logout")
+      localStorage.removeItem("saampark_session_revoked")
+      if (window.location.search) {
+        window.history.replaceState({}, document.title, window.location.pathname)
+      }
+    }
+
     const normalizedInput = email.toLowerCase().replace(/^@/, "").trim()
 
     try {
@@ -205,6 +214,7 @@ export default function LoginPage() {
 
       let backendUser: any = null
       let backendRole: Role | null = null
+      let backendToken: string | null = null
 
       // 2. Attempt backend API authentication
       try {
@@ -213,6 +223,7 @@ export default function LoginPage() {
           backendUser = backendRes.data?.user || backendRes.user
           backendRole = normalizeRole(backendUser.role_name || backendUser.role || "")
           const token = backendRes.data?.token || backendRes.token
+          backendToken = token
           if (token && typeof window !== "undefined") {
             localStorage.setItem("saampark_token", token)
           }
@@ -368,9 +379,18 @@ export default function LoginPage() {
       setSuccess(true)
 
       if (typeof window !== "undefined") {
+        sessionStorage.removeItem("saampark_inactivity_logout")
+        sessionStorage.removeItem("saampark_inactive_logout")
+        localStorage.removeItem("saampark_session_revoked")
+        if (window.location.search) {
+          window.history.replaceState({}, document.title, window.location.pathname)
+        }
         sessionStorage.setItem("saampark_session_active", "true")
         localStorage.setItem("saampark_session_active", "true")
         localStorage.setItem("saampark_last_activity_time", String(Date.now()))
+        if (backendToken) {
+          localStorage.setItem("saampark_token", backendToken)
+        }
       }
 
       let parsedCompanyIds: string[] = []
@@ -389,7 +409,7 @@ export default function LoginPage() {
       const selectedCompanyId = matchedRole === "Super Admin" ? "all" : (parsedCompanyIds[0] || "tech")
 
       loginAs(matchedRole, {
-        id: String(matchedAccount.id || matchedAccount.email),
+        id: String(backendUser?.id || matchedAccount.sql_id || matchedAccount.id || matchedAccount.email),
         name: displayName,
         email: effectiveEmail,
         username: matchedAccount.username || dbAccount?.username || (!normalizedInput.includes("@") ? normalizedInput : undefined),
@@ -403,11 +423,12 @@ export default function LoginPage() {
         branchName: matchedAccount.branchName || matchedAccount.branch_name || dbAccount?.branchName || (dbAccount as any)?.branch_name || undefined,
         allowedModules: matchedAccount.allowedModules || dbAccount?.allowedModules || (matchedAccount as any)?.permissions?.allowedModules,
         permissions: matchedAccount.permissions || dbAccount?.permissions,
-      })
+        token: backendToken || undefined,
+      } as any)
 
       setTimeout(() => {
-        router.push("/feature/dashboard")
-      }, 900)
+        router.replace("/feature/dashboard")
+      }, 500)
 
     } catch (err: any) {
       setIsLoading(false)
@@ -487,6 +508,9 @@ export default function LoginPage() {
         recordUserAccount({ ...existing, password: forgotNewPass })
       } else {
         recordUserAccount({ email: forgotEmail.toLowerCase().trim(), password: forgotNewPass })
+      }
+      if (typeof window !== "undefined" && window.location.search) {
+        window.history.replaceState({}, document.title, window.location.pathname)
       }
       setForgotStep("done")
       setForgotMsg("Password reset successfully! You can now log in.")

@@ -11,6 +11,7 @@ import { ClientItem } from "@/app/feature/clients/types"
 import { sendInvoiceDetailsEmailNotification } from "@/services/emailNotificationService"
 import { OfficialInvoiceDocument } from "./OfficialInvoiceDocument"
 import { useAuthStore } from "@/store/useAuthStore"
+import { executeWithFeedback } from "@/store/useActionFeedbackStore"
 
 interface InvoiceModalProps {
   isOpen: boolean
@@ -72,16 +73,25 @@ export function InvoiceModal({
   const handleSend = async () => {
     setIsSending(true)
     try {
-      if (onSendToClient) {
-        await onSendToClient(invoice)
-      } else {
-        await sendInvoiceDetailsEmailNotification(
-          invoice,
-          invoice.clientEmail || clientDetails?.email
-        )
-      }
-      setSentSuccess(true)
-      setTimeout(() => setSentSuccess(false), 3000)
+      await executeWithFeedback(async () => {
+        if (onSendToClient) {
+          await onSendToClient(invoice)
+        } else {
+          await sendInvoiceDetailsEmailNotification(
+            invoice,
+            invoice.clientEmail || clientDetails?.email
+          )
+        }
+        setSentSuccess(true)
+        setTimeout(() => setSentSuccess(false), 3000)
+      }, {
+        actionType: "sync",
+        loadingTitle: "Dispatching Invoice Email...",
+        loadingMsg: `Sending official invoice #${invoice.id} with download link to ${invoice.clientEmail || clientDetails?.email || "recipient"}...`,
+        successTitle: "Invoice Delivered Successfully!",
+        successMsg: `Official invoice #${invoice.id} has been dispatched to client's email inbox.`,
+        minLoadingMs: 650,
+      })
     } catch (e) {
       console.error("Failed to send invoice:", e)
     } finally {

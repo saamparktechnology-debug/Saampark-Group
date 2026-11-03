@@ -19,6 +19,7 @@ import { Subscription, InstallmentItem, SubscriptionStatus, calculateOverdueDeta
 import { getInvoices, InvoiceItem } from "@/app/feature/sales/invoices/services/invoiceService"
 import { getInstallments } from "../services/subscriptionService"
 import { useAuthStore } from "@/store/useAuthStore"
+import { formatDisplayDate } from "@/lib/utils"
 
 interface ClientSubscriptionLedgerModalProps {
   isOpen: boolean
@@ -451,7 +452,7 @@ export function ClientSubscriptionLedgerModal({
                                 {overdueInfo.isOverdue ? (
                                   <span className="text-rose-600 dark:text-rose-400 font-bold flex items-center gap-1">
                                     <AlertTriangle size={11} className="animate-pulse" />
-                                    <span>Overdue by {overdueInfo.daysOverdue} {overdueInfo.daysOverdue === 1 ? 'day' : 'days'} (Due: {sub.nextBillingDate})</span>
+                                    <span>Overdue by {overdueInfo.daysOverdue} {overdueInfo.daysOverdue === 1 ? 'day' : 'days'} (Due: {formatDisplayDate(sub.nextBillingDate)})</span>
                                     {overdueInfo.dailyLateFee > 0 && (
                                       <span className="text-[10px] font-semibold text-rose-500">
                                         • +₹{overdueInfo.accumulatedLateFee} Late Fee (₹{overdueInfo.dailyLateFee}/d)
@@ -459,12 +460,12 @@ export function ClientSubscriptionLedgerModal({
                                     )}
                                   </span>
                                 ) : (
-                                  <span>Next Billing: <strong className="text-emerald-600 dark:text-emerald-400">{sub.nextBillingDate}</strong></span>
+                                  <span>Next Billing: <strong className="text-emerald-600 dark:text-emerald-400">{formatDisplayDate(sub.nextBillingDate)}</strong></span>
                                 )}
                                 {sub.startDate && (
                                   <>
                                     <span>•</span>
-                                    <span>Started: {sub.startDate}</span>
+                                    <span>Started: {formatDisplayDate(sub.startDate)}</span>
                                   </>
                                 )}
                               </div>
@@ -543,10 +544,10 @@ export function ClientSubscriptionLedgerModal({
                                   {inv.id}
                                 </td>
                                 <td className="py-3 px-3 text-zinc-600 dark:text-zinc-400 whitespace-nowrap">
-                                  {inv.billDate || "N/A"}
+                                  {inv.billDate ? formatDisplayDate(inv.billDate) : "N/A"}
                                 </td>
                                 <td className="py-3 px-3 text-zinc-800 dark:text-zinc-200 font-medium whitespace-nowrap">
-                                  {inv.dueDate || "N/A"}
+                                  {inv.dueDate ? formatDisplayDate(inv.dueDate) : "N/A"}
                                 </td>
                                 <td className="py-3 px-3 font-bold text-zinc-900 dark:text-zinc-100 whitespace-nowrap">
                                   {inv.totalInvoiced}
@@ -617,7 +618,7 @@ export function ClientSubscriptionLedgerModal({
                               <span>Inst #{item.installmentNumber}</span>
                               <span>{item.formattedAmount}</span>
                             </div>
-                            <div className="text-[10px] text-zinc-500 mt-1">Due: {item.dueDate}</div>
+                            <div className="text-[10px] text-zinc-500 mt-1">Due: {formatDisplayDate(item.dueDate)}</div>
                             <div className="mt-1 font-bold text-[10px] flex items-center gap-1">
                               {item.status === "Paid" ? "✅ Paid" : item.status === "Overdue" ? "⚠️ Overdue" : "⏳ Pending"}
                             </div>

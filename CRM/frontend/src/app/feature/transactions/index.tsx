@@ -7,6 +7,7 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { TransactionService } from "@/services/accountService"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
+import { formatDisplayDate } from "@/lib/utils"
 
 interface Transaction { id: string; number: string; type: string; category: string; amount: number; date: string; method: string; notes?: string }
 
@@ -117,7 +118,7 @@ export default function TransactionsMain() {
                     <td className="py-3 px-4"><span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${item.type === "Income" ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>{item.type}</span></td>
                     <td className="py-3 px-4">{item.category}</td>
                     <td className={`py-3 px-4 font-bold font-mono ${item.type === "Income" ? "text-emerald-600" : "text-rose-600"}`}>{item.type === "Income" ? "+" : "-"}₹{(item.amount || 0).toLocaleString("en-IN")}</td>
-                    <td className="py-3 px-4 text-zinc-500 font-mono text-[11px]">{item.date}</td>
+                    <td className="py-3 px-4 text-zinc-500 font-mono text-[11px]">{formatDisplayDate(item.date)}</td>
                     <td className="py-3 px-4">{item.method}</td>
                     <td className="py-3 px-4">
                       <div className="flex items-center justify-center gap-1.5">

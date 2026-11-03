@@ -586,37 +586,37 @@ const toggleUserStatus = async (req, res, next) => {
 const deleteUser = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const targetEmail = (req.query?.email || req.body?.email || (String(id).includes('@') ? id : '')).toLowerCase().trim();
+    const idLower = String(id).toLowerCase().trim();
+    let emailNorm = targetEmail;
+    let dbId = isNaN(Number(id)) ? null : parseInt(id, 10);
 
-    // Prevent deleting Super Admin & Root Super Admin
-    const [users] = await pool.execute('SELECT role_id, email FROM users WHERE id = ? OR email = ?', [id, id]);
-    if (users.length > 0) {
-      const uEmail = (users[0].email || '').toLowerCase().trim();
-      if (uEmail === 'saampark.official@gmail.com') {
+    // Look up user by ID or email
+    const [targetUsers] = await pool.execute(
+      'SELECT id, role_id, email FROM users WHERE id = ? OR LOWER(email) = ? OR LOWER(email) = ?',
+      [dbId || 0, idLower, emailNorm || idLower]
+    );
+
+    if (targetUsers.length > 0) {
+      emailNorm = targetUsers[0].email.toLowerCase().trim();
+      dbId = targetUsers[0].id;
+      if (emailNorm === 'saampark.official@gmail.com') {
         return errorResponse(res, 403, 'Primary Root Super Admin account cannot be deleted.');
       }
-      if (users[0].role_id === 1) {
+      if (targetUsers[0].role_id === 1) {
         return errorResponse(res, 403, 'Super Admin accounts cannot be deleted.');
       }
     }
 
-    // Fetch user details for deleted_items tracking
-    const idLower = String(id).toLowerCase().trim();
-    await pool.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "users")', [idLower]);
-
-    const [targetUsers] = await pool.execute('SELECT id, email FROM users WHERE id = ? OR email = ?', [id, id]);
-    let emailNorm = '';
-    let dbIdStr = '';
-    if (targetUsers.length > 0) {
-      emailNorm = targetUsers[0].email.toLowerCase().trim();
-      dbIdStr = String(targetUsers[0].id).toLowerCase().trim();
-      await pool.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "users")', [emailNorm]);
-      await pool.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "users")', [dbIdStr]);
-    }
+    // Insert into deleted_items
+    if (idLower) await pool.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "users")', [idLower]);
+    if (emailNorm) await pool.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "users")', [emailNorm]);
+    if (dbId) await pool.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "users")', [String(dbId)]);
 
     // Soft delete: set deleted_at and deactivate
     await pool.execute(
-      'UPDATE users SET deleted_at = NOW(), status = ? WHERE id = ? OR email = ?',
-      ['inactive', id, id]
+      'UPDATE users SET deleted_at = NOW(), status = "inactive" WHERE id = ? OR LOWER(email) = ? OR LOWER(email) = ?',
+      [dbId || 0, idLower, emailNorm || idLower]
     );
 
     // Actively purge user from all app_data storage keys

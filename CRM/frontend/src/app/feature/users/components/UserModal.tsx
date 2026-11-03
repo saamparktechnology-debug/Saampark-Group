@@ -476,6 +476,22 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
   // Save handler
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    if (!name.trim()) {
+      setActiveTab("profile")
+      alert("Please enter the user full name.")
+      return
+    }
+    if (!email.trim()) {
+      setActiveTab("profile")
+      alert("Please enter the user email address.")
+      return
+    }
+    if (!editingUser && !password.trim()) {
+      setActiveTab("profile")
+      alert("Please enter or generate a password.")
+      return
+    }
+
     const finalRoleToSave: UserRole = (isEditingRootSuperAdmin || isRootSuperAdminEmail(email)) ? "Super Admin" : role
     const isAllCompanies = selectedCompanyId === "all" || finalRoleToSave === "Super Admin"
     const canonCompId = isAllCompanies ? "all" : (targetCompanyObj?.id || targetCompanyObj?.slug || selectedCompanyId || "tech")
@@ -661,7 +677,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
           </div>
 
           {/* Form Content: Scrollable Body */}
-          <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-6">
+          <form noValidate onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-6">
             
             {/* ========================================================================= */}
             {/* TAB 1: PROFILE & ASSIGNMENT (Kept mounted via CSS to preserve typed data) */}
@@ -750,7 +766,6 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         placeholder={role === "Clients" ? "e.g. Rahul Sharma" : "e.g. Supriya Adhikary"}
-                        required
                         className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-white dark:bg-[#090d16]/90 border border-slate-300 dark:border-white/15 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3)] shadow-xs dark:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-medium transition-all"
                       />
                     </div>
@@ -768,7 +783,6 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="user@saampark.in"
-                        required
                         className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-white dark:bg-[#090d16]/90 border border-slate-300 dark:border-white/15 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3)] shadow-xs dark:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-medium transition-all"
                       />
                     </div>
@@ -810,7 +824,6 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="Initial account password"
-                        required
                         className="w-full pl-9 pr-10 py-2.5 rounded-xl bg-white dark:bg-[#090d16]/90 border border-slate-300 dark:border-white/15 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3)] shadow-xs dark:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-medium transition-all"
                       />
                       <button
@@ -1422,6 +1435,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
 
                 <Button
                   type="submit"
+                  onClick={handleSubmit}
                   className="px-8 py-2.5 rounded-xl bg-gradient-to-b from-blue-600 via-indigo-600 to-blue-700 text-white font-black text-xs shadow-[0_8px_25px_rgba(59,130,246,0.4)] hover:shadow-[0_12px_30px_rgba(59,130,246,0.5)] hover:-translate-y-0.5 active:translate-y-0.5 transition-all cursor-pointer border border-blue-400/40"
                 >
                   {editingUser ? "Save User Account" : "Create Account Now"}
