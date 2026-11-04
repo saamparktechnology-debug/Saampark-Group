@@ -82,8 +82,17 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
     user?.branchId || activeBranchId || ""
   )
 
+  const hasInitializedRef = React.useRef(false)
+
   React.useEffect(() => {
-    if (isOpen) {
+    if (!isOpen) {
+      hasInitializedRef.current = false
+      return
+    }
+
+    if (!hasInitializedRef.current) {
+      hasInitializedRef.current = true
+
       useAuthStore.getState().fetchCompanies?.().catch(() => {})
       useAuthStore.getState().fetchBranches?.().catch(() => {})
       useAuthStore.getState().fetchSubBranches?.().catch(() => {})
@@ -101,7 +110,7 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
         setSelectedBranchId(activeBranchId || "")
       }
     }
-  }, [isOpen, activeCompanyId, activeBranchId, user?.companyId, user?.branchId, user?.role, selectableCompanies])
+  }, [isOpen])
 
   const availableBranches = React.useMemo(() => {
     if (!branches || !Array.isArray(branches)) return []
@@ -271,6 +280,12 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
     const targetSubBranchObj = finalSubBranchId ? subBranches?.find(sb => String(sb.id).toLowerCase().trim() === String(finalSubBranchId).toLowerCase().trim()) : undefined
     const finalSubBranchName = targetSubBranchObj?.name || user?.subBranchName || undefined
 
+    const currentFreshUser = useAuthStore.getState().user || user
+    const finalCreatorName = currentFreshUser?.name || currentFreshUser?.email || "User"
+    const finalCreatorId = String(currentFreshUser?.id || "")
+    const finalCreatorEmail = currentFreshUser?.email || ""
+    const finalCreatorRole = currentFreshUser?.role || "Teams"
+
     setIsSubmitting(true)
     try {
       const created = await addLead({
@@ -289,17 +304,17 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
         caller: effectiveCaller,
         owner: effectiveOwner,
         assignedTo: effectiveAssignedTo,
-        createdBy: user?.name || user?.email || "User",
-        createdById: String(user?.id || ""),
-        createdByName: user?.name || user?.email || "User",
-        createdByEmail: user?.email || "",
-        createdByRole: user?.role || "Teams",
+        createdBy: finalCreatorName,
+        createdById: finalCreatorId,
+        createdByName: finalCreatorName,
+        createdByEmail: finalCreatorEmail,
+        createdByRole: finalCreatorRole,
         branchId: finalBranchId,
         branchName: finalBranchName,
         subBranchId: finalSubBranchId,
         subBranchName: finalSubBranchName,
         companyId: finalCompanyId,
-        isClientPrivate: user?.role === "Clients",
+        isClientPrivate: currentFreshUser?.role === "Clients",
         ownerAvatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${companyName}`,
         managers: secondaryContact || managers,
         source: finalSource,
@@ -909,10 +924,21 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
             type="button"
             disabled={isSubmitting}
             onClick={handleSave}
-            className="flex items-center gap-1 px-5 py-2 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-semibold"
+            className={`flex items-center gap-1.5 px-5 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm ${
+              isSubmitting ? "opacity-75 cursor-not-allowed" : "cursor-pointer"
+            }`}
           >
-            <Check size={14} />
-            <span>Save</span>
+            {isSubmitting ? (
+              <>
+                <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                <span>Saving...</span>
+              </>
+            ) : (
+              <>
+                <Check size={14} />
+                <span>Save</span>
+              </>
+            )}
           </button>
         </div>
 

@@ -1236,6 +1236,7 @@ export function LeadList({
                 <th className="py-3 px-4">Assigned to</th>
                 <th className="py-3 px-4">Labels</th>
                 <th className="py-3 px-4">Created at</th>
+                <th className="py-3 px-4">Reminder Date</th>
                 <th className="py-3 px-4">
                   <div className="flex items-center gap-1">
                     <ArrowDown size={12} className="text-zinc-500" />
@@ -1570,6 +1571,37 @@ export function LeadList({
                       {formatDisplayDate(l.createdAt)}
                     </td>
 
+                    {/* Reminder Date */}
+                    <td className={`py-3.5 px-4 font-mono text-[11px] ${isLocked ? "blur-[1px] opacity-60" : ""}`}>
+                      {l.reminderDate && l.reminderDate !== "None" ? (
+                        <div className="flex flex-col gap-0.5">
+                          <span
+                            className={`font-semibold inline-flex items-center gap-1.5 ${
+                              isOverdue
+                                ? "text-rose-600 dark:text-rose-400 font-bold"
+                                : "text-amber-600 dark:text-amber-400"
+                            }`}
+                          >
+                            <span>📅</span>
+                            <span>{formatLeadReminderDate(l.reminderDate)}</span>
+                            {isOverdue && (
+                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300 font-extrabold uppercase">
+                                Expired
+                              </span>
+                            )}
+                          </span>
+                          {l.reminderTime && l.reminderTime !== "None" && (
+                            <span className="text-[10px] text-zinc-400 flex items-center gap-1">
+                              <span>⏰</span>
+                              <span>{l.reminderTime}</span>
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-zinc-400 italic text-[11px]">No Reminder</span>
+                      )}
+                    </td>
+
                     {/* Status */}
                     <td className="py-3.5 px-4">
                       {isLocked ? (
@@ -1684,7 +1716,7 @@ export function LeadList({
 
               {filteredLeads.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="py-12 text-center text-zinc-400">
+                  <td colSpan={13} className="py-12 text-center text-zinc-400">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <div className="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 text-zinc-400 flex items-center justify-center text-xl shadow-xs">
                         📋

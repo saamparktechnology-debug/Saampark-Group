@@ -999,10 +999,21 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
               type="button"
               disabled={isSubmitting}
               onClick={handleSave}
-              className="flex items-center gap-1 px-5 py-2 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-semibold"
+              className={`flex items-center gap-1.5 px-5 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm ${
+                isSubmitting ? "opacity-75 cursor-not-allowed" : "cursor-pointer"
+              }`}
             >
-              <Check size={14} />
-              <span>Save Changes</span>
+              {isSubmitting ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <>
+                  <Check size={14} />
+                  <span>Save Changes</span>
+                </>
+              )}
             </button>
           </div>
         </div>

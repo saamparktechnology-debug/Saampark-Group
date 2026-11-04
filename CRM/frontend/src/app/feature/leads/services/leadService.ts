@@ -93,26 +93,12 @@ export function formatLeadReminderDate(dateStr?: string): string {
   return `${day} ${month} ${year}`
 }
 
-export function isReminderDateOverdue(dateStr?: string, timeStr?: string): boolean {
+export function isReminderDateOverdue(dateStr?: string, _timeStr?: string): boolean {
   const parsed = parseLeadDate(dateStr)
   if (!parsed) return false
   const now = new Date()
 
-  // If time is provided, parse time (e.g. "11:30 AM", "06:00 PM", "14:30")
-  if (timeStr && timeStr !== "None" && typeof timeStr === "string") {
-    const timeMatch = timeStr.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i)
-    if (timeMatch) {
-      let hours = parseInt(timeMatch[1], 10)
-      const minutes = parseInt(timeMatch[2], 10)
-      const ampm = (timeMatch[3] || "").toUpperCase()
-      if (ampm === "PM" && hours < 12) hours += 12
-      if (ampm === "AM" && hours === 12) hours = 0
-      parsed.setHours(hours, minutes, 0, 0)
-      return now.getTime() > parsed.getTime()
-    }
-  }
-
-  // If no time is specified, the lead remains active during the reminder day and locks once the date ends (at midnight 23:59:59.999)
+  // The lead remains active during the entire reminder day and only locks once the date passes 11:59:59 PM
   parsed.setHours(23, 59, 59, 999)
   return now.getTime() > parsed.getTime()
 }
@@ -645,6 +631,11 @@ export const addLead = async (leadData: Omit<Lead, "id">, companyId?: string): P
   const currentUser = authState?.user
   const isClientRole = currentUser?.role === "Clients"
 
+  const creatorName = leadData.createdByName || leadData.createdBy || currentUser?.name || currentUser?.email || "User"
+  const creatorId = isClientRole ? String(currentUser?.id || "") : String(leadData.createdById || currentUser?.id || "")
+  const creatorEmail = isClientRole ? (currentUser?.email || "") : (leadData.createdByEmail || currentUser?.email || "")
+  const creatorRole = isClientRole ? "Clients" : (leadData.createdByRole || currentUser?.role || "Teams")
+
   const newLead: Lead = {
     ...leadData,
     id: newId,
@@ -658,23 +649,29 @@ export const addLead = async (leadData: Omit<Lead, "id">, companyId?: string): P
     caller: leadData.caller || leadData.owner || (isClientRole ? (currentUser?.name || "Client") : "Team"),
     isLocked: false,
     isClientPrivate: isClientRole ? true : (leadData.isClientPrivate || false),
-    createdById: isClientRole ? currentUser?.id : leadData.createdById,
-    createdByEmail: isClientRole ? currentUser?.email : leadData.createdByEmail,
-    createdByRole: isClientRole ? "Clients" : leadData.createdByRole,
+    createdBy: creatorName,
+    createdByName: creatorName,
+    createdById: creatorId,
+    createdByEmail: creatorEmail,
+    createdByRole: creatorRole,
   }
 
-  const [current, allCurrent] = await Promise.all([
-    fetchModuleDataFromDB<Lead[]>("leads", [], targetComp).catch(() => []),
-    fetchModuleDataFromDB<Lead[]>("leads", [], "all").catch(() => []),
-  ])
+  // Fast concurrent write to DB
+  const saveOps: Promise<any>[] = []
+  if (targetComp !== "all") {
+    saveOps.push(
+      fetchModuleDataFromDB<Lead[]>("leads", [], targetComp)
+        .catch(() => [])
+        .then((current) => saveModuleDataToDB("leads", [newLead, ...current.filter((l) => l.id !== newId)], targetComp))
+    )
+  }
+  saveOps.push(
+    fetchModuleDataFromDB<Lead[]>("leads", [], "all")
+      .catch(() => [])
+      .then((allCurrent) => saveModuleDataToDB("leads", [newLead, ...allCurrent.filter((l) => l.id !== newId)], "all"))
+  )
 
-  const updated = [newLead, ...current.filter((l) => l.id !== newId)]
-  const updatedAll = [newLead, ...allCurrent.filter((l) => l.id !== newId)]
-
-  await Promise.all([
-    saveModuleDataToDB("leads", updated, targetComp),
-    saveModuleDataToDB("leads", updatedAll, "all"),
-  ]).catch(() => {})
+  await Promise.all(saveOps).catch(() => {})
 
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent("saampark_leads_updated"))
