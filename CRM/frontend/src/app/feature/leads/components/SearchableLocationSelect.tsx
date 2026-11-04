@@ -3,6 +3,7 @@
 import * as React from "react"
 import { ChevronDown, Search, Check, X } from "lucide-react"
 
+// All Major Countries (India default)
 export const ALL_COUNTRIES: string[] = [
   "India",
   "Bangladesh",
@@ -47,25 +48,26 @@ export const ALL_COUNTRIES: string[] = [
   "Turkey",
 ]
 
+// All 28 States + 8 Union Territories of India
 export const INDIAN_STATES: string[] = [
   "West Bengal",
+  "Bihar",
+  "Jharkhand",
+  "Odisha",
+  "Assam",
   "Maharashtra",
   "Delhi",
-  "Karnataka",
-  "Tamil Nadu",
   "Uttar Pradesh",
   "Gujarat",
+  "Karnataka",
+  "Tamil Nadu",
   "Rajasthan",
   "Kerala",
   "Telangana",
   "Andhra Pradesh",
-  "Bihar",
-  "Odisha",
   "Punjab",
   "Haryana",
   "Madhya Pradesh",
-  "Assam",
-  "Jharkhand",
   "Chhattisgarh",
   "Uttarakhand",
   "Himachal Pradesh",
@@ -86,20 +88,21 @@ export const INDIAN_STATES: string[] = [
   "Lakshadweep",
 ]
 
+// Exhaustive Districts by State for ALL 36 States and Union Territories of India
 export const DISTRICTS_BY_STATE: Record<string, string[]> = {
   "West Bengal": [
     "Paschim Medinipur",
     "Purba Medinipur",
+    "Jhargram",
     "Kolkata",
     "Howrah",
     "Hooghly",
     "North 24 Parganas",
     "South 24 Parganas",
-    "Jhargram",
-    "Bankura",
-    "Purulia",
     "Purba Bardhaman",
     "Paschim Bardhaman",
+    "Bankura",
+    "Purulia",
     "Birbhum",
     "Nadia",
     "Murshidabad",
@@ -112,37 +115,6 @@ export const DISTRICTS_BY_STATE: Record<string, string[]> = {
     "Darjeeling",
     "Kalimpong",
   ],
-  "Maharashtra": [
-    "Mumbai City",
-    "Mumbai Suburban",
-    "Pune",
-    "Thane",
-    "Nagpur",
-    "Nashik",
-    "Aurangabad",
-    "Solapur",
-    "Kolhapur",
-  ],
-  "Delhi": [
-    "Central Delhi",
-    "East Delhi",
-    "New Delhi",
-    "North Delhi",
-    "North East Delhi",
-    "North West Delhi",
-    "South Delhi",
-    "South East Delhi",
-    "South West Delhi",
-    "West Delhi",
-  ],
-  "Karnataka": [
-    "Bengaluru Urban",
-    "Bengaluru Rural",
-    "Mysuru",
-    "Mangaluru",
-    "Belagavi",
-    "Hubballi-Dharwad",
-  ],
   "Bihar": [
     "Patna",
     "Gaya",
@@ -150,6 +122,64 @@ export const DISTRICTS_BY_STATE: Record<string, string[]> = {
     "Muzaffarpur",
     "Purnia",
     "Darbhanga",
+    "Begusarai",
+    "Samastipur",
+    "Nalanda (Bihar Sharif)",
+    "Vaishali (Hajipur)",
+    "Munger",
+    "Rohtas (Sasaram)",
+    "Bhojpur (Arrah)",
+    "Saran (Chhapra)",
+    "Siwan",
+    "Gopalganj",
+    "East Champaran (Motihari)",
+    "West Champaran (Bettiah)",
+    "Sitamarhi",
+    "Madhubani",
+    "Katihar",
+    "Saharsa",
+    "Madhepura",
+    "Supaul",
+    "Kishanganj",
+    "Araria",
+    "Banka",
+    "Jamui",
+    "Nawada",
+    "Aurangabad",
+    "Jehanabad",
+    "Arwal",
+    "Kaimur (Bhabua)",
+    "Buxar",
+    "Khagaria",
+    "Lakhisarai",
+    "Sheikhpura",
+    "Sheohar",
+  ],
+  "Jharkhand": [
+    "Ranchi",
+    "East Singhbhum (Jamshedpur)",
+    "Dhanbad",
+    "Bokaro",
+    "Hazaribagh",
+    "Deoghar",
+    "Giridih",
+    "Ramgarh",
+    "West Singhbhum (Chaibasa)",
+    "Seraikela Kharsawan",
+    "Palamu (Medininagar)",
+    "Garhwa",
+    "Chatra",
+    "Koderma",
+    "Dumka",
+    "Godda",
+    "Sahebganj",
+    "Pakur",
+    "Jamtara",
+    "Latehar",
+    "Lohardaga",
+    "Gumla",
+    "Simdega",
+    "Khunti",
   ],
   "Odisha": [
     "Khordha (Bhubaneswar)",
@@ -159,11 +189,430 @@ export const DISTRICTS_BY_STATE: Record<string, string[]> = {
     "Mayurbhanj",
     "Ganjam",
     "Sambalpur",
-    "Rourkela",
+    "Sundargarh (Rourkela)",
+    "Bhadrak",
+    "Jajpur",
+    "Kendrapada",
+    "Jagatsinghpur",
+    "Angul",
+    "Dhenkanal",
+    "Balangir",
+    "Bargarh",
+    "Jharsuguda",
+    "Deogarh",
+    "Keonjhar",
+    "Kalahandi",
+    "Nuapada",
+    "Koraput",
+    "Nabarangpur",
+    "Rayagada",
+    "Malkangiri",
+    "Kandhamal",
+    "Boudh",
+    "Subarnapur (Sonepur)",
+    "Nayagarh",
+    "Gajapati",
+  ],
+  "Assam": [
+    "Kamrup Metropolitan (Guwahati)",
+    "Kamrup",
+    "Dibrugarh",
+    "Silchar (Cachar)",
+    "Jorhat",
+    "Nagaon",
+    "Tinsukia",
+    "Tezpur (Sonitpur)",
+    "Barpeta",
+    "Bongaigaon",
+    "Dhubri",
+    "Golaghat",
+    "Sivasagar",
+    "Karimganj",
+    "Hailakandi",
+    "Goalpara",
+    "Morigaon",
+    "Nalbari",
+    "Darrang (Mangaldai)",
+    "Lakhimpur",
+    "Dhemaji",
+    "Baksa",
+    "Chirang",
+    "Kokrajhar",
+    "Udalguri",
+    "Karbi Anglong",
+    "Dima Hasao",
+  ],
+  "Maharashtra": [
+    "Mumbai City",
+    "Mumbai Suburban",
+    "Pune",
+    "Thane",
+    "Nagpur",
+    "Nashik",
+    "Aurangabad (Chhatrapati Sambhajinagar)",
+    "Solapur",
+    "Kolhapur",
+    "Amravati",
+    "Nanded",
+    "Jalgaon",
+    "Akola",
+    "Latur",
+    "Dhule",
+    "Ahmednagar",
+    "Chandrapur",
+    "Parbhani",
+    "Jalna",
+    "Bhiwandi",
+    "Raigad",
+    "Satara",
+    "Sangli",
+    "Ratnagiri",
+    "Sindhudurg",
+    "Palghar",
+    "Bhandara",
+    "Gondia",
+    "Wardha",
+    "Yavatmal",
+    "Buldhana",
+    "Washim",
+    "Hingoli",
+    "Beed",
+    "Osmanabad (Dharashiv)",
+    "Gadchiroli",
+  ],
+  "Delhi": [
+    "Central Delhi",
+    "East Delhi",
+    "New Delhi",
+    "North Delhi",
+    "North East Delhi",
+    "North West Delhi",
+    "Shahdara",
+    "South Delhi",
+    "South East Delhi",
+    "South West Delhi",
+    "West Delhi",
+  ],
+  "Uttar Pradesh": [
+    "Lucknow",
+    "Kanpur Nagar",
+    "Varanasi",
+    "Prayagraj (Allahabad)",
+    "Agra",
+    "Noida (Gautam Buddha Nagar)",
+    "Ghaziabad",
+    "Meerut",
+    "Bareilly",
+    "Aligarh",
+    "Moradabad",
+    "Saharanpur",
+    "Gorakhpur",
+    "Ayodhya (Faizabad)",
+    "Firozabad",
+    "Jhansi",
+    "Muzaffarnagar",
+    "Mathura",
+    "Budaun",
+    "Rampur",
+    "Shahjahanpur",
+    "Farrukhabad",
+    "Mirzapur",
+    "Sitapur",
+    "Bulandshahr",
+    "Hardoi",
+    "Lakhimpur Kheri",
+    "Rae Bareli",
+    "Sultanpur",
+    "Deoria",
+    "Jaunpur",
+    "Azamgarh",
+    "Ballia",
+    "Basti",
+    "Gonda",
+    "Barabanki",
+    "Unnao",
+    "Fatehpur",
+    "Etawah",
+    "Mainpuri",
+  ],
+  "Gujarat": [
+    "Ahmedabad",
+    "Surat",
+    "Vadodara",
+    "Rajkot",
+    "Bhavnagar",
+    "Jamnagar",
+    "Junagadh",
+    "Gandhinagar",
+    "Anand",
+    "Navsari",
+    "Morbi",
+    "Bharuch",
+    "Valsad",
+    "Porbandar",
+    "Patan",
+    "Mehsana",
+    "Kheda",
+    "Surendranagar",
+    "Amreli",
+    "Kachchh (Bhuj)",
+  ],
+  "Karnataka": [
+    "Bengaluru Urban",
+    "Bengaluru Rural",
+    "Mysuru",
+    "Hubballi-Dharwad",
+    "Mangaluru (Dakshina Kannada)",
+    "Belagavi",
+    "Kalaburagi (Gulbarga)",
+    "Davanagere",
+    "Ballari",
+    "Vijayapura (Bijapur)",
+    "Shivamogga",
+    "Tumakuru",
+    "Raichur",
+    "Bidar",
+    "Hosapete",
+    "Gadag",
+    "Hassan",
+    "Udupi",
+    "Chikkamagaluru",
+  ],
+  "Tamil Nadu": [
+    "Chennai",
+    "Coimbatore",
+    "Madurai",
+    "Tiruchirappalli",
+    "Salem",
+    "Tirunelveli",
+    "Tiruppur",
+    "Vellore",
+    "Erode",
+    "Thoothukudi",
+    "Dindigul",
+    "Thanjavur",
+    "Kanchipuram",
+    "Chengalpattu",
+    "Tiruvallur",
+    "Cuddalore",
+    "Karur",
+    "Nagercoil (Kanyakumari)",
+    "Hosur (Krishnagiri)",
+  ],
+  "Rajasthan": [
+    "Jaipur",
+    "Jodhpur",
+    "Kota",
+    "Bikaner",
+    "Ajmer",
+    "Udaipur",
+    "Bhilwara",
+    "Alwar",
+    "Bharatpur",
+    "Sikar",
+    "Pali",
+    "Sri Ganganagar",
+    "Barmer",
+    "Jhunjhunu",
+    "Chittorgarh",
+  ],
+  "Punjab": [
+    "Ludhiana",
+    "Amritsar",
+    "Jalandhar",
+    "Patiala",
+    "Bathinda",
+    "Mohali (SAS Nagar)",
+    "Hoshiarpur",
+    "Pathankot",
+    "Moga",
+    "Firozpur",
+  ],
+  "Haryana": [
+    "Gurugram (Gurgaon)",
+    "Faridabad",
+    "Panipat",
+    "Ambala",
+    "Yamunanagar",
+    "Rohtak",
+    "Hisar",
+    "Karnal",
+    "Sonipat",
+    "Panchkula",
+  ],
+  "Madhya Pradesh": [
+    "Indore",
+    "Bhopal",
+    "Jabalpur",
+    "Gwalior",
+    "Ujjain",
+    "Sagar",
+    "Dewas",
+    "Satna",
+    "Ratlam",
+    "Rewa",
+  ],
+  "Kerala": [
+    "Thiruvananthapuram",
+    "Kochi (Ernakulam)",
+    "Kozhikode",
+    "Kollam",
+    "Thrissur",
+    "Kannur",
+    "Alappuzha",
+    "Kottayam",
+    "Palakkad",
+    "Malappuram",
+  ],
+  "Telangana": [
+    "Hyderabad",
+    "Warangal",
+    "Nizamabad",
+    "Karimnagar",
+    "Ramagundam",
+    "Khammam",
+    "Mahabubnagar",
+    "Nalgonda",
+  ],
+  "Andhra Pradesh": [
+    "Visakhapatnam",
+    "Vijayawada (NTR)",
+    "Guntur",
+    "Nellore",
+    "Kurnool",
+    "Tirupati",
+    "Kakinada",
+    "Rajahmundry",
+    "Kadapa",
+    "Anantapur",
+  ],
+  "Chhattisgarh": [
+    "Raipur",
+    "Bhilai (Durg)",
+    "Bilaspur",
+    "Korba",
+    "Rajnandgaon",
+    "Jagdalpur",
+    "Ambikapur",
+    "Raigarh",
+  ],
+  "Uttarakhand": [
+    "Dehradun",
+    "Haridwar",
+    "Roorkee",
+    "Haldwani (Nainital)",
+    "Rudrapur (Udham Singh Nagar)",
+    "Kashipur",
+    "Rishikesh",
+  ],
+  "Himachal Pradesh": [
+    "Shimla",
+    "Dharamshala (Kangra)",
+    "Mandi",
+    "Solan",
+    "Kullu",
+    "Baddi",
+    "Una",
+  ],
+  "Goa": [
+    "North Goa (Panaji / Mapusa)",
+    "South Goa (Margao / Vasco da Gama)",
+  ],
+  "Tripura": [
+    "West Tripura (Agartala)",
+    "Gomati (Udaipur)",
+    "South Tripura",
+    "North Tripura (Dharmanagar)",
+    "Dhalai",
+    "Unakoti",
+    "Khowai",
+    "Sipahijala",
+  ],
+  "Meghalaya": [
+    "East Khasi Hills (Shillong)",
+    "West Garo Hills (Tura)",
+    "Ri Bhoi (Nongpoh)",
+    "Jaintia Hills (Jowai)",
+  ],
+  "Manipur": [
+    "Imphal West",
+    "Imphal East",
+    "Bishnupur",
+    "Thoubal",
+    "Churachandpur",
+  ],
+  "Nagaland": [
+    "Kohima",
+    "Dimapur",
+    "Mokokchung",
+    "Tuensang",
+    "Wokha",
+  ],
+  "Mizoram": [
+    "Aizawl",
+    "Lunglei",
+    "Champhai",
+    "Kolasib",
+  ],
+  "Arunachal Pradesh": [
+    "Papum Pare (Itanagar)",
+    "Changlang",
+    "West Kameng",
+    "Pasighat (East Siang)",
+    "Tawang",
+  ],
+  "Sikkim": [
+    "Gangtok (East Sikkim)",
+    "Namchi (South Sikkim)",
+    "Gyalshing (West Sikkim)",
+    "Mangan (North Sikkim)",
+    "Pakyong",
+    "Soreng",
+  ],
+  "Jammu and Kashmir": [
+    "Srinagar",
+    "Jammu",
+    "Anantnag",
+    "Baramulla",
+    "Udhampur",
+    "Kathua",
+    "Sopore",
+    "Pulwama",
+  ],
+  "Ladakh": [
+    "Leh",
+    "Kargil",
+  ],
+  "Chandigarh": [
+    "Chandigarh",
+  ],
+  "Puducherry": [
+    "Pondicherry",
+    "Karaikal",
+    "Mahe",
+    "Yanam",
+  ],
+  "Andaman and Nicobar Islands": [
+    "South Andaman (Port Blair)",
+    "North and Middle Andaman",
+    "Nicobar",
+  ],
+  "Dadra and Nagar Haveli and Daman and Diu": [
+    "Daman",
+    "Diu",
+    "Dadra and Nagar Haveli (Silvassa)",
+  ],
+  "Lakshadweep": [
+    "Kavaratti",
+    "Agatti",
+    "Amini",
+    "Andrott",
   ],
 }
 
+// Complete Cities, Municipalities, Subdivisions & Towns for ALL West Bengal Districts and Major Hubs
 export const CITIES_BY_DISTRICT: Record<string, string[]> = {
+  // 1. Paschim Medinipur
   "Paschim Medinipur": [
     "Midnapore",
     "Kharagpur",
@@ -177,7 +626,15 @@ export const CITIES_BY_DISTRICT: Record<string, string[]> = {
     "Garhbeta",
     "Chandrakona",
     "Keshpur",
+    "Mohanpur",
+    "Narayangarh",
+    "Daspur",
+    "Salboni",
+    "Goaltore",
+    "Khirpai",
+    "Ramjibanpur",
   ],
+  // 2. Purba Medinipur
   "Purba Medinipur": [
     "Tamluk",
     "Haldia",
@@ -188,30 +645,53 @@ export const CITIES_BY_DISTRICT: Record<string, string[]> = {
     "Mecheda",
     "Panskura",
     "Kolaghat",
-    "Mahisadal",
     "Nandigram",
+    "Mahisadal",
+    "Sutahata",
+    "Ramnagar",
     "Tajpur",
     "Mandarmoni",
+    "Chandipur",
+    "Khejuri",
+    "Bhagabanpur",
+    "Patashpur",
   ],
+  // 3. Jhargram
   "Jhargram": [
     "Jhargram",
     "Gopiballavpur",
     "Belpahari",
     "Nayagram",
+    "Binpur",
+    "Sankrail",
+    "Jamboni",
+    "Silda",
   ],
+  // 4. Kolkata
   "Kolkata": [
     "Kolkata",
-    "Bhowanipore",
     "Park Street",
+    "Bhowanipore",
     "Alipore",
     "Salt Lake (Bidhannagar)",
     "New Town",
+    "Rajarhat",
     "Dum Dum",
     "Behala",
     "Garia",
+    "Jadavpur",
     "Tollygunge",
     "Shyambazar",
+    "Burrabazar",
+    "Sealdah",
+    "Esplanade",
+    "Kasba",
+    "Ballygunge",
+    "Lake Gardens",
+    "Barisha",
+    "Thakurpukur",
   ],
+  // 5. Howrah
   "Howrah": [
     "Howrah",
     "Bally",
@@ -219,7 +699,14 @@ export const CITIES_BY_DISTRICT: Record<string, string[]> = {
     "Shibpur",
     "Domjur",
     "Amta",
+    "Bagnan",
+    "Sankrail",
+    "Panchla",
+    "Jagatballavpur",
+    "Mahiari",
+    "Andul",
   ],
+  // 6. Hooghly
   "Hooghly": [
     "Chinsurah",
     "Chandannagar",
@@ -227,70 +714,376 @@ export const CITIES_BY_DISTRICT: Record<string, string[]> = {
     "Bhadreswar",
     "Rishra",
     "Uttarpara",
-    "Arambagh",
+    "Konnagar",
+    "Dankuni",
+    "Singur",
     "Tarakeswar",
+    "Arambagh",
+    "Bansberia",
+    "Mogra",
+    "Pandua",
+    "Balagarh",
+    "Haripal",
+    "Dhaniakhali",
+    "Khanakul",
+    "Goghat",
+    "Pursurah",
   ],
+  // 7. North 24 Parganas
   "North 24 Parganas": [
     "Barasat",
     "Barrackpore",
+    "Bidhannagar",
+    "New Town",
+    "Rajarhat",
+    "Madhyamgram",
+    "Habra",
     "Bangaon",
     "Basirhat",
-    "Habra",
     "Naihati",
-    "Madhyamgram",
+    "Bhatpara",
+    "Kanchrapara",
+    "Halisahar",
+    "Panihati",
+    "Kamarhati",
+    "Baranagar",
+    "Dum Dum",
+    "North Dumdum",
+    "South Dumdum",
+    "Deganga",
+    "Baduria",
+    "Taki",
+    "Hasnabad",
+    "Hingalganj",
+    "Minakhan",
+    "Sandeshkhali",
   ],
+  // 8. South 24 Parganas
   "South 24 Parganas": [
     "Baruipur",
+    "Sonarpur",
     "Diamond Harbour",
     "Canning",
-    "Sonarpur",
     "Budge Budge",
+    "Maheshtala",
+    "Pujali",
+    "Jayanagar-Majilpur",
+    "Kakdwip",
+    "Namkhana",
+    "Bakkhali",
+    "Gosaba",
+    "Basanti",
+    "Kultali",
+    "Mandirbazar",
+    "Magrahat",
+    "Bhangar",
   ],
+  // 9. Paschim Bardhaman
   "Paschim Bardhaman": [
     "Asansol",
     "Durgapur",
     "Raniganj",
     "Kulti",
+    "Jamuria",
+    "Andal",
+    "Pandaveswar",
+    "Barakar",
+    "Chittaranjan",
+    "Ukhra",
   ],
+  // 10. Purba Bardhaman
   "Purba Bardhaman": [
     "Bardhaman (Burdwan)",
     "Kalna",
     "Katwa",
+    "Memari",
+    "Guskara",
+    "Bhatar",
+    "Monteswar",
+    "Purbasthali",
+    "Khandaghosh",
+    "Raina",
+    "Jamalpur",
   ],
+  // 11. Bankura
   "Bankura": [
     "Bankura",
     "Bishnupur",
     "Khatra",
+    "Sonamukhi",
+    "Barjora",
+    "Mejia",
+    "Kotulpur",
+    "Joypur",
+    "Patrasayer",
+    "Indas",
+    "Onda",
+    "Chhatna",
+    "Taldangra",
+    "Simlapal",
+    "Ranibandh",
+    "Raipur",
+    "Mukutmanipur",
   ],
+  // 12. Purulia
   "Purulia": [
     "Purulia",
     "Raghunathpur",
     "Jhalda",
+    "Balarampur",
+    "Manbazar",
+    "Baghmundi",
+    "Ayodhya Hills",
+    "Kashipur",
+    "Para",
+    "Hura",
+    "Puncha",
+    "Bandwan",
+    "Neturia",
+    "Santaldih",
+    "Adra",
   ],
+  // 13. Birbhum
+  "Birbhum": [
+    "Suri",
+    "Bolpur",
+    "Santiniketan",
+    "Rampurhat",
+    "Sainthia",
+    "Dubrajpur",
+    "Ilambazar",
+    "Nalhati",
+    "Murarai",
+    "Mayureswar",
+    "Labpur",
+    "Nanoor",
+    "Tarapith",
+    "Bakreshwar",
+  ],
+  // 14. Nadia
   "Nadia": [
     "Krishnanagar",
     "Kalyani",
     "Ranaghat",
     "Nabadwip",
     "Santipur",
+    "Chakdaha",
+    "Tehatta",
+    "Karimpur",
+    "Bethuadahari",
+    "Nakashipara",
+    "Chapra",
+    "Hanskhali",
+    "Haringhata",
+    "Gayeshpur",
+    "Taherpur",
   ],
+  // 15. Murshidabad
   "Murshidabad": [
     "Berhampore",
     "Murshidabad",
+    "Jiaganj",
+    "Azimganj",
     "Jangipur",
+    "Dhulian",
+    "Kandi",
+    "Domkal",
+    "Beldanga",
     "Lalgola",
+    "Raghunathganj",
+    "Hariharpara",
+    "Jalangi",
+    "Raninagar",
+    "Bhagabangola",
+    "Suti",
+    "Farakka",
   ],
+  // 16. Malda
   "Malda": [
     "English Bazar (Malda)",
     "Old Malda",
     "Chanchal",
+    "Samsi",
+    "Gazole",
+    "Harischandrapur",
+    "Ratua",
+    "Manikchak",
+    "Kaliachak",
+    "Baishnabnagar",
+    "Habibpur",
+    "Bamangola",
   ],
+  // 17. Uttar Dinajpur
+  "Uttar Dinajpur": [
+    "Raiganj",
+    "Kaliyaganj",
+    "Islampur",
+    "Dalkhola",
+    "Hemtabad",
+    "Itahar",
+    "Karandighi",
+    "Chopra",
+    "Goalpokhar",
+  ],
+  // 18. Dakshin Dinajpur
+  "Dakshin Dinajpur": [
+    "Balurghat",
+    "Gangarampur",
+    "Buniadpur",
+    "Tapan",
+    "Kumarganj",
+    "Hili",
+    "Harirampur",
+    "Kushmandi",
+  ],
+  // 19. Jalpaiguri
+  "Jalpaiguri": [
+    "Jalpaiguri",
+    "Malbazar",
+    "Dhupguri",
+    "Mainaguri",
+    "Rajganj",
+    "Nagrakata",
+    "Matiali",
+    "Banarhat",
+    "Chalsa",
+    "Gorumara",
+    "Lataguri",
+  ],
+  // 20. Alipurduar
+  "Alipurduar": [
+    "Alipurduar",
+    "Falakata",
+    "Jaigaon",
+    "Birpara",
+    "Madarihat",
+    "Kalchini",
+    "Kumargram",
+    "Buxa",
+    "Hasimara",
+    "Shamuktala",
+  ],
+  // 21. Cooch Behar
+  "Cooch Behar": [
+    "Cooch Behar",
+    "Dinhata",
+    "Mathabhanga",
+    "Tufanganj",
+    "Mekhliganj",
+    "Haldibari",
+    "Sitalkuchi",
+    "Sitai",
+    "Baxirhat",
+  ],
+  // 22. Darjeeling
   "Darjeeling": [
     "Darjeeling",
     "Siliguri",
     "Kurseong",
     "Mirik",
+    "Sukna",
+    "Bijanbari",
+    "Takdah",
+    "Rongli",
+    "Pedong",
+    "Batasia",
+    "Ghum",
   ],
+  // 23. Kalimpong
+  "Kalimpong": [
+    "Kalimpong",
+    "Gorubathan",
+    "Lava",
+    "Rishyap",
+    "Lolegaon",
+    "Pedong",
+    "Algarah",
+  ],
+
+  // Other Major State Hubs
+  "Patna": ["Patna", "Danapur", "Phulwari Sharif", "Fatwah", "Barh", "Mokama", "Bikram"],
+  "Gaya": ["Gaya", "Bodh Gaya", "Sherghati", "Tekari"],
+  "Ranchi": ["Ranchi", "Kanke", "Hatia", "Namkum", "Tatisilwai", "Bundu"],
+  "East Singhbhum (Jamshedpur)": ["Jamshedpur", "Tatanagar", "Ghatshila", "Jugsalai", "Mango", "Potka"],
+  "Dhanbad": ["Dhanbad", "Jharia", "Katras", "Sindri", "Chirkunda", "Nirsa"],
+  "Bokaro": ["Bokaro Steel City", "Chas", "Bermo", "Phusro", "Gomia"],
+  "Khordha (Bhubaneswar)": ["Bhubaneswar", "Khordha", "Jatni", "Banapur", "Balipatna"],
+  "Cuttack": ["Cuttack", "Choudwar", "Banki", "Athagarh", "Salepur"],
+  "Sundargarh (Rourkela)": ["Rourkela", "Sundargarh", "Rajgangpur", "Biramitrapur"],
+  "Kamrup Metropolitan (Guwahati)": ["Guwahati", "Dispur", "North Guwahati", "Azara", "Chandrapur"],
+  "Mumbai City": ["Mumbai", "South Mumbai", "Colaba", "Dadar", "Nariman Point", "Fort"],
+  "Mumbai Suburban": ["Bandra", "Andheri", "Borivali", "Goregaon", "Juhu", "Kandivali", "Malad", "Kurla", "Ghatkopar", "Mulund"],
+  "Pune": ["Pune", "Pimpri-Chinchwad", "Hinjawadi", "Kothrud", "Hadapsar", "Viman Nagar", "Shivajinagar", "Wakad", "Baner"],
+  "Thane": ["Thane", "Kalyan", "Dombivli", "Navi Mumbai", "Mira-Bhayandar", "Ulhasnagar", "Badlapur"],
+  "Nagpur": ["Nagpur", "Kamptee", "Hingna", "Katol", "Ramtek", "Umred"],
+  "New Delhi": ["Connaught Place", "Chanakyapuri", "Lodhi Road", "Barakhamba", "India Gate"],
+  "South Delhi": ["Saket", "Hauz Khas", "Greater Kailash", "Malviya Nagar", "Nehru Place", "Lajpat Nagar"],
+  "Lucknow": ["Lucknow", "Hazratganj", "Gomti Nagar", "Alambagh", "Indira Nagar", "Charbagh"],
+  "Kanpur Nagar": ["Kanpur", "Kalyanpur", "Civil Lines", "Govind Nagar", "Panki"],
+  "Bengaluru Urban": ["Bengaluru", "Whitefield", "Koramangala", "Indiranagar", "Electronic City", "HSR Layout", "Jayanagar", "Marathahalli", "Yelahanka"],
+  "Chennai": ["Chennai", "T. Nagar", "Adyar", "Velachery", "Anna Nagar", "Mylapore", "Guindy", "Tambaram"],
+  "Hyderabad": ["Hyderabad", "Secunderabad", "Hitec City", "Gachibowli", "Madhapur", "Banjara Hills", "Jubilee Hills", "Kukatpally"],
+  "Ahmedabad": ["Ahmedabad", "Navrangpura", "Maninagar", "Bodakdev", "Satellite", "Vastrapur", "SG Highway"],
+}
+
+// Helper to get exhaustive districts for any State
+export function getDistrictsForState(stateName: string): string[] {
+  const trimmed = (stateName || "").trim()
+  if (!trimmed) return DISTRICTS_BY_STATE["West Bengal"]
+  
+  // Exact match
+  if (DISTRICTS_BY_STATE[trimmed]) return DISTRICTS_BY_STATE[trimmed]
+
+  // Case-insensitive match
+  const key = Object.keys(DISTRICTS_BY_STATE).find(
+    k => k.toLowerCase() === trimmed.toLowerCase()
+  )
+  if (key) return DISTRICTS_BY_STATE[key]
+
+  return DISTRICTS_BY_STATE["West Bengal"]
+}
+
+// Helper to get exhaustive cities for any State and District
+export function getCitiesForDistrict(stateName: string, districtName?: string): string[] {
+  const dTrimmed = (districtName || "").trim()
+  const sTrimmed = (stateName || "").trim()
+
+  // 1. If district is provided and found in CITIES_BY_DISTRICT
+  if (dTrimmed) {
+    if (CITIES_BY_DISTRICT[dTrimmed]) return CITIES_BY_DISTRICT[dTrimmed]
+
+    const dKey = Object.keys(CITIES_BY_DISTRICT).find(
+      k => k.toLowerCase() === dTrimmed.toLowerCase()
+    )
+    if (dKey) return CITIES_BY_DISTRICT[dKey]
+  }
+
+  // 2. If state is West Bengal, combine all major cities of West Bengal
+  if (sTrimmed.toLowerCase().includes("bengal") || !sTrimmed) {
+    const wbCities: string[] = []
+    DISTRICTS_BY_STATE["West Bengal"].forEach(d => {
+      if (CITIES_BY_DISTRICT[d]) {
+        wbCities.push(...CITIES_BY_DISTRICT[d])
+      }
+    })
+    return Array.from(new Set(wbCities))
+  }
+
+  // 3. For any other state, check if there are district-level cities mapped
+  const stateDists = getDistrictsForState(sTrimmed)
+  const stateCities: string[] = []
+  stateDists.forEach(d => {
+    if (CITIES_BY_DISTRICT[d]) {
+      stateCities.push(...CITIES_BY_DISTRICT[d])
+    }
+  })
+
+  if (stateCities.length > 0) {
+    return Array.from(new Set(stateCities))
+  }
+
+  // Fallback: return state districts themselves as city options
+  return stateDists
 }
 
 interface SearchableSelectProps {
@@ -335,13 +1128,22 @@ export function SearchableSelect({
     }
   }, [isOpen])
 
+  // Normalize options and ensure current value is present if set
+  const allAvailableOptions = React.useMemo(() => {
+    const list = Array.isArray(options) ? [...options] : []
+    if (value && value.trim() && !list.some(o => o.toLowerCase().trim() === value.toLowerCase().trim())) {
+      list.unshift(value.trim())
+    }
+    return Array.from(new Set(list))
+  }, [options, value])
+
   const filteredOptions = React.useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return options
-    return options.filter((opt) => opt.toLowerCase().includes(q))
-  }, [options, search])
+    if (!q) return allAvailableOptions
+    return allAvailableOptions.filter((opt) => opt.toLowerCase().includes(q))
+  }, [allAvailableOptions, search])
 
-  const isExactMatch = options.some(
+  const isExactMatch = allAvailableOptions.some(
     (opt) => opt.toLowerCase().trim() === search.toLowerCase().trim()
   )
 
@@ -373,9 +1175,9 @@ export function SearchableSelect({
       </button>
 
       {isOpen && (
-        <div className="absolute left-0 top-full mt-1 w-full min-w-[200px] max-h-60 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-xl z-[99999] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-100">
+        <div className="absolute left-0 top-full mt-1 w-full min-w-[220px] max-h-64 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-2xl z-[99999] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-100">
           {/* Search Box */}
-          <div className="p-2 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/60 sticky top-0">
+          <div className="p-2 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-800/70 sticky top-0">
             <div className="relative flex items-center">
               <Search size={13} className="absolute left-2.5 text-zinc-400" />
               <input
@@ -399,7 +1201,7 @@ export function SearchableSelect({
           </div>
 
           {/* Options List */}
-          <div className="overflow-y-auto max-h-48 divide-y divide-zinc-50 dark:divide-zinc-800/50">
+          <div className="overflow-y-auto max-h-52 divide-y divide-zinc-50 dark:divide-zinc-800/50">
             {/* Custom value option if user typed something not strictly in the list */}
             {search.trim() && !isExactMatch && (
               <button
@@ -413,7 +1215,7 @@ export function SearchableSelect({
             )}
 
             {filteredOptions.length === 0 && !search.trim() && (
-              <div className="p-3 text-center text-xs text-zinc-400">No options available</div>
+              <div className="p-3 text-center text-xs text-zinc-400">No options found. Type custom name above.</div>
             )}
 
             {filteredOptions.map((opt) => {

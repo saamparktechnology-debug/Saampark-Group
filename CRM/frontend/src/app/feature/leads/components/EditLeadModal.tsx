@@ -72,6 +72,8 @@ import {
   INDIAN_STATES,
   DISTRICTS_BY_STATE,
   CITIES_BY_DISTRICT,
+  getDistrictsForState,
+  getCitiesForDistrict,
 } from "./SearchableLocationSelect"
 
 export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLead }: EditLeadModalProps) {
@@ -966,7 +968,7 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
             </div>
           </div>
 
-          {/* 2nd: State with Search */}
+          {/* 2nd: State with Search (Default: West Bengal) */}
           <div className="grid grid-cols-4 items-center gap-4">
             <label className="text-zinc-500 font-medium">State</label>
             <div className="col-span-3">
@@ -974,15 +976,11 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
                 value={state}
                 onChange={(val) => {
                   setState(val)
-                  const dists = DISTRICTS_BY_STATE[val]
-                  if (dists && dists.length > 0) {
-                    setDistrict(dists[0])
-                    const c = CITIES_BY_DISTRICT[dists[0]]
-                    setCity(c && c.length > 0 ? c[0] : "")
-                  } else {
-                    setDistrict("")
-                    setCity("")
-                  }
+                  const dists = getDistrictsForState(val)
+                  const defaultDist = val.toLowerCase().includes("bengal") ? "Paschim Medinipur" : (dists[0] || "")
+                  setDistrict(defaultDist)
+                  const c = getCitiesForDistrict(val, defaultDist)
+                  setCity(c && c.length > 0 ? c[0] : "")
                 }}
                 options={country === "India" ? INDIAN_STATES : []}
                 placeholder="Select or search state..."
@@ -991,7 +989,7 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
             </div>
           </div>
 
-          {/* 3rd: District (Dist) with Search */}
+          {/* 3rd: District (Dist) with Search (Default: Paschim Medinipur) */}
           <div className="grid grid-cols-4 items-center gap-4">
             <label className="text-zinc-500 font-medium">Dist (District)</label>
             <div className="col-span-3">
@@ -999,29 +997,26 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
                 value={district}
                 onChange={(val) => {
                   setDistrict(val)
-                  const c = CITIES_BY_DISTRICT[val]
+                  const c = getCitiesForDistrict(state, val)
                   if (c && c.length > 0) {
                     setCity(c[0])
                   }
                 }}
-                options={DISTRICTS_BY_STATE[state] || DISTRICTS_BY_STATE["West Bengal"]}
+                options={getDistrictsForState(state)}
                 placeholder="Select or search district..."
                 searchPlaceholder="Search district or type custom..."
               />
             </div>
           </div>
 
-          {/* 4th: City with Search */}
+          {/* 4th: City with Search (Default: Midnapore) */}
           <div className="grid grid-cols-4 items-center gap-4">
             <label className="text-zinc-500 font-medium">City</label>
             <div className="col-span-3">
               <SearchableSelect
                 value={city}
                 onChange={(val) => setCity(val)}
-                options={
-                  CITIES_BY_DISTRICT[district] ||
-                  (state === "West Bengal" ? CITIES_BY_DISTRICT["Paschim Medinipur"] : [])
-                }
+                options={getCitiesForDistrict(state, district)}
                 placeholder="Select or search city..."
                 searchPlaceholder="Search city or type custom..."
               />
