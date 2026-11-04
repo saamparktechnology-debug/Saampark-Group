@@ -36,6 +36,7 @@ export interface Lead {
   value?: string
   managers?: string
   address?: string
+  district?: string
   city?: string
   state?: string
   zip?: string

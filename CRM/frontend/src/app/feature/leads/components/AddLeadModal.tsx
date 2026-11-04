@@ -58,11 +58,19 @@ const STANDARD_SOURCES = [
   "Meta Ads",
   "Google Ads",
   "Local Market",
+  "Store Visit",
   "My Leads",
 ]
 
 import { useAuthStore, isMatchingCompany, getSelectableCompanies } from "@/store/useAuthStore"
 import { getUsers } from "@/app/feature/users/services/userService"
+import {
+  SearchableSelect,
+  ALL_COUNTRIES,
+  INDIAN_STATES,
+  DISTRICTS_BY_STATE,
+  CITIES_BY_DISTRICT,
+} from "./SearchableLocationSelect"
 
 export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps) {
   const { user, companies, activeCompanyId, activeBranchId, activeSubBranchId, branches, subBranches } = useAuthStore()
@@ -158,10 +166,11 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
   const [source, setSource] = React.useState("Social Media")
   const [customSource, setCustomSource] = React.useState("")
   const [address, setAddress] = React.useState("")
-  const [city, setCity] = React.useState("")
-  const [state, setState] = React.useState("")
+  const [country, setCountry] = React.useState("India")
+  const [state, setState] = React.useState("West Bengal")
+  const [district, setDistrict] = React.useState("Paschim Medinipur")
+  const [city, setCity] = React.useState("Midnapore")
   const [zip, setZip] = React.useState("")
-  const [country, setCountry] = React.useState("")
   const [website, setWebsite] = React.useState("")
   const [vatNumber, setVatNumber] = React.useState("")
   const [gstNumber, setGstNumber] = React.useState("")
@@ -193,10 +202,11 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
     setSource("Social Media")
     setCustomSource("")
     setAddress("")
-    setCity("")
-    setState("")
+    setCountry("India")
+    setState("West Bengal")
+    setDistrict("Paschim Medinipur")
+    setCity("Midnapore")
     setZip("")
-    setCountry("")
     setWebsite("")
     setVatNumber("")
     setGstNumber("")
@@ -319,6 +329,7 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
         managers: secondaryContact || managers,
         source: finalSource,
         address,
+        district,
         city,
         state,
         zip,
@@ -864,46 +875,105 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
             <label className="text-zinc-500 font-medium pt-2">Address</label>
             <textarea
               rows={2}
-              placeholder="Address"
+              placeholder="Building / Street address..."
               value={address}
               onChange={(e) => setAddress(e.target.value)}
               className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400"
             />
           </div>
 
-          {/* City */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <label className="text-zinc-500 font-medium">City</label>
-            <input
-              type="text"
-              placeholder="City"
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400"
-            />
-          </div>
-
-          {/* State */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <label className="text-zinc-500 font-medium">State</label>
-            <input
-              type="text"
-              placeholder="State"
-              value={state}
-              onChange={(e) => setState(e.target.value)}
-              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400"
-            />
-          </div>
-
-          {/* Country */}
+          {/* 1st: Country with Search (Default: India) */}
           <div className="grid grid-cols-4 items-center gap-4">
             <label className="text-zinc-500 font-medium">Country</label>
+            <div className="col-span-3">
+              <SearchableSelect
+                value={country}
+                onChange={(val) => {
+                  setCountry(val)
+                  if (val === "India") {
+                    setState("West Bengal")
+                    setDistrict("Paschim Medinipur")
+                    setCity("Midnapore")
+                  }
+                }}
+                options={ALL_COUNTRIES}
+                placeholder="Select or search country..."
+                searchPlaceholder="Search country or type custom..."
+              />
+            </div>
+          </div>
+
+          {/* 2nd: State with Search (Default: West Bengal) */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <label className="text-zinc-500 font-medium">State</label>
+            <div className="col-span-3">
+              <SearchableSelect
+                value={state}
+                onChange={(val) => {
+                  setState(val)
+                  const dists = DISTRICTS_BY_STATE[val]
+                  if (dists && dists.length > 0) {
+                    setDistrict(dists[0])
+                    const c = CITIES_BY_DISTRICT[dists[0]]
+                    setCity(c && c.length > 0 ? c[0] : "")
+                  } else {
+                    setDistrict("")
+                    setCity("")
+                  }
+                }}
+                options={country === "India" ? INDIAN_STATES : []}
+                placeholder="Select or search state..."
+                searchPlaceholder="Search state or type custom..."
+              />
+            </div>
+          </div>
+
+          {/* 3rd: District (Dist) with Search */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <label className="text-zinc-500 font-medium">Dist (District)</label>
+            <div className="col-span-3">
+              <SearchableSelect
+                value={district}
+                onChange={(val) => {
+                  setDistrict(val)
+                  const c = CITIES_BY_DISTRICT[val]
+                  if (c && c.length > 0) {
+                    setCity(c[0])
+                  }
+                }}
+                options={DISTRICTS_BY_STATE[state] || DISTRICTS_BY_STATE["West Bengal"]}
+                placeholder="Select or search district..."
+                searchPlaceholder="Search district or type custom..."
+              />
+            </div>
+          </div>
+
+          {/* 4th: City with Search */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <label className="text-zinc-500 font-medium">City</label>
+            <div className="col-span-3">
+              <SearchableSelect
+                value={city}
+                onChange={(val) => setCity(val)}
+                options={
+                  CITIES_BY_DISTRICT[district] ||
+                  (state === "West Bengal" ? CITIES_BY_DISTRICT["Paschim Medinipur"] : [])
+                }
+                placeholder="Select or search city..."
+                searchPlaceholder="Search city or type custom..."
+              />
+            </div>
+          </div>
+
+          {/* Postal / Zip Code (Optional) */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <label className="text-zinc-500 font-medium">Zip / PIN</label>
             <input
               type="text"
-              placeholder="India"
-              value={country}
-              onChange={(e) => setCountry(e.target.value)}
-              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400"
+              placeholder="e.g. 721101"
+              value={zip}
+              onChange={(e) => setZip(e.target.value)}
+              className="col-span-3 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 text-xs"
             />
           </div>
 
