@@ -65,8 +65,6 @@ const STANDARD_SOURCES = [
   "My Leads",
 ]
 
-import { getUsers } from "@/app/feature/users/services/userService"
-
 export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLead }: EditLeadModalProps) {
   const { user, companies, activeCompanyId, activeBranchId, branches } = useAuthStore()
   const isSuperOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
