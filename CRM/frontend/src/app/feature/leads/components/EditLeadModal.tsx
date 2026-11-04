@@ -4,7 +4,8 @@ import * as React from "react"
 import { X, Plus, Check, Calendar, Clock, Wrench, FileText, User as UserIcon, Trash2, MapPin, Building, Info } from "lucide-react"
 import { Lead, LeadStatus, LeadType } from "../types"
 import { updateLead, unlockLead, parseLeadDate, formatLeadReminderDate, isReminderDateOverdue, MONTH_NAMES_SHORT, canUserUnlockLead, isLeadClientPrivate } from "../services/leadService"
-import { useAuthStore } from "@/store/useAuthStore"
+import { useAuthStore, isMatchingCompany, getSelectableCompanies } from "@/store/useAuthStore"
+import { getUsers } from "@/app/feature/users/services/userService"
 
 // Helper to convert date string to "YYYY-MM-DD" for input[type="date"] (Zero UTC Timezone Shift)
 function formatDateForInput(dateStr?: string): string {
@@ -70,14 +71,14 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
   const { user, companies, activeCompanyId, activeBranchId, branches } = useAuthStore()
   const isSuperOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
 
-  const allowedCompanies = React.useMemo(() => {
-    if (!companies || !Array.isArray(companies)) return []
-    if (user?.role === "Super Admin") return companies
-    if (user?.companyIds && user.companyIds.length > 0) {
-      return companies.filter((c) => user.companyIds?.includes(c.id) || user.companyIds?.includes(c.slug || ""))
+  const selectableCompanies = React.useMemo(() => {
+    const list = getSelectableCompanies(companies, activeCompanyId, user, branches)
+    if (lead?.companyId && !list.some(c => isMatchingCompany(c, lead.companyId))) {
+      const leadComp = companies?.find(c => isMatchingCompany(c, lead.companyId))
+      if (leadComp) return [leadComp, ...list]
     }
-    return companies.filter((c) => c.id === user?.companyId || c.slug === user?.companyId)
-  }, [companies, user])
+    return list
+  }, [companies, activeCompanyId, user, branches, lead?.companyId])
 
   const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>(
     lead?.companyId || activeCompanyId || user?.companyId || "tech"
@@ -88,12 +89,14 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
 
   const availableBranches = React.useMemo(() => {
     if (!branches || !Array.isArray(branches)) return []
-    const targetComp = isSuperOrAdmin ? selectedCompanyId : (lead?.companyId || activeCompanyId || user?.companyId || "tech")
+    const targetComp = selectedCompanyId || lead?.companyId || activeCompanyId || user?.companyId || "tech"
     if (targetComp && targetComp !== "all") {
-      return branches.filter((b) => b.companyId === targetComp)
+      return branches.filter((b) =>
+        isMatchingCompany({ id: b.companyId || (b as any).company_id, slug: b.companyId } as any, targetComp)
+      )
     }
     return branches
-  }, [branches, isSuperOrAdmin, selectedCompanyId, lead?.companyId, activeCompanyId, user?.companyId])
+  }, [branches, selectedCompanyId, lead?.companyId, activeCompanyId, user?.companyId])
 
   const handleCompanyChange = (newCompId: string) => {
     setSelectedCompanyId(newCompId)
@@ -138,6 +141,7 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
   const [currency, setCurrency] = React.useState("Keep it blank to use the default (INR - ₹)")
   const [relatedTo, setRelatedTo] = React.useState("")
   const [isSubmitting, setIsSubmitting] = React.useState(false)
+  const [unlockedLocally, setUnlockedLocally] = React.useState(false)
 
   const toggleService = (svc: string) => {
     setSelectedServices((prev) =>
@@ -147,6 +151,8 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
 
   React.useEffect(() => {
     if (isOpen) {
+      useAuthStore.getState().fetchCompanies?.().catch(() => {})
+      useAuthStore.getState().fetchBranches?.().catch(() => {})
       if (user?.role === "Clients") {
         setTeamMembers([])
         return
@@ -242,9 +248,13 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
     }
   }, [lead])
 
-  if (!isOpen || !lead) return null
+  React.useEffect(() => {
+    setUnlockedLocally(false)
+  }, [lead?.id, isOpen])
 
   const handleSave = async () => {
+    if (!lead) return
+
     if (!companyName.trim()) {
       alert("Please enter a company or lead name.")
       return
@@ -269,7 +279,7 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
     const finalBranchId = targetBranchObj ? String(targetBranchObj.id) : (cleanBranchId || undefined)
     const finalBranchName = targetBranchObj?.name || (finalBranchId ? user?.branchName : undefined)
     const branchCompId = targetBranchObj?.companyId || (targetBranchObj as any)?.company_id
-    const finalCompanyId = branchCompId || (isSuperOrAdmin ? (selectedCompanyId || "tech") : (lead.companyId || activeCompanyId || user?.companyId || "tech"))
+    const finalCompanyId = selectedCompanyId || branchCompId || (isSuperOrAdmin ? (activeCompanyId || "tech") : (lead.companyId || activeCompanyId || user?.companyId || "tech"))
 
     const isNewReminderOverdue = isReminderDateOverdue(finalReminderDate, finalReminderTime)
     const shouldUnlock = !isNewReminderOverdue || unlockedLocally
@@ -321,12 +331,6 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
     }
   }
 
-  const [unlockedLocally, setUnlockedLocally] = React.useState(false)
-
-  React.useEffect(() => {
-    setUnlockedLocally(false)
-  }, [lead?.id, isOpen])
-
   const handleUnlock = async () => {
     if (!lead) return
     try {
@@ -355,6 +359,8 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
     !isLeadExplicitlyUnlocked &&
     (lead?.isLocked || isOverdue)
   )
+
+  if (!isOpen || !lead) return null
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
@@ -476,7 +482,7 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
                   onChange={(e) => handleCompanyChange(e.target.value)}
                   className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-blue-200 dark:border-blue-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-semibold cursor-pointer shadow-2xs"
                 >
-                  {allowedCompanies.map((c) => (
+                  {selectableCompanies.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
                     </option>
@@ -498,7 +504,7 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
                   <option value="">-- No Branch (Company Wide) --</option>
                   {availableBranches.map((b) => (
                     <option key={b.id} value={b.id}>
-                      {b.name}
+                      {b.name || (b as any).branch_name || b.code || "Branch"}
                     </option>
                   ))}
                 </select>

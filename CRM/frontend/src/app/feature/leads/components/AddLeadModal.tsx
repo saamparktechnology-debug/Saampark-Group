@@ -61,37 +61,39 @@ const STANDARD_SOURCES = [
   "My Leads",
 ]
 
-import { useAuthStore } from "@/store/useAuthStore"
+import { useAuthStore, isMatchingCompany, getSelectableCompanies } from "@/store/useAuthStore"
 import { getUsers } from "@/app/feature/users/services/userService"
 
 export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps) {
   const { user, companies, activeCompanyId, activeBranchId, activeSubBranchId, branches, subBranches } = useAuthStore()
   const isSuperOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
 
-  const allowedCompanies = React.useMemo(() => {
-    if (!companies || !Array.isArray(companies)) return []
-    if (user?.role === "Super Admin") return companies
-    if (user?.companyIds && user.companyIds.length > 0) {
-      return companies.filter((c) => user.companyIds?.includes(c.id) || user.companyIds?.includes(c.slug || ""))
-    }
-    return companies.filter((c) => c.id === user?.companyId || c.slug === user?.companyId)
-  }, [companies, user])
+  const selectableCompanies = React.useMemo(() => {
+    return getSelectableCompanies(companies, activeCompanyId, user, branches, subBranches)
+  }, [companies, activeCompanyId, user, branches, subBranches])
 
   const isBranchLocked = Boolean(user?.branchId && user?.role !== "Super Admin")
 
-  const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>(
-    activeCompanyId || user?.companyId || "tech"
-  )
+  const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>(() => {
+    if (activeCompanyId && activeCompanyId !== "all") return activeCompanyId
+    return user?.companyId || "tech"
+  })
   const [selectedBranchId, setSelectedBranchId] = React.useState<string>(
     user?.branchId || activeBranchId || ""
   )
 
   React.useEffect(() => {
     if (isOpen) {
+      useAuthStore.getState().fetchCompanies?.().catch(() => {})
+      useAuthStore.getState().fetchBranches?.().catch(() => {})
+      useAuthStore.getState().fetchSubBranches?.().catch(() => {})
+
       const currentComp = activeCompanyId && activeCompanyId !== "all" 
         ? activeCompanyId 
-        : (user?.companyId || "tech")
-      setSelectedCompanyId(currentComp)
+        : (user?.companyId || selectableCompanies[0]?.id || "tech")
+      const matchedCompObj = selectableCompanies.find(c => isMatchingCompany(c, currentComp)) || selectableCompanies[0]
+      const finalCompId = matchedCompObj?.id || currentComp
+      setSelectedCompanyId(finalCompId)
 
       if (user?.branchId && user?.role !== "Super Admin") {
         setSelectedBranchId(user.branchId)
@@ -99,16 +101,18 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
         setSelectedBranchId(activeBranchId || "")
       }
     }
-  }, [isOpen, activeCompanyId, activeBranchId, user?.companyId, user?.branchId, user?.role])
+  }, [isOpen, activeCompanyId, activeBranchId, user?.companyId, user?.branchId, user?.role, selectableCompanies])
 
   const availableBranches = React.useMemo(() => {
     if (!branches || !Array.isArray(branches)) return []
-    const targetComp = isSuperOrAdmin ? selectedCompanyId : (activeCompanyId || user?.companyId || "tech")
+    const targetComp = selectedCompanyId || activeCompanyId || user?.companyId || "tech"
     if (targetComp && targetComp !== "all") {
-      return branches.filter((b) => b.companyId === targetComp)
+      return branches.filter((b) =>
+        isMatchingCompany({ id: b.companyId || (b as any).company_id, slug: b.companyId } as any, targetComp)
+      )
     }
     return branches
-  }, [branches, isSuperOrAdmin, selectedCompanyId, activeCompanyId, user?.companyId])
+  }, [branches, selectedCompanyId, activeCompanyId, user?.companyId])
 
   const handleCompanyChange = (newCompId: string) => {
     setSelectedCompanyId(newCompId)
@@ -261,7 +265,7 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
     const finalBranchId = targetBranchObj ? String(targetBranchObj.id) : (cleanBranchId || undefined)
     const finalBranchName = targetBranchObj?.name || (finalBranchId ? user?.branchName : undefined)
     const branchCompId = targetBranchObj?.companyId || (targetBranchObj as any)?.company_id
-    const finalCompanyId = branchCompId || (isSuperOrAdmin ? (selectedCompanyId || activeCompanyId || "tech") : (activeCompanyId || user?.companyId || "tech"))
+    const finalCompanyId = selectedCompanyId || branchCompId || (isSuperOrAdmin ? (activeCompanyId || "tech") : (activeCompanyId || user?.companyId || "tech"))
 
     const finalSubBranchId = activeSubBranchId && activeSubBranchId !== "all" ? activeSubBranchId : (user?.subBranchId || undefined)
     const targetSubBranchObj = finalSubBranchId ? subBranches?.find(sb => String(sb.id).toLowerCase().trim() === String(finalSubBranchId).toLowerCase().trim()) : undefined
@@ -386,7 +390,7 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
                   onChange={(e) => handleCompanyChange(e.target.value)}
                   className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-blue-200 dark:border-blue-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-semibold cursor-pointer shadow-2xs"
                 >
-                  {allowedCompanies.map((c) => (
+                  {selectableCompanies.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
                     </option>
@@ -421,7 +425,7 @@ export function AddLeadModal({ isOpen, onClose, onLeadAdded }: AddLeadModalProps
                     <option value="">-- No Branch (Company Wide) --</option>
                     {availableBranches.map((b) => (
                       <option key={b.id} value={b.id}>
-                        {b.name}
+                        {b.name || (b as any).branch_name || b.code || "Branch"}
                       </option>
                     ))}
                   </select>
