@@ -303,7 +303,7 @@ export default function LoginPage() {
         window.history.replaceState({}, document.title, window.location.pathname)
       }
       sessionStorage.setItem("saampark_session_active", "true")
-      localStorage.setItem("saampark_session_active", "true")
+      localStorage.removeItem("saampark_session_active")
       localStorage.setItem("saampark_last_activity_time", String(Date.now()))
       if (backendToken) {
         localStorage.setItem("saampark_token", backendToken)

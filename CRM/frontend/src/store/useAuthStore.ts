@@ -1494,7 +1494,7 @@ export const useAuthStore = create<AuthState>()(
 
         if (typeof window !== 'undefined') {
           sessionStorage.setItem('saampark_session_active', 'true')
-          localStorage.setItem('saampark_session_active', 'true')
+          localStorage.removeItem('saampark_session_active')
           localStorage.setItem('saampark_last_activity_time', String(Date.now()))
           sessionStorage.removeItem('saampark_inactivity_logout')
           sessionStorage.removeItem('saampark_inactive_logout')
@@ -1597,7 +1597,7 @@ export const useAuthStore = create<AuthState>()(
 
             if (typeof window !== 'undefined') {
               sessionStorage.setItem('saampark_session_active', 'true')
-              localStorage.setItem('saampark_session_active', 'true')
+              localStorage.removeItem('saampark_session_active')
               localStorage.setItem('saampark_last_activity_time', String(Date.now()))
             }
 
@@ -1876,11 +1876,21 @@ export const useAuthStore = create<AuthState>()(
     {
       name: 'saampark-auth-v3',
       onRehydrateStorage: () => (state) => {
-        if (state && state.user && state.user.role === 'Super Admin') {
-          if (!state.activeCompanyId) {
-            state.activeCompanyId = 'all'
-            state.activeBranchId = null
-            state.activeSubBranchId = null
+        if (state) {
+          // If browser or tab was closed, sessionStorage is destroyed by the browser.
+          // Therefore, on reload or fresh tab open, verify if sessionStorage is active.
+          if (typeof window !== 'undefined') {
+            const isSessionActive = sessionStorage.getItem('saampark_session_active') === 'true'
+            if (!isSessionActive) {
+              state.isAuthenticated = false
+            }
+          }
+          if (state.user && state.user.role === 'Super Admin') {
+            if (!state.activeCompanyId) {
+              state.activeCompanyId = 'all'
+              state.activeBranchId = null
+              state.activeSubBranchId = null
+            }
           }
         }
       },

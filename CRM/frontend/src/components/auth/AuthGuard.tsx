@@ -22,8 +22,15 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     if (!isMounted) return
 
+    const isSessionActive = typeof window !== "undefined" && sessionStorage.getItem("saampark_session_active") === "true"
     const state = useAuthStore.getState()
-    const isAuth = Boolean(state.isAuthenticated && state.user && state.user.email)
+
+    // If browser or tab was closed, sessionStorage is empty: invalidate authentication state
+    if (!isSessionActive && state.isAuthenticated) {
+      useAuthStore.setState({ isAuthenticated: false })
+    }
+
+    const isAuth = Boolean(state.isAuthenticated && state.user && state.user.email && isSessionActive)
     const isPublicPage = 
       pathname === "/login" || 
       pathname?.startsWith("/login") ||
@@ -32,16 +39,14 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       pathname?.startsWith("/verify-member") ||
       pathname?.startsWith("/verify")
 
-    // If on a public verification page or login page, do NOT enforce session expiry or login redirects!
+    // If on a public verification page or login page:
     if (isPublicPage) {
       if (pathname === "/login" || pathname?.startsWith("/login")) {
-        // If user is already authenticated (or just logged in), navigate directly to dashboard
-        if (isAuth) {
+        // Only navigate to dashboard if there is a genuinely active browser session
+        if (isAuth && isSessionActive) {
           if (typeof window !== "undefined") {
             sessionStorage.removeItem("saampark_inactivity_logout")
             sessionStorage.removeItem("saampark_inactive_logout")
-            sessionStorage.setItem("saampark_session_active", "true")
-            localStorage.setItem("saampark_session_active", "true")
             localStorage.setItem("saampark_last_activity_time", String(Date.now()))
             if (window.location.search) {
               window.history.replaceState({}, document.title, window.location.pathname)
@@ -51,10 +56,11 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
           return
         }
 
-        // On login page when unauthenticated: cleanly reset any leftover flags without wiping out future login attempts!
+        // On login page when session is closed: cleanly reset flags and ensure no leftover storage
         if (typeof window !== "undefined") {
           sessionStorage.removeItem("saampark_inactivity_logout")
           sessionStorage.removeItem("saampark_inactive_logout")
+          localStorage.removeItem("saampark_session_active")
           if (window.location.search.includes("expired") || window.location.search.includes("inactivity")) {
             window.history.replaceState({}, document.title, window.location.pathname)
           }
@@ -63,19 +69,8 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       return
     }
 
-    if (isAuth && typeof window !== "undefined") {
-      const isSessionActive = 
-        sessionStorage.getItem("saampark_session_active") === "true" ||
-        localStorage.getItem("saampark_session_active") === "true"
-      if (!isSessionActive) {
-        sessionStorage.setItem("saampark_session_active", "true")
-        localStorage.setItem("saampark_session_active", "true")
-      } else {
-        sessionStorage.setItem("saampark_session_active", "true")
-      }
-    }
-
-    if (!isAuth) {
+    // Protected page access: requires BOTH authenticated user AND an active browser session in this tab/window
+    if (!isAuth || !isSessionActive) {
       router.replace("/login")
     }
   }, [isAuthenticated, user, pathname, router, isMounted])
@@ -83,13 +78,13 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   // Reset activity tracker immediately upon authentication
   React.useEffect(() => {
     if (!isMounted) return
-    if (isAuthenticated) {
+    const isSessionActive = typeof window !== "undefined" && sessionStorage.getItem("saampark_session_active") === "true"
+    if (isAuthenticated && isSessionActive) {
       if (typeof window !== "undefined") {
         localStorage.setItem("saampark_last_activity_time", String(Date.now()))
-        sessionStorage.setItem("saampark_session_active", "true")
-        localStorage.setItem("saampark_session_active", "true")
         sessionStorage.removeItem("saampark_inactivity_logout")
         sessionStorage.removeItem("saampark_inactive_logout")
+        localStorage.removeItem("saampark_session_active")
       }
     }
   }, [isAuthenticated, isMounted])
@@ -287,8 +282,9 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     pathname?.startsWith("/verify")
   if (isPublicPage) return <>{children}</>
 
-  // If not authenticated and not on public page, render nothing while redirecting
-  if (!isAuthenticated || !user) return null
+  // If not authenticated or session not active, and not on public page, render nothing while redirecting
+  const isSessionActiveNow = typeof window !== "undefined" && sessionStorage.getItem("saampark_session_active") === "true"
+  if (!isAuthenticated || !user || !isSessionActiveNow) return null
 
   // Authenticated user on protected page: Enforce URL Route Access Permissions
   const isSuperAdmin = user.role === "Super Admin"
