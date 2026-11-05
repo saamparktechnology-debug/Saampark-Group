@@ -93,6 +93,13 @@ export function UserOverviewModal({
   const [emailStatusMsg, setEmailStatusMsg] = React.useState<string | null>(null)
 
   React.useEffect(() => {
+    if (isOpen) {
+      useAuthStore.getState().fetchCompanies().catch(() => {})
+      useAuthStore.getState().fetchBranches().catch(() => {})
+    }
+  }, [isOpen])
+
+  React.useEffect(() => {
     if (user) {
       setSelectedCompanyId(user.companyId || (companies[0]?.id || "tech"))
       setSelectedBranchId(user.branchId || "")
@@ -109,7 +116,9 @@ export function UserOverviewModal({
   // Resolved entities
   const resolvedCompany = companies.find(c => 
     String(c.id).toLowerCase().trim() === String(selectedCompanyId).toLowerCase().trim() ||
-    String(c.slug || "").toLowerCase().trim() === String(selectedCompanyId).toLowerCase().trim()
+    String(c.slug || "").toLowerCase().trim() === String(selectedCompanyId).toLowerCase().trim() ||
+    String((c as any).numeric_id || "") === String(selectedCompanyId) ||
+    isMatchingCompany(c, selectedCompanyId)
   ) || companies[0]
 
   const resolvedBranch = branches.find(b => 

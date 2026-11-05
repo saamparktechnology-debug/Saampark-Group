@@ -62,24 +62,50 @@ export function IdentityCardDocument({
   const deptCode = (user.department || user.role || "HR").slice(0, 2).toUpperCase()
   const empId = user.employeeId || `STR/${deptCode}/${paddedNum}`
 
-  const companyName = company?.name || "SAAMPARK TECHNOLOGY & RESEARCH PVT. LTD."
-  const brandName = "SAAMPARK"
+  // Dynamic Company & Branch resolution with live updates from Company Management
+  const companyName = company?.name || "SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED"
+  const brandName = company?.brand_name || (companyName.toUpperCase().includes("SAAMPARK") ? "SAAMPARK" : companyName)
+  const companySubname = companyName.toUpperCase().replace(/^saampark\s*/i, '').trim() || "TECHNOLOGY AND RESEARCH PRIVATE LIMITED"
+
   const designation = (user.designation || user.role || "OFFICE COORDINATOR").toUpperCase()
   const phone = user.phone || "90915 18567"
   const avatarSrc = user.avatarUrl || (user as any).avatar
 
-  const branchCode = branch?.code || (user as any).branchCode || "B2501"
-  const branchAddress = branch?.address || (user as any).branchAddress || "Balichak, Paschim Medinipur"
-  const branchPhone = branch?.phone || "90915 18567 | 03222-464688"
-  const supportEmail = company?.email || "service@saamparktechnologyresearch.in"
-  const websiteUrl = "www.saampark.com"
+  // Actual updated Company / Branch Address
+  const displayAddress = 
+    (company?.address && company.address.trim()) || 
+    (branch?.address && branch.address.trim()) || 
+    (user as any)?.branchAddress || 
+    (user as any)?.address || 
+    "Madinipur, Kolkata, Durgapur, West Bengal, India - 721101"
 
-  // Contact vCard QR URL for front of the card
-  const vCardData = `BEGIN:VCARD\nVERSION:3.0\nN:${user.name};;;\nFN:${user.name}\nORG:${companyName}\nTITLE:${designation}\nTEL;TYPE=CELL:${phone}\nEMAIL:${user.email || ""}\nURL:https://${websiteUrl}\nEND:VCARD`
+  // Actual updated Company / Branch Phone
+  const displayPhone = 
+    (company?.phone && company.phone.trim()) || 
+    (branch?.phone && branch.phone.trim()) || 
+    user.phone || 
+    "+91 9901518567 / +91 9901518569"
+
+  // Actual updated Company / Branch Email
+  const displayEmail = 
+    (company?.email && company.email.trim()) || 
+    (branch?.email && branch.email.trim()) || 
+    "info@saamparktechnology.com"
+
+  // Actual updated Website
+  const rawWeb = (company?.website && company.website.trim()) || "www.saampark.com"
+  const displayWebsite = rawWeb.split("/")[0].trim().replace(/^https?:\/\//i, '').replace(/\/$/, '')
+  const websiteTargetUrl = rawWeb.startsWith("http") ? rawWeb : `https://${rawWeb}`
+
+  // Actual updated Branch Code
+  const displayBranchCode = branch?.code || (company as any)?.code || (user as any).branchCode || "B-2501"
+
+  // Contact vCard QR URL for front of the card (includes updated address)
+  const vCardData = `BEGIN:VCARD\nVERSION:3.0\nN:${user.name};;;\nFN:${user.name}\nORG:${companyName}\nTITLE:${designation}\nTEL;TYPE=CELL:${phone}\nEMAIL:${user.email || ""}\nADR;TYPE=WORK:;;${displayAddress};;;;\nURL:${websiteTargetUrl}\nEND:VCARD`
   const frontContactQR = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&margin=0&ecc=M&data=${encodeURIComponent(vCardData)}`
 
   // Website QR for back of the card
-  const websiteQR = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&margin=0&ecc=M&data=${encodeURIComponent("https://www.saampark.com")}`
+  const websiteQR = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&margin=0&ecc=M&data=${encodeURIComponent(websiteTargetUrl)}`
 
   return (
     <div className="flex flex-col items-center gap-5 w-full">
@@ -308,11 +334,11 @@ export function IdentityCardDocument({
               />
               <div className="leading-tight">
                 <div className="flex items-center gap-1">
-                  <span className="font-black text-[#0B1B36] text-[13px] tracking-tight">SAAMPARK</span>
+                  <span className="font-black text-[#0B1B36] text-[13px] tracking-tight">{brandName}</span>
                   <span className="text-[7px] font-bold text-[#0B1B36] -mt-1">TM</span>
                 </div>
-                <span className="block font-bold text-[6.5px] tracking-wider text-[#0B1B36] uppercase">
-                  TECHNOLOGY & RESEARCH PVT. LTD.
+                <span className="block font-bold text-[6.5px] tracking-wider text-[#0B1B36] uppercase max-w-[200px] truncate" title={companySubname}>
+                  {companySubname}
                 </span>
                 <div className="flex items-center gap-1.5 pt-0.5 text-[5.5px] font-black uppercase tracking-wider">
                   <span className="text-orange-500 font-extrabold">— INNOVATE</span>
@@ -418,36 +444,46 @@ export function IdentityCardDocument({
 
               <div className="flex items-start justify-between gap-3">
                 {/* Left: Contact Info List */}
-                <div className="space-y-1 text-[7px] text-zinc-200 font-medium">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-3.5 h-3.5 rounded-full border border-sky-400/50 flex items-center justify-center text-sky-400 shrink-0">
+                <div className="space-y-1 text-[7px] text-zinc-200 font-medium flex-1 min-w-0 pr-1">
+                  <div className="flex items-start gap-1.5">
+                    <div className="w-3.5 h-3.5 rounded-full border border-sky-400/50 flex items-center justify-center text-sky-400 shrink-0 mt-0.5">
                       <MapPin size={8} />
                     </div>
-                    <span className="truncate max-w-[150px]">{branchAddress}</span>
+                    <span className="leading-tight text-[6.5px] line-clamp-2 max-w-[165px]" title={displayAddress}>
+                      {displayAddress}
+                    </span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <div className="w-3.5 h-3.5 rounded-full border border-sky-400/50 flex items-center justify-center text-sky-400 shrink-0">
                       <Globe size={8} />
                     </div>
-                    <span>{websiteUrl}</span>
+                    <span className="truncate max-w-[165px]" title={displayWebsite}>
+                      {displayWebsite}
+                    </span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <div className="w-3.5 h-3.5 rounded-full border border-sky-400/50 flex items-center justify-center text-sky-400 shrink-0">
                       <Mail size={8} />
                     </div>
-                    <span className="truncate max-w-[150px]">{supportEmail}</span>
+                    <span className="truncate max-w-[165px]" title={displayEmail}>
+                      {displayEmail}
+                    </span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <div className="w-3.5 h-3.5 rounded-full border border-sky-400/50 flex items-center justify-center text-sky-400 shrink-0">
                       <Phone size={8} />
                     </div>
-                    <span>{branchPhone}</span>
+                    <span className="truncate max-w-[165px]" title={displayPhone}>
+                      {displayPhone}
+                    </span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <div className="w-3.5 h-3.5 rounded-full border border-sky-400/50 flex items-center justify-center text-sky-400 shrink-0">
                       <Landmark size={8} />
                     </div>
-                    <span className="font-bold text-sky-300">Branch Code: {branchCode}</span>
+                    <span className="font-bold text-sky-300">
+                      Branch Code: {displayBranchCode}
+                    </span>
                   </div>
                 </div>
 
