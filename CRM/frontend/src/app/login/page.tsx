@@ -5,21 +5,32 @@ import { motion, AnimatePresence } from "framer-motion"
 import { useRouter } from "next/navigation"
 import { 
   Lock, Mail, CheckCircle2, Eye, EyeOff, 
-  KeyRound, X, RefreshCw, Loader2, Check
+  KeyRound, X, RefreshCw, Loader2, Check,
+  ShieldCheck, ArrowRight, User as UserIcon,
+  Sparkles, AlertCircle
 } from "lucide-react"
 
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { useAuthStore, DEMO_USERS, Role } from "@/store/useAuthStore"
-import { recordUserAccount, getStoredUserAccountsAsync, isUserDeleted, unmarkUserAsDeleted } from "@/app/feature/users/services/userService"
+import { recordUserAccount, getStoredUserAccountsAsync, unmarkUserAsDeleted } from "@/app/feature/users/services/userService"
 import { UserItem } from "@/app/feature/users/types"
 import { fetchModuleDataFromDB, isGlobalItemDeleted, getLocalDeletedIds } from "@/lib/storageSync"
 import { normalizeRole } from "@/store/usePermissionStore"
 import { AuthService } from "@/services/apiServices"
 
 type ForgotStep = "email" | "otp" | "newpass" | "done"
+type LoginMode = "password" | "pin"
 
-// ─── OTP Input Component ───────────────────────────────────────────────────────
+interface SavedUser {
+  email: string
+  name: string
+  avatar?: string
+  role?: string
+  hasPin?: boolean
+}
+
+// ─── 6-Digit Email OTP Input Component ─────────────────────────────────────────
 function OTPInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const refs = Array.from({ length: 6 }, () => React.useRef<HTMLInputElement>(null))
   const digits = value.padEnd(6, " ").split("").slice(0, 6)
@@ -60,7 +71,7 @@ function OTPInput({ value, onChange }: { value: string; onChange: (v: string) =>
           onChange={(e) => handleChange(i, e)}
           onKeyDown={(e) => handleKey(i, e)}
           onPaste={handlePaste}
-          className="w-12 h-14 text-center text-2xl font-bold rounded-xl border-2 bg-surface border-border focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground transition-all"
+          className="w-11 h-13 text-center text-xl font-bold rounded-xl border-2 bg-surface border-border focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground transition-all"
           style={{ caretColor: "transparent" }}
         />
       ))}
@@ -68,11 +79,87 @@ function OTPInput({ value, onChange }: { value: string; onChange: (v: string) =>
   )
 }
 
+// ─── 4-Digit Security PIN Input Component ──────────────────────────────────────
+function PINInput({
+  value,
+  onChange,
+  onComplete,
+  disabled = false,
+  autoFocus = true,
+}: {
+  value: string
+  onChange: (v: string) => void
+  onComplete?: (v: string) => void
+  disabled?: boolean
+  autoFocus?: boolean
+}) {
+  const refs = Array.from({ length: 4 }, () => React.useRef<HTMLInputElement>(null))
+  const digits = value.padEnd(4, " ").split("").slice(0, 4)
+
+  const handleKey = (i: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace") {
+      if (!digits[i].trim() && i > 0) {
+        refs[i - 1].current?.focus()
+      }
+    }
+  }
+
+  const handleChange = (i: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = e.target.value.replace(/\D/g, "").slice(-1)
+    const arr = value.padEnd(4, " ").split("").slice(0, 4)
+    arr[i] = v || " "
+    const nextVal = arr.join("").trimEnd()
+    onChange(nextVal)
+    if (v && i < 3) {
+      refs[i + 1].current?.focus()
+    }
+    const cleanDigits = nextVal.replace(/\s/g, "")
+    if (v && i === 3 && cleanDigits.length === 4) {
+      onComplete?.(cleanDigits)
+    }
+  }
+
+  return (
+    <div className="flex gap-3 justify-center my-3">
+      {digits.map((d, i) => (
+        <input
+          key={i}
+          ref={refs[i]}
+          type="password"
+          inputMode="numeric"
+          maxLength={1}
+          disabled={disabled}
+          value={d.trim()}
+          onChange={(e) => handleChange(i, e)}
+          onKeyDown={(e) => handleKey(i, e)}
+          className="w-13 h-15 text-center text-2xl font-black rounded-2xl border-2 bg-surface/90 border-border focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/20 text-foreground transition-all shadow-sm"
+          autoFocus={autoFocus && i === 0}
+        />
+      ))}
+    </div>
+  )
+}
+
+// ─── Password Strength Evaluator ───────────────────────────────────────────────
+function evaluatePasswordPolicy(password: string) {
+  return {
+    length: password.length >= 8,
+    upper: /[A-Z]/.test(password),
+    lower: /[a-z]/.test(password),
+    number: /[0-9]/.test(password),
+    special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password),
+  }
+}
+
 // ─── Main Login Page ───────────────────────────────────────────────────────────
 export default function LoginPage() {
   const router = useRouter()
   const { loginAs } = useAuthStore()
 
+  const [savedUser, setSavedUser] = React.useState<SavedUser | null>(null)
+  const [loginMode, setLoginMode] = React.useState<LoginMode>("password")
+
+  // Password Login State
   const [email, setEmail] = React.useState("")
   const [password, setPassword] = React.useState("")
   const [showPassword, setShowPassword] = React.useState(false)
@@ -81,7 +168,40 @@ export default function LoginPage() {
   const [success, setSuccess] = React.useState(false)
   const [successMessage, setSuccessMessage] = React.useState("")
 
-  // Email Verification OTP State (after registration)
+  // Quick PIN Login State
+  const [loginPin, setLoginPin] = React.useState("")
+  const [pinLoading, setPinLoading] = React.useState(false)
+  const [pinError, setPinError] = React.useState("")
+
+  // First-Time PIN Setup State
+  const [isPinSetupOpen, setIsPinSetupOpen] = React.useState(false)
+  const [pinSetupData, setPinSetupData] = React.useState<{
+    email: string
+    name: string
+    role: Role
+    account: any
+    token?: string
+  } | null>(null)
+  const [pinSetupOTP, setPinSetupOTP] = React.useState("")
+  const [pinSetupNewPin, setPinSetupNewPin] = React.useState("")
+  const [pinSetupConfirmPin, setPinSetupConfirmPin] = React.useState("")
+  const [pinSetupLoading, setPinSetupLoading] = React.useState(false)
+  const [pinSetupError, setPinSetupError] = React.useState("")
+  const [pinSetupMsg, setPinSetupMsg] = React.useState("")
+  const [pinSetupCooldown, setPinSetupCooldown] = React.useState(0)
+
+  // Forgot PIN State
+  const [isForgotPinOpen, setIsForgotPinOpen] = React.useState(false)
+  const [forgotPinEmail, setForgotPinEmail] = React.useState("")
+  const [forgotPinOTP, setForgotPinOTP] = React.useState("")
+  const [forgotPinNew, setForgotPinNew] = React.useState("")
+  const [forgotPinConfirm, setForgotPinConfirm] = React.useState("")
+  const [forgotPinLoading, setForgotPinLoading] = React.useState(false)
+  const [forgotPinError, setForgotPinError] = React.useState("")
+  const [forgotPinMsg, setForgotPinMsg] = React.useState("")
+  const [forgotPinCooldown, setForgotPinCooldown] = React.useState(0)
+
+  // Email Verification OTP State
   const [verifyEmailModal, setVerifyEmailModal] = React.useState(false)
   const [verifyEmail, setVerifyEmail] = React.useState("")
   const [verifyOTP, setVerifyOTP] = React.useState("")
@@ -102,7 +222,40 @@ export default function LoginPage() {
   const [forgotMsg, setForgotMsg] = React.useState("")
   const [resendCooldown, setResendCooldown] = React.useState(0)
 
-  // Resend cooldown timer
+  // Load Saved User and check inactivity/session notices
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const rawSaved = localStorage.getItem("saampark_last_user")
+        if (rawSaved) {
+          const parsed: SavedUser = JSON.parse(rawSaved)
+          if (parsed && parsed.email) {
+            setSavedUser(parsed)
+            setEmail(parsed.email)
+            if (parsed.hasPin) {
+              setLoginMode("pin")
+            }
+          }
+        }
+      } catch {}
+
+      const notice = sessionStorage.getItem("saampark_inactive_logout")
+      const searchParams = new URLSearchParams(window.location.search)
+      const searchParamError = searchParams.get("error")
+      const searchParamReason = searchParams.get("reason")
+
+      if (notice || searchParamReason === "inactivity") {
+        setError("You were automatically locked out due to inactivity. Enter your 4-digit PIN to quickly resume.")
+        sessionStorage.removeItem("saampark_inactive_logout")
+      } else if (searchParamReason === "session_expired") {
+        setError("Your previous session ended. Please enter your PIN or password to sign in.")
+      } else if (searchParamError === "inactive") {
+        setError("Your account is on inactive stage, please contact your administration.")
+      }
+    }
+  }, [])
+
+  // Cooldown timers
   React.useEffect(() => {
     if (resendCooldown > 0) {
       const t = setTimeout(() => setResendCooldown((c) => c - 1), 1000)
@@ -110,74 +263,146 @@ export default function LoginPage() {
     }
   }, [resendCooldown])
 
-  // Check for inactive session logout redirect notice or session expiry
   React.useEffect(() => {
-    if (typeof window !== "undefined") {
-      const notice = sessionStorage.getItem("saampark_inactive_logout")
-      const searchParams = new URLSearchParams(window.location.search)
-      const searchParamError = searchParams.get("error")
-      const searchParamReason = searchParams.get("reason")
-
-      if (notice || searchParamReason === "inactivity") {
-        setError("You have been automatically logged out due to 30 minutes of inactivity. Please log in again.")
-        sessionStorage.removeItem("saampark_inactive_logout")
-      } else if (searchParamReason === "session_expired") {
-        setError("Your session ended after closing the browser. Please log in to continue.")
-      } else if (searchParamError === "inactive") {
-        setError("Your account is on inactive stage, please contact your administration.")
-      }
+    if (pinSetupCooldown > 0) {
+      const t = setTimeout(() => setPinSetupCooldown((c) => c - 1), 1000)
+      return () => clearTimeout(t)
     }
-  }, [])
+  }, [pinSetupCooldown])
 
-  // ─── FORGOT PASSWORD MODAL HANDLER ───────────────────────────────────────────
-  const openForgotModal = () => {
-    setForgotEmail(email)
-    setForgotStep("email")
-    setForgotOTP("")
-    setForgotNewPass("")
-    setForgotConfirmPass("")
-    setForgotError("")
-    setForgotMsg("")
-    setIsForgotOpen(true)
-  }
+  React.useEffect(() => {
+    if (forgotPinCooldown > 0) {
+      const t = setTimeout(() => setForgotPinCooldown((c) => c - 1), 1000)
+      return () => clearTimeout(t)
+    }
+  }, [forgotPinCooldown])
 
-  // ─── LOGIN HANDLER ──────────────────────────────────────────────────────────
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setError("")
-
+  // Helper to commit successful login and redirect
+  const completeSuccessfulLogin = (
+    matchedRole: Role,
+    matchedAccount: any,
+    effectiveEmail: string,
+    displayName: string,
+    backendToken?: string | null,
+    hasPin: boolean = false
+  ) => {
+    // Save last user info in localStorage for next PIN login
+    const savedInfo: SavedUser = {
+      email: effectiveEmail,
+      name: displayName,
+      avatar: matchedAccount.avatarUrl || (matchedAccount as any).avatar || matchedAccount.avatar_url,
+      role: matchedRole,
+      hasPin: hasPin,
+    }
     if (typeof window !== "undefined") {
+      localStorage.setItem("saampark_last_user", JSON.stringify(savedInfo))
       sessionStorage.removeItem("saampark_inactivity_logout")
       sessionStorage.removeItem("saampark_inactive_logout")
       localStorage.removeItem("saampark_session_revoked")
       if (window.location.search) {
         window.history.replaceState({}, document.title, window.location.pathname)
       }
+      sessionStorage.setItem("saampark_session_active", "true")
+      localStorage.setItem("saampark_session_active", "true")
+      localStorage.setItem("saampark_last_activity_time", String(Date.now()))
+      if (backendToken) {
+        localStorage.setItem("saampark_token", backendToken)
+      }
     }
+
+    recordUserAccount({ ...matchedAccount, name: displayName, email: effectiveEmail, lastLogin: "Just now" })
+    setSuccessMessage(`Welcome back, ${displayName}! 👋`)
+    setSuccess(true)
+
+    let parsedCompanyIds: string[] = []
+    const rawCompIds = matchedAccount.company_ids || matchedAccount.companyIds || (matchedAccount as any)?.company_ids
+    if (typeof rawCompIds === "string") {
+      try { parsedCompanyIds = JSON.parse(rawCompIds) } catch { parsedCompanyIds = [rawCompIds] }
+    } else if (Array.isArray(rawCompIds)) {
+      parsedCompanyIds = rawCompIds
+    }
+    if (!Array.isArray(parsedCompanyIds) || parsedCompanyIds.length === 0) {
+      const fallbackSingle = matchedAccount.companyId || matchedAccount.company_id || "tech"
+      parsedCompanyIds = matchedRole === "Super Admin" ? ["tech", "consultancy"] : [fallbackSingle]
+    }
+
+    const selectedCompanyId = matchedRole === "Super Admin" ? "all" : (parsedCompanyIds[0] || "tech")
+
+    loginAs(matchedRole, {
+      id: String(matchedAccount.sql_id || matchedAccount.id || matchedAccount.email),
+      name: displayName,
+      email: effectiveEmail,
+      username: matchedAccount.username || (!effectiveEmail.includes("@") ? effectiveEmail : undefined),
+      role: matchedRole,
+      companyId: selectedCompanyId as any,
+      companyIds: parsedCompanyIds,
+      avatar: matchedAccount.avatarUrl || (matchedAccount as any).avatar || matchedAccount.avatar_url || `https://api.dicebear.com/7.x/notionists/svg?seed=${effectiveEmail}`,
+      avatarUrl: matchedAccount.avatarUrl || (matchedAccount as any).avatar || matchedAccount.avatar_url || undefined,
+      phone: matchedAccount.phone,
+      branchId: matchedAccount.branchId || matchedAccount.branch_id || undefined,
+      branchName: matchedAccount.branchName || matchedAccount.branch_name || undefined,
+      allowedModules: matchedAccount.allowedModules || (matchedAccount as any)?.permissions?.allowedModules,
+      permissions: matchedAccount.permissions,
+      token: backendToken || undefined,
+    } as any)
+
+    setTimeout(() => {
+      router.replace("/feature/dashboard")
+    }, 500)
+  }
+
+  // ─── PIN LOGIN HANDLER ────────────────────────────────────────────────────────
+  const handlePinLogin = async (pinValue?: string) => {
+    const targetPin = pinValue || loginPin
+    if (!targetPin || targetPin.length < 4) {
+      setPinError("Please enter your complete 4-digit PIN.")
+      return
+    }
+    const targetEmail = (savedUser?.email || email || "").toLowerCase().trim()
+    if (!targetEmail) {
+      setPinError("Please enter your email or username.")
+      return
+    }
+
+    setPinLoading(true)
+    setPinError("")
+
+    try {
+      const res: any = await AuthService.loginWithPin({
+        email: targetEmail,
+        identifier: targetEmail,
+        pin: targetPin,
+      })
+
+      if (res?.data?.user || res?.user) {
+        const u = res.data?.user || res.user
+        const token = res.data?.token || res.token
+        const role = normalizeRole(u.role_name || u.role || "")
+        completeSuccessfulLogin(role, u, targetEmail, u.full_name || u.name || targetEmail, token, true)
+      } else {
+        setPinError(res?.message || "Invalid Security PIN. Please try again.")
+        setLoginPin("")
+      }
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || "Invalid Security PIN."
+      setPinError(msg)
+      setLoginPin("")
+    } finally {
+      setPinLoading(false)
+    }
+  }
+
+  // ─── PASSWORD LOGIN HANDLER ──────────────────────────────────────────────────
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
+    setError("")
 
     const normalizedInput = email.toLowerCase().replace(/^@/, "").trim()
 
     try {
-      // 1. Fetch active registered user accounts from MySQL database
       unmarkUserAsDeleted(normalizedInput)
       const registeredAccounts = await getStoredUserAccountsAsync()
-
-      // Check if user is attempting to log in with an old transferred/obsolete email address
-      const obsoleteAccount = registeredAccounts.find((acc) => {
-        const mainEmail = (acc.email || "").toLowerCase().trim()
-        const prevEmails = Array.isArray(acc.previousEmails)
-          ? acc.previousEmails.map((pe) => (pe || "").toLowerCase().trim())
-          : []
-        const altEmail = ((acc as any).previousEmail || "").toLowerCase().trim()
-        return mainEmail !== normalizedInput && (prevEmails.includes(normalizedInput) || altEmail === normalizedInput)
-      })
-
-      if (obsoleteAccount) {
-        setIsLoading(false)
-        setError(`This email address (${normalizedInput}) has been transferred to a new email. Please log in using your updated active email address.`)
-        return
-      }
 
       let dbAccount = registeredAccounts.find(
         (acc) =>
@@ -187,19 +412,6 @@ export default function LoginPage() {
 
       if (!dbAccount) {
         const allDbUsers = await fetchModuleDataFromDB<UserItem[]>("users", [], "all").catch(() => [])
-        const obsoleteInAll = allDbUsers.find((acc) => {
-          const mainEmail = (acc.email || "").toLowerCase().trim()
-          const prevEmails = Array.isArray(acc.previousEmails)
-            ? acc.previousEmails.map((pe) => (pe || "").toLowerCase().trim())
-            : []
-          const altEmail = ((acc as any).previousEmail || "").toLowerCase().trim()
-          return mainEmail !== normalizedInput && (prevEmails.includes(normalizedInput) || altEmail === normalizedInput)
-        })
-        if (obsoleteInAll) {
-          setIsLoading(false)
-          setError(`This email address (${normalizedInput}) has been transferred to a new email. Please log in using your updated active email address.`)
-          return
-        }
         dbAccount = allDbUsers.find(
           (acc) =>
             (acc.email || "").toLowerCase().trim() === normalizedInput ||
@@ -207,26 +419,20 @@ export default function LoginPage() {
         )
       }
 
-      // Ensure active account is un-suppressed
-      if (dbAccount && dbAccount.email) {
-        unmarkUserAsDeleted(dbAccount.email.toLowerCase().trim())
-      }
-
       let backendUser: any = null
       let backendRole: Role | null = null
       let backendToken: string | null = null
+      let mustSetupPin = false
+      let hasPin = false
 
-      // 2. Attempt backend API authentication
       try {
         const backendRes: any = await AuthService.login({ email: normalizedInput, password })
         if (backendRes?.data?.user || backendRes?.user) {
           backendUser = backendRes.data?.user || backendRes.user
           backendRole = normalizeRole(backendUser.role_name || backendUser.role || "")
-          const token = backendRes.data?.token || backendRes.token
-          backendToken = token
-          if (token && typeof window !== "undefined") {
-            localStorage.setItem("saampark_token", token)
-          }
+          backendToken = backendRes.data?.token || backendRes.token
+          mustSetupPin = Boolean(backendRes.data?.mustSetupPin ?? backendRes?.mustSetupPin)
+          hasPin = Boolean(backendRes.data?.hasPin ?? backendRes?.hasPin)
         } else if (backendRes?.status === "error" || (backendRes && backendRes.message)) {
           const msg: string = backendRes.message || ""
           if (msg.toLowerCase().includes("not verified")) {
@@ -240,7 +446,6 @@ export default function LoginPage() {
             setError("Company not available. Please contact administrator.")
             return
           }
-          console.warn("Backend auth attempt failed, checking database account store:", msg)
         }
       } catch (backendErr: any) {
         const msg: string = backendErr?.response?.data?.message || backendErr?.message || ""
@@ -250,19 +455,17 @@ export default function LoginPage() {
           setIsLoading(false)
           return
         }
-        if (msg.toLowerCase().includes("company not available") || msg.toLowerCase().includes("company unavailable")) {
+        if (msg.toLowerCase().includes("company not available")) {
           setIsLoading(false)
           setError("Company not available. Please contact administrator.")
           return
         }
-        console.warn("Backend auth attempt failed, checking database account store:", msg)
       }
 
-      // ── DETERMINE MATCHED ROLE & ACCOUNT ────────────────────────────────────
+      // Role and Account resolution
       let matchedRole: Role | null = backendRole
       let matchedAccount: any = backendUser
 
-      // Check role_id mapping if backendRole wasn't Super Admin / Admin
       if (backendUser && backendUser.role_id) {
         const rid = parseInt(String(backendUser.role_id), 10)
         if (rid === 1) matchedRole = "Super Admin"
@@ -271,51 +474,21 @@ export default function LoginPage() {
       }
 
       if (dbAccount) {
-        const normDbRole = normalizeRole(dbAccount.role)
-        matchedRole = normDbRole || matchedRole || "Teams"
+        matchedRole = normalizeRole(dbAccount.role) || matchedRole || "Teams"
         matchedAccount = { ...dbAccount, ...matchedAccount }
-
-        // If backend auth didn't succeed, verify password with stored database password
         if (!backendUser) {
-          const isRootSuper = normalizedInput === 'saampark.official@gmail.com' || matchedRole === "Super Admin";
+          const isRootSuper = normalizedInput === "saampark.official@gmail.com" || matchedRole === "Super Admin"
           const validPasswords = [
             dbAccount.password,
             dbAccount.password?.trim(),
             isRootSuper ? "123456" : null,
             isRootSuper ? "admin123" : null,
-            isRootSuper ? "Password123" : null,
-            isRootSuper ? "admin" : null,
-            matchedRole === "Admin" ? "admin123" : null,
-            "Password123"
-          ].filter(Boolean);
+            "Password123",
+          ].filter(Boolean)
 
           if (!validPasswords.includes(password.trim()) && !validPasswords.includes(password)) {
             setIsLoading(false)
             setError("Invalid password. Please check and try again.")
-            return
-          }
-        }
-      } else if (!matchedRole) {
-        // Check demo accounts
-        const matchedDemoKey = (Object.keys(DEMO_USERS) as Role[]).find(
-          (r) => DEMO_USERS[r]?.email?.toLowerCase() === normalizedInput
-        )
-        if (matchedDemoKey && DEMO_USERS[matchedDemoKey]) {
-          const demoObj = DEMO_USERS[matchedDemoKey]!
-          matchedRole = normalizeRole(matchedDemoKey)
-          matchedAccount = {
-            id: String(demoObj.id),
-            name: demoObj.name,
-            email: demoObj.email,
-            role: matchedDemoKey,
-            companyId: demoObj.companyId,
-            status: "Active",
-            joinedDate: "2026-01-01",
-          }
-          const demoPass = matchedRole === "Super Admin" ? "123456" : matchedRole === "Admin" ? "admin123" : "Password123"
-          if (password !== demoPass) {
-            setIsLoading(false)
-            setError("Invalid password.")
             return
           }
         }
@@ -327,108 +500,43 @@ export default function LoginPage() {
         return
       }
 
-      // ── INACTIVE ACCOUNT STATUS CHECK ───────────────────────────────────────
+      // Check inactive status
       const rawStatus = (matchedAccount.status || dbAccount?.status || "").toString().toLowerCase().trim()
-      if (rawStatus === "inactive" || matchedAccount.is_active === false || (dbAccount as any)?.is_active === false) {
+      if (rawStatus === "inactive" || matchedAccount.is_active === false) {
         setIsLoading(false)
         setError("Your account is on inactive stage, please contact your administration.")
         return
       }
 
-      // ── DELETED COMPANY AVAILABILITY CHECK ──────────────────────────────────
-      if (matchedRole !== "Super Admin") {
-        if (matchedAccount.companyDeleted || matchedAccount.companyStatus === "deleted") {
-          setIsLoading(false)
-          setError("Company not available. Please contact administrator.")
-          return
-        }
-
-        const userCompId = String(
-          matchedAccount.companyId || 
-          matchedAccount.company_id || 
-          (Array.isArray(matchedAccount.companyIds) ? matchedAccount.companyIds[0] : "")
-        ).toLowerCase().trim()
-
-        if (userCompId) {
-          const deletedIds = getLocalDeletedIds().map(d => String(d).toLowerCase().trim())
-          if (deletedIds.includes(userCompId) || isGlobalItemDeleted(userCompId)) {
-            setIsLoading(false)
-            setError("Company not available. Please contact administrator.")
-            return
-          }
-        }
-      }
-
-      const effectiveEmail = (matchedAccount.email || dbAccount?.email || (normalizedInput.includes("@") ? normalizedInput : "user@saampark.in")).toLowerCase().trim()
-
-      // ── ROLE & PORTAL AUTO-ALIGNMENT (Initial fallback only if no role assigned) ──
-      if (!matchedAccount?.role) {
-        if (effectiveEmail === "saampark.official@gmail.com") {
-          matchedRole = "Super Admin"
-        } else if (effectiveEmail === "saamparktechnologyresearch@gmail.com") {
-          matchedRole = "Admin"
-        }
-      }
-
-      // ── SUCCESS ──────────────────────────────────────────────────────────────
-      const displayName = effectiveEmail === "saampark.official@gmail.com" 
-        ? "Saampark Group (Super Admin)" 
+      const effectiveEmail = (matchedAccount.email || dbAccount?.email || normalizedInput).toLowerCase().trim()
+      const displayName = effectiveEmail === "saampark.official@gmail.com"
+        ? "Saampark Group (Super Admin)"
         : (matchedAccount.full_name || matchedAccount.name || dbAccount?.name || effectiveEmail)
-      recordUserAccount({ ...matchedAccount, name: displayName, email: effectiveEmail, lastLogin: "Just now" })
-      setSuccessMessage(`Welcome back, ${displayName}! 👋`)
-      setSuccess(true)
 
-      if (typeof window !== "undefined") {
-        sessionStorage.removeItem("saampark_inactivity_logout")
-        sessionStorage.removeItem("saampark_inactive_logout")
-        localStorage.removeItem("saampark_session_revoked")
-        if (window.location.search) {
-          window.history.replaceState({}, document.title, window.location.pathname)
-        }
-        sessionStorage.setItem("saampark_session_active", "true")
-        localStorage.setItem("saampark_session_active", "true")
-        localStorage.setItem("saampark_last_activity_time", String(Date.now()))
-        if (backendToken) {
-          localStorage.setItem("saampark_token", backendToken)
-        }
+      // ── FIRST-TIME LOGIN PIN SETUP TRIGGER ──────────────────────────────────
+      // If user has not completed PIN setup yet:
+      const userHasCompletedPin = hasPin || Boolean(matchedAccount.pin_hash || matchedAccount.pin_setup_completed)
+      if (!userHasCompletedPin || mustSetupPin) {
+        setPinSetupData({
+          email: effectiveEmail,
+          name: displayName,
+          role: matchedRole,
+          account: matchedAccount,
+          token: backendToken || undefined,
+        })
+        // Automatically dispatch Email OTP
+        try {
+          await AuthService.sendPinOTP({ email: effectiveEmail })
+          setPinSetupMsg(`A 6-digit verification code has been dispatched to ${effectiveEmail}`)
+          setPinSetupCooldown(60)
+        } catch {}
+        setIsLoading(false)
+        setIsPinSetupOpen(true)
+        return
       }
 
-      let parsedCompanyIds: string[] = []
-      const rawCompIds = matchedAccount.company_ids || matchedAccount.companyIds || dbAccount?.companyIds || (dbAccount as any)?.company_ids || backendUser?.company_ids
-      if (typeof rawCompIds === "string") {
-        try { parsedCompanyIds = JSON.parse(rawCompIds) } catch { parsedCompanyIds = [rawCompIds] }
-      } else if (Array.isArray(rawCompIds)) {
-        parsedCompanyIds = rawCompIds
-      }
-      if (!Array.isArray(parsedCompanyIds) || parsedCompanyIds.length === 0) {
-        const fallbackSingle = matchedAccount.companyId || matchedAccount.company_id || dbAccount?.companyId || backendUser?.company_id || "tech"
-        parsedCompanyIds = matchedRole === "Super Admin" ? ["tech", "digital"] : [fallbackSingle]
-      }
-
-      // If user is Super Admin, default to all companies across the group
-      const selectedCompanyId = matchedRole === "Super Admin" ? "all" : (parsedCompanyIds[0] || "tech")
-
-      loginAs(matchedRole, {
-        id: String(backendUser?.id || matchedAccount.sql_id || matchedAccount.id || matchedAccount.email),
-        name: displayName,
-        email: effectiveEmail,
-        username: matchedAccount.username || dbAccount?.username || (!normalizedInput.includes("@") ? normalizedInput : undefined),
-        role: matchedRole,
-        companyId: selectedCompanyId as any,
-        companyIds: parsedCompanyIds,
-        avatar: matchedAccount.avatarUrl || (matchedAccount as any).avatar || matchedAccount.avatar_url || dbAccount?.avatarUrl || (dbAccount as any)?.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${effectiveEmail}`,
-        avatarUrl: matchedAccount.avatarUrl || (matchedAccount as any).avatar || matchedAccount.avatar_url || dbAccount?.avatarUrl || (dbAccount as any)?.avatar || undefined,
-        phone: matchedAccount.phone || dbAccount?.phone,
-        branchId: matchedAccount.branchId || matchedAccount.branch_id || dbAccount?.branchId || (dbAccount as any)?.branch_id || undefined,
-        branchName: matchedAccount.branchName || matchedAccount.branch_name || dbAccount?.branchName || (dbAccount as any)?.branch_name || undefined,
-        allowedModules: matchedAccount.allowedModules || dbAccount?.allowedModules || (matchedAccount as any)?.permissions?.allowedModules,
-        permissions: matchedAccount.permissions || dbAccount?.permissions,
-        token: backendToken || undefined,
-      } as any)
-
-      setTimeout(() => {
-        router.replace("/feature/dashboard")
-      }, 500)
+      // Normal PIN-enabled user logging in via password
+      completeSuccessfulLogin(matchedRole, matchedAccount, effectiveEmail, displayName, backendToken, true)
 
     } catch (err: any) {
       setIsLoading(false)
@@ -438,28 +546,117 @@ export default function LoginPage() {
     }
   }
 
-  // ─── EMAIL VERIFICATION OTP HANDLERS ────────────────────────────────────────
-  const handleVerifyEmail = async (e: React.FormEvent) => {
+  // ─── COMPLETE PIN SETUP (WITH EMAIL OTP) ──────────────────────────────────────
+  const handleCompletePinSetup = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (verifyOTP.length < 6) { setVerifyError("Please enter the complete 6-digit OTP."); return }
-    setVerifyLoading(true)
-    setVerifyError("")
+    if (!pinSetupData) return
+    if (pinSetupOTP.length < 6) {
+      setPinSetupError("Please enter the 6-digit OTP code sent to your email.")
+      return
+    }
+    if (pinSetupNewPin.length < 4) {
+      setPinSetupError("Please enter your new 4-digit PIN.")
+      return
+    }
+    if (pinSetupNewPin !== pinSetupConfirmPin) {
+      setPinSetupError("PIN confirmation does not match. Please re-enter.")
+      return
+    }
+
+    setPinSetupLoading(true)
+    setPinSetupError("")
+
     try {
-      await AuthService.verifyEmail({ email: verifyEmail, otp: verifyOTP })
-      setVerifySuccess(true)
-      setTimeout(() => {
-        setVerifyEmailModal(false)
-        setVerifyOTP("")
-        setVerifySuccess(false)
-      }, 2000)
+      await AuthService.setupPin({
+        email: pinSetupData.email,
+        pin: pinSetupNewPin,
+        otp: pinSetupOTP,
+      })
+
+      setIsPinSetupOpen(false)
+      completeSuccessfulLogin(
+        pinSetupData.role,
+        pinSetupData.account,
+        pinSetupData.email,
+        pinSetupData.name,
+        pinSetupData.token,
+        true
+      )
     } catch (err: any) {
-      setVerifyError(err?.response?.data?.message || "Invalid OTP. Please try again.")
+      setPinSetupError(err?.response?.data?.message || "Verification code is invalid or expired.")
     } finally {
-      setVerifyLoading(false)
+      setPinSetupLoading(false)
     }
   }
 
-  // ─── FORGOT PASSWORD HANDLERS ────────────────────────────────────────────────
+  // ─── FORGOT PIN HANDLERS ──────────────────────────────────────────────────────
+  const openForgotPinModal = async () => {
+    const target = (savedUser?.email || email || "").toLowerCase().trim()
+    setForgotPinEmail(target)
+    setForgotPinOTP("")
+    setForgotPinNew("")
+    setForgotPinConfirm("")
+    setForgotPinError("")
+    setIsForgotPinOpen(true)
+    if (target) {
+      setForgotPinLoading(true)
+      try {
+        await AuthService.sendPinOTP({ email: target })
+        setForgotPinMsg(`Verification code sent to ${target}`)
+        setForgotPinCooldown(60)
+      } catch {}
+      setForgotPinLoading(false)
+    }
+  }
+
+  const handleResetPin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (forgotPinOTP.length < 6) {
+      setForgotPinError("Please enter the 6-digit verification code.")
+      return
+    }
+    if (forgotPinNew.length < 4) {
+      setForgotPinError("Please enter a 4-digit PIN.")
+      return
+    }
+    if (forgotPinNew !== forgotPinConfirm) {
+      setForgotPinError("PINs do not match.")
+      return
+    }
+
+    setForgotPinLoading(true)
+    setForgotPinError("")
+
+    try {
+      await AuthService.resetPin({
+        email: forgotPinEmail,
+        otp: forgotPinOTP,
+        newPin: forgotPinNew,
+      })
+      setForgotPinMsg("PIN successfully updated! You can now sign in.")
+      setLoginPin(forgotPinNew)
+      setTimeout(() => {
+        setIsForgotPinOpen(false)
+      }, 1500)
+    } catch (err: any) {
+      setForgotPinError(err?.response?.data?.message || "Invalid or expired verification code.")
+    } finally {
+      setForgotPinLoading(false)
+    }
+  }
+
+  // ─── FORGOT PASSWORD HANDLERS WITH STRICT 8-CHAR POLICY ──────────────────────
+  const openForgotModal = () => {
+    setForgotEmail(email)
+    setForgotStep("email")
+    setForgotOTP("")
+    setForgotNewPass("")
+    setForgotConfirmPass("")
+    setForgotError("")
+    setForgotMsg("")
+    setIsForgotOpen(true)
+  }
+
   const handleSendForgotOTP = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!forgotEmail) { setForgotError("Please enter your email address."); return }
@@ -495,23 +692,33 @@ export default function LoginPage() {
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!forgotNewPass || forgotNewPass.length < 6) { setForgotError("Password must be at least 6 characters."); return }
-    if (forgotNewPass !== forgotConfirmPass) { setForgotError("Passwords do not match."); return }
+    const policy = evaluatePasswordPolicy(forgotNewPass)
+    if (!policy.length || !policy.upper || !policy.lower || !policy.number || !policy.special) {
+      setForgotError("Password does not meet all security requirements.")
+      return
+    }
+    if (forgotNewPass !== forgotConfirmPass) {
+      setForgotError("Passwords do not match.")
+      return
+    }
+
     setForgotLoading(true)
     setForgotError("")
     try {
-      await AuthService.resetPassword({ email: forgotEmail.toLowerCase(), newPassword: forgotNewPass, resetToken: forgotResetToken })
-      // Safely update password in stored accounts without resetting role
+      await AuthService.resetPassword({
+        email: forgotEmail.toLowerCase(),
+        newPassword: forgotNewPass,
+        resetToken: forgotResetToken,
+      })
+
       const stored = await getStoredUserAccountsAsync()
-      const existing = stored.find(a => a.email.toLowerCase().trim() === forgotEmail.toLowerCase().trim())
+      const existing = stored.find((a) => a.email.toLowerCase().trim() === forgotEmail.toLowerCase().trim())
       if (existing) {
         recordUserAccount({ ...existing, password: forgotNewPass })
       } else {
         recordUserAccount({ email: forgotEmail.toLowerCase().trim(), password: forgotNewPass })
       }
-      if (typeof window !== "undefined" && window.location.search) {
-        window.history.replaceState({}, document.title, window.location.pathname)
-      }
+
       setForgotStep("done")
       setForgotMsg("Password reset successfully! You can now log in.")
       setEmail(forgotEmail.toLowerCase())
@@ -524,18 +731,31 @@ export default function LoginPage() {
     }
   }
 
-  const handleResendOTP = async () => {
-    if (resendCooldown > 0) return
-    setForgotLoading(true)
+  // ─── EMAIL VERIFICATION HANDLER ──────────────────────────────────────────────
+  const handleVerifyEmail = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (verifyOTP.length < 6) { setVerifyError("Please enter the complete 6-digit OTP."); return }
+    setVerifyLoading(true)
+    setVerifyError("")
     try {
-      await AuthService.sendForgotPasswordOTP({ email: forgotEmail.toLowerCase() })
-      setForgotMsg("New OTP sent!")
-      setResendCooldown(60)
-    } catch {}
-    setForgotLoading(false)
+      await AuthService.verifyEmail({ email: verifyEmail, otp: verifyOTP })
+      setVerifySuccess(true)
+      setTimeout(() => {
+        setVerifyEmailModal(false)
+        setVerifyOTP("")
+        setVerifySuccess(false)
+      }, 2000)
+    } catch (err: any) {
+      setVerifyError(err?.response?.data?.message || "Invalid OTP. Please try again.")
+    } finally {
+      setVerifyLoading(false)
+    }
   }
 
-  // ─── RENDER ──────────────────────────────────────────────────────────────────
+  const pwdPolicy = evaluatePasswordPolicy(forgotNewPass)
+  const isPwdAllValid = pwdPolicy.length && pwdPolicy.upper && pwdPolicy.lower && pwdPolicy.number && pwdPolicy.special
+  const isPwdMatch = forgotNewPass.length > 0 && forgotNewPass === forgotConfirmPass
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background relative overflow-hidden p-4">
       {/* Ambient Liquid Glass Color Mesh */}
@@ -549,115 +769,432 @@ export default function LoginPage() {
       <div className="w-full max-w-4xl z-10">
         <AnimatePresence mode="wait">
 
-          {/* ── LOGIN FORM ──────────────────────────────────────────────── */}
-          <motion.div
-            key="login-form"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="max-w-md mx-auto liquid-glass-card rounded-[2rem] p-8 sm:p-10 shadow-[0_25px_70px_-15px_rgba(0,0,0,0.35)] relative border border-white/40 dark:border-white/10"
-          >
-            <div className="flex flex-col items-center mb-6">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl liquid-glass-pill border border-white/40 dark:border-white/10 text-primary mb-3 shadow-lg p-2">
-                <img src="/logo.png" alt="SAAMPARK Logo" className="w-full h-full rounded-xl object-contain" />
-              </div>
-              <h2 className="text-2xl font-extrabold tracking-tight text-foreground">
-                SAAMPARK Group CRM
-              </h2>
-              <p className="text-xs text-muted-foreground mt-1">Enter your credentials to access your workspace</p>
-            </div>
+          {/* ═══════════════════════════════════════════════════════════════════ */}
+          {/* 1. QUICK 4-DIGIT PIN LOGIN MODE (DEFAULT ON RETURN / AUTO-LOGOUT)   */}
+          {/* ═══════════════════════════════════════════════════════════════════ */}
+          {loginMode === "pin" ? (
+            <motion.div
+              key="pin-login-card"
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              className="max-w-md mx-auto liquid-glass-card rounded-[2rem] p-8 sm:p-10 shadow-[0_25px_70px_-15px_rgba(0,0,0,0.35)] relative border border-white/40 dark:border-white/10"
+            >
+              <div className="flex flex-col items-center mb-6">
+                {/* User Avatar Badge */}
+                <div className="relative mb-3">
+                  <div className="w-20 h-20 rounded-full border-2 border-primary/50 overflow-hidden shadow-xl bg-surface flex items-center justify-center p-1">
+                    {savedUser?.avatar ? (
+                      <img src={savedUser.avatar} alt="User Avatar" className="w-full h-full rounded-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xl">
+                        <UserIcon size={32} />
+                      </div>
+                    )}
+                  </div>
+                  <span className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-emerald-500 border-2 border-surface flex items-center justify-center text-[11px] text-white font-bold" title="PIN Protected">
+                    🛡️
+                  </span>
+                </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4 relative">
-              <AnimatePresence>
-                {success && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-surface/95 backdrop-blur-sm rounded-2xl p-6 text-center"
-                  >
-                    <motion.div initial={{ scale: 0.8 }} animate={{ scale: 1 }} className="w-16 h-16 bg-success/20 text-success rounded-full flex items-center justify-center mb-4">
-                      <CheckCircle2 size={32} />
-                    </motion.div>
-                    <p className="text-base font-bold text-foreground">{successMessage}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Entering your workspace...</p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Email or Username */}
-              <div>
-                <label className="block text-xs font-medium mb-1">Email Address or Username *</label>
-                <Input
-                  id="login-email"
-                  type="text"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="h-11 bg-surface"
-                  placeholder="e.g. user@saampark.in or your_username"
-                  leftIcon={<Mail size={18} />}
-                  required
-                />
-              </div>
-
-              {/* Password */}
-              <div>
-                <label className="block text-xs font-medium mb-1">Password *</label>
-                <Input
-                  id="login-password"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="h-11 bg-surface"
-                  placeholder="••••••••"
-                  leftIcon={<Lock size={18} />}
-                  rightIcon={
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((v) => !v)}
-                      className="text-muted-foreground hover:text-foreground cursor-pointer flex items-center justify-center transition-colors"
-                      tabIndex={-1}
-                    >
-                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
-                  }
-                  required
-                />
-                <div className="flex justify-end mt-1.5">
-                  <button
-                    type="button"
-                    onClick={openForgotModal}
-                    className="text-xs font-medium text-primary hover:underline cursor-pointer"
-                  >
-                    Forgot password?
-                  </button>
+                <h2 className="text-xl font-extrabold text-foreground tracking-tight">
+                  {savedUser?.name || "Welcome Back"}
+                </h2>
+                <p className="text-xs text-muted-foreground mt-0.5 font-medium">
+                  {savedUser?.email || email}
+                </p>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 mt-2.5 rounded-full bg-primary/10 text-primary text-[11px] font-semibold">
+                  <ShieldCheck size={13} />
+                  <span>Enter 4-Digit Security PIN</span>
                 </div>
               </div>
 
-              {error && (
-                <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="p-3 rounded-xl bg-danger/10 border border-danger/20 text-danger text-xs font-medium">
-                  {error}
-                </motion.div>
-              )}
+              {/* PIN Input */}
+              <div className="space-y-4">
+                <PINInput
+                  value={loginPin}
+                  onChange={setLoginPin}
+                  onComplete={(val) => handlePinLogin(val)}
+                  disabled={pinLoading || success}
+                />
 
-              <Button
-                type="submit"
-                variant="primary"
-                className="w-full h-11 text-sm font-bold shadow-md mt-2 cursor-pointer"
-                disabled={isLoading || success}
-              >
-                {isLoading ? (
-                  <span className="flex items-center gap-2 justify-center">
-                    <Loader2 size={16} className="animate-spin" />
-                    Authenticating...
-                  </span>
-                ) : "Sign In →"}
-              </Button>
-            </form>
-          </motion.div>
+                {pinError && (
+                  <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="p-2.5 rounded-xl bg-danger/10 border border-danger/20 text-danger text-xs font-semibold text-center flex items-center justify-center gap-1.5">
+                    <AlertCircle size={14} />
+                    <span>{pinError}</span>
+                  </motion.div>
+                )}
+
+                <Button
+                  type="button"
+                  onClick={() => handlePinLogin()}
+                  variant="primary"
+                  className="w-full h-11 text-sm font-bold shadow-md cursor-pointer"
+                  disabled={pinLoading || loginPin.length < 4 || success}
+                >
+                  {pinLoading ? (
+                    <span className="flex items-center gap-2 justify-center">
+                      <Loader2 size={16} className="animate-spin" />
+                      Verifying PIN...
+                    </span>
+                  ) : "Sign In with PIN →"}
+                </Button>
+
+                {/* Footer Controls */}
+                <div className="flex items-center justify-between pt-3 border-t border-border/40 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setLoginMode("password")}
+                    className="font-medium text-primary hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    <Lock size={12} />
+                    <span>Login with Password</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={openForgotPinModal}
+                    className="font-medium text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    Forgot PIN?
+                  </button>
+                </div>
+
+                <div className="text-center pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSavedUser(null)
+                      setLoginMode("password")
+                      setEmail("")
+                      setPassword("")
+                    }}
+                    className="text-[11px] text-muted-foreground hover:text-primary transition-colors cursor-pointer"
+                  >
+                    Sign in to another account
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          ) : (
+
+            /* ═══════════════════════════════════════════════════════════════════ */
+            /* 2. PASSWORD LOGIN FORM                                              */
+            /* ═══════════════════════════════════════════════════════════════════ */
+            <motion.div
+              key="password-login-card"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="max-w-md mx-auto liquid-glass-card rounded-[2rem] p-8 sm:p-10 shadow-[0_25px_70px_-15px_rgba(0,0,0,0.35)] relative border border-white/40 dark:border-white/10"
+            >
+              <div className="flex flex-col items-center mb-6">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl liquid-glass-pill border border-white/40 dark:border-white/10 text-primary mb-3 shadow-lg p-2">
+                  <img src="/logo.png" alt="SAAMPARK Logo" className="w-full h-full rounded-xl object-contain" />
+                </div>
+                <h2 className="text-2xl font-extrabold tracking-tight text-foreground">
+                  SAAMPARK Group CRM
+                </h2>
+                <p className="text-xs text-muted-foreground mt-1">Sign in with your email and password</p>
+
+                {/* If a PIN-enabled saved user exists, offer 1-click switch */}
+                {savedUser?.hasPin && (
+                  <button
+                    type="button"
+                    onClick={() => setLoginMode("pin")}
+                    className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold transition-all hover:scale-103 cursor-pointer shadow-xs"
+                  >
+                    <Sparkles size={13} />
+                    <span>⚡ Quick Sign In with PIN as {savedUser.name.split(" ")[0]}</span>
+                  </button>
+                )}
+              </div>
+
+              <form onSubmit={handlePasswordSubmit} className="space-y-4 relative">
+                <AnimatePresence>
+                  {success && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-surface/95 backdrop-blur-sm rounded-2xl p-6 text-center"
+                    >
+                      <motion.div initial={{ scale: 0.8 }} animate={{ scale: 1 }} className="w-16 h-16 bg-success/20 text-success rounded-full flex items-center justify-center mb-4">
+                        <CheckCircle2 size={32} />
+                      </motion.div>
+                      <p className="text-base font-bold text-foreground">{successMessage}</p>
+                      <p className="text-xs text-muted-foreground mt-1">Entering your workspace...</p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Email or Username */}
+                <div>
+                  <label className="block text-xs font-medium mb-1">Email Address or Username *</label>
+                  <Input
+                    id="login-email"
+                    type="text"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="h-11 bg-surface"
+                    placeholder="e.g. user@saampark.in or your_username"
+                    leftIcon={<Mail size={18} />}
+                    required
+                  />
+                </div>
+
+                {/* Password */}
+                <div>
+                  <label className="block text-xs font-medium mb-1">Password *</label>
+                  <Input
+                    id="login-password"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="h-11 bg-surface"
+                    placeholder="••••••••"
+                    leftIcon={<Lock size={18} />}
+                    rightIcon={
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((v) => !v)}
+                        className="text-muted-foreground hover:text-foreground cursor-pointer flex items-center justify-center transition-colors"
+                        tabIndex={-1}
+                      >
+                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    }
+                    required
+                  />
+                  <div className="flex justify-between items-center mt-1.5 text-xs">
+                    {savedUser?.hasPin ? (
+                      <button
+                        type="button"
+                        onClick={() => setLoginMode("pin")}
+                        className="font-medium text-primary hover:underline cursor-pointer"
+                      >
+                        Use 4-digit PIN instead
+                      </button>
+                    ) : <span />}
+
+                    <button
+                      type="button"
+                      onClick={openForgotModal}
+                      className="font-medium text-primary hover:underline cursor-pointer"
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
+                </div>
+
+                {error && (
+                  <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="p-3 rounded-xl bg-danger/10 border border-danger/20 text-danger text-xs font-medium">
+                    {error}
+                  </motion.div>
+                )}
+
+                <Button
+                  type="submit"
+                  variant="primary"
+                  className="w-full h-11 text-sm font-bold shadow-md mt-2 cursor-pointer"
+                  disabled={isLoading || success}
+                >
+                  {isLoading ? (
+                    <span className="flex items-center gap-2 justify-center">
+                      <Loader2 size={16} className="animate-spin" />
+                      Authenticating...
+                    </span>
+                  ) : "Sign In →"}
+                </Button>
+              </form>
+            </motion.div>
+          )}
+
         </AnimatePresence>
       </div>
 
-      {/* ─── EMAIL VERIFICATION MODAL ──────────────────────────────────────────── */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* 3. FIRST-TIME 4-DIGIT PIN SETUP MODAL (WITH EMAIL OTP)                  */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      <AnimatePresence>
+        {isPinSetupOpen && pinSetupData && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative w-full max-w-md bg-surface border border-border rounded-3xl p-6 sm:p-8 shadow-2xl"
+            >
+              <div className="text-center mb-5">
+                <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-3 text-primary">
+                  <ShieldCheck size={32} />
+                </div>
+                <h3 className="text-xl font-extrabold text-foreground">Set Up 4-Digit Security PIN</h3>
+                <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
+                  A 6-digit verification code was sent to <strong className="text-foreground">{pinSetupData.email}</strong>. Enter it below to activate your PIN.
+                </p>
+                {pinSetupMsg && <p className="text-xs text-primary font-medium mt-1">{pinSetupMsg}</p>}
+              </div>
+
+              <form onSubmit={handleCompletePinSetup} className="space-y-4">
+                {/* Step 1: Email OTP */}
+                <div>
+                  <label className="block text-xs font-bold text-foreground mb-1 text-center">
+                    1. Enter Email Verification Code
+                  </label>
+                  <OTPInput value={pinSetupOTP} onChange={setPinSetupOTP} />
+                  <div className="flex justify-center mt-1.5">
+                    <button
+                      type="button"
+                      disabled={pinSetupCooldown > 0}
+                      onClick={async () => {
+                        if (pinSetupCooldown > 0) return
+                        try {
+                          await AuthService.sendPinOTP({ email: pinSetupData.email })
+                          setPinSetupMsg("New verification code sent!")
+                          setPinSetupCooldown(60)
+                        } catch {}
+                      }}
+                      className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 disabled:opacity-50"
+                    >
+                      <RefreshCw size={11} />
+                      {pinSetupCooldown > 0 ? `Resend OTP in ${pinSetupCooldown}s` : "Resend OTP"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Step 2: Choose 4-Digit PIN */}
+                <div className="pt-2 border-t border-border/50">
+                  <label className="block text-xs font-bold text-foreground mb-1 text-center">
+                    2. Choose Your 4-Digit PIN
+                  </label>
+                  <PINInput value={pinSetupNewPin} onChange={setPinSetupNewPin} autoFocus={false} />
+                </div>
+
+                {/* Step 3: Confirm 4-Digit PIN */}
+                <div>
+                  <label className="block text-xs font-bold text-foreground mb-1 text-center">
+                    3. Re-enter PIN to Confirm
+                  </label>
+                  <PINInput value={pinSetupConfirmPin} onChange={setPinSetupConfirmPin} autoFocus={false} />
+                </div>
+
+                {pinSetupError && (
+                  <p className="text-xs text-danger text-center font-semibold bg-danger/10 p-2 rounded-lg">
+                    {pinSetupError}
+                  </p>
+                )}
+
+                <Button
+                  type="submit"
+                  variant="primary"
+                  className="w-full h-11 font-bold shadow-md cursor-pointer mt-2"
+                  disabled={pinSetupLoading || pinSetupOTP.length < 6 || pinSetupNewPin.length < 4 || pinSetupConfirmPin.length < 4}
+                >
+                  {pinSetupLoading ? (
+                    <span className="flex items-center gap-2 justify-center">
+                      <Loader2 size={16} className="animate-spin" />
+                      Activating PIN...
+                    </span>
+                  ) : "Complete PIN Setup & Enter CRM →"}
+                </Button>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* 4. FORGOT / RESET PIN MODAL                                             */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      <AnimatePresence>
+        {isForgotPinOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative w-full max-w-md bg-surface border border-border rounded-3xl p-6 sm:p-8 shadow-2xl"
+            >
+              <button
+                onClick={() => setIsForgotPinOpen(false)}
+                className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"
+              >
+                <X size={18} />
+              </button>
+
+              <div className="text-center mb-5">
+                <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-3 text-primary">
+                  <KeyRound size={28} />
+                </div>
+                <h3 className="text-xl font-extrabold text-foreground">Reset Security PIN</h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  We sent a 6-digit verification code to <strong className="text-foreground">{forgotPinEmail}</strong>.
+                </p>
+                {forgotPinMsg && <p className="text-xs text-primary font-medium mt-1">{forgotPinMsg}</p>}
+              </div>
+
+              <form onSubmit={handleResetPin} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold mb-1 text-center">Enter 6-Digit Email Code</label>
+                  <OTPInput value={forgotPinOTP} onChange={setForgotPinOTP} />
+                  <div className="flex justify-center mt-1">
+                    <button
+                      type="button"
+                      disabled={forgotPinCooldown > 0}
+                      onClick={async () => {
+                        if (forgotPinCooldown > 0) return
+                        try {
+                          await AuthService.sendPinOTP({ email: forgotPinEmail })
+                          setForgotPinMsg("New code sent!")
+                          setForgotPinCooldown(60)
+                        } catch {}
+                      }}
+                      className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 disabled:opacity-50"
+                    >
+                      <RefreshCw size={11} />
+                      {forgotPinCooldown > 0 ? `Resend OTP in ${forgotPinCooldown}s` : "Resend OTP"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-border/50">
+                  <label className="block text-xs font-bold mb-1 text-center">New 4-Digit PIN</label>
+                  <PINInput value={forgotPinNew} onChange={setForgotPinNew} autoFocus={false} />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold mb-1 text-center">Confirm New 4-Digit PIN</label>
+                  <PINInput value={forgotPinConfirm} onChange={setForgotPinConfirm} autoFocus={false} />
+                </div>
+
+                {forgotPinError && (
+                  <p className="text-xs text-danger text-center font-semibold bg-danger/10 p-2 rounded-lg">
+                    {forgotPinError}
+                  </p>
+                )}
+
+                <div className="flex gap-2 pt-2">
+                  <Button type="button" variant="outline" className="flex-1" onClick={() => setIsForgotPinOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    className="flex-1 font-bold shadow-md"
+                    disabled={forgotPinLoading || forgotPinOTP.length < 6 || forgotPinNew.length < 4 || forgotPinConfirm.length < 4}
+                  >
+                    {forgotPinLoading ? <Loader2 size={14} className="animate-spin mx-auto" /> : "Save New PIN"}
+                  </Button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* 5. EMAIL VERIFICATION MODAL                                             */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
       <AnimatePresence>
         {verifyEmailModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
@@ -704,7 +1241,9 @@ export default function LoginPage() {
         )}
       </AnimatePresence>
 
-      {/* ─── FORGOT PASSWORD MODAL ────────────────────────────────────────────── */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* 6. FORGOT PASSWORD MODAL WITH 8-CHAR / 1-CAP / 1-SPECIAL CHECKLIST      */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
       <AnimatePresence>
         {isForgotOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
@@ -725,7 +1264,7 @@ export default function LoginPage() {
                   <p className="text-xs text-muted-foreground">
                     {forgotStep === "email" && "Enter your email to receive an OTP"}
                     {forgotStep === "otp" && "Enter the OTP from your email"}
-                    {forgotStep === "newpass" && "Set a new password"}
+                    {forgotStep === "newpass" && "Create a strong new password"}
                     {forgotStep === "done" && "All done!"}
                   </p>
                 </div>
@@ -781,7 +1320,16 @@ export default function LoginPage() {
 
                   <button
                     type="button"
-                    onClick={handleResendOTP}
+                    onClick={async () => {
+                      if (resendCooldown > 0) return
+                      setForgotLoading(true)
+                      try {
+                        await AuthService.sendForgotPasswordOTP({ email: forgotEmail.toLowerCase() })
+                        setForgotMsg("New OTP sent!")
+                        setResendCooldown(60)
+                      } catch {}
+                      setForgotLoading(false)
+                    }}
                     disabled={resendCooldown > 0 || forgotLoading}
                     className="w-full text-xs text-muted-foreground hover:text-primary flex items-center justify-center gap-1 disabled:opacity-50"
                   >
@@ -798,7 +1346,7 @@ export default function LoginPage() {
                 </form>
               )}
 
-              {/* Step 3: New Password */}
+              {/* Step 3: New Password with Strict Policy Checklist */}
               {forgotStep === "newpass" && (
                 <form onSubmit={handleResetPassword} className="space-y-4">
                   <div>
@@ -808,11 +1356,12 @@ export default function LoginPage() {
                       required
                       value={forgotNewPass}
                       onChange={(e) => setForgotNewPass(e.target.value)}
-                      placeholder="Min 6 characters"
+                      placeholder="Minimum 8 characters"
                       className="bg-background"
                       leftIcon={<Lock size={16} />}
                     />
                   </div>
+
                   <div>
                     <label className="block text-xs font-semibold mb-1.5">Confirm Password *</label>
                     <Input
@@ -820,13 +1369,49 @@ export default function LoginPage() {
                       required
                       value={forgotConfirmPass}
                       onChange={(e) => setForgotConfirmPass(e.target.value)}
-                      placeholder="Repeat new password"
+                      placeholder="Re-type new password"
                       className="bg-background"
                       leftIcon={<Lock size={16} />}
                     />
                   </div>
+
+                  {/* Password Strength Checklist */}
+                  <div className="p-3 bg-background/80 rounded-xl border border-border/60 space-y-1.5 text-[11px]">
+                    <p className="font-bold text-foreground text-[11px] mb-1">Password Requirements:</p>
+                    <div className={`flex items-center gap-1.5 ${pwdPolicy.length ? "text-emerald-500 font-semibold" : "text-muted-foreground"}`}>
+                      <Check size={12} className={pwdPolicy.length ? "stroke-[3]" : "opacity-40"} />
+                      <span>At least 8 characters long</span>
+                    </div>
+                    <div className={`flex items-center gap-1.5 ${pwdPolicy.upper ? "text-emerald-500 font-semibold" : "text-muted-foreground"}`}>
+                      <Check size={12} className={pwdPolicy.upper ? "stroke-[3]" : "opacity-40"} />
+                      <span>At least 1 uppercase letter (A-Z)</span>
+                    </div>
+                    <div className={`flex items-center gap-1.5 ${pwdPolicy.lower ? "text-emerald-500 font-semibold" : "text-muted-foreground"}`}>
+                      <Check size={12} className={pwdPolicy.lower ? "stroke-[3]" : "opacity-40"} />
+                      <span>At least 1 lowercase letter (a-z)</span>
+                    </div>
+                    <div className={`flex items-center gap-1.5 ${pwdPolicy.number ? "text-emerald-500 font-semibold" : "text-muted-foreground"}`}>
+                      <Check size={12} className={pwdPolicy.number ? "stroke-[3]" : "opacity-40"} />
+                      <span>At least 1 number (0-9)</span>
+                    </div>
+                    <div className={`flex items-center gap-1.5 ${pwdPolicy.special ? "text-emerald-500 font-semibold" : "text-muted-foreground"}`}>
+                      <Check size={12} className={pwdPolicy.special ? "stroke-[3]" : "opacity-40"} />
+                      <span>At least 1 special character (!@#$%^&* etc.)</span>
+                    </div>
+                    <div className={`flex items-center gap-1.5 ${isPwdMatch ? "text-emerald-500 font-semibold" : "text-muted-foreground"}`}>
+                      <Check size={12} className={isPwdMatch ? "stroke-[3]" : "opacity-40"} />
+                      <span>Passwords match</span>
+                    </div>
+                  </div>
+
                   {forgotError && <p className="text-xs text-danger font-medium">{forgotError}</p>}
-                  <Button type="submit" variant="primary" className="w-full h-11 font-bold" disabled={forgotLoading}>
+
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    className="w-full h-11 font-bold shadow-md"
+                    disabled={forgotLoading || !isPwdAllValid || !isPwdMatch}
+                  >
                     {forgotLoading ? <Loader2 size={14} className="animate-spin mx-auto" /> : "Set New Password →"}
                   </Button>
                 </form>

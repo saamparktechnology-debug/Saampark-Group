@@ -21,6 +21,25 @@ async function ensureUsersColumns() {
 }
 ensureUsersColumns();
 
+function validatePasswordPolicy(password) {
+  if (!password || password.length < 8) {
+    return 'Password must be at least 8 characters long.';
+  }
+  if (!/[A-Z]/.test(password)) {
+    return 'Password must contain at least one uppercase letter (A-Z).';
+  }
+  if (!/[a-z]/.test(password)) {
+    return 'Password must contain at least one lowercase letter (a-z).';
+  }
+  if (!/[0-9]/.test(password)) {
+    return 'Password must contain at least one number (0-9).';
+  }
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+    return 'Password must contain at least one special character (!@#$%^&* etc.).';
+  }
+  return null;
+}
+
 // ─── REGISTER ────────────────────────────────────────────────────────────────
 const register = async (req, res, next) => {
   try {
@@ -514,8 +533,9 @@ const resetPassword = async (req, res, next) => {
       return errorResponse(res, 401, 'Invalid reset token.');
     }
 
-    if (newPassword.length < 6) {
-      return errorResponse(res, 400, 'Password must be at least 6 characters.');
+    const pwdErr = validatePasswordPolicy(newPassword);
+    if (pwdErr) {
+      return errorResponse(res, 400, pwdErr);
     }
 
     const hashedPassword = await hashPassword(newPassword);
@@ -689,7 +709,7 @@ const loginWithPin = async (req, res, next) => {
 // ─── SETUP 4-DIGIT PIN ───────────────────────────────────────────────────────
 const setupPin = async (req, res, next) => {
   try {
-    const { email, pin } = req.body;
+    const { email, pin, otp } = req.body;
     const targetEmail = (email || req.user?.email || '').toLowerCase().trim();
     if (!targetEmail || !pin) {
       return errorResponse(res, 400, 'User email and 4-digit PIN are required.');
@@ -697,6 +717,15 @@ const setupPin = async (req, res, next) => {
     const cleanPin = String(pin).trim();
     if (!/^\d{4}$/.test(cleanPin)) {
       return errorResponse(res, 400, 'PIN must be exactly 4 numeric digits.');
+    }
+
+    // Verify OTP if provided
+    if (otp) {
+      const { verifyOTP } = require('../utils/emailService');
+      const otpRes = verifyOTP(targetEmail, String(otp).trim());
+      if (!otpRes || !otpRes.valid) {
+        return errorResponse(res, 400, otpRes?.error || 'Invalid or expired verification code. Please request a new code.');
+      }
     }
 
     const pinHash = await hashPassword(cleanPin);
@@ -766,9 +795,9 @@ const resetPinWithOTP = async (req, res, next) => {
     }
 
     const { verifyOTP } = require('../utils/emailService');
-    const isValid = verifyOTP(targetEmail, String(otp).trim(), 'pin_reset');
-    if (!isValid) {
-      return errorResponse(res, 400, 'Invalid or expired verification code. Please request a new code.');
+    const otpRes = verifyOTP(targetEmail, String(otp).trim());
+    if (!otpRes || !otpRes.valid) {
+      return errorResponse(res, 400, otpRes?.error || 'Invalid or expired verification code. Please request a new code.');
     }
 
     const pinHash = await hashPassword(cleanPin);
@@ -783,6 +812,23 @@ const resetPinWithOTP = async (req, res, next) => {
       const [appDataRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "users"');
       if (appDataRows.length > 0) {
         let list = JSON.parse(appDataRows[0].data_json);
+        if (Array.isArray(list)) {
+          const idx = list.findIndex(u => u.email && u.email.toLowerCase().trim() === targetEmail);
+          if (idx >= 0) {
+            list[idx].pin_hash = pinHash;
+            list[idx].pin_setup_completed = true;
+            list[idx].hasPin = true;
+            await pool.execute('UPDATE app_data SET data_json = ?, updated_at = NOW() WHERE module_key = "users"', [JSON.stringify(list)]);
+          }
+        }
+      }
+    } catch {}
+
+    return successResponse(res, 200, '4-Digit Security PIN successfully updated!');
+  } catch (error) {
+    next(error);
+  }
+};
         if (Array.isArray(list)) {
           const idx = list.findIndex(u => u.email && u.email.toLowerCase().trim() === targetEmail);
           if (idx >= 0) {

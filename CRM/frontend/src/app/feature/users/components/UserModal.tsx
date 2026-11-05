@@ -463,14 +463,23 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
     }
   }
 
-  // Generate random strong password
+  // Generate strong password (guaranteed 10 chars: at least 1 uppercase, 1 lowercase, 1 number, 1 special character)
   const generatePassword = () => {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%&*"
+    const uppers = "ABCDEFGHJKLMNPQRSTUVWXYZ"
+    const lowers = "abcdefghijkmnopqrstuvwxyz"
+    const numbers = "23456789"
+    const specials = "!@#$%&*?"
+    const all = uppers + lowers + numbers + specials
     let res = ""
-    for (let i = 0; i < 10; i++) {
-      res += chars.charAt(Math.floor(Math.random() * chars.length))
+    res += uppers[Math.floor(Math.random() * uppers.length)]
+    res += lowers[Math.floor(Math.random() * lowers.length)]
+    res += numbers[Math.floor(Math.random() * numbers.length)]
+    res += specials[Math.floor(Math.random() * specials.length)]
+    for (let i = 0; i < 6; i++) {
+      res += all[Math.floor(Math.random() * all.length)]
     }
-    setPassword(res)
+    const shuffled = res.split("").sort(() => 0.5 - Math.random()).join("")
+    setPassword(shuffled)
   }
 
   // Save handler

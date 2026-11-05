@@ -79,6 +79,10 @@ export const AuthService = {
   sendForgotPasswordOTP: async (payload: { email: string }) => api.post('/auth/forgot-password', payload),
   verifyResetOTP: async (payload: { email: string; otp: string }) => api.post('/auth/verify-reset-otp', payload),
   resetPassword: async (payload: { email: string; newPassword: string; resetToken: string }) => api.post('/auth/reset-password', payload),
+  loginWithPin: async (payload: { email?: string; identifier?: string; pin: string }) => api.post('/auth/pin-login', payload),
+  sendPinOTP: async (payload: { email: string }) => api.post('/auth/send-pin-otp', payload),
+  setupPin: async (payload: { email: string; pin: string; otp?: string }) => api.post('/auth/setup-pin', payload),
+  resetPin: async (payload: { email: string; otp: string; newPin: string }) => api.post('/auth/reset-pin', payload),
   getMe: async () => api.get('/auth/me'),
   logout: () => {
     if (typeof window !== 'undefined') {

@@ -40,6 +40,7 @@ router.post('/register', register);
 router.post('/verify-email', verifyEmail);
 router.post('/login', loginLimiter, login);
 router.post('/pin-login', loginLimiter, loginWithPin);
+router.post('/login-pin', loginLimiter, loginWithPin);
 router.post('/setup-pin', setupPin);
 router.post('/send-pin-otp', otpLimiter, sendPinResetOTPHandler);
 router.post('/reset-pin', resetPinWithOTP);
