@@ -1259,14 +1259,6 @@ export const useAuthStore = create<AuthState>()(
         console.warn('Branch deletion is permanently disabled. Branches cannot be deleted once created.')
         return false
       },
-        await saveModuleDataToDB('sub_branches', updatedSub, 'all').catch(() => {})
-
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new Event('storage'))
-          window.dispatchEvent(new CustomEvent('saampark_data_synced'))
-        }
-        return true
-      },
 
       addSubBranch: async (subBranchData: Partial<SubBranch>) => {
         const { subBranches, branches, activeCompanyId } = get()
