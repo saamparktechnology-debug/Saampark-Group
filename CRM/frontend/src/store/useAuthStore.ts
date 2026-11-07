@@ -314,6 +314,20 @@ export function getCompanyLogoUrl(company?: Partial<Company> | null): string | n
 export function getCompanyFullName(company?: Partial<Company> | null): string {
   if (!company) return "SAAMPARK GROUP"
   
+  const canon = getCanonicalCompanyId(company.slug || company.id || (company as any)?.numeric_id || company.name)
+  if (canon === "tech" || canon === "1") {
+    if (company.name && company.name.toUpperCase().includes("PRIVATE LIMITED")) {
+      return company.name.trim()
+    }
+    return "SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED"
+  }
+  if (canon === "consultancy" || canon === "2") {
+    if (company.name && company.name.toUpperCase().includes("PRIVATE LIMITED")) {
+      return company.name.trim()
+    }
+    return "SAAMPARK CONSULTANCY SERVICES PRIVATE LIMITED"
+  }
+
   // If company explicitly has a customized/full registered name, respect it
   const explicitName = (company.name || "").trim()
   if (explicitName && explicitName.toLowerCase() !== "saampark" && explicitName.toLowerCase() !== "saampark group") {
@@ -579,8 +593,8 @@ export const DEFAULT_COMPANIES: Company[] = [
     id: 'tech', 
     numeric_id: 1,
     brand_name: 'SAAMPARK',
-    division_name: 'TECHNOLOGY & RESEARCH',
-    name: 'SAAMPARK TECHNOLOGY & RESEARCH', 
+    division_name: 'TECHNOLOGY AND RESEARCH',
+    name: 'SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED', 
     subtitle: '',
     logo: '💻', 
     logo_url: '/saampark-logo.png',
@@ -620,8 +634,8 @@ export const DEFAULT_COMPANIES: Company[] = [
     id: 'consultancy', 
     numeric_id: 2,
     brand_name: 'SAAMPARK',
-    division_name: 'CONSULTANCY SERVICE',
-    name: 'SAAMPARK CONSULTANCY SERVICE', 
+    division_name: 'CONSULTANCY SERVICES',
+    name: 'SAAMPARK CONSULTANCY SERVICES PRIVATE LIMITED', 
     subtitle: '',
     logo: '💼', 
     logo_url: '', 
