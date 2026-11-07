@@ -106,8 +106,12 @@ const branchController = {
   },
 
   async delete(req, res) {
-    // Branches are permanent organizational records and cannot be deleted once created
-    return errorResponse(res, 403, 'Branches cannot be deleted once created. They can only be edited or updated.');
+    try {
+      await branchModel.delete(req.params.id);
+      return successResponse(res, 200, 'Branch deleted successfully');
+    } catch (err) {
+      return errorResponse(res, 500, err.message);
+    }
   },
 
   async getStats(req, res) {
@@ -309,8 +313,12 @@ const subBranchController = {
   },
 
   async delete(req, res) {
-    // Sub-branches are permanent partner units and cannot be deleted once created
-    return errorResponse(res, 403, 'Sub-branches cannot be deleted once created. They can only be edited or updated.');
+    try {
+      await subBranchModel.delete(req.params.id);
+      return successResponse(res, 200, 'Sub-branch deleted successfully');
+    } catch (err) {
+      return errorResponse(res, 500, err.message);
+    }
   }
 };
 

@@ -1358,10 +1358,6 @@ export default function CompaniesMain() {
       alert("Company deletion is disabled. The CRM operates strictly with SAAMPARK Technology and Saampark Consultancy.")
       return
     }
-    if (type === "branch" || type === "sub_branch") {
-      alert("Branches and Sub-branches cannot be deleted once created. They can only be edited or updated.")
-      return
-    }
     if (!isSuperAdmin) {
       alert("Permission denied: Only Super Admin can delete records.")
       return
@@ -1609,6 +1605,9 @@ export default function CompaniesMain() {
                                   <Button variant="ghost" size="sm" onClick={() => { openEditBranch(branch); setBranchModalViewMode("preview") }} title="Live Preview Branch Invoice" className="text-xs h-7 gap-1 text-blue-600 font-semibold"><Eye className="h-3.5 w-3.5" />Preview</Button>
                                   <Button variant="ghost" size="sm" onClick={() => openAddSubBranch(branch.id, branch.company_id)} title="Add Sub-Branch" className="text-xs h-7 gap-1"><Plus className="h-3 w-3" />Sub-Branch</Button>
                                   <Button variant="ghost" size="sm" onClick={() => openEditBranch(branch)} title="Edit Branch" className="h-7 w-7 p-0"><Edit2 className="h-3 w-3" /></Button>
+                                  {isSuperAdmin && (
+                                    <Button variant="ghost" size="sm" onClick={() => confirmDelete("branch", branch.id)} title="Delete Branch" className="h-7 w-7 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40"><Trash2 className="h-3 w-3" /></Button>
+                                  )}
                                 </div>
                               </div>
 
@@ -1640,6 +1639,9 @@ export default function CompaniesMain() {
                                         <div className="flex items-center gap-1">
                                           <Button variant="ghost" size="sm" onClick={() => { openEditSubBranch(sb); setSubBranchModalViewMode("preview") }} title="Live Preview Sub-Branch Invoice" className="text-xs h-7 gap-1 text-emerald-600 font-semibold"><Eye className="h-3.5 w-3.5" />Preview</Button>
                                           <Button variant="ghost" size="sm" onClick={() => openEditSubBranch(sb)} title="Edit Sub-Branch" className="h-7 w-7 p-0"><Edit2 className="h-3 w-3" /></Button>
+                                          {isSuperAdmin && (
+                                            <Button variant="ghost" size="sm" onClick={() => confirmDelete("sub_branch", sb.id)} title="Delete Sub-Branch" className="h-7 w-7 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40"><Trash2 className="h-3 w-3" /></Button>
+                                          )}
                                         </div>
                                       </div>
                                     ))

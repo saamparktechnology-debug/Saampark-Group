@@ -2,22 +2,88 @@ const pool = require('../config/db');
 const { successResponse, errorResponse } = require('../utils/apiResponse');
 
 // Ensure required columns exist in companies table (auto-migrate if missing)
+let cachedCompanyColumns = null;
+
+async function getExistingCompanyColumns() {
+  if (cachedCompanyColumns) return cachedCompanyColumns;
+  try {
+    const [cols] = await pool.execute('SHOW COLUMNS FROM companies');
+    if (cols && cols.length > 0) {
+      cachedCompanyColumns = cols.map(c => c.Field);
+      return cachedCompanyColumns;
+    }
+  } catch (e) {}
+  return [];
+}
+
 async function ensureCompanyColumns() {
   try {
-    await pool.execute('ALTER TABLE companies MODIFY COLUMN address TEXT NULL').catch(() => {});
-    await pool.execute('ALTER TABLE companies MODIFY COLUMN logo_url LONGTEXT NULL').catch(() => {});
-    await pool.execute('ALTER TABLE companies MODIFY COLUMN signature_image_url LONGTEXT NULL').catch(() => {});
-    await pool.execute('ALTER TABLE companies MODIFY COLUMN stamp_image_url LONGTEXT NULL').catch(() => {});
-    await pool.execute('ALTER TABLE companies MODIFY COLUMN payment_qr_url LONGTEXT NULL').catch(() => {});
-    await pool.execute('ALTER TABLE companies MODIFY COLUMN gst_payment_qr_url LONGTEXT NULL').catch(() => {});
-    await pool.execute('ALTER TABLE companies MODIFY COLUMN nongst_payment_qr_url LONGTEXT NULL').catch(() => {});
-    await pool.execute('ALTER TABLE companies ADD COLUMN bottom_footer_text TEXT NULL').catch(() => {});
-    await pool.execute('ALTER TABLE companies ADD COLUMN quotation_notes TEXT NULL').catch(() => {});
-    await pool.execute('ALTER TABLE companies ADD COLUMN footer_text TEXT NULL').catch(() => {});
-    await pool.execute('ALTER TABLE companies ADD COLUMN terms_conditions LONGTEXT NULL').catch(() => {});
-    await pool.execute('ALTER TABLE companies ADD COLUMN invoice_notes LONGTEXT NULL').catch(() => {});
-    await pool.execute('ALTER TABLE companies ADD COLUMN gst_payment_qr_url LONGTEXT NULL').catch(() => {});
-    await pool.execute('ALTER TABLE companies ADD COLUMN nongst_payment_qr_url LONGTEXT NULL').catch(() => {});
+    const colsToEnsure = [
+      'brand_name VARCHAR(191) NULL',
+      'division_name VARCHAR(191) NULL',
+      'subtitle VARCHAR(191) NULL',
+      'trademark_symbol VARCHAR(32) NULL',
+      'iso_certification VARCHAR(191) NULL',
+      'gstin VARCHAR(64) NULL',
+      'pan VARCHAR(64) NULL',
+      'cin VARCHAR(64) NULL',
+      'msme_reg VARCHAR(64) NULL',
+      'website VARCHAR(191) NULL',
+      'signatory_name VARCHAR(191) NULL',
+      'signatory_designation VARCHAR(191) NULL',
+      'upi_id VARCHAR(191) NULL',
+      'account_holder VARCHAR(191) NULL',
+      'bank_name VARCHAR(191) NULL',
+      'account_number VARCHAR(191) NULL',
+      'ifsc_code VARCHAR(64) NULL',
+      'bank_branch VARCHAR(191) NULL',
+      'gst_bank_name VARCHAR(191) NULL',
+      'gst_account_holder VARCHAR(191) NULL',
+      'gst_account_number VARCHAR(191) NULL',
+      'gst_ifsc_code VARCHAR(64) NULL',
+      'gst_bank_branch VARCHAR(191) NULL',
+      'gst_upi_id VARCHAR(191) NULL',
+      'nongst_bank_name VARCHAR(191) NULL',
+      'nongst_account_holder VARCHAR(191) NULL',
+      'nongst_account_number VARCHAR(191) NULL',
+      'nongst_ifsc_code VARCHAR(64) NULL',
+      'nongst_bank_branch VARCHAR(191) NULL',
+      'nongst_upi_id VARCHAR(191) NULL',
+      'signature_position JSON NULL',
+      'stamp_position JSON NULL',
+      'logo_position JSON NULL',
+      'logo_scale DECIMAL(5,2) NULL',
+      'stamp_scale DECIMAL(5,2) NULL',
+      'signature_scale DECIMAL(5,2) NULL',
+      'custom_stamps JSON NULL',
+      'zoom INT NULL',
+      'preview_scale VARCHAR(32) NULL',
+      'preview_invoice_type VARCHAR(32) NULL',
+      'invoice_customization JSON NULL',
+      'bottom_footer_text TEXT NULL',
+      'quotation_notes TEXT NULL',
+      'footer_text TEXT NULL',
+      'terms_conditions LONGTEXT NULL',
+      'invoice_notes LONGTEXT NULL',
+      'gst_payment_qr_url LONGTEXT NULL',
+      'nongst_payment_qr_url LONGTEXT NULL',
+      'address TEXT NULL',
+      'logo_url LONGTEXT NULL',
+      'signature_image_url LONGTEXT NULL',
+      'stamp_image_url LONGTEXT NULL',
+      'payment_qr_url LONGTEXT NULL'
+    ];
+
+    for (const def of colsToEnsure) {
+      const colName = def.split(' ')[0];
+      await pool.execute(`ALTER TABLE companies ADD COLUMN ${def}`).catch(async () => {
+        // If column already exists, try modifying it to allow sufficient length
+        if (def.includes('TEXT') || def.includes('JSON')) {
+          await pool.execute(`ALTER TABLE companies MODIFY COLUMN ${def}`).catch(() => {});
+        }
+      });
+    }
+    cachedCompanyColumns = null;
   } catch {}
 }
 ensureCompanyColumns();
@@ -134,6 +200,7 @@ const updateCompany = async (req, res, next) => {
     const userRoleId = Number(req.user?.role_id);
     const userRole = String(req.user?.role || req.user?.role_name || '').toLowerCase().trim();
     const isSuper = userRoleId === 1 || userRole === 'super admin' || userRole === 'superadmin';
+    const targetParam = String(req.params.id).toLowerCase().trim();
 
     const isNumericParam = Number.isFinite(Number(req.params.id));
     let [targetRows] = await pool.execute(
@@ -144,7 +211,6 @@ const updateCompany = async (req, res, next) => {
     );
 
     if (!targetRows.length) {
-      const targetParam = String(req.params.id).toLowerCase().trim();
       const insertSlug = (targetParam === '2' || targetParam === 'consultancy') ? 'consultancy' : targetParam;
       const insertName = req.body.name || req.body.brand_name || (insertSlug === 'consultancy' ? 'SAAMPARK CONSULTANCY SERVICE' : 'SAAMPARK');
       const insertId = isNumericParam ? Number(req.params.id) : (insertSlug === 'consultancy' ? 2 : null);
@@ -186,7 +252,6 @@ const updateCompany = async (req, res, next) => {
       } catch (e) {}
 
       const allAllowed = Array.from(new Set([assignedComp, ...assignedComps].filter(Boolean))).map(s => String(s).toLowerCase().trim());
-      const targetParam = String(req.params.id).toLowerCase().trim();
 
       const canUpdate = allAllowed.some(a => a === targetParam || a === targetIdStr || (oldSlug && a === oldSlug));
       if (!canUpdate) {
@@ -225,11 +290,16 @@ const updateCompany = async (req, res, next) => {
       req.body.logo_url = req.body.logo;
     }
 
+    const existingCols = await getExistingCompanyColumns();
     const fields = [];
     const values = [];
 
     for (const field of allowedFields) {
       if (req.body[field] !== undefined) {
+        if (existingCols.length > 0 && !existingCols.includes(field)) {
+          // Column not in MySQL table, skip to avoid SQL error
+          continue;
+        }
         fields.push(`${field} = ?`);
         let val = req.body[field];
         if (typeof val === 'object' && val !== null) {
@@ -257,6 +327,7 @@ const updateCompany = async (req, res, next) => {
         const insertVals = [req.body.name || req.params.id, compSlug];
         for (const field of allowedFields) {
           if (field !== 'name' && field !== 'slug' && req.body[field] !== undefined) {
+            if (existingCols.length > 0 && !existingCols.includes(field)) continue;
             insertCols.push(field);
             insertPlaceholders.push('?');
             let val = req.body[field];
@@ -275,6 +346,34 @@ const updateCompany = async (req, res, next) => {
         ).catch(e => console.warn('Company insert fallback notice:', e.message));
       }
     }
+
+    // Always sync updated company into app_data JSON store for bulletproof persistence
+    try {
+      const [appRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "companies"').catch(() => [[]]);
+      let cList = [];
+      if (appRows && appRows.length > 0 && appRows[0].data_json) {
+        try { cList = JSON.parse(appRows[0].data_json); } catch {}
+      }
+      if (!Array.isArray(cList)) cList = [];
+      const updatedCompanyObj = {
+        ...req.body,
+        id: numericId === 2 ? 'consultancy' : (numericId === 1 ? 'tech' : (newSlug || String(numericId))),
+        numeric_id: numericId,
+        slug: newSlug,
+      };
+      const filteredComps = cList.filter(c => {
+        const cId = String(c.id || '').toLowerCase();
+        const cSlug = String(c.slug || '').toLowerCase();
+        const cNum = String(c.numeric_id || '');
+        return cId !== String(numericId) && cId !== newSlug && cSlug !== newSlug && cNum !== String(numericId);
+      });
+      filteredComps.push(updatedCompanyObj);
+      await pool.execute(
+        `INSERT INTO app_data (module_key, data_json) VALUES ('companies', ?)
+         ON DUPLICATE KEY UPDATE data_json = VALUES(data_json), updated_at = NOW()`,
+        [JSON.stringify(filteredComps)]
+      ).catch(() => {});
+    } catch (e) {}
 
     // When a super admin renames a slug, propagate changes to references (users, branches, sub-branches)
     if (isSlugRenamed && oldSlug) {

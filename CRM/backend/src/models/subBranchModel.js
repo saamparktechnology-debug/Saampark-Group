@@ -345,13 +345,13 @@ const subBranchModel = {
       fields.push('updated_at = NOW()');
       const isNum = !isNaN(Number(id)) && Number(id) > 0;
       if (isNum) {
-        values.push(Number(id));
-        await pool.execute(`UPDATE sub_branches SET ${fields.join(', ')} WHERE id = ?`, values).catch(err => {
+        values.push(Number(id), String(id));
+        await pool.execute(`UPDATE sub_branches SET ${fields.join(', ')} WHERE id = ? OR code = ?`, values).catch(err => {
           console.warn('MySQL sub_branch update warning:', err.message);
         });
       } else {
-        values.push(String(id));
-        await pool.execute(`UPDATE sub_branches SET ${fields.join(', ')} WHERE code = ?`, values).catch(err => {
+        values.push(String(id), String(id));
+        await pool.execute(`UPDATE sub_branches SET ${fields.join(', ')} WHERE id = ? OR code = ?`, values).catch(err => {
           console.warn('MySQL sub_branch update warning:', err.message);
         });
       }
@@ -371,7 +371,18 @@ const subBranchModel = {
   },
 
   async delete(id) {
-    await pool.execute('DELETE FROM sub_branches WHERE id = ? OR code = ?', [id, id]).catch(() => {});
+    const strId = String(id);
+    await pool.execute('DELETE FROM sub_branches WHERE id = ? OR code = ?', [strId, strId]).catch(() => {});
+    try {
+      const [appRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "sub_branches"');
+      if (appRows && appRows.length > 0) {
+        let list = JSON.parse(appRows[0].data_json);
+        if (Array.isArray(list)) {
+          const filtered = list.filter(sb => String(sb.id) !== strId && String(sb.code) !== strId);
+          await pool.execute('UPDATE app_data SET data_json = ?, updated_at = NOW() WHERE module_key = "sub_branches"', [JSON.stringify(filtered)]);
+        }
+      }
+    } catch {}
     return true;
   }
 };

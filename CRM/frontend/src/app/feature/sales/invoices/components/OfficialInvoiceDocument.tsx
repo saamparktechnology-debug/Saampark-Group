@@ -417,10 +417,13 @@ export function OfficialInvoiceDocument({
   // Split Corporate Brand & Division for Top Header Typography
   // Top line: SAAMPARK (with optional TM/R badge)
   // Second line: Header Line 2 (division_name) - strictly what user typed, no forced suffixes
-  let headerBrandName = (resolvedBrandName || "SAAMPARK").trim().toUpperCase()
-  let headerSecondaryLine = (resolvedDivisionName !== undefined
-    ? resolvedDivisionName
-    : (activeCompany?.division_name || "")).trim().toUpperCase()
+  // Space is preserved as a letter/character exactly as typed by the user
+  let headerBrandName = (resolvedBrandName !== undefined && resolvedBrandName !== null && resolvedBrandName !== ""
+    ? String(resolvedBrandName)
+    : "SAAMPARK").toUpperCase()
+  let headerSecondaryLine = (resolvedDivisionName !== undefined && resolvedDivisionName !== null
+    ? String(resolvedDivisionName)
+    : (activeCompany?.division_name || "")).toUpperCase()
 
   // Helper to validate non-empty string fields (strictly ignores empty, null, and placeholder text)
   const isValidField = (val?: string | null): boolean => {
@@ -926,8 +929,8 @@ export function OfficialInvoiceDocument({
         {/* Top-Left Logo Card: PERMANENTLY FIXED (No move, no drag, no scale increase/decrease) */}
         {resolvedLogoUrl ? (
           <div 
-            className="relative w-24 h-24 rounded-2xl overflow-hidden shadow-2xs shrink-0 border border-zinc-200 bg-white flex items-center justify-center p-1.5 print:w-24 print:h-24 print:shrink-0 select-none"
-            style={{ width: '96px', height: '96px', minWidth: '96px', minHeight: '96px', flexShrink: 0 }}
+            className="relative w-28 h-28 sm:w-[120px] sm:h-[120px] rounded-2xl overflow-hidden shadow-2xs shrink-0 border border-zinc-200 bg-white flex items-center justify-center p-1.5 print:w-[115px] print:h-[115px] print:shrink-0 select-none"
+            style={{ width: '120px', height: '120px', minWidth: '120px', minHeight: '120px', flexShrink: 0 }}
           >
             <img 
               src={resolvedLogoUrl} 
@@ -938,8 +941,8 @@ export function OfficialInvoiceDocument({
           </div>
         ) : (
           <div 
-            className="relative w-24 h-24 rounded-2xl overflow-hidden shadow-md shrink-0 border border-teal-900/30 bg-gradient-to-b from-[#004e59] via-[#005c68] to-[#003840] flex flex-col items-center justify-center p-2 text-white text-center print:w-24 print:h-24 print:shrink-0 select-none"
-            style={{ width: '96px', height: '96px', minWidth: '96px', minHeight: '96px', flexShrink: 0 }}
+            className="relative w-28 h-28 sm:w-[120px] sm:h-[120px] rounded-2xl overflow-hidden shadow-md shrink-0 border border-teal-900/30 bg-gradient-to-b from-[#004e59] via-[#005c68] to-[#003840] flex flex-col items-center justify-center p-2 text-white text-center print:w-[115px] print:h-[115px] print:shrink-0 select-none"
+            style={{ width: '120px', height: '120px', minWidth: '120px', minHeight: '120px', flexShrink: 0 }}
           >
             <Sparkles className="w-5 h-5 mb-1 text-teal-200 drop-shadow-sm" />
             <div className="font-black text-[11px] tracking-wider uppercase leading-tight font-sans">

@@ -62,15 +62,13 @@ export const BranchApiService = {
     const headers: Record<string, string> = {
       'x-company-id': (companyId && companyId !== 'all') ? companyId : 'all'
     }
-    const res = await fetchWithAuth('/branches', { headers })
+    const res = await api.get('/branches', { headers })
     return unpackArray(res)
   },
   create: async (companyId: string, data: any) => {
     const numComp = companyId === 'consultancy' || companyId === 'digital' || companyId === 'print' ? '2' : (companyId === 'tech' ? '1' : companyId);
-    const res = await fetchWithAuth('/branches', {
-      method: 'POST',
-      headers: { 'x-company-id': numComp },
-      body: JSON.stringify({ ...data, company_id: numComp }),
+    const res = await api.post('/branches', { ...data, company_id: numComp }, {
+      headers: { 'x-company-id': numComp }
     })
     return unpack(res)
   },
@@ -84,15 +82,13 @@ export const SubBranchApiService = {
     const headers: Record<string, string> = {
       'x-company-id': (companyId && companyId !== 'all') ? companyId : 'all'
     }
-    const res = await fetchWithAuth(`/branches/sub-branches/all${query}`, { headers })
+    const res = await api.get(`/branches/sub-branches/all${query}`, { headers })
     return unpackArray(res)
   },
   create: async (companyId: string, data: any) => {
     const numComp = companyId === 'consultancy' || companyId === 'digital' || companyId === 'print' ? '2' : (companyId === 'tech' ? '1' : companyId);
-    const res = await fetchWithAuth('/branches/sub-branches', {
-      method: 'POST',
-      headers: { 'x-company-id': numComp },
-      body: JSON.stringify({ ...data, company_id: numComp }),
+    const res = await api.post('/branches/sub-branches', { ...data, company_id: numComp }, {
+      headers: { 'x-company-id': numComp }
     })
     return unpack(res)
   },

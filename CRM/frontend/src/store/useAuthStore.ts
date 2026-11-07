@@ -1242,6 +1242,9 @@ export const useAuthStore = create<AuthState>()(
           ...updates,
           ...(updates.code ? { code: updates.code.trim().toUpperCase() } : {}),
         }
+        try {
+          await api.put(`/branches/${encodeURIComponent(branchId)}`, sanitizedUpdates).catch(() => {})
+        } catch {}
         const updated = (branches || []).filter(Boolean).map(b => b.id === branchId ? { ...b, ...sanitizedUpdates } : b)
         set({ branches: updated })
         await saveModuleDataToDB('branches', updated, 'all').catch(() => {})
@@ -1359,6 +1362,9 @@ export const useAuthStore = create<AuthState>()(
 
       updateSubBranch: async (subBranchId: string, updates: Partial<SubBranch>) => {
         const { subBranches } = get()
+        try {
+          await api.put(`/branches/sub-branches/${encodeURIComponent(subBranchId)}`, updates).catch(() => {})
+        } catch {}
         const updated = (subBranches || []).map(sb => sb.id === subBranchId ? { ...sb, ...updates } : sb)
         set({ subBranches: updated })
         await saveModuleDataToDB('sub_branches', updated, 'all').catch(() => {})
