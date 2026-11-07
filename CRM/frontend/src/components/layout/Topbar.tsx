@@ -15,14 +15,6 @@ import { useUIStore } from "@/store/useUIStore"
 import { useAuthStore, COMPANIES, getCompanyLogoUrl, getCompanyFullName, isMatchingCompany, getUserEntityScope } from "@/store/useAuthStore"
 import { usePermissionStore } from "@/store/usePermissionStore"
 
-// Quick-Add Dropdown options with module keys (only active functional modals)
-const QUICK_ADD_OPTIONS = [
-  { label: "New Client", modal: "isAddClientModalOpen", module: "Clients" },
-  { label: "New Task", modal: "isAddTaskModalOpen", module: "Tasks" },
-  { label: "New Lead", modal: "isAddLeadModalOpen", module: "Leads" },
-  { label: "New Ticket", modal: "isAddTicketModalOpen", module: "Tickets" },
-] as const
-
 export function Topbar() {
   const { theme, setTheme } = useTheme()
   const { isSidebarCollapsed, toggleSidebar, openModal } = useUIStore()
@@ -42,15 +34,12 @@ export function Topbar() {
     fetchBranches,
     fetchSubBranches 
   } = useAuthStore()
-  const { canPerformAction } = usePermissionStore()
 
   const [showProfileMenu, setShowProfileMenu] = React.useState(false)
-  const [showQuickAdd, setShowQuickAdd] = React.useState(false)
   const [showNotifications, setShowNotifications] = React.useState(false)
   const [showCompanyMenu, setShowCompanyMenu] = React.useState(false)
   const [showBranchMenu, setShowBranchMenu] = React.useState(false)
   const [showSubBranchMenu, setShowSubBranchMenu] = React.useState(false)
-  const [isSearchOpen, setIsSearchOpen] = React.useState(false)
   const [notifications, setNotifications] = React.useState<any[]>([])
 
   // DOM element refs for robust outside-click detection
@@ -58,15 +47,7 @@ export function Topbar() {
   const branchMenuRef = React.useRef<HTMLDivElement>(null)
   const subBranchMenuRef = React.useRef<HTMLDivElement>(null)
   const profileMenuRef = React.useRef<HTMLDivElement>(null)
-  const quickAddRef = React.useRef<HTMLDivElement>(null)
   const notifRef = React.useRef<HTMLDivElement>(null)
-  const searchContainerRef = React.useRef<HTMLDivElement>(null)
-
-  const visibleQuickAddOptions = React.useMemo(() => {
-    if (!user) return []
-    if (user.role === "Super Admin") return QUICK_ADD_OPTIONS
-    return QUICK_ADD_OPTIONS.filter((opt) => canPerformAction(user, opt.module, "add"))
-  }, [user, canPerformAction])
 
   React.useEffect(() => {
     const handleSync = () => {
@@ -228,10 +209,12 @@ export function Topbar() {
     }
   }, [user])
 
-  // Robust outside click handling using ref containment
+  // Robust outside click and touch handling using ref containment
   React.useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
       const target = event.target as Node
+      if (!target) return
+
       if (companyMenuRef.current && !companyMenuRef.current.contains(target)) {
         setShowCompanyMenu(false)
       }
@@ -244,18 +227,16 @@ export function Topbar() {
       if (profileMenuRef.current && !profileMenuRef.current.contains(target)) {
         setShowProfileMenu(false)
       }
-      if (quickAddRef.current && !quickAddRef.current.contains(target)) {
-        setShowQuickAdd(false)
-      }
       if (notifRef.current && !notifRef.current.contains(target)) {
         setShowNotifications(false)
       }
-      if (searchContainerRef.current && !searchContainerRef.current.contains(target)) {
-        setIsSearchOpen(false)
-      }
     }
     document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
+    document.addEventListener("touchstart", handleClickOutside)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+      document.removeEventListener("touchstart", handleClickOutside)
+    }
   }, [])
 
   const stop = (e: React.MouseEvent) => e.stopPropagation()
@@ -334,304 +315,175 @@ export function Topbar() {
   }, [allowedSubBranches, activeBranchId, activeCompanyId])
 
   return (
-    <header
-      style={{ left: isMobile ? 0 : (isSidebarCollapsed ? 64 : 256) }}
-      className="fixed top-0 right-0 h-16 glass-panel border-b border-border/50 flex items-center justify-between px-3 sm:px-6 z-30 transition-[left] duration-300 ease-in-out bg-surface/90 backdrop-blur-md"
-    >
-      {/* ── LEFT: Hamburger + Current Company View & Workspace Switcher ── */}
-      <div className="flex items-center gap-3">
-        <Button
-          variant="ghost" size="icon"
-          onClick={(e) => { stop(e); toggleSidebar() }}
-          className="text-slate-500 hover:text-slate-900 dark:hover:text-white shrink-0"
-          title="Toggle Sidebar"
-        >
-          <Menu size={20} />
-        </Button>
+    <>
+      {/* Mobile Dimmed Backdrop Overlay */}
+      {(showCompanyMenu || showBranchMenu || showSubBranchMenu || showNotifications || showProfileMenu) && (
+        <div
+          className="fixed inset-0 bg-black/40 backdrop-blur-xs z-[9990] sm:hidden"
+          onClick={() => {
+            setShowCompanyMenu(false)
+            setShowBranchMenu(false)
+            setShowSubBranchMenu(false)
+            setShowNotifications(false)
+            setShowProfileMenu(false)
+          }}
+        />
+      )}
 
-        {/* Hierarchical Entity Selectors in Top Navbar: Company Tab, Branch Tab, Sub-Branch Tab */}
-        <div className="flex items-center gap-1.5 sm:gap-2 max-w-[calc(100vw-280px)] overflow-x-auto scrollbar-hide py-1">
-          {/* 1. Company Tab */}
-          <div className="relative" ref={companyMenuRef}>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                setShowCompanyMenu(prev => !prev)
-                setShowBranchMenu(false)
-                setShowSubBranchMenu(false)
-                setShowQuickAdd(false)
-                setShowNotifications(false)
-                setShowProfileMenu(false)
-              }}
-              className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 hover:bg-slate-50 dark:hover:bg-zinc-800/80 shadow-xs text-xs text-slate-900 dark:text-white transition-all group cursor-pointer max-w-[260px] sm:max-w-[420px]"
-              title={`Active Company: ${activeCompanyName}`}
-            >
-              {isAllCompanies ? (
-                <div className="w-6 h-6 rounded-md bg-blue-600/20 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/30">
-                  <Building2 size={13} />
-                </div>
-              ) : activeCompanyLogo ? (
-                <img
-                  src={activeCompanyLogo}
-                  alt={activeCompanyName}
-                  className="w-6 h-6 rounded-md object-contain shrink-0 bg-white dark:bg-zinc-900 p-0.5 border border-slate-200 dark:border-zinc-700"
-                />
-              ) : (
-                <div className="w-6 h-6 rounded-md bg-blue-600/20 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/30">
-                  <Building2 size={13} />
-                </div>
-              )}
-              
-              <div className="text-left truncate min-w-0 flex-1">
-                <span className="truncate font-bold text-xs text-slate-900 dark:text-white leading-tight block">
-                  {isAllCompanies ? "SAAMPARK GROUP (ALL)" : activeCompanyName}
-                </span>
-                <span className="text-[10px] text-slate-500 dark:text-slate-400 block truncate leading-tight font-medium">
-                  {isAllCompanies
-                    ? "All Companies (Group View)"
-                    : (activeSubBranch
-                      ? `${activeBranch?.name || 'Branch'} • ${activeSubBranch.name}`
-                      : (activeBranch
-                        ? activeBranch.name
-                        : "Company HQ (All Branches)"))}
-                </span>
-              </div>
-              <ChevronDown size={13} className="text-slate-400 shrink-0 ml-0.5 group-hover:text-slate-600 dark:group-hover:text-slate-200" />
-            </button>
+      <header
+        style={{ left: isMobile ? 0 : (isSidebarCollapsed ? 64 : 256) }}
+        className="fixed top-0 right-0 h-16 glass-panel border-b border-border/50 flex items-center justify-between px-2 sm:px-6 z-40 transition-[left] duration-300 ease-in-out bg-surface/90 backdrop-blur-md overflow-visible"
+      >
+        {/* ── LEFT: Hamburger + Current Company View & Workspace Switcher ── */}
+        <div className="flex items-center gap-1.5 sm:gap-3 min-w-0 overflow-visible">
+          <Button
+            variant="ghost" size="icon"
+            onClick={(e) => { stop(e); toggleSidebar() }}
+            className="text-slate-500 hover:text-slate-900 dark:hover:text-white shrink-0 cursor-pointer h-9 w-9 p-0"
+            title="Toggle Sidebar"
+          >
+            <Menu size={20} />
+          </Button>
 
-            {/* Company Dropdown Menu */}
-            <AnimatePresence>
-              {showCompanyMenu && (
-                <motion.div
-                  initial={{ opacity: 0, y: 6, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 6, scale: 0.98 }}
-                  transition={{ duration: 0.15 }}
-                  onClick={(e) => e.stopPropagation()}
-                  className="absolute left-0 mt-2 w-80 sm:w-96 rounded-2xl bg-white dark:bg-zinc-900 border border-border shadow-2xl z-50 overflow-hidden flex flex-col"
-                >
-                  <div className="p-3 bg-muted/30 border-b border-border flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-bold text-foreground">Select Company</p>
-                      <p className="text-[10px] text-muted-foreground">Switch between registered company entities</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); setShowCompanyMenu(false) }}
-                      className="p-1 text-muted-foreground hover:text-foreground rounded-lg cursor-pointer"
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-
-                  <div className="p-2 space-y-1.5 max-h-[340px] overflow-y-auto">
-                    {/* Super Admin: All Companies Option */}
-                    {isSuperAdmin && (
-                      <div
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          switchCompany('all')
-                          setShowCompanyMenu(false)
-                        }}
-                        className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
-                          isAllCompanies
-                            ? 'bg-blue-600/10 border-blue-500/40 text-blue-700 dark:text-blue-300'
-                            : 'border-transparent hover:bg-muted/50'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="w-7 h-7 rounded-lg bg-blue-600/20 text-blue-600 flex items-center justify-center shrink-0">
-                            <Building2 size={14} />
-                          </div>
-                          <div>
-                            <p className="text-xs font-bold leading-tight">SAAMPARK GROUP (ALL)</p>
-                            <p className="text-[10px] text-muted-foreground">Consolidated Enterprise View</p>
-                          </div>
-                        </div>
-                        {isAllCompanies && (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-600 text-white">Active</span>
-                        )}
-                      </div>
-                    )}
-
-                    {allowedCompanies.map((c) => {
-                      const isActive = !isAllCompanies && isMatchingCompany(c, activeCompany?.id || activeCompanyId)
-                      const cName = getCompanyFullName(c)
-                      const cLogo = getCompanyLogoUrl(c)
-                      return (
-                        <div
-                          key={c.id || c.slug}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            switchCompany(c.id || c.slug)
-                            setShowCompanyMenu(false)
-                          }}
-                          className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
-                            isActive
-                              ? 'bg-blue-600/10 border-blue-500/40 text-blue-700 dark:text-blue-300'
-                              : 'border-transparent hover:bg-muted/50'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                            {cLogo ? (
-                              <img src={cLogo} alt={cName} className="w-7 h-7 rounded-lg object-contain shrink-0 bg-white dark:bg-zinc-800 p-0.5 border border-border" />
-                            ) : (
-                              <div className="w-7 h-7 rounded-lg bg-blue-600/20 text-blue-600 flex items-center justify-center shrink-0">
-                                <Building2 size={14} />
-                              </div>
-                            )}
-                            <div className="truncate">
-                              <p className="text-xs font-bold leading-tight truncate">{cName}</p>
-                              <p className="text-[10px] text-muted-foreground truncate">{c.city ? `${c.city}, ` : ''}{c.state || 'India'}</p>
-                            </div>
-                          </div>
-                          {isActive && (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-600 text-white shrink-0 ml-2">Active</span>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-
-                  <div className="p-2.5 border-t border-border bg-muted/20 flex items-center justify-between">
-                    <Link
-                      href="/feature/companies"
-                      onClick={(e) => { e.stopPropagation(); setShowCompanyMenu(false) }}
-                      className="text-[11px] font-bold text-blue-600 hover:underline flex items-center gap-1"
-                    >
-                      <span>Manage Companies →</span>
-                    </Link>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); setShowCompanyMenu(false) }}
-                      className="px-2.5 py-1 text-[11px] font-semibold bg-surface-hover hover:bg-muted rounded-lg text-foreground cursor-pointer"
-                    >
-                      Close
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          {/* 2. Branch Tab (Beside Company Tab, visible if company branches exist) */}
-          {companyBranches.length > 0 && (
-            <div className="relative" ref={branchMenuRef}>
+          {/* Hierarchical Entity Selectors in Top Navbar: Company Tab, Branch Tab, Sub-Branch Tab */}
+          <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto sm:overflow-visible scrollbar-hide py-1 max-w-[calc(100vw-130px)] sm:max-w-none">
+            {/* 1. Company Tab */}
+            <div className="relative shrink-0" ref={companyMenuRef}>
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation()
-                  setShowBranchMenu(prev => !prev)
-                  setShowCompanyMenu(false)
+                  setShowCompanyMenu(prev => !prev)
+                  setShowBranchMenu(false)
                   setShowSubBranchMenu(false)
-                  setShowQuickAdd(false)
                   setShowNotifications(false)
                   setShowProfileMenu(false)
                 }}
-                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border transition-all group cursor-pointer max-w-[160px] sm:max-w-[240px] ${
-                  activeBranch
-                    ? 'border-blue-300 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20 text-blue-900 dark:text-blue-300'
-                    : 'border-slate-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 hover:bg-slate-50 dark:hover:bg-zinc-800/80 text-slate-800 dark:text-zinc-200'
-                }`}
-                title={activeBranch ? `Active Branch: ${activeBranch.name}` : "Branch selection"}
+                className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white/90 dark:bg-zinc-900/90 hover:bg-slate-50 dark:hover:bg-zinc-800 shadow-xs text-slate-900 dark:text-white transition-all group cursor-pointer max-w-[140px] xs:max-w-[190px] sm:max-w-[320px] md:max-w-[460px]"
+                title={`Active Company: ${activeCompanyName}`}
               >
-                {activeBranch?.logo_url ? (
+                {isAllCompanies ? (
+                  <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-md bg-blue-600/20 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/30">
+                    <Building2 size={12} className="sm:hidden" />
+                    <Building2 size={13} className="hidden sm:block" />
+                  </div>
+                ) : activeCompanyLogo ? (
                   <img
-                    src={activeBranch.logo_url}
-                    alt={activeBranch.name}
-                    className="w-4 h-4 rounded-md object-contain shrink-0 bg-white dark:bg-zinc-900 p-0.5 border border-slate-200 dark:border-zinc-700"
+                    src={activeCompanyLogo}
+                    alt={activeCompanyName}
+                    className="w-5 h-5 sm:w-6 sm:h-6 rounded-md object-contain shrink-0 bg-white dark:bg-zinc-900 p-0.5 border border-slate-200 dark:border-zinc-700"
                   />
                 ) : (
-                  <GitBranch size={13} className="text-blue-600 dark:text-blue-400 shrink-0" />
+                  <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-md bg-blue-600/20 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/30">
+                    <Building2 size={12} className="sm:hidden" />
+                    <Building2 size={13} className="hidden sm:block" />
+                  </div>
                 )}
-                <span className="truncate font-semibold text-xs leading-tight">
-                  {activeBranch ? activeBranch.name : "All Branches"}
-                </span>
+                
+                <div className="text-left truncate min-w-0 flex-1">
+                  <span className="truncate font-bold text-[11px] sm:text-xs text-slate-900 dark:text-white leading-tight block">
+                    {isAllCompanies ? "SAAMPARK GROUP (ALL)" : activeCompanyName}
+                  </span>
+                  <span className="text-[9px] sm:text-[10px] text-slate-500 dark:text-slate-400 block truncate leading-tight font-medium">
+                    {isAllCompanies
+                      ? "All Companies"
+                      : (activeSubBranch
+                        ? `${activeBranch?.name || 'Branch'} • ${activeSubBranch.name}`
+                        : (activeBranch
+                          ? activeBranch.name
+                          : "HQ (All Branches)"))}
+                  </span>
+                </div>
                 <ChevronDown size={12} className="text-slate-400 shrink-0 ml-0.5 group-hover:text-slate-600 dark:group-hover:text-slate-200" />
               </button>
 
-              {/* Branch Dropdown Menu */}
+              {/* Company Dropdown Menu (Fixed across mobile screen, absolute below button on desktop) */}
               <AnimatePresence>
-                {showBranchMenu && (
+                {showCompanyMenu && (
                   <motion.div
                     initial={{ opacity: 0, y: 6, scale: 0.98 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 6, scale: 0.98 }}
                     transition={{ duration: 0.15 }}
                     onClick={(e) => e.stopPropagation()}
-                    className="absolute left-0 mt-2 w-72 sm:w-80 rounded-2xl bg-white dark:bg-zinc-900 border border-border shadow-2xl z-50 overflow-hidden flex flex-col"
+                    className="fixed top-16 left-2 right-2 sm:absolute sm:top-full sm:left-0 sm:right-auto mt-1 sm:mt-2 w-auto sm:w-96 max-w-[calc(100vw-1rem)] rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-2xl z-[9999] overflow-hidden flex flex-col max-h-[80vh]"
                   >
                     <div className="p-3 bg-muted/30 border-b border-border flex items-center justify-between">
                       <div>
-                        <p className="text-xs font-bold text-foreground">Select Branch</p>
-                        <p className="text-[10px] text-muted-foreground">{activeCompanyName}</p>
+                        <p className="text-xs font-bold text-foreground">Select Company</p>
+                        <p className="text-[10px] text-muted-foreground">Switch between registered company entities</p>
                       </div>
                       <button
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); setShowBranchMenu(false) }}
+                        onClick={(e) => { e.stopPropagation(); setShowCompanyMenu(false) }}
                         className="p-1 text-muted-foreground hover:text-foreground rounded-lg cursor-pointer"
                       >
                         <X size={14} />
                       </button>
                     </div>
 
-                    <div className="p-2 space-y-1 max-h-[300px] overflow-y-auto">
-                      {/* All Branches / Company HQ Option */}
-                      <div
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          switchBranch(null)
-                          setShowBranchMenu(false)
-                        }}
-                        className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer ${
-                          !activeBranch
-                            ? 'bg-blue-600/10 border-blue-500/40 text-blue-700 dark:text-blue-300'
-                            : 'border-transparent hover:bg-muted/50'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Building2 size={14} className="text-blue-600 shrink-0" />
-                          <div>
-                            <p className="text-xs font-bold leading-tight">Company HQ (All Branches)</p>
-                            <p className="text-[10px] text-muted-foreground">Corporate Headquarters view</p>
+                    <div className="p-2 space-y-1.5 max-h-[340px] overflow-y-auto">
+                      {/* Super Admin: All Companies Option */}
+                      {isSuperAdmin && (
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            switchCompany('all')
+                            setShowCompanyMenu(false)
+                          }}
+                          className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
+                            isAllCompanies
+                              ? 'bg-blue-600/10 border-blue-500/40 text-blue-700 dark:text-blue-300'
+                              : 'border-transparent hover:bg-muted/50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-7 h-7 rounded-lg bg-blue-600/20 text-blue-600 flex items-center justify-center shrink-0">
+                              <Building2 size={14} />
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold leading-tight">SAAMPARK GROUP (ALL)</p>
+                              <p className="text-[10px] text-muted-foreground">Consolidated Enterprise View</p>
+                            </div>
                           </div>
+                          {isAllCompanies && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-600 text-white">Active</span>
+                          )}
                         </div>
-                        {!activeBranch && (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-600 text-white">Active</span>
-                        )}
-                      </div>
+                      )}
 
-                      {companyBranches.map((b) => {
-                        const isBranchActive = activeBranch?.id === b.id
+                      {allowedCompanies.map((c) => {
+                        const isActive = !isAllCompanies && isMatchingCompany(c, activeCompany?.id || activeCompanyId)
+                        const cName = getCompanyFullName(c)
+                        const cLogo = getCompanyLogoUrl(c)
                         return (
                           <div
-                            key={b.id}
+                            key={c.id || c.slug}
                             onClick={(e) => {
                               e.stopPropagation()
-                              switchBranch(b.id)
-                              setShowBranchMenu(false)
+                              switchCompany(c.id || c.slug)
+                              setShowCompanyMenu(false)
                             }}
-                            className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer ${
-                              isBranchActive
+                            className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
+                              isActive
                                 ? 'bg-blue-600/10 border-blue-500/40 text-blue-700 dark:text-blue-300'
                                 : 'border-transparent hover:bg-muted/50'
                             }`}
                           >
-                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                              {b.logo_url ? (
-                                <img src={b.logo_url} alt={b.name} className="w-6 h-6 rounded-lg object-contain shrink-0 bg-white dark:bg-zinc-800 p-0.5 border border-border" />
+                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                              {cLogo ? (
+                                <img src={cLogo} alt={cName} className="w-7 h-7 rounded-lg object-contain shrink-0 bg-white dark:bg-zinc-800 p-0.5 border border-border" />
                               ) : (
-                                <div className="w-6 h-6 rounded-lg bg-blue-500/20 text-blue-600 flex items-center justify-center shrink-0">
-                                  <GitBranch size={13} />
+                                <div className="w-7 h-7 rounded-lg bg-blue-600/20 text-blue-600 flex items-center justify-center shrink-0">
+                                  <Building2 size={14} />
                                 </div>
                               )}
                               <div className="truncate">
-                                <p className="text-xs font-bold leading-tight truncate">{b.name}</p>
-                                <p className="text-[10px] text-muted-foreground truncate">{b.code ? `${b.code} • ` : ''}{b.city || 'Branch'}</p>
+                                <p className="text-xs font-bold leading-tight truncate">{cName}</p>
+                                <p className="text-[10px] text-muted-foreground truncate">{c.city ? `${c.city}, ` : ''}{c.state || 'India'}</p>
                               </div>
                             </div>
-                            {isBranchActive && (
+                            {isActive && (
                               <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-600 text-white shrink-0 ml-2">Active</span>
                             )}
                           </div>
@@ -639,18 +491,18 @@ export function Topbar() {
                       })}
                     </div>
 
-                    <div className="p-2 border-t border-border bg-muted/20 flex items-center justify-between">
+                    <div className="p-2.5 border-t border-border bg-muted/20 flex items-center justify-between">
                       <Link
                         href="/feature/companies"
-                        onClick={(e) => { e.stopPropagation(); setShowBranchMenu(false) }}
-                        className="text-[11px] font-bold text-blue-600 hover:underline"
+                        onClick={(e) => { e.stopPropagation(); setShowCompanyMenu(false) }}
+                        className="text-[11px] font-bold text-blue-600 hover:underline flex items-center gap-1"
                       >
-                        Manage Branches →
+                        <span>Manage Companies →</span>
                       </Link>
                       <button
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); setShowBranchMenu(false) }}
-                        className="px-2 py-0.5 text-[11px] font-semibold bg-surface-hover hover:bg-muted rounded-md text-foreground cursor-pointer"
+                        onClick={(e) => { e.stopPropagation(); setShowCompanyMenu(false) }}
+                        className="px-2.5 py-1 text-[11px] font-semibold bg-surface-hover hover:bg-muted rounded-lg text-foreground cursor-pointer"
                       >
                         Close
                       </button>
@@ -659,424 +511,458 @@ export function Topbar() {
                 )}
               </AnimatePresence>
             </div>
-          )}
 
-          {/* 3. Sub-Branch Tab (Beside Branch Tab, visible if sub-branches exist) */}
-          {availableSubBranches.length > 0 && (
-            <div className="relative" ref={subBranchMenuRef}>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setShowSubBranchMenu(prev => !prev)
-                  setShowCompanyMenu(false)
-                  setShowBranchMenu(false)
-                  setShowQuickAdd(false)
-                  setShowNotifications(false)
-                  setShowProfileMenu(false)
-                }}
-                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border transition-all group cursor-pointer max-w-[160px] sm:max-w-[240px] ${
-                  activeSubBranch
-                    ? 'border-purple-300 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-950/20 text-purple-900 dark:text-purple-300'
-                    : 'border-slate-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 hover:bg-slate-50 dark:hover:bg-zinc-800/80 text-slate-800 dark:text-zinc-200'
-                }`}
-                title={activeSubBranch ? `Active Sub-Branch: ${activeSubBranch.name}` : "Sub-Branch selection"}
-              >
-                {activeSubBranch?.logo_url ? (
-                  <img
-                    src={activeSubBranch.logo_url}
-                    alt={activeSubBranch.name}
-                    className="w-4 h-4 rounded-md object-contain shrink-0 bg-white dark:bg-zinc-900 p-0.5 border border-slate-200 dark:border-zinc-700"
-                  />
-                ) : (
-                  <span className="text-xs shrink-0">🤝</span>
-                )}
-                <span className="truncate font-semibold text-xs leading-tight">
-                  {activeSubBranch ? activeSubBranch.name : "All Sub-Branches"}
-                </span>
-                <ChevronDown size={12} className="text-slate-400 shrink-0 ml-0.5 group-hover:text-slate-600 dark:group-hover:text-slate-200" />
-              </button>
-
-              {/* Sub-Branch Dropdown Menu */}
-              <AnimatePresence>
-                {showSubBranchMenu && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 6, scale: 0.98 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 6, scale: 0.98 }}
-                    transition={{ duration: 0.15 }}
-                    onClick={(e) => e.stopPropagation()}
-                    className="absolute left-0 mt-2 w-72 sm:w-80 rounded-2xl bg-white dark:bg-zinc-900 border border-border shadow-2xl z-50 overflow-hidden flex flex-col"
-                  >
-                    <div className="p-3 bg-muted/30 border-b border-border flex items-center justify-between">
-                      <div>
-                        <p className="text-xs font-bold text-foreground">Select Sub-Branch</p>
-                        <p className="text-[10px] text-muted-foreground">{activeBranch?.name || activeCompanyName}</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); setShowSubBranchMenu(false) }}
-                        className="p-1 text-muted-foreground hover:text-foreground rounded-lg cursor-pointer"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-
-                    <div className="p-2 space-y-1 max-h-[300px] overflow-y-auto">
-                      {/* All Sub-Branches / Branch HQ Option */}
-                      <div
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          switchSubBranch(null)
-                          setShowSubBranchMenu(false)
-                        }}
-                        className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer ${
-                          !activeSubBranch
-                            ? 'bg-purple-600/10 border-purple-500/40 text-purple-700 dark:text-purple-300'
-                            : 'border-transparent hover:bg-muted/50'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Building2 size={14} className="text-purple-600 shrink-0" />
-                          <div>
-                            <p className="text-xs font-bold leading-tight">Branch HQ (All Sub-Branches)</p>
-                            <p className="text-[10px] text-muted-foreground">Main branch operation</p>
-                          </div>
-                        </div>
-                        {!activeSubBranch && (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-600 text-white">Active</span>
-                        )}
-                      </div>
-
-                      {availableSubBranches.map((sb) => {
-                        const isSubActive = activeSubBranch?.id === sb.id
-                        return (
-                          <div
-                            key={sb.id}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              switchSubBranch(sb.id)
-                              setShowSubBranchMenu(false)
-                            }}
-                            className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer ${
-                              isSubActive
-                                ? 'bg-purple-600/10 border-purple-500/40 text-purple-700 dark:text-purple-300'
-                                : 'border-transparent hover:bg-muted/50'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                              {sb.logo_url ? (
-                                <img src={sb.logo_url} alt={sb.name} className="w-6 h-6 rounded-lg object-contain shrink-0 bg-white dark:bg-zinc-800 p-0.5 border border-border" />
-                              ) : (
-                                <div className="w-6 h-6 rounded-lg bg-purple-500/20 text-purple-600 flex items-center justify-center shrink-0 text-xs font-bold">
-                                  🤝
-                                </div>
-                              )}
-                              <div className="truncate">
-                                <p className="text-xs font-bold leading-tight truncate">{sb.name}</p>
-                                <p className="text-[10px] text-muted-foreground truncate">{sb.partnerType || "Franchise Partner"}{sb.city ? ` • ${sb.city}` : ''}</p>
-                              </div>
-                            </div>
-                            {isSubActive && (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-600 text-white shrink-0 ml-2">Active</span>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-
-                    <div className="p-2 border-t border-border bg-muted/20 flex items-center justify-between">
-                      <Link
-                        href="/feature/companies"
-                        onClick={(e) => { e.stopPropagation(); setShowSubBranchMenu(false) }}
-                        className="text-[11px] font-bold text-purple-600 hover:underline"
-                      >
-                        Manage Sub-Branches →
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); setShowSubBranchMenu(false) }}
-                        className="px-2 py-0.5 text-[11px] font-semibold bg-surface-hover hover:bg-muted rounded-md text-foreground cursor-pointer"
-                      >
-                        Close
-                      </button>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── RIGHT: Actions + Profile ── */}
-      <div className="flex items-center gap-2 sm:gap-3">
-        {/* Search button that expands to search box on click */}
-        <div className="relative flex items-center" ref={searchContainerRef}>
-          <AnimatePresence initial={false}>
-            {!isSearchOpen ? (
-              <motion.button
-                type="button"
-                key="search-btn"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ duration: 0.15 }}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setIsSearchOpen(true)
-                }}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-600 dark:text-zinc-300 transition-all text-xs font-medium cursor-pointer shadow-xs"
-                title="Search (Click to open search box)"
-              >
-                <Search size={14} className="text-slate-400 shrink-0" />
-                <span className="hidden sm:inline text-xs">Search...</span>
-                <kbd className="hidden lg:inline-flex items-center px-1.5 py-0.5 text-[9px] font-mono bg-slate-100 dark:bg-zinc-800 text-slate-400 rounded border border-slate-200 dark:border-zinc-700">
-                  ⌘K
-                </kbd>
-              </motion.button>
-            ) : (
-              <motion.div
-                key="search-input"
-                initial={{ width: 40, opacity: 0 }}
-                animate={{ width: isMobile ? 180 : 260, opacity: 1 }}
-                exit={{ width: 40, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="relative flex items-center"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <Search size={14} className="absolute left-3 text-slate-400 pointer-events-none shrink-0" />
-                <input
-                  type="text"
-                  autoFocus
-                  placeholder="Search anything..."
-                  onClick={() => openModal("isGlobalSearchOpen")}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") {
-                      setIsSearchOpen(false)
-                    } else if (e.key === "Enter") {
-                      openModal("isGlobalSearchOpen")
-                    }
-                  }}
-                  className="w-full pl-8 pr-7 py-1.5 text-xs liquid-glass-input rounded-full cursor-pointer placeholder:text-slate-400 focus:outline-hidden hover:border-primary/40 transition-colors font-medium border border-blue-500/40 shadow-xs"
-                />
+            {/* 2. Branch Tab (Beside Company Tab, visible if company branches exist) */}
+            {companyBranches.length > 0 && (
+              <div className="relative shrink-0" ref={branchMenuRef}>
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation()
-                    setIsSearchOpen(false)
+                    setShowBranchMenu(prev => !prev)
+                    setShowCompanyMenu(false)
+                    setShowSubBranchMenu(false)
+                    setShowNotifications(false)
+                    setShowProfileMenu(false)
                   }}
-                  className="absolute right-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 rounded-full cursor-pointer"
-                  title="Close search"
+                  className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-xl border transition-all group cursor-pointer max-w-[100px] xs:max-w-[130px] sm:max-w-[220px] ${
+                    activeBranch
+                      ? 'border-blue-300 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20 text-blue-900 dark:text-blue-300'
+                      : 'border-slate-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 hover:bg-slate-50 dark:hover:bg-zinc-800/80 text-slate-800 dark:text-zinc-200'
+                  }`}
+                  title={activeBranch ? `Active Branch: ${activeBranch.name}` : "Branch selection"}
                 >
-                  <X size={13} />
+                  {activeBranch?.logo_url ? (
+                    <img
+                      src={activeBranch.logo_url}
+                      alt={activeBranch.name}
+                      className="w-4 h-4 rounded-md object-contain shrink-0 bg-white dark:bg-zinc-900 p-0.5 border border-slate-200 dark:border-zinc-700"
+                    />
+                  ) : (
+                    <GitBranch size={12} className="text-blue-600 dark:text-blue-400 shrink-0" />
+                  )}
+                  <span className="truncate font-semibold text-[11px] sm:text-xs leading-tight">
+                    {activeBranch ? activeBranch.name : "Branches"}
+                  </span>
+                  <ChevronDown size={11} className="text-slate-400 shrink-0 ml-0.5 group-hover:text-slate-600 dark:group-hover:text-slate-200" />
                 </button>
-              </motion.div>
+
+                {/* Branch Dropdown Menu */}
+                <AnimatePresence>
+                  {showBranchMenu && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 6, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 6, scale: 0.98 }}
+                      transition={{ duration: 0.15 }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="fixed top-16 left-2 right-2 sm:absolute sm:top-full sm:left-0 sm:right-auto mt-1 sm:mt-2 w-auto sm:w-80 max-w-[calc(100vw-1rem)] rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-2xl z-[9999] overflow-hidden flex flex-col max-h-[80vh]"
+                    >
+                      <div className="p-3 bg-muted/30 border-b border-border flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-bold text-foreground">Select Branch</p>
+                          <p className="text-[10px] text-muted-foreground">{activeCompanyName}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setShowBranchMenu(false) }}
+                          className="p-1 text-muted-foreground hover:text-foreground rounded-lg cursor-pointer"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+
+                      <div className="p-2 space-y-1 max-h-[300px] overflow-y-auto">
+                        {/* All Branches / Company HQ Option */}
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            switchBranch(null)
+                            setShowBranchMenu(false)
+                          }}
+                          className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer ${
+                            !activeBranch
+                              ? 'bg-blue-600/10 border-blue-500/40 text-blue-700 dark:text-blue-300'
+                              : 'border-transparent hover:bg-muted/50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Building2 size={14} className="text-blue-600 shrink-0" />
+                            <div>
+                              <p className="text-xs font-bold leading-tight">Company HQ (All Branches)</p>
+                              <p className="text-[10px] text-muted-foreground">Corporate Headquarters view</p>
+                            </div>
+                          </div>
+                          {!activeBranch && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-600 text-white">Active</span>
+                          )}
+                        </div>
+
+                        {companyBranches.map((b) => {
+                          const isBranchActive = activeBranch?.id === b.id
+                          return (
+                            <div
+                              key={b.id}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                switchBranch(b.id)
+                                setShowBranchMenu(false)
+                              }}
+                              className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer ${
+                                isBranchActive
+                                  ? 'bg-blue-600/10 border-blue-500/40 text-blue-700 dark:text-blue-300'
+                                  : 'border-transparent hover:bg-muted/50'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                {b.logo_url ? (
+                                  <img src={b.logo_url} alt={b.name} className="w-6 h-6 rounded-lg object-contain shrink-0 bg-white dark:bg-zinc-800 p-0.5 border border-border" />
+                                ) : (
+                                  <div className="w-6 h-6 rounded-lg bg-blue-500/20 text-blue-600 flex items-center justify-center shrink-0">
+                                    <GitBranch size={13} />
+                                  </div>
+                                )}
+                                <div className="truncate">
+                                  <p className="text-xs font-bold leading-tight truncate">{b.name}</p>
+                                  <p className="text-[10px] text-muted-foreground truncate">{b.code ? `${b.code} • ` : ''}{b.city || 'Branch'}</p>
+                                </div>
+                              </div>
+                              {isBranchActive && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-600 text-white shrink-0 ml-2">Active</span>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+
+                      <div className="p-2 border-t border-border bg-muted/20 flex items-center justify-between">
+                        <Link
+                          href="/feature/companies"
+                          onClick={(e) => { e.stopPropagation(); setShowBranchMenu(false) }}
+                          className="text-[11px] font-bold text-blue-600 hover:underline"
+                        >
+                          Manage Branches →
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setShowBranchMenu(false) }}
+                          className="px-2 py-0.5 text-[11px] font-semibold bg-surface-hover hover:bg-muted rounded-md text-foreground cursor-pointer"
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             )}
-          </AnimatePresence>
+
+            {/* 3. Sub-Branch Tab (Beside Branch Tab, visible if sub-branches exist) */}
+            {availableSubBranches.length > 0 && (
+              <div className="relative shrink-0" ref={subBranchMenuRef}>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setShowSubBranchMenu(prev => !prev)
+                    setShowCompanyMenu(false)
+                    setShowBranchMenu(false)
+                    setShowNotifications(false)
+                    setShowProfileMenu(false)
+                  }}
+                  className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-xl border transition-all group cursor-pointer max-w-[100px] xs:max-w-[130px] sm:max-w-[220px] ${
+                    activeSubBranch
+                      ? 'border-purple-300 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-950/20 text-purple-900 dark:text-purple-300'
+                      : 'border-slate-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 hover:bg-slate-50 dark:hover:bg-zinc-800/80 text-slate-800 dark:text-zinc-200'
+                  }`}
+                  title={activeSubBranch ? `Active Sub-Branch: ${activeSubBranch.name}` : "Sub-Branch selection"}
+                >
+                  {activeSubBranch?.logo_url ? (
+                    <img
+                      src={activeSubBranch.logo_url}
+                      alt={activeSubBranch.name}
+                      className="w-4 h-4 rounded-md object-contain shrink-0 bg-white dark:bg-zinc-900 p-0.5 border border-slate-200 dark:border-zinc-700"
+                    />
+                  ) : (
+                    <span className="text-xs shrink-0">🤝</span>
+                  )}
+                  <span className="truncate font-semibold text-[11px] sm:text-xs leading-tight">
+                    {activeSubBranch ? activeSubBranch.name : "Sub-Branches"}
+                  </span>
+                  <ChevronDown size={11} className="text-slate-400 shrink-0 ml-0.5 group-hover:text-slate-600 dark:group-hover:text-slate-200" />
+                </button>
+
+                {/* Sub-Branch Dropdown Menu */}
+                <AnimatePresence>
+                  {showSubBranchMenu && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 6, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 6, scale: 0.98 }}
+                      transition={{ duration: 0.15 }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="fixed top-16 left-2 right-2 sm:absolute sm:top-full sm:left-0 sm:right-auto mt-1 sm:mt-2 w-auto sm:w-80 max-w-[calc(100vw-1rem)] rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-2xl z-[9999] overflow-hidden flex flex-col max-h-[80vh]"
+                    >
+                      <div className="p-3 bg-muted/30 border-b border-border flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-bold text-foreground">Select Sub-Branch</p>
+                          <p className="text-[10px] text-muted-foreground">{activeBranch?.name || activeCompanyName}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setShowSubBranchMenu(false) }}
+                          className="p-1 text-muted-foreground hover:text-foreground rounded-lg cursor-pointer"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+
+                      <div className="p-2 space-y-1 max-h-[300px] overflow-y-auto">
+                        {/* All Sub-Branches / Branch HQ Option */}
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            switchSubBranch(null)
+                            setShowSubBranchMenu(false)
+                          }}
+                          className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer ${
+                            !activeSubBranch
+                              ? 'bg-purple-600/10 border-purple-500/40 text-purple-700 dark:text-purple-300'
+                              : 'border-transparent hover:bg-muted/50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Building2 size={14} className="text-purple-600 shrink-0" />
+                            <div>
+                              <p className="text-xs font-bold leading-tight">Branch HQ (All Sub-Branches)</p>
+                              <p className="text-[10px] text-muted-foreground">Main branch operation</p>
+                            </div>
+                          </div>
+                          {!activeSubBranch && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-600 text-white">Active</span>
+                          )}
+                        </div>
+
+                        {availableSubBranches.map((sb) => {
+                          const isSubActive = activeSubBranch?.id === sb.id
+                          return (
+                            <div
+                              key={sb.id}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                switchSubBranch(sb.id)
+                                setShowSubBranchMenu(false)
+                              }}
+                              className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer ${
+                                isSubActive
+                                  ? 'bg-purple-600/10 border-purple-500/40 text-purple-700 dark:text-purple-300'
+                                  : 'border-transparent hover:bg-muted/50'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                {sb.logo_url ? (
+                                  <img src={sb.logo_url} alt={sb.name} className="w-6 h-6 rounded-lg object-contain shrink-0 bg-white dark:bg-zinc-800 p-0.5 border border-border" />
+                                ) : (
+                                  <div className="w-6 h-6 rounded-lg bg-purple-500/20 text-purple-600 flex items-center justify-center shrink-0 text-xs font-bold">
+                                    🤝
+                                  </div>
+                                )}
+                                <div className="truncate">
+                                  <p className="text-xs font-bold leading-tight truncate">{sb.name}</p>
+                                  <p className="text-[10px] text-muted-foreground truncate">{sb.partnerType || "Franchise Partner"}{sb.city ? ` • ${sb.city}` : ''}</p>
+                                </div>
+                              </div>
+                              {isSubActive && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-600 text-white shrink-0 ml-2">Active</span>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+
+                      <div className="p-2 border-t border-border bg-muted/20 flex items-center justify-between">
+                        <Link
+                          href="/feature/companies"
+                          onClick={(e) => { e.stopPropagation(); setShowSubBranchMenu(false) }}
+                          className="text-[11px] font-bold text-purple-600 hover:underline"
+                        >
+                          Manage Sub-Branches →
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setShowSubBranchMenu(false) }}
+                          className="px-2 py-0.5 text-[11px] font-semibold bg-surface-hover hover:bg-muted rounded-md text-foreground cursor-pointer"
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Quick Add dropdown */}
-        {['Super Admin', 'Admin', 'Teams'].includes(user.role) && (
-          <div className="relative" ref={quickAddRef}>
+        {/* ── RIGHT: Actions + Profile ── */}
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+          {/* Search icon button - no box */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={(e) => {
+              e.stopPropagation()
+              openModal("isGlobalSearchOpen")
+            }}
+            className="text-slate-500 hover:text-slate-900 dark:hover:text-white cursor-pointer h-8 w-8 sm:h-9 sm:w-9 p-0"
+            title="Search (Ctrl + K)"
+          >
+            <Search size={18} />
+          </Button>
+
+          {/* Notifications */}
+          <div className="relative shrink-0" ref={notifRef}>
             <Button
               variant="ghost" size="icon"
               onClick={(e) => {
                 e.stopPropagation()
-                setShowQuickAdd(v => !v)
-                setShowNotifications(false)
+                setShowNotifications(v => !v)
                 setShowProfileMenu(false)
                 setShowCompanyMenu(false)
                 setShowBranchMenu(false)
                 setShowSubBranchMenu(false)
               }}
-              className="text-muted-foreground hover:text-foreground cursor-pointer"
-              title="Quick Add"
+              className="text-muted-foreground hover:text-foreground relative cursor-pointer h-8 w-8 sm:h-9 sm:w-9 p-0"
+              title="Notifications"
             >
-              <Plus size={20} />
+              <Bell size={18} />
+              {notifications.some(n => !n.read) && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-danger animate-pulse" />
+              )}
             </Button>
+
             <AnimatePresence>
-              {showQuickAdd && (
+              {showNotifications && (
                 <motion.div
                   initial={{ opacity: 0, y: 8, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 8, scale: 0.95 }}
                   transition={{ duration: 0.13 }}
                   onClick={(e) => e.stopPropagation()}
-                  className="absolute right-0 top-full mt-2 w-48 modal-3d-dialog overflow-hidden z-50 py-1"
+                  className="fixed top-16 left-2 right-2 sm:absolute sm:top-full sm:left-auto sm:right-0 mt-1 sm:mt-2 w-auto sm:w-96 max-w-[calc(100vw-1rem)] bg-surface border border-slate-200 dark:border-zinc-800 shadow-2xl rounded-3xl overflow-hidden z-[9999] max-h-[85vh] flex flex-col"
                 >
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-4 pt-2 pb-1">Quick Add</p>
-                  {visibleQuickAddOptions.map((opt) => (
-                    <button
-                      key={opt.modal}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        openModal(opt.modal)
-                        setShowQuickAdd(false)
-                      }}
-                      className="w-full text-left px-4 py-2 text-sm text-muted-foreground hover:bg-surface-hover hover:text-foreground transition-colors cursor-pointer"
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
+                  <div className="p-4 border-b border-border/50 flex items-center justify-between bg-surface-hover/30">
+                    <div className="flex items-center gap-2">
+                      <Bell size={16} className="text-primary" />
+                      <span className="font-bold text-sm text-foreground">Notifications</span>
+                    </div>
+                    <span className="text-[10px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-full border border-primary/20">
+                      {notifications.filter(n => !n.read).length} New
+                    </span>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto divide-y divide-border/40 max-h-80">
+                    {notifications.length === 0 ? (
+                      <div className="py-10 text-center text-xs text-muted-foreground space-y-1">
+                        <p className="text-2xl">🔔</p>
+                        <p className="font-medium">No new notifications</p>
+                        <p className="text-[11px] opacity-75">You're all caught up!</p>
+                      </div>
+                    ) : (
+                      notifications.map((n, idx) => (
+                        <div
+                          key={n.id || idx}
+                          onClick={async (e) => {
+                            e.stopPropagation()
+                            const { markNotificationAsRead } = await import("@/services/notificationService")
+                            if (n.id) await markNotificationAsRead(n.id, user?.email)
+                            if (n.linkUrl) {
+                              setShowNotifications(false)
+                              window.location.href = n.linkUrl
+                            }
+                          }}
+                          className={`px-4 py-3 flex items-start gap-3 hover:bg-surface-hover cursor-pointer transition-colors ${
+                            !n.read ? 'bg-primary/5' : 'opacity-80'
+                          }`}
+                        >
+                          <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${!n.read ? 'bg-primary' : 'bg-transparent'}`} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-foreground leading-snug">{n.title || n.text}</p>
+                            {n.message && (
+                              <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">
+                                {n.message}
+                              </p>
+                            )}
+                            <p className="text-[10px] text-muted-foreground mt-1 font-mono">
+                              {n.timestampFormatted || n.timestamp || n.time || "Just now"}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {notifications.length > 0 && (
+                    <div className="p-2.5 text-center border-t border-border/50 bg-surface flex items-center justify-center">
+                      <button 
+                        onClick={async (e) => {
+                          e.stopPropagation()
+                          const { markAllNotificationsAsRead } = await import("@/services/notificationService")
+                          await markAllNotificationsAsRead(user?.email)
+                          setNotifications(prev => prev.map(n => ({ ...n, read: true })))
+                        }}
+                        className="text-xs text-primary hover:underline font-bold cursor-pointer"
+                      >
+                        Mark all as read
+                      </button>
+                    </div>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
-        )}
 
-        {/* Notifications */}
-        <div className="relative" ref={notifRef}>
-          <Button
-            variant="ghost" size="icon"
-            onClick={(e) => {
-              e.stopPropagation()
-              setShowNotifications(v => !v)
-              setShowQuickAdd(false)
-              setShowProfileMenu(false)
-              setShowCompanyMenu(false)
-              setShowBranchMenu(false)
-              setShowSubBranchMenu(false)
-            }}
-            className="text-muted-foreground hover:text-foreground relative cursor-pointer"
-            title="Notifications"
-          >
-            <Bell size={20} />
-            {notifications.some(n => !n.read) && (
-              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-danger animate-pulse" />
-            )}
-          </Button>
+          <div className="h-5 sm:h-6 w-[1px] bg-border mx-0.5 sm:mx-1" />
 
-          <AnimatePresence>
-            {showNotifications && (
-              <motion.div
-                initial={{ opacity: 0, y: 8, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                transition={{ duration: 0.13 }}
-                onClick={(e) => e.stopPropagation()}
-                className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-surface border border-border shadow-2xl rounded-3xl overflow-hidden z-50 max-h-[85vh] flex flex-col"
-              >
-                <div className="p-4 border-b border-border/50 flex items-center justify-between bg-surface-hover/30">
-                  <div className="flex items-center gap-2">
-                    <Bell size={16} className="text-primary" />
-                    <span className="font-bold text-sm text-foreground">Notifications</span>
-                  </div>
-                  <span className="text-[10px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-full border border-primary/20">
-                    {notifications.filter(n => !n.read).length} New
-                  </span>
-                </div>
-
-                <div className="flex-1 overflow-y-auto divide-y divide-border/40 max-h-80">
-                  {notifications.length === 0 ? (
-                    <div className="py-10 text-center text-xs text-muted-foreground space-y-1">
-                      <p className="text-2xl">🔔</p>
-                      <p className="font-medium">No new notifications</p>
-                      <p className="text-[11px] opacity-75">You're all caught up!</p>
-                    </div>
-                  ) : (
-                    notifications.map((n, idx) => (
-                      <div
-                        key={n.id || idx}
-                        onClick={async (e) => {
-                          e.stopPropagation()
-                          const { markNotificationAsRead } = await import("@/services/notificationService")
-                          if (n.id) await markNotificationAsRead(n.id, user?.email)
-                          if (n.linkUrl) {
-                            setShowNotifications(false)
-                            window.location.href = n.linkUrl
-                          }
-                        }}
-                        className={`px-4 py-3 flex items-start gap-3 hover:bg-surface-hover cursor-pointer transition-colors ${
-                          !n.read ? 'bg-primary/5' : 'opacity-80'
-                        }`}
-                      >
-                        <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${!n.read ? 'bg-primary' : 'bg-transparent'}`} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-foreground leading-snug">{n.title || n.text}</p>
-                          {n.message && (
-                            <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">
-                              {n.message}
-                            </p>
-                          )}
-                          <p className="text-[10px] text-muted-foreground mt-1 font-mono">
-                            {n.timestampFormatted || n.timestamp || n.time || "Just now"}
-                          </p>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                {notifications.length > 0 && (
-                  <div className="p-2.5 text-center border-t border-border/50 bg-surface flex items-center justify-center">
-                    <button 
-                      onClick={async (e) => {
-                        e.stopPropagation()
-                        const { markAllNotificationsAsRead } = await import("@/services/notificationService")
-                        await markAllNotificationsAsRead(user?.email)
-                        setNotifications(prev => prev.map(n => ({ ...n, read: true })))
-                      }}
-                      className="text-xs text-primary hover:underline font-bold cursor-pointer"
-                    >
-                      Mark all as read
-                    </button>
-                  </div>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* Messages link */}
-        <Link href="/feature/messages" onClick={(e) => e.stopPropagation()}>
-          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground cursor-pointer" title="Messages">
-            <Mail size={20} />
-          </Button>
-        </Link>
-
-        <div className="h-6 w-[1px] bg-border mx-1" />
-
-        {/* Profile chip matching screenshot */}
-        <div className="relative shrink-0" ref={profileMenuRef}>
-          <div
-            onClick={(e) => {
-              e.stopPropagation()
-              setShowProfileMenu(v => !v)
-              setShowQuickAdd(false)
-              setShowNotifications(false)
-              setShowCompanyMenu(false)
-              setShowBranchMenu(false)
-              setShowSubBranchMenu(false)
-            }}
-            className="flex items-center gap-2.5 cursor-pointer p-1 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors select-none"
-          >
-            <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 border border-slate-200 dark:border-zinc-700 shadow-xs">
-              <img
-                key={(user as any)?.avatarUrl || user?.avatar || user?.name || "topbar_avatar"}
-                src={(user as any).avatarUrl || user.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${user.name}`}
-                alt={user.name}
-                className="w-full h-full object-cover"
-              />
+          {/* Profile chip matching screenshot */}
+          <div className="relative shrink-0" ref={profileMenuRef}>
+            <div
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowProfileMenu(v => !v)
+                setShowNotifications(false)
+                setShowCompanyMenu(false)
+                setShowBranchMenu(false)
+                setShowSubBranchMenu(false)
+              }}
+              className="flex items-center gap-2 cursor-pointer p-0.5 sm:p-1 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors select-none"
+            >
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full overflow-hidden shrink-0 border border-slate-200 dark:border-zinc-700 shadow-xs">
+                <img
+                  key={(user as any)?.avatarUrl || user?.avatar || user?.name || "topbar_avatar"}
+                  src={(user as any).avatarUrl || user.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${user.name}`}
+                  alt={user.name}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="hidden lg:block text-left leading-tight pr-1">
+                <span className="text-xs text-slate-900 dark:text-white font-bold block truncate max-w-[140px]">{user.name}</span>
+                <span className="text-[10px] text-slate-400 font-medium block truncate max-w-[140px]">
+                  {user.role === "Super Admin" ? "Super Administrator" : user.role}
+                </span>
+              </div>
             </div>
-            <div className="hidden lg:block text-left leading-tight pr-1">
-              <span className="text-xs text-slate-900 dark:text-white font-bold block truncate max-w-[140px]">{user.name}</span>
-              <span className="text-[10px] text-slate-400 font-medium block truncate max-w-[140px]">
-                {user.role === "Super Admin" ? "Super Administrator" : user.role}
-              </span>
-            </div>
-          </div>
 
-          <AnimatePresence>
-            {showProfileMenu && (
-              <motion.div
-                initial={{ opacity: 0, y: 8, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                transition={{ duration: 0.13 }}
-                onClick={(e) => e.stopPropagation()}
-                className="absolute right-0 top-full mt-2 w-64 max-w-[calc(100vw-1.5rem)] bg-surface border border-border shadow-2xl rounded-2xl overflow-hidden z-50 flex flex-col max-h-[85vh]"
-              >
+            <AnimatePresence>
+              {showProfileMenu && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                  transition={{ duration: 0.13 }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="fixed top-16 left-2 right-2 sm:absolute sm:top-full sm:left-auto sm:right-0 mt-1 sm:mt-2 w-auto sm:w-64 max-w-[calc(100vw-1rem)] bg-surface border border-slate-200 dark:border-zinc-800 shadow-2xl rounded-2xl overflow-hidden z-[9999] flex flex-col max-h-[85vh]"
+                >
                 <div className="px-4 py-3 border-b border-border/50 shrink-0 bg-surface-pressed/30">
                   <p className="text-sm font-semibold truncate">{user.name}</p>
                   <p className="text-xs text-muted-foreground truncate">{user.email}</p>
@@ -1155,5 +1041,6 @@ export function Topbar() {
         </div>
       </div>
     </header>
-  )
+  </>
+)
 }
