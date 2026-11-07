@@ -381,7 +381,7 @@ export function Topbar() {
                 )}
                 
                 <div className="text-left truncate min-w-0 flex-1">
-                  <span className="truncate font-bold text-[11px] sm:text-xs text-slate-900 dark:text-white leading-tight block">
+                  <span className="truncate font-bold text-[11px] sm:text-xs text-slate-900 dark:text-white leading-tight block whitespace-pre">
                     {isAllCompanies ? "SAAMPARK GROUP (ALL)" : activeCompanyName}
                   </span>
                   <span className="text-[9px] sm:text-[10px] text-slate-500 dark:text-slate-400 block truncate leading-tight font-medium">

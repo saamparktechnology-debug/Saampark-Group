@@ -945,10 +945,10 @@ export function OfficialInvoiceDocument({
             style={{ width: '120px', height: '120px', minWidth: '120px', minHeight: '120px', flexShrink: 0 }}
           >
             <Sparkles className="w-5 h-5 mb-1 text-teal-200 drop-shadow-sm" />
-            <div className="font-black text-[11px] tracking-wider uppercase leading-tight font-sans">
+            <div className="font-black text-[11px] tracking-wider uppercase leading-tight font-sans whitespace-pre-wrap">
               {resolvedBrandName}
             </div>
-            <div className="text-[7px] font-bold text-teal-200 tracking-widest uppercase mt-0.5">
+            <div className="text-[7px] font-bold text-teal-200 tracking-widest uppercase mt-0.5 whitespace-pre-wrap">
               {resolvedDivisionName || "ENTERPRISE"}
             </div>
           </div>

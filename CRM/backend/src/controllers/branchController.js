@@ -106,12 +106,7 @@ const branchController = {
   },
 
   async delete(req, res) {
-    try {
-      await branchModel.delete(req.params.id);
-      return successResponse(res, 200, 'Branch deleted successfully');
-    } catch (err) {
-      return errorResponse(res, 500, err.message);
-    }
+    return errorResponse(res, 403, 'Branches cannot be deleted once created. They can only be edited or updated.');
   },
 
   async getStats(req, res) {

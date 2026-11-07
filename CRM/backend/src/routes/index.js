@@ -20,6 +20,7 @@ router.use('/email', require('./emailRoutes'));
 // NEW: Organisation Structure
 router.use('/org', require('./orgRoutes'));
 router.use('/branches', require('./branchRoutes'));
+router.use('/sub-branches', require('./branchRoutes'));
 
 // NEW: Permissions & Roles
 router.use('/access', require('./permissionRoutes'));

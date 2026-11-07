@@ -353,13 +353,27 @@ export default function CompaniesMain() {
         return uComp ? isMatchingCompany(c, uComp) : false
       }
 
+      // Safe merge helper: never clobbers populated target fields with null, undefined, or empty strings
+      const mergeSafe = (target: any, source: any) => {
+        if (!source || typeof source !== 'object') return { ...(target || {}) }
+        const res = { ...(target || {}) }
+        for (const [k, v] of Object.entries(source)) {
+          if (v !== null && v !== undefined && v !== '') {
+            res[k] = v
+          } else if (res[k] === undefined || res[k] === null) {
+            res[k] = v
+          }
+        }
+        return res
+      }
+
       // 2. Overlay persistent storage companies (from app_data)
       if (Array.isArray(dbComps) && dbComps.length > 0) {
         dbComps.forEach(c => {
           if (!isCompanyDeleted(c.id, c.slug) && isCompanyAllowed(c)) {
             const key = c.slug || String(c.id)
             const prev = compMap.get(key) || (c.slug ? compMap.get(c.slug) : undefined) || compMap.get(String(c.id))
-            compMap.set(key, { ...(prev || {}), ...c })
+            compMap.set(key, mergeSafe(prev, c))
           }
         })
       }
@@ -371,27 +385,25 @@ export default function CompaniesMain() {
           if (!isCompanyDeleted(c.id, c.slug) && isCompanyAllowed(c)) {
             const key = c.slug || String(c.id)
             const prev = compMap.get(key) || (c.slug ? compMap.get(c.slug) : undefined) || compMap.get(String(c.id))
-            compMap.set(key, { ...(prev || {}), ...c })
+            compMap.set(key, mergeSafe(prev, c))
           }
         })
       }
 
-      // 4. HIGHEST PRECEDENCE: Live MySQL Backend API — real database is always authoritative
+      // 4. HIGHEST PRECEDENCE: Live MySQL Backend API — real database is authoritative for updated fields
       if (Array.isArray(compRes) && compRes.length > 0) {
         compRes.forEach(c => {
           if (!isCompanyDeleted(c.id, c.slug) && isCompanyAllowed(c)) {
             const key = c.slug || String(c.id)
             const prev = compMap.get(key) || compMap.get(c.slug) || compMap.get(String(c.id))
-            compMap.set(key, {
-              ...(prev || {}),
-              ...c,
-              terms_conditions: c.terms_conditions !== undefined && c.terms_conditions !== null
-                ? c.terms_conditions
-                : (prev?.terms_conditions || ""),
-              invoice_notes: c.invoice_notes !== undefined && c.invoice_notes !== null
-                ? c.invoice_notes
-                : (prev?.invoice_notes || ""),
-            })
+            const merged = mergeSafe(prev, c)
+            if (c.terms_conditions !== undefined && c.terms_conditions !== null && c.terms_conditions !== '') {
+              merged.terms_conditions = c.terms_conditions
+            }
+            if (c.invoice_notes !== undefined && c.invoice_notes !== null && c.invoice_notes !== '') {
+              merged.invoice_notes = c.invoice_notes
+            }
+            compMap.set(key, merged)
           }
         })
       }
@@ -416,7 +428,7 @@ export default function CompaniesMain() {
       // 2. Merge Branches: KEEP all branches belonging to active companies unless deleted
       const branchMap = new Map<string, Branch>()
 
-      // First add baseline canonical branches for active companies (tech br-1, br-2)
+      // First add baseline canonical branches for active companies
       CANONICAL_BRANCHES.forEach(b => {
         if (!isBranchDeleted(b.id, b.code, b.name)) {
           const bComp = b.company_id || (b as any).companyId
@@ -435,7 +447,7 @@ export default function CompaniesMain() {
               const strKey = String(b.id)
               const prev = branchMap.get(strKey)
               const resolvedComp = bComp || prev?.company_id || prev?.companyId
-              branchMap.set(strKey, { ...prev, ...b, company_id: resolvedComp, companyId: resolvedComp })
+              branchMap.set(strKey, { ...mergeSafe(prev, b), company_id: resolvedComp, companyId: resolvedComp })
             }
           }
         })
@@ -450,7 +462,7 @@ export default function CompaniesMain() {
               const strKey = String(b.id)
               const prev = branchMap.get(strKey)
               const resolvedComp = bComp || prev?.company_id || prev?.companyId
-              branchMap.set(strKey, { ...prev, ...b, company_id: resolvedComp, companyId: resolvedComp })
+              branchMap.set(strKey, { ...mergeSafe(prev, b), company_id: resolvedComp, companyId: resolvedComp })
             }
           }
         })
@@ -466,7 +478,7 @@ export default function CompaniesMain() {
               const strKey = String(b.id)
               const prev = branchMap.get(strKey)
               const resolvedComp = bComp || prev?.company_id || prev?.companyId
-              branchMap.set(strKey, { ...prev, ...b, company_id: resolvedComp, companyId: resolvedComp })
+              branchMap.set(strKey, { ...mergeSafe(prev, b), company_id: resolvedComp, companyId: resolvedComp })
             }
           }
         })
@@ -487,7 +499,9 @@ export default function CompaniesMain() {
       const subMap = new Map<string, any>()
       combinedSubList.forEach(sb => {
         if (sb && sb.id) {
-          subMap.set(String(sb.id), sb)
+          const strKey = String(sb.id)
+          const prev = subMap.get(strKey)
+          subMap.set(strKey, mergeSafe(prev, sb))
         }
       })
       const subList = Array.from(subMap.values()).filter(sb => {
@@ -748,12 +762,15 @@ export default function CompaniesMain() {
         console.warn("Company API save warning:", apiErr)
       }
 
-      // 4. Persist all companies to app_data for guaranteed retention
-      const storeComps = useAuthStore.getState().companies || []
-      const mergedAllComps = storeComps.map(c => isMatchingCompany(c, compKey) ? { ...c, ...payload } : c)
-      if (!mergedAllComps.some(c => isMatchingCompany(c, compKey))) {
-        mergedAllComps.push({ ...payload, id: payload.slug, slug: payload.slug } as Company)
-      }
+      // 4. Persist all companies to app_data for guaranteed retention (always keep both Tech & Consultancy)
+      const currentComps = useAuthStore.getState().companies || []
+      const mergedMap = new Map<string, Company>()
+      CANONICAL_COMPANIES.forEach(c => mergedMap.set(c.slug || c.id, { ...c }))
+      currentComps.forEach(c => mergedMap.set(c.slug || c.id, { ...(mergedMap.get(c.slug || c.id) || {}), ...c }))
+      const targetSlug = payload.slug || (editingCompany?.slug) || (String(targetId) === '2' ? 'consultancy' : 'tech')
+      const prevComp = mergedMap.get(targetSlug) || {}
+      mergedMap.set(targetSlug, { ...prevComp, ...payload, id: targetSlug, slug: targetSlug } as Company)
+      const mergedAllComps = Array.from(mergedMap.values())
       await saveModuleDataToDB("companies", mergedAllComps, "all").catch(() => {})
 
       // 5. Dispatch events so all tabs / preview sync immediately
@@ -1358,6 +1375,10 @@ export default function CompaniesMain() {
       alert("Company deletion is disabled. The CRM operates strictly with SAAMPARK Technology and Saampark Consultancy.")
       return
     }
+    if (type === "branch") {
+      alert("Branches cannot be deleted once created. They can only be edited or updated.")
+      return
+    }
     if (!isSuperAdmin) {
       alert("Permission denied: Only Super Admin can delete records.")
       return
@@ -1416,36 +1437,11 @@ export default function CompaniesMain() {
         setBranches(remainingBranches)
         await saveModuleDataToDB("branches", remainingBranches, "all").catch(() => {})
       } else if (deleteTarget.type === "branch") {
-        const targetBranchId = String(deleteTarget.id).toLowerCase().trim()
-        const targetBranch = branches.find(b => 
-          String(b.id).toLowerCase().trim() === targetBranchId || 
-          (b.code && String(b.code).toLowerCase().trim() === targetBranchId)
-        )
-        await markGlobalItemDeleted(deleteTarget.id, "branches")
-        if (targetBranch?.id) await markGlobalItemDeleted(targetBranch.id, "branches")
-        if (targetBranch?.code) await markGlobalItemDeleted(targetBranch.code, "branches")
-
-        await BranchApiService.delete(deleteTarget.id).catch(() => {})
-        if (targetBranch?.id && String(targetBranch.id) !== deleteTarget.id) {
-          await BranchApiService.delete(String(targetBranch.id)).catch(() => {})
-        }
-        try {
-          await useAuthStore.getState().deleteBranch(deleteTarget.id)
-        } catch (e) {}
-
-        const targetId = targetBranch ? String(targetBranch.id).toLowerCase().trim() : targetBranchId
-        const targetCode = targetBranch?.code ? String(targetBranch.code).toLowerCase().trim() : ""
-
-        const remainingBranches = branches.filter(b => {
-          const bId = String(b.id).toLowerCase().trim()
-          const bCode = String(b.code || "").toLowerCase().trim()
-          if (bId === targetBranchId || bId === targetId) return false
-          if (targetCode && (bId === targetCode || bCode === targetCode)) return false
-          if (bCode && bCode === targetBranchId) return false
-          return true
-        })
-        setBranches(remainingBranches)
-        await saveModuleDataToDB("branches", remainingBranches, "all").catch(() => {})
+        alert("Branches cannot be deleted once created. They can only be edited or updated.")
+        setShowDeleteConfirm(false)
+        setDeleteTarget(null)
+        setSaving(false)
+        return
       } else {
         const targetSubId = String(deleteTarget.id).toLowerCase().trim()
         const targetSub = subBranches.find(sb => 
@@ -1541,9 +1537,9 @@ export default function CompaniesMain() {
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-bold text-foreground text-sm truncate">{company.name}</h3>
+                    <h3 className="font-bold text-foreground text-sm truncate whitespace-pre">{company.name}</h3>
                     {company.brand_name && company.brand_name !== company.name && (
-                      <span className="text-[10px] px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold">{company.brand_name}</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold whitespace-pre">{company.brand_name}</span>
                     )}
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">{company.status || "active"}</span>
                   </div>
@@ -1605,9 +1601,6 @@ export default function CompaniesMain() {
                                   <Button variant="ghost" size="sm" onClick={() => { openEditBranch(branch); setBranchModalViewMode("preview") }} title="Live Preview Branch Invoice" className="text-xs h-7 gap-1 text-blue-600 font-semibold"><Eye className="h-3.5 w-3.5" />Preview</Button>
                                   <Button variant="ghost" size="sm" onClick={() => openAddSubBranch(branch.id, branch.company_id)} title="Add Sub-Branch" className="text-xs h-7 gap-1"><Plus className="h-3 w-3" />Sub-Branch</Button>
                                   <Button variant="ghost" size="sm" onClick={() => openEditBranch(branch)} title="Edit Branch" className="h-7 w-7 p-0"><Edit2 className="h-3 w-3" /></Button>
-                                  {isSuperAdmin && (
-                                    <Button variant="ghost" size="sm" onClick={() => confirmDelete("branch", branch.id)} title="Delete Branch" className="h-7 w-7 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40"><Trash2 className="h-3 w-3" /></Button>
-                                  )}
                                 </div>
                               </div>
 

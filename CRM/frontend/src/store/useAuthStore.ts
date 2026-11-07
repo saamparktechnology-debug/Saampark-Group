@@ -313,35 +313,32 @@ export function getCompanyLogoUrl(company?: Partial<Company> | null): string | n
 
 export function getCompanyFullName(company?: Partial<Company> | null): string {
   if (!company) return "SAAMPARK GROUP"
-  
+
+  // 1. If explicit registered/custom name is present, preserve it directly
+  const explicitName = (company.name !== undefined && company.name !== null) ? String(company.name).trim() : ""
+  if (explicitName && explicitName.toLowerCase() !== "saampark" && explicitName.toLowerCase() !== "saampark group") {
+    return String(company.name)
+  }
+
+  // 2. Compose from brand_name and division_name if present
+  const brand = (company.brand_name !== undefined && company.brand_name !== null) ? String(company.brand_name) : ""
+  const div = (company.division_name !== undefined && company.division_name !== null) ? String(company.division_name) : ""
+  if (brand.trim() && div.trim()) {
+    return `${brand} ${div}`
+  }
+  if (brand.trim()) {
+    return brand
+  }
+
   const canon = getCanonicalCompanyId(company.slug || company.id || (company as any)?.numeric_id || company.name)
   if (canon === "tech" || canon === "1") {
-    if (company.name && company.name.toUpperCase().includes("PRIVATE LIMITED")) {
-      return company.name.trim()
-    }
-    return "SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED"
+    return "SAAMPARK TECHNOLOGY & RESEARCH"
   }
   if (canon === "consultancy" || canon === "2") {
-    if (company.name && company.name.toUpperCase().includes("PRIVATE LIMITED")) {
-      return company.name.trim()
-    }
-    return "SAAMPARK CONSULTANCY SERVICES PRIVATE LIMITED"
+    return "SAAMPARK CONSULTANCY SERVICE"
   }
 
-  // If company explicitly has a customized/full registered name, respect it
-  const explicitName = (company.name || "").trim()
-  if (explicitName && explicitName.toLowerCase() !== "saampark" && explicitName.toLowerCase() !== "saampark group") {
-    return explicitName
-  }
-
-  const brand = (company.brand_name || "SAAMPARK").trim()
-  const div = (company.division_name !== undefined ? company.division_name : "").trim()
-  
-  if (brand && div) {
-    return `${brand} ${div}`.trim()
-  }
-
-  return brand || explicitName || "SAAMPARK GROUP"
+  return explicitName || "SAAMPARK GROUP"
 }
 
 export function getCanonicalCompanyId(val: string | number | null | undefined): string {
@@ -803,11 +800,12 @@ export const useAuthStore = create<AuthState>()(
             const key = getCanonicalKey(c)
             const existing = map.get(key)
             if (existing) {
+              const explicitName = (c.name && c.name.trim() !== '') ? c.name : existing.name
               map.set(key, {
                 ...mergeNonEmpty(existing, c),
                 id: key,
                 slug: key,
-                name: getCompanyFullName({ ...existing, ...c }),
+                name: explicitName || getCompanyFullName({ ...existing, ...c }),
               })
             }
           })
@@ -818,11 +816,12 @@ export const useAuthStore = create<AuthState>()(
               const key = getCanonicalKey(c)
               const existing = map.get(key)
               if (existing) {
+                const explicitName = (c.name && c.name.trim() !== '') ? c.name : existing.name
                 map.set(key, {
                   ...mergeNonEmpty(existing, c),
                   id: key,
                   slug: key,
-                  name: getCompanyFullName({ ...existing, ...c }),
+                  name: explicitName || getCompanyFullName({ ...existing, ...c }),
                 })
               }
             })
@@ -833,11 +832,12 @@ export const useAuthStore = create<AuthState>()(
             const key = getCanonicalKey(c)
             const existing = map.get(key)
             if (existing) {
+              const explicitName = (c.name && c.name.trim() !== '') ? c.name : existing.name
               const mergedComp = {
                 ...mergeNonEmpty(existing, c),
                 id: key,
                 slug: key,
-                name: (c.name && c.name.trim() !== '') ? c.name : getCompanyFullName({ ...existing, ...c }),
+                name: explicitName || getCompanyFullName({ ...existing, ...c }),
               }
               map.set(key, mergedComp)
             }
@@ -856,7 +856,7 @@ export const useAuthStore = create<AuthState>()(
             division_name: rawTech.division_name !== undefined ? rawTech.division_name : 'TECHNOLOGY',
             subtitle: rawTech.subtitle !== undefined ? rawTech.subtitle : '',
             trademark_symbol: rawTech.trademark_symbol !== undefined ? rawTech.trademark_symbol : '',
-            name: (rawTech.name && rawTech.name.trim() !== '') ? rawTech.name : (getCompanyFullName(rawTech) || 'SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED'),
+            name: (rawTech.name && rawTech.name.trim() !== '') ? rawTech.name : (getCompanyFullName(rawTech) || 'SAAMPARK TECHNOLOGY & RESEARCH'),
             logo: (rawTech.logo && rawTech.logo !== '💻') ? rawTech.logo : (rawTech.logo_url || '💻'),
             logo_url: rawTech.logo_url !== undefined && rawTech.logo_url !== null && rawTech.logo_url !== ''
               ? rawTech.logo_url
@@ -1255,49 +1255,10 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      deleteBranch: async (branchId: string) => {
-        const strId = String(branchId).toLowerCase().trim()
-        const { branches } = get()
-        const targetBranch = branches.find(b => {
-          const bId = String(b.id).toLowerCase().trim()
-          const bCode = String(b.code || '').toLowerCase().trim()
-          return bId === strId || (bCode && bCode === strId)
-        })
-
-        await markGlobalItemDeleted(branchId, 'branches')
-        if (targetBranch) {
-          if (targetBranch.id) await markGlobalItemDeleted(targetBranch.id, 'branches')
-          if (targetBranch.code) await markGlobalItemDeleted(targetBranch.code, 'branches')
-        }
-
-        try {
-          await api.delete(`/branches/${encodeURIComponent(branchId)}`).catch(() => {})
-          if (targetBranch?.id && String(targetBranch.id) !== branchId) {
-            await api.delete(`/branches/${encodeURIComponent(String(targetBranch.id))}`).catch(() => {})
-          }
-        } catch {}
-
-        const targetId = targetBranch ? String(targetBranch.id).toLowerCase().trim() : strId
-        const targetCode = targetBranch?.code ? String(targetBranch.code).toLowerCase().trim() : ''
-
-        const updated = (branches || []).filter(Boolean).filter(b => {
-          const bId = String(b.id).toLowerCase().trim()
-          const bCode = String(b.code || '').toLowerCase().trim()
-          if (bId === strId || bId === targetId) return false
-          if (targetCode && (bId === targetCode || bCode === targetCode)) return false
-          if (bCode && bCode === strId) return false
-          return true
-        })
-        set({ branches: updated })
-        await saveModuleDataToDB('branches', updated, 'all').catch(() => {})
-
-        // Also clean up any sub-branches that were children of this deleted branch
-        const { subBranches } = get()
-        const updatedSub = (subBranches || []).filter(Boolean).filter(sb => {
-          const pId = String(sb.parentBranchId || (sb as any).branch_id || (sb as any).branchId || '').toLowerCase().trim()
-          return pId !== strId && pId !== targetId && (targetCode ? pId !== targetCode : true)
-        })
-        set({ subBranches: updatedSub })
+      deleteBranch: async (_branchId: string) => {
+        console.warn('Branch deletion is permanently disabled. Branches cannot be deleted once created.')
+        return false
+      },
         await saveModuleDataToDB('sub_branches', updatedSub, 'all').catch(() => {})
 
         if (typeof window !== 'undefined') {
