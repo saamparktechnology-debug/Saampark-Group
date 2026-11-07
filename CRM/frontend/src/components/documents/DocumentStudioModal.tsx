@@ -29,6 +29,8 @@ import { addSubscription, saveInstallmentRecord } from "@/app/feature/subscripti
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
+import { DigitalMarketingPackageBuilder } from "@/components/documents/DigitalMarketingPackageBuilder"
+import { DigitalMarketingPackage, createDefaultMarketingPackage } from "@/types/digitalMarketing"
 
 export interface DocumentStudioModalProps {
   isOpen: boolean
@@ -236,6 +238,11 @@ export function DocumentStudioModal({
       }).catch(() => {})
     })
   }, [clientName, selectedClient, companyId, mode, initialData?.creditDeduction])
+
+  // Digital Marketing & Form No - 9 State
+  const [marketingPackage, setMarketingPackage] = React.useState<DigitalMarketingPackage>(() => {
+    return initialData?.marketingPackage || createDefaultMarketingPackage("Grow - 2")
+  })
 
   // Primary Category (Website, Software, Android/Ios, Cloud and domain, Custom)
   const [primaryCategory, setPrimaryCategory] = React.useState<string>(() => {
@@ -573,6 +580,12 @@ export function DocumentStudioModal({
       setSetupCharge(initialData.setupCharge !== undefined ? initialData.setupCharge : "")
       if (initialData.notes) setNotes(initialData.notes)
       if (initialData.terms) setTerms(initialData.terms)
+
+      if (initialData?.marketingPackage) {
+        setMarketingPackage(initialData.marketingPackage)
+      } else {
+        setMarketingPackage(createDefaultMarketingPackage("Grow - 2"))
+      }
 
       if (initialData.assignedMembers && Array.isArray(initialData.assignedMembers) && initialData.assignedMembers.length > 0) {
         setAssignedMembers(initialData.assignedMembers)
@@ -920,39 +933,40 @@ export function DocumentStudioModal({
         prepaidCycles: subPrepaidCycles,
         remainingCycles: subRemainingCycles,
         nextBillingDate: paymentPlan === "subscription" ? subNextBillingDate : dueDate,
-      }
-
-      // Auto-save client if custom or new
-      if (clientMode === "custom" || (!selectedClient && clientName.trim())) {
-        try {
-          await saveStoredClient({
-            id: `cli_${Date.now()}`,
-            name: clientName.trim(),
-            primaryContact: contactPersonName.trim() || clientName.trim(),
-            designation: effectiveDesignation,
-            phone: clientPhone,
-            email: clientEmail,
-            address: clientAddress,
-            city: clientCity,
-            district: clientDistrict,
-            state: clientState,
-            zip: clientPincode,
-            gstNumber: clientGst,
-            companyId: companyId,
-            group: "Standard",
-            label: "Active",
-            labelColor: "#3B82F6",
-            projectsCount: 1,
-            totalInvoiced: `₹${effectiveDocTotal.toLocaleString("en-IN")}`,
-            paymentReceived: `₹${effectiveAdvance.toLocaleString("en-IN")}`,
-            due: `₹${effectiveDue.toLocaleString("en-IN")}`,
-          })
-        } catch (cErr) {
-          console.warn("Auto-save client error:", cErr)
-        }
+        marketingPackage: marketingPackage.enabled ? marketingPackage : undefined,
       }
 
       if (mode === "invoice") {
+        // Auto-save client ONLY when creating an official invoice (quotations and estimates do not create client accounts)
+        if (clientMode === "custom" || (!selectedClient && clientName.trim())) {
+          try {
+            await saveStoredClient({
+              id: `cli_${Date.now()}`,
+              name: clientName.trim(),
+              primaryContact: contactPersonName.trim() || clientName.trim(),
+              designation: effectiveDesignation,
+              phone: clientPhone,
+              email: clientEmail,
+              address: clientAddress,
+              city: clientCity,
+              district: clientDistrict,
+              state: clientState,
+              zip: clientPincode,
+              gstNumber: clientGst,
+              companyId: companyId,
+              group: "Standard",
+              label: "Active",
+              labelColor: "#3B82F6",
+              projectsCount: 1,
+              totalInvoiced: `₹${effectiveDocTotal.toLocaleString("en-IN")}`,
+              paymentReceived: `₹${effectiveAdvance.toLocaleString("en-IN")}`,
+              due: `₹${effectiveDue.toLocaleString("en-IN")}`,
+            })
+          } catch (cErr) {
+            console.warn("Auto-save client error:", cErr)
+          }
+        }
+
         let saved
         if (initialData?.id) {
           saved = await updateInvoice(finalDocPayload)
@@ -1079,12 +1093,20 @@ export function DocumentStudioModal({
             const existingProjects = await getProjects(companyId)
             const cleanTitle = effectiveProjectName.trim()
             const found = existingProjects.find(p => p.title.toLowerCase().trim() === cleanTitle.toLowerCase())
+            const isDigitalMarketing = effectiveCategory.toLowerCase().includes("marketing") || Boolean(marketingPackage?.enabled)
+            const mappedMembers = assignedMembers.map(m => ({
+              id: m.memberId,
+              name: m.memberName,
+              role: m.memberRole || (isDigitalMarketing ? "Marketing Specialist" : "Developer"),
+              avatar: m.memberAvatar,
+              avatarUrl: m.memberAvatar,
+            }))
             if (!found) {
               await addProject({
                 title: cleanTitle,
                 client: String(clientName || selectedClient?.name || "Client"),
                 clientId: selectedClient?.id ? String(selectedClient.id) : undefined,
-                projectType: "Client Project",
+                projectType: isDigitalMarketing ? "Digital Marketing Campaign" : "Client Project",
                 price: `₹${effectiveDocTotal.toLocaleString("en-IN")}`,
                 startDate: issueDate || new Date().toISOString().split("T")[0],
                 deadline: dueDate || new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
@@ -1096,8 +1118,12 @@ export function DocumentStudioModal({
                 companyId: companyId,
                 branchId: branchId || undefined,
                 subBranchId: subBranchId || undefined,
-                labels: ["Client Project", effectiveCategory, paymentPlan.toUpperCase()],
-                description: `Project for ${clientName || "Client"} - Invoice #${docNumber}. Category: ${effectiveCategory}`,
+                members: mappedMembers,
+                marketingPackage: isDigitalMarketing ? marketingPackage : undefined,
+                labels: [isDigitalMarketing ? "Digital Marketing" : "Client Project", effectiveCategory, paymentPlan.toUpperCase()],
+                description: isDigitalMarketing
+                  ? `Digital Marketing Campaign for ${clientName || "Client"} (${marketingPackage.planName || "Grow Plan"}, ${marketingPackage.packageDuration || "1 month"}). Posters: ${marketingPackage.postersCount || 12}, Reels: ${marketingPackage.videosCount || 2}. Target: ${marketingPackage.targetLocations || "Regional"}`
+                  : `Project for ${clientName || "Client"} - Invoice #${docNumber}. Category: ${effectiveCategory}`,
               }, companyId)
             }
           } catch (projErr) {
@@ -1107,6 +1133,42 @@ export function DocumentStudioModal({
 
         onSaveSuccess?.(saved || finalDocPayload)
       } else if (mode === "quotation") {
+        const effectiveQuotationItems = (deliverables.length > 0 && items.length <= 1)
+          ? deliverables.map((del, dIdx) => {
+              const baseShare = deliverables.length > 0 ? Math.floor(taxableBase / deliverables.length) : taxableBase
+              const rem = taxableBase - (baseShare * deliverables.length)
+              const modTotal = dIdx === deliverables.length - 1 ? (baseShare + rem) : baseShare
+              return {
+                id: del.id || `item_${dIdx + 1}`,
+                name: del.title || `Module ${dIdx + 1}`,
+                serviceName: del.title || `Module ${dIdx + 1}`,
+                description: del.description || "",
+                deliverableTime: del.duration || "1-2 Weeks",
+                sac: items[0]?.sacCode || (docScheme === "gst" ? "998313" : "998311"),
+                quantity: 1,
+                unit: "Module",
+                unitPrice: modTotal,
+                rate: modTotal,
+                gstRate: docScheme === "gst" ? 18 : 0,
+                gstAmount: docScheme === "gst" ? Math.round(modTotal * 0.18) : 0,
+                total: modTotal,
+              }
+            })
+          : items.map(it => ({
+              id: it.id,
+              name: it.serviceName,
+              serviceName: it.serviceName,
+              description: it.description || "",
+              deliverableTime: (it as any).deliverableTime || "1-2 Weeks",
+              sac: it.sacCode,
+              quantity: it.qty,
+              unitPrice: it.rate,
+              rate: it.rate,
+              gstRate: docScheme === "gst" ? (it.gstRate ?? 18) : 0,
+              gstAmount: docScheme === "gst" ? Math.round((it.rate * it.qty) * ((it.gstRate ?? 18) / 100)) : 0,
+              total: it.totalAmount || (it.rate * it.qty)
+            }))
+
         const quotationPayload = {
           id: initialData?.id || docNumber,
           number: docNumber,
@@ -1151,34 +1213,9 @@ export function DocumentStudioModal({
           companyId: companyId,
           branchId: branchId,
           subBranchId: subBranchId,
-          services: items.map(it => ({
-            id: it.id,
-            name: it.serviceName,
-            serviceName: it.serviceName,
-            sac: it.sacCode,
-            quantity: it.qty,
-            unitPrice: it.rate,
-            rate: it.rate,
-            description: it.description || "",
-            deliverableTime: (it as any).deliverableTime || "1-2 Weeks",
-            gstRate: docScheme === "gst" ? (it.gstRate ?? 18) : 0,
-            gstAmount: docScheme === "gst" ? Math.round((it.rate * it.qty) * ((it.gstRate ?? 18) / 100)) : 0,
-            total: it.totalAmount || (it.rate * it.qty)
-          })),
-          items: items.map(it => ({
-            id: it.id,
-            name: it.serviceName,
-            serviceName: it.serviceName,
-            description: it.description || "",
-            deliverableTime: (it as any).deliverableTime || "1-2 Weeks",
-            sac: it.sacCode,
-            quantity: it.qty,
-            unitPrice: it.rate,
-            rate: it.rate,
-            gstRate: docScheme === "gst" ? (it.gstRate ?? 18) : 0,
-            gstAmount: docScheme === "gst" ? Math.round((it.rate * it.qty) * ((it.gstRate ?? 18) / 100)) : 0,
-            total: it.totalAmount || (it.rate * it.qty)
-          }))
+          services: effectiveQuotationItems,
+          items: effectiveQuotationItems,
+          marketingPackage: marketingPackage.enabled ? marketingPackage : undefined,
         }
 
         let saved: any = null
@@ -1272,7 +1309,8 @@ export function DocumentStudioModal({
             gstRate: docScheme === "gst" ? (it.gstRate ?? 18) : 0,
             gstAmount: docScheme === "gst" ? Math.round((it.rate * it.qty) * ((it.gstRate ?? 18) / 100)) : 0,
             total: it.totalAmount || (it.rate * it.qty)
-          }))
+          })),
+          marketingPackage: marketingPackage.enabled ? marketingPackage : undefined,
         }
 
         let saved: any = null
@@ -1329,7 +1367,7 @@ export function DocumentStudioModal({
     ? "Create Commercial Project Quotation & Tender"
     : "Create Project Cost Estimate"
 
-  const totalSteps = mode === "estimate" ? 2 : 3
+  const totalSteps = mode === "estimate" ? 3 : 4
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-1.5 sm:p-5 overflow-y-auto">
@@ -1396,7 +1434,7 @@ export function DocumentStudioModal({
         {/* ── CLEAN TAB BAR TAILORED BY DOCUMENT TYPE (Fully Mobile Scrollable) ── */}
         <div className="border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 text-center font-bold shrink-0 overflow-x-auto">
           {mode === "quotation" && (
-            <div className="flex sm:grid sm:grid-cols-3 min-w-full">
+            <div className="flex sm:grid sm:grid-cols-4 min-w-full">
               <button
                 type="button"
                 onClick={() => setCurrentStep(1)}
@@ -1424,11 +1462,20 @@ export function DocumentStudioModal({
               >
                 3. Commercial Value &amp; Milestones
               </button>
+              <button
+                type="button"
+                onClick={() => setCurrentStep(4)}
+                className={`py-2.5 sm:py-3 px-3.5 border-b-2 text-[11px] sm:text-xs transition-all cursor-pointer whitespace-nowrap flex-1 ${
+                  currentStep === 4 ? "border-purple-600 text-purple-600 bg-white dark:bg-zinc-900 font-bold" : "border-transparent text-purple-600 hover:text-purple-800"
+                }`}
+              >
+                4. 📢 Digital Marketing (Form 9)
+              </button>
             </div>
           )}
 
           {mode === "estimate" && (
-            <div className="flex sm:grid sm:grid-cols-2 min-w-full">
+            <div className="flex sm:grid sm:grid-cols-3 min-w-full">
               <button
                 type="button"
                 onClick={() => setCurrentStep(1)}
@@ -1447,11 +1494,20 @@ export function DocumentStudioModal({
               >
                 2. Estimated Services &amp; Notes
               </button>
+              <button
+                type="button"
+                onClick={() => setCurrentStep(3)}
+                className={`py-2.5 sm:py-3 px-3.5 border-b-2 text-[11px] sm:text-xs transition-all cursor-pointer whitespace-nowrap flex-1 ${
+                  currentStep === 3 ? "border-purple-600 text-purple-600 bg-white dark:bg-zinc-900 font-bold" : "border-transparent text-purple-600 hover:text-purple-800"
+                }`}
+              >
+                3. 📢 Digital Marketing (Form 9)
+              </button>
             </div>
           )}
 
           {mode === "invoice" && (
-            <div className="flex sm:grid sm:grid-cols-3 min-w-full">
+            <div className="flex sm:grid sm:grid-cols-4 min-w-full">
               <button
                 type="button"
                 onClick={() => setCurrentStep(1)}
@@ -1478,6 +1534,15 @@ export function DocumentStudioModal({
                 }`}
               >
                 3. Items &amp; Calculation
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentStep(4)}
+                className={`py-2.5 sm:py-3 px-3.5 border-b-2 text-[11px] sm:text-xs transition-all cursor-pointer whitespace-nowrap flex-1 ${
+                  currentStep === 4 ? "border-purple-600 text-purple-600 bg-white dark:bg-zinc-900 font-bold" : "border-transparent text-purple-600 hover:text-purple-800"
+                }`}
+              >
+                4. 📢 Digital Marketing (Form 9)
               </button>
             </div>
           )}
@@ -1962,6 +2027,17 @@ export function DocumentStudioModal({
                   </div>
                 </div>
               )}
+
+              {/* Step 4: Digital Marketing (Form 9) */}
+              {currentStep === 4 && (
+                <DigitalMarketingPackageBuilder
+                  value={marketingPackage}
+                  onChange={setMarketingPackage}
+                  clientName={clientName}
+                  clientPhone={clientPhone}
+                  clientAddress={clientAddress}
+                />
+              )}
             </>
           )}
 
@@ -2140,6 +2216,17 @@ export function DocumentStudioModal({
                     />
                   </div>
                 </div>
+              )}
+
+              {/* Step 3: Digital Marketing (Form 9) */}
+              {currentStep === 3 && (
+                <DigitalMarketingPackageBuilder
+                  value={marketingPackage}
+                  onChange={setMarketingPackage}
+                  clientName={clientName}
+                  clientPhone={clientPhone}
+                  clientAddress={clientAddress}
+                />
               )}
             </>
           )}
@@ -2603,21 +2690,41 @@ export function DocumentStudioModal({
                           </span>
                           <span className="text-[9.5px] text-teal-600 font-bold">Printed on Invoice Header &amp; Scope</span>
                         </label>
-                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
                           {[
                             { id: "Website", label: "🌐 Website" },
                             { id: "Software", label: "💻 Software" },
                             { id: "Android/Ios", label: "📱 Android / iOS" },
+                            { id: "Digital Marketing", label: "📈 Digital Marketing" },
                             { id: "Cloud and domain", label: "☁️ Cloud & Domain" },
                             { id: "Custom", label: "✨ Custom" },
                           ].map(cat => (
                             <button
                               key={cat.id}
                               type="button"
-                              onClick={() => setPrimaryCategory(cat.id)}
+                              onClick={() => {
+                                setPrimaryCategory(cat.id)
+                                if (cat.id === "Digital Marketing") {
+                                  setMarketingPackage(prev => ({ ...prev, enabled: true }))
+                                  if (items.length === 1 && (!items[0].serviceName || items[0].serviceName === "Website Development")) {
+                                    setItems([{
+                                      id: `svc_${Date.now()}`,
+                                      serviceName: "Digital Marketing & Social Media Campaign (Grow - 2)",
+                                      sacCode: docScheme === "gst" ? "998311" : "",
+                                      qty: 1,
+                                      unit: "Month",
+                                      rate: 12000,
+                                      gstRate: docScheme === "gst" ? 18 : 0,
+                                      gstAmount: docScheme === "gst" ? Math.round(12000 * 0.18) : 0,
+                                      charges: [],
+                                      totalAmount: 12000
+                                    }])
+                                  }
+                                }
+                              }}
                               className={`p-2.5 rounded-xl border text-center font-bold text-xs transition-all cursor-pointer ${
                                 primaryCategory === cat.id
-                                  ? "border-teal-600 bg-teal-50 dark:bg-teal-950/60 text-teal-800 dark:text-teal-200 ring-1 ring-teal-500 shadow-2xs"
+                                  ? "border-purple-600 bg-purple-50 dark:bg-purple-950/60 text-purple-800 dark:text-purple-200 ring-1 ring-purple-500 shadow-2xs"
                                   : "border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:border-zinc-300"
                               }`}
                             >
@@ -3291,6 +3398,17 @@ export function DocumentStudioModal({
                     </div>
                   </div>
                 </div>
+              )}
+
+              {/* Step 4: Digital Marketing (Form 9) */}
+              {currentStep === 4 && (
+                <DigitalMarketingPackageBuilder
+                  value={marketingPackage}
+                  onChange={setMarketingPackage}
+                  clientName={clientName}
+                  clientPhone={clientPhone}
+                  clientAddress={clientAddress}
+                />
               )}
             </>
           )}

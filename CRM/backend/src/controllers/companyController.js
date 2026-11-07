@@ -1,6 +1,27 @@
 const pool = require('../config/db');
 const { successResponse, errorResponse } = require('../utils/apiResponse');
 
+// Ensure required columns exist in companies table (auto-migrate if missing)
+async function ensureCompanyColumns() {
+  try {
+    await pool.execute('ALTER TABLE companies MODIFY COLUMN address TEXT NULL').catch(() => {});
+    await pool.execute('ALTER TABLE companies MODIFY COLUMN logo_url LONGTEXT NULL').catch(() => {});
+    await pool.execute('ALTER TABLE companies MODIFY COLUMN signature_image_url LONGTEXT NULL').catch(() => {});
+    await pool.execute('ALTER TABLE companies MODIFY COLUMN stamp_image_url LONGTEXT NULL').catch(() => {});
+    await pool.execute('ALTER TABLE companies MODIFY COLUMN payment_qr_url LONGTEXT NULL').catch(() => {});
+    await pool.execute('ALTER TABLE companies MODIFY COLUMN gst_payment_qr_url LONGTEXT NULL').catch(() => {});
+    await pool.execute('ALTER TABLE companies MODIFY COLUMN nongst_payment_qr_url LONGTEXT NULL').catch(() => {});
+    await pool.execute('ALTER TABLE companies ADD COLUMN bottom_footer_text TEXT NULL').catch(() => {});
+    await pool.execute('ALTER TABLE companies ADD COLUMN quotation_notes TEXT NULL').catch(() => {});
+    await pool.execute('ALTER TABLE companies ADD COLUMN footer_text TEXT NULL').catch(() => {});
+    await pool.execute('ALTER TABLE companies ADD COLUMN terms_conditions LONGTEXT NULL').catch(() => {});
+    await pool.execute('ALTER TABLE companies ADD COLUMN invoice_notes LONGTEXT NULL').catch(() => {});
+    await pool.execute('ALTER TABLE companies ADD COLUMN gst_payment_qr_url LONGTEXT NULL').catch(() => {});
+    await pool.execute('ALTER TABLE companies ADD COLUMN nongst_payment_qr_url LONGTEXT NULL').catch(() => {});
+  } catch {}
+}
+ensureCompanyColumns();
+
 // ─── GET ALL COMPANIES ─────────────────────────────────────────────────────────
 const getAllCompanies = async (req, res, next) => {
   try {
@@ -115,12 +136,30 @@ const updateCompany = async (req, res, next) => {
     const isSuper = userRoleId === 1 || userRole === 'super admin' || userRole === 'superadmin';
 
     const isNumericParam = Number.isFinite(Number(req.params.id));
-    const [targetRows] = await pool.execute(
+    let [targetRows] = await pool.execute(
       isNumericParam 
         ? 'SELECT id, slug FROM companies WHERE id = ? UNION SELECT id, slug FROM companies WHERE slug = ? LIMIT 1'
         : 'SELECT id, slug FROM companies WHERE slug = ? UNION SELECT id, slug FROM companies WHERE id = ? LIMIT 1',
       [req.params.id, req.params.id]
     );
+
+    if (!targetRows.length) {
+      const targetParam = String(req.params.id).toLowerCase().trim();
+      const insertSlug = (targetParam === '2' || targetParam === 'consultancy') ? 'consultancy' : targetParam;
+      const insertName = req.body.name || req.body.brand_name || (insertSlug === 'consultancy' ? 'SAAMPARK CONSULTANCY SERVICE' : 'SAAMPARK');
+      const insertId = isNumericParam ? Number(req.params.id) : (insertSlug === 'consultancy' ? 2 : null);
+
+      await pool.execute(
+        `INSERT INTO companies (id, slug, name, brand_name, division_name, status) 
+         VALUES (?, ?, ?, ?, ?, 'active') 
+         ON DUPLICATE KEY UPDATE name=VALUES(name)`,
+        [insertId, insertSlug, insertName, req.body.brand_name || 'SAAMPARK', req.body.division_name || (insertSlug === 'consultancy' ? 'CONSULTANCY SERVICE' : '')]
+      ).catch(() => {});
+
+      const [reRows] = await pool.execute('SELECT id, slug FROM companies WHERE id = ? OR slug = ? LIMIT 1', [insertId, insertSlug]).catch(() => [[]]);
+      if (reRows.length) targetRows = reRows;
+    }
+
     if (!targetRows.length) return errorResponse(res, 404, 'Company not found.');
 
     const numericId = targetRows[0].id;
@@ -176,11 +215,15 @@ const updateCompany = async (req, res, next) => {
       'name', ...(isSuper ? ['slug'] : []), 'currency', 'currency_symbol', 'logo_url', 'address', 'industry', 'phone', 'email',
       'brand_name', 'division_name', 'subtitle', 'trademark_symbol', 'iso_certification', 'gstin', 'pan', 'cin', 'msme_reg', 'website',
       'signatory_name', 'signatory_designation', 'signature_image_url', 'stamp_image_url',
-      'terms_conditions', 'invoice_notes', 'upi_id', 'account_holder', 'bank_name', 'account_number', 'ifsc_code', 'bank_branch', 'payment_qr_url',
+      'terms_conditions', 'invoice_notes', 'quotation_notes', 'bottom_footer_text', 'footer_text', 'upi_id', 'account_holder', 'bank_name', 'account_number', 'ifsc_code', 'bank_branch', 'payment_qr_url',
       'gst_bank_name', 'gst_account_holder', 'gst_account_number', 'gst_ifsc_code', 'gst_bank_branch', 'gst_upi_id', 'gst_payment_qr_url',
       'nongst_bank_name', 'nongst_account_holder', 'nongst_account_number', 'nongst_ifsc_code', 'nongst_bank_branch', 'nongst_upi_id', 'nongst_payment_qr_url',
       'signature_position', 'stamp_position', 'logo_position', 'logo_scale', 'stamp_scale', 'signature_scale', 'custom_stamps', 'zoom', 'preview_scale', 'preview_invoice_type', 'invoice_customization'
     ];
+
+    if (req.body.logo_url === undefined && req.body.logo !== undefined) {
+      req.body.logo_url = req.body.logo;
+    }
 
     const fields = [];
     const values = [];

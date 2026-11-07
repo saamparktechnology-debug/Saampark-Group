@@ -73,4 +73,10 @@ export interface Lead {
   transferredBy?: string
   transferredByRole?: string
   transferredAt?: string
+  clientId?: string
+  clientName?: string
+  isExistingClient?: boolean
+  expectedTimeline?: string
+  expectedStartDate?: string
+  projectRequirement?: string
 }

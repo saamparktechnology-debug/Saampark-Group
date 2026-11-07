@@ -297,7 +297,15 @@ const login = async (req, res, next) => {
       [uEmailNorm, uIdStr]
     );
     if (delRows.length > 0 && user.role_id !== 1 && uEmailNorm !== 'saampark.official@gmail.com') {
-      return errorResponse(res, 403, 'Your account has been deleted. Please contact your administrator.');
+      if (user.deleted_at === null && (!user.status || user.status.toLowerCase() === 'active')) {
+        // Auto-heal stale entry in deleted_items since account is active in users table
+        await pool.execute(
+          'DELETE FROM deleted_items WHERE (LOWER(TRIM(item_id)) = ? OR LOWER(TRIM(item_id)) = ?) AND module_name = "users"',
+          [uEmailNorm, uIdStr]
+        ).catch(() => {});
+      } else {
+        return errorResponse(res, 403, 'Your account has been deleted. Please contact your administrator.');
+      }
     }
 
     let isMatch = await comparePassword(password, user.password_hash);
@@ -363,7 +371,7 @@ const login = async (req, res, next) => {
         } catch {}
       }
 
-      if (compTarget) {
+      if (compTarget && String(compTarget).toLowerCase().trim() !== 'all') {
         const [delRows] = await pool.execute(
           'SELECT 1 FROM deleted_items WHERE (LOWER(TRIM(item_id)) = ? OR LOWER(TRIM(item_id)) = ?) AND module_name = "companies"',
           [String(compTarget).toLowerCase().trim(), String(compTarget).toLowerCase().trim()]
@@ -373,14 +381,12 @@ const login = async (req, res, next) => {
         }
 
         const [compRows] = await pool.execute(
-          'SELECT id, status FROM companies WHERE id = ? OR slug = ?',
+          'SELECT id, status FROM companies WHERE LOWER(id) = LOWER(?) OR LOWER(slug) = LOWER(?)',
           [compTarget, compTarget]
         );
-        if (compRows.length === 0 || (compRows[0].status && compRows[0].status.toLowerCase() !== 'active')) {
+        if (compRows.length > 0 && compRows[0].status && compRows[0].status.toLowerCase() !== 'active') {
           return errorResponse(res, 403, 'Company not available. Please contact administrator.');
         }
-      } else {
-        return errorResponse(res, 403, 'Company not available. Please contact administrator.');
       }
     }
 
@@ -393,6 +399,14 @@ const login = async (req, res, next) => {
     delete user.pin_hash;
     user.hasPin = hasPin;
     user.mustSetupPin = mustSetupPin;
+    user.kycStatus = user.kyc_status || 'Pending';
+    if (user.kyc_data) {
+      try {
+        user.kycData = typeof user.kyc_data === 'string' ? JSON.parse(user.kyc_data) : user.kyc_data;
+      } catch {
+        user.kycData = null;
+      }
+    }
 
     return successResponse(res, 200, 'Login successful', { user, token, hasPin, mustSetupPin });
   } catch (error) {
@@ -812,23 +826,6 @@ const resetPinWithOTP = async (req, res, next) => {
       const [appDataRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "users"');
       if (appDataRows.length > 0) {
         let list = JSON.parse(appDataRows[0].data_json);
-        if (Array.isArray(list)) {
-          const idx = list.findIndex(u => u.email && u.email.toLowerCase().trim() === targetEmail);
-          if (idx >= 0) {
-            list[idx].pin_hash = pinHash;
-            list[idx].pin_setup_completed = true;
-            list[idx].hasPin = true;
-            await pool.execute('UPDATE app_data SET data_json = ?, updated_at = NOW() WHERE module_key = "users"', [JSON.stringify(list)]);
-          }
-        }
-      }
-    } catch {}
-
-    return successResponse(res, 200, '4-Digit Security PIN successfully updated!');
-  } catch (error) {
-    next(error);
-  }
-};
         if (Array.isArray(list)) {
           const idx = list.findIndex(u => u.email && u.email.toLowerCase().trim() === targetEmail);
           if (idx >= 0) {

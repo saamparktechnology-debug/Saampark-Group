@@ -14,11 +14,49 @@ import { usePermissionStore } from "@/store/usePermissionStore"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
 import { ImageUploadField } from "@/components/ui/ImageUploadField"
 import { BranchApiService, SubBranchApiService } from "@/app/feature/companies/services/companyService"
-import { OfficialInvoiceDocument } from "@/app/feature/sales/invoices/components/OfficialInvoiceDocument"
 
 type Tab = "branches" | "sub-branches"
 type BranchModalTab = "basic" | "address" | "tax" | "bank" | "signatory"
 type SubBranchModalTab = "basic" | "address" | "tax" | "bank" | "signatory"
+
+const cleanStr = (val: any) => (val && typeof val === "string" ? val.trim() : "")
+const cleanUpper = (val: any) => (val && typeof val === "string" ? val.trim().toUpperCase() : "")
+
+class SafeModalBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error: any }> {
+  constructor(props: any) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error }
+  }
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error("Branch Modal Error:", error, errorInfo)
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-6 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200 rounded-2xl m-4 space-y-3">
+          <div className="flex items-center gap-2 font-bold text-sm">
+            <AlertCircle size={18} className="text-rose-600" />
+            <span>Form Render Issue</span>
+          </div>
+          <pre className="text-xs bg-white dark:bg-zinc-900 p-3 rounded-xl border border-rose-200 dark:border-rose-800/60 overflow-auto max-h-48 whitespace-pre-wrap font-mono">
+            {String(this.state.error?.message || this.state.error)}
+          </pre>
+          <button 
+            type="button" 
+            onClick={() => this.setState({ hasError: false, error: null })} 
+            className="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all"
+          >
+            Reset Form
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 export default function BranchesMain() {
   const { 
@@ -269,135 +307,141 @@ export default function BranchesMain() {
   // ── OPEN BRANCH MODALS ─────────────────────────────────────────────
   const openAddBranch = () => {
     setEditingBranch(null)
-    setBranchCompanyId(activeCompanyId || (companies[0]?.id || "tech"))
+    const initialComp = (activeCompanyId && activeCompanyId !== "all") 
+      ? activeCompanyId 
+      : (selectableCompanies?.[0]?.id || companies?.[0]?.id || "tech")
+    setBranchCompanyId(String(initialComp))
+    const pComp = companies.find(c => isMatchingCompany(c, initialComp)) || companies[0]
     setBranchTab("basic")
     setBranchBankProfileTab("gst")
     setBranchForm({
       name: "",
       code: `BR-${Math.floor(100 + Math.random() * 900)}`,
-      brand_name: "SAAMPARK",
-      division_name: "",
-      subtitle: "",
-      logo_url: "",
+      brand_name: pComp?.brand_name || "SAAMPARK",
+      division_name: pComp?.division_name || "",
+      subtitle: pComp?.subtitle || "",
+      logo_url: pComp?.logo_url || "",
       managerName: user?.name || "",
       managerPhone: user?.phone || "",
       managerEmail: user?.email || "",
       status: "Active",
       
-      address: "",
-      city: "",
-      state: "West Bengal",
-      zip: "",
-      country: "India",
-      phone: "",
-      email: "",
-      website: "",
+      address: pComp?.address || "",
+      city: pComp?.city || "",
+      state: pComp?.state || "West Bengal",
+      zip: pComp?.zip || "",
+      country: pComp?.country || "India",
+      phone: pComp?.phone || "",
+      email: pComp?.email || "",
+      website: pComp?.website || "",
 
-      gstin: "",
-      pan: "",
-      cin: "",
-      msme_reg: "",
-      iso_certification: "An ISO 9001:2015 Certified Company",
+      gstin: pComp?.gstin || "",
+      pan: pComp?.pan || "",
+      cin: pComp?.cin || "",
+      msme_reg: pComp?.msme_reg || "",
+      iso_certification: pComp?.iso_certification || "An ISO 9001:2015 Certified Company",
 
-      bank_name: "",
-      account_holder: "",
-      account_number: "",
-      ifsc_code: "",
-      bank_branch: "",
-      upi_id: "",
-      payment_qr_url: "",
+      bank_name: pComp?.bank_name || pComp?.gst_bank_name || "",
+      account_holder: pComp?.account_holder || pComp?.gst_account_holder || "",
+      account_number: pComp?.account_number || pComp?.gst_account_number || "",
+      ifsc_code: pComp?.ifsc_code || pComp?.gst_ifsc_code || "",
+      bank_branch: pComp?.bank_branch || pComp?.gst_bank_branch || "",
+      upi_id: pComp?.upi_id || pComp?.gst_upi_id || "",
+      payment_qr_url: pComp?.payment_qr_url || pComp?.gst_payment_qr_url || "",
 
       // Dual GST and Non-GST Bank Profiles for Branch
-      gst_bank_name: "",
-      gst_account_holder: "",
-      gst_account_number: "",
-      gst_ifsc_code: "",
-      gst_bank_branch: "",
-      gst_upi_id: "",
-      gst_payment_qr_url: "",
+      gst_bank_name: pComp?.gst_bank_name || pComp?.bank_name || "",
+      gst_account_holder: pComp?.gst_account_holder || pComp?.account_holder || "",
+      gst_account_number: pComp?.gst_account_number || pComp?.account_number || "",
+      gst_ifsc_code: pComp?.gst_ifsc_code || pComp?.ifsc_code || "",
+      gst_bank_branch: pComp?.gst_bank_branch || pComp?.bank_branch || "",
+      gst_upi_id: pComp?.gst_upi_id || pComp?.upi_id || "",
+      gst_payment_qr_url: pComp?.gst_payment_qr_url || pComp?.payment_qr_url || "",
 
-      nongst_bank_name: "",
-      nongst_account_holder: "",
-      nongst_account_number: "",
-      nongst_ifsc_code: "",
-      nongst_bank_branch: "",
-      nongst_upi_id: "",
-      nongst_payment_qr_url: "",
+      nongst_bank_name: pComp?.nongst_bank_name || pComp?.bank_name || "",
+      nongst_account_holder: pComp?.nongst_account_holder || pComp?.account_holder || "",
+      nongst_account_number: pComp?.nongst_account_number || pComp?.account_number || "",
+      nongst_ifsc_code: pComp?.nongst_ifsc_code || pComp?.ifsc_code || "",
+      nongst_bank_branch: pComp?.nongst_bank_branch || pComp?.bank_branch || "",
+      nongst_upi_id: pComp?.nongst_upi_id || pComp?.upi_id || "",
+      nongst_payment_qr_url: pComp?.nongst_payment_qr_url || pComp?.payment_qr_url || "",
 
-      signatory_name: user?.name || "Authorized Signatory",
-      signatory_designation: "Branch Manager",
-      signature_image_url: "",
-      stamp_image_url: "",
-      terms_conditions: "1. All disputes subject to local jurisdiction only.\n2. Goods/Services once billed are non-refundable.",
-      invoice_notes: "Thank you for partnering with us.",
+      signatory_name: pComp?.signatory_name || user?.name || "Authorized Signatory",
+      signatory_designation: pComp?.signatory_designation || "Branch Manager",
+      signature_image_url: pComp?.signature_image_url || "",
+      stamp_image_url: pComp?.stamp_image_url || "",
+      terms_conditions: pComp?.terms_conditions || (pComp as any)?.terms || "1. All disputes subject to local jurisdiction only.\n2. Goods/Services once billed are non-refundable.",
+      invoice_notes: pComp?.invoice_notes || (pComp as any)?.notes || "Thank you for partnering with us.",
     })
     setIsBranchModalOpen(true)
   }
 
   const openEditBranch = (b: Branch) => {
     setEditingBranch(b)
-    setBranchCompanyId(b.companyId || activeCompanyId || "tech")
+    const effectiveComp = b.companyId || (b as any).company_id || activeCompanyId || "tech"
+    setBranchCompanyId(effectiveComp)
+    const pComp = companies.find(c => isMatchingCompany(c, effectiveComp)) || companies[0]
     setBranchTab("basic")
     setBranchBankProfileTab("gst")
     setBranchForm({
       name: b.name || "",
       code: b.code || "",
-      brand_name: b.brand_name || "SAAMPARK",
-      division_name: b.division_name || "",
-      subtitle: b.subtitle || "",
-      logo_url: b.logo_url || "",
+      brand_name: b.brand_name || pComp?.brand_name || "SAAMPARK",
+      division_name: b.division_name || pComp?.division_name || "",
+      subtitle: b.subtitle || pComp?.subtitle || "",
+      logo_url: b.logo_url || pComp?.logo_url || "",
       managerName: b.managerName || "",
       managerPhone: (b as any).managerPhone || "",
       managerEmail: (b as any).managerEmail || "",
       status: (b.status as any) || "Active",
 
-      address: b.address || "",
-      city: b.city || "",
-      state: b.state || "",
-      zip: (b as any).zip || "",
-      country: b.country || "India",
-      phone: b.phone || "",
-      email: b.email || "",
-      website: (b as any).website || "",
+      address: b.address || pComp?.address || "",
+      city: b.city || pComp?.city || "",
+      state: b.state || pComp?.state || "",
+      zip: (b as any).zip || pComp?.zip || "",
+      country: b.country || pComp?.country || "India",
+      phone: b.phone || pComp?.phone || "",
+      email: b.email || pComp?.email || "",
+      website: (b as any).website || pComp?.website || "",
 
-      gstin: (b as any).gstin || "",
-      pan: (b as any).pan || "",
-      cin: (b as any).cin || "",
-      msme_reg: (b as any).msme_reg || "",
-      iso_certification: (b as any).iso_certification ?? "An ISO 9001:2015 Certified Company",
+      gstin: (b as any).gstin || pComp?.gstin || "",
+      pan: (b as any).pan || pComp?.pan || "",
+      cin: (b as any).cin || pComp?.cin || "",
+      msme_reg: (b as any).msme_reg || pComp?.msme_reg || "",
+      iso_certification: (b as any).iso_certification ?? pComp?.iso_certification ?? "An ISO 9001:2015 Certified Company",
 
-      bank_name: (b as any).bank_name || b.bankDetails?.bankName || "",
-      account_holder: (b as any).account_holder || b.bankDetails?.accountHolder || "",
-      account_number: (b as any).account_number || b.bankDetails?.accountNumber || "",
-      ifsc_code: (b as any).ifsc_code || b.bankDetails?.ifscCode || "",
-      bank_branch: (b as any).bank_branch || "",
-      upi_id: (b as any).upi_id || b.bankDetails?.upiId || "",
-      payment_qr_url: (b as any).payment_qr_url || "",
+      bank_name: (b as any).bank_name || b.bankDetails?.bankName || pComp?.bank_name || pComp?.gst_bank_name || "",
+      account_holder: (b as any).account_holder || b.bankDetails?.accountHolder || pComp?.account_holder || pComp?.gst_account_holder || "",
+      account_number: (b as any).account_number || b.bankDetails?.accountNumber || pComp?.account_number || pComp?.gst_account_number || "",
+      ifsc_code: (b as any).ifsc_code || b.bankDetails?.ifscCode || pComp?.ifsc_code || pComp?.gst_ifsc_code || "",
+      bank_branch: (b as any).bank_branch || pComp?.bank_branch || pComp?.gst_bank_branch || "",
+      upi_id: (b as any).upi_id || b.bankDetails?.upiId || pComp?.upi_id || pComp?.gst_upi_id || "",
+      payment_qr_url: (b as any).payment_qr_url || pComp?.payment_qr_url || pComp?.gst_payment_qr_url || "",
 
       // Distinct GST Banking
-      gst_bank_name: (b as any).gst_bank_name || (b as any).bank_name || b.bankDetails?.bankName || "",
-      gst_account_holder: (b as any).gst_account_holder || (b as any).account_holder || b.bankDetails?.accountHolder || "",
-      gst_account_number: (b as any).gst_account_number || (b as any).account_number || b.bankDetails?.accountNumber || "",
-      gst_ifsc_code: (b as any).gst_ifsc_code || (b as any).ifsc_code || b.bankDetails?.ifscCode || "",
-      gst_bank_branch: (b as any).gst_bank_branch || (b as any).bank_branch || "",
-      gst_upi_id: (b as any).gst_upi_id || (b as any).upi_id || b.bankDetails?.upiId || "",
-      gst_payment_qr_url: (b as any).gst_payment_qr_url || (b as any).payment_qr_url || "",
+      gst_bank_name: (b as any).gst_bank_name || (b as any).bank_name || b.bankDetails?.bankName || pComp?.gst_bank_name || pComp?.bank_name || "",
+      gst_account_holder: (b as any).gst_account_holder || (b as any).account_holder || b.bankDetails?.accountHolder || pComp?.gst_account_holder || pComp?.account_holder || "",
+      gst_account_number: (b as any).gst_account_number || (b as any).account_number || b.bankDetails?.accountNumber || pComp?.gst_account_number || pComp?.account_number || "",
+      gst_ifsc_code: (b as any).gst_ifsc_code || (b as any).ifsc_code || b.bankDetails?.ifscCode || pComp?.gst_ifsc_code || pComp?.ifsc_code || "",
+      gst_bank_branch: (b as any).gst_bank_branch || (b as any).bank_branch || pComp?.gst_bank_branch || pComp?.bank_branch || "",
+      gst_upi_id: (b as any).gst_upi_id || (b as any).upi_id || b.bankDetails?.upiId || pComp?.gst_upi_id || pComp?.upi_id || "",
+      gst_payment_qr_url: (b as any).gst_payment_qr_url || (b as any).payment_qr_url || pComp?.gst_payment_qr_url || pComp?.payment_qr_url || "",
 
       // Distinct Non-GST Banking
-      nongst_bank_name: (b as any).nongst_bank_name || (b as any).bank_name || b.bankDetails?.bankName || "",
-      nongst_account_holder: (b as any).nongst_account_holder || (b as any).account_holder || b.bankDetails?.accountHolder || "",
-      nongst_account_number: (b as any).nongst_account_number || (b as any).account_number || b.bankDetails?.accountNumber || "",
-      nongst_ifsc_code: (b as any).nongst_ifsc_code || (b as any).ifsc_code || b.bankDetails?.ifscCode || "",
-      nongst_bank_branch: (b as any).nongst_bank_branch || (b as any).bank_branch || "",
-      nongst_upi_id: (b as any).nongst_upi_id || (b as any).upi_id || b.bankDetails?.upiId || "",
-      nongst_payment_qr_url: (b as any).nongst_payment_qr_url || (b as any).payment_qr_url || "",
+      nongst_bank_name: (b as any).nongst_bank_name || (b as any).bank_name || b.bankDetails?.bankName || pComp?.nongst_bank_name || pComp?.bank_name || "",
+      nongst_account_holder: (b as any).nongst_account_holder || (b as any).account_holder || b.bankDetails?.accountHolder || pComp?.nongst_account_holder || pComp?.account_holder || "",
+      nongst_account_number: (b as any).nongst_account_number || (b as any).account_number || b.bankDetails?.accountNumber || pComp?.nongst_account_number || pComp?.account_number || "",
+      nongst_ifsc_code: (b as any).nongst_ifsc_code || (b as any).ifsc_code || b.bankDetails?.ifscCode || pComp?.nongst_ifsc_code || pComp?.ifsc_code || "",
+      nongst_bank_branch: (b as any).nongst_bank_branch || (b as any).bank_branch || pComp?.nongst_bank_branch || pComp?.bank_branch || "",
+      nongst_upi_id: (b as any).nongst_upi_id || (b as any).upi_id || b.bankDetails?.upiId || pComp?.nongst_upi_id || pComp?.upi_id || "",
+      nongst_payment_qr_url: (b as any).nongst_payment_qr_url || (b as any).payment_qr_url || pComp?.nongst_payment_qr_url || pComp?.payment_qr_url || "",
 
-      signatory_name: (b as any).signatory_name || "Authorized Signatory",
-      signatory_designation: (b as any).signatory_designation || "Branch Manager",
-      signature_image_url: (b as any).signature_image_url || "",
-      stamp_image_url: (b as any).stamp_image_url || "",
-      terms_conditions: (b as any).terms_conditions || "",
-      invoice_notes: (b as any).invoice_notes || "",
+      signatory_name: (b as any).signatory_name || pComp?.signatory_name || "Authorized Signatory",
+      signatory_designation: (b as any).signatory_designation || pComp?.signatory_designation || "Branch Manager",
+      signature_image_url: (b as any).signature_image_url || pComp?.signature_image_url || "",
+      stamp_image_url: (b as any).stamp_image_url || pComp?.stamp_image_url || "",
+      terms_conditions: (b as any).terms_conditions || pComp?.terms_conditions || (pComp as any)?.terms || "",
+      invoice_notes: (b as any).invoice_notes || pComp?.invoice_notes || (pComp as any)?.notes || "",
     })
     setIsBranchModalOpen(true)
   }
@@ -431,50 +475,57 @@ export default function BranchesMain() {
   // ── SAVE BRANCH ────────────────────────────────────────────────────
   const handleSaveBranch = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!branchForm.name.trim()) return
+    const branchName = cleanStr(branchForm?.name)
+    if (!branchName) return
 
     setIsSaving(true)
-    const payload: any = {
-      ...branchForm,
-      name: branchForm.name.trim(),
-      code: branchForm.code.trim().toUpperCase(),
-      companyId: branchCompanyId,
-      company_id: branchCompanyId,
-      // Base Fallback
-      bank_name: (branchForm.gst_bank_name || branchForm.bank_name || branchForm.nongst_bank_name).trim(),
-      account_holder: (branchForm.gst_account_holder || branchForm.account_holder || branchForm.nongst_account_holder).trim(),
-      account_number: (branchForm.gst_account_number || branchForm.account_number || branchForm.nongst_account_number).trim(),
-      ifsc_code: (branchForm.gst_ifsc_code || branchForm.ifsc_code || branchForm.nongst_ifsc_code).trim().toUpperCase(),
-      bank_branch: (branchForm.gst_bank_branch || branchForm.bank_branch || branchForm.nongst_bank_branch).trim(),
-      upi_id: (branchForm.gst_upi_id || branchForm.upi_id || branchForm.nongst_upi_id).trim(),
-      payment_qr_url: branchForm.gst_payment_qr_url || branchForm.payment_qr_url || branchForm.nongst_payment_qr_url,
-      bankDetails: {
-        bankName: (branchForm.gst_bank_name || branchForm.bank_name || branchForm.nongst_bank_name).trim(),
-        accountHolder: (branchForm.gst_account_holder || branchForm.account_holder || branchForm.nongst_account_holder).trim(),
-        accountNumber: (branchForm.gst_account_number || branchForm.account_number || branchForm.nongst_account_number).trim(),
-        ifscCode: (branchForm.gst_ifsc_code || branchForm.ifsc_code || branchForm.nongst_ifsc_code).trim().toUpperCase(),
-        upiId: (branchForm.gst_upi_id || branchForm.upi_id || branchForm.nongst_upi_id).trim(),
-      }
-    }
-
     try {
+      const branchCode = cleanUpper(branchForm?.code) || `BR-${Math.floor(100 + Math.random() * 900)}`
+      const bankName = cleanStr(branchForm?.gst_bank_name || branchForm?.bank_name || branchForm?.nongst_bank_name)
+      const accHolder = cleanStr(branchForm?.gst_account_holder || branchForm?.account_holder || branchForm?.nongst_account_holder)
+      const accNum = cleanStr(branchForm?.gst_account_number || branchForm?.account_number || branchForm?.nongst_account_number)
+      const ifsc = cleanUpper(branchForm?.gst_ifsc_code || branchForm?.ifsc_code || branchForm?.nongst_ifsc_code)
+      const bankBranch = cleanStr(branchForm?.gst_bank_branch || branchForm?.bank_branch || branchForm?.nongst_bank_branch)
+      const upiId = cleanStr(branchForm?.gst_upi_id || branchForm?.upi_id || branchForm?.nongst_upi_id)
+      const qrUrl = cleanStr(branchForm?.gst_payment_qr_url || branchForm?.payment_qr_url || branchForm?.nongst_payment_qr_url)
+
+      const payload: any = {
+        ...branchForm,
+        name: branchName,
+        code: branchCode,
+        companyId: branchCompanyId || "tech",
+        company_id: branchCompanyId || "tech",
+        bank_name: bankName,
+        account_holder: accHolder,
+        account_number: accNum,
+        ifsc_code: ifsc,
+        bank_branch: bankBranch,
+        upi_id: upiId,
+        payment_qr_url: qrUrl,
+        bankDetails: {
+          bankName,
+          accountHolder: accHolder,
+          accountNumber: accNum,
+          ifscCode: ifsc,
+          upiId,
+        }
+      }
+
       if (editingBranch) {
         await executeWithFeedback(async () => {
           await updateBranch(editingBranch.id, payload)
-          await BranchApiService.update(String(editingBranch.id), payload).catch(() => {})
         }, {
           actionType: "update",
           successTitle: "Branch Updated",
-          successMsg: `${branchForm.name} updated with all legal, tax, banking, and signatory details.`,
+          successMsg: `${branchName} updated with all legal, tax, banking, and signatory details.`,
         })
       } else {
         await executeWithFeedback(async () => {
           await addBranch(payload)
-          await BranchApiService.create(branchCompanyId, payload).catch(() => {})
         }, {
           actionType: "create",
           successTitle: "Branch Created",
-          successMsg: `${branchForm.name} created successfully.`,
+          successMsg: `${branchName} created successfully.`,
         })
       }
       setIsBranchModalOpen(false)
@@ -489,19 +540,24 @@ export default function BranchesMain() {
   // ── OPEN SUB-BRANCH MODALS ─────────────────────────────────────────
   const openAddSubBranch = () => {
     setEditingSubBranch(null)
-    const defaultParent = branches[0]?.id || ""
-    const parent = branches.find(b => b.id === defaultParent)
-    setSubBranchCompanyId(parent?.companyId || activeCompanyId || "tech")
+    const validBranches = (branches || []).filter(b => Boolean(b && b.id))
+    const defaultParent = validBranches[0]?.id || ""
+    const parent = validBranches.find(b => b.id === defaultParent)
+    const initialComp = (activeCompanyId && activeCompanyId !== "all")
+      ? activeCompanyId
+      : ((parent as any)?.companyId || (parent as any)?.company_id || selectableCompanies?.[0]?.id || companies?.[0]?.id || "tech")
+    const pComp = companies.find(c => isMatchingCompany(c, initialComp)) || companies[0]
+    setSubBranchCompanyId(String(initialComp))
     setSubBranchParentBranchId(defaultParent)
     setSubBranchTab("basic")
     setSubBranchBankProfileTab("gst")
     setSubBranchForm({
       name: "",
       code: `SB-${Math.floor(100 + Math.random() * 900)}`,
-      brand_name: "SAAMPARK",
-      division_name: "",
-      subtitle: "",
-      logo_url: "",
+      brand_name: parent?.brand_name || pComp?.brand_name || "SAAMPARK",
+      division_name: parent?.division_name || pComp?.division_name || "",
+      subtitle: parent?.subtitle || pComp?.subtitle || "",
+      logo_url: parent?.logo_url || pComp?.logo_url || "",
       partnerName: "",
       partnerPhone: "",
       partnerEmail: "",
@@ -509,108 +565,124 @@ export default function BranchesMain() {
       revenueSharePct: 30,
       status: "Active",
 
-      address: parent?.address || "",
-      city: parent?.city || "",
-      state: parent?.state || "",
-      zip: (parent as any)?.zip || "",
-      country: parent?.country || "India",
-      phone: "",
-      email: "",
+      address: parent?.address || pComp?.address || "",
+      city: parent?.city || pComp?.city || "",
+      state: parent?.state || pComp?.state || "",
+      zip: (parent as any)?.zip || pComp?.zip || "",
+      country: parent?.country || pComp?.country || "India",
+      phone: parent?.phone || pComp?.phone || "",
+      email: parent?.email || pComp?.email || "",
 
-      gstin: "",
-      pan: "",
-      bank_name: "",
-      account_holder: "",
-      account_number: "",
-      ifsc_code: "",
-      bank_branch: "",
-      upi_id: "",
-      payment_qr_url: "",
+      gstin: (parent as any)?.gstin || pComp?.gstin || "",
+      pan: (parent as any)?.pan || pComp?.pan || "",
+      cin: (parent as any)?.cin || pComp?.cin || "",
+      msme_reg: (parent as any)?.msme_reg || pComp?.msme_reg || "",
+      iso_certification: (parent as any)?.iso_certification || pComp?.iso_certification || "",
+
+      bank_name: (parent as any)?.bank_name || parent?.bankDetails?.bankName || pComp?.bank_name || pComp?.gst_bank_name || "",
+      account_holder: (parent as any)?.account_holder || parent?.bankDetails?.accountHolder || pComp?.account_holder || pComp?.gst_account_holder || "",
+      account_number: (parent as any)?.account_number || parent?.bankDetails?.accountNumber || pComp?.account_number || pComp?.gst_account_number || "",
+      ifsc_code: (parent as any)?.ifsc_code || parent?.bankDetails?.ifscCode || pComp?.ifsc_code || pComp?.gst_ifsc_code || "",
+      bank_branch: (parent as any)?.bank_branch || pComp?.bank_branch || "",
+      upi_id: (parent as any)?.upi_id || parent?.bankDetails?.upiId || pComp?.upi_id || "",
+      payment_qr_url: (parent as any)?.payment_qr_url || pComp?.payment_qr_url || "",
 
       // Dual GST and Non-GST Bank Profiles for Sub-Branch
-      gst_bank_name: "",
-      gst_account_holder: "",
-      gst_account_number: "",
-      gst_ifsc_code: "",
-      gst_bank_branch: "",
-      gst_upi_id: "",
-      gst_payment_qr_url: "",
+      gst_bank_name: (parent as any)?.gst_bank_name || (parent as any)?.bank_name || parent?.bankDetails?.bankName || pComp?.gst_bank_name || pComp?.bank_name || "",
+      gst_account_holder: (parent as any)?.gst_account_holder || (parent as any)?.account_holder || parent?.bankDetails?.accountHolder || pComp?.gst_account_holder || pComp?.account_holder || "",
+      gst_account_number: (parent as any)?.gst_account_number || (parent as any)?.account_number || parent?.bankDetails?.accountNumber || pComp?.gst_account_number || pComp?.account_number || "",
+      gst_ifsc_code: (parent as any)?.gst_ifsc_code || (parent as any)?.ifsc_code || parent?.bankDetails?.ifscCode || pComp?.gst_ifsc_code || pComp?.ifsc_code || "",
+      gst_bank_branch: (parent as any)?.gst_bank_branch || (parent as any)?.bank_branch || pComp?.gst_bank_branch || pComp?.bank_branch || "",
+      gst_upi_id: (parent as any)?.gst_upi_id || (parent as any)?.upi_id || parent?.bankDetails?.upiId || pComp?.gst_upi_id || pComp?.upi_id || "",
+      gst_payment_qr_url: (parent as any)?.gst_payment_qr_url || (parent as any)?.payment_qr_url || pComp?.gst_payment_qr_url || pComp?.payment_qr_url || "",
 
-      nongst_bank_name: "",
-      nongst_account_holder: "",
-      nongst_account_number: "",
-      nongst_ifsc_code: "",
-      nongst_bank_branch: "",
-      nongst_upi_id: "",
-      nongst_payment_qr_url: "",
+      nongst_bank_name: (parent as any)?.nongst_bank_name || (parent as any)?.bank_name || parent?.bankDetails?.bankName || pComp?.nongst_bank_name || pComp?.bank_name || "",
+      nongst_account_holder: (parent as any)?.nongst_account_holder || (parent as any)?.account_holder || parent?.bankDetails?.accountHolder || pComp?.nongst_account_holder || pComp?.account_holder || "",
+      nongst_account_number: (parent as any)?.nongst_account_number || (parent as any)?.account_number || parent?.bankDetails?.accountNumber || pComp?.nongst_account_number || pComp?.account_number || "",
+      nongst_ifsc_code: (parent as any)?.nongst_ifsc_code || (parent as any)?.ifsc_code || parent?.bankDetails?.ifscCode || pComp?.nongst_ifsc_code || pComp?.ifsc_code || "",
+      nongst_bank_branch: (parent as any)?.nongst_bank_branch || (parent as any)?.bank_branch || pComp?.nongst_bank_branch || pComp?.bank_branch || "",
+      nongst_upi_id: (parent as any)?.nongst_upi_id || (parent as any)?.upi_id || parent?.bankDetails?.upiId || pComp?.nongst_upi_id || pComp?.upi_id || "",
+      nongst_payment_qr_url: (parent as any)?.nongst_payment_qr_url || (parent as any)?.payment_qr_url || pComp?.nongst_payment_qr_url || pComp?.payment_qr_url || "",
 
-      signatory_name: "Partner Signatory",
+      signatory_name: (parent as any)?.signatory_name || pComp?.signatory_name || "Partner Signatory",
       signatory_designation: "Franchise Partner",
-      signature_image_url: "",
-      stamp_image_url: "",
+      signature_image_url: (parent as any)?.signature_image_url || pComp?.signature_image_url || "",
+      stamp_image_url: (parent as any)?.stamp_image_url || pComp?.stamp_image_url || "",
+      terms_conditions: (parent as any)?.terms_conditions || pComp?.terms_conditions || (pComp as any)?.terms || "",
+      invoice_notes: (parent as any)?.invoice_notes || pComp?.invoice_notes || (pComp as any)?.notes || "",
     })
     setIsSubBranchModalOpen(true)
   }
 
   const openEditSubBranch = (sb: SubBranch) => {
     setEditingSubBranch(sb)
-    setSubBranchCompanyId(sb.companyId || activeCompanyId || "tech")
-    setSubBranchParentBranchId(sb.parentBranchId || "")
+    const effectiveParent = sb.parentBranchId || (sb as any).branch_id || ""
+    const parent = branches.find(b => b.id === effectiveParent)
+    const effectiveComp = sb.companyId || (parent as any)?.companyId || (parent as any)?.company_id || activeCompanyId || "tech"
+    const pComp = companies.find(c => isMatchingCompany(c, effectiveComp)) || companies[0]
+    setSubBranchCompanyId(effectiveComp)
+    setSubBranchParentBranchId(effectiveParent)
     setSubBranchTab("basic")
     setSubBranchForm({
       name: sb.name || "",
       code: sb.code || "",
-      brand_name: sb.brand_name || "",
-      division_name: sb.division_name || "",
-      subtitle: sb.subtitle || "",
-      logo_url: sb.logo_url || "",
-      partnerName: sb.partnerName || "",
-      partnerPhone: sb.partnerPhone || "",
-      partnerEmail: sb.partnerEmail || "",
-      partnerType: (sb.partnerType as any) || "Franchise Partner",
-      revenueSharePct: sb.revenueSharePct ?? 30,
+      brand_name: sb.brand_name || parent?.brand_name || pComp?.brand_name || "SAAMPARK",
+      division_name: sb.division_name || parent?.division_name || pComp?.division_name || "",
+      subtitle: sb.subtitle || parent?.subtitle || pComp?.subtitle || "",
+      logo_url: sb.logo_url || parent?.logo_url || pComp?.logo_url || "",
+      partnerName: sb.partnerName || (sb as any).partner_name || "",
+      partnerPhone: sb.partnerPhone || (sb as any).partner_phone || "",
+      partnerEmail: sb.partnerEmail || (sb as any).partner_email || "",
+      partnerType: (sb.partnerType as any) || (sb as any).partner_type || "Franchise Partner",
+      revenueSharePct: sb.revenueSharePct ?? (sb as any).revenue_share_pct ?? 30,
       status: (sb.status as any) || "Active",
 
-      address: (sb as any).address || "",
-      city: (sb as any).city || "",
-      state: (sb as any).state || "",
-      zip: (sb as any).zip || "",
-      country: (sb as any).country || "India",
-      phone: (sb as any).phone || "",
-      email: (sb as any).email || "",
+      address: (sb as any).address || parent?.address || pComp?.address || "",
+      city: (sb as any).city || parent?.city || pComp?.city || "",
+      state: (sb as any).state || parent?.state || pComp?.state || "",
+      zip: (sb as any).zip || (parent as any)?.zip || pComp?.zip || "",
+      country: (sb as any).country || parent?.country || pComp?.country || "India",
+      phone: (sb as any).phone || parent?.phone || pComp?.phone || "",
+      email: (sb as any).email || parent?.email || pComp?.email || "",
 
-      gstin: (sb as any).gstin || "",
-      pan: (sb as any).pan || "",
-      bank_name: (sb as any).bank_name || sb.bankDetails?.bankName || "",
-      account_holder: (sb as any).account_holder || sb.bankDetails?.accountHolder || "",
-      account_number: (sb as any).account_number || sb.bankDetails?.accountNumber || "",
-      ifsc_code: (sb as any).ifsc_code || sb.bankDetails?.ifscCode || "",
-      bank_branch: (sb as any).bank_branch || "",
-      upi_id: (sb as any).upi_id || sb.bankDetails?.upiId || "",
-      payment_qr_url: (sb as any).payment_qr_url || "",
+      gstin: (sb as any).gstin || (parent as any)?.gstin || pComp?.gstin || "",
+      pan: (sb as any).pan || (parent as any)?.pan || pComp?.pan || "",
+      cin: (sb as any).cin || (parent as any)?.cin || pComp?.cin || "",
+      msme_reg: (sb as any).msme_reg || (parent as any)?.msme_reg || pComp?.msme_reg || "",
+      iso_certification: (sb as any).iso_certification || (parent as any)?.iso_certification || pComp?.iso_certification || "",
+
+      bank_name: (sb as any).bank_name || sb.bankDetails?.bankName || (parent as any)?.bank_name || parent?.bankDetails?.bankName || pComp?.bank_name || pComp?.gst_bank_name || "",
+      account_holder: (sb as any).account_holder || sb.bankDetails?.accountHolder || (parent as any)?.account_holder || parent?.bankDetails?.accountHolder || pComp?.account_holder || pComp?.gst_account_holder || "",
+      account_number: (sb as any).account_number || sb.bankDetails?.accountNumber || (parent as any)?.account_number || parent?.bankDetails?.accountNumber || pComp?.account_number || pComp?.gst_account_number || "",
+      ifsc_code: (sb as any).ifsc_code || sb.bankDetails?.ifscCode || (parent as any)?.ifsc_code || parent?.bankDetails?.ifscCode || pComp?.ifsc_code || pComp?.gst_ifsc_code || "",
+      bank_branch: (sb as any).bank_branch || (parent as any)?.bank_branch || pComp?.bank_branch || "",
+      upi_id: (sb as any).upi_id || sb.bankDetails?.upiId || (parent as any)?.upi_id || parent?.bankDetails?.upiId || pComp?.upi_id || "",
+      payment_qr_url: (sb as any).payment_qr_url || (parent as any)?.payment_qr_url || pComp?.payment_qr_url || "",
 
       // Distinct GST Banking
-      gst_bank_name: (sb as any).gst_bank_name || (sb as any).bank_name || sb.bankDetails?.bankName || "",
-      gst_account_holder: (sb as any).gst_account_holder || (sb as any).account_holder || sb.bankDetails?.accountHolder || "",
-      gst_account_number: (sb as any).gst_account_number || (sb as any).account_number || sb.bankDetails?.accountNumber || "",
-      gst_ifsc_code: (sb as any).gst_ifsc_code || (sb as any).ifsc_code || sb.bankDetails?.ifscCode || "",
-      gst_bank_branch: (sb as any).gst_bank_branch || (sb as any).bank_branch || "",
-      gst_upi_id: (sb as any).gst_upi_id || (sb as any).upi_id || sb.bankDetails?.upiId || "",
-      gst_payment_qr_url: (sb as any).gst_payment_qr_url || (sb as any).payment_qr_url || "",
+      gst_bank_name: (sb as any).gst_bank_name || (sb as any).bank_name || sb.bankDetails?.bankName || (parent as any)?.gst_bank_name || (parent as any)?.bank_name || pComp?.gst_bank_name || pComp?.bank_name || "",
+      gst_account_holder: (sb as any).gst_account_holder || (sb as any).account_holder || sb.bankDetails?.accountHolder || (parent as any)?.gst_account_holder || (parent as any)?.account_holder || pComp?.gst_account_holder || pComp?.account_holder || "",
+      gst_account_number: (sb as any).gst_account_number || (sb as any).account_number || sb.bankDetails?.accountNumber || (parent as any)?.gst_account_number || (parent as any)?.account_number || pComp?.gst_account_number || pComp?.account_number || "",
+      gst_ifsc_code: (sb as any).gst_ifsc_code || (sb as any).ifsc_code || sb.bankDetails?.ifscCode || (parent as any)?.gst_ifsc_code || (parent as any)?.ifsc_code || pComp?.gst_ifsc_code || pComp?.ifsc_code || "",
+      gst_bank_branch: (sb as any).gst_bank_branch || (sb as any).bank_branch || (parent as any)?.gst_bank_branch || (parent as any)?.bank_branch || pComp?.gst_bank_branch || pComp?.bank_branch || "",
+      gst_upi_id: (sb as any).gst_upi_id || (sb as any).upi_id || sb.bankDetails?.upiId || (parent as any)?.gst_upi_id || (parent as any)?.upi_id || pComp?.gst_upi_id || pComp?.upi_id || "",
+      gst_payment_qr_url: (sb as any).gst_payment_qr_url || (sb as any).payment_qr_url || (parent as any)?.gst_payment_qr_url || (parent as any)?.payment_qr_url || pComp?.gst_payment_qr_url || pComp?.payment_qr_url || "",
 
       // Distinct Non-GST Banking
-      nongst_bank_name: (sb as any).nongst_bank_name || (sb as any).bank_name || sb.bankDetails?.bankName || "",
-      nongst_account_holder: (sb as any).nongst_account_holder || (sb as any).account_holder || sb.bankDetails?.accountHolder || "",
-      nongst_account_number: (sb as any).nongst_account_number || (sb as any).account_number || sb.bankDetails?.accountNumber || "",
-      nongst_ifsc_code: (sb as any).nongst_ifsc_code || (sb as any).ifsc_code || sb.bankDetails?.ifscCode || "",
-      nongst_bank_branch: (sb as any).nongst_bank_branch || (sb as any).bank_branch || "",
-      nongst_upi_id: (sb as any).nongst_upi_id || (sb as any).upi_id || sb.bankDetails?.upiId || "",
-      nongst_payment_qr_url: (sb as any).nongst_payment_qr_url || (sb as any).payment_qr_url || "",
+      nongst_bank_name: (sb as any).nongst_bank_name || (sb as any).bank_name || sb.bankDetails?.bankName || (parent as any)?.nongst_bank_name || (parent as any)?.bank_name || pComp?.nongst_bank_name || pComp?.bank_name || "",
+      nongst_account_holder: (sb as any).nongst_account_holder || (sb as any).account_holder || sb.bankDetails?.accountHolder || (parent as any)?.nongst_account_holder || (parent as any)?.account_holder || pComp?.nongst_account_holder || pComp?.account_holder || "",
+      nongst_account_number: (sb as any).nongst_account_number || (sb as any).account_number || sb.bankDetails?.accountNumber || (parent as any)?.nongst_account_number || (parent as any)?.account_number || pComp?.nongst_account_number || pComp?.account_number || "",
+      nongst_ifsc_code: (sb as any).nongst_ifsc_code || (sb as any).ifsc_code || sb.bankDetails?.ifscCode || (parent as any)?.nongst_ifsc_code || (parent as any)?.ifsc_code || pComp?.nongst_ifsc_code || pComp?.ifsc_code || "",
+      nongst_bank_branch: (sb as any).nongst_bank_branch || (sb as any).bank_branch || (parent as any)?.nongst_bank_branch || (parent as any)?.bank_branch || pComp?.nongst_bank_branch || pComp?.bank_branch || "",
+      nongst_upi_id: (sb as any).nongst_upi_id || (sb as any).upi_id || sb.bankDetails?.upiId || (parent as any)?.nongst_upi_id || (parent as any)?.upi_id || pComp?.nongst_upi_id || pComp?.upi_id || "",
+      nongst_payment_qr_url: (sb as any).nongst_payment_qr_url || (sb as any).payment_qr_url || (parent as any)?.nongst_payment_qr_url || (parent as any)?.payment_qr_url || pComp?.nongst_payment_qr_url || pComp?.payment_qr_url || "",
 
-      signatory_name: (sb as any).signatory_name || "Partner Signatory",
+      signatory_name: (sb as any).signatory_name || (parent as any)?.signatory_name || pComp?.signatory_name || "Partner Signatory",
       signatory_designation: (sb as any).signatory_designation || "Franchise Partner",
-      signature_image_url: (sb as any).signature_image_url || "",
-      stamp_image_url: (sb as any).stamp_image_url || "",
+      signature_image_url: (sb as any).signature_image_url || (parent as any)?.signature_image_url || pComp?.signature_image_url || "",
+      stamp_image_url: (sb as any).stamp_image_url || (parent as any)?.stamp_image_url || pComp?.stamp_image_url || "",
+      terms_conditions: (sb as any).terms_conditions || (parent as any)?.terms_conditions || pComp?.terms_conditions || (pComp as any)?.terms || "",
+      invoice_notes: (sb as any).invoice_notes || (parent as any)?.invoice_notes || pComp?.invoice_notes || (pComp as any)?.notes || "",
     })
     setIsSubBranchModalOpen(true)
   }
@@ -618,52 +690,59 @@ export default function BranchesMain() {
   // ── SAVE SUB-BRANCH ────────────────────────────────────────────────
   const handleSaveSubBranch = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!subBranchForm.name.trim()) return
+    const subName = cleanStr(subBranchForm?.name)
+    if (!subName) return
 
     setIsSaving(true)
-    const payload: any = {
-      ...subBranchForm,
-      name: subBranchForm.name.trim(),
-      code: subBranchForm.code.trim().toUpperCase(),
-      companyId: subBranchCompanyId,
-      company_id: subBranchCompanyId,
-      parentBranchId: subBranchParentBranchId,
-      branch_id: subBranchParentBranchId,
-      // Base Fallback
-      bank_name: (subBranchForm.gst_bank_name || subBranchForm.bank_name || subBranchForm.nongst_bank_name).trim(),
-      account_holder: (subBranchForm.gst_account_holder || subBranchForm.account_holder || subBranchForm.nongst_account_holder).trim(),
-      account_number: (subBranchForm.gst_account_number || subBranchForm.account_number || subBranchForm.nongst_account_number).trim(),
-      ifsc_code: (subBranchForm.gst_ifsc_code || subBranchForm.ifsc_code || subBranchForm.nongst_ifsc_code).trim().toUpperCase(),
-      bank_branch: (subBranchForm.gst_bank_branch || subBranchForm.bank_branch || subBranchForm.nongst_bank_branch).trim(),
-      upi_id: (subBranchForm.gst_upi_id || subBranchForm.upi_id || subBranchForm.nongst_upi_id).trim(),
-      payment_qr_url: subBranchForm.gst_payment_qr_url || subBranchForm.payment_qr_url || subBranchForm.nongst_payment_qr_url,
-      bankDetails: {
-        bankName: (subBranchForm.gst_bank_name || subBranchForm.bank_name || subBranchForm.nongst_bank_name).trim(),
-        accountHolder: (subBranchForm.gst_account_holder || subBranchForm.account_holder || subBranchForm.nongst_account_holder).trim(),
-        accountNumber: (subBranchForm.gst_account_number || subBranchForm.account_number || subBranchForm.nongst_account_number).trim(),
-        ifscCode: (subBranchForm.gst_ifsc_code || subBranchForm.ifsc_code || subBranchForm.nongst_ifsc_code).trim().toUpperCase(),
-        upiId: (subBranchForm.gst_upi_id || subBranchForm.upi_id || subBranchForm.nongst_upi_id).trim(),
-      }
-    }
-
     try {
+      const subCode = cleanUpper(subBranchForm?.code) || `SB-${Math.floor(100 + Math.random() * 900)}`
+      const bankName = cleanStr(subBranchForm?.gst_bank_name || subBranchForm?.bank_name || subBranchForm?.nongst_bank_name)
+      const accHolder = cleanStr(subBranchForm?.gst_account_holder || subBranchForm?.account_holder || subBranchForm?.nongst_account_holder)
+      const accNum = cleanStr(subBranchForm?.gst_account_number || subBranchForm?.account_number || subBranchForm?.nongst_account_number)
+      const ifsc = cleanUpper(subBranchForm?.gst_ifsc_code || subBranchForm?.ifsc_code || subBranchForm?.nongst_ifsc_code)
+      const bankBranch = cleanStr(subBranchForm?.gst_bank_branch || subBranchForm?.bank_branch || subBranchForm?.nongst_bank_branch)
+      const upiId = cleanStr(subBranchForm?.gst_upi_id || subBranchForm?.upi_id || subBranchForm?.nongst_upi_id)
+      const qrUrl = cleanStr(subBranchForm?.gst_payment_qr_url || subBranchForm?.payment_qr_url || subBranchForm?.nongst_payment_qr_url)
+
+      const payload: any = {
+        ...subBranchForm,
+        name: subName,
+        code: subCode,
+        companyId: subBranchCompanyId || "tech",
+        company_id: subBranchCompanyId || "tech",
+        parentBranchId: subBranchParentBranchId,
+        branch_id: subBranchParentBranchId,
+        bank_name: bankName,
+        account_holder: accHolder,
+        account_number: accNum,
+        ifsc_code: ifsc,
+        bank_branch: bankBranch,
+        upi_id: upiId,
+        payment_qr_url: qrUrl,
+        bankDetails: {
+          bankName,
+          accountHolder: accHolder,
+          accountNumber: accNum,
+          ifscCode: ifsc,
+          upiId,
+        }
+      }
+
       if (editingSubBranch) {
         await executeWithFeedback(async () => {
           await updateSubBranch(editingSubBranch.id, payload)
-          await SubBranchApiService.update(String(editingSubBranch.id), payload).catch(() => {})
         }, {
           actionType: "update",
           successTitle: "Sub-Branch Updated",
-          successMsg: `${subBranchForm.name} updated successfully.`,
+          successMsg: `${subName} updated successfully.`,
         })
       } else {
         await executeWithFeedback(async () => {
           await addSubBranch(payload)
-          await SubBranchApiService.create(subBranchCompanyId, payload).catch(() => {})
         }, {
           actionType: "create",
           successTitle: "Sub-Branch Created",
-          successMsg: `${subBranchForm.name} created successfully.`,
+          successMsg: `${subName} created successfully.`,
         })
       }
       setIsSubBranchModalOpen(false)
@@ -1040,6 +1119,7 @@ export default function BranchesMain() {
       <AnimatePresence>
         {isBranchModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto">
+            <SafeModalBoundary>
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }} 
               animate={{ opacity: 1, scale: 1 }} 
@@ -1161,7 +1241,7 @@ export default function BranchesMain() {
                           <div>
                             <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1 flex items-center justify-between">
                               <span>Company *</span>
-                              {selectableCompanies.length <= 1 && (
+                              {(selectableCompanies || []).length <= 1 && (
                                 <span className="text-[9px] text-blue-600 font-bold bg-blue-50 dark:bg-blue-950/40 px-1 py-0.2 rounded border border-blue-200 dark:border-blue-800">
                                   🔒 Active Company
                                 </span>
@@ -1171,11 +1251,11 @@ export default function BranchesMain() {
                               required 
                               value={branchCompanyId} 
                               onChange={(e) => setBranchCompanyId(e.target.value)}
-                              disabled={selectableCompanies.length <= 1}
+                              disabled={(selectableCompanies || []).length <= 1}
                               className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-medium disabled:opacity-85 disabled:cursor-not-allowed"
                             >
-                              {selectableCompanies.map(c => (
-                                <option key={c.id} value={c.id}>{c.brand_name || c.name}</option>
+                              {(selectableCompanies || []).filter(Boolean).map(c => (
+                                <option key={c.id || Math.random()} value={c.id || ""}>{c.brand_name || c.name || "Company"}</option>
                               ))}
                             </select>
                           </div>
@@ -1701,6 +1781,29 @@ export default function BranchesMain() {
                             />
                           </div>
                         </div>
+
+                        <div className="space-y-3 pt-2">
+                          <div>
+                            <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Branch Terms &amp; Conditions</label>
+                            <textarea
+                              rows={3}
+                              placeholder="Branch specific terms &amp; conditions (applies on branch invoices)..."
+                              value={branchForm.terms_conditions}
+                              onChange={e => setBranchForm({ ...branchForm, terms_conditions: e.target.value })}
+                              className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Branch Invoice Notes / Payment Instructions</label>
+                            <textarea
+                              rows={2}
+                              placeholder="Notes printed on branch invoices..."
+                              value={branchForm.invoice_notes}
+                              onChange={e => setBranchForm({ ...branchForm, invoice_notes: e.target.value })}
+                              className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs"
+                            />
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1723,7 +1826,7 @@ export default function BranchesMain() {
                   <button 
                     type="submit" 
                     form="branchFormSubmit"
-                    disabled={isSaving || !branchForm.name.trim()}
+                    disabled={isSaving || !(branchForm?.name || "").trim()}
                     className="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-xl shadow-md transition-all flex items-center gap-1.5"
                   >
                     {isSaving ? "Saving..." : (editingBranch ? "Update Branch" : "Create Branch")}
@@ -1731,6 +1834,7 @@ export default function BranchesMain() {
                 </div>
               </div>
             </motion.div>
+            </SafeModalBoundary>
           </div>
         )}
       </AnimatePresence>
@@ -1739,6 +1843,7 @@ export default function BranchesMain() {
       <AnimatePresence>
         {isSubBranchModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto">
+            <SafeModalBoundary>
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }} 
               animate={{ opacity: 1, scale: 1 }} 
@@ -1854,7 +1959,7 @@ export default function BranchesMain() {
                         <div>
                           <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1 flex items-center justify-between">
                             <span>Parent Company *</span>
-                            {selectableCompanies.length <= 1 && (
+                            {(selectableCompanies || []).length <= 1 && (
                               <span className="text-[9px] text-blue-600 font-bold bg-blue-50 dark:bg-blue-950/40 px-1 py-0.2 rounded border border-blue-200 dark:border-blue-800">
                                 🔒 Active Company
                               </span>
@@ -1865,14 +1970,14 @@ export default function BranchesMain() {
                             onChange={(e) => {
                               const newCompId = e.target.value
                               setSubBranchCompanyId(newCompId)
-                              const matchBranch = branches.find(b => b.companyId === newCompId)
+                              const matchBranch = (branches || []).find(b => b && ((b as any).companyId === newCompId || String((b as any).company_id) === String(newCompId)))
                               setSubBranchParentBranchId(matchBranch?.id || "")
                             }}
-                            disabled={selectableCompanies.length <= 1}
+                            disabled={(selectableCompanies || []).length <= 1}
                             className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-medium disabled:opacity-85 disabled:cursor-not-allowed"
                           >
-                            {selectableCompanies.map(c => (
-                              <option key={c.id} value={c.id}>{c.name} ({c.brand_name || "Co."})</option>
+                            {(selectableCompanies || []).filter(Boolean).map(c => (
+                              <option key={c.id || Math.random()} value={c.id || ""}>{(c.name || "Company")} ({c.brand_name || "Co."})</option>
                             ))}
                           </select>
                         </div>
@@ -1885,10 +1990,11 @@ export default function BranchesMain() {
                             className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-medium"
                           >
                             <option value="">-- Select Parent Branch --</option>
-                            {branches
-                              .filter(b => !subBranchCompanyId || isMatchingCompany({ id: b.companyId, slug: b.companyId } as any, subBranchCompanyId))
+                            {(branches || [])
+                              .filter(b => Boolean(b && b.id))
+                              .filter(b => !subBranchCompanyId || isMatchingCompany({ id: (b as any).companyId || (b as any).company_id, slug: (b as any).companyId || (b as any).company_id } as any, subBranchCompanyId))
                               .map(b => (
-                                <option key={b.id} value={b.id}>{b.name} ({b.code}) - {b.city || "Branch"}</option>
+                                <option key={b.id} value={b.id}>{b.name || "Branch"} ({b.code || "-"}) - {b.city || "Branch"}</option>
                               ))}
                           </select>
                         </div>
@@ -2383,6 +2489,29 @@ export default function BranchesMain() {
                           />
                         </div>
                       </div>
+
+                      <div className="space-y-3 pt-2">
+                        <div>
+                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Sub-Branch Terms &amp; Conditions</label>
+                          <textarea
+                            rows={3}
+                            placeholder="Sub-Branch specific terms &amp; conditions (applies on sub-branch invoices)..."
+                            value={subBranchForm.terms_conditions}
+                            onChange={e => setSubBranchForm({ ...subBranchForm, terms_conditions: e.target.value })}
+                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Sub-Branch Invoice Notes / Payment Instructions</label>
+                          <textarea
+                            rows={2}
+                            placeholder="Notes printed on sub-branch invoices..."
+                            value={subBranchForm.invoice_notes}
+                            onChange={e => setSubBranchForm({ ...subBranchForm, invoice_notes: e.target.value })}
+                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs"
+                          />
+                        </div>
+                      </div>
                     </div>
                   )}
                 </form>
@@ -2404,7 +2533,7 @@ export default function BranchesMain() {
                   <button 
                     type="submit" 
                     form="subBranchFormSubmit" 
-                    disabled={isSaving || !subBranchForm.name.trim()} 
+                    disabled={isSaving || !(subBranchForm?.name || "").trim()} 
                     className="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-xl shadow-md transition-all flex items-center gap-1.5"
                   >
                     {isSaving ? "Saving..." : (editingSubBranch ? "Update Sub-Branch" : "Create Sub-Branch")}
@@ -2412,6 +2541,7 @@ export default function BranchesMain() {
                 </div>
               </div>
             </motion.div>
+            </SafeModalBoundary>
           </div>
         )}
       </AnimatePresence>

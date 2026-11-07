@@ -117,7 +117,6 @@ export interface NavItem {
 
 const ALL_NAV_ITEMS: NavItem[] = [
   { name: "Dashboard", href: "/feature/dashboard", icon: LayoutDashboard },
-  { name: "Companies", href: "/feature/companies", icon: Building2 },
   { name: "Users", href: "/feature/users", icon: Users },
   {
     name: "CRM",
@@ -241,8 +240,9 @@ export function Sidebar() {
   }, [user, companies])
 
   const allowedBranches = React.useMemo(() => {
+    const validBranches = (branches || []).filter(b => Boolean(b && b.id))
     if (!user) return []
-    if (user.role === 'Super Admin') return branches
+    if (user.role === 'Super Admin') return validBranches
     let rawBranchIds = user.branchIds || (user as any).branch_ids
     let userBranchIds: string[] = []
     if (typeof rawBranchIds === 'string') {
@@ -253,8 +253,8 @@ export function Sidebar() {
     if (userBranchIds.length === 0 && user.branchId) {
       userBranchIds = [user.branchId]
     }
-    if (userBranchIds.length === 0) return branches
-    return branches.filter(b => userBranchIds.some(id => String(id).toLowerCase().trim() === String(b.id).toLowerCase().trim()))
+    if (userBranchIds.length === 0) return validBranches
+    return validBranches.filter(b => userBranchIds.some(id => String(id).toLowerCase().trim() === String(b.id).toLowerCase().trim()))
   }, [user, branches])
 
   const isAllCompanies = !activeCompanyId || activeCompanyId === "all"
@@ -268,8 +268,8 @@ export function Sidebar() {
 
   const activeCompanyName = isAllCompanies ? "SAAMPARK GROUP" : (activeCompany ? getCompanyFullName(activeCompany) : "SAAMPARK GROUP")
   const activeCompanyLogo = isAllCompanies ? null : (activeCompany ? getCompanyLogoUrl(activeCompany) : null)
-  const activeBranch = branches.find(b => b.id === activeBranchId)
-  const activeSubBranch = subBranches.find(sb => sb.id === activeSubBranchId)
+  const activeBranch = (branches || []).find(b => b && b.id === activeBranchId)
+  const activeSubBranch = (subBranches || []).find(sb => sb && sb.id === activeSubBranchId)
   const activeEntityLogo = activeSubBranch?.logo_url || activeBranch?.logo_url || activeCompanyLogo
   const { isModuleAllowed, isCompanyModuleAllowed, isEntityModuleAllowed, userActionPermissions, userPermissions, companyEnabledModules } = usePermissionStore()
 
@@ -688,15 +688,16 @@ export function Sidebar() {
                   ) : (
                     <div>
                       <span 
-                        className="font-black text-xs sm:text-sm tracking-wide text-white block truncate uppercase"
-                        title={activeCompanyName}
+                        className="font-black text-xs sm:text-sm tracking-wider text-white block truncate uppercase"
+                        title={activeCompany?.brand_name || "SAAMPARK"}
                       >
-                        {activeCompanyName}
+                        {activeCompany?.brand_name || "SAAMPARK"}
                       </span>
-                      <span className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider block truncate -mt-0.5">
-                        {activeCompany?.subtitle 
-                          ? activeCompany.subtitle.replace(/\s+(pvt\.?\s*ltd\.?|private\s+limited)$/i, "") 
-                          : (activeCompany?.brand_name || "COMPANY")}
+                      <span 
+                        className="text-[9.5px] font-bold text-slate-400 uppercase tracking-tight block truncate -mt-0.5"
+                        title={activeCompany?.name || activeCompanyName}
+                      >
+                        {activeCompany?.name || activeCompanyName}
                       </span>
                     </div>
                   )}

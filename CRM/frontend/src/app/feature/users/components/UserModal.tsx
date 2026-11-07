@@ -10,6 +10,7 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { UserItem as UserType, UserRole, UserStatus } from "../types"
+import { generateCompanyEmployeeId, getStoredUserAccountsAsync } from "../services/userService"
 import { useAuthStore, isMatchingCompany, getCompanyFullName } from "@/store/useAuthStore"
 import { 
   usePermissionStore, 
@@ -353,13 +354,16 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
     } else {
       setName("")
       setEmail("")
-      setEmployeeId("")
-      setEmailError(null)
-      const defaultRole: UserRole = (!isCurrentSuperAdmin && (initialRole === "Super Admin" || initialRole === "Admin")) ? "Teams" : (initialRole || "Teams")
-      setRole(defaultRole)
-      
       const defaultComp = isCompanyLocked ? (availableCompanies[0]?.id || activeCompanyId!) : "tech"
       setSelectedCompanyId(defaultComp)
+      
+      // Auto-generate employee serial ID (STR-EMP-2601 or SCS-EMP-2601)
+      getStoredUserAccountsAsync().then(accs => {
+        setEmployeeId(generateCompanyEmployeeId(defaultComp, accs))
+      }).catch(() => {
+        setEmployeeId(generateCompanyEmployeeId(defaultComp, []))
+      })
+      setEmailError(null)
       if (activeSubBranchId && activeSubBranchId !== "all") {
         setScopeType("subbranch")
         setSelectedSubBranchId(activeSubBranchId)
@@ -383,6 +387,8 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
       setAvatarUrl("")
       setKycStatus("Pending")
 
+      const defaultRole: UserRole = initialRole || "Teams"
+      setRole(defaultRole)
       const matrix = getMatrixForRole(defaultRole)
       setActionMatrix(matrix)
       setAllowedModules(CONFIGURABLE_MODULES.filter(m => {
@@ -562,8 +568,8 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
 
     if (!editingUser && autoSendOfferLetter && email.trim()) {
       createNotification({
-        title: "Official Offer & Welcome Kit Dispatched",
-        message: `Welcome to ${companyNameToSave}! Your official appointment letter has been issued to ${email.trim()}.`,
+        title: `Welcome to ${companyNameToSave} - Account Credentials`,
+        message: `Welcome to ${companyNameToSave}! Your team login credentials have been issued. Email: ${email.trim()}, Temporary Password: ${password.trim() || 'Password123'}. Please log in, configure your 4-digit security PIN, and submit your KYC documents for approval.`,
         type: "system",
         targetEmail: email.trim().toLowerCase(),
         sendEmailNotification: true,
@@ -950,9 +956,17 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                       value={selectedCompanyId}
                       disabled={isCompanyLocked}
                       onChange={(e) => {
-                        setSelectedCompanyId(e.target.value)
+                        const newCompId = e.target.value
+                        setSelectedCompanyId(newCompId)
                         setSelectedBranchId("")
                         setSelectedSubBranchId("")
+                        if (!editingUser) {
+                          getStoredUserAccountsAsync().then(accs => {
+                            setEmployeeId(generateCompanyEmployeeId(newCompId, accs))
+                          }).catch(() => {
+                            setEmployeeId(generateCompanyEmployeeId(newCompId, []))
+                          })
+                        }
                       }}
                       className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#090d16]/90 border border-slate-300 dark:border-white/15 text-xs text-slate-900 dark:text-white focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3)] shadow-xs dark:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-bold transition-all disabled:opacity-90 disabled:cursor-not-allowed"
                     >
@@ -1073,16 +1087,34 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
-                            <span>Employee ID Number</span>
-                            <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold">SP-EMP-XXXX</span>
+                            <span>Employee Serial ID</span>
+                            <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold font-mono">
+                              {selectedCompanyId === "consultancy" || selectedCompanyId === "2" ? "SCS-EMP-26XX" : "STR-EMP-26XX"}
+                            </span>
                           </label>
-                          <input
-                            type="text"
-                            value={employeeId}
-                            onChange={(e) => setEmployeeId(e.target.value)}
-                            placeholder="e.g. SP-EMP-0041 (auto if empty)"
-                            className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#090d16]/90 border border-slate-300 dark:border-white/15 text-xs text-slate-900 dark:text-white font-mono focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3)] shadow-xs dark:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-bold transition-all"
-                          />
+                          <div className="relative flex items-center">
+                            <input
+                              type="text"
+                              value={employeeId}
+                              onChange={(e) => setEmployeeId(e.target.value)}
+                              placeholder={selectedCompanyId === "consultancy" || selectedCompanyId === "2" ? "e.g. SCS-EMP-2601" : "e.g. STR-EMP-2601"}
+                              className="w-full pl-3.5 pr-20 py-2.5 rounded-xl bg-white dark:bg-[#090d16]/90 border border-slate-300 dark:border-white/15 text-xs text-slate-900 dark:text-white font-mono focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.3)] shadow-xs dark:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)] outline-hidden font-bold transition-all"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                getStoredUserAccountsAsync().then(accs => {
+                                  setEmployeeId(generateCompanyEmployeeId(selectedCompanyId, accs))
+                                }).catch(() => {
+                                  setEmployeeId(generateCompanyEmployeeId(selectedCompanyId, []))
+                                })
+                              }}
+                              className="absolute right-2 px-2 py-1 text-[10px] font-bold bg-blue-50 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400 hover:bg-blue-100 rounded-lg border border-blue-200 dark:border-blue-800 cursor-pointer shadow-2xs"
+                              title="Recalculate next serial ID for this company"
+                            >
+                              Auto ID
+                            </button>
+                          </div>
                         </div>
 
                         <div>

@@ -209,6 +209,7 @@ export interface Subscription {
   advanceAmount?: number
   balanceDue?: number
   prepaidUntilDate?: string
+  marketingPackage?: any
 }
 
 export interface SubscriptionKPIs {

@@ -10,6 +10,8 @@ const {
   sendPaymentReceiptEmail,
   sendPaymentDueReminderEmail,
   sendGenericEmail,
+  sendKycSuccessEmail,
+  sendKycRejectedEmail,
 } = require('../utils/emailService');
 
 // ─── TEST SMTP CONNECTION ───────────────────────────────────────────────────
@@ -501,6 +503,45 @@ router.post('/send-general', async (req, res, next) => {
   }
 });
 
+
+// ─── SEND KYC STATUS NOTIFICATION EMAIL ────────────────────────────────────
+router.post('/send-kyc-status', async (req, res, next) => {
+  try {
+    const { to, status, name, role, companyName, branchName, employeeId, docType, docNumber, bankName, accountNumber, verifiedBy, rejectionReason, companyId, company_id } = req.body;
+    if (!to) {
+      return res.status(400).json({ status: 'error', message: 'Recipient email is required' });
+    }
+
+    if (String(status).toLowerCase() === 'verified') {
+      await sendKycSuccessEmail({
+        to,
+        name: name || 'Team Member',
+        role: role || 'Teams',
+        companyName: companyName || 'SAAMPARK Group',
+        branchName: branchName || '',
+        employeeId: employeeId || '',
+        docType: docType || 'Government ID',
+        docNumber: docNumber || '',
+        bankName: bankName || '',
+        accountNumber: accountNumber || '',
+        verifiedBy: verifiedBy || 'Management',
+        companyId: companyId || company_id || null,
+      });
+      return res.status(200).json({ status: 'success', message: `KYC verified email sent successfully to ${to}` });
+    } else {
+      await sendKycRejectedEmail({
+        to,
+        name: name || 'Team Member',
+        rejectionReason: rejectionReason || 'Document details could not be verified. Please re-upload clear copies.',
+        companyName: companyName || 'SAAMPARK Group',
+        companyId: companyId || company_id || null,
+      });
+      return res.status(200).json({ status: 'success', message: `KYC rejection notice sent to ${to}` });
+    }
+  } catch (err) {
+    next(err);
+  }
+});
 
 // ─── GET & SAVE GLOBAL SMTP SETTINGS ──────────────────────────────────────
 router.get('/settings', async (req, res, next) => {

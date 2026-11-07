@@ -6,6 +6,7 @@ import { X, Printer, Send, CheckCircle2, Building2, CreditCard, ShieldCheck } fr
 import { TeamPayoutRecord } from "../types"
 import { sendTeamPaymentReceiptEmail } from "../services/teamPaymentService"
 import { Button } from "@/components/ui/Button"
+import { printDocument } from "@/lib/printUtils"
 
 interface TeamPaymentReceiptModalProps {
   isOpen: boolean
@@ -24,7 +25,7 @@ export function TeamPaymentReceiptModal({
   if (!isOpen || !payout) return null
 
   const handlePrint = () => {
-    window.print()
+    printDocument("printable-team-payment", `Payout_Voucher_${payout.id}`)
   }
 
   const handleSendEmail = async () => {
@@ -87,7 +88,7 @@ export function TeamPaymentReceiptModal({
           )}
 
           {/* Printable Voucher Paper */}
-          <div className="p-8 space-y-6 text-zinc-900 dark:text-zinc-100 bg-white dark:bg-zinc-900 print:p-6 print:text-black">
+          <div id="printable-team-payment" className="p-8 space-y-6 text-zinc-900 dark:text-zinc-100 bg-white dark:bg-zinc-900 print:p-6 print:text-black">
             {/* Header: Company & Voucher Info */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-700 pb-6">
               <div>

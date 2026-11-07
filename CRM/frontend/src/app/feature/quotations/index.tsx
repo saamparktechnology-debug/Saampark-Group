@@ -122,6 +122,16 @@ export default function QuotationsMain() {
         validTill: q.validTill || q.valid_till || "",
         status: q.status || "Draft",
         companyId: q.companyId || (q.company_id === "1" ? "tech" : (q.company_id === "2" ? "consultancy" : q.company_id)) || "tech",
+        deliverables: (Array.isArray(q.deliverables) && q.deliverables.length > 0) 
+          ? q.deliverables 
+          : (Array.isArray(q.items) && q.items.length > 0 
+              ? q.items.map((it: any, idx: number) => ({
+                  id: it.id || `mod_${idx + 1}`,
+                  title: it.name || it.serviceName || `Module ${idx + 1}`,
+                  description: it.description || "",
+                  duration: it.deliverableTime || it.duration || "1-2 Weeks",
+                }))
+              : []),
         items: (q.items && q.items.length > 0) ? q.items : [{ id: "1", name: q.title || "", description: q.description || "", quantity: 1, unitPrice: Number(q.total) || 0, total: Number(q.total) || 0 }]
       }))
 
@@ -418,11 +428,28 @@ export default function QuotationsMain() {
   const handleConvertToInvoice = async (quotation: QuotationData) => {
     const invId = `INV-${Math.floor(100 + Math.random() * 900)}`
     await executeWithFeedback(async () => {
+      const qAny = quotation as any
+      const isDigitalMarketing = (qAny.category && qAny.category.toLowerCase().includes("marketing")) || Boolean(qAny.marketingPackage?.enabled)
+      const targetCompanyId = quotation.companyId || activeCompanyId || "tech"
+      const resolvedProjectName = quotation.project || qAny.projectName || `Project from ${quotation.number}`
+      const mappedItems = quotation.items ? quotation.items.map((it, idx) => ({
+        id: it.id || `item_${idx + 1}`,
+        serviceName: it.name || (it as any).serviceName || "Service",
+        sacCode: it.sac || "998311",
+        qty: it.quantity || 1,
+        unit: "Nos",
+        rate: it.unitPrice || 0,
+        gstRate: 18,
+        gstAmount: Math.round(((it.total || 0) * 18) / 100),
+        charges: [],
+        totalAmount: it.total || 0,
+      })) : undefined
+
       await addInvoice({
         id: invId,
         client: quotation.customer,
         clientEmail: quotation.customerEmail,
-        project: `Project from ${quotation.number}`,
+        project: resolvedProjectName,
         billDate: new Date().toLocaleDateString("en-GB"),
         dueDate: quotation.validTill || new Date(Date.now() + 15 * 86400000).toLocaleDateString("en-GB"),
         baseAmount: quotation.subtotal || Math.round(quotation.total / 1.18),
@@ -433,10 +460,53 @@ export default function QuotationsMain() {
         due: `₹${quotation.total.toLocaleString("en-IN")}`,
         status: "Not paid",
         billedBy: user?.name || "Admin",
-        companyId: quotation.companyId || activeCompanyId || "tech",
+        companyId: targetCompanyId,
         branchId: quotation.branchId,
         branchName: quotation.branchName,
-      }, quotation.companyId || activeCompanyId || "tech")
+        category: isDigitalMarketing ? "Digital Marketing" : qAny.category,
+        marketingPackage: qAny.marketingPackage,
+        items: mappedItems,
+        notes: quotation.notes,
+        terms: quotation.terms,
+      }, targetCompanyId)
+
+      // Auto-create/sync Project in Projects module
+      try {
+        const { getProjects, addProject } = await import("@/app/feature/projects/services/projectService")
+        const existingProjects = await getProjects(targetCompanyId)
+        const projTitle = (resolvedProjectName || `${quotation.customer} - ${isDigitalMarketing ? "Digital Marketing Campaign" : "Project"}`).trim()
+        const found = existingProjects.find(p => p.title.toLowerCase().trim() === projTitle.toLowerCase())
+        if (!found) {
+          await addProject({
+            title: projTitle,
+            client: quotation.customer,
+            clientId: qAny.clientId || qAny.customerId,
+            projectType: isDigitalMarketing ? "Digital Marketing Campaign" : "Client Project",
+            price: `₹${quotation.total.toLocaleString("en-IN")}`,
+            startDate: new Date().toISOString().split("T")[0],
+            deadline: quotation.validTill || new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
+            progress: 10,
+            status: "In Progress",
+            paymentStatus: "Payment Pending",
+            baseAmount: quotation.subtotal || Math.round(quotation.total / 1.18),
+            totalAmount: quotation.total,
+            labels: [],
+            companyId: targetCompanyId,
+            branchId: quotation.branchId,
+            branchName: quotation.branchName,
+            marketingPackage: isDigitalMarketing ? qAny.marketingPackage : undefined,
+            members: qAny.assignedMembers ? qAny.assignedMembers.map((m: any) => ({
+              id: m.memberId || m.id,
+              name: m.memberName || m.name,
+              role: m.memberRole || m.role || "Marketing Specialist",
+              avatar: m.memberAvatar || m.avatar,
+              avatarUrl: m.memberAvatar || m.avatarUrl,
+            })) : undefined,
+          }, targetCompanyId)
+        }
+      } catch (err) {
+        console.warn("Auto project creation notice:", err)
+      }
 
       setViewingItem(null)
     }, {
@@ -544,7 +614,9 @@ export default function QuotationsMain() {
       transition={{ duration: 0.2 }} 
       className="space-y-6 max-w-[1600px] mx-auto p-4 sm:p-6"
     >
-      {/* HEADER */}
+      {/* ── DASHBOARD VIEW (COMPLETELY HIDDEN DURING PRINTING) ── */}
+      <div className="print:hidden space-y-6">
+        {/* HEADER */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-100 dark:border-zinc-800 pb-4">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2.5">
@@ -834,16 +906,16 @@ export default function QuotationsMain() {
           </table>
         </div>
       </div>
+      </div>
 
       {/* ── OFFICIAL PDF DOCUMENT VIEWER MODAL ───────────────────────── */}
       <AnimatePresence>
         {viewingItem && (
-          <div className="fixed inset-0 z-[99999] flex items-start justify-center bg-black/75 backdrop-blur-sm p-2 sm:p-6 py-6 sm:py-10 overflow-y-auto print:p-0 print:bg-white">
+          <div className="fixed inset-0 z-[99999] flex items-start justify-center bg-black/75 backdrop-blur-sm p-2 sm:p-6 py-6 sm:py-10 overflow-y-auto print:p-0 print:m-0 print:bg-white print:static print:overflow-visible print:block print:w-full">
             <OfficialQuotationDocument 
               quotation={viewingItem}
               onClose={() => setViewingItem(null)}
               onAccept={() => handleAcceptQuotation(viewingItem)}
-              onConvertToClient={() => handleConvertToClient(viewingItem)}
               onSendEstimate={() => handleCreateEstimateFromQuote(viewingItem)}
               onSendEmail={() => {
                 const target = viewingItem

@@ -9,6 +9,8 @@ async function ensureUsersColumns() {
     await pool.execute('ALTER TABLE users ADD COLUMN username VARCHAR(100) NULL').catch(() => {});
     await pool.execute('ALTER TABLE users ADD COLUMN company_ids TEXT NULL').catch(() => {});
     await pool.execute('ALTER TABLE users MODIFY COLUMN phone VARCHAR(100) NULL').catch(() => {});
+    await pool.execute("ALTER TABLE users ADD COLUMN kyc_status ENUM('Pending', 'Processing', 'Verified', 'Rejected') DEFAULT 'Pending'").catch(() => {});
+    await pool.execute('ALTER TABLE users ADD COLUMN kyc_data LONGTEXT NULL').catch(() => {});
   } catch {}
 }
 ensureUsersColumns();
@@ -70,6 +72,7 @@ const getAllUsers = async (req, res, next) => {
     let query = `
       SELECT u.id, u.full_name, u.email, u.username, u.phone, u.department, u.status, u.permissions, u.last_login, u.created_at,
              u.company_id, u.company_ids, u.branch_id, u.sub_branch_id, u.avatar_url,
+             u.kyc_status, u.kyc_data,
              r.name as role_name, r.id as role_id,
              b.name as branch_name, sb.name as sub_branch_name, c.name as company_name
       FROM users u
@@ -192,6 +195,7 @@ const getUserById = async (req, res, next) => {
     try {
       const [rows] = await pool.execute(
         `SELECT u.id, u.full_name, u.email, u.username, u.phone, u.department, u.status, u.permissions, u.company_id, u.company_ids, u.branch_id, u.sub_branch_id, u.avatar_url,
+                u.kyc_status, u.kyc_data,
                 r.name as role_name, r.id as role_id,
                 b.name as branch_name, sb.name as sub_branch_name, c.name as company_name
          FROM users u
@@ -334,6 +338,20 @@ const updateUser = async (req, res, next) => {
     if (subBranchIdVal !== undefined) { setClauses.push('sub_branch_id = ?'); params.push(subBranchIdVal); }
     if (department !== undefined) { setClauses.push('department = ?'); params.push(department || null); }
     if (avatarVal !== null) { setClauses.push('avatar_url = ?'); params.push(avatarVal); }
+    
+    // KYC Fields
+    const kycStatusVal = req.body.kyc_status || req.body.kycStatus;
+    if (kycStatusVal !== undefined && kycStatusVal !== null) {
+      setClauses.push('kyc_status = ?');
+      params.push(kycStatusVal);
+    }
+    const kycDataVal = req.body.kyc_data || req.body.kycData;
+    if (kycDataVal !== undefined && kycDataVal !== null) {
+      const kycStr = typeof kycDataVal === 'string' ? kycDataVal : JSON.stringify(kycDataVal);
+      setClauses.push('kyc_data = ?');
+      params.push(kycStr);
+    }
+
     if (permissions !== undefined && permissions !== null) {
       const permStr = typeof permissions === 'string' ? permissions : JSON.stringify(permissions);
       setClauses.push('permissions = ?');
@@ -465,6 +483,14 @@ const updateUser = async (req, res, next) => {
           phone: u.phone || '',
           permissions: permObj,
           allowedModules: permObj?.allowedModules,
+          kycStatus: u.kyc_status || (kycStatusVal !== undefined ? kycStatusVal : undefined),
+          kycData: (() => {
+            try {
+              if (u.kyc_data) return typeof u.kyc_data === 'string' ? JSON.parse(u.kyc_data) : u.kyc_data;
+              if (kycDataVal) return typeof kycDataVal === 'string' ? JSON.parse(kycDataVal) : kycDataVal;
+            } catch {}
+            return undefined;
+          })(),
         };
       } else {
         // Fallback for accounts tracked directly via app_data (e.g. system accounts with string IDs)
@@ -766,7 +792,7 @@ const createUser = async (req, res, next) => {
         }
       }
       // Remove from deleted_items tracking
-      await pool.execute('DELETE FROM deleted_items WHERE item_id = ? AND module_name = "users"', [normEmail]).catch(() => {});
+      await pool.execute('DELETE FROM deleted_items WHERE (item_id = ? OR item_id = ?) AND module_name = "users"', [normEmail, String(userId)]).catch(() => {});
     } else {
       try {
         const [result] = await pool.execute(

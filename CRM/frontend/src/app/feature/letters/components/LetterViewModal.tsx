@@ -5,6 +5,7 @@ import { motion } from "framer-motion"
 import { X, Printer, Download, Mail, Building2, Calendar, Shield, Users } from "lucide-react"
 import { LetterRecord } from "../types"
 import { useAuthStore, getCompanyLogoUrl, getCompanyFullName } from "@/store/useAuthStore"
+import { printDocument } from "@/lib/printUtils"
 
 interface LetterViewModalProps {
   letter: LetterRecord | null
@@ -21,7 +22,7 @@ export function LetterViewModal({ letter, onClose }: LetterViewModalProps) {
   const companyFullName = comp ? getCompanyFullName(comp) : (letter.companyName || "SAAMPARK GROUP")
 
   const handlePrint = () => {
-    window.print()
+    printDocument("printable-letter", `Letter_${letter.referenceNumber || "Official"}`)
   }
 
   return (
@@ -60,7 +61,7 @@ export function LetterViewModal({ letter, onClose }: LetterViewModalProps) {
         </div>
 
         {/* Printable Official Document Container */}
-        <div className="p-8 sm:p-12 overflow-y-auto flex-1 bg-white text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 print:p-0 print:bg-white print:text-black">
+        <div id="printable-letter" className="p-8 sm:p-12 overflow-y-auto flex-1 bg-white text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 print:p-0 print:bg-white print:text-black">
           {/* Header */}
           <div className="border-b-2 border-zinc-900 pb-5 flex items-center justify-between gap-4">
             <div className="flex items-center gap-4">

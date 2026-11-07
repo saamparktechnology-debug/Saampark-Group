@@ -8,6 +8,7 @@ import {
 } from "lucide-react"
 import { useAuthStore, getCompanyLogoUrl, DEFAULT_COMPANIES } from "@/store/useAuthStore"
 import { numberToIndianWords } from "@/app/feature/quotations/components/OfficialQuotationDocument"
+import { printDocument } from "@/lib/printUtils"
 
 export interface RenewReceiptData {
   receiptNumber: string
@@ -65,7 +66,7 @@ export function RenewReceiptModal({
   const logoUrl = getCompanyLogoUrl(activeCompany) || activeCompany?.logo_url
 
   const handlePrint = () => {
-    window.print()
+    printDocument("printable-renew-receipt", `Renewal_Receipt_${receipt.receiptNumber}`)
   }
 
   const handleSend = async () => {
@@ -145,7 +146,7 @@ export function RenewReceiptModal({
           )}
 
           {/* Printable Receipt Paper */}
-          <div className="p-6 sm:p-10 space-y-6 text-zinc-900 dark:text-zinc-100 bg-white dark:bg-zinc-900 print:p-6 print:text-black">
+          <div id="printable-renew-receipt" className="p-6 sm:p-10 space-y-6 text-zinc-900 dark:text-zinc-100 bg-white dark:bg-zinc-900 print:p-6 print:text-black">
             
             {/* 1. Header: Brand, Legal IDs, Receipt Badge */}
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b-2 border-zinc-900 pb-5">

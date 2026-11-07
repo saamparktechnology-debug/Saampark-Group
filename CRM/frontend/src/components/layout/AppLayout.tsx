@@ -8,6 +8,7 @@ import { useUIStore } from "@/store/useUIStore"
 import { usePathname } from "next/navigation"
 
 import { AppModuleGuard } from "@/components/auth/AppModuleGuard"
+import { EmployeeKycGate } from "@/components/auth/EmployeeKycGate"
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const { isSidebarCollapsed } = useUIStore()
@@ -53,7 +54,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       >
         <div className="p-2.5 sm:p-4 md:p-6 lg:p-8 max-w-[1800px] mx-auto w-full min-w-0 overflow-x-hidden">
           <AppModuleGuard>
-            {children}
+            <EmployeeKycGate>
+              {children}
+            </EmployeeKycGate>
           </AppModuleGuard>
         </div>
       </main>

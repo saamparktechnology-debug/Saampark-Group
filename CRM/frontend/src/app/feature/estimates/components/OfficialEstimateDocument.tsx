@@ -4,10 +4,12 @@ import * as React from "react"
 import { 
   Printer, Download, Check, X, ArrowRight, Building2, MapPin, 
   Phone, Mail, Globe, Shield, Calendar, Calculator, CheckCircle2,
-  Clock, AlertCircle, FileText, QrCode, Landmark, Stamp, FileCheck, Sparkles
+  Clock, AlertCircle, FileText, QrCode, Landmark, Stamp, FileCheck, Sparkles, Megaphone
 } from "lucide-react"
 import { EstimateItem } from "../services/estimateService"
 import { useAuthStore, Company, Branch, DEFAULT_COMPANIES, getCompanyLogoUrl } from "@/store/useAuthStore"
+import { OfficialFormNo9Document } from "@/components/documents/OfficialFormNo9Document"
+import { printDocument } from "@/lib/printUtils"
 
 interface OfficialEstimateDocumentProps {
   estimate: EstimateItem
@@ -102,6 +104,8 @@ export function OfficialEstimateDocument({
     if (!branches || branches.length === 0) fetchBranches().catch(() => {})
     if (!subBranches || subBranches.length === 0) fetchSubBranches().catch(() => {})
   }, [companies, branches, subBranches, fetchCompanies, fetchBranches, fetchSubBranches])
+
+  const [isForm9Open, setIsForm9Open] = React.useState(false)
 
   // Resolve Company
   const activeCompany = React.useMemo(() => {
@@ -267,7 +271,7 @@ export function OfficialEstimateDocument({
   const documentQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=1&ecc=M&data=${encodeURIComponent(`SAAMPARK-ESTIMATE:${estimate.estimateNumber}|CLIENT:${estimate.client}|AMOUNT:INR${grandTotal}|DATE:${estimate.date}`)}`
 
   const handlePrint = () => {
-    window.print()
+    printDocument("printable-estimate", `Estimate_${estimate.estimateNumber}`)
   }
 
   // Theme matching corporate palette (GST Teal vs Non-GST Sky Blue)
@@ -370,6 +374,17 @@ export function OfficialEstimateDocument({
             >
               <ArrowRight size={13} />
               <span>Convert to Project &amp; Invoice</span>
+            </button>
+          )}
+
+          {estimate.marketingPackage?.enabled && (
+            <button
+              type="button"
+              onClick={() => setIsForm9Open(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-purple-900 bg-amber-400 hover:bg-amber-300 rounded-lg shadow-md transition-all cursor-pointer"
+            >
+              <Megaphone size={13} />
+              <span>View Form No - 9</span>
             </button>
           )}
 
@@ -502,14 +517,14 @@ export function OfficialEstimateDocument({
 
           {/* Address & Contact Row */}
           {(resolvedAddress || hasContactInfo) && (
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-x-4 gap-y-1 text-[9.5px] text-zinc-700 pt-1.5 border-t border-zinc-100">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-x-4 gap-y-1 text-[9.5px] text-zinc-700 pt-1.5 border-t border-zinc-100 w-full">
               {resolvedAddress && (
-                <div className="flex items-center gap-1.5 min-w-0 max-w-full sm:max-w-[55%]">
-                  <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
+                <div className="flex items-start gap-1.5 min-w-0 flex-1">
+                  <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0 mt-0.5`}>
                     <MapPin size={8} />
                   </span>
                   <strong className="text-zinc-900 text-[9px] shrink-0">Office:</strong>
-                  <span className="text-zinc-600 text-[9px] truncate">{resolvedAddress}</span>
+                  <span className="text-zinc-700 text-[9px] leading-normal break-words whitespace-normal">{resolvedAddress}</span>
                 </div>
               )}
 
@@ -681,6 +696,31 @@ export function OfficialEstimateDocument({
               </p>
             </div>
 
+            {/* Digital Marketing & Social Media Campaign Package Card (Form No - 9) */}
+            {estimate.marketingPackage?.enabled && (
+              <div className="p-3.5 rounded-xl border border-purple-200 bg-purple-50/60 text-xs space-y-2">
+                <div className="flex items-center justify-between border-b border-purple-200 pb-1.5">
+                  <span className="font-bold text-purple-900 flex items-center gap-1.5">
+                    <Megaphone size={14} className="text-purple-700" />
+                    <span>DIGITAL MARKETING PACKAGE ({estimate.marketingPackage.planName || "Grow - 2"})</span>
+                  </span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-200 text-purple-800">
+                    FORM NO - 9
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[11px] text-zinc-700">
+                  <div>Duration: <strong>{estimate.marketingPackage.packageDuration || "1 month"}</strong> ({estimate.marketingPackage.startDate} - {estimate.marketingPackage.expireDate})</div>
+                  <div>Creatives: <strong>{estimate.marketingPackage.postersCount || 12} Posters</strong> • <strong>{estimate.marketingPackage.videosCount || 2} AI Reels</strong></div>
+                  {estimate.marketingPackage.hasRealModelShoot && (
+                    <div className="col-span-2 text-purple-800 font-semibold">📸 Real Model Shoot: {estimate.marketingPackage.modelShootDate} ({estimate.marketingPackage.modelShootNotes || "Included"})</div>
+                  )}
+                  {estimate.marketingPackage.targetLocations && (
+                    <div className="col-span-2 text-zinc-600 text-[10px]">🎯 Audience Target: {estimate.marketingPackage.targetLocations}</div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Bank Remittance Details Box */}
             <div className="p-4 rounded-xl border border-zinc-200 bg-zinc-50/70 space-y-2 text-[11px]">
               <div className="flex items-center justify-between border-b border-zinc-200 pb-1.5">
@@ -841,6 +881,17 @@ export function OfficialEstimateDocument({
           Corporate Office: {resolvedAddress} • Registered under the Companies Act • All disputes subject to local jurisdiction only.
         </div>
       </div>
+      {isForm9Open && estimate.marketingPackage && (
+        <OfficialFormNo9Document
+          pkg={estimate.marketingPackage}
+          clientInfo={{
+            name: estimate.client,
+            businessName: estimate.client,
+            phone: (estimate as any).clientPhone,
+          }}
+          onClose={() => setIsForm9Open(false)}
+        />
+      )}
     </div>
     </div>
   )

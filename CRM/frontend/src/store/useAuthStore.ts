@@ -320,38 +320,14 @@ export function getCompanyFullName(company?: Partial<Company> | null): string {
     return explicitName
   }
 
-  const canon = getCanonicalCompanyId(company.slug || company.id || (company as any)?.numeric_id || company.name)
   const brand = (company.brand_name || "SAAMPARK").trim()
+  const div = (company.division_name !== undefined ? company.division_name : "").trim()
   
-  if (canon === "tech" || canon === "1") {
-    const div = company.division_name !== undefined ? company.division_name.trim() : "TECHNOLOGY"
-    const sub = (company.subtitle || "").trim()
-    if (sub && !sub.toLowerCase().includes("consult")) {
-      return [brand, div, sub].filter(Boolean).join(" ").trim()
-    }
-    return [brand, div].filter(Boolean).join(" ").trim() || brand
+  if (brand && div) {
+    return `${brand} ${div}`.trim()
   }
 
-  if (canon === "consultancy" || canon === "2") {
-    const div = company.division_name !== undefined ? company.division_name.trim() : "CONSULTANCY SERVICE"
-    const sub = (company.subtitle || "").trim()
-    if (sub && !sub.toLowerCase().includes("tech")) {
-      return [brand, div, sub].filter(Boolean).join(" ").trim()
-    }
-    return [brand, div].filter(Boolean).join(" ").trim() || brand
-  }
-
-  const rawBrand = (company.brand_name || "").trim()
-  const rawDivision = (company.division_name || "").trim()
-  const rawSubtitle = (company.subtitle || "").trim()
-  const rawName = (company.name || "").trim()
-
-  if (rawName) return rawName
-  if (rawBrand && rawDivision) {
-    return rawSubtitle ? `${rawBrand} ${rawDivision} ${rawSubtitle}`.trim() : `${rawBrand} ${rawDivision}`.trim()
-  }
-
-  return rawBrand || "SAAMPARK GROUP"
+  return brand || explicitName || "SAAMPARK GROUP"
 }
 
 export function getCanonicalCompanyId(val: string | number | null | undefined): string {
@@ -603,9 +579,9 @@ export const DEFAULT_COMPANIES: Company[] = [
     id: 'tech', 
     numeric_id: 1,
     brand_name: 'SAAMPARK',
-    division_name: 'TECHNOLOGY',
-    name: 'SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED', 
-    subtitle: 'AND RESEARCH PRIVATE LIMITED',
+    division_name: 'TECHNOLOGY & RESEARCH',
+    name: 'SAAMPARK TECHNOLOGY & RESEARCH', 
+    subtitle: '',
     logo: '💻', 
     logo_url: '/saampark-logo.png',
     slug: 'tech', 
@@ -646,7 +622,7 @@ export const DEFAULT_COMPANIES: Company[] = [
     brand_name: 'SAAMPARK',
     division_name: 'CONSULTANCY SERVICE',
     name: 'SAAMPARK CONSULTANCY SERVICE', 
-    subtitle: 'MANAGEMENT & ADVISORY SERVICES',
+    subtitle: '',
     logo: '💼', 
     logo_url: '', 
     slug: 'consultancy', 
@@ -683,21 +659,7 @@ export const DEFAULT_COMPANIES: Company[] = [
   },
 ]
 
-export const DEFAULT_BRANCHES: Branch[] = [
-  {
-    id: 'br-1',
-    companyId: 'tech',
-    name: 'Head Office - Mumbai & Kolkata Technology Center',
-    code: 'STR-HO',
-    city: 'Mumbai / Kolkata',
-    state: 'Maharashtra / West Bengal',
-    country: 'India',
-    phone: '+91 9901518567',
-    email: 'ho@saamparktechnology.com',
-    managerName: 'Supriya Kumar',
-    status: 'Active',
-  },
-]
+export const DEFAULT_BRANCHES: Branch[] = []
 
 export const COMPANIES = DEFAULT_COMPANIES
 
@@ -805,22 +767,14 @@ export const useAuthStore = create<AuthState>()(
             })
           })
 
-          // Helper to merge fields without overwriting non-empty fields with null/empty
+          // Helper to merge fields from database or state without clobbering with undefined
           const mergeNonEmpty = (targetObj: any, sourceObj: any) => {
             if (!sourceObj || typeof sourceObj !== 'object') return targetObj
             const result = { ...targetObj }
             for (const [k, v] of Object.entries(sourceObj)) {
               if (v !== null && v !== undefined) {
-                if (typeof v === 'string') {
-                  if (v.trim() !== '') {
-                    result[k] = v
-                  }
-                } else if (typeof v === 'object') {
-                  if (Array.isArray(v)) {
-                    if (v.length > 0) result[k] = v
-                  } else {
-                    result[k] = mergeNonEmpty(result[k] || {}, v)
-                  }
+                if (typeof v === 'object' && !Array.isArray(v)) {
+                  result[k] = mergeNonEmpty(result[k] || {}, v)
                 } else {
                   result[k] = v
                 }
@@ -886,16 +840,21 @@ export const useAuthStore = create<AuthState>()(
             numeric_id: (rawTech as any).numeric_id || 1,
             brand_name: rawTech.brand_name !== undefined ? rawTech.brand_name : 'SAAMPARK',
             division_name: rawTech.division_name !== undefined ? rawTech.division_name : 'TECHNOLOGY',
-            subtitle: rawTech.subtitle !== undefined ? rawTech.subtitle : 'AND RESEARCH PRIVATE LIMITED',
+            subtitle: rawTech.subtitle !== undefined ? rawTech.subtitle : '',
+            trademark_symbol: rawTech.trademark_symbol !== undefined ? rawTech.trademark_symbol : '',
             name: (rawTech.name && rawTech.name.trim() !== '') ? rawTech.name : (getCompanyFullName(rawTech) || 'SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED'),
-            logo: rawTech.logo || '💻',
-            logo_url: rawTech.logo_url !== undefined ? rawTech.logo_url : '/saampark-logo.png',
+            logo: (rawTech.logo && rawTech.logo !== '💻') ? rawTech.logo : (rawTech.logo_url || '💻'),
+            logo_url: rawTech.logo_url !== undefined && rawTech.logo_url !== null && rawTech.logo_url !== ''
+              ? rawTech.logo_url
+              : ((rawTech.logo && (rawTech.logo.startsWith('http') || rawTech.logo.startsWith('data:') || rawTech.logo.startsWith('/'))) ? rawTech.logo : '/saampark-logo.png'),
+            logo_position: rawTech.logo_position || { x: 0, y: 0 },
             signature_position: rawTech.signature_position || { x: 0, y: 0 },
             stamp_position: rawTech.stamp_position || { x: 0, y: 0 },
             logo_scale: rawTech.logo_scale ?? 1,
             stamp_scale: rawTech.stamp_scale ?? 1,
             signature_scale: rawTech.signature_scale ?? 1,
             custom_stamps: Array.isArray(rawTech.custom_stamps) ? rawTech.custom_stamps : [],
+            terms_conditions: rawTech.terms_conditions !== undefined ? rawTech.terms_conditions : (rawTech as any).terms,
             invoice_customization: rawTech.invoice_customization || { hidden_fields: [] },
           }
 
@@ -906,16 +865,21 @@ export const useAuthStore = create<AuthState>()(
             numeric_id: (rawConsult as any).numeric_id || 2,
             brand_name: rawConsult.brand_name !== undefined ? rawConsult.brand_name : 'SAAMPARK',
             division_name: rawConsult.division_name !== undefined ? rawConsult.division_name : 'CONSULTANCY SERVICE',
-            subtitle: rawConsult.subtitle !== undefined ? rawConsult.subtitle : 'MANAGEMENT & ADVISORY SERVICES',
+            subtitle: rawConsult.subtitle !== undefined ? rawConsult.subtitle : '',
+            trademark_symbol: rawConsult.trademark_symbol !== undefined ? rawConsult.trademark_symbol : '',
             name: (rawConsult.name && rawConsult.name.trim() !== '') ? rawConsult.name : (getCompanyFullName(rawConsult) || 'SAAMPARK CONSULTANCY SERVICE'),
-            logo: rawConsult.logo || '💼',
-            logo_url: (rawConsult.logo_url && rawConsult.logo_url !== '/saampark-logo.png') ? rawConsult.logo_url : '',
+            logo: (rawConsult.logo && rawConsult.logo !== '💼' && rawConsult.logo !== '💻') ? rawConsult.logo : (rawConsult.logo_url || '💼'),
+            logo_url: rawConsult.logo_url !== undefined && rawConsult.logo_url !== null && rawConsult.logo_url !== ''
+              ? rawConsult.logo_url
+              : ((rawConsult.logo && (rawConsult.logo.startsWith('http') || rawConsult.logo.startsWith('data:') || rawConsult.logo.startsWith('/'))) ? rawConsult.logo : ''),
+            logo_position: rawConsult.logo_position || { x: 0, y: 0 },
             signature_position: rawConsult.signature_position || { x: 0, y: 0 },
             stamp_position: rawConsult.stamp_position || { x: 0, y: 0 },
             logo_scale: rawConsult.logo_scale ?? 1,
             stamp_scale: rawConsult.stamp_scale ?? 1,
             signature_scale: rawConsult.signature_scale ?? 1,
             custom_stamps: Array.isArray(rawConsult.custom_stamps) ? rawConsult.custom_stamps : [],
+            terms_conditions: rawConsult.terms_conditions !== undefined ? rawConsult.terms_conditions : (rawConsult as any).terms,
             invoice_customization: rawConsult.invoice_customization || { hidden_fields: [] },
           }
 
@@ -935,7 +899,11 @@ export const useAuthStore = create<AuthState>()(
       fetchBranches: async () => {
         try {
           const deletedIds = await syncGlobalDeletedIds().catch(() => getLocalDeletedIds())
-          const isBranchDeleted = (id?: string | number, code?: string) => {
+          const isBranchDeleted = (id?: string | number, code?: string, name?: string) => {
+            const sId = String(id || '').toLowerCase().trim()
+            const sCode = String(code || '').toUpperCase().trim()
+            const sName = String(name || '').toLowerCase().trim()
+            if (sId === 'br-1' || sCode === 'STR-HO' || sCode === 'HO' || sName.includes('head office') || sName === 'head office') return true
             if (id && isGlobalItemDeleted(id, deletedIds, 'branches')) return true
             if (code && isGlobalItemDeleted(code, deletedIds, 'branches')) return true
             return false
@@ -952,7 +920,7 @@ export const useAuthStore = create<AuthState>()(
           // 1. Load app_data branches first
           if (Array.isArray(dbBranches) && dbBranches.length > 0) {
             dbBranches.forEach(b => {
-              if (!isBranchDeleted(b.id, b.code)) {
+              if (!isBranchDeleted(b.id, b.code, b.name)) {
                 branchMap.set(String(b.id), { ...b })
               }
             })
@@ -963,7 +931,7 @@ export const useAuthStore = create<AuthState>()(
             ? (Array.isArray(apiRes.data) ? apiRes.data : apiRes)
             : []
           apiList.forEach((b: Branch) => {
-            if (!isBranchDeleted(b.id, b.code)) {
+            if (!isBranchDeleted(b.id, b.code, b.name)) {
               const strKey = String(b.id)
               const existing = branchMap.get(strKey)
               branchMap.set(strKey, { ...(existing || {}), ...b })
@@ -973,7 +941,7 @@ export const useAuthStore = create<AuthState>()(
           // 3. If both sources are empty, fall back to DEFAULT_BRANCHES as last resort only
           if (branchMap.size === 0) {
             DEFAULT_BRANCHES.forEach(b => {
-              if (!isBranchDeleted(b.id, b.code)) {
+              if (!isBranchDeleted(b.id, b.code, b.name)) {
                 branchMap.set(String(b.id), { ...b })
               }
             })
@@ -1002,13 +970,17 @@ export const useAuthStore = create<AuthState>()(
           console.warn("fetchBranches warning:", err)
         }
         const localDeleted = getLocalDeletedIds()
-        const isBranchDeletedFallback = (id?: string | number, code?: string) => {
+        const isBranchDeletedFallback = (id?: string | number, code?: string, name?: string) => {
+          const sId = String(id || '').toLowerCase().trim()
+          const sCode = String(code || '').toUpperCase().trim()
+          const sName = String(name || '').toLowerCase().trim()
+          if (sId === 'br-1' || sCode === 'STR-HO' || sCode === 'HO' || sName.includes('head office') || sName === 'head office') return true
           if (id && isGlobalItemDeleted(id, localDeleted, 'branches')) return true
           if (code && isGlobalItemDeleted(code, localDeleted, 'branches')) return true
           return false
         }
         const currentFiltered = get().branches
-          .filter(b => !isBranchDeletedFallback(b.id, b.code))
+          .filter(b => !isBranchDeletedFallback(b.id, b.code, b.name))
         set({ branches: currentFiltered })
         return currentFiltered
       },
@@ -1115,6 +1087,7 @@ export const useAuthStore = create<AuthState>()(
           subtitle: updates.subtitle !== undefined ? updates.subtitle : (target.subtitle || ''),
           trademark_symbol: updates.trademark_symbol !== undefined ? updates.trademark_symbol : (target.trademark_symbol || ''),
           logo_url: updates.logo_url !== undefined ? updates.logo_url : (target.logo_url || ''),
+          logo: updates.logo_url || updates.logo || target.logo || '💼',
           name: updates.name || getCompanyFullName({ ...target, ...updates }),
         }
 
@@ -1129,6 +1102,7 @@ export const useAuthStore = create<AuthState>()(
             currency: merged.currency,
             currency_symbol: merged.currency_symbol,
             logo_url: merged.logo_url,
+            logo: merged.logo_url,
             address: merged.address ?? '',
             phone: merged.phone ?? '',
             email: merged.email ?? '',
@@ -1170,6 +1144,7 @@ export const useAuthStore = create<AuthState>()(
             nongst_payment_qr_url: merged.nongst_payment_qr_url ?? '',
             signature_position: merged.signature_position,
             stamp_position: merged.stamp_position,
+            logo_position: merged.logo_position,
             logo_scale: merged.logo_scale,
             stamp_scale: merged.stamp_scale,
             signature_scale: merged.signature_scale,
@@ -1236,7 +1211,7 @@ export const useAuthStore = create<AuthState>()(
           await api.post('/branches', newBranch).catch(() => {})
         } catch {}
 
-        const updated = [...branches.filter(b => b.id !== newBranch.id), newBranch]
+        const updated = [...(branches || []).filter(b => b && b.id !== newBranch.id), newBranch]
         set({ branches: updated })
         await saveModuleDataToDB('branches', updated, 'all').catch(() => {})
 
@@ -1253,7 +1228,7 @@ export const useAuthStore = create<AuthState>()(
           ...updates,
           ...(updates.code ? { code: updates.code.trim().toUpperCase() } : {}),
         }
-        const updated = branches.map(b => b.id === branchId ? { ...b, ...sanitizedUpdates } : b)
+        const updated = (branches || []).filter(Boolean).map(b => b.id === branchId ? { ...b, ...sanitizedUpdates } : b)
         set({ branches: updated })
         await saveModuleDataToDB('branches', updated, 'all').catch(() => {})
 
@@ -1288,7 +1263,7 @@ export const useAuthStore = create<AuthState>()(
         const targetId = targetBranch ? String(targetBranch.id).toLowerCase().trim() : strId
         const targetCode = targetBranch?.code ? String(targetBranch.code).toLowerCase().trim() : ''
 
-        const updated = branches.filter(b => {
+        const updated = (branches || []).filter(Boolean).filter(b => {
           const bId = String(b.id).toLowerCase().trim()
           const bCode = String(b.code || '').toLowerCase().trim()
           if (bId === strId || bId === targetId) return false
@@ -1301,7 +1276,7 @@ export const useAuthStore = create<AuthState>()(
 
         // Also clean up any sub-branches that were children of this deleted branch
         const { subBranches } = get()
-        const updatedSub = (subBranches || []).filter(sb => {
+        const updatedSub = (subBranches || []).filter(Boolean).filter(sb => {
           const pId = String(sb.parentBranchId || (sb as any).branch_id || (sb as any).branchId || '').toLowerCase().trim()
           return pId !== strId && pId !== targetId && (targetCode ? pId !== targetCode : true)
         })
@@ -1356,7 +1331,7 @@ export const useAuthStore = create<AuthState>()(
           }
         } catch {}
 
-        const updated = [...(subBranches || []).filter(sb => sb.id !== newSubBranch.id), newSubBranch]
+        const updated = [...(subBranches || []).filter(sb => sb && sb.id !== newSubBranch.id), newSubBranch]
         set({ subBranches: updated })
         await saveModuleDataToDB('sub_branches', updated, 'all').catch(() => {})
 
@@ -1475,6 +1450,8 @@ export const useAuthStore = create<AuthState>()(
           phone: customUser?.phone,
           allowedModules: normalizedRole === 'Super Admin' ? undefined : userAllowedMods,
           permissions: parsedPerms || customUser?.permissions,
+          kycStatus: (customUser as any)?.kycStatus || (customUser as any)?.kyc_status || 'Pending',
+          kycData: (customUser as any)?.kycData || (customUser as any)?.kyc_data,
         }
 
         // Direct company and branch routing
@@ -1589,6 +1566,18 @@ export const useAuthStore = create<AuthState>()(
               phone: res.user?.phone,
               allowedModules: userAllowedMods,
               permissions: resPerms || res.user?.permissions,
+              kycStatus: res.user?.kyc_status || res.user?.kycStatus || 'Pending',
+              kycData: (() => {
+                try {
+                  if (res.user?.kyc_data) {
+                    return typeof res.user?.kyc_data === 'string' ? JSON.parse(res.user?.kyc_data) : res.user?.kyc_data;
+                  }
+                  if (res.user?.kycData) {
+                    return typeof res.user?.kycData === 'string' ? JSON.parse(res.user?.kycData) : res.user?.kycData;
+                  }
+                } catch {}
+                return undefined;
+              })(),
             }
 
             const effectiveCompanyId = (role === 'Super Admin') ? 'all' : primaryCompany

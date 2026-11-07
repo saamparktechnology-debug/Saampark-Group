@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { motion } from "framer-motion"
-import { Search, Filter, Shield, Edit2, Trash2, CheckCircle2, XCircle, Clock, Building2, Mail, Phone, Lock, MapPin } from "lucide-react"
+import { Search, Filter, Shield, ShieldCheck, Edit2, Trash2, CheckCircle2, XCircle, Clock, Building2, Mail, Phone, Lock, MapPin } from "lucide-react"
 import { UserItem, UserRole, UserStatus } from "../types"
 import { usePermissionStore } from "@/store/usePermissionStore"
 import { useAuthStore, isMatchingCompany, getCompanyFullName } from "@/store/useAuthStore"
@@ -41,6 +41,16 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
   const [searchTerm, setSearchTerm] = React.useState("")
   const [selectedRole, setSelectedRole] = React.useState<string>("All")
   const [selectedStatus, setSelectedStatus] = React.useState<string>("All")
+  const [selectedKycStatus, setSelectedKycStatus] = React.useState<string>("All")
+
+  const pendingKycCount = React.useMemo(() => {
+    return users.filter(
+      (u) =>
+        u.role === "Teams" &&
+        (u.kycStatus === "Processing" ||
+          (u.kycData?.docNumber && u.kycStatus !== "Verified" && u.kycStatus !== "Rejected"))
+    ).length
+  }, [users])
 
   const filteredUsers = React.useMemo(() => {
     return users.filter((u) => {
@@ -52,9 +62,20 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
       const matchesRole = selectedRole === "All" || u.role === selectedRole
       const matchesStatus = selectedStatus === "All" || u.status === selectedStatus
 
-      return matchesSearch && matchesRole && matchesStatus
+      let matchesKyc = true
+      if (selectedKycStatus === "Processing" || selectedKycStatus === "PendingApproval") {
+        matchesKyc = u.kycStatus === "Processing" || (Boolean(u.kycData?.docNumber) && u.kycStatus !== "Verified")
+      } else if (selectedKycStatus === "Verified") {
+        matchesKyc = u.kycStatus === "Verified"
+      } else if (selectedKycStatus === "Rejected") {
+        matchesKyc = u.kycStatus === "Rejected"
+      } else if (selectedKycStatus === "Pending") {
+        matchesKyc = !u.kycStatus || u.kycStatus === "Pending"
+      }
+
+      return matchesSearch && matchesRole && matchesStatus && matchesKyc
     })
-  }, [users, searchTerm, selectedRole, selectedStatus])
+  }, [users, searchTerm, selectedRole, selectedStatus, selectedKycStatus])
 
   return (
     <div className="space-y-4">
@@ -77,8 +98,38 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
         </div>
 
         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
+          {pendingKycCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setSelectedKycStatus(selectedKycStatus === "Processing" ? "All" : "Processing")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm ${
+                selectedKycStatus === "Processing"
+                  ? "bg-amber-500 text-white shadow-amber-500/20"
+                  : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/20"
+              }`}
+            >
+              <Clock size={13} className="animate-pulse" />
+              <span>{pendingKycCount} KYC Pending Approval</span>
+            </button>
+          )}
+
           <div className="flex items-center gap-2">
             <Filter size={14} className="text-muted-foreground" />
+            <span className="text-xs font-bold text-muted-foreground">KYC:</span>
+            <select
+              value={selectedKycStatus}
+              onChange={(e) => setSelectedKycStatus(e.target.value)}
+              className="px-3 py-2 rounded-xl liquid-glass-input text-xs font-semibold focus:outline-hidden cursor-pointer"
+            >
+              <option value="All">All KYC</option>
+              <option value="Processing">Pending Approval ({pendingKycCount})</option>
+              <option value="Verified">Verified</option>
+              <option value="Rejected">Rejected</option>
+              <option value="Pending">Unsubmitted</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-muted-foreground">Role:</span>
             <select
               value={selectedRole}
@@ -204,7 +255,8 @@ export function UserList({ users, onEdit, onToggleStatus, onDelete, onManageUser
                       <td className="py-3.5 px-4">
                         {u.role === "Super Admin" ? (
                           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-purple-500/10 text-purple-400 border border-purple-500/30">
-                            👑 Full Master Access
+                            <ShieldCheck size={13} className="text-purple-400" />
+                            Full System Access
                           </span>
                         ) : canEditUsers ? (
                           <button

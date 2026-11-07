@@ -120,10 +120,6 @@ export default function UsersMain() {
                  (u.companyId && isMatchingCompany({ id: u.companyId, slug: u.companyId } as any, targetComp))
         })
       })
-    } else if (isSuperAdminLoggedIn) {
-      // 👑 When at SAAMPARK Group level (All Companies), show ONLY Super Admins and Admins!
-      // Operational Teams and Clients belong to individual operating companies and will appear when switching to that company.
-      filtered = filtered.filter((u) => u.role === "Super Admin" || u.role === "Admin")
     }
 
     // 2. Strict Branch Filter (Show ONLY users assigned to this branch)
@@ -138,7 +134,7 @@ export default function UsersMain() {
           : (u.branchId ? [String(u.branchId).toLowerCase().trim()] : [])
         const uBranchName = String(u.branchName || "").toLowerCase().trim()
 
-        // Strict separation: users with no branch assigned do not belong to this branch
+        // Strict separation: users with no branch assigned do not belong to a specific branch filter
         if (uBranchIds.length === 0 && !uBranchName) {
           return false
         }
@@ -396,6 +392,8 @@ export default function UsersMain() {
           department: saved.department || currentUser.department,
           avatar: saved.avatarUrl || currentUser.avatar,
           avatarUrl: saved.avatarUrl || currentUser.avatarUrl,
+          kycStatus: saved.kycStatus || currentUser.kycStatus,
+          kycData: saved.kycData || currentUser.kycData,
         }
       })
       if (saved.avatarUrl || (saved as any).avatar) {

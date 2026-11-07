@@ -6,10 +6,10 @@ import {
   Building2, MapPin, Calendar, Mail, Phone, ShieldCheck, 
   Award, QrCode, Download, Printer, Send, Sparkles, Droplets,
   CheckCircle2, RefreshCw, Check, Camera, UploadCloud,
-  Lightbulb, Rocket, Users, FileText, Globe, Landmark,
-  Facebook, Instagram, Linkedin, Youtube
+  Lightbulb, Rocket, Users, FileText, Globe, Landmark
 } from "lucide-react"
 import { UserItem } from "../types"
+import { printDocument } from "@/lib/printUtils"
 
 interface IdentityCardDocumentProps {
   user: UserItem
@@ -185,7 +185,7 @@ export function IdentityCardDocument({
 
           <button
             type="button"
-            onClick={() => window.print()}
+            onClick={() => printDocument("printable-id-card", `ID_Card_${user.name || "Member"}`)}
             className="px-3.5 py-1.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/90 transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
           >
             <Printer size={13} />
@@ -195,7 +195,7 @@ export function IdentityCardDocument({
       </div>
 
       {/* ID Card Graphic Container */}
-      <div className="relative flex flex-col md:flex-row items-center justify-center gap-8 py-3 w-full">
+      <div id="printable-id-card" className="relative flex flex-col md:flex-row items-center justify-center gap-8 py-3 w-full">
         {/* ========================================================= */}
         {/* FRONT SIDE CARD */}
         {/* ========================================================= */}

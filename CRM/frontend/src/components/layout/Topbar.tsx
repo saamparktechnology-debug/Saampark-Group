@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { 
   Menu, CheckSquare, LayoutGrid, Briefcase, Monitor, Calendar, Command, CheckCircle, Check,
   Search, Plus, Clock, Bell, Mail,
-  Settings, LogOut, User, Sun, Moon, X, Building2, GitBranch, CreditCard, MapPin, ChevronRight
+  Settings, LogOut, User, Sun, Moon, X, Building2, GitBranch, CreditCard, MapPin, ChevronRight, ChevronDown
 } from "lucide-react"
 import { useTheme } from "next-themes"
 import Link from "next/link"
@@ -50,6 +50,8 @@ export function Topbar() {
   const [showQuickAdd, setShowQuickAdd] = React.useState(false)
   const [showNotifications, setShowNotifications] = React.useState(false)
   const [showCompanyMenu, setShowCompanyMenu] = React.useState(false)
+  const [showBranchMenu, setShowBranchMenu] = React.useState(false)
+  const [showSubBranchMenu, setShowSubBranchMenu] = React.useState(false)
   const [notifications, setNotifications] = React.useState<any[]>([])
   
   // Hierarchical Stepped Switcher state
@@ -157,10 +159,13 @@ export function Topbar() {
           }
 
           const freshAvatar = dbRecord.avatarUrl || (dbRecord as any).avatar || (user as any).avatarUrl || user.avatar
+          const latestUser = useAuthStore.getState().user || user
+          const resolvedKycStatus = dbRecord.kycStatus || (dbRecord as any).kyc_status || latestUser?.kycStatus || "Pending"
+          const resolvedKycData = dbRecord.kycData || (dbRecord as any).kyc_data || latestUser?.kycData
 
           useAuthStore.setState({
             user: {
-              ...user,
+              ...latestUser,
               name: dbRecord.name || user.name,
               role: user.role,
               avatar: freshAvatar,
@@ -174,6 +179,8 @@ export function Topbar() {
               phone: dbRecord.phone,
               allowedModules: freshAllowedMods,
               permissions: freshPerms,
+              kycStatus: resolvedKycStatus,
+              kycData: resolvedKycData,
             },
             activeCompanyId: nextActive || (isSuperUser ? "all" : "tech"),
           })
@@ -225,6 +232,8 @@ export function Topbar() {
       setShowQuickAdd(false)
       setShowNotifications(false)
       setShowCompanyMenu(false)
+      setShowBranchMenu(false)
+      setShowSubBranchMenu(false)
     }
     window.addEventListener("click", handler)
     return () => window.removeEventListener("click", handler)
@@ -256,14 +265,16 @@ export function Topbar() {
 
   // Branches this specific user has access to
   const allowedBranches = React.useMemo(() => {
-    if (userScope.isSuperAdmin) return branches
-    return branches.filter(b => userScope.allowedBranchIds.some(id => String(id).toLowerCase().trim() === String(b.id).toLowerCase().trim()))
+    const validBranches = (branches || []).filter(b => Boolean(b && b.id))
+    if (userScope.isSuperAdmin) return validBranches
+    return validBranches.filter(b => userScope.allowedBranchIds.some(id => String(id).toLowerCase().trim() === String(b.id).toLowerCase().trim()))
   }, [userScope, branches])
 
   // Sub-Branches this specific user has access to
   const allowedSubBranches = React.useMemo(() => {
-    if (userScope.isSuperAdmin) return subBranches
-    return subBranches.filter(sb => userScope.allowedSubBranchIds.some(id => String(id).toLowerCase().trim() === String(sb.id).toLowerCase().trim()))
+    const validSubs = (subBranches || []).filter(sb => Boolean(sb && sb.id))
+    if (userScope.isSuperAdmin) return validSubs
+    return validSubs.filter(sb => userScope.allowedSubBranchIds.some(id => String(id).toLowerCase().trim() === String(sb.id).toLowerCase().trim()))
   }, [userScope, subBranches])
 
   const isSuperAdmin = user.role === 'Super Admin'
@@ -284,6 +295,25 @@ export function Topbar() {
 
   const canSwitchEntities = userScope.isSuperAdmin || (userScope.scopeLevel !== 'subbranch' && (allowedCompanies.length > 1 || allowedBranches.length > 1 || allowedSubBranches.length > 0))
 
+  // Branches belonging to currently active company scope
+  const companyBranches = React.useMemo(() => {
+    if (!activeCompanyId || activeCompanyId === 'all') {
+      return allowedBranches
+    }
+    return allowedBranches.filter(b => isMatchingCompany({ id: b.companyId || (b as any).company_id, slug: b.companyId } as any, activeCompanyId))
+  }, [allowedBranches, activeCompanyId])
+
+  // Sub-branches belonging to currently active branch / company scope
+  const availableSubBranches = React.useMemo(() => {
+    if (activeBranchId) {
+      return allowedSubBranches.filter(sb => String(sb.parentBranchId || (sb as any).branch_id || (sb as any).branchId) === String(activeBranchId))
+    }
+    if (activeCompanyId && activeCompanyId !== 'all') {
+      return allowedSubBranches.filter(sb => isMatchingCompany({ id: sb.companyId || (sb as any).company_id, slug: sb.companyId } as any, activeCompanyId))
+    }
+    return allowedSubBranches
+  }, [allowedSubBranches, activeBranchId, activeCompanyId])
+
   return (
     <header
       style={{ left: isMobile ? 0 : (isSidebarCollapsed ? 64 : 256) }}
@@ -300,426 +330,439 @@ export function Topbar() {
           <Menu size={20} />
         </Button>
 
-        {/* Current Company View & Workspace Switcher in Top Navbar */}
-        <div className="relative" onClick={stop}>
-          <button
-            type="button"
-            onClick={() => {
-              if (activeCompany && !isAllCompanies) {
-                setSelectedCompanyForDrill(activeCompany)
-                if (activeBranch) {
-                  setSelectedBranchForDrill(activeBranch)
-                  setDrillStep('branch')
-                } else {
-                  setDrillStep('company')
-                }
-              } else {
-                setDrillStep('company')
-              }
-              setShowCompanyMenu(prev => !prev)
-              setShowQuickAdd(false)
-              setShowNotifications(false)
-              setShowProfileMenu(false)
-            }}
-            className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl box-3d text-xs text-slate-900 dark:text-white transition-all group cursor-pointer max-w-[220px] sm:max-w-[360px]"
-            title="Click to switch active Company or Branch"
-          >
-            {isAllCompanies ? (
-              <div className="w-6 h-6 rounded-lg bg-blue-600/20 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/30">
-                <Building2 size={13} />
-              </div>
-            ) : activeEntityLogo ? (
-              <img
-                src={activeEntityLogo}
-                alt={activeSubBranch?.name || activeBranch?.name || activeCompanyName}
-                className="w-6 h-6 rounded-lg object-contain shrink-0 bg-white dark:bg-zinc-900 p-0.5 border border-slate-200 dark:border-zinc-700"
-              />
-            ) : (
-              <div className="w-6 h-6 rounded-lg bg-blue-600/20 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/30">
-                <Building2 size={13} />
-              </div>
-            )}
-
-            <div className="text-left truncate min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
-                <span className="truncate font-bold text-xs text-slate-900 dark:text-white leading-tight">
-                  {isAllCompanies ? "SAAMPARK GROUP" : activeCompanyName}
-                </span>
-                <span className="w-3.5 h-3.5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[9px] font-bold shadow-xs shrink-0">✓</span>
-              </div>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400 block truncate">
-                {isAllCompanies
-                  ? "All Companies (Group View)"
-                  : (activeSubBranch
-                    ? `${activeBranch?.name || 'Branch'} • ${activeSubBranch.name}`
-                    : (activeBranch
-                      ? `${activeBranch.name}`
-                      : "Company HQ (All Branches)"))}
-              </span>
-            </div>
-
-            {canSwitchEntities && (
-              <div className="flex items-center gap-1 shrink-0 ml-0.5">
-                <span className="text-[10px] font-bold bg-blue-50 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 px-1.5 py-0.5 rounded-md group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                  Switch ▾
-                </span>
-              </div>
-            )}
-          </button>
-
-          {/* Switcher Dropdown */}
-          <AnimatePresence>
-            {showCompanyMenu && canSwitchEntities && (
-              <motion.div
-                initial={{ opacity: 0, y: 8, scale: 0.96 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 8, scale: 0.96 }}
-                transition={{ duration: 0.15 }}
-                className="absolute left-0 top-full mt-2 w-80 sm:w-96 modal-3d-dialog overflow-hidden z-50 flex flex-col max-h-[82vh]"
-              >
-                {/* Dropdown Header */}
-                <div className="p-3.5 border-b border-border bg-muted/40 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Building2 size={16} className="text-blue-600" />
-                    <span className="font-bold text-xs text-foreground">
-                      {drillStep === 'company' && "Step 1: Select Company"}
-                      {drillStep === 'branch' && `Step 2: Branches of ${selectedCompanyForDrill?.brand_name || selectedCompanyForDrill?.name}`}
-                      {drillStep === 'subbranch' && `Step 3: Sub-Branches of ${selectedBranchForDrill?.name}`}
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => setShowCompanyMenu(false)}
-                    className="text-muted-foreground hover:text-foreground p-1 rounded-lg hover:bg-muted cursor-pointer"
-                  >
-                    <X size={15} />
-                  </button>
+        {/* Hierarchical Entity Selectors in Top Navbar: Company Tab, Branch Tab, Sub-Branch Tab */}
+        <div className="flex items-center gap-1.5 sm:gap-2 max-w-[calc(100vw-280px)] overflow-x-auto scrollbar-hide py-1" onClick={stop}>
+          {/* 1. Company Tab */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setShowCompanyMenu(prev => !prev)
+                setShowBranchMenu(false)
+                setShowSubBranchMenu(false)
+                setShowQuickAdd(false)
+                setShowNotifications(false)
+                setShowProfileMenu(false)
+              }}
+              className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 hover:bg-slate-50 dark:hover:bg-zinc-800/80 shadow-xs text-xs text-slate-900 dark:text-white transition-all group cursor-pointer max-w-[200px] sm:max-w-[340px]"
+              title={`Active Company: ${activeCompanyName}`}
+            >
+              {isAllCompanies ? (
+                <div className="w-5 h-5 rounded-md bg-blue-600/20 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/30">
+                  <Building2 size={12} />
                 </div>
+              ) : activeCompanyLogo ? (
+                <img
+                  src={activeCompanyLogo}
+                  alt={activeCompanyName}
+                  className="w-5 h-5 rounded-md object-contain shrink-0 bg-white dark:bg-zinc-900 p-0.5 border border-slate-200 dark:border-zinc-700"
+                />
+              ) : (
+                <div className="w-5 h-5 rounded-md bg-blue-600/20 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/30">
+                  <Building2 size={12} />
+                </div>
+              )}
+              <span className="truncate font-bold text-xs text-slate-900 dark:text-white leading-tight">
+                {isAllCompanies ? "SAAMPARK GROUP (ALL)" : activeCompanyName}
+              </span>
+              <ChevronDown size={13} className="text-slate-400 shrink-0 ml-0.5 group-hover:text-slate-600 dark:group-hover:text-slate-200" />
+            </button>
 
-                {/* Level 1: Companies */}
-                {drillStep === 'company' && (
-                  <div className="p-3 space-y-2 overflow-y-auto flex-1 scrollbar-hide">
+            {/* Company Dropdown Menu */}
+            <AnimatePresence>
+              {showCompanyMenu && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 6, scale: 0.98 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute left-0 mt-2 w-80 sm:w-96 rounded-2xl bg-white dark:bg-zinc-900 border border-border shadow-2xl z-50 overflow-hidden flex flex-col"
+                >
+                  <div className="p-3 bg-muted/30 border-b border-border flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-bold text-foreground">Select Company</p>
+                      <p className="text-[10px] text-muted-foreground">Switch between registered company entities</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowCompanyMenu(false)}
+                      className="p-1 text-muted-foreground hover:text-foreground rounded-lg"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+
+                  <div className="p-2 space-y-1.5 max-h-[340px] overflow-y-auto">
+                    {/* Super Admin: All Companies Option */}
                     {isSuperAdmin && (
-                      <button
-                        type="button"
+                      <div
                         onClick={() => {
-                          switchCompany("all")
-                          switchBranch(null)
-                          switchSubBranch(null)
+                          switchCompany('all')
                           setShowCompanyMenu(false)
                         }}
-                        className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                        className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
                           isAllCompanies
-                            ? "bg-blue-50/90 dark:bg-blue-950/70 border-blue-500/50 shadow-xs"
-                            : "bg-surface border-border hover:bg-surface-hover"
+                            ? 'bg-blue-600/10 border-blue-500/40 text-blue-700 dark:text-blue-300'
+                            : 'border-transparent hover:bg-muted/50'
                         }`}
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 font-black text-xs shadow-xs">
-                            🏢
+                          <div className="w-7 h-7 rounded-lg bg-blue-600/20 text-blue-600 flex items-center justify-center shrink-0">
+                            <Building2 size={14} />
                           </div>
-                          <div className="truncate">
-                            <p className="font-bold text-xs text-foreground truncate">
-                              All Companies (Group View)
-                            </p>
-                            <p className="text-[10px] text-muted-foreground truncate">
-                              Consolidated multi-company analytics
-                            </p>
+                          <div>
+                            <p className="text-xs font-bold leading-tight">SAAMPARK GROUP (ALL)</p>
+                            <p className="text-[10px] text-muted-foreground">Consolidated Enterprise View</p>
                           </div>
                         </div>
                         {isAllCompanies && (
-                          <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-600 text-white shadow-xs">
-                            ✓ Active
-                          </span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-600 text-white">Active</span>
                         )}
-                      </button>
+                      </div>
                     )}
 
-                    <p className="text-[10px] uppercase font-bold text-muted-foreground px-1 pt-1">
-                      Choose Company to access its Branches:
-                    </p>
-
-                    {allowedCompanies.map(comp => {
-                      const isCurrent = !isAllCompanies && isMatchingCompany(comp, activeCompanyId || activeCompany?.id || activeCompany?.slug)
-                      const compFullName = getCompanyFullName(comp)
-                      const compLogoUrl = getCompanyLogoUrl(comp)
-
+                    {allowedCompanies.map((c) => {
+                      const isActive = !isAllCompanies && isMatchingCompany(c, activeCompany?.id || activeCompanyId)
+                      const cName = getCompanyFullName(c)
+                      const cLogo = getCompanyLogoUrl(c)
                       return (
                         <div
-                          key={comp.id}
+                          key={c.id || c.slug}
                           onClick={() => {
-                            switchCompany(comp.id)
-                            setSelectedCompanyForDrill(comp)
-                            setDrillStep('branch')
+                            switchCompany(c.id || c.slug)
+                            setShowCompanyMenu(false)
                           }}
-                          className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 transition-all cursor-pointer ${
-                            isCurrent
-                              ? "bg-blue-50/50 dark:bg-blue-950/40 border-blue-500/50 shadow-2xs"
-                              : "bg-surface border-border hover:bg-surface-hover hover:border-slate-300 dark:hover:border-zinc-700"
+                          className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
+                            isActive
+                              ? 'bg-blue-600/10 border-blue-500/40 text-blue-700 dark:text-blue-300'
+                              : 'border-transparent hover:bg-muted/50'
                           }`}
                         >
                           <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                            {compLogoUrl ? (
-                              <img
-                                src={compLogoUrl}
-                                alt={compFullName}
-                                className="w-8 h-8 rounded-lg object-contain shrink-0 bg-white dark:bg-zinc-900 p-0.5 border border-border"
-                              />
+                            {cLogo ? (
+                              <img src={cLogo} alt={cName} className="w-7 h-7 rounded-lg object-contain shrink-0 bg-white dark:bg-zinc-800 p-0.5 border border-border" />
                             ) : (
-                              <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950 text-blue-600 flex items-center justify-center text-sm shrink-0 border border-blue-200 dark:border-blue-900">
-                                {comp.logo || "🏢"}
+                              <div className="w-7 h-7 rounded-lg bg-blue-600/20 text-blue-600 flex items-center justify-center shrink-0">
+                                <Building2 size={14} />
                               </div>
                             )}
                             <div className="truncate">
-                              <p className="font-bold text-xs text-foreground truncate">
-                                {compFullName}
-                              </p>
-                              {comp.subtitle && (
-                                <p className="text-[9.5px] text-muted-foreground truncate">
-                                  {comp.subtitle}
-                                </p>
-                              )}
+                              <p className="text-xs font-bold leading-tight truncate">{cName}</p>
+                              <p className="text-[10px] text-muted-foreground truncate">{c.city ? `${c.city}, ` : ''}{c.state || 'India'}</p>
                             </div>
                           </div>
-
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {isCurrent && !activeBranchId && (
-                              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-600 text-white shadow-xs">
-                                ✓ HQ Active
-                              </span>
-                            )}
-                            <span className="text-[11px] font-bold text-primary flex items-center gap-0.5">
-                              <span>Select Branches</span>
-                              <ChevronRight size={14} />
-                            </span>
-                          </div>
+                          {isActive && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-600 text-white shrink-0 ml-2">Active</span>
+                          )}
                         </div>
                       )
                     })}
                   </div>
-                )}
 
-                {/* Level 2: Branches for Selected Company */}
-                {drillStep === 'branch' && selectedCompanyForDrill && (
-                  <div className="p-3 space-y-2 overflow-y-auto flex-1 scrollbar-hide">
-                    <div className="flex items-center justify-between pb-1.5 border-b border-border">
+                  <div className="p-2.5 border-t border-border bg-muted/20 flex items-center justify-between">
+                    <Link
+                      href="/feature/companies"
+                      onClick={() => setShowCompanyMenu(false)}
+                      className="text-[11px] font-bold text-blue-600 hover:underline flex items-center gap-1"
+                    >
+                      <span>Manage Companies →</span>
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => setShowCompanyMenu(false)}
+                      className="px-2.5 py-1 text-[11px] font-semibold bg-surface-hover hover:bg-muted rounded-lg text-foreground cursor-pointer"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* 2. Branch Tab (Beside Company Tab, visible if company branches exist) */}
+          {companyBranches.length > 0 && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowBranchMenu(prev => !prev)
+                  setShowCompanyMenu(false)
+                  setShowSubBranchMenu(false)
+                  setShowQuickAdd(false)
+                  setShowNotifications(false)
+                  setShowProfileMenu(false)
+                }}
+                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border transition-all group cursor-pointer max-w-[160px] sm:max-w-[220px] ${
+                  activeBranch
+                    ? 'border-blue-300 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20 text-blue-900 dark:text-blue-300'
+                    : 'border-slate-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 hover:bg-slate-50 dark:hover:bg-zinc-800/80 text-slate-800 dark:text-zinc-200'
+                }`}
+                title={activeBranch ? `Active Branch: ${activeBranch.name}` : "Branch selection"}
+              >
+                {activeBranch?.logo_url ? (
+                  <img
+                    src={activeBranch.logo_url}
+                    alt={activeBranch.name}
+                    className="w-4 h-4 rounded-md object-contain shrink-0 bg-white dark:bg-zinc-900 p-0.5 border border-slate-200 dark:border-zinc-700"
+                  />
+                ) : (
+                  <GitBranch size={13} className="text-blue-600 dark:text-blue-400 shrink-0" />
+                )}
+                <span className="truncate font-semibold text-xs leading-tight">
+                  {activeBranch ? activeBranch.name : "All Branches"}
+                </span>
+                <ChevronDown size={12} className="text-slate-400 shrink-0 ml-0.5 group-hover:text-slate-600 dark:group-hover:text-slate-200" />
+              </button>
+
+              {/* Branch Dropdown Menu */}
+              <AnimatePresence>
+                {showBranchMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 6, scale: 0.98 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute left-0 mt-2 w-72 sm:w-80 rounded-2xl bg-white dark:bg-zinc-900 border border-border shadow-2xl z-50 overflow-hidden flex flex-col"
+                  >
+                    <div className="p-3 bg-muted/30 border-b border-border flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-bold text-foreground">Select Branch</p>
+                        <p className="text-[10px] text-muted-foreground">{activeCompanyName}</p>
+                      </div>
                       <button
                         type="button"
-                        onClick={() => setDrillStep('company')}
-                        className="text-xs font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                        onClick={() => setShowBranchMenu(false)}
+                        className="p-1 text-muted-foreground hover:text-foreground rounded-lg"
                       >
-                        ← Change Company
+                        <X size={14} />
                       </button>
-                      <span className="text-[10px] font-bold text-muted-foreground truncate max-w-[180px]">
-                        {selectedCompanyForDrill.name}
-                      </span>
                     </div>
 
-                    {userScope.canAccessCompanyHq && (
-                      <button
-                        type="button"
+                    <div className="p-2 space-y-1 max-h-[300px] overflow-y-auto">
+                      {/* All Branches / Company HQ Option */}
+                      <div
                         onClick={() => {
                           switchBranch(null)
-                          switchSubBranch(null)
-                          setShowCompanyMenu(false)
+                          setShowBranchMenu(false)
                         }}
-                        className={`w-full p-2.5 rounded-xl border text-left flex items-center justify-between gap-2 transition-all cursor-pointer ${
-                          !activeBranchId
-                            ? "bg-blue-600 text-white font-bold shadow-xs"
-                            : "bg-surface border-border hover:bg-surface-hover text-foreground"
+                        className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer ${
+                          !activeBranch
+                            ? 'bg-blue-600/10 border-blue-500/40 text-blue-700 dark:text-blue-300'
+                            : 'border-transparent hover:bg-muted/50'
                         }`}
                       >
-                        <div className="flex items-center gap-2">
-                          <Building2 size={15} />
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Building2 size={14} className="text-blue-600 shrink-0" />
                           <div>
-                            <p className="font-bold text-xs">Stay at Company Headquarters</p>
-                            <p className={`text-[10px] ${!activeBranchId ? "text-blue-100" : "text-muted-foreground"}`}>
-                              Access all branch data at corporate HQ level
-                            </p>
+                            <p className="text-xs font-bold leading-tight">Company HQ (All Branches)</p>
+                            <p className="text-[10px] text-muted-foreground">Corporate Headquarters view</p>
                           </div>
                         </div>
-                        {!activeBranchId && <span className="text-xs">✓ Active</span>}
-                      </button>
-                    )}
+                        {!activeBranch && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-600 text-white">Active</span>
+                        )}
+                      </div>
 
-                    <p className="text-[10px] uppercase font-bold text-muted-foreground px-1 pt-2">
-                      Branches ({allowedBranches.filter(b => isMatchingCompany(selectedCompanyForDrill, b.companyId || (b as any).company_id)).length}):
-                    </p>
-
-                    {allowedBranches.filter(b => isMatchingCompany(selectedCompanyForDrill, b.companyId || (b as any).company_id)).length === 0 ? (
-                      <p className="text-xs text-muted-foreground p-3 text-center">No branches accessible for this company.</p>
-                    ) : (
-                      allowedBranches.filter(b => isMatchingCompany(selectedCompanyForDrill, b.companyId || (b as any).company_id)).map(b => {
-                        const isBranchActive = activeBranchId === b.id
-                        const branchSubs = allowedSubBranches.filter(sb => String(sb.parentBranchId) === String(b.id))
-
+                      {companyBranches.map((b) => {
+                        const isBranchActive = activeBranch?.id === b.id
                         return (
                           <div
                             key={b.id}
                             onClick={() => {
                               switchBranch(b.id)
-                              if (branchSubs.length > 0) {
-                                setSelectedBranchForDrill(b)
-                                setDrillStep('subbranch')
-                              } else {
-                                setShowCompanyMenu(false)
-                              }
+                              setShowBranchMenu(false)
                             }}
-                            className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                            className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer ${
                               isBranchActive
-                                ? "bg-amber-500/15 border-amber-500/50 shadow-2xs"
-                                : "bg-surface border-border hover:bg-surface-hover"
+                                ? 'bg-blue-600/10 border-blue-500/40 text-blue-700 dark:text-blue-300'
+                                : 'border-transparent hover:bg-muted/50'
                             }`}
                           >
                             <div className="flex items-center gap-2 min-w-0 flex-1">
                               {b.logo_url ? (
-                                <img src={b.logo_url} alt={b.name} className="w-5 h-5 rounded object-contain shrink-0 bg-white dark:bg-zinc-800 p-0.5 border border-border" />
+                                <img src={b.logo_url} alt={b.name} className="w-6 h-6 rounded-lg object-contain shrink-0 bg-white dark:bg-zinc-800 p-0.5 border border-border" />
                               ) : (
-                                <MapPin size={15} className="text-amber-500 shrink-0" />
+                                <div className="w-6 h-6 rounded-lg bg-blue-500/20 text-blue-600 flex items-center justify-center shrink-0">
+                                  <GitBranch size={13} />
+                                </div>
                               )}
                               <div className="truncate">
-                                <p className="font-bold text-xs text-foreground truncate">{b.name}</p>
-                                <p className="text-[10px] text-muted-foreground truncate">
-                                  {b.city ? `${b.city}, ${b.state || 'India'}` : (b.address || 'Operational Branch')}
-                                </p>
+                                <p className="text-xs font-bold leading-tight truncate">{b.name}</p>
+                                <p className="text-[10px] text-muted-foreground truncate">{b.code ? `${b.code} • ` : ''}{b.city || 'Branch'}</p>
                               </div>
                             </div>
-
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              {branchSubs.length > 0 && (
-                                <span className="text-[9.5px] font-bold px-1.5 py-0.5 rounded-md bg-purple-500/15 text-purple-600 dark:text-purple-300 border border-purple-500/30">
-                                  {branchSubs.length} Sub-Branches
-                                </span>
-                              )}
-                              {isBranchActive ? (
-                                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-500 text-slate-950">
-                                  ✓ Active
-                                </span>
-                              ) : (
-                                <span className="text-[11px] font-bold text-primary flex items-center gap-0.5">
-                                  <span>{branchSubs.length > 0 ? "Drill Down" : "Select"}</span>
-                                  <ChevronRight size={13} />
-                                </span>
-                              )}
-                            </div>
+                            {isBranchActive && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-600 text-white shrink-0 ml-2">Active</span>
+                            )}
                           </div>
                         )
-                      })
-                    )}
-                  </div>
-                )}
-
-                {/* Level 3: Sub-Branches for Selected Branch */}
-                {drillStep === 'subbranch' && selectedBranchForDrill && (
-                  <div className="p-3 space-y-2 overflow-y-auto flex-1 scrollbar-hide">
-                    <div className="flex items-center justify-between pb-1.5 border-b border-border">
-                      <button
-                        type="button"
-                        onClick={() => setDrillStep('branch')}
-                        className="text-xs font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
-                      >
-                        ← Back to Branches
-                      </button>
-                      <span className="text-[10px] font-bold text-muted-foreground truncate max-w-[180px]">
-                        {selectedBranchForDrill.name}
-                      </span>
+                      })}
                     </div>
 
-                    {userScope.canAccessBranchHq && (
+                    <div className="p-2 border-t border-border bg-muted/20 flex items-center justify-between">
+                      <Link
+                        href="/feature/companies"
+                        onClick={() => setShowBranchMenu(false)}
+                        className="text-[11px] font-bold text-blue-600 hover:underline"
+                      >
+                        Manage Branches →
+                      </Link>
                       <button
                         type="button"
+                        onClick={() => setShowBranchMenu(false)}
+                        className="px-2 py-0.5 text-[11px] font-semibold bg-surface-hover hover:bg-muted rounded-md text-foreground cursor-pointer"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
+
+          {/* 3. Sub-Branch Tab (Beside Branch Tab, visible if sub-branches exist) */}
+          {availableSubBranches.length > 0 && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSubBranchMenu(prev => !prev)
+                  setShowCompanyMenu(false)
+                  setShowBranchMenu(false)
+                  setShowQuickAdd(false)
+                  setShowNotifications(false)
+                  setShowProfileMenu(false)
+                }}
+                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border transition-all group cursor-pointer max-w-[160px] sm:max-w-[220px] ${
+                  activeSubBranch
+                    ? 'border-purple-300 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-950/20 text-purple-900 dark:text-purple-300'
+                    : 'border-slate-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 hover:bg-slate-50 dark:hover:bg-zinc-800/80 text-slate-800 dark:text-zinc-200'
+                }`}
+                title={activeSubBranch ? `Active Sub-Branch: ${activeSubBranch.name}` : "Sub-Branch selection"}
+              >
+                {activeSubBranch?.logo_url ? (
+                  <img
+                    src={activeSubBranch.logo_url}
+                    alt={activeSubBranch.name}
+                    className="w-4 h-4 rounded-md object-contain shrink-0 bg-white dark:bg-zinc-900 p-0.5 border border-slate-200 dark:border-zinc-700"
+                  />
+                ) : (
+                  <span className="text-xs shrink-0">🤝</span>
+                )}
+                <span className="truncate font-semibold text-xs leading-tight">
+                  {activeSubBranch ? activeSubBranch.name : "All Sub-Branches"}
+                </span>
+                <ChevronDown size={12} className="text-slate-400 shrink-0 ml-0.5 group-hover:text-slate-600 dark:group-hover:text-slate-200" />
+              </button>
+
+              {/* Sub-Branch Dropdown Menu */}
+              <AnimatePresence>
+                {showSubBranchMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 6, scale: 0.98 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute left-0 mt-2 w-72 sm:w-80 rounded-2xl bg-white dark:bg-zinc-900 border border-border shadow-2xl z-50 overflow-hidden flex flex-col"
+                  >
+                    <div className="p-3 bg-muted/30 border-b border-border flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-bold text-foreground">Select Sub-Branch</p>
+                        <p className="text-[10px] text-muted-foreground">{activeBranch?.name || activeCompanyName}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowSubBranchMenu(false)}
+                        className="p-1 text-muted-foreground hover:text-foreground rounded-lg"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+
+                    <div className="p-2 space-y-1 max-h-[300px] overflow-y-auto">
+                      {/* All Sub-Branches / Branch HQ Option */}
+                      <div
                         onClick={() => {
                           switchSubBranch(null)
-                          setShowCompanyMenu(false)
+                          setShowSubBranchMenu(false)
                         }}
-                        className={`w-full p-2.5 rounded-xl border text-left flex items-center justify-between gap-2 transition-all cursor-pointer ${
-                          !activeSubBranchId
-                            ? "bg-amber-500 text-slate-950 font-bold shadow-xs"
-                            : "bg-surface border-border hover:bg-surface-hover text-foreground"
+                        className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer ${
+                          !activeSubBranch
+                            ? 'bg-purple-600/10 border-purple-500/40 text-purple-700 dark:text-purple-300'
+                            : 'border-transparent hover:bg-muted/50'
                         }`}
                       >
-                        <div className="flex items-center gap-2">
-                          <MapPin size={15} />
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Building2 size={14} className="text-purple-600 shrink-0" />
                           <div>
-                            <p className="font-bold text-xs">Stay at Branch Main Office</p>
-                            <p className="text-[10px] opacity-80">
-                              Direct branch operations without partner filter
-                            </p>
+                            <p className="text-xs font-bold leading-tight">Branch HQ (All Sub-Branches)</p>
+                            <p className="text-[10px] text-muted-foreground">Main branch operation</p>
                           </div>
                         </div>
-                        {!activeSubBranchId && <span className="text-xs">✓ Active</span>}
-                      </button>
-                    )}
+                        {!activeSubBranch && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-600 text-white">Active</span>
+                        )}
+                      </div>
 
-                    <p className="text-[10px] uppercase font-bold text-muted-foreground px-1 pt-2">
-                      Sub-Branches & Partners ({allowedSubBranches.filter(sb => String(sb.parentBranchId) === String(selectedBranchForDrill.id)).length}):
-                    </p>
-
-                    {allowedSubBranches.filter(sb => String(sb.parentBranchId) === String(selectedBranchForDrill.id)).map(sb => {
-                      const isSubActive = activeSubBranchId === sb.id
-                      return (
-                        <div
-                          key={sb.id}
-                          onClick={() => {
-                            switchSubBranch(sb.id)
-                            setShowCompanyMenu(false)
-                          }}
-                          className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 transition-all cursor-pointer ${
-                            isSubActive
-                              ? "bg-purple-500/20 border-purple-500/50 shadow-2xs"
-                              : "bg-surface border-border hover:bg-surface-hover"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2 min-w-0 flex-1">
-                            {sb.logo_url ? (
-                              <img src={sb.logo_url} alt={sb.name} className="w-6 h-6 rounded-lg object-contain shrink-0 bg-white dark:bg-zinc-800 p-0.5 border border-border" />
-                            ) : (
-                              <div className="w-6 h-6 rounded-lg bg-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 text-xs font-bold">
-                                🤝
+                      {availableSubBranches.map((sb) => {
+                        const isSubActive = activeSubBranch?.id === sb.id
+                        return (
+                          <div
+                            key={sb.id}
+                            onClick={() => {
+                              switchSubBranch(sb.id)
+                              setShowSubBranchMenu(false)
+                            }}
+                            className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer ${
+                              isSubActive
+                                ? 'bg-purple-600/10 border-purple-500/40 text-purple-700 dark:text-purple-300'
+                                : 'border-transparent hover:bg-muted/50'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              {sb.logo_url ? (
+                                <img src={sb.logo_url} alt={sb.name} className="w-6 h-6 rounded-lg object-contain shrink-0 bg-white dark:bg-zinc-800 p-0.5 border border-border" />
+                              ) : (
+                                <div className="w-6 h-6 rounded-lg bg-purple-500/20 text-purple-600 flex items-center justify-center shrink-0 text-xs font-bold">
+                                  🤝
+                                </div>
+                              )}
+                              <div className="truncate">
+                                <p className="text-xs font-bold leading-tight truncate">{sb.name}</p>
+                                <p className="text-[10px] text-muted-foreground truncate">{sb.partnerType || "Franchise Partner"}{sb.city ? ` • ${sb.city}` : ''}</p>
                               </div>
-                            )}
-                            <div className="truncate">
-                              <p className="font-bold text-xs text-foreground truncate">{sb.name}</p>
-                              <p className="text-[10px] text-muted-foreground truncate">
-                                {sb.partnerType || "Franchise Partner"} • {sb.revenueSharePct || 0}% share
-                              </p>
                             </div>
-                          </div>
-
-                          <div className="shrink-0">
-                            {isSubActive ? (
-                              <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-purple-600 text-white">
-                                ✓ Active
-                              </span>
-                            ) : (
-                              <span className="text-[11px] font-bold text-primary">Select</span>
+                            {isSubActive && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-600 text-white shrink-0 ml-2">Active</span>
                             )}
                           </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
+                        )
+                      })}
+                    </div>
 
-                {/* Footer Link */}
-                <div className="p-3 border-t border-border bg-muted/30 flex items-center justify-between">
-                  <Link
-                    href="/feature/companies"
-                    onClick={() => setShowCompanyMenu(false)}
-                    className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1"
-                  >
-                    <span>Manage Companies & Branches →</span>
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => setShowCompanyMenu(false)}
-                    className="px-2.5 py-1 text-[11px] font-semibold bg-surface-hover hover:bg-muted rounded-lg text-foreground cursor-pointer"
-                  >
-                    Close
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                    <div className="p-2 border-t border-border bg-muted/20 flex items-center justify-between">
+                      <Link
+                        href="/feature/companies"
+                        onClick={() => setShowSubBranchMenu(false)}
+                        className="text-[11px] font-bold text-purple-600 hover:underline"
+                      >
+                        Manage Sub-Branches →
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => setShowSubBranchMenu(false)}
+                        className="px-2 py-0.5 text-[11px] font-semibold bg-surface-hover hover:bg-muted rounded-md text-foreground cursor-pointer"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
         </div>
       </div>
 

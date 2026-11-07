@@ -514,9 +514,14 @@ export default function LoginPage() {
         : (matchedAccount.full_name || matchedAccount.name || dbAccount?.name || effectiveEmail)
 
       // ── FIRST-TIME LOGIN PIN SETUP TRIGGER ──────────────────────────────────
-      // If user has not completed PIN setup yet:
-      const userHasCompletedPin = hasPin || Boolean(matchedAccount.pin_hash || matchedAccount.pin_setup_completed)
-      if (!userHasCompletedPin || mustSetupPin) {
+      // Check if user has already configured PIN
+      const localSavedPin = (typeof window !== "undefined")
+        ? Boolean(JSON.parse(localStorage.getItem("saampark_last_user") || "{}")?.hasPin && JSON.parse(localStorage.getItem("saampark_last_user") || "{}")?.email?.toLowerCase().trim() === effectiveEmail)
+        : false
+
+      const userHasCompletedPin = hasPin || localSavedPin || Boolean(matchedAccount.hasPin) || Boolean(matchedAccount.pin_hash) || Boolean(Number(matchedAccount.pin_setup_completed) === 1) || Boolean(Number(backendUser?.pin_setup_completed) === 1)
+
+      if (!userHasCompletedPin && mustSetupPin) {
         setPinSetupData({
           email: effectiveEmail,
           name: displayName,
@@ -573,10 +578,19 @@ export default function LoginPage() {
         otp: pinSetupOTP,
       })
 
+      if (typeof window !== "undefined") {
+        try {
+          const lastUser = JSON.parse(localStorage.getItem("saampark_last_user") || "{}")
+          lastUser.hasPin = true
+          lastUser.email = pinSetupData.email
+          localStorage.setItem("saampark_last_user", JSON.stringify(lastUser))
+        } catch {}
+      }
+
       setIsPinSetupOpen(false)
       completeSuccessfulLogin(
         pinSetupData.role,
-        pinSetupData.account,
+        { ...pinSetupData.account, hasPin: true, pin_setup_completed: 1 },
         pinSetupData.email,
         pinSetupData.name,
         pinSetupData.token,

@@ -388,12 +388,12 @@ async function sendAdminCreatedAccountEmail(email, name = 'Team Member', role = 
     <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 540px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden; border: 1px solid #1e1e2e;">
       <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); padding: 32px 40px; text-align: center;">
         <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.5px;">SAAMPARK CRM</h1>
-        <p style="color: rgba(255,255,255,0.85); margin: 8px 0 0; font-size: 13px;">Welcome to the Team! 🚀</p>
+        <p style="color: rgba(255,255,255,0.85); margin: 8px 0 0; font-size: 13px;">Employee Onboarding Portal</p>
       </div>
       <div style="padding: 36px 40px; background: #16161e;">
         <p style="color: #e2e8f0; font-size: 16px; margin: 0 0 12px;">Hello <strong>${name}</strong>,</p>
         <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0 0 24px;">
-          Congratulations! An Administrator has added you to <strong style="color: #6366f1;">${companyName}</strong> with the role of <strong style="color: #10b981;">${role}</strong>.
+          An Administrator has registered your account at <strong style="color: #6366f1;">${companyName}</strong> with the designated role of <strong style="color: #10b981;">${role}</strong>.
         </p>
 
         <div style="background: #1e1e2e; border: 1px solid #2d2d3d; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
@@ -408,15 +408,21 @@ async function sendAdminCreatedAccountEmail(email, name = 'Team Member', role = 
           </div>
         </div>
 
-        <div style="background: #1e1b4b; border-left: 4px solid #6366f1; padding: 16px; border-radius: 6px; margin-bottom: 28px;">
-          <p style="color: #c7d2fe; font-size: 13px; margin: 0; line-height: 1.5;">
-            🔒 <strong>Security Instruction:</strong> Please log in to your account at <a href="https://crm.saampark.com" style="color: #818cf8; text-decoration: underline;">https://crm.saampark.com</a> and change your temporary password immediately from your <strong>Settings / Security</strong> profile.
+        <div style="background: #1e1b4b; border-left: 4px solid #6366f1; padding: 18px; border-radius: 8px; margin-bottom: 24px;">
+          <p style="color: #c7d2fe; font-size: 13px; margin: 0 0 10px; font-weight: 700;">
+            Required Onboarding Steps:
           </p>
+          <ol style="color: #94a3b8; font-size: 12.5px; margin: 0; padding-left: 18px; line-height: 1.6;">
+            <li>Sign in using your email and temporary password above.</li>
+            <li>Configure your personal <strong>4-Digit Security PIN</strong>.</li>
+            <li>Submit your <strong>Employee KYC Documents</strong> (Government Identity &amp; Bank Details).</li>
+            <li>Branch Management will review your submission and notify you once full CRM access is unlocked.</li>
+          </ol>
         </div>
 
         <div style="text-align: center;">
           <a href="https://crm.saampark.com/login" style="display: inline-block; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 10px; font-weight: 700; font-size: 14px;">
-            Log In to SAAMPARK CRM →
+            Sign In to SAAMPARK CRM →
           </a>
         </div>
       </div>
@@ -429,7 +435,7 @@ async function sendAdminCreatedAccountEmail(email, name = 'Team Member', role = 
   await transporter.sendMail({
     from,
     to: email,
-    subject: `🎉 Congratulations! You have been added as ${role} at ${companyName}`,
+    subject: `Welcome to ${companyName} - Account Credentials & Onboarding Steps`,
     html,
   });
 }
@@ -1149,6 +1155,162 @@ async function sendGenericEmail({
   });
 }
 
+/**
+ * Send KYC Verification Successful Email to Team Member
+ */
+async function sendKycSuccessEmail({
+  to,
+  name = 'Team Member',
+  role = 'Teams',
+  companyName = 'SAAMPARK Group',
+  branchName = '',
+  employeeId = '',
+  docType = 'Government ID',
+  docNumber = '',
+  bankName = '',
+  accountNumber = '',
+  verifiedBy = 'Management',
+  companyId = null,
+}) {
+  const { transporter, from } = await getEmailConfig(companyId);
+  const maskedDoc = docNumber ? (docNumber.length > 4 ? `•••• •••• ${docNumber.slice(-4)}` : docNumber) : 'Verified';
+  const maskedAcc = accountNumber ? (accountNumber.length > 4 ? `•••• •••• ${accountNumber.slice(-4)}` : accountNumber) : '';
+
+  const html = `
+    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 580px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden; border: 1px solid #1e1e2e;">
+      <div style="background: linear-gradient(135deg, #059669, #10b981); padding: 36px 40px; text-align: center;">
+        <div style="display: inline-block; width: 56px; height: 56px; line-height: 56px; border-radius: 28px; background: rgba(255,255,255,0.2); font-size: 28px; margin-bottom: 12px;">✅</div>
+        <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">KYC VERIFICATION SUCCESSFUL</h1>
+        <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0; font-size: 13px; font-weight: 600;">Welcome to ${companyName}!</p>
+      </div>
+
+      <div style="padding: 36px 40px; background: #16161e;">
+        <p style="color: #e2e8f0; font-size: 16px; margin: 0 0 12px;">Dear <strong>${name}</strong>,</p>
+        <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0 0 24px;">
+          Congratulations! Your Employee KYC verification documents and bank details have been officially reviewed and <strong style="color: #10b981;">APPROVED</strong> by ${verifiedBy}.
+        </p>
+
+        <div style="background: #1e1e2e; border: 1px solid #2d2d3d; border-radius: 12px; padding: 22px; margin-bottom: 24px;">
+          <p style="color: #10b981; font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; margin: 0 0 14px; font-weight: 800;">VERIFIED CREDENTIALS SUMMARY</p>
+          <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
+            <tr style="border-bottom: 1px solid #2d2d3d;">
+              <td style="padding: 8px 0; color: #94a3b8;">Employee Name:</td>
+              <td style="padding: 8px 0; text-align: right; color: #ffffff; font-weight: 600;">${name}</td>
+            </tr>
+            ${employeeId ? `
+            <tr style="border-bottom: 1px solid #2d2d3d;">
+              <td style="padding: 8px 0; color: #94a3b8;">Employee ID:</td>
+              <td style="padding: 8px 0; text-align: right; color: #38bdf8; font-weight: 700; font-family: monospace;">${employeeId}</td>
+            </tr>` : ''}
+            <tr style="border-bottom: 1px solid #2d2d3d;">
+              <td style="padding: 8px 0; color: #94a3b8;">Designation / Role:</td>
+              <td style="padding: 8px 0; text-align: right; color: #e2e8f0;">${role}</td>
+            </tr>
+            ${branchName ? `
+            <tr style="border-bottom: 1px solid #2d2d3d;">
+              <td style="padding: 8px 0; color: #94a3b8;">Allocated Branch:</td>
+              <td style="padding: 8px 0; text-align: right; color: #e2e8f0;">${branchName}</td>
+            </tr>` : ''}
+            <tr style="border-bottom: 1px solid #2d2d3d;">
+              <td style="padding: 8px 0; color: #94a3b8;">Identity Document:</td>
+              <td style="padding: 8px 0; text-align: right; color: #e2e8f0; font-weight: 600;">${docType} (${maskedDoc})</td>
+            </tr>
+            ${bankName ? `
+            <tr style="border-bottom: 1px solid #2d2d3d;">
+              <td style="padding: 8px 0; color: #94a3b8;">Salary Bank Account:</td>
+              <td style="padding: 8px 0; text-align: right; color: #e2e8f0;">${bankName} ${maskedAcc ? `(${maskedAcc})` : ''}</td>
+            </tr>` : ''}
+            <tr>
+              <td style="padding: 8px 0; color: #94a3b8;">Verification Status:</td>
+              <td style="padding: 8px 0; text-align: right; color: #10b981; font-weight: 700;">VERIFIED & ACTIVE</td>
+            </tr>
+          </table>
+        </div>
+
+        <div style="background: rgba(16, 185, 129, 0.1); border-left: 4px solid #10b981; padding: 16px; border-radius: 6px; margin-bottom: 28px;">
+          <p style="color: #a7f3d0; font-size: 13px; margin: 0; line-height: 1.5;">
+            <strong>Full Access Unlocked:</strong> Your CRM workspace is now active. You can log in using your registered email and your 4-digit Security PIN to access assigned projects, clients, and operational tools.
+          </p>
+        </div>
+
+        <div style="text-align: center;">
+          <a href="https://crm.saampark.com/login" style="display: inline-block; background: linear-gradient(135deg, #059669, #10b981); color: #ffffff; text-decoration: none; padding: 14px 36px; border-radius: 10px; font-weight: 700; font-size: 14px; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);">
+            Enter CRM Workspace →
+          </a>
+        </div>
+      </div>
+      <div style="padding: 20px 40px; background: #0f0f13; text-align: center; border-top: 1px solid #1e1e2e;">
+        <p style="color: #475569; font-size: 12px; margin: 0;">© 2026 ${companyName}. All rights reserved.</p>
+      </div>
+    </div>
+  `;
+
+  await transporter.sendMail({
+    from,
+    to,
+    subject: `KYC Verification Approved - Welcome to ${companyName}`,
+    html,
+  });
+}
+
+/**
+ * Send KYC Rejection Email with reason
+ */
+async function sendKycRejectedEmail({
+  to,
+  name = 'Team Member',
+  rejectionReason = 'Document details could not be verified.',
+  companyName = 'SAAMPARK Group',
+  companyId = null,
+}) {
+  const { transporter, from } = await getEmailConfig(companyId);
+
+  const html = `
+    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 580px; margin: 0 auto; background: #0f0f13; border-radius: 16px; overflow: hidden; border: 1px solid #1e1e2e;">
+      <div style="background: linear-gradient(135deg, #e11d48, #be123c); padding: 36px 40px; text-align: center;">
+        <h1 style="color: #ffffff; margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">KYC VERIFICATION UPDATE REQUIRED</h1>
+        <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0; font-size: 13px;">${companyName} - Employee Verification</p>
+      </div>
+
+      <div style="padding: 36px 40px; background: #16161e;">
+        <p style="color: #e2e8f0; font-size: 16px; margin: 0 0 12px;">Dear <strong>${name}</strong>,</p>
+        <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0 0 20px;">
+          Your submitted KYC verification documents were reviewed by management. However, some items could not be approved due to the following reason:
+        </p>
+
+        <div style="background: rgba(244, 63, 94, 0.1); border-left: 4px solid #f43f5e; padding: 16px; border-radius: 6px; margin-bottom: 24px;">
+          <p style="color: #fca5a5; font-size: 13px; margin: 0; font-weight: 600; line-height: 1.5;">
+            Reason for Rejection:
+          </p>
+          <p style="color: #ffffff; font-size: 14px; margin: 6px 0 0; font-weight: bold;">
+            "${rejectionReason}"
+          </p>
+        </div>
+
+        <p style="color: #94a3b8; font-size: 13px; line-height: 1.6; margin: 0 0 24px;">
+          Please sign in to your account, review the rejection note, and re-upload the correct document copies. Once re-submitted, your file will be re-evaluated promptly.
+        </p>
+
+        <div style="text-align: center;">
+          <a href="https://crm.saampark.com/login" style="display: inline-block; background: linear-gradient(135deg, #e11d48, #be123c); color: #ffffff; text-decoration: none; padding: 14px 36px; border-radius: 10px; font-weight: 700; font-size: 14px;">
+            Sign In & Re-upload Documents →
+          </a>
+        </div>
+      </div>
+      <div style="padding: 20px 40px; background: #0f0f13; text-align: center; border-top: 1px solid #1e1e2e;">
+        <p style="color: #475569; font-size: 12px; margin: 0;">© 2026 ${companyName}. All rights reserved.</p>
+      </div>
+    </div>
+  `;
+
+  await transporter.sendMail({
+    from,
+    to,
+    subject: `KYC Document Verification Update - Action Required (${companyName})`,
+    html,
+  });
+}
+
 module.exports = {
   getEmailConfig,
   testSmtpConnection,
@@ -1165,6 +1327,8 @@ module.exports = {
   sendPaymentReceiptEmail,
   sendPaymentDueReminderEmail,
   sendGenericEmail,
+  sendKycSuccessEmail,
+  sendKycRejectedEmail,
   verifyOTP,
   generateOTP,
   storeOTP,

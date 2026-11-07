@@ -149,15 +149,23 @@ export const DEFAULT_SYSTEM_ACCOUNTS: UserItem[] = [
   },
 ];
 
-// Helper: get deleted user emails (synced from MySQL deleted table)
+// Helper: get deleted user emails (synced from MySQL deleted table specifically for users module)
 export async function getDeletedUserEmailsAsync(): Promise<string[]> {
-  const deletedIds = await syncGlobalDeletedIds();
-  return deletedIds.filter((id: string) => id.includes('@'));
+  try {
+    const deletedIds = await syncGlobalDeletedIds("users");
+    return deletedIds.filter((id: string) => id.includes('@'));
+  } catch {
+    return [];
+  }
 }
 
 export function getDeletedUserEmails(): string[] {
-  const deleted = getLocalDeletedIds();
-  return deleted.filter((id: string) => id.includes('@'));
+  try {
+    const deleted = getLocalDeletedIds("users");
+    return deleted.filter((id: string) => id.includes('@'));
+  } catch {
+    return [];
+  }
 }
 
 // Helper: check if a specific user email has been deleted
@@ -214,6 +222,39 @@ export async function isEmailRegistered(email: string): Promise<boolean> {
   if (isUserDeleted(normEmail)) return false;
   const accounts = await getStoredUserAccountsAsync();
   return accounts.some((acc) => acc.email.toLowerCase().trim() === normEmail);
+}
+
+/**
+ * Auto-generates standard Employee Serial ID matching company specifications:
+ * - SAAMPARK TECHNOLOGY: STR-EMP-YY01, STR-EMP-YY02... (e.g. STR-EMP-2601, STR-EMP-2602)
+ * - SAAMPARK CONSULTANCY: SCS-EMP-YY01, SCS-EMP-YY02... (e.g. SCS-EMP-2601, SCS-EMP-2602)
+ */
+export function generateCompanyEmployeeId(companyId?: string, existingUsers: UserItem[] = []): string {
+  const comp = String(companyId || "").toLowerCase().trim();
+  const isConsultancy = comp === "consultancy" || comp === "2" || comp.includes("consult");
+  const prefix = isConsultancy ? "SCS-EMP-" : "STR-EMP-";
+  
+  // Current 2-digit year (e.g. 2026 -> 26)
+  const yearSuffix = String(new Date().getFullYear()).slice(-2);
+  const patternPrefix = `${prefix}${yearSuffix}`; // e.g. "STR-EMP-26" or "SCS-EMP-26"
+
+  // Scan existing users for highest sequence number in this company and year
+  let maxSeq = 0;
+  const safeUsers = Array.isArray(existingUsers) ? existingUsers : [];
+  safeUsers.forEach(u => {
+    if (!u) return;
+    const rawEmp = String(u.employeeId || "").toUpperCase().trim();
+    if (rawEmp.startsWith(patternPrefix)) {
+      const seqStr = rawEmp.slice(patternPrefix.length); // get "01", "02", etc.
+      const num = parseInt(seqStr, 10);
+      if (!isNaN(num) && num > maxSeq) {
+        maxSeq = num;
+      }
+    }
+  });
+
+  const nextSeq = String(maxSeq + 1).padStart(2, "0"); // "01", "02", etc.
+  return `${patternPrefix}${nextSeq}`;
 }
 
 // Helper: record a logged-in or newly created account into MySQL (Async version)
@@ -315,12 +356,17 @@ export async function recordUserAccountAsync(user: Partial<UserItem>, isNewRegis
       password: (user.password && user.password.trim()) ? user.password.trim() : (existing?.password || "Password123"),
       lastLogin: user.lastLogin !== undefined ? user.lastLogin : (existing?.lastLogin || "Just now"),
       joinedDate: user.joinedDate !== undefined ? user.joinedDate : (existing?.joinedDate || new Date().toISOString().split("T")[0]),
-      employeeId: user.employeeId !== undefined ? user.employeeId : (existing?.employeeId || (user.id ? `SP-EMP-${String(user.id).replace(/[^0-9]/g, "").slice(-4).padStart(4, "0") || "0041"}` : `SP-EMP-${String(Date.now()).slice(-4)}`)),
+      employeeId: user.employeeId !== undefined && user.employeeId !== "" ? user.employeeId : (existing?.employeeId || generateCompanyEmployeeId(effCompId, currentAccounts)),
       designation: user.designation !== undefined ? user.designation : existing?.designation,
       ctc: user.ctc !== undefined ? user.ctc : (existing as any)?.ctc,
       salary: user.salary !== undefined ? user.salary : (existing as any)?.salary,
       subBranchId: user.subBranchId !== undefined ? user.subBranchId : existing?.subBranchId,
       subBranchName: user.subBranchName !== undefined ? user.subBranchName : existing?.subBranchName,
+      kycStatus: user.kycStatus !== undefined ? user.kycStatus : existing?.kycStatus,
+      kycData: user.kycData !== undefined ? user.kycData : existing?.kycData,
+      bloodGroup: user.bloodGroup !== undefined ? user.bloodGroup : existing?.bloodGroup,
+      emergencyContact: user.emergencyContact !== undefined ? user.emergencyContact : existing?.emergencyContact,
+      address: user.address !== undefined ? user.address : existing?.address,
       offerLetterSentAt: user.offerLetterSentAt !== undefined ? user.offerLetterSentAt : existing?.offerLetterSentAt,
       idCardIssuedAt: user.idCardIssuedAt !== undefined ? user.idCardIssuedAt : existing?.idCardIssuedAt,
       previousEmails: prevEmailsList.length > 0 ? prevEmailsList : undefined,
@@ -436,6 +482,11 @@ export function recordUserAccount(user: Partial<UserItem>, isNewRegistration = f
     password: user.password !== undefined ? user.password : "Password123",
     lastLogin: user.lastLogin || "Just now",
     joinedDate: user.joinedDate || new Date().toISOString().split("T")[0],
+    kycStatus: user.kycStatus,
+    kycData: user.kycData,
+    bloodGroup: user.bloodGroup,
+    emergencyContact: user.emergencyContact,
+    address: user.address,
     permissions: (user as any).permissions,
     allowedModules: (user as any).allowedModules,
   };
@@ -1132,7 +1183,7 @@ export async function getUsers(companyId?: string): Promise<UserItem[]> {
   });
 
   const cleanUsers = Array.from(uniqueUsersMap.values());
-  saveModuleDataToDB("users", cleanUsers, "all").catch(() => {});
+  // Do NOT silently overwrite app_data on a GET read operation to prevent losing accounts
 
   // Store result in cache
   _usersCacheData = cleanUsers;
@@ -1299,6 +1350,10 @@ export async function updateUser(idOrEmail: string, updates: Partial<UserItem>, 
       permissions: updated.permissions || (updated.allowedModules ? { allowedModules: updated.allowedModules } : undefined),
       company_id: updated.companyId,
       company_ids: updated.companyIds,
+      kyc_status: updated.kycStatus || undefined,
+      kycStatus: updated.kycStatus || undefined,
+      kyc_data: updated.kycData || undefined,
+      kycData: updated.kycData || undefined,
     }).catch(() => {});
   } catch {}
 
@@ -1309,9 +1364,10 @@ export async function updateUser(idOrEmail: string, updates: Partial<UserItem>, 
       useAuthStore.setState({
         user: {
           ...curUser,
-          avatarUrl: newAvatar || curUser.avatarUrl,
-          avatar: newAvatar || curUser.avatar,
-          name: updated.name,
+          ...updated,
+          avatarUrl: newAvatar || updated.avatarUrl || curUser.avatarUrl,
+          avatar: newAvatar || updated.avatar || curUser.avatar,
+          name: updated.name || curUser.name,
         }
       });
       if (typeof window !== "undefined") {

@@ -10,6 +10,7 @@ import {
 } from "lucide-react"
 import { UserItem } from "../types"
 import { Company, Branch, SubBranch } from "@/app/feature/companies/types"
+import { printDocument } from "@/lib/printUtils"
 
 export const DEFAULT_ROLE_RESPONSIBILITIES: Record<string, string[]> = {
   "Software Engineer": [
@@ -395,7 +396,7 @@ export function OfferLetterDocument({
 
           <button
             type="button"
-            onClick={() => window.print()}
+            onClick={() => printDocument("printable-offer-letter", `Offer_Letter_${user?.name || "Official"}`)}
             className="px-3.5 py-1.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/90 transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
           >
             <Printer size={13} />

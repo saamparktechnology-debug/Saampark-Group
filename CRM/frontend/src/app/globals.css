@@ -278,12 +278,12 @@ html, body, input, textarea, select, button, table, span, div, p {
 }
 
 /* ========================================================
-   OFFICIAL PRINT & PDF EXPORT STYLES (Invoices, Estimates, Quotations)
+   OFFICIAL PRINT & PDF EXPORT STYLES (Invoices, Estimates, Quotations, Forms, Letters, Receipts)
    ======================================================== */
 @media print {
   @page {
     size: A4 portrait;
-    margin: 0;
+    margin: 4mm 6mm;
   }
 
   html, body {
@@ -293,6 +293,8 @@ html, body, input, textarea, select, button, table, span, div, p {
     print-color-adjust: exact !important;
     margin: 0 !important;
     padding: 0 !important;
+    width: 100% !important;
+    min-width: 100% !important;
   }
 
   /* Hide standard CRM web chrome when printing documents */
@@ -300,23 +302,37 @@ html, body, input, textarea, select, button, table, span, div, p {
     display: none !important;
   }
 
-  /* Reset modal containers so the PDF fills the A4 canvas */
-  .fixed.inset-0 {
+  /* Neutralize all fixed modal backdrops and flex wrappers */
+  .fixed.inset-0, [class*="backdrop-blur"], [class*="bg-black/"] {
     position: static !important;
     background: transparent !important;
+    backdrop-filter: none !important;
     padding: 0 !important;
     margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: auto !important;
     overflow: visible !important;
     box-shadow: none !important;
+    display: block !important;
   }
 
   .official-estimate-modal-root,
   .official-quotation-modal-root,
+  .official-invoice-modal-root,
   #printable-invoice,
   #printable-estimate,
-  #printable-quotation {
+  #printable-quotation,
+  #printable-formno9,
+  #saampark-form-9-sheet,
+  #printable-letter,
+  #printable-offer-letter,
+  #printable-renew-receipt,
+  #printable-team-payment,
+  .printable-document-root {
     max-width: 100% !important;
     width: 100% !important;
+    min-width: 100% !important;
     margin: 0 !important;
     padding: 0 !important;
     box-shadow: none !important;
@@ -327,31 +343,35 @@ html, body, input, textarea, select, button, table, span, div, p {
     color: #000000 !important;
   }
 
-  tr, .avoid-break {
+  tr, .avoid-break, .avoid-break-inside {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
 
-  .a4-page {
+  .a4-page, .quotation-a4-card {
     box-sizing: border-box !important;
-    width: 210mm !important;
-    max-width: 210mm !important;
-    min-height: 282mm !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: auto !important;
     height: auto !important;
     max-height: none !important;
     margin: 0 auto !important;
-    padding: 8mm 10mm !important;
+    padding: 4mm 6mm !important;
     overflow: visible !important;
     box-shadow: none !important;
     border: none !important;
+    border-radius: 0 !important;
     background: #ffffff !important;
-    page-break-after: auto !important;
-    break-after: auto !important;
   }
 
-  .a4-page:last-child {
-    page-break-after: avoid !important;
-    break-after: avoid !important;
+  .page-break-after-always {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+
+  .page-break-before-always {
+    page-break-before: always !important;
+    break-before: page !important;
   }
 }
 
@@ -753,64 +773,95 @@ html, body, input, textarea, select, button, table, span, div, p {
 }
 
 /* ========================================================
-   OFFICIAL A4 INVOICE & DOCUMENT PRINT CALIBRATION
+   OFFICIAL A4 INVOICE, QUOTATION & ALL CRM DOCUMENTS PRINT CALIBRATION
    ======================================================== */
 @page {
   size: A4 portrait;
-  margin: 0mm;
+  margin: 4mm 6mm;
 }
 
 @media print {
+  *, *::before, *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    box-sizing: border-box !important;
+  }
+
   html, body {
     width: 210mm !important;
     min-width: 210mm !important;
     height: auto !important;
-    margin: 0 !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 auto !important;
     padding: 0 !important;
     background: #ffffff !important;
     color: #000000 !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
+    overflow: visible !important;
   }
 
-  /* Hide navigation, toolbars, and extraneous buttons during print */
-  nav, header, sidebar, aside, .no-print, button, .sidebar-backdrop, .navbar, .portal-header, [data-theme-switcher] {
+  /* Hide navigation, sidebars, toolbars, backdrops, and action buttons during print */
+  nav, header, sidebar, aside, .no-print, [data-no-print], button, 
+  .sidebar-backdrop, .navbar, .portal-header, [data-theme-switcher],
+  .fixed.inset-0.bg-black\/60, .fixed.inset-0.bg-black\/80 {
     display: none !important;
   }
 
-  #printable-invoice {
-    width: 210mm !important;
+  /* Reset any modal dialog wrappers so they flow naturally as full-width A4 */
+  .fixed, .relative, .official-quotation-modal-root, [role="dialog"], .modal-root {
+    position: static !important;
+    width: 100% !important;
     max-width: 210mm !important;
+    min-width: 0 !important;
     margin: 0 auto !important;
     padding: 0 !important;
-    display: block !important;
+    overflow: visible !important;
     background: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
   }
 
-  .a4-page {
-    width: 210mm !important;
+  /* Universal Printable Documents (Invoices, Quotations, Estimates, Receipts, Form No. 9, ID Cards) */
+  #printable-invoice,
+  #printable-quotation,
+  [id^="printable-"],
+  .a4-page,
+  .printable-root {
+    width: 100% !important;
     max-width: 210mm !important;
-    min-height: 282mm !important;
-    height: auto !important;
-    max-height: none !important;
-    padding: 5mm 8mm !important;
+    min-width: 200mm !important;
     margin: 0 auto !important;
+    padding: 2mm 3mm !important;
+    display: flex !important;
+    flex-direction: column !important;
     box-sizing: border-box !important;
     box-shadow: none !important;
     border: none !important;
     border-radius: 0 !important;
+    background: #ffffff !important;
+    color: #09090b !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
     page-break-after: auto !important;
     break-after: auto !important;
-    overflow: visible !important;
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: space-between !important;
-    background: #ffffff !important;
   }
 
-  .a4-page:last-child {
-    page-break-after: auto !important;
-    break-after: auto !important;
+  .avoid-break, .break-inside-avoid, tr, table, .quotation-scope-card, .official-card-section {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .quotation-page-1, .break-after-page, .page-break-after {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+
+  .quotation-final-page, .break-before-page, .page-break-before {
+    page-break-before: always !important;
+    break-before: page !important;
   }
 }
 

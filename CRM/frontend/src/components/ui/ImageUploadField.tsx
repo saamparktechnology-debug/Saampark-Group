@@ -178,7 +178,7 @@ export function ImageUploadField({
                   <UploadCloud className="w-5 h-5" />
                 </div>
                 <p className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
-                  Click to upload {label.toLowerCase()} from storage
+                  Click to upload {(label || "image").toLowerCase()} from storage
                 </p>
                 <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5">
                   PNG, JPG, WebP, SVG up to 10MB (Free permanent ImgBB hosting)

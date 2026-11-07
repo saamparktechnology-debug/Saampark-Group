@@ -5,7 +5,7 @@ const UNIVERSAL_DELETED_KEY = "saampark_universal_deleted_ids"
 // Core protected system records that can NEVER be deleted (Master Super Admin user account only)
 const PROTECTED_ACCOUNTS = ["hiisupriya@gmail.com"]
 
-export function getLocalDeletedIds(): string[] {
+export function getLocalDeletedIds(moduleName?: string): string[] {
   if (typeof window === "undefined") return []
   try {
     const raw = localStorage.getItem(UNIVERSAL_DELETED_KEY)
@@ -107,7 +107,7 @@ export function resetDeletedCache(): void {
 }
 
 // Fetch all deleted item IDs from MySQL DB to ensure cross-browser synchronization
-export async function syncGlobalDeletedIds(): Promise<string[]> {
+export async function syncGlobalDeletedIds(moduleName?: string): Promise<string[]> {
   const now = Date.now()
   if (deletedCache.length > 0 && now - lastDeletedSyncTime < DELETED_CACHE_TTL_MS) {
     return deletedCache

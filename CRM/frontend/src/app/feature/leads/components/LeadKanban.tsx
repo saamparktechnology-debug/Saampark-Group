@@ -1363,6 +1363,24 @@ export function LeadKanban({
                           </div>
                         </div>
 
+                        {/* Repeat Client & Future Timeline Badges */}
+                        {(Boolean(l.isExistingClient || l.clientId) || Boolean(l.expectedTimeline)) && (
+                          <div className="flex items-center gap-1.5 flex-wrap pt-0.5 pb-0.5">
+                            {Boolean(l.isExistingClient || l.clientId) && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 shadow-2xs">
+                                <UserIcon size={9} className="text-emerald-600 dark:text-emerald-400" />
+                                <span>Repeat Client</span>
+                              </span>
+                            )}
+                            {Boolean(l.expectedTimeline) && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shadow-2xs">
+                                <Clock size={9} className="text-purple-600 dark:text-purple-400" />
+                                <span>Target: {l.expectedTimeline}</span>
+                              </span>
+                            )}
+                          </div>
+                        )}
+
                         {/* Line 2: Customer / Primary Contact Name */}
                         {l.primaryContact && (
                           <div className="flex items-center gap-1.5 text-[11px] text-zinc-700 dark:text-zinc-200">

@@ -2,8 +2,9 @@
 
 import * as React from "react"
 import { 
-  X, Printer, Send, Edit, ExternalLink, Check
+  X, Printer, Send, Edit, ExternalLink, Check, Megaphone
 } from "lucide-react"
+import { OfficialFormNo9Document } from "@/components/documents/OfficialFormNo9Document"
 import { InvoiceItem } from "../services/invoiceService"
 import { getCompanyPaymentSettings, CompanyPaymentSettings, DEFAULT_COMPANY_PAYMENT_SETTINGS } from "@/app/feature/settings/services/companyPaymentService"
 import { getClients } from "@/app/feature/clients/services/clientService"
@@ -12,6 +13,7 @@ import { sendInvoiceDetailsEmailNotification } from "@/services/emailNotificatio
 import { OfficialInvoiceDocument } from "./OfficialInvoiceDocument"
 import { useAuthStore } from "@/store/useAuthStore"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
+import { printDocument } from "@/lib/printUtils"
 
 interface InvoiceModalProps {
   isOpen: boolean
@@ -31,6 +33,7 @@ export function InvoiceModal({
   const [isSending, setIsSending] = React.useState(false)
   const [sentSuccess, setSentSuccess] = React.useState(false)
   const [copiedLink, setCopiedLink] = React.useState(false)
+  const [isForm9Open, setIsForm9Open] = React.useState(false)
   const [paySettings, setPaySettings] = React.useState<CompanyPaymentSettings>(DEFAULT_COMPANY_PAYMENT_SETTINGS)
   const [clientDetails, setClientDetails] = React.useState<ClientItem | null>(null)
 
@@ -58,6 +61,66 @@ export function InvoiceModal({
     (c.slug && c.slug.toLowerCase() === (invoice.companyId || "").toLowerCase()) ||
     c.name.toLowerCase() === (invoice.companyId || "").toLowerCase()
   ) || companies.find(c => c.id.toLowerCase() === (useAuthStore.getState().activeCompanyId || "").toLowerCase()) || companies[0] || null
+
+  const [logoPosition, setLogoPosition] = React.useState<{ x: number; y: number } | undefined>(undefined)
+  const [logoScale, setLogoScale] = React.useState<number | undefined>(undefined)
+  const [stampPosition, setStampPosition] = React.useState<{ x: number; y: number } | undefined>(undefined)
+  const [stampScale, setStampScale] = React.useState<number | undefined>(undefined)
+  const [sigPosition, setSigPosition] = React.useState<{ x: number; y: number } | undefined>(undefined)
+  const [sigScale, setSigScale] = React.useState<number | undefined>(undefined)
+
+  React.useEffect(() => {
+    if (resolvedCompany) {
+      setLogoPosition(resolvedCompany.logo_position || { x: 0, y: 0 })
+      setLogoScale(resolvedCompany.logo_scale ?? 1)
+      setStampPosition(resolvedCompany.stamp_position || { x: 0, y: 0 })
+      setStampScale(resolvedCompany.stamp_scale ?? 1)
+      setSigPosition(resolvedCompany.signature_position || { x: 0, y: 0 })
+      setSigScale(resolvedCompany.signature_scale ?? 1)
+    }
+  }, [resolvedCompany?.id, resolvedCompany?.logo_position, resolvedCompany?.logo_scale])
+
+  const handleLogoPositionChange = (pos: { x: number; y: number }) => {
+    setLogoPosition(pos)
+    if (resolvedCompany) {
+      useAuthStore.getState().updateCompany(resolvedCompany.id, { logo_position: pos }).catch(() => {})
+    }
+  }
+
+  const handleLogoScaleChange = (scale: number) => {
+    setLogoScale(scale)
+    if (resolvedCompany) {
+      useAuthStore.getState().updateCompany(resolvedCompany.id, { logo_scale: scale }).catch(() => {})
+    }
+  }
+
+  const handleStampPositionChange = (pos: { x: number; y: number }) => {
+    setStampPosition(pos)
+    if (resolvedCompany) {
+      useAuthStore.getState().updateCompany(resolvedCompany.id, { stamp_position: pos }).catch(() => {})
+    }
+  }
+
+  const handleStampScaleChange = (scale: number) => {
+    setStampScale(scale)
+    if (resolvedCompany) {
+      useAuthStore.getState().updateCompany(resolvedCompany.id, { stamp_scale: scale }).catch(() => {})
+    }
+  }
+
+  const handleSignaturePositionChange = (pos: { x: number; y: number }) => {
+    setSigPosition(pos)
+    if (resolvedCompany) {
+      useAuthStore.getState().updateCompany(resolvedCompany.id, { signature_position: pos }).catch(() => {})
+    }
+  }
+
+  const handleSignatureScaleChange = (scale: number) => {
+    setSigScale(scale)
+    if (resolvedCompany) {
+      useAuthStore.getState().updateCompany(resolvedCompany.id, { signature_scale: scale }).catch(() => {})
+    }
+  }
 
   const originUrl = typeof window !== "undefined" ? window.location.origin : "https://saamparktechnology.com"
   const publicShareUrl = `${originUrl}/public/invoice?id=${encodeURIComponent(invoice.id)}`
@@ -100,63 +163,7 @@ export function InvoiceModal({
   }
 
   const handlePrint = () => {
-    const printContent = document.getElementById("printable-invoice")
-    if (!printContent) {
-      window.print()
-      return
-    }
-
-    try {
-      const printWin = window.open("", "_blank", "width=850,height=1100")
-      if (printWin) {
-        printWin.document.open()
-        printWin.document.write(`
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <title>Tax_Invoice_${invoice.id}</title>
-              <meta charset="utf-8" />
-              <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-              ${document.head.innerHTML}
-              <style>
-                @page { size: A4 portrait; margin: 4mm 4mm; }
-                html, body {
-                  background: white !important;
-                  color: black !important;
-                  margin: 0 !important;
-                  padding: 4px !important;
-                  -webkit-print-color-adjust: exact !important;
-                  print-color-adjust: exact !important;
-                }
-                * {
-                  -webkit-print-color-adjust: exact !important;
-                  print-color-adjust: exact !important;
-                }
-                .no-print { display: none !important; }
-              </style>
-            </head>
-            <body>
-              ${printContent.outerHTML}
-              <script>
-                window.onload = function() {
-                  setTimeout(function() {
-                    window.focus();
-                    window.print();
-                    window.close();
-                  }, 350);
-                };
-              </script>
-            </body>
-          </html>
-        `)
-        printWin.document.close()
-        return
-      }
-    } catch (e) {
-      console.warn("Print window open failed, fallback to direct print:", e)
-    }
-
-    window.print()
+    printDocument("printable-invoice", `Tax_Invoice_${invoice.id}`)
   }
 
   return (
@@ -193,6 +200,18 @@ export function InvoiceModal({
               <Send size={14} />
               <span>{isSending ? "Sending..." : sentSuccess ? "Sent ✓" : "Send Email"}</span>
             </button>
+
+            {Boolean((invoice as any)?.marketingPackage?.enabled || (invoice as any)?.marketingPackage?.planName || (invoice as any)?.primaryCategory === "Digital Marketing") && (
+              <button
+                type="button"
+                onClick={() => setIsForm9Open(true)}
+                className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-purple-500/20 transition-all cursor-pointer"
+                title="View Full Digital Marketing Campaign Specifications (Form No - 9)"
+              >
+                <Megaphone size={14} />
+                <span className="hidden sm:inline">Form No - 9</span>
+              </button>
+            )}
 
             {onEditInvoice && (
               <button
@@ -231,9 +250,36 @@ export function InvoiceModal({
             clientDetails={clientDetails}
             companyDetails={resolvedCompany}
             paySettings={paySettings}
+            interactive={true}
+            logoPosition={logoPosition}
+            onLogoPositionChange={handleLogoPositionChange}
+            logoScale={logoScale}
+            onLogoScaleChange={handleLogoScaleChange}
+            stampPosition={stampPosition}
+            onStampPositionChange={handleStampPositionChange}
+            stampScale={stampScale}
+            onStampScaleChange={handleStampScaleChange}
+            signaturePosition={sigPosition}
+            onSignaturePositionChange={handleSignaturePositionChange}
+            signatureScale={sigScale}
+            onSignatureScaleChange={handleSignatureScaleChange}
           />
         </div>
       </div>
+
+      {/* Official Form No - 9 Sheet Modal */}
+      {isForm9Open && (invoice as any)?.marketingPackage && (
+        <OfficialFormNo9Document
+          pkg={(invoice as any).marketingPackage}
+          clientInfo={{
+            name: invoice.client,
+            businessName: invoice.client,
+            phone: invoice.clientPhone,
+            address: invoice.clientAddress,
+          }}
+          onClose={() => setIsForm9Open(false)}
+        />
+      )}
     </div>
   )
 }

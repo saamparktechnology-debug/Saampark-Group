@@ -336,6 +336,9 @@ export default function EstimatesPage() {
         companyId: targetComp,
         branchId: est.branchId,
         branchName: est.branchName,
+        estimateId: est.id,
+        estimateNumber: est.estimateNumber,
+        estimateData: est,
       }, targetComp)
 
       await addInvoice({

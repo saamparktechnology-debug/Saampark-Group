@@ -15,6 +15,7 @@ import {
   MapPin,
   Info,
   Receipt,
+  Megaphone,
 } from "lucide-react"
 import { Project } from "../types"
 import { ProjectFiltersDropdown } from "./ProjectFiltersDropdown"
@@ -62,6 +63,14 @@ export function ProjectList({
     const matchesSearch = !q || pTitle.includes(q) || pClient.includes(q) || pId.includes(q)
     const pLabels = Array.isArray(p.labels) ? p.labels : []
 
+    if (activeFilter === "Digital Marketing") {
+      return matchesSearch && (
+        p.projectType === "Digital Marketing Campaign" ||
+        Boolean((p as any).marketingPackage?.enabled) ||
+        pLabels.includes("Digital Marketing") ||
+        String((p as any).category || "").toLowerCase().includes("marketing")
+      )
+    }
     if (activeFilter === "Completed") return matchesSearch && (p.status === "Completed" || p.status === "Finished")
     if (activeFilter === "High Priority") return matchesSearch && (pLabels.includes("Urgent") || pLabels.includes("High"))
     if (activeFilter === "Open projects") return matchesSearch && (p.status === "Open" || p.status === "In Progress" || p.status === "Payment Pending")
@@ -193,7 +202,7 @@ export function ProjectList({
 
           {/* Filter Pills matching Image 1 */}
           <div className="flex items-center gap-1.5 overflow-x-auto text-xs ml-1">
-            {["All projects", "Completed", "High Priority", "Open projects", "Upcoming"].map((f) => {
+            {["All projects", "Digital Marketing", "Open projects", "Completed", "High Priority", "Upcoming"].map((f) => {
               const isActive = activeFilter === f
               return (
                 <button
@@ -325,6 +334,14 @@ export function ProjectList({
                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/70 text-[9.5px] font-semibold">
                               <MapPin size={9} />
                               <span>Branch: {(p as any).branchName}</span>
+                            </span>
+                          )}
+
+                          {/* Digital Marketing Project Badge */}
+                          {(p.projectType === "Digital Marketing Campaign" || (p as any).marketingPackage?.enabled || String((p as any).category || "").toLowerCase().includes("marketing")) && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-950/70 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-800 text-[9.5px] font-bold">
+                              <Megaphone size={9} />
+                              <span>Digital Marketing (Form 9)</span>
                             </span>
                           )}
 

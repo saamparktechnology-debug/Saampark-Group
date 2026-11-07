@@ -129,6 +129,7 @@ export interface InvoiceItem {
   logoPosition?: { x: number; y: number }
   signaturePosition?: { x: number; y: number }
   customStamps?: any[]
+  marketingPackage?: any
 }
 
 export const INITIAL_INVOICES: InvoiceItem[] = []

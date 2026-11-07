@@ -1,6 +1,7 @@
 "use client"
 
 import { ClientItem, ContactItem, ClientLabelItem } from "../types"
+export type { ClientItem, ContactItem, ClientLabelItem }
 import { api } from "@/lib/api"
 import { filterGlobalDeletedItems, markGlobalItemDeleted, fetchModuleDataFromDB, saveModuleDataToDB } from "@/lib/storageSync"
 import { markUserAsDeleted, recordUserAccount } from "@/app/feature/users/services/userService"

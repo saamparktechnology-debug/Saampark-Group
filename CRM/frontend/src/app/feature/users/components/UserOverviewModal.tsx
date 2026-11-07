@@ -7,10 +7,12 @@ import {
   Printer, Sparkles, UserCheck, Briefcase, DollarSign, Layers
 } from "lucide-react"
 import { UserItem, KycStatus } from "../types"
-import { recordUserAccount } from "../services/userService"
+import { recordUserAccount, updateUser } from "../services/userService"
+import { api } from "@/lib/api"
 import { saveModuleDataToDB } from "@/lib/storageSync"
-import { useAuthStore, getSelectableCompanies } from "@/store/useAuthStore"
+import { useAuthStore, getSelectableCompanies, isMatchingCompany } from "@/store/useAuthStore"
 import { createNotification } from "@/services/notificationService"
+import { sendKycStatusEmailNotification } from "@/services/emailNotificationService"
 import { OfferLetterDocument } from "./OfferLetterDocument"
 import { IdentityCardDocument } from "./IdentityCardDocument"
 
@@ -61,7 +63,11 @@ export function UserOverviewModal({
   const branches = useAuthStore((state) => state.branches)
   const subBranches = useAuthStore((state) => state.subBranches)
   const activeCompanyId = useAuthStore((state) => state.activeCompanyId)
-  const isSuperAdminOrAdmin = currentUser?.role === "Super Admin" || currentUser?.role === "Admin"
+  const canReviewKyc = 
+    (currentUser?.role as any) === "Super Admin" || 
+    (currentUser?.role as any) === "Admin" || 
+    (currentUser?.role as any) === "Branch Admin" || 
+    (currentUser?.role as any) === "Sub Branch Admin"
 
   const selectableCompanies = React.useMemo(() => {
     return getSelectableCompanies(companies, activeCompanyId, currentUser, branches, subBranches)
@@ -99,8 +105,11 @@ export function UserOverviewModal({
     }
   }, [isOpen])
 
+  const [liveUser, setLiveUser] = React.useState<UserItem>(user!)
+
   React.useEffect(() => {
     if (user) {
+      setLiveUser(user)
       setSelectedCompanyId(user.companyId || (companies[0]?.id || "tech"))
       setSelectedBranchId(user.branchId || "")
       setSelectedSubBranchId(user.subBranchId || (user as any).sub_branch_id || "")
@@ -108,10 +117,35 @@ export function UserOverviewModal({
       setCustomDesignation(user.designation || user.role || "Senior Executive")
       setCustomCtc((user as any).ctc || "₹4,80,000 per Annum (INR 4.8 LPA)")
       setCustomDepartment(user.department || "Operations & Technology")
+
+      // Fetch fresh profile data directly from MySQL users table
+      const identifier = user.id || user.email
+      if (identifier) {
+        api.get(`/users/${encodeURIComponent(identifier)}`)
+          .then((res: any) => {
+            const data = res?.data || res
+            if (data && (data.id || data.email)) {
+              let parsedKyc = data.kyc_data || data.kycData
+              if (typeof parsedKyc === "string") {
+                try { parsedKyc = JSON.parse(parsedKyc) } catch {}
+              }
+              setLiveUser((prev) => ({
+                ...prev,
+                ...data,
+                name: data.full_name || data.name || prev.name,
+                kycStatus: data.kyc_status || data.kycStatus || prev.kycStatus,
+                kycData: parsedKyc || prev.kycData,
+              }))
+            }
+          })
+          .catch(() => {})
+      }
     }
   }, [user, companies])
 
   if (!isOpen || !user) return null
+
+  const activeUser = liveUser || user
 
   // Resolved entities
   const resolvedCompany = companies.find(c => 
@@ -131,10 +165,23 @@ export function UserOverviewModal({
     (resolvedBranch && String((sb as any).branch_id || (sb as any).branchId) === String(resolvedBranch.id))
   )
 
-  const kycStatus: KycStatus = user.kycStatus || (user.kycData?.docNumber ? "Processing" : "Pending")
+  const rawKyc = activeUser.kycData || (activeUser as any).kyc_data
+  let kyc: any = null
+  if (rawKyc) {
+    if (typeof rawKyc === "string") {
+      try { kyc = JSON.parse(rawKyc) } catch { kyc = null }
+    } else if (typeof rawKyc === "object") {
+      kyc = rawKyc
+    }
+  }
+
+  const kycStatus: KycStatus = (
+    activeUser.kycStatus || 
+    (activeUser as any).kyc_status || 
+    (kyc?.docNumber ? "Processing" : "Pending")
+  ) as KycStatus
   const kycConfig = KYC_BADGE_CONFIG[kycStatus] || KYC_BADGE_CONFIG.Pending
   const KycIcon = kycConfig.icon
-  const kyc = user.kycData
 
   const handleApproveKyc = async () => {
     if (!confirm(`Are you sure you want to approve and mark KYC as Verified for ${user.name}?`)) {
@@ -142,18 +189,34 @@ export function UserOverviewModal({
     }
 
     setIsProcessingAction(true)
+    const approverName = currentUser?.name ? `${currentUser.name} (${currentUser.role})` : "Branch Management"
+
     const updated: UserItem = {
       ...user,
       kycStatus: "Verified",
       kycData: {
         ...(user.kycData || { fullName: user.name, docType: "Aadhaar Card", docNumber: "N/A" }),
         verifiedAt: new Date().toISOString(),
-        verifiedBy: currentUser?.name || "Administrator",
+        verifiedBy: approverName,
         rejectionReason: undefined,
       },
     }
 
     await recordUserAccount(updated)
+    await updateUser(user.id, updated).catch(console.warn)
+
+    // Clear backup localStorage for this employee since they are now verified
+    try {
+      const emailOrId = (user.email || user.id || "").toLowerCase().trim()
+      localStorage.removeItem(`saampark_kyc_submission_${emailOrId}`)
+    } catch {}
+
+    // Send official KYC verification successful confirmation email
+    sendKycStatusEmailNotification({
+      user: updated,
+      status: "Verified",
+      verifiedBy: approverName,
+    }).catch(console.warn)
     
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("saampark_kyc_updated", { detail: updated }))
@@ -191,6 +254,21 @@ export function UserOverviewModal({
     }
 
     await recordUserAccount(updated)
+    await updateUser(user.id, updated).catch(console.warn)
+
+    // Clear backup localStorage for this employee
+    try {
+      const emailOrId = (user.email || user.id || "").toLowerCase().trim()
+      localStorage.removeItem(`saampark_kyc_submission_${emailOrId}`)
+    } catch {}
+
+    // Send official KYC rejection update email with reason
+    sendKycStatusEmailNotification({
+      user: updated,
+      status: "Rejected",
+      rejectionReason: rejectReason.trim(),
+      verifiedBy: currentUser?.name || "Management",
+    }).catch(console.warn)
 
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("saampark_kyc_updated", { detail: updated }))
@@ -609,8 +687,8 @@ export function UserOverviewModal({
                   </div>
                 )}
 
-                {/* ── SUPER ADMIN / ADMIN KYC DECISION BUTTONS ──────────────────── */}
-                {isSuperAdminOrAdmin && kycStatus !== "Verified" && (
+                {/* ── SUPER ADMIN / ADMIN / BRANCH ADMIN KYC DECISION BUTTONS ──────────────────── */}
+                {canReviewKyc && kycStatus !== "Verified" && (
                   <div className="pt-3 border-t border-border/50 space-y-2">
                     {!showRejectInput ? (
                       <div className="flex items-center justify-end gap-2">
@@ -628,8 +706,8 @@ export function UserOverviewModal({
                           disabled={isProcessingAction}
                           className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md transition-all cursor-pointer flex items-center gap-1.5"
                         >
-                          <Check size={14} />
-                          <span>Approve & Verify KYC (KYC Done)</span>
+                          <CheckCircle2 size={14} className="text-white" />
+                          <span>Approve KYC &amp; Send Success Email</span>
                         </button>
                       </div>
                     ) : (

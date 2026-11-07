@@ -1,4 +1,4 @@
-export type ProjectType = "Client Project" | "Internal Project"
+export type ProjectType = "Client Project" | "Internal Project" | "Digital Marketing Campaign"
 export type ProjectStatus = "Payment Pending" | "Open" | "In Progress" | "Completed" | "Hold" | "Finished" | "Cancelled"
 
 export interface ProjectMember {
@@ -84,5 +84,12 @@ export interface Project {
   subBranchId?: string
   subBranchName?: string
   subBranchCode?: string
+  quotationId?: string
+  quotationNumber?: string
+  quotationData?: any
+  estimateId?: string
+  estimateNumber?: string
+  estimateData?: any
+  marketingPackage?: any
 }
 

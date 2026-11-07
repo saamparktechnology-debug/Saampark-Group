@@ -41,11 +41,11 @@ const CANONICAL_COMPANIES: Company[] = [
   {
     id: "tech",
     numeric_id: 1,
-    name: "SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED",
+    name: "SAAMPARK TECHNOLOGY & RESEARCH",
     slug: "tech",
     brand_name: "SAAMPARK",
-    division_name: "TECHNOLOGY",
-    subtitle: "AND RESEARCH PRIVATE LIMITED",
+    division_name: "TECHNOLOGY & RESEARCH",
+    subtitle: "",
     industry: "Technology",
     currency: "INR",
     gstin: "",
@@ -70,7 +70,7 @@ const CANONICAL_COMPANIES: Company[] = [
     slug: "consultancy",
     brand_name: "SAAMPARK",
     division_name: "CONSULTANCY SERVICE",
-    subtitle: "MANAGEMENT & ADVISORY SERVICES",
+    subtitle: "",
     industry: "Consulting",
     currency: "INR",
     gstin: "",
@@ -87,25 +87,59 @@ const CANONICAL_COMPANIES: Company[] = [
     member_count: 0,
     signatory_name: "Authorized Signatory",
     signatory_designation: "Consulting Director",
+    terms_conditions: "1. All consulting engagements are initiated following signed scope of work.\n2. Retainer fees are payable in advance.\n3. All disputes are subject to local jurisdiction only.",
   },
 ]
 
-const CANONICAL_BRANCHES: Branch[] = [
-  {
-    id: "br-1",
-    company_id: "tech",
-    name: "Head Office",
-    code: "STR-HO",
-    city: "",
-    state: "",
-    country: "India",
-    phone: "",
-    email: "",
-    manager_name: "",
-    status: "active",
-    user_count: 0,
-  },
-]
+const CANONICAL_BRANCHES: Branch[] = []
+
+const cleanStr = (val: any) => (val && typeof val === "string" ? val.trim() : "")
+const cleanUpper = (val: any) => (val && typeof val === "string" ? val.trim().toUpperCase() : "")
+
+export const isBranchDeleted = (_id?: string | number, _code?: string, _name?: string) => {
+  const sId = String(_id || "").toLowerCase().trim()
+  const sCode = String(_code || "").toUpperCase().trim()
+  const sName = String(_name || "").toLowerCase().trim()
+  if (sId === "br-1" || sCode === "STR-HO" || sCode === "HO" || sName.includes("head office") || sName === "head office") return true
+  return false
+}
+
+class SafeModalBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error: any }> {
+  constructor(props: any) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error }
+  }
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error("Company Modal Render Issue:", error, errorInfo)
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-6 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200 rounded-2xl m-4 space-y-3">
+          <div className="flex items-center gap-2 font-bold text-sm">
+            <AlertCircle size={18} className="text-rose-600" />
+            <span>Form Display Alert</span>
+          </div>
+          <p className="text-xs">A display error occurred while rendering this editor view:</p>
+          <pre className="text-xs bg-white dark:bg-zinc-900 p-3 rounded-xl border border-rose-200 dark:border-rose-800/60 overflow-auto max-h-48 whitespace-pre-wrap font-mono">
+            {String(this.state.error?.message || this.state.error)}
+          </pre>
+          <button 
+            type="button" 
+            onClick={() => this.setState({ hasError: false, error: null })} 
+            className="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all"
+          >
+            Reset Form View
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 export default function CompaniesMain() {
   const { user, fetchCompanies, activeCompanyId } = useAuthStore()
@@ -138,7 +172,7 @@ export default function CompaniesMain() {
   const [branchModalViewMode, setBranchModalViewMode] = React.useState<"split" | "form" | "preview">("split")
   const [subBranchModalViewMode, setSubBranchModalViewMode] = React.useState<"split" | "form" | "preview">("split")
   const [editingCompany, setEditingCompany] = React.useState<Company | null>(null)
-  const [companyTab, setCompanyTab] = React.useState<"identity" | "tax" | "contact" | "branding" | "signatory" | "bank">("identity")
+  const [companyTab, setCompanyTab] = React.useState<"identity" | "tax" | "contact" | "branding" | "signatory" | "bank" | "terms">("identity")
   const [companyBankProfileTab, setCompanyBankProfileTab] = React.useState<"gst" | "nongst">("gst")
   const [companyBankSubTab, setCompanyBankSubTab] = React.useState<"gst" | "nongst">("gst")
   const [companyPreviewScale, setCompanyPreviewScale] = React.useState<"fit" | "normal" | "large">("fit")
@@ -147,16 +181,19 @@ export default function CompaniesMain() {
   const [previewEntityLevel, setPreviewEntityLevel] = React.useState<"company" | "branch" | "subbranch">("company")
   const [previewInvoiceType, setPreviewInvoiceType] = React.useState<"gst" | "nongst">("gst")
   const [selectedPreviewBranchId, setSelectedPreviewBranchId] = React.useState<string>("")
+  const [companyLogoPos, setCompanyLogoPos] = React.useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [companySignaturePos, setCompanySignaturePos] = React.useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [companyStampPos, setCompanyStampPos] = React.useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [companyLogoScale, setCompanyLogoScale] = React.useState<number>(1)
   const [companyStampScale, setCompanyStampScale] = React.useState<number>(1)
   const [companySignatureScale, setCompanySignatureScale] = React.useState<number>(1)
+  const [branchLogoPos, setBranchLogoPos] = React.useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [branchSignaturePos, setBranchSignaturePos] = React.useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [branchStampPos, setBranchStampPos] = React.useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [branchLogoScale, setBranchLogoScale] = React.useState<number>(1)
   const [branchStampScale, setBranchStampScale] = React.useState<number>(1)
   const [branchSignatureScale, setBranchSignatureScale] = React.useState<number>(1)
+  const [subBranchLogoPos, setSubBranchLogoPos] = React.useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [subBranchSignaturePos, setSubBranchSignaturePos] = React.useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [subBranchStampPos, setSubBranchStampPos] = React.useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [subBranchLogoScale, setSubBranchLogoScale] = React.useState<number>(1)
@@ -207,7 +244,7 @@ export default function CompaniesMain() {
     bank_name: "", account_holder: "", account_number: "", ifsc_code: "", bank_branch: "", upi_id: "", payment_qr_url: "",
     gst_bank_name: "", gst_account_holder: "", gst_account_number: "", gst_ifsc_code: "", gst_bank_branch: "", gst_upi_id: "", gst_payment_qr_url: "",
     nongst_bank_name: "", nongst_account_holder: "", nongst_account_number: "", nongst_ifsc_code: "", nongst_bank_branch: "", nongst_upi_id: "", nongst_payment_qr_url: "",
-    terms_conditions: "", invoice_notes: "", quotation_notes: "",
+    terms_conditions: "", invoice_notes: "", quotation_notes: "", bottom_footer_text: "",
     status: "active"
   })
 
@@ -273,17 +310,7 @@ export default function CompaniesMain() {
         return false
       }
 
-      const isBranchDeleted = (id?: string | number, code?: string) => {
-        if (id && isGlobalItemDeleted(id, deletedIds, "branches")) return true
-        if (code && isGlobalItemDeleted(code, deletedIds, "branches")) return true
-        return false
-      }
-
-      const isSubBranchDeleted = (id?: string | number, code?: string) => {
-        if (id && isGlobalItemDeleted(id, deletedIds, "sub_branches")) return true
-        if (code && isGlobalItemDeleted(code, deletedIds, "sub_branches")) return true
-        return false
-      }
+      const isSubBranchDeleted = (_id?: string | number, _code?: string) => false
 
       const [compRes, branchRes, subBranchRes, dbComps, dbBranches, dbSubBranches, dbUsersList] = await Promise.all([
         CompanyApiService.getAll().catch(() => []),
@@ -326,18 +353,7 @@ export default function CompaniesMain() {
         return uComp ? isMatchingCompany(c, uComp) : false
       }
 
-      // Overlay API companies (from MySQL) — only allowed companies for non-super-admins
-      if (Array.isArray(compRes) && compRes.length > 0) {
-        compRes.forEach(c => {
-          if (!isCompanyDeleted(c.id, c.slug) && isCompanyAllowed(c)) {
-            const key = c.slug || String(c.id)
-            const prev = compMap.get(key) || compMap.get(c.slug) || compMap.get(String(c.id))
-            compMap.set(key, { ...(prev || {}), ...c })
-          }
-        })
-      }
-
-      // Overlay persistent storage companies (from app_data) — only allowed companies
+      // 2. Overlay persistent storage companies (from app_data)
       if (Array.isArray(dbComps) && dbComps.length > 0) {
         dbComps.forEach(c => {
           if (!isCompanyDeleted(c.id, c.slug) && isCompanyAllowed(c)) {
@@ -348,7 +364,7 @@ export default function CompaniesMain() {
         })
       }
 
-      // Also overlay current auth store companies — only allowed companies
+      // 3. Overlay current auth store companies
       const storeComps = useAuthStore.getState().companies
       if (Array.isArray(storeComps) && storeComps.length > 0) {
         storeComps.forEach(c => {
@@ -356,6 +372,26 @@ export default function CompaniesMain() {
             const key = c.slug || String(c.id)
             const prev = compMap.get(key) || (c.slug ? compMap.get(c.slug) : undefined) || compMap.get(String(c.id))
             compMap.set(key, { ...(prev || {}), ...c })
+          }
+        })
+      }
+
+      // 4. HIGHEST PRECEDENCE: Live MySQL Backend API — real database is always authoritative
+      if (Array.isArray(compRes) && compRes.length > 0) {
+        compRes.forEach(c => {
+          if (!isCompanyDeleted(c.id, c.slug) && isCompanyAllowed(c)) {
+            const key = c.slug || String(c.id)
+            const prev = compMap.get(key) || compMap.get(c.slug) || compMap.get(String(c.id))
+            compMap.set(key, {
+              ...(prev || {}),
+              ...c,
+              terms_conditions: c.terms_conditions !== undefined && c.terms_conditions !== null
+                ? c.terms_conditions
+                : (prev?.terms_conditions || ""),
+              invoice_notes: c.invoice_notes !== undefined && c.invoice_notes !== null
+                ? c.invoice_notes
+                : (prev?.invoice_notes || ""),
+            })
           }
         })
       }
@@ -382,7 +418,7 @@ export default function CompaniesMain() {
 
       // First add baseline canonical branches for active companies (tech br-1, br-2)
       CANONICAL_BRANCHES.forEach(b => {
-        if (!isBranchDeleted(b.id, b.code)) {
+        if (!isBranchDeleted(b.id, b.code, b.name)) {
           const bComp = b.company_id || (b as any).companyId
           if (finalCompanies.some(c => isMatchingCompany(c, bComp))) {
             branchMap.set(String(b.id), { ...b, company_id: bComp, companyId: bComp })
@@ -393,7 +429,7 @@ export default function CompaniesMain() {
       // Overlay DB branches (from app_data)
       if (Array.isArray(dbBranches) && dbBranches.length > 0) {
         dbBranches.forEach(b => {
-          if (!isBranchDeleted(b.id, b.code)) {
+          if (!isBranchDeleted(b.id, b.code, b.name)) {
             const bComp = b.company_id || (b as any).companyId
             if (finalCompanies.some(c => isMatchingCompany(c, bComp))) {
               const strKey = String(b.id)
@@ -408,7 +444,7 @@ export default function CompaniesMain() {
       // Overlay API branches (from MySQL)
       if (Array.isArray(branchRes) && branchRes.length > 0) {
         branchRes.forEach(b => {
-          if (!isBranchDeleted(b.id, b.code)) {
+          if (!isBranchDeleted(b.id, b.code, b.name)) {
             const bComp = b.company_id || (b as any).companyId
             if (finalCompanies.some(c => isMatchingCompany(c, bComp))) {
               const strKey = String(b.id)
@@ -424,7 +460,7 @@ export default function CompaniesMain() {
       const storeBranches = useAuthStore.getState().branches || []
       if (Array.isArray(storeBranches) && storeBranches.length > 0) {
         storeBranches.forEach(b => {
-          if (!isBranchDeleted(b.id, b.code)) {
+          if (!isBranchDeleted(b.id, b.code, b.name)) {
             const bComp = b.company_id || (b as any).companyId
             if (finalCompanies.some(c => isMatchingCompany(c, bComp))) {
               const strKey = String(b.id)
@@ -502,6 +538,7 @@ export default function CompaniesMain() {
     const comp = companies.find(c => isMatchingCompany(c, companyId))
     if (!comp) return []
     return branches.filter(b => {
+      if (isBranchDeleted(b.id, b.code, b.name)) return false
       const bComp = b.company_id || (b as any).companyId
       return isMatchingCompany(comp, bComp)
     })
@@ -560,6 +597,7 @@ export default function CompaniesMain() {
     setEditingCompany(null)
     setCompanyTab("identity")
     setCompanyBankSubTab("gst")
+    setCompanyLogoPos({ x: 0, y: 0 })
     setCompanySignaturePos({ x: 0, y: 0 })
     setCompanyStampPos({ x: 0, y: 0 })
     setCompanyLogoScale(1)
@@ -580,6 +618,7 @@ export default function CompaniesMain() {
       terms_conditions: "1. All disputes subject to local jurisdiction only.\n2. Goods/Services once delivered are non-refundable.\n3. Disputed items must be notified within 7 business days.",
       invoice_notes: "Thank you for partnering with us. Please remit payment according to the stated terms.",
       quotation_notes: "This quotation is valid for 30 calendar days from the date of issuance.",
+      bottom_footer_text: "",
       status: "active"
     })
     setShowCompanyModal(true)
@@ -589,6 +628,7 @@ export default function CompaniesMain() {
     setEditingCompany(c)
     setCompanyTab("identity")
     setCompanyBankSubTab("gst")
+    setCompanyLogoPos(c.logo_position || { x: 0, y: 0 })
     setCompanySignaturePos(c.signature_position || { x: 0, y: 0 })
     setCompanyStampPos(c.stamp_position || { x: 0, y: 0 })
     setCompanyLogoScale(c.logo_scale ?? 1)
@@ -604,6 +644,7 @@ export default function CompaniesMain() {
       iso_certification: c.iso_certification ?? "An ISO 9001:2015 Certified Company",
       signatory_name: c.signatory_name || "Authorized Signatory", signatory_designation: c.signatory_designation || "Managing Director", signature_image_url: c.signature_image_url || "", stamp_image_url: c.stamp_image_url || "",
       address: c.address || "", city: c.city || "", state: c.state || "", zip: c.zip || "", country: c.country || "India", phone: c.phone || "", email: c.email || "", website: c.website || "",
+      bottom_footer_text: c.bottom_footer_text || "",
       bank_name: c.bank_name || "",
       account_holder: c.account_holder || "",
       account_number: c.account_number || "",
@@ -636,9 +677,9 @@ export default function CompaniesMain() {
   const [previewSaveSuccess, setPreviewSaveSuccess] = React.useState(false)
 
   const saveCompany = async (keepModalOpen = false) => {
-    const finalBrand = (companyForm.brand_name || "").trim()
-    const finalName = (companyForm.name || "").trim() || finalBrand
-    if (!finalBrand && !finalName) return
+    const finalBrand = companyForm.brand_name || ""
+    const finalName = companyForm.name || finalBrand
+    if (!finalBrand.trim() && !finalName.trim()) return
     setSaving(true)
     try {
       const cur = CURRENCIES.find(c => c.code === companyForm.currency)
@@ -646,9 +687,12 @@ export default function CompaniesMain() {
         ...companyForm,
         brand_name: finalBrand,
         name: finalName,
-        slug: companyForm.slug.trim() || generateSlug(finalBrand || finalName),
+        slug: (companyForm.slug || "").trim() || generateSlug(finalBrand.trim() || finalName.trim()),
         trademark_symbol: companyForm.trademark_symbol || "",
         currency_symbol: cur?.symbol || "₹",
+        logo: companyForm.logo_url || "",
+        logo_url: companyForm.logo_url || "",
+        logo_position: companyLogoPos,
         signature_position: companySignaturePos,
         stamp_position: companyStampPos,
         logo_scale: companyLogoScale,
@@ -705,8 +749,12 @@ export default function CompaniesMain() {
       }
 
       // 4. Persist all companies to app_data for guaranteed retention
-      const currentComps = useAuthStore.getState().companies
-      await saveModuleDataToDB("companies", currentComps, "all").catch(() => {})
+      const storeComps = useAuthStore.getState().companies || []
+      const mergedAllComps = storeComps.map(c => isMatchingCompany(c, compKey) ? { ...c, ...payload } : c)
+      if (!mergedAllComps.some(c => isMatchingCompany(c, compKey))) {
+        mergedAllComps.push({ ...payload, id: payload.slug, slug: payload.slug } as Company)
+      }
+      await saveModuleDataToDB("companies", mergedAllComps, "all").catch(() => {})
 
       // 5. Dispatch events so all tabs / preview sync immediately
       if (typeof window !== "undefined") {
@@ -734,67 +782,70 @@ export default function CompaniesMain() {
   }
 
   // ── BRANCH MODAL OPENERS ───────────────────────────────────────────────────
-  const openAddBranch = (companyId: string) => {
+  const openAddBranch = (companyId?: string) => {
     setEditingBranch(null)
-    setBranchCompanyId(companyId)
+    const effectiveCompId = String(companyId || (companies[0]?.id ? companies[0].id : "tech"))
+    const pComp = companies.find(c => isMatchingCompany(c, effectiveCompId)) || companies[0]
+    setBranchCompanyId(effectiveCompId)
+    setBranchModalViewMode("split")
     setBranchTab("basic")
     setBranchBankProfileTab("gst")
-    setBranchSignaturePos({ x: 0, y: 0 })
-    setBranchStampPos({ x: 0, y: 0 })
-    setBranchLogoScale(1)
-    setBranchStampScale(1)
-    setBranchSignatureScale(1)
-    setBranchCustomStamps([])
-    setBranchZoom(100)
+    setBranchSignaturePos(pComp?.signature_position || { x: 0, y: 0 })
+    setBranchStampPos(pComp?.stamp_position || { x: 0, y: 0 })
+    setBranchLogoScale(pComp?.logo_scale ?? 1)
+    setBranchStampScale(pComp?.stamp_scale ?? 1)
+    setBranchSignatureScale(pComp?.signature_scale ?? 1)
+    setBranchCustomStamps(Array.isArray(pComp?.custom_stamps) ? pComp.custom_stamps : [])
+    setBranchZoom(pComp?.zoom || 100)
     setPreviewInvoiceType("gst")
     setBranchForm({
       name: "",
       code: `BR-${Math.floor(100 + Math.random() * 900)}`,
-      brand_name: "SAAMPARK",
-      division_name: "",
-      subtitle: "",
-      logo_url: "",
-      payment_qr_url: "",
-      gstin: "",
-      pan: "",
-      cin: "",
-      msme_reg: "",
-      iso_certification: "",
-      signatory_name: "Authorized Signatory",
-      signatory_designation: "Branch Manager",
-      signature_image_url: "",
-      stamp_image_url: "",
-      address: "",
-      city: "",
-      state: "",
-      zip: "",
-      country: "India",
-      phone: "",
-      email: "",
+      brand_name: pComp?.brand_name || "SAAMPARK",
+      division_name: pComp?.division_name || "",
+      subtitle: pComp?.subtitle || "",
+      logo_url: pComp?.logo_url || "",
+      payment_qr_url: pComp?.payment_qr_url || "",
+      gstin: pComp?.gstin || "",
+      pan: pComp?.pan || "",
+      cin: pComp?.cin || "",
+      msme_reg: pComp?.msme_reg || "",
+      iso_certification: pComp?.iso_certification || "",
+      signatory_name: pComp?.signatory_name || "Authorized Signatory",
+      signatory_designation: pComp?.signatory_designation || "Branch Manager",
+      signature_image_url: pComp?.signature_image_url || "",
+      stamp_image_url: pComp?.stamp_image_url || "",
+      address: pComp?.address || "",
+      city: pComp?.city || "",
+      state: pComp?.state || "",
+      zip: pComp?.zip || "",
+      country: pComp?.country || "India",
+      phone: pComp?.phone || "",
+      email: pComp?.email || "",
       managerName: "",
       managerPhone: "",
-      bank_name: "",
-      account_holder: "",
-      account_number: "",
-      ifsc_code: "",
-      bank_branch: "",
-      upi_id: "",
-      gst_bank_name: "",
-      gst_account_holder: "",
-      gst_account_number: "",
-      gst_ifsc_code: "",
-      gst_bank_branch: "",
-      gst_upi_id: "",
-      gst_payment_qr_url: "",
-      nongst_bank_name: "",
-      nongst_account_holder: "",
-      nongst_account_number: "",
-      nongst_ifsc_code: "",
-      nongst_bank_branch: "",
-      nongst_upi_id: "",
-      nongst_payment_qr_url: "",
-      terms_conditions: "",
-      invoice_notes: "",
+      bank_name: pComp?.bank_name || pComp?.gst_bank_name || "",
+      account_holder: pComp?.account_holder || pComp?.gst_account_holder || "",
+      account_number: pComp?.account_number || pComp?.gst_account_number || "",
+      ifsc_code: pComp?.ifsc_code || pComp?.gst_ifsc_code || "",
+      bank_branch: pComp?.bank_branch || pComp?.gst_bank_branch || "",
+      upi_id: pComp?.upi_id || pComp?.gst_upi_id || "",
+      gst_bank_name: pComp?.gst_bank_name || pComp?.bank_name || "",
+      gst_account_holder: pComp?.gst_account_holder || pComp?.account_holder || "",
+      gst_account_number: pComp?.gst_account_number || pComp?.account_number || "",
+      gst_ifsc_code: pComp?.gst_ifsc_code || pComp?.ifsc_code || "",
+      gst_bank_branch: pComp?.gst_bank_branch || pComp?.bank_branch || "",
+      gst_upi_id: pComp?.gst_upi_id || pComp?.upi_id || "",
+      gst_payment_qr_url: pComp?.gst_payment_qr_url || pComp?.payment_qr_url || "",
+      nongst_bank_name: pComp?.nongst_bank_name || pComp?.bank_name || "",
+      nongst_account_holder: pComp?.nongst_account_holder || pComp?.account_holder || "",
+      nongst_account_number: pComp?.nongst_account_number || pComp?.account_number || "",
+      nongst_ifsc_code: pComp?.nongst_ifsc_code || pComp?.ifsc_code || "",
+      nongst_bank_branch: pComp?.nongst_bank_branch || pComp?.bank_branch || "",
+      nongst_upi_id: pComp?.nongst_upi_id || pComp?.upi_id || "",
+      nongst_payment_qr_url: pComp?.nongst_payment_qr_url || pComp?.payment_qr_url || "",
+      terms_conditions: pComp?.terms_conditions || (pComp as any)?.terms || "",
+      invoice_notes: pComp?.invoice_notes || (pComp as any)?.notes || "",
       status: "active"
     })
     setShowBranchModal(true)
@@ -802,40 +853,67 @@ export default function CompaniesMain() {
 
   const openEditBranch = (b: any) => {
     setEditingBranch(b)
-    setBranchCompanyId(b.company_id || b.companyId)
+    const effectiveCompId = b.company_id || b.companyId
+    setBranchCompanyId(effectiveCompId)
+    const pComp = companies.find(c => isMatchingCompany(c, effectiveCompId)) || companies[0]
     setBranchTab("basic")
     setBranchBankProfileTab("gst")
-    setBranchSignaturePos(b.signature_position || { x: 0, y: 0 })
-    setBranchStampPos(b.stamp_position || { x: 0, y: 0 })
-    setBranchLogoScale(b.logo_scale ?? 1)
-    setBranchStampScale(b.stamp_scale ?? 1)
-    setBranchSignatureScale(b.signature_scale ?? 1)
-    setBranchCustomStamps(Array.isArray(b.custom_stamps) ? b.custom_stamps : [])
-    setBranchZoom(b.zoom || 100)
+    setBranchSignaturePos(b.signature_position || pComp?.signature_position || { x: 0, y: 0 })
+    setBranchStampPos(b.stamp_position || pComp?.stamp_position || { x: 0, y: 0 })
+    setBranchLogoScale(b.logo_scale ?? pComp?.logo_scale ?? 1)
+    setBranchStampScale(b.stamp_scale ?? pComp?.stamp_scale ?? 1)
+    setBranchSignatureScale(b.signature_scale ?? pComp?.signature_scale ?? 1)
+    setBranchCustomStamps(Array.isArray(b.custom_stamps) && b.custom_stamps.length > 0 ? b.custom_stamps : (Array.isArray(pComp?.custom_stamps) ? pComp.custom_stamps : []))
+    setBranchZoom(b.zoom || pComp?.zoom || 100)
     setPreviewInvoiceType(b.preview_invoice_type || "gst")
     setBranchForm({
-      name: b.name || "", code: b.code || "", brand_name: b.brand_name || "", division_name: b.division_name || "", subtitle: b.subtitle || "",
-      logo_url: b.logo_url || "", payment_qr_url: b.payment_qr_url || "",
-      gstin: b.gstin || "", pan: b.pan || "", cin: b.cin || "", msme_reg: b.msme_reg || "", iso_certification: b.iso_certification || "",
-      signatory_name: b.signatory_name || "Authorized Signatory", signatory_designation: b.signatory_designation || "Branch Manager", signature_image_url: b.signature_image_url || "", stamp_image_url: b.stamp_image_url || "",
-      address: b.address || "", city: b.city || "", state: b.state || "", zip: b.zip || "", country: b.country || "India", phone: b.phone || "", email: b.email || "", managerName: b.managerName || "", managerPhone: b.managerPhone || "",
-      bank_name: b.bank_name || b.bankDetails?.bankName || "", account_holder: b.account_holder || b.bankDetails?.accountHolder || "", account_number: b.account_number || b.bankDetails?.accountNumber || "", ifsc_code: b.ifsc_code || b.bankDetails?.ifscCode || "", bank_branch: b.bank_branch || "", upi_id: b.upi_id || b.bankDetails?.upiId || "",
-      gst_bank_name: b.gst_bank_name || b.bank_name || b.bankDetails?.bankName || "",
-      gst_account_holder: b.gst_account_holder || b.account_holder || b.bankDetails?.accountHolder || "",
-      gst_account_number: b.gst_account_number || b.account_number || b.bankDetails?.accountNumber || "",
-      gst_ifsc_code: b.gst_ifsc_code || b.ifsc_code || b.bankDetails?.ifscCode || "",
-      gst_bank_branch: b.gst_bank_branch || b.bank_branch || "",
-      gst_upi_id: b.gst_upi_id || b.upi_id || b.bankDetails?.upiId || "",
-      gst_payment_qr_url: b.gst_payment_qr_url || b.payment_qr_url || "",
-      nongst_bank_name: b.nongst_bank_name || b.bank_name || b.bankDetails?.bankName || "",
-      nongst_account_holder: b.nongst_account_holder || b.account_holder || b.bankDetails?.accountHolder || "",
-      nongst_account_number: b.nongst_account_number || b.account_number || b.bankDetails?.accountNumber || "",
-      nongst_ifsc_code: b.nongst_ifsc_code || b.ifsc_code || b.bankDetails?.ifscCode || "",
-      nongst_bank_branch: b.nongst_bank_branch || b.bank_branch || "",
-      nongst_upi_id: b.nongst_upi_id || b.upi_id || b.bankDetails?.upiId || "",
-      nongst_payment_qr_url: b.nongst_payment_qr_url || b.payment_qr_url || "",
-      terms_conditions: b.terms_conditions || "",
-      invoice_notes: b.invoice_notes || "",
+      name: b.name || "",
+      code: b.code || "",
+      brand_name: b.brand_name || pComp?.brand_name || "SAAMPARK",
+      division_name: b.division_name || pComp?.division_name || "",
+      subtitle: b.subtitle || pComp?.subtitle || "",
+      logo_url: b.logo_url || pComp?.logo_url || "",
+      payment_qr_url: b.payment_qr_url || pComp?.payment_qr_url || "",
+      gstin: b.gstin || pComp?.gstin || "",
+      pan: b.pan || pComp?.pan || "",
+      cin: b.cin || pComp?.cin || "",
+      msme_reg: b.msme_reg || pComp?.msme_reg || "",
+      iso_certification: b.iso_certification || pComp?.iso_certification || "",
+      signatory_name: b.signatory_name || pComp?.signatory_name || "Authorized Signatory",
+      signatory_designation: b.signatory_designation || pComp?.signatory_designation || "Branch Manager",
+      signature_image_url: b.signature_image_url || pComp?.signature_image_url || "",
+      stamp_image_url: b.stamp_image_url || pComp?.stamp_image_url || "",
+      address: b.address || pComp?.address || "",
+      city: b.city || pComp?.city || "",
+      state: b.state || pComp?.state || "",
+      zip: b.zip || pComp?.zip || "",
+      country: b.country || pComp?.country || "India",
+      phone: b.phone || pComp?.phone || "",
+      email: b.email || pComp?.email || "",
+      managerName: b.managerName || "",
+      managerPhone: b.managerPhone || "",
+      bank_name: b.bank_name || b.bankDetails?.bankName || pComp?.bank_name || pComp?.gst_bank_name || "",
+      account_holder: b.account_holder || b.bankDetails?.accountHolder || pComp?.account_holder || pComp?.gst_account_holder || "",
+      account_number: b.account_number || b.bankDetails?.accountNumber || pComp?.account_number || pComp?.gst_account_number || "",
+      ifsc_code: b.ifsc_code || b.bankDetails?.ifscCode || pComp?.ifsc_code || pComp?.gst_ifsc_code || "",
+      bank_branch: b.bank_branch || pComp?.bank_branch || pComp?.gst_bank_branch || "",
+      upi_id: b.upi_id || b.bankDetails?.upiId || pComp?.upi_id || pComp?.gst_upi_id || "",
+      gst_bank_name: b.gst_bank_name || b.bank_name || b.bankDetails?.bankName || pComp?.gst_bank_name || pComp?.bank_name || "",
+      gst_account_holder: b.gst_account_holder || b.account_holder || b.bankDetails?.accountHolder || pComp?.gst_account_holder || pComp?.account_holder || "",
+      gst_account_number: b.gst_account_number || b.account_number || b.bankDetails?.accountNumber || pComp?.gst_account_number || pComp?.account_number || "",
+      gst_ifsc_code: b.gst_ifsc_code || b.ifsc_code || b.bankDetails?.ifscCode || pComp?.gst_ifsc_code || pComp?.ifsc_code || "",
+      gst_bank_branch: b.gst_bank_branch || b.bank_branch || pComp?.gst_bank_branch || pComp?.bank_branch || "",
+      gst_upi_id: b.gst_upi_id || b.upi_id || b.bankDetails?.upiId || pComp?.gst_upi_id || pComp?.upi_id || "",
+      gst_payment_qr_url: b.gst_payment_qr_url || b.payment_qr_url || pComp?.gst_payment_qr_url || pComp?.payment_qr_url || "",
+      nongst_bank_name: b.nongst_bank_name || b.bank_name || b.bankDetails?.bankName || pComp?.nongst_bank_name || pComp?.bank_name || "",
+      nongst_account_holder: b.nongst_account_holder || b.account_holder || b.bankDetails?.accountHolder || pComp?.nongst_account_holder || pComp?.account_holder || "",
+      nongst_account_number: b.nongst_account_number || b.account_number || b.bankDetails?.accountNumber || pComp?.nongst_account_number || pComp?.account_number || "",
+      nongst_ifsc_code: b.nongst_ifsc_code || b.ifsc_code || b.bankDetails?.ifscCode || pComp?.nongst_ifsc_code || pComp?.ifsc_code || "",
+      nongst_bank_branch: b.nongst_bank_branch || b.bank_branch || pComp?.nongst_bank_branch || pComp?.bank_branch || "",
+      nongst_upi_id: b.nongst_upi_id || b.upi_id || b.bankDetails?.upiId || pComp?.nongst_upi_id || pComp?.upi_id || "",
+      nongst_payment_qr_url: b.nongst_payment_qr_url || b.payment_qr_url || pComp?.nongst_payment_qr_url || pComp?.payment_qr_url || "",
+      terms_conditions: b.terms_conditions || pComp?.terms_conditions || (pComp as any)?.terms || "",
+      invoice_notes: b.invoice_notes || pComp?.invoice_notes || (pComp as any)?.notes || "",
       status: b.status || "active"
     })
     setShowBranchModal(true)
@@ -900,7 +978,8 @@ export default function CompaniesMain() {
   }
 
   const saveBranch = async (keepModalOpen = false) => {
-    if (!branchForm.name.trim()) return
+    const cleanBranchName = cleanStr(branchForm.name)
+    if (!cleanBranchName) return
     setSaving(true)
     try {
       const curComp = companies.find(c => isMatchingCompany(c, branchCompanyId))
@@ -909,8 +988,8 @@ export default function CompaniesMain() {
 
       const payload: any = {
         ...branchForm,
-        name: branchForm.name.trim(),
-        code: branchForm.code.trim().toUpperCase(),
+        name: cleanBranchName,
+        code: cleanUpper(branchForm.code) || `BR-${Math.floor(100 + Math.random() * 900)}`,
         companyId: resolvedCompSlug,
         company_id: resolvedCompNumeric,
         signature_position: branchSignaturePos,
@@ -922,19 +1001,19 @@ export default function CompaniesMain() {
         zoom: branchZoom,
         preview_invoice_type: previewInvoiceType,
         // Base fallback banking
-        bank_name: (branchForm.gst_bank_name || branchForm.bank_name || branchForm.nongst_bank_name || "").trim(),
-        account_holder: (branchForm.gst_account_holder || branchForm.account_holder || branchForm.nongst_account_holder || "").trim(),
-        account_number: (branchForm.gst_account_number || branchForm.account_number || branchForm.nongst_account_number || "").trim(),
-        ifsc_code: (branchForm.gst_ifsc_code || branchForm.ifsc_code || branchForm.nongst_ifsc_code || "").trim().toUpperCase(),
-        bank_branch: (branchForm.gst_bank_branch || branchForm.bank_branch || branchForm.nongst_bank_branch || "").trim(),
-        upi_id: (branchForm.gst_upi_id || branchForm.upi_id || branchForm.nongst_upi_id || "").trim(),
+        bank_name: cleanStr(branchForm.gst_bank_name || branchForm.bank_name || branchForm.nongst_bank_name),
+        account_holder: cleanStr(branchForm.gst_account_holder || branchForm.account_holder || branchForm.nongst_account_holder),
+        account_number: cleanStr(branchForm.gst_account_number || branchForm.account_number || branchForm.nongst_account_number),
+        ifsc_code: cleanUpper(branchForm.gst_ifsc_code || branchForm.ifsc_code || branchForm.nongst_ifsc_code),
+        bank_branch: cleanStr(branchForm.gst_bank_branch || branchForm.bank_branch || branchForm.nongst_bank_branch),
+        upi_id: cleanStr(branchForm.gst_upi_id || branchForm.upi_id || branchForm.nongst_upi_id),
         payment_qr_url: branchForm.gst_payment_qr_url || branchForm.payment_qr_url || branchForm.nongst_payment_qr_url || "",
         bankDetails: {
-          bankName: (branchForm.gst_bank_name || branchForm.bank_name || branchForm.nongst_bank_name || "").trim(),
-          accountHolder: (branchForm.gst_account_holder || branchForm.account_holder || branchForm.nongst_account_holder || "").trim(),
-          accountNumber: (branchForm.gst_account_number || branchForm.account_number || branchForm.nongst_account_number || "").trim(),
-          ifscCode: (branchForm.gst_ifsc_code || branchForm.ifsc_code || branchForm.nongst_ifsc_code || "").trim().toUpperCase(),
-          upiId: (branchForm.gst_upi_id || branchForm.upi_id || branchForm.nongst_upi_id || "").trim(),
+          bankName: cleanStr(branchForm.gst_bank_name || branchForm.bank_name || branchForm.nongst_bank_name),
+          accountHolder: cleanStr(branchForm.gst_account_holder || branchForm.account_holder || branchForm.nongst_account_holder),
+          accountNumber: cleanStr(branchForm.gst_account_number || branchForm.account_number || branchForm.nongst_account_number),
+          ifscCode: cleanUpper(branchForm.gst_ifsc_code || branchForm.ifsc_code || branchForm.nongst_ifsc_code),
+          upiId: cleanStr(branchForm.gst_upi_id || branchForm.upi_id || branchForm.nongst_upi_id),
         }
       }
 
@@ -989,19 +1068,23 @@ export default function CompaniesMain() {
   }
 
   // ── SUB-BRANCH MODAL OPENERS ───────────────────────────────────────────────
-  const openAddSubBranch = (branchId: string, companyId: string) => {
+  const openAddSubBranch = (branchId: string, companyId?: string) => {
     setEditingSubBranch(null)
-    setSubBranchBranchId(branchId)
-    setSubBranchCompanyId(companyId)
+    setSubBranchBranchId(String(branchId || ""))
+    const pBranch = branches.find(b => String(b.id) === String(branchId) || (b.code && b.code === branchId))
+    const effectiveCompId = String(companyId || pBranch?.company_id || pBranch?.companyId || (companies[0]?.id ? companies[0].id : "tech"))
+    const pComp = companies.find(c => isMatchingCompany(c, effectiveCompId)) || companies[0]
+    setSubBranchCompanyId(effectiveCompId)
+    setSubBranchModalViewMode("split")
     setSubBranchTab("partner")
     setSubBranchBankProfileTab("gst")
-    setSubBranchSignaturePos({ x: 0, y: 0 })
-    setSubBranchStampPos({ x: 0, y: 0 })
-    setSubBranchLogoScale(1)
-    setSubBranchStampScale(1)
-    setSubBranchSignatureScale(1)
-    setSubBranchCustomStamps([])
-    setSubBranchZoom(100)
+    setSubBranchSignaturePos(pBranch?.signature_position || pComp?.signature_position || { x: 0, y: 0 })
+    setSubBranchStampPos(pBranch?.stamp_position || pComp?.stamp_position || { x: 0, y: 0 })
+    setSubBranchLogoScale(pBranch?.logo_scale ?? pComp?.logo_scale ?? 1)
+    setSubBranchStampScale(pBranch?.stamp_scale ?? pComp?.stamp_scale ?? 1)
+    setSubBranchSignatureScale(pBranch?.signature_scale ?? pComp?.signature_scale ?? 1)
+    setSubBranchCustomStamps(Array.isArray(pBranch?.custom_stamps) && pBranch.custom_stamps.length > 0 ? pBranch.custom_stamps : (Array.isArray(pComp?.custom_stamps) ? pComp.custom_stamps : []))
+    setSubBranchZoom(pBranch?.zoom || pComp?.zoom || 100)
     setPreviewInvoiceType("gst")
     setSubBranchForm({
       name: "",
@@ -1011,45 +1094,45 @@ export default function CompaniesMain() {
       partner_email: "",
       revenue_share_pct: 0,
       partner_type: "Regional Associate",
-      address: "",
-      city: "",
-      state: "",
-      phone: "",
-      email: "",
-      gstin: "",
-      pan: "",
-      cin: "",
-      msme_reg: "",
-      subtitle: "",
-      iso_certification: "",
-      bank_name: "",
-      account_holder: "",
-      account_number: "",
-      ifsc_code: "",
-      bank_branch: "",
-      upi_id: "",
-      payment_qr_url: "",
-      gst_bank_name: "",
-      gst_account_holder: "",
-      gst_account_number: "",
-      gst_ifsc_code: "",
-      gst_bank_branch: "",
-      gst_upi_id: "",
-      gst_payment_qr_url: "",
-      nongst_bank_name: "",
-      nongst_account_holder: "",
-      nongst_account_number: "",
-      nongst_ifsc_code: "",
-      nongst_bank_branch: "",
-      nongst_upi_id: "",
-      nongst_payment_qr_url: "",
-      logo_url: "",
-      signature_image_url: "",
-      stamp_image_url: "",
-      signatory_name: "Authorized Signatory",
-      signatory_designation: "Partner",
-      terms_conditions: "",
-      invoice_notes: "",
+      address: pBranch?.address || pComp?.address || "",
+      city: pBranch?.city || pComp?.city || "",
+      state: pBranch?.state || pComp?.state || "",
+      phone: pBranch?.phone || pComp?.phone || "",
+      email: pBranch?.email || pComp?.email || "",
+      gstin: pBranch?.gstin || pComp?.gstin || "",
+      pan: pBranch?.pan || pComp?.pan || "",
+      cin: pBranch?.cin || pComp?.cin || "",
+      msme_reg: pBranch?.msme_reg || pComp?.msme_reg || "",
+      subtitle: pBranch?.subtitle || pComp?.subtitle || "",
+      iso_certification: pBranch?.iso_certification || pComp?.iso_certification || "",
+      bank_name: pBranch?.bank_name || pBranch?.gst_bank_name || pComp?.bank_name || pComp?.gst_bank_name || "",
+      account_holder: pBranch?.account_holder || pBranch?.gst_account_holder || pComp?.account_holder || pComp?.gst_account_holder || "",
+      account_number: pBranch?.account_number || pBranch?.gst_account_number || pComp?.account_number || pComp?.gst_account_number || "",
+      ifsc_code: pBranch?.ifsc_code || pBranch?.gst_ifsc_code || pComp?.ifsc_code || pComp?.gst_ifsc_code || "",
+      bank_branch: pBranch?.bank_branch || pBranch?.gst_bank_branch || pComp?.bank_branch || pComp?.gst_bank_branch || "",
+      upi_id: pBranch?.upi_id || pBranch?.gst_upi_id || pComp?.upi_id || pComp?.gst_upi_id || "",
+      payment_qr_url: pBranch?.payment_qr_url || pBranch?.gst_payment_qr_url || pComp?.payment_qr_url || pComp?.gst_payment_qr_url || "",
+      gst_bank_name: pBranch?.gst_bank_name || pBranch?.bank_name || pComp?.gst_bank_name || pComp?.bank_name || "",
+      gst_account_holder: pBranch?.gst_account_holder || pBranch?.account_holder || pComp?.gst_account_holder || pComp?.account_holder || "",
+      gst_account_number: pBranch?.gst_account_number || pBranch?.account_number || pComp?.gst_account_number || pComp?.account_number || "",
+      gst_ifsc_code: pBranch?.gst_ifsc_code || pBranch?.ifsc_code || pComp?.gst_ifsc_code || pComp?.ifsc_code || "",
+      gst_bank_branch: pBranch?.gst_bank_branch || pBranch?.bank_branch || pComp?.gst_bank_branch || pComp?.bank_branch || "",
+      gst_upi_id: pBranch?.gst_upi_id || pBranch?.upi_id || pComp?.gst_upi_id || pComp?.upi_id || "",
+      gst_payment_qr_url: pBranch?.gst_payment_qr_url || pBranch?.payment_qr_url || pComp?.gst_payment_qr_url || pComp?.payment_qr_url || "",
+      nongst_bank_name: pBranch?.nongst_bank_name || pBranch?.bank_name || pComp?.nongst_bank_name || pComp?.bank_name || "",
+      nongst_account_holder: pBranch?.nongst_account_holder || pBranch?.account_holder || pComp?.nongst_account_holder || pComp?.account_holder || "",
+      nongst_account_number: pBranch?.nongst_account_number || pBranch?.account_number || pComp?.nongst_account_number || pComp?.account_number || "",
+      nongst_ifsc_code: pBranch?.nongst_ifsc_code || pBranch?.ifsc_code || pComp?.nongst_ifsc_code || pComp?.ifsc_code || "",
+      nongst_bank_branch: pBranch?.nongst_bank_branch || pBranch?.bank_branch || pComp?.nongst_bank_branch || pComp?.bank_branch || "",
+      nongst_upi_id: pBranch?.nongst_upi_id || pBranch?.upi_id || pComp?.nongst_upi_id || pComp?.upi_id || "",
+      nongst_payment_qr_url: pBranch?.nongst_payment_qr_url || pBranch?.payment_qr_url || pComp?.nongst_payment_qr_url || pComp?.payment_qr_url || "",
+      logo_url: pBranch?.logo_url || pComp?.logo_url || "",
+      signature_image_url: pBranch?.signature_image_url || pComp?.signature_image_url || "",
+      stamp_image_url: pBranch?.stamp_image_url || pComp?.stamp_image_url || "",
+      signatory_name: pBranch?.signatory_name || pComp?.signatory_name || "Authorized Signatory",
+      signatory_designation: pBranch?.signatory_designation || pComp?.signatory_designation || "Partner",
+      terms_conditions: pBranch?.terms_conditions || pComp?.terms_conditions || (pComp as any)?.terms || "",
+      invoice_notes: pBranch?.invoice_notes || pComp?.invoice_notes || (pComp as any)?.notes || "",
       status: "active"
     })
     setShowSubBranchModal(true)
@@ -1059,15 +1142,18 @@ export default function CompaniesMain() {
     setEditingSubBranch(sb)
     setSubBranchBranchId(sb.branch_id)
     setSubBranchCompanyId(sb.company_id)
+    const pBranch = branches.find(b => String(b.id) === String(sb.branch_id) || (b.code && b.code === sb.branch_id))
+    const effectiveCompId = sb.company_id || pBranch?.company_id || pBranch?.companyId || (companies[0]?.id ? companies[0].id : "tech")
+    const pComp = companies.find(c => isMatchingCompany(c, effectiveCompId)) || companies[0]
     setSubBranchTab("partner")
     setSubBranchBankProfileTab("gst")
-    setSubBranchSignaturePos(sb.signature_position || { x: 0, y: 0 })
-    setSubBranchStampPos(sb.stamp_position || { x: 0, y: 0 })
-    setSubBranchLogoScale(sb.logo_scale ?? 1)
-    setSubBranchStampScale(sb.stamp_scale ?? 1)
-    setSubBranchSignatureScale(sb.signature_scale ?? 1)
-    setSubBranchCustomStamps(Array.isArray(sb.custom_stamps) ? sb.custom_stamps : [])
-    setSubBranchZoom(sb.zoom || 100)
+    setSubBranchSignaturePos(sb.signature_position || pBranch?.signature_position || pComp?.signature_position || { x: 0, y: 0 })
+    setSubBranchStampPos(sb.stamp_position || pBranch?.stamp_position || pComp?.stamp_position || { x: 0, y: 0 })
+    setSubBranchLogoScale(sb.logo_scale ?? pBranch?.logo_scale ?? pComp?.logo_scale ?? 1)
+    setSubBranchStampScale(sb.stamp_scale ?? pBranch?.stamp_scale ?? pComp?.stamp_scale ?? 1)
+    setSubBranchSignatureScale(sb.signature_scale ?? pBranch?.signature_scale ?? pComp?.signature_scale ?? 1)
+    setSubBranchCustomStamps(Array.isArray(sb.custom_stamps) && sb.custom_stamps.length > 0 ? sb.custom_stamps : (Array.isArray(pBranch?.custom_stamps) && pBranch.custom_stamps.length > 0 ? pBranch.custom_stamps : (Array.isArray(pComp?.custom_stamps) ? pComp.custom_stamps : [])))
+    setSubBranchZoom(sb.zoom || pBranch?.zoom || pComp?.zoom || 100)
     setPreviewInvoiceType(sb.preview_invoice_type || "gst")
     setSubBranchForm({
       name: sb.name || "", 
@@ -1077,48 +1163,48 @@ export default function CompaniesMain() {
       partner_email: sb.partner_email || "",
       revenue_share_pct: sb.revenue_share_pct != null ? Number(sb.revenue_share_pct) : 30, 
       partner_type: sb.partner_type || "Franchise Partner",
-      address: sb.address || "", 
-      city: sb.city || "", 
-      state: sb.state || "", 
-      phone: sb.phone || "", 
-      email: sb.email || "",
-      gstin: sb.gstin || "", 
-      pan: sb.pan || "", 
-      cin: sb.cin || "",
-      msme_reg: sb.msme_reg || "",
-      subtitle: sb.subtitle || "",
-      iso_certification: sb.iso_certification || "",
+      address: sb.address || pBranch?.address || pComp?.address || "", 
+      city: sb.city || pBranch?.city || pComp?.city || "", 
+      state: sb.state || pBranch?.state || pComp?.state || "", 
+      phone: sb.phone || pBranch?.phone || pComp?.phone || "", 
+      email: sb.email || pBranch?.email || pComp?.email || "",
+      gstin: sb.gstin || pBranch?.gstin || pComp?.gstin || "", 
+      pan: sb.pan || pBranch?.pan || pComp?.pan || "", 
+      cin: sb.cin || pBranch?.cin || pComp?.cin || "",
+      msme_reg: sb.msme_reg || pBranch?.msme_reg || pComp?.msme_reg || "",
+      subtitle: sb.subtitle || pBranch?.subtitle || pComp?.subtitle || "",
+      iso_certification: sb.iso_certification || pBranch?.iso_certification || pComp?.iso_certification || "",
       // Base Banking
-      bank_name: sb.bank_name || sb.bankDetails?.bankName || "", 
-      account_holder: sb.account_holder || sb.bankDetails?.accountHolder || "",
-      account_number: sb.account_number || sb.bankDetails?.accountNumber || "", 
-      ifsc_code: sb.ifsc_code || sb.bankDetails?.ifscCode || "", 
-      bank_branch: sb.bank_branch || "",
-      upi_id: sb.upi_id || sb.bankDetails?.upiId || "", 
-      payment_qr_url: sb.payment_qr_url || "",
+      bank_name: sb.bank_name || sb.bankDetails?.bankName || pBranch?.bank_name || pBranch?.gst_bank_name || pComp?.bank_name || pComp?.gst_bank_name || "", 
+      account_holder: sb.account_holder || sb.bankDetails?.accountHolder || pBranch?.account_holder || pBranch?.gst_account_holder || pComp?.account_holder || pComp?.gst_account_holder || "",
+      account_number: sb.account_number || sb.bankDetails?.accountNumber || pBranch?.account_number || pBranch?.gst_account_number || pComp?.account_number || pComp?.gst_account_number || "", 
+      ifsc_code: sb.ifsc_code || sb.bankDetails?.ifscCode || pBranch?.ifsc_code || pBranch?.gst_ifsc_code || pComp?.ifsc_code || pComp?.gst_ifsc_code || "", 
+      bank_branch: sb.bank_branch || pBranch?.bank_branch || pBranch?.gst_bank_branch || pComp?.bank_branch || pComp?.gst_bank_branch || "",
+      upi_id: sb.upi_id || sb.bankDetails?.upiId || pBranch?.upi_id || pBranch?.gst_upi_id || pComp?.upi_id || pComp?.gst_upi_id || "", 
+      payment_qr_url: sb.payment_qr_url || pBranch?.payment_qr_url || pComp?.payment_qr_url || "",
       // GST Profile
-      gst_bank_name: sb.gst_bank_name || sb.bank_name || sb.bankDetails?.bankName || "",
-      gst_account_holder: sb.gst_account_holder || sb.account_holder || sb.bankDetails?.accountHolder || "",
-      gst_account_number: sb.gst_account_number || sb.account_number || sb.bankDetails?.accountNumber || "",
-      gst_ifsc_code: sb.gst_ifsc_code || sb.ifsc_code || sb.bankDetails?.ifscCode || "",
-      gst_bank_branch: sb.gst_bank_branch || sb.bank_branch || "",
-      gst_upi_id: sb.gst_upi_id || sb.upi_id || sb.bankDetails?.upiId || "",
-      gst_payment_qr_url: sb.gst_payment_qr_url || sb.payment_qr_url || "",
+      gst_bank_name: sb.gst_bank_name || sb.bank_name || sb.bankDetails?.bankName || pBranch?.gst_bank_name || pBranch?.bank_name || pComp?.gst_bank_name || pComp?.bank_name || "",
+      gst_account_holder: sb.gst_account_holder || sb.account_holder || sb.bankDetails?.accountHolder || pBranch?.gst_account_holder || pBranch?.account_holder || pComp?.gst_account_holder || pComp?.account_holder || "",
+      gst_account_number: sb.gst_account_number || sb.account_number || sb.bankDetails?.accountNumber || pBranch?.gst_account_number || pBranch?.account_number || pComp?.gst_account_number || pComp?.account_number || "",
+      gst_ifsc_code: sb.gst_ifsc_code || sb.ifsc_code || sb.bankDetails?.ifscCode || pBranch?.gst_ifsc_code || pBranch?.ifsc_code || pComp?.gst_ifsc_code || pComp?.ifsc_code || "",
+      gst_bank_branch: sb.gst_bank_branch || sb.bank_branch || pBranch?.gst_bank_branch || pBranch?.bank_branch || pComp?.gst_bank_branch || pComp?.bank_branch || "",
+      gst_upi_id: sb.gst_upi_id || sb.upi_id || sb.bankDetails?.upiId || pBranch?.gst_upi_id || pBranch?.upi_id || pComp?.gst_upi_id || pComp?.upi_id || "",
+      gst_payment_qr_url: sb.gst_payment_qr_url || sb.payment_qr_url || pBranch?.gst_payment_qr_url || pBranch?.payment_qr_url || pComp?.gst_payment_qr_url || pComp?.payment_qr_url || "",
       // Non-GST Profile
-      nongst_bank_name: sb.nongst_bank_name || sb.bank_name || sb.bankDetails?.bankName || "",
-      nongst_account_holder: sb.nongst_account_holder || sb.account_holder || sb.bankDetails?.accountHolder || "",
-      nongst_account_number: sb.nongst_account_number || sb.account_number || sb.bankDetails?.accountNumber || "",
-      nongst_ifsc_code: sb.nongst_ifsc_code || sb.ifsc_code || sb.bankDetails?.ifscCode || "",
-      nongst_bank_branch: sb.nongst_bank_branch || sb.bank_branch || "",
-      nongst_upi_id: sb.nongst_upi_id || sb.upi_id || sb.bankDetails?.upiId || "",
-      nongst_payment_qr_url: sb.nongst_payment_qr_url || sb.payment_qr_url || "",
-      logo_url: sb.logo_url || "", 
-      signature_image_url: sb.signature_image_url || "", 
-      stamp_image_url: sb.stamp_image_url || "", 
-      signatory_name: sb.signatory_name || "Partner Signatory", 
-      signatory_designation: sb.signatory_designation || "Franchise Partner",
-      terms_conditions: sb.terms_conditions || "",
-      invoice_notes: sb.invoice_notes || "",
+      nongst_bank_name: sb.nongst_bank_name || sb.bank_name || sb.bankDetails?.bankName || pBranch?.nongst_bank_name || pBranch?.bank_name || pComp?.nongst_bank_name || pComp?.bank_name || "",
+      nongst_account_holder: sb.nongst_account_holder || sb.account_holder || sb.bankDetails?.accountHolder || pBranch?.nongst_account_holder || pBranch?.account_holder || pComp?.nongst_account_holder || pComp?.account_holder || "",
+      nongst_account_number: sb.nongst_account_number || sb.account_number || sb.bankDetails?.accountNumber || pBranch?.nongst_account_number || pBranch?.account_number || pComp?.nongst_account_number || pComp?.account_number || "",
+      nongst_ifsc_code: sb.nongst_ifsc_code || sb.ifsc_code || sb.bankDetails?.ifscCode || pBranch?.nongst_ifsc_code || pBranch?.ifsc_code || pComp?.nongst_ifsc_code || pComp?.ifsc_code || "",
+      nongst_bank_branch: sb.nongst_bank_branch || sb.bank_branch || pBranch?.nongst_bank_branch || pBranch?.bank_branch || pComp?.nongst_bank_branch || pComp?.bank_branch || "",
+      nongst_upi_id: sb.nongst_upi_id || sb.upi_id || sb.bankDetails?.upiId || pBranch?.nongst_upi_id || pBranch?.upi_id || pComp?.nongst_upi_id || pComp?.upi_id || "",
+      nongst_payment_qr_url: sb.nongst_payment_qr_url || sb.payment_qr_url || pBranch?.nongst_payment_qr_url || pBranch?.payment_qr_url || pComp?.nongst_payment_qr_url || pComp?.payment_qr_url || "",
+      logo_url: sb.logo_url || pBranch?.logo_url || pComp?.logo_url || "", 
+      signature_image_url: sb.signature_image_url || pBranch?.signature_image_url || pComp?.signature_image_url || "", 
+      stamp_image_url: sb.stamp_image_url || pBranch?.stamp_image_url || pComp?.stamp_image_url || "", 
+      signatory_name: sb.signatory_name || pBranch?.signatory_name || pComp?.signatory_name || "Partner Signatory", 
+      signatory_designation: sb.signatory_designation || pBranch?.signatory_designation || pComp?.signatory_designation || "Franchise Partner",
+      terms_conditions: sb.terms_conditions || pBranch?.terms_conditions || pComp?.terms_conditions || (pComp as any)?.terms || "",
+      invoice_notes: sb.invoice_notes || pBranch?.invoice_notes || pComp?.invoice_notes || (pComp as any)?.notes || "",
       status: sb.status || "active"
     })
     setShowSubBranchModal(true)
@@ -1140,36 +1226,36 @@ export default function CompaniesMain() {
   const handleCopyCompanyDetailsToSubBranch = () => {
     const pBranch = branches.find(b => b.id === subBranchBranchId)
     const parentCompany = companies.find(c => isMatchingCompany(c, subBranchCompanyId) || (pBranch && isMatchingCompany(c, pBranch.company_id)))
-    if (!parentCompany) return
+    if (!parentCompany && !pBranch) return
     setSubBranchForm(prev => ({
       ...prev,
-      gst_bank_name: parentCompany.gst_bank_name || parentCompany.bank_name || prev.gst_bank_name,
-      gst_account_holder: parentCompany.gst_account_holder || parentCompany.account_holder || prev.gst_account_holder,
-      gst_account_number: parentCompany.gst_account_number || parentCompany.account_number || prev.gst_account_number,
-      gst_ifsc_code: parentCompany.gst_ifsc_code || parentCompany.ifsc_code || prev.gst_ifsc_code,
-      gst_bank_branch: parentCompany.gst_bank_branch || parentCompany.bank_branch || prev.gst_bank_branch,
-      gst_upi_id: parentCompany.gst_upi_id || parentCompany.upi_id || prev.gst_upi_id,
-      gst_payment_qr_url: parentCompany.gst_payment_qr_url || parentCompany.payment_qr_url || prev.gst_payment_qr_url,
-      nongst_bank_name: parentCompany.nongst_bank_name || parentCompany.bank_name || prev.nongst_bank_name,
-      nongst_account_holder: parentCompany.nongst_account_holder || parentCompany.account_holder || prev.nongst_account_holder,
-      nongst_account_number: parentCompany.nongst_account_number || parentCompany.account_number || prev.nongst_account_number,
-      nongst_ifsc_code: parentCompany.nongst_ifsc_code || parentCompany.ifsc_code || prev.nongst_ifsc_code,
-      nongst_bank_branch: parentCompany.nongst_bank_branch || parentCompany.bank_branch || prev.nongst_bank_branch,
-      nongst_upi_id: parentCompany.nongst_upi_id || parentCompany.upi_id || prev.nongst_upi_id,
-      nongst_payment_qr_url: parentCompany.nongst_payment_qr_url || parentCompany.payment_qr_url || prev.nongst_payment_qr_url,
-      bank_name: parentCompany.gst_bank_name || parentCompany.bank_name || prev.bank_name,
-      account_holder: parentCompany.gst_account_holder || parentCompany.account_holder || prev.account_holder,
-      account_number: parentCompany.gst_account_number || parentCompany.account_number || prev.account_number,
-      ifsc_code: parentCompany.gst_ifsc_code || parentCompany.ifsc_code || prev.ifsc_code,
-      bank_branch: parentCompany.gst_bank_branch || parentCompany.bank_branch || prev.bank_branch,
-      upi_id: parentCompany.gst_upi_id || parentCompany.upi_id || prev.upi_id,
-      payment_qr_url: parentCompany.gst_payment_qr_url || parentCompany.payment_qr_url || prev.payment_qr_url,
-      signatory_name: parentCompany.signatory_name || prev.signatory_name,
-      signatory_designation: parentCompany.signatory_designation || prev.signatory_designation,
-      signature_image_url: parentCompany.signature_image_url || prev.signature_image_url,
-      stamp_image_url: parentCompany.stamp_image_url || prev.stamp_image_url,
-      terms_conditions: parentCompany.terms_conditions || (parentCompany as any).terms || prev.terms_conditions,
-      invoice_notes: parentCompany.invoice_notes || (parentCompany as any).notes || prev.invoice_notes,
+      gst_bank_name: pBranch?.gst_bank_name || pBranch?.bank_name || parentCompany?.gst_bank_name || parentCompany?.bank_name || prev.gst_bank_name,
+      gst_account_holder: pBranch?.gst_account_holder || pBranch?.account_holder || parentCompany?.gst_account_holder || parentCompany?.account_holder || prev.gst_account_holder,
+      gst_account_number: pBranch?.gst_account_number || pBranch?.account_number || parentCompany?.gst_account_number || parentCompany?.account_number || prev.gst_account_number,
+      gst_ifsc_code: pBranch?.gst_ifsc_code || pBranch?.ifsc_code || parentCompany?.gst_ifsc_code || parentCompany?.ifsc_code || prev.gst_ifsc_code,
+      gst_bank_branch: pBranch?.gst_bank_branch || pBranch?.bank_branch || parentCompany?.gst_bank_branch || parentCompany?.bank_branch || prev.gst_bank_branch,
+      gst_upi_id: pBranch?.gst_upi_id || pBranch?.upi_id || parentCompany?.gst_upi_id || parentCompany?.upi_id || prev.gst_upi_id,
+      gst_payment_qr_url: pBranch?.gst_payment_qr_url || pBranch?.payment_qr_url || parentCompany?.gst_payment_qr_url || parentCompany?.payment_qr_url || prev.gst_payment_qr_url,
+      nongst_bank_name: pBranch?.nongst_bank_name || pBranch?.bank_name || parentCompany?.nongst_bank_name || parentCompany?.bank_name || prev.nongst_bank_name,
+      nongst_account_holder: pBranch?.nongst_account_holder || pBranch?.account_holder || parentCompany?.nongst_account_holder || parentCompany?.account_holder || prev.nongst_account_holder,
+      nongst_account_number: pBranch?.nongst_account_number || pBranch?.account_number || parentCompany?.nongst_account_number || parentCompany?.account_number || prev.nongst_account_number,
+      nongst_ifsc_code: pBranch?.nongst_ifsc_code || pBranch?.ifsc_code || parentCompany?.nongst_ifsc_code || parentCompany?.ifsc_code || prev.nongst_ifsc_code,
+      nongst_bank_branch: pBranch?.nongst_bank_branch || pBranch?.bank_branch || parentCompany?.nongst_bank_branch || parentCompany?.bank_branch || prev.nongst_bank_branch,
+      nongst_upi_id: pBranch?.nongst_upi_id || pBranch?.upi_id || parentCompany?.nongst_upi_id || parentCompany?.upi_id || prev.nongst_upi_id,
+      nongst_payment_qr_url: pBranch?.nongst_payment_qr_url || pBranch?.payment_qr_url || parentCompany?.nongst_payment_qr_url || parentCompany?.payment_qr_url || prev.nongst_payment_qr_url,
+      bank_name: pBranch?.gst_bank_name || pBranch?.bank_name || parentCompany?.gst_bank_name || parentCompany?.bank_name || prev.bank_name,
+      account_holder: pBranch?.gst_account_holder || pBranch?.account_holder || parentCompany?.gst_account_holder || parentCompany?.account_holder || prev.account_holder,
+      account_number: pBranch?.gst_account_number || pBranch?.account_number || parentCompany?.gst_account_number || parentCompany?.account_number || prev.account_number,
+      ifsc_code: pBranch?.gst_ifsc_code || pBranch?.ifsc_code || parentCompany?.gst_ifsc_code || parentCompany?.ifsc_code || prev.ifsc_code,
+      bank_branch: pBranch?.gst_bank_branch || pBranch?.bank_branch || parentCompany?.gst_bank_branch || parentCompany?.bank_branch || prev.bank_branch,
+      upi_id: pBranch?.gst_upi_id || pBranch?.upi_id || parentCompany?.gst_upi_id || parentCompany?.upi_id || prev.upi_id,
+      payment_qr_url: pBranch?.gst_payment_qr_url || pBranch?.payment_qr_url || parentCompany?.gst_payment_qr_url || parentCompany?.payment_qr_url || prev.payment_qr_url,
+      signatory_name: pBranch?.signatory_name || parentCompany?.signatory_name || prev.signatory_name,
+      signatory_designation: pBranch?.signatory_designation || parentCompany?.signatory_designation || prev.signatory_designation,
+      signature_image_url: pBranch?.signature_image_url || parentCompany?.signature_image_url || prev.signature_image_url,
+      stamp_image_url: pBranch?.stamp_image_url || parentCompany?.stamp_image_url || prev.stamp_image_url,
+      terms_conditions: pBranch?.terms_conditions || parentCompany?.terms_conditions || (parentCompany as any)?.terms || prev.terms_conditions,
+      invoice_notes: pBranch?.invoice_notes || parentCompany?.invoice_notes || (parentCompany as any)?.notes || prev.invoice_notes,
     }))
     setSubBranchCopiedNotice(true)
     setTimeout(() => setSubBranchCopiedNotice(false), 2500)
@@ -1178,12 +1264,13 @@ export default function CompaniesMain() {
   const [subBranchPreviewSaveSuccess, setSubBranchPreviewSaveSuccess] = React.useState(false)
 
   const saveSubBranch = async (keepModalOpen = false) => {
-    if (!subBranchForm.name.trim()) return
+    const cleanSubName = cleanStr(subBranchForm.name)
+    if (!cleanSubName) return
     setSaving(true)
     try {
       const curBranch = branches.find(b => String(b.id) === String(subBranchBranchId) || (b.code && b.code === subBranchBranchId))
       const resolvedBranchId = curBranch?.id || subBranchBranchId
-      const curComp = companies.find(c => isMatchingCompany(c, subBranchCompanyId))
+      const curComp = companies.find(c => isMatchingCompany(c, subBranchCompanyId) || (curBranch && isMatchingCompany(c, curBranch.company_id)))
       const resolvedCompNumeric = resolveNumericCompId(curComp, subBranchCompanyId || (curBranch as any)?.company_id)
       const resolvedCompSlug = curComp?.slug || (resolvedCompNumeric === 2 ? "consultancy" : "tech")
 
@@ -1193,10 +1280,10 @@ export default function CompaniesMain() {
         companyId: resolvedCompSlug,
         company_id: resolvedCompNumeric,
         ...subBranchForm,
-        name: subBranchForm.name.trim(),
-        code: subBranchForm.code.trim().toUpperCase(),
-        revenue_share_pct: Number(subBranchForm.revenue_share_pct),
-        revenueSharePct: Number(subBranchForm.revenue_share_pct),
+        name: cleanSubName,
+        code: cleanUpper(subBranchForm.code) || `SB-${Math.floor(100 + Math.random() * 900)}`,
+        revenue_share_pct: Number(subBranchForm.revenue_share_pct || 0),
+        revenueSharePct: Number(subBranchForm.revenue_share_pct || 0),
         signature_position: subBranchSignaturePos,
         stamp_position: subBranchStampPos,
         logo_scale: subBranchLogoScale,
@@ -1206,12 +1293,12 @@ export default function CompaniesMain() {
         zoom: subBranchZoom,
         preview_invoice_type: previewInvoiceType,
         // Base fallback banking
-        bank_name: (subBranchForm.gst_bank_name || subBranchForm.bank_name || subBranchForm.nongst_bank_name || "").trim(),
-        account_holder: (subBranchForm.gst_account_holder || subBranchForm.account_holder || subBranchForm.nongst_account_holder || "").trim(),
-        account_number: (subBranchForm.gst_account_number || subBranchForm.account_number || subBranchForm.nongst_account_number || "").trim(),
-        ifsc_code: (subBranchForm.gst_ifsc_code || subBranchForm.ifsc_code || subBranchForm.nongst_ifsc_code || "").trim().toUpperCase(),
-        bank_branch: (subBranchForm.gst_bank_branch || subBranchForm.bank_branch || subBranchForm.nongst_bank_branch || "").trim(),
-        upi_id: (subBranchForm.gst_upi_id || subBranchForm.upi_id || subBranchForm.nongst_upi_id || "").trim(),
+        bank_name: cleanStr(subBranchForm.gst_bank_name || subBranchForm.bank_name || subBranchForm.nongst_bank_name),
+        account_holder: cleanStr(subBranchForm.gst_account_holder || subBranchForm.account_holder || subBranchForm.nongst_account_holder),
+        account_number: cleanStr(subBranchForm.gst_account_number || subBranchForm.account_number || subBranchForm.nongst_account_number),
+        ifsc_code: cleanUpper(subBranchForm.gst_ifsc_code || subBranchForm.ifsc_code || subBranchForm.nongst_ifsc_code),
+        bank_branch: cleanStr(subBranchForm.gst_bank_branch || subBranchForm.bank_branch || subBranchForm.nongst_bank_branch),
+        upi_id: cleanStr(subBranchForm.gst_upi_id || subBranchForm.upi_id || subBranchForm.nongst_upi_id),
         payment_qr_url: subBranchForm.gst_payment_qr_url || subBranchForm.payment_qr_url || subBranchForm.nongst_payment_qr_url || "",
       }
 
@@ -1269,6 +1356,10 @@ export default function CompaniesMain() {
   const confirmDelete = (type: "company" | "branch" | "sub_branch", id: string) => {
     if (type === "company") {
       alert("Company deletion is disabled. The CRM operates strictly with SAAMPARK Technology and Saampark Consultancy.")
+      return
+    }
+    if (type === "branch" || type === "sub_branch") {
+      alert("Branches and Sub-branches cannot be deleted once created. They can only be edited or updated.")
       return
     }
     if (!isSuperAdmin) {
@@ -1518,9 +1609,6 @@ export default function CompaniesMain() {
                                   <Button variant="ghost" size="sm" onClick={() => { openEditBranch(branch); setBranchModalViewMode("preview") }} title="Live Preview Branch Invoice" className="text-xs h-7 gap-1 text-blue-600 font-semibold"><Eye className="h-3.5 w-3.5" />Preview</Button>
                                   <Button variant="ghost" size="sm" onClick={() => openAddSubBranch(branch.id, branch.company_id)} title="Add Sub-Branch" className="text-xs h-7 gap-1"><Plus className="h-3 w-3" />Sub-Branch</Button>
                                   <Button variant="ghost" size="sm" onClick={() => openEditBranch(branch)} title="Edit Branch" className="h-7 w-7 p-0"><Edit2 className="h-3 w-3" /></Button>
-                                  {isSuperAdmin && (
-                                    <Button variant="ghost" size="sm" onClick={() => confirmDelete("branch", branch.id)} title="Delete Branch" className="h-7 w-7 p-0 text-destructive"><Trash2 className="h-3 w-3" /></Button>
-                                  )}
                                 </div>
                               </div>
 
@@ -1551,10 +1639,7 @@ export default function CompaniesMain() {
                                         </div>
                                         <div className="flex items-center gap-1">
                                           <Button variant="ghost" size="sm" onClick={() => { openEditSubBranch(sb); setSubBranchModalViewMode("preview") }} title="Live Preview Sub-Branch Invoice" className="text-xs h-7 gap-1 text-emerald-600 font-semibold"><Eye className="h-3.5 w-3.5" />Preview</Button>
-                                          <Button variant="ghost" size="sm" onClick={() => openEditSubBranch(sb)} className="h-7 w-7 p-0"><Edit2 className="h-3 w-3" /></Button>
-                                          {isSuperAdmin && (
-                                            <Button variant="ghost" size="sm" onClick={() => confirmDelete("sub_branch", sb.id)} className="h-7 w-7 p-0 text-destructive"><Trash2 className="h-3 w-3" /></Button>
-                                          )}
+                                          <Button variant="ghost" size="sm" onClick={() => openEditSubBranch(sb)} title="Edit Sub-Branch" className="h-7 w-7 p-0"><Edit2 className="h-3 w-3" /></Button>
                                         </div>
                                       </div>
                                     ))
@@ -1578,6 +1663,7 @@ export default function CompaniesMain() {
       <AnimatePresence>
         {showCompanyModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto">
+            <SafeModalBoundary>
             <motion.div 
               initial={{ opacity: 0, scale: 0.96 }} 
               animate={{ opacity: 1, scale: 1 }} 
@@ -1668,6 +1754,7 @@ export default function CompaniesMain() {
                       <button type="button" onClick={() => setCompanyTab("branding")} className={`py-2.5 px-3 border-b-2 text-[10px] sm:text-[11px] font-bold transition-all whitespace-nowrap flex-1 ${companyTab === "branding" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>4. Branding</button>
                       <button type="button" onClick={() => setCompanyTab("signatory")} className={`py-2.5 px-3 border-b-2 text-[10px] sm:text-[11px] font-bold transition-all whitespace-nowrap flex-1 ${companyTab === "signatory" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>5. Stamp &amp; Sig</button>
                       <button type="button" onClick={() => setCompanyTab("bank")} className={`py-2.5 px-3 border-b-2 text-[10px] sm:text-[11px] font-bold transition-all whitespace-nowrap flex-1 ${companyTab === "bank" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>6. Dual Bank &amp; QR</button>
+                      <button type="button" onClick={() => setCompanyTab("terms")} className={`py-2.5 px-3 border-b-2 text-[10px] sm:text-[11px] font-bold transition-all whitespace-nowrap flex-1 ${companyTab === "terms" ? "border-primary text-primary bg-surface" : "border-transparent text-muted-foreground hover:text-foreground"}`}>7. Terms &amp; Notes</button>
                     </div>
 
                     {/* Active Tab Form Inputs */}
@@ -1785,29 +1872,41 @@ export default function CompaniesMain() {
                       {companyTab === "contact" && (
                         <div className="space-y-4">
                           <div>
-                            <div className="flex justify-between items-center mb-1">
-                              <label className="block font-semibold">Registered Address *</label>
-                              <span className={`text-[10px] font-mono ${companyForm.address.length > 110 ? "text-amber-500 font-bold" : "text-muted-foreground"}`}>
-                                {companyForm.address.length}/120 chars
-                              </span>
-                            </div>
-                            <Input 
-                              placeholder="Full registered street address" 
-                              maxLength={120} 
+                            <label className="block font-semibold text-xs mb-1.5 uppercase tracking-wider">Registered / Corporate Office Address *</label>
+                            <textarea 
+                              rows={2}
+                              placeholder="Full registered corporate street address" 
                               value={companyForm.address} 
                               onChange={e => setCompanyForm({ ...companyForm, address: e.target.value })} 
+                              className="w-full px-3 py-2 rounded-xl border border-border bg-surface text-xs focus:outline-none focus:ring-1 focus:ring-primary leading-relaxed whitespace-pre-wrap"
                             />
-                            <span className="text-[10px] text-muted-foreground block mt-0.5">Character limit keeps invoice bottom footer on a single clean line without extra vertical spacing.</span>
+                            <span className="text-[10px] text-muted-foreground block mt-0.5">Corporate legal street address used in contracts, statutory records, and invoices.</span>
                           </div>
-                          <div className="grid grid-cols-3 gap-3">
-                            <div><label className="block font-semibold mb-1">City</label><Input value={companyForm.city} onChange={e => setCompanyForm({ ...companyForm, city: e.target.value })} /></div>
-                            <div><label className="block font-semibold mb-1">State</label><Input value={companyForm.state} onChange={e => setCompanyForm({ ...companyForm, state: e.target.value })} /></div>
-                            <div><label className="block font-semibold mb-1">Country</label><Input value={companyForm.country} onChange={e => setCompanyForm({ ...companyForm, country: e.target.value })} /></div>
+                          <div>
+                            <label className="block font-semibold text-xs mb-1.5 uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                              Custom Invoice Bottom Footer Text (Displayed in Bottom Banner)
+                            </label>
+                            <textarea 
+                              rows={2}
+                              placeholder="e.g. Registered Office: 123 Corporate Street, Kolkata - 700001 | Email: consultancy@saampark.in | Tel: +91 9901518570" 
+                              value={companyForm.bottom_footer_text || ""} 
+                              onChange={e => setCompanyForm({ ...companyForm, bottom_footer_text: e.target.value })} 
+                              className="w-full px-3 py-2 rounded-xl border border-blue-300 dark:border-blue-700 bg-surface text-xs focus:outline-none focus:ring-1 focus:ring-primary leading-relaxed whitespace-pre-wrap font-medium"
+                            />
+                            <span className="text-[10px] text-muted-foreground block mt-0.5">
+                              This text displays directly inside the colored bottom banner of your official invoices and wraps across lines without cutting off with (...).
+                            </span>
                           </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            <div><label className="block font-semibold mb-1">Primary Phone</label><Input value={companyForm.phone} onChange={e => setCompanyForm({ ...companyForm, phone: e.target.value })} /></div>
-                            <div><label className="block font-semibold mb-1">Official Email</label><Input value={companyForm.email} onChange={e => setCompanyForm({ ...companyForm, email: e.target.value })} /></div>
-                            <div><label className="block font-semibold mb-1">Official Website</label><Input value={companyForm.website} onChange={e => setCompanyForm({ ...companyForm, website: e.target.value })} /></div>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div><label className="block font-semibold text-xs mb-1">City</label><Input value={companyForm.city} onChange={e => setCompanyForm({ ...companyForm, city: e.target.value })} className="text-xs" /></div>
+                            <div><label className="block font-semibold text-xs mb-1">State</label><Input value={companyForm.state} onChange={e => setCompanyForm({ ...companyForm, state: e.target.value })} className="text-xs" /></div>
+                            <div><label className="block font-semibold text-xs mb-1">PIN / Zip Code</label><Input placeholder="e.g. 700001" value={companyForm.zip} onChange={e => setCompanyForm({ ...companyForm, zip: e.target.value })} className="text-xs font-mono" /></div>
+                            <div><label className="block font-semibold text-xs mb-1">Country</label><Input value={companyForm.country} onChange={e => setCompanyForm({ ...companyForm, country: e.target.value })} className="text-xs" /></div>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                            <div><label className="block font-semibold text-xs mb-1">Support / Contact Phone</label><Input placeholder="e.g. +91 90915 18567" value={companyForm.phone} onChange={e => setCompanyForm({ ...companyForm, phone: e.target.value })} className="text-xs" /></div>
+                            <div><label className="block font-semibold text-xs mb-1">Official Support Email</label><Input placeholder="e.g. info@saampark.com" value={companyForm.email} onChange={e => setCompanyForm({ ...companyForm, email: e.target.value })} className="text-xs" /></div>
+                            <div><label className="block font-semibold text-xs mb-1">Official Website</label><Input placeholder="e.g. https://saampark.com" value={companyForm.website} onChange={e => setCompanyForm({ ...companyForm, website: e.target.value })} className="text-xs" /></div>
                           </div>
                         </div>
                       )}
@@ -1866,27 +1965,8 @@ export default function CompaniesMain() {
                                 placeholder="Standard terms and conditions..."
                               />
                             </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              <div>
-                                <label className="block font-semibold mb-1 text-[11px]">Default Invoice Notes</label>
-                                <textarea
-                                  rows={2}
-                                  value={companyForm.invoice_notes}
-                                  onChange={e => setCompanyForm({ ...companyForm, invoice_notes: e.target.value })}
-                                  className="w-full px-3 py-2 rounded-xl border border-border bg-surface text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-                                  placeholder="Default notes on invoices..."
-                                />
-                              </div>
-                              <div>
-                                <label className="block font-semibold mb-1 text-[11px]">Default Quotation Notes</label>
-                                <textarea
-                                  rows={2}
-                                  value={companyForm.quotation_notes}
-                                  onChange={e => setCompanyForm({ ...companyForm, quotation_notes: e.target.value })}
-                                  className="w-full px-3 py-2 rounded-xl border border-border bg-surface text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-                                  placeholder="Default notes on quotations..."
-                                />
-                              </div>
+                            <div className="p-2.5 rounded-xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 text-[10.5px] text-blue-900 dark:text-blue-300">
+                              ✓ <strong>Permanent Terms:</strong> These Terms & Conditions stay permanently active across all generated Invoices, Quotations & Estimates.
                             </div>
                           </div>
                         </div>
@@ -2001,6 +2081,71 @@ export default function CompaniesMain() {
                               </div>
                             </div>
                           )}
+                        </div>
+                      )}
+
+                      {companyTab === "terms" && (
+                        <div className="space-y-4">
+                          <div className="p-3 bg-blue-50/70 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/50 rounded-xl flex items-center gap-2 text-xs text-blue-700 dark:text-blue-300">
+                            <FileText size={15} className="shrink-0 text-blue-600" />
+                            <span><strong>Permanent Terms &amp; Conditions:</strong> These terms are saved permanently in MySQL database and auto-inherited on all Invoices, Quotations, and Estimates issued by this company.</span>
+                          </div>
+
+                          <div className="space-y-3">
+                            <div>
+                              <label className="block text-xs font-bold text-foreground mb-1 uppercase tracking-wider">
+                                Default Terms &amp; Conditions *
+                              </label>
+                              <textarea
+                                rows={6}
+                                value={companyForm.terms_conditions}
+                                onChange={e => setCompanyForm({ ...companyForm, terms_conditions: e.target.value })}
+                                className="w-full px-3 py-2.5 rounded-xl border border-border bg-surface text-xs leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary font-sans"
+                                placeholder="1. All disputes subject to local jurisdiction only.&#10;2. Goods/Services once delivered are non-refundable.&#10;3. Disputed items must be notified within 7 business days."
+                              />
+                              <span className="text-[10px] text-muted-foreground block mt-1">
+                                Printed at the bottom of official invoices &amp; estimates.
+                              </span>
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-bold text-foreground mb-1 uppercase tracking-wider">
+                                Invoice Notes / Remittance Instructions
+                              </label>
+                              <textarea
+                                rows={3}
+                                value={companyForm.invoice_notes}
+                                onChange={e => setCompanyForm({ ...companyForm, invoice_notes: e.target.value })}
+                                className="w-full px-3 py-2.5 rounded-xl border border-border bg-surface text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+                                placeholder="Thank you for partnering with us. Please remit payment according to the stated terms."
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-bold text-foreground mb-1 uppercase tracking-wider">
+                                Quotation &amp; Proposal Validity Notes
+                              </label>
+                              <textarea
+                                rows={2}
+                                value={companyForm.quotation_notes}
+                                onChange={e => setCompanyForm({ ...companyForm, quotation_notes: e.target.value })}
+                                className="w-full px-3 py-2.5 rounded-xl border border-border bg-surface text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+                                placeholder="This quotation is valid for 30 calendar days from the date of issuance."
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-bold text-foreground mb-1 uppercase tracking-wider">
+                                Bottom Footer Legal Text
+                              </label>
+                              <Input
+                                value={companyForm.bottom_footer_text}
+                                onChange={e => setCompanyForm({ ...companyForm, bottom_footer_text: e.target.value })}
+                                placeholder="e.g. Balichak (Station Road), Debra - 721124 | Support: info@saampark.com"
+                                className="text-xs"
+                              />
+                            </div>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -2215,6 +2360,8 @@ export default function CompaniesMain() {
                           } as any}
                           companyDetails={companyForm as any}
                           interactive={true}
+                          logoPosition={companyLogoPos}
+                          onLogoPositionChange={setCompanyLogoPos}
                           logoScale={companyLogoScale}
                           onLogoScaleChange={setCompanyLogoScale}
                           stampPosition={companyStampPos}
@@ -2238,6 +2385,7 @@ export default function CompaniesMain() {
                 )}
               </div>
             </motion.div>
+            </SafeModalBoundary>
           </div>
         )}
       </AnimatePresence>
@@ -2246,6 +2394,7 @@ export default function CompaniesMain() {
       <AnimatePresence>
         {showBranchModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto">
+            <SafeModalBoundary>
             <motion.div 
               initial={{ opacity: 0, scale: 0.96 }} 
               animate={{ opacity: 1, scale: 1 }} 
@@ -2807,7 +2956,7 @@ export default function CompaniesMain() {
                         style={{ transform: `scale(${branchZoom / 100})`, transformOrigin: "top center" }}
                       >
                         {(() => {
-                          const pComp = companies.find(c => c.id === branchCompanyId) || companies[0]
+                          const pComp = companies.find(c => isMatchingCompany(c, branchCompanyId)) || companies[0] || CANONICAL_COMPANIES[0]
                           return (
                             <OfficialInvoiceDocument
                               invoice={{
@@ -2817,8 +2966,8 @@ export default function CompaniesMain() {
                                 date: "2026-09-18",
                                 issueDate: "2026-09-18",
                                 dueDate: "2026-10-03",
-                                companyId: branchCompanyId || "tech",
-                                company_id: branchCompanyId || "tech",
+                                companyId: pComp?.id || branchCompanyId || "tech",
+                                company_id: pComp?.id || branchCompanyId || "tech",
                                 branchId: editingBranch?.id || "branch-preview",
                                 branch_id: editingBranch?.id || "branch-preview",
                                 client: "Acme Corp",
@@ -2868,6 +3017,8 @@ export default function CompaniesMain() {
                                 company_id: branchCompanyId
                               } as any}
                               interactive={true}
+                              logoPosition={branchLogoPos}
+                              onLogoPositionChange={setBranchLogoPos}
                               logoScale={branchLogoScale}
                               onLogoScaleChange={setBranchLogoScale}
                               stampPosition={branchStampPos}
@@ -2893,6 +3044,7 @@ export default function CompaniesMain() {
                 )}
               </div>
             </motion.div>
+            </SafeModalBoundary>
           </div>
         )}
       </AnimatePresence>
@@ -2901,6 +3053,7 @@ export default function CompaniesMain() {
       <AnimatePresence>
         {showSubBranchModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto">
+            <SafeModalBoundary>
             <motion.div 
               initial={{ opacity: 0, scale: 0.96 }} 
               animate={{ opacity: 1, scale: 1 }} 
@@ -3476,8 +3629,8 @@ export default function CompaniesMain() {
                         style={{ transform: `scale(${subBranchZoom / 100})`, transformOrigin: "top center" }}
                       >
                         {(() => {
-                          const pBranch = branches.find(b => b.id === subBranchBranchId)
-                          const pComp = companies.find(c => c.id === subBranchCompanyId || c.id === pBranch?.company_id) || companies[0]
+                          const pBranch = branches.find(b => String(b.id) === String(subBranchBranchId) || (b.code && b.code === subBranchBranchId))
+                          const pComp = companies.find(c => isMatchingCompany(c, subBranchCompanyId) || (pBranch && isMatchingCompany(c, pBranch.company_id))) || companies[0] || CANONICAL_COMPANIES[0]
                           return (
                             <OfficialInvoiceDocument
                               invoice={{
@@ -3567,6 +3720,7 @@ export default function CompaniesMain() {
                 )}
               </div>
             </motion.div>
+            </SafeModalBoundary>
           </div>
         )}
       </AnimatePresence>

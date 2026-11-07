@@ -5,7 +5,7 @@ import { motion } from "framer-motion"
 import { 
   MapPin, Phone, Mail, Globe, Building2, Landmark, ShieldCheck, 
   Award, Sparkles, UserCheck, Briefcase, FileText, QrCode, CreditCard, 
-  CheckCircle2, Layers, Check
+  CheckCircle2, Layers, Check, Megaphone
 } from "lucide-react"
 import { InvoiceItem, InvoiceLineItem, parseCurrencyNumber } from "../services/invoiceService"
 import { CompanyPaymentSettings } from "@/app/feature/settings/services/companyPaymentService"
@@ -346,10 +346,17 @@ export function OfficialInvoiceDocument({
   const customStamps: CustomTextStamp[] = (propCustomStamps && propCustomStamps.length > 0) ? propCustomStamps : (entityCustomStamps || [])
 
   // Corporate Entity Details (Corporate identity remains intact forever; branches/sub-branches appear in their designated hierarchy strip)
-  const resolvedBrandName = companyDetails?.brand_name || activeCompany?.brand_name || activeCompany?.name || "SAAMPARK"
+  const resolvedBrandName = companyDetails?.brand_name !== undefined ? companyDetails.brand_name : (activeCompany?.brand_name !== undefined ? activeCompany.brand_name : (activeCompany?.name || "SAAMPARK"))
   const resolvedDivisionName = companyDetails?.division_name !== undefined ? companyDetails.division_name : (activeCompany?.division_name || "")
   const resolvedSubtitle = companyDetails?.subtitle !== undefined ? companyDetails.subtitle : (activeCompany?.subtitle || "")
-  const resolvedTrademarkSymbol = (companyDetails?.trademark_symbol || activeCompany?.trademark_symbol || (activeCompany as any)?.invoice_customization?.trademark_symbol || "®").trim()
+  const rawTm = companyDetails?.trademark_symbol !== undefined 
+    ? companyDetails.trademark_symbol 
+    : activeCompany?.trademark_symbol !== undefined 
+    ? activeCompany.trademark_symbol 
+    : (activeCompany as any)?.invoice_customization?.trademark_symbol
+  const resolvedTrademarkSymbol = (!rawTm || rawTm.trim().toLowerCase() === "none" || rawTm.trim() === "")
+    ? ""
+    : rawTm.trim()
   const resolvedLogoUrl = overrideLogoUrl || getCompanyLogoUrl(activeCompany) || activeCompany?.logo_url || companyDetails?.logo_url || ""
 
   // Specific Entity Legal IDs (Strictly user-typed values; totally blank if not filled, NO fake examples)
@@ -359,10 +366,25 @@ export function OfficialInvoiceDocument({
   const resolvedMsme = (companyDetails?.msme_reg || (companyDetails as any)?.msme || activeCompany?.msme_reg || (activeCompany as any)?.msme || (activeCompany as any)?.udyam)?.trim() || ""
 
   // Address & Contact Information (Corporate entity defaults)
-  const resolvedAddress = (companyDetails ? companyDetails.address : activeCompany?.address)?.trim() || ""
+  const resolvedAddress = (companyDetails ? companyDetails.address : activeCompany?.address) || ""
+  const resolvedCity = (companyDetails ? (companyDetails as any).city : activeCompany?.city) || ""
+  const resolvedState = (companyDetails ? (companyDetails as any).state : activeCompany?.state) || ""
+  const resolvedZip = (companyDetails ? ((companyDetails as any).zip || (companyDetails as any).pincode) : (activeCompany?.zip || (activeCompany as any)?.pincode)) || ""
+  const resolvedCountry = (companyDetails ? (companyDetails as any).country : activeCompany?.country) || ""
   const resolvedPhone = (companyDetails ? companyDetails.phone : activeCompany?.phone)?.trim() || ""
   const resolvedEmail = (companyDetails ? companyDetails.email : activeCompany?.email)?.trim() || ""
   const resolvedWebsite = (companyDetails ? companyDetails.website : activeCompany?.website)?.trim() || ""
+
+  // Formatted Full Office Address
+  const fullAddressSegments = [
+    resolvedAddress.trim(),
+    resolvedCity.trim(),
+    resolvedState.trim() ? (resolvedZip.trim() ? `${resolvedState.trim()} - ${resolvedZip.trim()}` : resolvedState.trim()) : (resolvedZip.trim() ? `PIN: ${resolvedZip.trim()}` : ""),
+    resolvedCountry.trim()
+  ].filter(Boolean)
+  const resolvedFullOfficeAddress = fullAddressSegments.length > 0 
+    ? fullAddressSegments.join(", ")
+    : (resolvedAddress.trim() || "Kolkata, West Bengal, India")
 
   // 2. Determine if GST (>0%) or Non-GST / 0% GST Bill (Done early for Bank profile binding)
   const isExplicitNonGst = 
@@ -387,24 +409,18 @@ export function OfficialInvoiceDocument({
     companyDetails?.name || 
     (invoice as any).companyName ||
     activeCompany?.name || 
-    ((activeCompany?.name && activeCompany?.subtitle && !activeCompany.name.includes(activeCompany.subtitle))
-      ? `${activeCompany.name} ${activeCompany.subtitle}`.trim()
-      : "") ||
     `${resolvedBrandName} ${resolvedDivisionName}`.trim() || 
-    "SAAMPARK TECHNOLOGY AND RESEARCH PRIVATE LIMITED"
+    resolvedBrandName ||
+    "SAAMPARK"
   ).trim()
 
   // Split Corporate Brand & Division for Top Header Typography
   // Top line: SAAMPARK (with optional TM/R badge)
-  // Second line: Header Line 2 (division_name) - strictly respects blank when cleared and preserves spaces
-  let headerBrandName = (resolvedBrandName || "SAAMPARK").toUpperCase()
-  let headerSecondaryLine = resolvedDivisionName !== undefined
-    ? resolvedDivisionName.toUpperCase()
-    : (activeCompany?.division_name ? activeCompany.division_name.toUpperCase() : "")
-
-  if (resolvedSubtitle && headerSecondaryLine && !headerSecondaryLine.includes(resolvedSubtitle.toUpperCase())) {
-    headerSecondaryLine = `${headerSecondaryLine} ${resolvedSubtitle.toUpperCase()}`
-  }
+  // Second line: Header Line 2 (division_name) - strictly what user typed, no forced suffixes
+  let headerBrandName = (resolvedBrandName || "SAAMPARK").trim().toUpperCase()
+  let headerSecondaryLine = (resolvedDivisionName !== undefined
+    ? resolvedDivisionName
+    : (activeCompany?.division_name || "")).trim().toUpperCase()
 
   // Helper to validate non-empty string fields (strictly ignores empty, null, and placeholder text)
   const isValidField = (val?: string | null): boolean => {
@@ -618,26 +634,27 @@ export function OfficialInvoiceDocument({
 
   // ISO / Quality Certification Badge text (Editable)
   const resolvedIsoCertification = (
-    (companyDetails as any)?.iso_certification !== undefined
-      ? (companyDetails as any)?.iso_certification
-      : isSubBranchIssued
-      ? (activeSubBranch as any)?.iso_certification
-      : isBranchIssued
-      ? (activeBranch as any)?.iso_certification
-      : (activeCompany as any)?.iso_certification
-  ) ?? "An ISO 9001:2015 Certified Company"
+    isValidField((companyDetails as any)?.iso_certification)
+      ? String((companyDetails as any)?.iso_certification).trim()
+      : isSubBranchIssued && isValidField((activeSubBranch as any)?.iso_certification)
+      ? String((activeSubBranch as any)?.iso_certification).trim()
+      : isBranchIssued && isValidField((activeBranch as any)?.iso_certification)
+      ? String((activeBranch as any)?.iso_certification).trim()
+      : isValidField((activeCompany as any)?.iso_certification)
+      ? String((activeCompany as any)?.iso_certification).trim()
+      : "An ISO 9001:2015 Certified Company"
+  )
 
-  // Terms & Conditions / Notes (Inherited across Company, Branch, Sub-Branch with optional invoice override)
+  // Terms & Conditions: Sub-Branch and Branch terms strictly OVERWRITE company terms
   const resolvedTermsAndNotes = (
-    (invoice as any)?.terms ||
-    (invoice as any)?.notes ||
-    (isSubBranchIssued ? (activeSubBranch?.terms_conditions || (activeSubBranch as any)?.invoice_notes) : null) ||
-    (isBranchIssued ? (activeBranch?.terms_conditions || (activeBranch as any)?.invoice_notes) : null) ||
-    companyDetails?.terms_conditions ||
-    companyDetails?.invoice_notes ||
-    activeCompany?.terms_conditions ||
-    activeCompany?.invoice_notes ||
-    "1. E. & O.E.\n2. Total payment due within due date to avoid suspension/cancellation.\n3. Please include invoice number in payment notes.\n4. All disputes subject to local jurisdiction."
+    (isSubBranchIssued && activeSubBranch?.terms_conditions && activeSubBranch.terms_conditions.trim())
+      ? activeSubBranch.terms_conditions
+      : (isBranchIssued && activeBranch?.terms_conditions && activeBranch.terms_conditions.trim())
+      ? activeBranch.terms_conditions
+      : (companyDetails?.terms_conditions?.trim() ||
+         activeCompany?.terms_conditions?.trim() ||
+         (invoice as any)?.terms?.trim() ||
+         "1. E. & O.E.\n2. Total payment due within due date to avoid suspension/cancellation.\n3. Please include invoice number in payment notes.\n4. All disputes subject to local jurisdiction.")
   )?.trim()
 
   // Theme configuration based on GST (Teal theme) vs Non-GST (Light Blue theme)
@@ -719,28 +736,38 @@ export function OfficialInvoiceDocument({
   const companyNonGstQr = (isCustomCompany ? (companyDetails?.nongst_payment_qr_url ?? (companyDetails as any)?.payment_qr_url ?? "") : (activeCompany?.nongst_payment_qr_url || (activeCompany as any)?.payment_qr_url || ""))?.trim()
   const companyQr = isGstInvoice ? (companyGstQr || companyNonGstQr) : (companyNonGstQr || companyGstQr)
 
-  const customPaymentQrUrl = 
-    overrideBankDetails?.paymentQrUrl ||
-    (isSubBranchIssued
-      ? (isGstInvoice 
-          ? (activeSubBranch?.gst_payment_qr_url || activeSubBranch?.payment_qr_url || activeBranch?.gst_payment_qr_url || activeBranch?.payment_qr_url || companyGstQr || companyQr) 
-          : (activeSubBranch?.nongst_payment_qr_url || activeSubBranch?.payment_qr_url || activeBranch?.nongst_payment_qr_url || activeBranch?.payment_qr_url || companyNonGstQr || companyQr)
-        )
-      : isBranchIssued
-      ? (isGstInvoice 
-          ? (activeBranch?.gst_payment_qr_url || activeBranch?.payment_qr_url || companyGstQr || companyQr) 
-          : (activeBranch?.nongst_payment_qr_url || activeBranch?.payment_qr_url || companyNonGstQr || companyQr)
-        )
-      : (isGstInvoice 
-          ? (companyGstQr || companyQr) 
-          : (companyNonGstQr || companyQr)
-        )
-    ) ||
-    (isCustomCompany ? "" : (activeSubBranch?.payment_qr_url || activeBranch?.payment_qr_url || companyQr || activeCompany?.payment_qr_url || "")) ||
-    (resolvedUpiId
-      ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=1&ecc=M&data=${encodeURIComponent(`upi://pay?pa=${resolvedUpiId}&pn=${encodeURIComponent(resolvedAccountHolder || resolvedBrandName)}&am=${totalVal}&cu=INR`)}`
-      : null
-    )
+  // Helper to test if a value is an uploaded/custom image QR URL
+  const isImageQrUrl = (url?: string | null): boolean => {
+    if (!url || typeof url !== "string") return false
+    const s = url.trim()
+    return s !== "" && s !== "none" && (s.startsWith("http") || s.startsWith("data:") || s.startsWith("/"))
+  }
+
+  // QR Code Resolution: Strictly respects uploaded QR images; if cleared or deleted, NO QR is rendered
+  let customPaymentQrUrl: string | null = null
+  if (overrideBankDetails?.paymentQrUrl !== undefined) {
+    customPaymentQrUrl = isImageQrUrl(overrideBankDetails.paymentQrUrl) ? overrideBankDetails.paymentQrUrl : null
+  } else if (isSubBranchIssued) {
+    const sbQr = isGstInvoice
+      ? (activeSubBranch?.gst_payment_qr_url || activeSubBranch?.payment_qr_url)
+      : (activeSubBranch?.nongst_payment_qr_url || activeSubBranch?.payment_qr_url)
+    const branchQr = isGstInvoice
+      ? (activeBranch?.gst_payment_qr_url || activeBranch?.payment_qr_url)
+      : (activeBranch?.nongst_payment_qr_url || activeBranch?.payment_qr_url)
+    if (isImageQrUrl(sbQr)) customPaymentQrUrl = sbQr!
+    else if (isImageQrUrl(branchQr)) customPaymentQrUrl = branchQr!
+    else customPaymentQrUrl = null
+  } else if (isBranchIssued) {
+    const branchQr = isGstInvoice
+      ? (activeBranch?.gst_payment_qr_url || activeBranch?.payment_qr_url)
+      : (activeBranch?.nongst_payment_qr_url || activeBranch?.payment_qr_url)
+    if (isImageQrUrl(branchQr)) customPaymentQrUrl = branchQr!
+    else customPaymentQrUrl = null
+  } else {
+    const compQr = isGstInvoice ? (companyGstQr || companyQr) : (companyNonGstQr || companyQr)
+    if (isImageQrUrl(compQr)) customPaymentQrUrl = compQr
+    else customPaymentQrUrl = null
+  }
 
   // Generate Official Public Verification / View Online PDF QR Code against Invoice Number (Crisp 300x300 M-level ECC QR)
   const invoiceNumOrId = (invoice as any).invoiceNumber || (invoice as any).invoice_number || invoice.id
@@ -791,6 +818,25 @@ export function OfficialInvoiceDocument({
   const totalTableBase = finalRenderedRows.reduce((sum, it) => sum + (it.itemRate * it.itemQty) + it.itemCharges, 0)
   const totalTableGst = isGstInvoice ? finalRenderedRows.reduce((sum, it) => sum + it.rowTax, 0) : 0
   const totalTableGross = isGstInvoice ? finalRenderedRows.reduce((sum, it) => sum + it.rowTotal, 0) : totalTableBase
+
+  // Bottom Footer Text resolution (Customizable via Company Settings or Invoice Studio)
+  const fallbackContactText = [
+    resolvedEmail ? `Email: ${resolvedEmail}` : null,
+    resolvedPhone ? `Tel: ${resolvedPhone}` : null,
+    resolvedWebsite ? `Web: ${resolvedWebsite}` : null,
+  ].filter(Boolean).join("  •  ") || fullRegisteredCompanyName
+
+  const customFooterText = 
+    (invoice as any)?.bottom_footer_text ||
+    (companyDetails as any)?.bottom_footer_text ||
+    (activeCompany as any)?.bottom_footer_text ||
+    (companyDetails as any)?.footer_text ||
+    (activeCompany as any)?.footer_text ||
+    ""
+
+  const resolvedBottomFooterText = customFooterText.trim()
+    ? customFooterText.trim()
+    : (fallbackContactText ? `OFFICIAL CONTACT & SUPPORT: ${fallbackContactText}` : fullRegisteredCompanyName)
 
   // 4. Strict A4 Pagination Engine (2 items per page: 2 products fit on 1 A4 page; 3rd creates page 2 with same invoice format)
   const ITEMS_PER_FIRST_PAGE = 2
@@ -863,7 +909,7 @@ export function OfficialInvoiceDocument({
 
   const hasContactInfo = Boolean(isValidField(resolvedPhone) || isValidField(resolvedWebsite) || isValidField(resolvedEmail))
   const hasCin = isValidField(resolvedCin)
-  const hasGstin = isValidField(resolvedGstin)
+  const hasGstin = isGstInvoice && isValidField(resolvedGstin)
   const hasPan = isValidField(resolvedPan)
   const hasMsme = isValidField(resolvedMsme)
   const hasLegalIds = Boolean(hasCin || hasGstin || hasPan || hasMsme)
@@ -873,114 +919,63 @@ export function OfficialInvoiceDocument({
   const renderTopHeader = (pageNumber: number = 1, totalPgs: number = 1) => (
     <div className="flex flex-col gap-2.5 border-b border-zinc-200 pb-2.5">
       {/* 3-Column Top Identity Grid: Left = Logo, Center = Big SAAMPARK & Division/Subtitle, Right = Invoice Card */}
-      <div className="flex flex-col sm:flex-row justify-between items-center sm:items-start gap-3">
-        {/* Top-Left Logo Card */}
-        <motion.div
-          drag={interactive}
-          dragMomentum={false}
-          dragElastic={0}
-          whileDrag={{ scale: (logoScale || 1) * 1.04, zIndex: 50 }}
-          animate={{ x: logoPosition?.x || 0, y: logoPosition?.y || 0, scale: logoScale || 1 }}
-          onDragEnd={(_, info) => {
-            if (onLogoPositionChange) {
-              onLogoPositionChange({
-                x: (logoPosition?.x || 0) + info.offset.x,
-                y: (logoPosition?.y || 0) + info.offset.y,
-              })
-            }
-          }}
-          className={`relative shrink-0 select-none bg-transparent ${
-            interactive ? "cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-blue-500/60 rounded-2xl group transition-shadow z-20" : ""
-          }`}
-          style={{ transformOrigin: "top left" }}
-        >
-          {interactive && (
-            <div className="absolute -top-7 left-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity bg-zinc-900/95 text-white px-2 py-0.5 rounded-lg shadow-xl flex items-center gap-1.5 z-40 text-[9px] pointer-events-auto whitespace-nowrap border border-white/20">
-              <span className="text-[7.5px] font-bold text-zinc-400 select-none">✥ Logo</span>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onLogoScaleChange?.(Math.max(0.5, Number(((logoScale || 1) - 0.1).toFixed(1))))
-                }}
-                className="hover:text-blue-300 font-bold px-1 cursor-pointer"
-                title="Zoom Out Logo (Scale down)"
-              >
-                🔍-
-              </button>
-              <span className="font-mono text-[8px] text-zinc-300 font-bold">{Math.round((logoScale || 1) * 100)}%</span>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onLogoScaleChange?.(Math.min(2.5, Number(((logoScale || 1) + 0.1).toFixed(1))))
-                }}
-                className="hover:text-blue-300 font-bold px-1 cursor-pointer"
-                title="Zoom In Logo (Scale up)"
-              >
-                🔍+
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onLogoScaleChange?.(1)
-                }}
-                className="text-[7.5px] text-zinc-400 hover:text-white px-0.5 cursor-pointer"
-                title="Reset Logo Zoom (100%)"
-              >
-                100%
-              </button>
+      <div 
+        className="flex flex-row justify-between items-start gap-3 w-full print:flex-row print:justify-between print:items-start"
+        style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%' }}
+      >
+        {/* Top-Left Logo Card: PERMANENTLY FIXED (No move, no drag, no scale increase/decrease) */}
+        {resolvedLogoUrl ? (
+          <div 
+            className="relative w-24 h-24 rounded-2xl overflow-hidden shadow-2xs shrink-0 border border-zinc-200 bg-white flex items-center justify-center p-1.5 print:w-24 print:h-24 print:shrink-0 select-none"
+            style={{ width: '96px', height: '96px', minWidth: '96px', minHeight: '96px', flexShrink: 0 }}
+          >
+            <img 
+              src={resolvedLogoUrl} 
+              alt={resolvedBrandName || "Entity Logo"} 
+              className="max-w-full max-h-full object-contain mx-auto print:max-w-full print:max-h-full select-none" 
+              style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+            />
+          </div>
+        ) : (
+          <div 
+            className="relative w-24 h-24 rounded-2xl overflow-hidden shadow-md shrink-0 border border-teal-900/30 bg-gradient-to-b from-[#004e59] via-[#005c68] to-[#003840] flex flex-col items-center justify-center p-2 text-white text-center print:w-24 print:h-24 print:shrink-0 select-none"
+            style={{ width: '96px', height: '96px', minWidth: '96px', minHeight: '96px', flexShrink: 0 }}
+          >
+            <Sparkles className="w-5 h-5 mb-1 text-teal-200 drop-shadow-sm" />
+            <div className="font-black text-[11px] tracking-wider uppercase leading-tight font-sans">
+              {resolvedBrandName}
             </div>
-          )}
-          {resolvedLogoUrl ? (
-            <div className="relative w-20 h-20 sm:w-24 sm:h-24 shrink-0 bg-transparent flex items-center justify-center p-0.5 border-0 shadow-none">
-              <img 
-                src={resolvedLogoUrl} 
-                alt={resolvedBrandName || "Entity Logo"} 
-                className="max-w-full max-h-full object-contain pointer-events-none select-none bg-transparent" 
-              />
+            <div className="text-[7px] font-bold text-teal-200 tracking-widest uppercase mt-0.5">
+              {resolvedDivisionName || "ENTERPRISE"}
             </div>
-          ) : (
-            <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden shadow-md shrink-0 border border-teal-900/30 bg-gradient-to-b from-[#004e59] via-[#005c68] to-[#003840] flex flex-col items-center justify-center p-2">
-              <div className="relative z-10 w-full h-full flex flex-col items-center justify-center text-center text-white">
-                <Sparkles className="w-5 h-5 mb-1 text-teal-200 drop-shadow-sm" />
-                <div className="font-black text-[11px] tracking-wider uppercase leading-tight font-sans">
-                  {resolvedBrandName}
-                </div>
-                <div className="text-[7px] font-bold text-teal-200 tracking-widest uppercase mt-0.5">
-                  {resolvedDivisionName || "TECHNOLOGY"}
-                </div>
-              </div>
-            </div>
-          )}
-        </motion.div>
+          </div>
+        )}
 
         {/* Center: BIG SAAMPARK and in below BIGGER SECONDARY LINE (TECHNOLOGY AND RESEARCH PVT LTD / CONSULTANCY SERVICES) */}
         <div className="flex-1 flex flex-col items-center justify-center text-center min-w-0 px-2 sm:px-4">
-          <div className="flex items-center justify-center gap-1.5 flex-wrap">
+          <div className="flex items-center justify-center gap-0.5 flex-wrap">
             <EditableText
               as="h1"
               value={headerBrandName}
               onChange={(val) => onFieldChange?.("brand_name", val)}
               interactive={interactive}
               fieldKey="brand_name"
-              className="text-2xl sm:text-3xl md:text-[34px] font-black tracking-wider leading-none text-zinc-950 uppercase font-sans text-center drop-shadow-2xs"
+              className="text-2xl sm:text-3xl md:text-[34px] font-black tracking-widest sm:tracking-[0.2em] leading-none text-zinc-950 uppercase font-sans text-center drop-shadow-2xs whitespace-pre-wrap"
             />
             {resolvedTrademarkSymbol && resolvedTrademarkSymbol !== "none" ? (
               resolvedTrademarkSymbol === "TM" || resolvedTrademarkSymbol === "™" ? (
                 <span 
-                  className="inline-flex items-center justify-center w-[23px] h-[23px] min-w-[23px] min-h-[23px] rounded-full border-[1.5px] border-red-600 text-red-600 bg-white font-bold text-[9px] tracking-tight leading-none shrink-0 -translate-y-2 ml-1 shadow-xs select-none"
+                  className="inline-flex items-center justify-center w-[21px] h-[21px] min-w-[21px] min-h-[21px] rounded-full border-[1.5px] border-[#0a194e] text-[#0a194e] bg-white font-bold text-[8.5px] tracking-tight leading-none shrink-0 -translate-y-3.5 sm:-translate-y-4 -ml-2 shadow-xs select-none"
                   title="Trademark"
                 >
                   TM
                 </span>
               ) : (
                 <span 
-                  className="inline-flex items-center justify-center w-[20px] h-[20px] min-w-[20px] min-h-[20px] rounded-full border-[1.5px] border-red-600 text-red-600 bg-white font-black text-[11px] leading-none shrink-0 -translate-y-2 ml-1 shadow-xs select-none"
+                  className="inline-flex items-center justify-center w-[19px] h-[19px] min-w-[19px] min-h-[19px] rounded-full border-[1.5px] border-[#0a194e] text-[#0a194e] bg-white font-black text-[10px] leading-none shrink-0 -translate-y-3.5 sm:-translate-y-4 -ml-2 shadow-xs select-none"
                   title="Registered Trademark"
                 >
-                  R
+                  ®
                 </span>
               )
             ) : null}
@@ -995,7 +990,7 @@ export function OfficialInvoiceDocument({
               interactive={interactive}
               fieldKey="division_name"
               placeholder="CORPORATE SUBTITLE / DIVISION (OPTIONAL)"
-              className="text-xs sm:text-sm md:text-[15px] font-black tracking-widest text-zinc-800 uppercase font-sans mt-1.5 block leading-tight text-center"
+              className="text-xs sm:text-sm md:text-[15px] font-black tracking-widest text-zinc-800 uppercase font-sans mt-1.5 block leading-tight text-center whitespace-pre-wrap"
             />
           ) : null}
 
@@ -1083,26 +1078,26 @@ export function OfficialInvoiceDocument({
 
       {/* Address & Contact Row */}
       {(isValidField(resolvedAddress) || hasContactInfo) && (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-x-4 gap-y-1 text-[9.5px] text-zinc-700 pt-1 border-t border-zinc-100">
-          {isValidField(resolvedAddress) && (
-            <div className="flex items-center gap-1.5 min-w-0 max-w-full sm:max-w-[55%]">
-              <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
+        <div className="flex flex-col sm:flex-row items-start justify-between gap-x-4 gap-y-1.5 text-[9.5px] text-zinc-700 pt-1.5 border-t border-zinc-100 w-full">
+          {isValidField(resolvedFullOfficeAddress || resolvedAddress) && (
+            <div className="flex items-start gap-1.5 min-w-0 flex-1 max-w-full">
+              <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0 mt-0.5`}>
                 <MapPin size={8} />
               </span>
               <span className="text-zinc-900 font-bold text-[9px] shrink-0">Office:</span>
               <EditableText
-                value={resolvedAddress}
+                value={resolvedFullOfficeAddress || resolvedAddress}
                 onChange={(val) => onFieldChange?.("address", val)}
                 interactive={interactive}
                 fieldKey="address"
                 placeholder="Company address..."
-                className="text-zinc-600 text-[9px] truncate"
+                className="text-zinc-700 text-[9px] leading-relaxed break-words whitespace-normal font-medium"
               />
             </div>
           )}
 
           {hasContactInfo && (
-            <div className="flex items-center gap-3 flex-wrap justify-end text-[9px]">
+            <div className="flex items-center gap-3 flex-wrap justify-end text-[9px] shrink-0">
               {isValidField(resolvedPhone) && (
                 <p className="flex items-center gap-1">
                   <span className={`w-3.5 h-3.5 rounded-full ${theme.primaryBg} text-white flex items-center justify-center shrink-0`}>
@@ -1820,11 +1815,58 @@ export function OfficialInvoiceDocument({
         </div>
       </div>
 
-      {/* TERMS & CONDITIONS / INVOICE NOTES (Enlarged, Clear & Prominent) */}
+      {/* DIGITAL MARKETING & SOCIAL MEDIA CAMPAIGN PACKAGE SPECIFICATIONS (FORM NO - 9) */}
+      {Boolean((invoice as any)?.marketingPackage?.enabled || (invoice as any)?.marketingPackage?.planName || (invoice as any)?.primaryCategory === "Digital Marketing") && (
+        <div className="p-3 sm:p-3.5 rounded-lg border border-purple-200 bg-purple-50/70 dark:bg-purple-950/30 text-xs space-y-2 shadow-2xs">
+          <div className="flex items-center justify-between border-b border-purple-200/80 dark:border-purple-800/60 pb-1.5">
+            <span className="font-extrabold text-purple-900 dark:text-purple-200 flex items-center gap-1.5 text-[11px] sm:text-xs">
+              <Megaphone size={14} className="text-purple-700 dark:text-purple-400" />
+              <span>DIGITAL MARKETING CAMPAIGN &amp; ADS PACKAGE ({(invoice as any).marketingPackage?.planName || "Grow - 2"})</span>
+            </span>
+            <span className="text-[9.5px] font-black px-2 py-0.5 rounded bg-purple-200 dark:bg-purple-900 text-purple-900 dark:text-purple-100 uppercase tracking-wider">
+              FORM NO - 9
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10.5px] sm:text-[11px] text-zinc-700 dark:text-zinc-300">
+            <div>
+              <span className="text-zinc-500 font-medium">Duration:</span>{" "}
+              <strong className="text-purple-950 dark:text-purple-200">{(invoice as any).marketingPackage?.packageDuration || "1 month"}</strong>{" "}
+              {(invoice as any).marketingPackage?.startDate && <span>({(invoice as any).marketingPackage.startDate} - {(invoice as any).marketingPackage.expireDate || "Ongoing"})</span>}
+            </div>
+            <div>
+              <span className="text-zinc-500 font-medium">Deliverables:</span>{" "}
+              <strong className="text-purple-950 dark:text-purple-200">{(invoice as any).marketingPackage?.postersCount || 12} Posters/Creatives</strong> •{" "}
+              <strong className="text-purple-950 dark:text-purple-200">{(invoice as any).marketingPackage?.videosCount || 2} AI Video Reels</strong>
+            </div>
+            {(invoice as any).marketingPackage?.hasRealModelShoot && (
+              <div className="col-span-1 sm:col-span-2 text-purple-800 dark:text-purple-300 font-semibold flex items-center gap-1">
+                <span>📸 Real Model Shoot: {(invoice as any).marketingPackage.modelShootDate || "Scheduled"} ({(invoice as any).marketingPackage.modelShootNotes || "Included in Retainer"})</span>
+              </div>
+            )}
+            {(invoice as any).marketingPackage?.targetLocations && (
+              <div className="col-span-1 sm:col-span-2 text-zinc-600 dark:text-zinc-400 text-[10px]">
+                <span className="font-semibold text-zinc-700 dark:text-zinc-300">🎯 Geo Audience &amp; Pin Codes:</span> {(invoice as any).marketingPackage.targetLocations}
+              </div>
+            )}
+            {Array.isArray((invoice as any).assignedMembers) && (invoice as any).assignedMembers.length > 0 && (
+              <div className="col-span-1 sm:col-span-2 text-[10px] text-purple-900 dark:text-purple-300 font-medium flex items-center gap-1.5 flex-wrap pt-0.5">
+                <span className="font-bold">👥 Assigned Marketing Team:</span>
+                {(invoice as any).assignedMembers.map((m: any, i: number) => (
+                  <span key={i} className="px-1.5 py-0.2 rounded bg-purple-100 dark:bg-purple-900/60 text-purple-800 dark:text-purple-200 font-bold border border-purple-200">
+                    {m.memberName} ({m.memberRole || "Specialist"})
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TERMS & CONDITIONS (Enlarged, Clear & Permanent from Company Section) */}
       {(resolvedTermsAndNotes || interactive) && (
         <div className="p-3 sm:p-3.5 rounded-lg border border-zinc-300/90 dark:border-zinc-700 bg-zinc-50/90 dark:bg-zinc-900/60 text-[9.5px] sm:text-[10.5px] text-zinc-700 dark:text-zinc-300 space-y-1 shadow-2xs">
           <EditableText
-            value="Terms & Conditions / Official Notes:"
+            value="Terms & Conditions:"
             interactive={interactive}
             className="font-extrabold text-zinc-900 dark:text-zinc-100 uppercase text-[9px] sm:text-[9.5px] tracking-wider block"
           />
@@ -1876,224 +1918,85 @@ export function OfficialInvoiceDocument({
             </div>
           </div>
 
-          {/* Center-Right: Independent Draggable Corporate Seal / Stamp (Only shown when stamp image is provided) */}
-          {resolvedStampUrl ? (
-            <motion.div
-              drag={interactive}
-              dragMomentum={false}
-              dragElastic={0}
-              whileDrag={{ scale: (stampScale || 1) * 1.05, zIndex: 50 }}
-              animate={{ x: stampPosition?.x || 0, y: stampPosition?.y || 0, scale: stampScale || 1 }}
-              onDragEnd={(_, info) => {
-                if (onStampPositionChange) {
-                  onStampPositionChange({
-                    x: (stampPosition?.x || 0) + info.offset.x,
-                    y: (stampPosition?.y || 0) + info.offset.y,
-                  })
-                }
-              }}
-              className={`shrink-0 select-none relative bg-transparent ${
-                interactive ? "cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-emerald-500/50 rounded-2xl group transition-shadow p-1 z-20" : ""
-              }`}
-              style={{ transformOrigin: "bottom center" }}
-            >
-              {interactive && (
-                <div className="absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity bg-zinc-900/95 text-white px-2 py-0.5 rounded-lg shadow-xl flex items-center gap-1.5 z-40 text-[9px] pointer-events-auto whitespace-nowrap border border-white/20">
-                  <span className="text-[7.5px] font-bold text-zinc-400 select-none">✥ Seal</span>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onStampScaleChange?.(Math.max(0.5, Number(((stampScale || 1) - 0.1).toFixed(1))))
-                    }}
-                    className="hover:text-emerald-300 font-bold px-1 cursor-pointer"
-                    title="Zoom Out Stamp / Seal"
-                  >
-                    🔍-
-                  </button>
-                  <span className="font-mono text-[8px] text-zinc-300 font-bold">{Math.round((stampScale || 1) * 100)}%</span>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onStampScaleChange?.(Math.min(2.5, Number(((stampScale || 1) + 0.1).toFixed(1))))
-                    }}
-                    className="hover:text-emerald-300 font-bold px-1 cursor-pointer"
-                    title="Zoom In Stamp / Seal"
-                  >
-                    🔍+
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onStampScaleChange?.(1)
-                    }}
-                    className="text-[7.5px] text-zinc-400 hover:text-white px-0.5 cursor-pointer"
-                    title="Reset Seal Zoom (100%)"
-                  >
-                    100%
-                  </button>
-                </div>
-              )}
-              <div className="w-22 h-22 sm:w-24 sm:h-24 flex items-center justify-center p-0.5 bg-transparent">
+          {/* Right: Company Authorized Signatory & Official Stamp (Tightly paired together) */}
+          <div className="flex items-end justify-end gap-3 shrink-0">
+            {/* Official Stamp / Seal - positioned right close to the signature */}
+            {resolvedStampUrl ? (
+              <div className="w-18 h-18 sm:w-20 sm:h-20 shrink-0 flex items-center justify-center p-0.5 select-none relative mb-1">
                 <img 
                   src={resolvedStampUrl} 
                   alt="Official Company Seal" 
-                  className="max-h-24 max-w-24 object-contain pointer-events-none select-none drop-shadow-sm bg-transparent" 
+                  className="max-h-18 max-w-18 sm:max-h-20 sm:max-w-20 object-contain drop-shadow-xs pointer-events-none select-none" 
                 />
               </div>
-            </motion.div>
-          ) : (
-            <div className="w-16 h-16 sm:w-20 sm:h-20 shrink-0 pointer-events-none" />
-          )}
+            ) : null}
 
-          {/* Right: Independent Draggable Company Authorized Signatory */}
-          <motion.div
-            drag={interactive}
-            dragMomentum={false}
-            dragElastic={0}
-            whileDrag={{ scale: (signatureScale || 1) * 1.04, zIndex: 50 }}
-            animate={{ x: signaturePosition?.x || 0, y: signaturePosition?.y || 0, scale: signatureScale || 1 }}
-            onDragEnd={(_, info) => {
-              if (onSignaturePositionChange) {
-                onSignaturePositionChange({
-                  x: (signaturePosition?.x || 0) + info.offset.x,
-                  y: (signaturePosition?.y || 0) + info.offset.y,
-                })
-              }
-            }}
-            className={`text-center space-y-0.5 min-w-[160px] relative select-none ${
-              interactive ? "cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-blue-500 rounded-xl group transition-shadow p-1.5 z-20" : ""
-            }`}
-            style={{ transformOrigin: "bottom right" }}
-          >
-            {interactive && (
-              <div className="absolute -top-7 right-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity bg-zinc-900/95 text-white px-2 py-0.5 rounded-lg shadow-xl flex items-center gap-1.5 z-40 text-[9px] pointer-events-auto whitespace-nowrap border border-white/20">
-                <span className="text-[7.5px] font-bold text-zinc-400 select-none">✥ Signature</span>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onSignatureScaleChange?.(Math.max(0.5, Number(((signatureScale || 1) - 0.1).toFixed(1))))
-                  }}
-                  className="hover:text-blue-300 font-bold px-1 cursor-pointer"
-                  title="Zoom Out Signature (Scale down)"
-                >
-                  🔍-
-                </button>
-                <span className="font-mono text-[8px] text-zinc-300 font-bold">{Math.round((signatureScale || 1) * 100)}%</span>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onSignatureScaleChange?.(Math.min(2.5, Number(((signatureScale || 1) + 0.1).toFixed(1))))
-                  }}
-                  className="hover:text-blue-300 font-bold px-1 cursor-pointer"
-                  title="Zoom In Signature (Scale up)"
-                >
-                  🔍+
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onSignatureScaleChange?.(1)
-                  }}
-                  className="text-[7.5px] text-zinc-400 hover:text-white px-0.5 cursor-pointer"
-                  title="Reset Signature Zoom (100%)"
-                >
-                  100%
-                </button>
+            {/* Company Authorized Signatory */}
+            <div className="text-center space-y-0.5 min-w-[160px] sm:min-w-[175px] select-none">
+              <EditableText
+                value={`For ${fullRegisteredCompanyName} ${isSubBranchIssued && activeSubBranch ? `(${activeSubBranch.name})` : isBranchIssued && activeBranch ? `(${activeBranch.name})` : ""}`}
+                interactive={interactive}
+                className="text-[8.5px] font-bold text-zinc-500 uppercase tracking-tight truncate max-w-[175px] block"
+              />
+              <div className="h-12 flex items-center justify-center">
+                {resolvedSignatureUrl ? (
+                  <img 
+                    src={resolvedSignatureUrl} 
+                    alt="Authorized Signature" 
+                    className="max-h-12 max-w-[150px] object-contain drop-shadow-xs pointer-events-none select-none" 
+                  />
+                ) : (
+                  /* Elegant Digital Calligraphic Signature Graphic */
+                  <div className="flex flex-col items-center justify-center">
+                    <EditableText
+                      value={resolvedSignatoryName || "Authorized Signatory"}
+                      interactive={interactive}
+                      className="font-serif italic font-extrabold text-sm sm:text-base tracking-wide text-zinc-800 dark:text-zinc-200"
+                    />
+                    <EditableText
+                      value="✓ Digitally Authorized"
+                      interactive={interactive}
+                      className="text-[6.5px] font-bold text-emerald-600 dark:text-emerald-400 tracking-widest uppercase flex items-center gap-0.5"
+                    />
+                  </div>
+                )}
               </div>
-            )}
-
-            <EditableText
-              value={`For ${fullRegisteredCompanyName} ${isSubBranchIssued && activeSubBranch ? `(${activeSubBranch.name})` : isBranchIssued && activeBranch ? `(${activeBranch.name})` : ""}`}
-              interactive={interactive}
-              className="text-[8.5px] font-bold text-zinc-500 uppercase tracking-tight truncate max-w-[175px] block"
-            />
-            <div className="h-12 flex items-center justify-center">
-              {resolvedSignatureUrl ? (
-                <img 
-                  src={resolvedSignatureUrl} 
-                  alt="Authorized Signature" 
-                  className="max-h-12 max-w-[150px] object-contain drop-shadow-xs pointer-events-none select-none" 
+              <div className="w-full border-t-2 border-zinc-400 dark:border-zinc-600 pt-1">
+                <EditableText
+                  value={resolvedSignatoryName || "Authorized Signatory"}
+                  onChange={(val) => onFieldChange?.("signatory_name", val)}
+                  interactive={interactive}
+                  fieldKey="signatory_name"
+                  placeholder="Signatory name..."
+                  className="text-[9px] font-black uppercase text-zinc-800 dark:text-zinc-200 font-bold leading-tight block truncate"
                 />
-              ) : (
-                /* Elegant Digital Calligraphic Signature Graphic */
-                <div className="flex flex-col items-center justify-center">
-                  <EditableText
-                    value={resolvedSignatoryName || "Authorized Signatory"}
-                    interactive={interactive}
-                    className="font-serif italic font-extrabold text-sm sm:text-base tracking-wide text-zinc-800 dark:text-zinc-200"
-                  />
-                  <EditableText
-                    value="✓ Digitally Authorized"
-                    interactive={interactive}
-                    className="text-[6.5px] font-bold text-emerald-600 dark:text-emerald-400 tracking-widest uppercase flex items-center gap-0.5"
-                  />
-                </div>
-              )}
+                <EditableText
+                  value={resolvedSignatoryDesignation || "Managing Director"}
+                  onChange={(val) => onFieldChange?.("signatory_designation", val)}
+                  interactive={interactive}
+                  fieldKey="signatory_designation"
+                  placeholder="Designation..."
+                  className="text-[7.5px] text-zinc-500 font-medium leading-tight block truncate"
+                />
+              </div>
             </div>
-            <div className="w-full border-t-2 border-zinc-400 dark:border-zinc-600 pt-1">
-              <EditableText
-                value={resolvedSignatoryName || "Authorized Signatory"}
-                onChange={(val) => onFieldChange?.("signatory_name", val)}
-                interactive={interactive}
-                fieldKey="signatory_name"
-                placeholder="Signatory name..."
-                className="text-[9px] font-black uppercase text-zinc-800 dark:text-zinc-200 font-bold leading-tight block truncate"
-              />
-              <EditableText
-                value={resolvedSignatoryDesignation || "Managing Director"}
-                onChange={(val) => onFieldChange?.("signatory_designation", val)}
-                interactive={interactive}
-                fieldKey="signatory_designation"
-                placeholder="Designation..."
-                className="text-[7.5px] text-zinc-500 font-medium leading-tight block truncate"
-              />
-            </div>
-          </motion.div>
-        </div>
-
-        {/* DEDICATED BOTTOM FILLING OPTION: Custom Declarations, Jurisdiction, Branch Operational Notes */}
-        <div className="w-full rounded-md border border-zinc-200/90 bg-zinc-50/70 p-2 text-[8px] sm:text-[8.5px] text-zinc-600 leading-tight space-y-1">
-          <div className="flex items-center justify-between gap-2 border-b border-zinc-200 pb-1">
-            <span className="font-bold uppercase tracking-wider text-zinc-700 text-[8px] flex items-center gap-1">
-              <span>Statutory Declaration &amp; Compliance Terms:</span>
-            </span>
-            <span className="text-[7.5px] text-zinc-500 font-medium">
-              Subject to Kolkata Jurisdiction • Computer Generated Official Document
-            </span>
           </div>
-          <EditableText
-            value={(invoice as any).bottomNote || (invoice as any).bottomDetails || (invoice as any).declaration || activeCompany?.invoice_notes || "We declare that this invoice shows the actual price of the goods/services described and that all particulars are true and correct. All disputes are subject to Kolkata jurisdiction."}
-            onChange={(val) => onFieldChange?.("bottomNote", val)}
-            interactive={interactive}
-            fieldKey="bottomNote"
-            placeholder="Click to fill custom bottom notes, compliance declarations, or branch operational details..."
-            className="text-zinc-600 italic block leading-relaxed"
-          />
         </div>
 
-        {/* BOTTOM BANNER WITH PAGE NUMBER */}
-        <div className={`rounded-lg ${theme.headerGradient} text-white px-3 py-1.5 text-[8.5px] sm:text-[9px] font-medium flex items-center justify-between gap-2 overflow-hidden whitespace-nowrap shadow-xs`}>
-          <div className="flex items-center gap-1 min-w-0 max-w-[55%] truncate">
-            <MapPin size={9} className="shrink-0" />
+        {/* BOTTOM BANNER WITH CUSTOM FOOTER / SUPPORT & CONTACT DETAILS & PAGE NUMBER */}
+        <div className={`rounded-lg ${theme.headerGradient} text-white px-3 py-1.5 text-[8px] sm:text-[8.5px] font-medium flex items-center justify-between gap-2 shadow-xs`}>
+          <div className="flex-1 min-w-0 pr-2">
             <EditableText
-              value={resolvedAddress || fullRegisteredCompanyName}
-              onChange={(val) => onFieldChange?.("address", val)}
+              value={resolvedBottomFooterText}
+              onChange={(val) => onFieldChange?.("bottom_footer_text", val)}
               interactive={interactive}
-              fieldKey="address"
-              className="text-white truncate"
+              fieldKey="bottom_footer_text"
+              placeholder="Official Contact & Support: Email • Tel • Web (or custom corporate office address)..."
+              className="text-white text-[8px] sm:text-[8.5px] font-medium whitespace-pre-wrap break-words leading-relaxed"
             />
           </div>
-          <div className="flex items-center gap-2 shrink-0 overflow-hidden text-[8px] sm:text-[8.5px]">
-            <span className="truncate max-w-[260px] sm:max-w-[340px]">
-              {resolvedEmail ? `Support: ${resolvedEmail}` : ""} {resolvedPhone ? `| Tel: ${resolvedPhone}` : ""}
-            </span>
-            <span className="font-mono font-bold bg-black/20 px-2 py-0.5 rounded text-[8px] shrink-0">
+          <div className="flex items-center gap-2 shrink-0 self-center text-[8px] sm:text-[8.5px]">
+            <span className="font-mono font-bold bg-black/25 px-2 py-0.5 rounded text-[8px] shrink-0">
               Page {pageNumber} of {totalPgs}
             </span>
           </div>
@@ -2103,20 +2006,16 @@ export function OfficialInvoiceDocument({
   )
 
   const renderPageFooterOnly = (pageNumber: number, totalPgs: number) => (
-    <div className="mt-auto shrink-0 pt-2 border-t border-zinc-200 space-y-2">
-      <div className="flex justify-between items-center bg-zinc-50 p-2 rounded-lg border border-zinc-200 text-[8.5px] text-zinc-600">
+    <div className="mt-auto shrink-0 pt-2 border-t border-zinc-200 space-y-1.5">
+      <div className="flex justify-between items-center bg-zinc-50 px-2.5 py-1 rounded-lg border border-zinc-200 text-[8px] text-zinc-600">
         <span>Continued to Next Page...</span>
         <span className="font-mono font-bold text-zinc-800">Page {pageNumber} of {totalPgs}</span>
       </div>
-      <div className={`rounded-lg ${theme.headerGradient} text-white px-2.5 py-1 text-[8px] font-medium flex items-center justify-between gap-2 overflow-hidden whitespace-nowrap shadow-xs`}>
-        <p className="flex items-center gap-1 min-w-0 max-w-[55%] truncate">
-          <MapPin size={8.5} className="shrink-0" />
-          <span className="truncate">{resolvedAddress || fullRegisteredCompanyName}</span>
-        </p>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="truncate max-w-[260px]">
-            {resolvedEmail ? `Support: ${resolvedEmail}` : ""} {resolvedPhone ? `| Tel: ${resolvedPhone}` : ""}
-          </span>
+      <div className={`rounded-lg ${theme.headerGradient} text-white px-2.5 py-1 text-[7.5px] sm:text-[8px] font-medium flex items-center justify-between gap-2 shadow-xs`}>
+        <div className="flex-1 min-w-0 pr-2 text-white whitespace-pre-wrap break-words leading-tight">
+          {resolvedBottomFooterText}
+        </div>
+        <div className="flex items-center gap-2 shrink-0 self-center">
           <span className="font-mono font-bold bg-black/20 px-1.5 py-0.2 rounded text-[7.5px] shrink-0">
             Page {pageNumber} of {totalPgs}
           </span>

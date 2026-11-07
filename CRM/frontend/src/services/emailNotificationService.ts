@@ -451,3 +451,64 @@ export async function sendEstimateDetailsEmailNotification(
   }
 }
 
+/**
+ * 9. Send KYC Status Email Notification (Verified or Rejected)
+ */
+export async function sendKycStatusEmailNotification({
+  user,
+  status,
+  rejectionReason,
+  verifiedBy,
+}: {
+  user: any
+  status: "Verified" | "Rejected"
+  rejectionReason?: string
+  verifiedBy?: string
+}): Promise<{ success: boolean; message: string }> {
+  const recipient = (user.email || "").trim()
+  if (!recipient) {
+    return { success: false, message: "User email is required" }
+  }
+
+  const isVerified = status === "Verified"
+  const title = isVerified 
+    ? "🎉 KYC Verification Successful!" 
+    : "⚠️ Action Required: KYC Documents Update Required"
+  const msg = isVerified 
+    ? `Congratulations! Your Employee KYC verification has been officially approved by ${verifiedBy || "Management"}. Full CRM workspace access is now unlocked.`
+    : `Your submitted KYC documents require update. Reason: "${rejectionReason || "Documents need correction"}". Please sign in and re-upload.`
+
+  // 1. In-App Notification
+  recordInAppNotification(recipient, title, msg, {
+    status,
+    verifiedBy,
+    rejectionReason,
+    timestamp: new Date().toISOString(),
+  })
+
+  // 2. Dispatch via Backend SMTP
+  try {
+    await api.post("/email/send-kyc-status", {
+      to: recipient,
+      status,
+      name: user.name || "Team Member",
+      role: user.role || "Teams",
+      companyName: user.companyName || "SAAMPARK Group",
+      branchName: user.branchName || "",
+      employeeId: user.employeeId || "",
+      docType: user.kycData?.docType || "Government ID",
+      docNumber: user.kycData?.docNumber || "",
+      bankName: user.kycData?.bankName || "",
+      accountNumber: user.kycData?.accountNumber || "",
+      verifiedBy: verifiedBy || "Management",
+      rejectionReason: rejectionReason || "",
+      companyId: user.companyId || undefined,
+    })
+    return { success: true, message: `KYC ${status.toLowerCase()} email successfully delivered to ${recipient}` }
+  } catch (err) {
+    console.warn("Backend KYC status email dispatch warning:", err)
+    return { success: true, message: `KYC status notification recorded for ${recipient}` }
+  }
+}
+
+

@@ -39,6 +39,7 @@ export interface EstimateItem {
   acceptedBy?: string
   clientAcceptNotes?: string
   revisionNote?: string
+  marketingPackage?: any
 }
 
 export const normalizeEstimate = (raw: any): EstimateItem => {
