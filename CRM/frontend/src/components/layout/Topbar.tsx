@@ -90,7 +90,7 @@ export function Topbar() {
     const cId = c.id || c.slug
     switchCompany(cId)
 
-    const cSlug = String(c.slug || cId).toLowerCase().includes("consult") ? "consultancy" : "technology"
+    const cSlug = String(c.slug || cId).toLowerCase().includes("consult") ? "saampark-consultancy" : "saampark-technology"
     const matchingBranches = branches.filter(b => isMatchingCompany({ id: b.companyId || (b as any).company_id } as any, cId))
     const targetBranch = matchingBranches[0]
     const bSlug = targetBranch ? (targetBranch.code?.toLowerCase() || targetBranch.name.toLowerCase().replace(/\s+/g, "-")) : "main"
@@ -110,7 +110,7 @@ export function Topbar() {
     }
 
     switchBranch(b.id)
-    const cSlug = String(activeCompanyId || "technology").toLowerCase().includes("consult") ? "consultancy" : "technology"
+    const cSlug = String(activeCompanyId || "saampark-technology").toLowerCase().includes("consult") ? "saampark-consultancy" : "saampark-technology"
     const bSlug = b.code?.toLowerCase() || b.name.toLowerCase().replace(/\s+/g, "-")
     router.push(`/${cSlug}/${bSlug}${featurePath}`)
   }

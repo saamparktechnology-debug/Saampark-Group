@@ -611,6 +611,18 @@ export function Sidebar() {
     }
   }
 
+  // Scoped URL generator for company + branch hierarchical routing
+  const getScopedHref = React.useCallback((baseHref: string) => {
+    if (!baseHref || !baseHref.startsWith("/feature/")) return baseHref
+    if (!activeCompanyId || activeCompanyId === "all" || activeCompanyId === "group") {
+      return baseHref
+    }
+    const cSlug = String(activeCompanyId).toLowerCase().includes("consult") ? "saampark-consultancy" : "saampark-technology"
+    const currentBranchObj = branches?.find(b => b.id === activeBranchId)
+    const bSlug = currentBranchObj ? (currentBranchObj.code?.toLowerCase() || currentBranchObj.name?.toLowerCase().replace(/\s+/g, "-")) : "main"
+    return `/${cSlug}/${bSlug}${baseHref}`
+  }, [activeCompanyId, activeBranchId, branches])
+
   // Sidebar visibility on mobile
   const isDrawerOpen = !isSidebarCollapsed
 
@@ -732,9 +744,9 @@ export function Sidebar() {
           {allowedNavItems.map((item) => {
             const hasSubItems = Boolean(item.subItems && item.subItems.length > 0)
             const isSubActive = hasSubItems && item.subItems?.some(
-              sub => pathname === sub.href || pathname.startsWith(sub.href + '/')
+              sub => pathname === sub.href || pathname.startsWith(sub.href + '/') || pathname.includes(sub.href)
             )
-            const isActive = pathname === item.href || (item.href !== "/feature/dashboard" && pathname.startsWith(item.href + '/')) || isSubActive
+            const isActive = pathname === item.href || (item.href !== "/feature/dashboard" && pathname.startsWith(item.href + '/')) || pathname.includes(item.href) || isSubActive
             const isDropdownOpen = Boolean(openSubmenus[item.name])
             const getItemBadge = (name: string) => {
               const raw = rawCounts[name] !== undefined ? rawCounts[name] : (typeof item.badge === "number" ? item.badge : 0)
@@ -788,7 +800,7 @@ export function Sidebar() {
                     </div>
                   </button>
                 ) : (
-                  <Link href={item.href} onClick={handleLinkClick} className="block">
+                  <Link href={getScopedHref(item.href)} onClick={handleLinkClick} className="block">
                     <div
                       className={cn(
                         "flex items-center gap-3 py-2.5 rounded-xl transition-all relative group text-xs font-semibold",
@@ -836,10 +848,10 @@ export function Sidebar() {
                       className="space-y-1 mt-1 pl-4 pr-1 overflow-hidden"
                     >
                       {item.subItems?.map((sub) => {
-                        const isSubActiveItem = pathname === sub.href || pathname.startsWith(sub.href + '/')
+                        const isSubActiveItem = pathname === sub.href || pathname.startsWith(sub.href + '/') || pathname.includes(sub.href)
 
                         return (
-                          <Link key={sub.name} href={sub.href} onClick={handleLinkClick} className="block">
+                          <Link key={sub.name} href={getScopedHref(sub.href)} onClick={handleLinkClick} className="block">
                             <div
                               className={cn(
                                 "flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
