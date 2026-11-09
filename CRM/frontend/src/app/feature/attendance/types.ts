@@ -53,3 +53,4 @@ export interface EmployeeMonthlyAttendance {
   totalDaysOff: number
   totalHolidays: number
 }
+

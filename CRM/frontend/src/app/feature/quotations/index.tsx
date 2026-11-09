@@ -572,6 +572,31 @@ export default function QuotationsMain() {
       const updated = { ...quotation, status: "Accepted" }
       await QuotationService.update(quotation.id, updated).catch(() => {})
       setQuotations(prev => prev.map(q => q.id === quotation.id ? updated : q))
+
+      // Check if quotation includes digital marketing package -> Auto-provision Marketing Campaign
+      const hasMarketing = (quotation.items || []).some((it: any) => 
+        (it.name || '').toLowerCase().includes("marketing") || 
+        (it.name || '').toLowerCase().includes("social media") || 
+        (it.name || '').toLowerCase().includes("poster") || 
+        (it.name || '').toLowerCase().includes("video") ||
+        (it.name || '').toLowerCase().includes("package")
+      ) || quotation.companyId === "consultancy"
+
+      if (hasMarketing) {
+        import("@/app/feature/marketing/services/marketingService").then(({ MarketingService }) => {
+          MarketingService.autoProvisionFromQuotation(
+            {
+              id: matchedClient?.id || quotation.clientId || `CLT-${Date.now().toString().slice(-4)}`,
+              name: quotation.customer,
+              email: quotation.customerEmail,
+              branchName: quotation.branchName
+            },
+            quotation.items?.[0]?.name || "Digital Marketing Growth Retainer",
+            { poster: 20, video: 15, real_model: 10, customName: "Tutor Service", custom: 15 },
+            quotation.companyId || "consultancy"
+          ).catch(() => {})
+        })
+      }
       
       // Dispatch sync events
       if (typeof window !== "undefined") {

@@ -128,7 +128,15 @@ const ALL_NAV_ITEMS: NavItem[] = [
       { name: "Proposals", href: "/feature/proposals", icon: FileOutput },
     ]
   },
-  { name: "Projects", href: "/feature/projects", icon: KanbanSquare },
+  {
+    name: "Projects",
+    href: "/feature/projects",
+    icon: KanbanSquare,
+    subItems: [
+      { name: "IT & Software Projects", href: "/feature/projects", icon: KanbanSquare },
+      { name: "Digital Marketing", href: "/feature/marketing", icon: BarChart3 },
+    ]
+  },
   { name: "Tasks", href: "/feature/tasks", icon: CheckSquare },
   {
     name: "Sales",

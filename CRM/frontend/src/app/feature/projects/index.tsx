@@ -2,12 +2,14 @@
 
 import * as React from "react"
 import { motion } from "framer-motion"
+import { KanbanSquare, BarChart3 } from "lucide-react"
 import { Project } from "./types"
 import { getProjects, deleteProject } from "./services/projectService"
 import { ProjectList } from "./components/ProjectList"
 import { AddProjectModal } from "./components/AddProjectModal"
 import { EditProjectModal } from "./components/EditProjectModal"
 import { ProjectDetailView } from "./components/ProjectDetailView"
+import ClientMarketingReport from "../marketing/components/ClientMarketingReport"
 import { useAuthStore } from "@/store/useAuthStore"
 import { ThreeDotLoader } from "@/components/ui/ThreeDotLoader"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
@@ -29,6 +31,7 @@ export default function ProjectsMain() {
   const isTeam = !isSuperAdmin && !isAdmin && !isClient
 
   const [projects, setProjects] = React.useState<Project[]>([])
+  const [projectSuite, setProjectSuite] = React.useState<"software" | "marketing">("software")
   const [viewMode, setViewMode] = React.useState<"table" | "detail">("table")
   const [selectedProject, setSelectedProject] = React.useState<Project | null>(null)
   
@@ -221,7 +224,46 @@ export default function ProjectsMain() {
       transition={{ duration: 0.2 }}
       className="space-y-6"
     >
-      {viewMode === "table" ? (
+      {/* ── PROJECT SUITE SELECTOR (Software vs Marketing Retainers) ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-2.5 sm:px-4 shadow-xs">
+        <div className="flex items-center gap-1.5 p-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl">
+          <button
+            onClick={() => {
+              setProjectSuite("software")
+              setViewMode("table")
+            }}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              projectSuite === "software"
+                ? "bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-xs"
+                : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+            }`}
+          >
+            <KanbanSquare className="w-3.5 h-3.5" />
+            <span>IT & Software Projects</span>
+          </button>
+
+          <button
+            onClick={() => setProjectSuite("marketing")}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              projectSuite === "marketing"
+                ? "bg-white dark:bg-zinc-900 text-indigo-600 dark:text-indigo-400 shadow-xs"
+                : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+            }`}
+          >
+            <BarChart3 className="w-3.5 h-3.5" />
+            <span>Digital Marketing Campaigns</span>
+          </button>
+        </div>
+
+        <div className="text-[11px] text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span>Multi-Discipline Project & Retainer Hub</span>
+        </div>
+      </div>
+
+      {projectSuite === "marketing" ? (
+        <ClientMarketingReport />
+      ) : viewMode === "table" ? (
         <ProjectList
           projects={visibleProjects}
           onOpenAddModal={() => setIsAddModalOpen(true)}
