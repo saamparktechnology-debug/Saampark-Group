@@ -11,6 +11,7 @@ import {
 import { MarketingCampaign, MarketingPost, MarketingServiceQuota } from "../types"
 import { MarketingService } from "../services/marketingService"
 import { useAuthStore } from "@/store/useAuthStore"
+import { usePermissionStore } from "@/store/usePermissionStore"
 import ViewCreativeModal from "./ViewCreativeModal"
 import AddDeliverablePostModal from "./AddDeliverablePostModal"
 import CreateCampaignModal from "./CreateCampaignModal"
@@ -18,7 +19,11 @@ import { Button } from "@/components/ui/Button"
 
 export default function ClientMarketingReport() {
   const { user } = useAuthStore()
+  const { canPerformAction } = usePermissionStore()
   const isAdmin = user?.role === "Super Admin" || user?.role === "Admin"
+  const canAdd = isAdmin || canPerformAction(user, "Digital Marketing", "add")
+  const canEdit = isAdmin || canPerformAction(user, "Digital Marketing", "edit")
+  const canDelete = isAdmin || canPerformAction(user, "Digital Marketing", "delete")
 
   // Data states
   const [campaigns, setCampaigns] = React.useState<MarketingCampaign[]>([])
@@ -85,7 +90,7 @@ export default function ClientMarketingReport() {
         <p className="text-xs text-zinc-500 max-w-sm mx-auto mb-5">
           Launch a digital marketing retainer contract for your clients with deliverable commitments.
         </p>
-        {isAdmin && (
+        {(isAdmin || canAdd) && (
           <Button onClick={() => setIsCreateCampaignOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs cursor-pointer px-4 py-2">
             + Create Marketing Retainer
           </Button>
@@ -163,7 +168,7 @@ export default function ClientMarketingReport() {
             <span>Sync Now</span>
           </button>
 
-          {isAdmin && (
+          {(isAdmin || canAdd) && (
             <Button
               onClick={() => setIsCreateCampaignOpen(true)}
               variant="outline"
@@ -364,15 +369,17 @@ export default function ClientMarketingReport() {
                 </h3>
               </div>
 
-              <div className="flex items-center gap-2">
-                <Button
-                  onClick={() => setIsAddPostOpen(true)}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-8 px-3 gap-1 shadow-xs"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Log Deliverable</span>
-                </Button>
-              </div>
+              {(isAdmin || canAdd) && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={() => setIsAddPostOpen(true)}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-8 px-3 gap-1 shadow-xs"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Log Deliverable</span>
+                  </Button>
+                </div>
+              )}
             </div>
 
             <div className="overflow-x-auto">

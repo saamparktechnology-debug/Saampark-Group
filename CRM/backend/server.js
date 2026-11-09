@@ -245,6 +245,18 @@ async function checkDbConnection() {
       await safeAddColumn('sub_branches', col);
     }
 
+    // Ensure permissions table has Digital Marketing entries
+    try {
+      const actions = ['view', 'add', 'edit', 'delete'];
+      for (const act of actions) {
+        await connection.execute(
+          `INSERT IGNORE INTO permissions (module, action, description) 
+           VALUES ('Digital Marketing', ?, ?)`,
+          [act, `Allow user to ${act} Digital Marketing retainers, campaigns & deliverables`]
+        );
+      }
+    } catch {}
+
     console.log('✅ CRM Database schema verified and synchronized.');
     connection.release();
   } catch (error) {

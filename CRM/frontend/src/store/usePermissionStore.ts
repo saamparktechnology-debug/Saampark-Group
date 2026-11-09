@@ -17,6 +17,9 @@ export const ALL_APP_MODULES = [
   'Debit Notes',
   'Services & Store',
 
+  // Digital Marketing
+  'Digital Marketing',
+
   // Projects & Operations
   'Projects',
   'Tasks',
@@ -105,6 +108,13 @@ export const CLEAN_MODULE_CATEGORIES: Record<string, { label: string; icon: stri
       { key: "Credit Notes", name: "Credit Notes", description: "Credit adjustments and bill reversals" },
       { key: "Debit Notes", name: "Debit Notes", description: "Supplementary debit claims and debits" },
       { key: "Services & Store", name: "Services & Store", description: "Standardized service catalog and pricing" },
+    ]
+  },
+  marketing: {
+    label: "Digital Marketing & Campaigns",
+    icon: "Megaphone",
+    modules: [
+      { key: "Digital Marketing", name: "Digital Marketing", description: "Form No. 9 retainers, social media ads, deliverables & campaign analytics" },
     ]
   },
   projects: {
@@ -209,7 +219,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, ModuleName[]> = {
   'Admin': [...ALL_APP_MODULES],
   'Teams': [
     'Dashboard', 'Leads', 'Clients', 'Proposals', 'Quotations', 'Estimates',
-    'Sales Orders', 'Invoices', 'Payments', 'Services & Store', 'Projects',
+    'Sales Orders', 'Invoices', 'Payments', 'Services & Store', 'Digital Marketing', 'Projects',
     'Tasks', 'Teams', 'Attendance', 'Leave', 'Tickets', 'Knowledge base',
     'Messages', 'Events', 'Notes', 'Files', 'Expenses', 'Reports', 'Settings'
   ],
@@ -530,6 +540,13 @@ export const usePermissionStore = create<PermissionState>()(
         const state = get()
 
         const ALIAS_MAP: Record<string, string> = {
+          'marketing': 'Digital Marketing',
+          'digital marketing': 'Digital Marketing',
+          'digital_marketing': 'Digital Marketing',
+          'client marketing report': 'Digital Marketing',
+          'marketing plans & retainers': 'Digital Marketing',
+          'posts & deliverables': 'Digital Marketing',
+          'marketing leads & ads': 'Digital Marketing',
           'sales': 'Invoices',
           'store': 'Services & Store',
           'packages & retainers': 'Subscriptions',
@@ -611,6 +628,13 @@ export const usePermissionStore = create<PermissionState>()(
         const uAny = user as any
 
         const ALIAS_MAP: Record<string, string> = {
+          'marketing': 'Digital Marketing',
+          'digital marketing': 'Digital Marketing',
+          'digital_marketing': 'Digital Marketing',
+          'client marketing report': 'Digital Marketing',
+          'marketing plans & retainers': 'Digital Marketing',
+          'posts & deliverables': 'Digital Marketing',
+          'marketing leads & ads': 'Digital Marketing',
           'sales': 'Invoices',
           'store': 'Services & Store',
           'packages & retainers': 'Subscriptions',
@@ -752,6 +776,13 @@ export const usePermissionStore = create<PermissionState>()(
 
         // Module group alias mappings for backwards-compatible queries (e.g. "Sales" -> Invoices, etc.)
         const ALIAS_MAP: Record<string, string> = {
+          'marketing': 'Digital Marketing',
+          'digital marketing': 'Digital Marketing',
+          'digital_marketing': 'Digital Marketing',
+          'client marketing report': 'Digital Marketing',
+          'marketing plans & retainers': 'Digital Marketing',
+          'posts & deliverables': 'Digital Marketing',
+          'marketing leads & ads': 'Digital Marketing',
           'sales': 'Invoices',
           'store': 'Services & Store',
           'packages & retainers': 'Subscriptions',

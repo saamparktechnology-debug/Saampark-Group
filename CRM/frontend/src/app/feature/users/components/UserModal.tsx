@@ -52,6 +52,13 @@ const MODULE_CATEGORIES: { name: string; icon: string; modules: ModuleName[] }[]
     ] as ModuleName[],
   },
   {
+    name: "Digital Marketing & Campaigns",
+    icon: "📢",
+    modules: [
+      "Digital Marketing"
+    ] as ModuleName[],
+  },
+  {
     name: "Projects & Operations",
     icon: "🚀",
     modules: [
@@ -427,7 +434,7 @@ export function UserModal({ isOpen, onClose, onSave, editingUser, initialRole }:
         const isClientMod = clientMods.includes(m as ModuleName)
         nextMatrix[m] = isClientMod ? { view: true, add: m === "Tickets" || m === "Messages", edit: false, delete: false } : { view: false, add: false, edit: false, delete: false }
       } else if (presetType === "salesCRM") {
-        const salesMods: ModuleName[] = ["Leads", "Clients", "Quotations", "Estimates", "Sales Orders", "Invoices", "Tasks", "Messages", "Events"] as ModuleName[]
+        const salesMods: ModuleName[] = ["Leads", "Clients", "Quotations", "Estimates", "Sales Orders", "Invoices", "Digital Marketing", "Tasks", "Messages", "Events"] as ModuleName[]
         const isSalesMod = salesMods.includes(m as ModuleName)
         nextMatrix[m] = isSalesMod ? { view: true, add: true, edit: true, delete: false } : { view: false, add: false, edit: false, delete: false }
       } else if (presetType === "finance") {
