@@ -353,14 +353,12 @@ export default function CompaniesMain() {
         return uComp ? isMatchingCompany(c, uComp) : false
       }
 
-      // Safe merge helper: never clobbers populated target fields with null, undefined, or empty strings
+      // Safe merge helper: preserves user-edited values and allows intentional field updates
       const mergeSafe = (target: any, source: any) => {
         if (!source || typeof source !== 'object') return { ...(target || {}) }
         const res = { ...(target || {}) }
         for (const [k, v] of Object.entries(source)) {
-          if (v !== null && v !== undefined && v !== '') {
-            res[k] = v
-          } else if (res[k] === undefined || res[k] === null) {
+          if (v !== undefined) {
             res[k] = v
           }
         }
@@ -395,13 +393,15 @@ export default function CompaniesMain() {
         compRes.forEach(c => {
           if (!isCompanyDeleted(c.id, c.slug) && isCompanyAllowed(c)) {
             const key = c.slug || String(c.id)
-            const prev = compMap.get(key) || compMap.get(c.slug) || compMap.get(String(c.id))
-            const merged = mergeSafe(prev, c)
-            if (c.terms_conditions !== undefined && c.terms_conditions !== null && c.terms_conditions !== '') {
-              merged.terms_conditions = c.terms_conditions
+            const prev = compMap.get(key) || compMap.get(c.slug) || compMap.get(String(c.id)) || {}
+            const merged: any = { ...prev }
+            for (const [k, v] of Object.entries(c)) {
+              if (v !== null && v !== undefined) {
+                merged[k] = v
+              }
             }
-            if (c.invoice_notes !== undefined && c.invoice_notes !== null && c.invoice_notes !== '') {
-              merged.invoice_notes = c.invoice_notes
+            if (c.name && String(c.name).trim() !== '') {
+              merged.name = c.name
             }
             compMap.set(key, merged)
           }

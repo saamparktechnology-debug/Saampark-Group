@@ -167,9 +167,13 @@ export default function QuotationsMain() {
     const targetBranchName = branchObj?.name?.toLowerCase().trim() || ""
 
     return quotations.filter(q => {
-      // 1. Client Scoping: Client users strictly only see quotations created for them
+      // 1. Client Scoping: Client users strictly see all quotations created for them across their company (bypassing internal branch filter)
       if (isClientUser) {
         if (!isRecordAssignedToClient(q, user)) return false
+        if (statusFilter !== "all" && q.status !== statusFilter) return false
+        return q.number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          q.customer?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (q.customerEmail && q.customerEmail.toLowerCase().includes(searchQuery.toLowerCase()))
       }
 
       // 2. Team Member Scoping: Team members only see quotations they created, are assigned to, or for their projects
@@ -289,9 +293,16 @@ export default function QuotationsMain() {
     const approvalStatus: "pending" | "approved" | "rejected" = (editingItem as any)?.approvalStatus || (isTeamMember ? "pending" : "approved")
     const quoteStatus = (isTeamMember && approvalStatus === "pending") ? "Pending Approval" : form.status
 
+    const effClientId = selectedClientId || (editingItem as any)?.clientId || (editingItem as any)?.customerId || undefined
+
     const payload: QuotationData = {
       id: editingItem ? editingItem.id : `qt_${Date.now()}`,
       ...form,
+      clientId: effClientId,
+      customerId: effClientId,
+      client_id: effClientId,
+      clientName: form.customer,
+      clientEmail: form.customerEmail,
       status: quoteStatus,
       approvalStatus,
       subtotal,

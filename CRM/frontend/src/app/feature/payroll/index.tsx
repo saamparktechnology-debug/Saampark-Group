@@ -31,7 +31,12 @@ interface PayrollItem {
 export default function PayrollMain() {
   const { user, activeCompanyId } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
-  const canAdd = canPerformAction(user, "Users", "add")
+
+  const roleNorm = String(user?.role || "").toLowerCase().trim()
+  const isAdmin = roleNorm === "super admin" || roleNorm === "admin" || roleNorm.includes("admin")
+  const isClient = roleNorm === "clients" || roleNorm === "client" || roleNorm.includes("client")
+  const isTeamMember = !isAdmin && !isClient
+  const canAdd = isAdmin || canPerformAction(user, "Users", "add")
 
   const [payrolls, setPayrolls] = React.useState<PayrollItem[]>([])
   const [projects, setProjects] = React.useState<Project[]>([])
@@ -40,6 +45,13 @@ export default function PayrollMain() {
   const [statusFilter, setStatusFilter] = React.useState("all")
   const [projectFilter, setProjectFilter] = React.useState("all")
   const [isModalOpen, setIsModalOpen] = React.useState(false)
+
+  // Payout request modal state (for team member self-service)
+  const [isPayoutModalOpen, setIsPayoutModalOpen] = React.useState(false)
+  const [payoutReqAmount, setPayoutReqAmount] = React.useState("")
+  const [payoutReqType, setPayoutReqType] = React.useState<"Monthly Salary Payout" | "Salary Advance" | "Expense Reimbursement">("Monthly Salary Payout")
+  const [payoutReqNotes, setPayoutReqNotes] = React.useState("")
+  const [isSubmittingPayoutReq, setIsSubmittingPayoutReq] = React.useState(false)
 
   // Form state
   const [selectionMode, setSelectionMode] = React.useState<"project" | "individual">("project")
@@ -108,6 +120,17 @@ export default function PayrollMain() {
   }
 
   const filtered = payrolls.filter(p => {
+    // If team member: strictly only see their own payroll records
+    if (isTeamMember) {
+      const uId = String(user?.id || "").toLowerCase().trim()
+      const uName = String(user?.name || "").toLowerCase().trim()
+      const pEmp = (p.employee || "").toLowerCase().trim()
+      const pEmpId = String(p.employeeId || "").toLowerCase().trim()
+
+      const isMine = (uId && pEmpId === uId) || (uName && (pEmp === uName || pEmp.includes(uName)))
+      if (!isMine) return false
+    }
+
     const matchSearch = 
       p.employee.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (p.projectName || "").toLowerCase().includes(searchQuery.toLowerCase())
@@ -115,6 +138,71 @@ export default function PayrollMain() {
     if (projectFilter !== "all" && p.projectId !== projectFilter) return false
     return matchSearch
   })
+
+  // Team Member Metrics
+  const teamMetrics = React.useMemo(() => {
+    const myRecords = filtered
+    const totalDue = myRecords.filter(r => r.status === "Pending").reduce((sum, r) => sum + (r.net || 0), 0)
+    const totalPaid = myRecords.filter(r => r.status === "Paid").reduce((sum, r) => sum + (r.net || 0), 0)
+    const latest = myRecords[0]
+    return {
+      totalDue,
+      totalPaid,
+      latestNet: latest ? latest.net : 0,
+      bankName: user?.kycData?.bankName || "Branch Remittance",
+      accountNumber: user?.kycData?.accountNumber ? `••••${user.kycData.accountNumber.slice(-4)}` : "Verified Remittance",
+    }
+  }, [filtered, user])
+
+  const handleSubmitPayoutRequest = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!payoutReqAmount || Number(payoutReqAmount) <= 0) return
+
+    setIsSubmittingPayoutReq(true)
+    try {
+      const { submitForApproval } = await import("@/services/approvalService")
+      const reqId = `payreq_${Date.now()}`
+      await submitForApproval({
+        type: "payout",
+        title: `${payoutReqType} of ₹${Number(payoutReqAmount).toLocaleString("en-IN")}`,
+        documentNumber: reqId,
+        documentId: reqId,
+        clientName: user?.name || "Team Member",
+        clientEmail: user?.email || "",
+        amount: Number(payoutReqAmount),
+        submittedBy: {
+          id: String(user?.id || ""),
+          name: user?.name || "Team Member",
+          email: user?.email || "",
+          role: user?.role || "Teams",
+        },
+        companyId: activeCompanyId || "tech",
+        branchId: user?.branchId,
+        branchName: user?.branchName,
+        dataSnapshot: {
+          amount: Number(payoutReqAmount),
+          type: payoutReqType,
+          notes: payoutReqNotes,
+          bankDetails: user?.kycData ? {
+            bankName: user.kycData.bankName,
+            accountNumber: user.kycData.accountNumber,
+            ifscCode: user.kycData.ifscCode,
+            upiId: user.kycData.upiId,
+          } : undefined,
+          submittedAt: new Date().toISOString(),
+        }
+      })
+
+      setIsPayoutModalOpen(false)
+      setPayoutReqAmount("")
+      setPayoutReqNotes("")
+      alert("✅ Payout request submitted! Your request has been forwarded for Administrator review and disbursement.")
+    } catch (err: any) {
+      alert(`Failed to submit payout request: ${err.message}`)
+    } finally {
+      setIsSubmittingPayoutReq(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -142,6 +230,18 @@ export default function PayrollMain() {
     loadData()
   }
 
+  if (isClient) {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center p-6 text-center">
+        <div className="max-w-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 shadow-sm space-y-3">
+          <DollarSign className="mx-auto text-blue-500" size={32} />
+          <h2 className="text-lg font-bold">Client Portal Notice</h2>
+          <p className="text-xs text-muted-foreground">The Payroll module is reserved for internal company staff and employee compensation. Please visit Invoices or Projects to view your commercial accounts.</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="space-y-6 max-w-[1600px] mx-auto p-4 sm:p-6 pb-12">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-100 dark:border-zinc-800 pb-4">
@@ -150,13 +250,16 @@ export default function PayrollMain() {
             <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 border border-blue-200/60 dark:border-blue-800">
               <DollarSign size={22} />
             </div>
-            <span>Payroll Management</span>
+            <span>{isTeamMember ? "My Earnings & Compensation" : "Payroll Management"}</span>
           </h1>
           <p className="text-xs text-zinc-500 mt-1">
-            Generate and manage employee payroll against specific projects or individual team members
+            {isTeamMember
+              ? "View your personal earnings breakdown, payslips, and request advances or payouts"
+              : "Generate and manage employee payroll against specific projects or individual team members"}
           </p>
         </div>
-        {canAdd && (
+
+        {isAdmin ? (
           <button 
             onClick={() => { 
               setSelectionMode("project")
@@ -179,8 +282,37 @@ export default function PayrollMain() {
             <Plus size={14} />
             <span>Generate Payroll</span>
           </button>
+        ) : (
+          <button 
+            onClick={() => setIsPayoutModalOpen(true)} 
+            className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors shadow-xs cursor-pointer"
+          >
+            <Plus size={14} />
+            <span>Request Payout / Advance</span>
+          </button>
         )}
       </div>
+
+      {/* Team Member Personal Earnings KPI Cards */}
+      {isTeamMember && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 space-y-1">
+            <span className="text-xs text-zinc-500 font-medium">Pending / Due Payout</span>
+            <p className="text-2xl font-black text-amber-600 font-mono">₹{teamMetrics.totalDue.toLocaleString("en-IN")}</p>
+            <p className="text-[11px] text-zinc-400">Available for payout disbursement</p>
+          </div>
+          <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 space-y-1">
+            <span className="text-xs text-zinc-500 font-medium">Approved & Paid YTD</span>
+            <p className="text-2xl font-black text-emerald-600 font-mono">₹{teamMetrics.totalPaid.toLocaleString("en-IN")}</p>
+            <p className="text-[11px] text-zinc-400">Total received compensation</p>
+          </div>
+          <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 space-y-1">
+            <span className="text-xs text-zinc-500 font-medium">Registered Payout Account</span>
+            <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{teamMetrics.bankName}</p>
+            <p className="font-mono text-xs text-blue-600 dark:text-blue-400 font-semibold">{teamMetrics.accountNumber}</p>
+          </div>
+        </div>
+      )}
 
       {/* Filter and Search controls */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white dark:bg-zinc-900 p-3 rounded-2xl border border-zinc-200/80 dark:border-zinc-800 shadow-xs">
@@ -283,7 +415,16 @@ export default function PayrollMain() {
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center justify-center gap-1.5">
-                        {item.status === "Pending" && canAdd && (
+                        {item.status === "Paid" ? (
+                          <button
+                            type="button"
+                            onClick={() => window.print()}
+                            className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                          >
+                            <Check size={12} />
+                            <span>Payslip</span>
+                          </button>
+                        ) : isAdmin ? (
                           <button 
                             onClick={() => handleMarkPaid(item.id)} 
                             className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
@@ -291,6 +432,10 @@ export default function PayrollMain() {
                             <Check size={12} />
                             <span>Mark Paid</span>
                           </button>
+                        ) : (
+                          <span className="text-[11px] font-medium text-amber-600 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded">
+                            Pending Clearance
+                          </span>
                         )}
                       </div>
                     </td>
@@ -516,6 +661,105 @@ export default function PayrollMain() {
                     className="px-5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs cursor-pointer"
                   >
                     Generate Payroll
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+        {/* Request Payout / Advance Modal for Team Members */}
+        {isPayoutModalOpen && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }} 
+              animate={{ opacity: 1, scale: 1 }} 
+              exit={{ opacity: 0, scale: 0.95 }} 
+              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden text-xs"
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/50 text-blue-600">
+                    <DollarSign size={16} />
+                  </div>
+                  <h3 className="font-bold text-sm">Request Salary Payout / Advance</h3>
+                </div>
+                <button 
+                  onClick={() => setIsPayoutModalOpen(false)} 
+                  className="p-1 text-zinc-400 hover:text-zinc-600 rounded-lg cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmitPayoutRequest} className="p-6 space-y-4">
+                <div>
+                  <label className="block text-zinc-700 dark:text-zinc-300 font-semibold mb-1">
+                    Request Category *
+                  </label>
+                  <select
+                    value={payoutReqType}
+                    onChange={(e: any) => setPayoutReqType(e.target.value)}
+                    className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg focus:outline-none cursor-pointer"
+                  >
+                    <option value="Monthly Salary Payout">Monthly Salary Payout</option>
+                    <option value="Salary Advance">Salary Advance</option>
+                    <option value="Expense Reimbursement">Expense Reimbursement / Claim</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-zinc-700 dark:text-zinc-300 font-semibold mb-1">
+                    Requested Amount (₹) *
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    value={payoutReqAmount}
+                    onChange={(e) => setPayoutReqAmount(e.target.value)}
+                    placeholder="e.g. 25000"
+                    className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg font-mono text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+
+                {/* Auto-filled remittance account info */}
+                <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 rounded-xl space-y-1">
+                  <span className="text-[10px] text-zinc-500 uppercase font-bold">Disbursement Target Account:</span>
+                  <p className="font-bold text-zinc-900 dark:text-zinc-100">
+                    {user?.kycData?.bankName || "Registered Branch Remittance Account"}
+                  </p>
+                  <p className="font-mono text-[11px] text-blue-600 dark:text-blue-400">
+                    {user?.kycData?.accountNumber ? `A/C: ${user.kycData.accountNumber} (${user.kycData.ifscCode || ""})` : "Verified Remittance Details"}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-zinc-700 dark:text-zinc-300 font-semibold mb-1">
+                    Reason / Notes
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={payoutReqNotes}
+                    onChange={(e) => setPayoutReqNotes(e.target.value)}
+                    placeholder="Brief explanation for finance and admin review..."
+                    className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg focus:outline-none"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-3 border-t border-zinc-100 dark:border-zinc-800">
+                  <button 
+                    type="button" 
+                    onClick={() => setIsPayoutModalOpen(false)} 
+                    className="px-4 py-2 text-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl font-semibold cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit" 
+                    disabled={isSubmittingPayoutReq}
+                    className="px-5 py-2 font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs cursor-pointer flex items-center gap-1.5"
+                  >
+                    <span>{isSubmittingPayoutReq ? "Submitting..." : "Submit Payout Request"}</span>
                   </button>
                 </div>
               </form>

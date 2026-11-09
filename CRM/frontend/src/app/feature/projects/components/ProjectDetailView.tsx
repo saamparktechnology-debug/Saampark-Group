@@ -87,6 +87,39 @@ export function ProjectDetailView({
   onOpenEditModal,
 }: ProjectDetailViewProps) {
   const { user } = useAuthStore()
+
+  const roleNorm = String(user?.role || "").toLowerCase().trim()
+  const isAdmin = roleNorm === "super admin" || roleNorm === "admin" || roleNorm.includes("admin")
+  const isClient = roleNorm === "clients" || roleNorm === "client" || roleNorm.includes("client")
+
+  const isAssignedTeamMember = React.useMemo(() => {
+    if (!user || !selectedProject) return false
+    const uId = String(user.id || "").toLowerCase().trim()
+    const uEmail = (user.email || "").toLowerCase().trim()
+    const uName = (user.name || "").toLowerCase().trim()
+
+    const creatorId = String((selectedProject as any).createdById || "").toLowerCase().trim()
+    const creatorEmail = String((selectedProject as any).createdByEmail || "").toLowerCase().trim()
+    if (uId && creatorId === uId) return true
+    if (uEmail && creatorEmail === uEmail) return true
+
+    const members = Array.isArray(selectedProject.members) ? selectedProject.members : []
+    const isMember = members.some((m: any) => {
+      if (!m) return false
+      const mId = String(typeof m === "string" ? "" : m.id || "").toLowerCase().trim()
+      const mEmail = String(typeof m === "string" ? "" : m.email || "").toLowerCase().trim()
+      const mName = String(typeof m === "string" ? m : m.name || "").toLowerCase().trim()
+      return (uId && mId === uId) || (uEmail && mEmail === uEmail) || (uName && mName === uName)
+    })
+    if (isMember) return true
+
+    const lead = String((selectedProject as any).lead || (selectedProject as any).developer || "").toLowerCase().trim()
+    if (uName && (lead === uName || lead.includes(uName))) return true
+
+    return false
+  }, [user, selectedProject])
+
+  const canManageProgress = isAdmin || isAssignedTeamMember
   const [activeTab, setActiveTab] = React.useState(() => {
     if (initialTab && initialTab !== "Overview") return initialTab
     if (selectedProject.projectType === "Digital Marketing Campaign" || (selectedProject as any).marketingPackage?.enabled) {
@@ -150,20 +183,36 @@ export function ProjectDetailView({
     { name: "Done", value: selectedProject.taskBreakdown?.done || 3, color: DONUT_COLORS.done },
   ]
 
-  const navTabs = [
-    "Overview",
-    "Digital Marketing (Form 9)",
-    "Invoices",
-    "Tasks List",
-    "Tasks Kanban",
-    "Milestones",
-    "Gantt",
-    "Notes",
-    "Files",
-    "Comments",
-    "Timesheets",
-    "Expenses",
-  ]
+  const navTabs = React.useMemo(() => {
+    if (isClient) {
+      return [
+        "Overview",
+        "Milestones",
+        "Tasks List",
+        "Invoices",
+        "Files",
+        "Comments",
+      ]
+    }
+    const base = [
+      "Overview",
+      "Digital Marketing (Form 9)",
+      "Invoices",
+      "Tasks List",
+      "Tasks Kanban",
+      "Milestones",
+      "Gantt",
+      "Notes",
+      "Files",
+      "Comments",
+    ]
+    if (isAdmin) {
+      base.push("Timesheets", "Expenses")
+    } else {
+      base.push("Timesheets")
+    }
+    return base
+  }, [isClient, isAdmin])
 
   // Commercial Origin Documents & Form 9 State
   const [viewingQuotation, setViewingQuotation] = React.useState<any | null>(null)
@@ -614,30 +663,36 @@ export function ProjectDetailView({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => openAddMilestone("Frontend")}
-            className="px-2.5 py-1 text-[11px] font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-100 transition-colors cursor-pointer"
-          >
-            + Frontend Done
-          </button>
-          <button
-            type="button"
-            onClick={() => openAddMilestone("Backend")}
-            className="px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-100 transition-colors cursor-pointer"
-          >
-            + Backend Done
-          </button>
-          <button
-            type="button"
-            onClick={() => openAddMilestone("Custom")}
-            className="flex items-center gap-1 px-3 py-1 text-[11px] font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-2xs cursor-pointer"
-          >
-            <Plus size={13} />
-            <span>Add Update</span>
-          </button>
-        </div>
+        {canManageProgress ? (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => openAddMilestone("Frontend")}
+              className="px-2.5 py-1 text-[11px] font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-100 transition-colors cursor-pointer"
+            >
+              + Frontend Done
+            </button>
+            <button
+              type="button"
+              onClick={() => openAddMilestone("Backend")}
+              className="px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-100 transition-colors cursor-pointer"
+            >
+              + Backend Done
+            </button>
+            <button
+              type="button"
+              onClick={() => openAddMilestone("Custom")}
+              className="flex items-center gap-1 px-3 py-1 text-[11px] font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-2xs cursor-pointer"
+            >
+              <Plus size={13} />
+              <span>Add Update</span>
+            </button>
+          </div>
+        ) : (
+          <span className="text-[11px] text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-2.5 py-1 rounded-lg">
+            Progress Tracking (Managed by Admin & Assigned Team)
+          </span>
+        )}
       </div>
 
       <div className="space-y-3">
@@ -1759,25 +1814,40 @@ export function ProjectDetailView({
 
           {/* Action buttons */}
           <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={() => onOpenEditModal(selectedProject)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md hover:bg-zinc-100 transition-colors cursor-pointer"
-            >
-              <Settings size={13} className="text-zinc-500" />
-              <span>Project Settings</span>
-            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => onOpenEditModal(selectedProject)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md hover:bg-zinc-100 transition-colors cursor-pointer"
+              >
+                <Settings size={13} className="text-zinc-500" />
+                <span>Project Settings</span>
+              </button>
+            )}
 
-            <button
-              type="button"
-              onClick={() => setIsTimerRunning(!isTimerRunning)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white rounded-md transition-colors shadow-sm cursor-pointer ${
-                isTimerRunning ? "bg-amber-600 hover:bg-amber-700" : "bg-emerald-500 hover:bg-emerald-600"
-              }`}
-            >
-              {isTimerRunning ? <Pause size={13} /> : <Play size={13} />}
-              <span>{isTimerRunning ? `Timer: ${formatTimer(timerSeconds)}` : "🟢 Start timer"}</span>
-            </button>
+            {canManageProgress && (
+              <button
+                type="button"
+                onClick={() => openAddMilestone("Frontend")}
+                className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 rounded-md hover:bg-blue-100 transition-colors cursor-pointer"
+              >
+                <Code2 size={13} />
+                <span>Update Progress</span>
+              </button>
+            )}
+
+            {!isClient && (
+              <button
+                type="button"
+                onClick={() => setIsTimerRunning(!isTimerRunning)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white rounded-md transition-colors shadow-sm cursor-pointer ${
+                  isTimerRunning ? "bg-amber-600 hover:bg-amber-700" : "bg-emerald-500 hover:bg-emerald-600"
+                }`}
+              >
+                {isTimerRunning ? <Pause size={13} /> : <Play size={13} />}
+                <span>{isTimerRunning ? `Timer: ${formatTimer(timerSeconds)}` : "🟢 Start timer"}</span>
+              </button>
+            )}
           </div>
         </div>
 

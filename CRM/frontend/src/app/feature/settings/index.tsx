@@ -194,6 +194,20 @@ export default function SettingsMain() {
   const frontDocInputRef = React.useRef<HTMLInputElement>(null)
   const backDocInputRef = React.useRef<HTMLInputElement>(null)
 
+  // ── Bank Change Request State ──
+  const [showBankChangeModal, setShowBankChangeModal] = React.useState(false)
+  const [newReqBankName, setNewReqBankName] = React.useState("")
+  const [newReqAccountHolderName, setNewReqAccountHolderName] = React.useState(user?.name || "")
+  const [newReqAccountNumber, setNewReqAccountNumber] = React.useState("")
+  const [newReqConfirmAccountNumber, setNewReqConfirmAccountNumber] = React.useState("")
+  const [newReqIfscCode, setNewReqIfscCode] = React.useState("")
+  const [newReqUpiId, setNewReqUpiId] = React.useState("")
+  const [newReqProofUrl, setNewReqProofUrl] = React.useState("")
+  const [newReqReason, setNewReqReason] = React.useState("")
+  const [isUploadingBankProof, setIsUploadingBankProof] = React.useState(false)
+  const [isSubmittingBankChange, setIsSubmittingBankChange] = React.useState(false)
+  const bankProofInputRef = React.useRef<HTMLInputElement>(null)
+
   // ── Company Payment QR & Bank Details State (for Invoices) ──
   const [payQrUrl, setPayQrUrl] = React.useState("")
   const [payBankName, setPayBankName] = React.useState("State Bank of India")
@@ -501,6 +515,86 @@ export default function SettingsMain() {
       setErrorMsg("Failed to upload document. Please retry.")
     } finally {
       setIsUploadingBack(false)
+    }
+  }
+
+  // Handle Bank Proof Upload for Change Request
+  const handleBankProofUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setIsUploadingBankProof(true)
+    try {
+      const res = await uploadToImgBB(file, `bank_proof_${user?.id || "doc"}_${Date.now()}`)
+      if (res.url) {
+        setNewReqProofUrl(res.url)
+        setSuccessMsg("📄 Passbook/Cheque document uploaded successfully!")
+        setTimeout(() => setSuccessMsg(""), 3000)
+      }
+    } catch {
+      setErrorMsg("Failed to upload document proof. Please retry.")
+    } finally {
+      setIsUploadingBankProof(false)
+    }
+  }
+
+  // Submit Bank Account & UPI Change Request
+  const handleSubmitBankChangeRequest = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setErrorMsg("")
+    if (!newReqAccountNumber.trim() || !newReqIfscCode.trim()) {
+      setErrorMsg("Please provide both New Bank Account Number and IFSC Code.")
+      return
+    }
+    if (newReqAccountNumber.trim() !== newReqConfirmAccountNumber.trim()) {
+      setErrorMsg("New Account Number and Confirmation do not match.")
+      return
+    }
+
+    setIsSubmittingBankChange(true)
+    try {
+      const changeRequest = {
+        bankName: newReqBankName.trim() || "N/A",
+        accountHolderName: newReqAccountHolderName.trim() || user?.name || "",
+        accountNumber: newReqAccountNumber.trim(),
+        ifscCode: newReqIfscCode.trim().toUpperCase(),
+        upiId: newReqUpiId.trim() || "",
+        bankProofUrl: newReqProofUrl || "",
+        reason: newReqReason.trim() || "Salary Remittance Account Update",
+        status: "pending",
+        requestedAt: new Date().toISOString(),
+      }
+
+      const existingKyc = user?.kycData || {}
+      const updatedKyc = {
+        ...existingKyc,
+        bankChangeRequest: changeRequest,
+      }
+
+      const updatedUser: any = {
+        ...(user || {}),
+        kycData: updatedKyc,
+      }
+
+      if (user?.role) {
+        loginAs(user.role, updatedUser)
+      }
+
+      const targetId = user?.id || user?.email
+      if (targetId) {
+        const { api } = await import("@/lib/api")
+        await api.put(`/users/${encodeURIComponent(targetId)}`, {
+          kyc_data: updatedKyc,
+          kycData: updatedKyc,
+        }).catch(console.warn)
+      }
+
+      setShowBankChangeModal(false)
+      setSuccessMsg("🏦 Bank change request submitted! Awaiting administrator approval. Remittances will use current account until approved.")
+      setTimeout(() => setSuccessMsg(""), 6000)
+    } catch (err: any) {
+      setErrorMsg(`Failed to submit bank change request: ${err.message}`)
+    } finally {
+      setIsSubmittingBankChange(false)
     }
   }
 
@@ -1519,6 +1613,75 @@ export default function SettingsMain() {
             </div>
           </div>
 
+          {/* Bank Change Request Actions & Status Banner for Verified Team Members */}
+          {kycStatus === "Verified" && (
+            <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 space-y-3">
+              {user?.kycData?.bankChangeRequest?.status === "pending" ? (
+                <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
+                      <AlertCircle size={15} />
+                      <span>Bank Detail Change Request Pending Admin Approval</span>
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-800 dark:text-amber-200">
+                      Submitted on {new Date(user.kycData.bankChangeRequest.requestedAt || Date.now()).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs p-2.5 rounded-xl bg-white/60 dark:bg-zinc-800/60 border border-amber-500/20">
+                    <div>
+                      <span className="text-[10px] text-zinc-500 uppercase font-bold">Requested Bank:</span>
+                      <p className="font-bold text-zinc-900 dark:text-zinc-100">{user.kycData.bankChangeRequest.bankName}</p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-zinc-500 uppercase font-bold">A/C Number:</span>
+                      <p className="font-mono font-bold text-zinc-900 dark:text-zinc-100">{user.kycData.bankChangeRequest.accountNumber}</p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-zinc-500 uppercase font-bold">IFSC Code:</span>
+                      <p className="font-mono font-bold text-zinc-900 dark:text-zinc-100">{user.kycData.bankChangeRequest.ifscCode}</p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-zinc-500 uppercase font-bold">UPI ID:</span>
+                      <p className="font-mono font-bold text-zinc-900 dark:text-zinc-100">{user.kycData.bankChangeRequest.upiId || "N/A"}</p>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-amber-800 dark:text-amber-300 font-medium">
+                    ⚠️ <strong>Notice:</strong> Your payout remittances and salary will strictly continue to route to your currently verified account until an Administrator approves this change.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
+                  <div className="flex items-center gap-2.5 text-emerald-800 dark:text-emerald-300 text-xs">
+                    <ShieldCheck size={20} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
+                    <div>
+                      <p className="font-bold">Verified Remittance Account Active</p>
+                      <p className="text-[11px] opacity-80">All company payroll and project payouts are securely deposited into this account.</p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewReqBankName(kycBankName || "")
+                      setNewReqAccountHolderName(kycAccountHolderName || user?.name || "")
+                      setNewReqAccountNumber("")
+                      setNewReqConfirmAccountNumber("")
+                      setNewReqIfscCode(kycIfscCode || "")
+                      setNewReqUpiId(kycUpiId || "")
+                      setNewReqProofUrl("")
+                      setNewReqReason("")
+                      setShowBankChangeModal(true)
+                    }}
+                    className="px-4 py-2 text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-xl transition-all cursor-pointer shrink-0 flex items-center gap-1.5"
+                  >
+                    <CreditCard size={14} />
+                    <span>Request Bank / UPI Change</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Submit Button */}
           {kycStatus !== "Verified" && (
             <div className="flex justify-end pt-4 border-t border-zinc-100 dark:border-zinc-800">
@@ -1533,6 +1696,165 @@ export default function SettingsMain() {
             </div>
           )}
         </form>
+      )}
+
+      {/* ── MODAL: REQUEST BANK & UPI DETAILS CHANGE ────────────────────────── */}
+      {showBankChangeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-2xl max-w-lg w-full space-y-4 text-xs"
+          >
+            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600">
+                  <CreditCard size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-foreground">Request Bank / UPI Details Change</h3>
+                  <p className="text-[11px] text-muted-foreground">Submit updated remittance account for Admin verification</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBankChangeModal(false)}
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitBankChangeRequest} className="space-y-3">
+              <div>
+                <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">New Bank Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={newReqBankName}
+                  onChange={(e) => setNewReqBankName(e.target.value)}
+                  placeholder="e.g. State Bank of India / HDFC Bank"
+                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Account Holder Legal Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={newReqAccountHolderName}
+                  onChange={(e) => setNewReqAccountHolderName(e.target.value)}
+                  placeholder="Must match your KYC ID legal name"
+                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">New Account Number *</label>
+                  <input
+                    type="password"
+                    required
+                    value={newReqAccountNumber}
+                    onChange={(e) => setNewReqAccountNumber(e.target.value)}
+                    placeholder="Enter account number"
+                    className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Confirm Account Number *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newReqConfirmAccountNumber}
+                    onChange={(e) => setNewReqConfirmAccountNumber(e.target.value)}
+                    placeholder="Re-type account number"
+                    className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">IFSC Code *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newReqIfscCode}
+                    onChange={(e) => setNewReqIfscCode(e.target.value.toUpperCase())}
+                    placeholder="e.g. SBIN0001234"
+                    className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">UPI ID / VPA</label>
+                  <input
+                    type="text"
+                    value={newReqUpiId}
+                    onChange={(e) => setNewReqUpiId(e.target.value)}
+                    placeholder="e.g. yourname@okhdfcbank"
+                    className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-mono focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">Reason for Bank Change</label>
+                <input
+                  type="text"
+                  value={newReqReason}
+                  onChange={(e) => setNewReqReason(e.target.value)}
+                  placeholder="e.g. Primary salary account updated"
+                  className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Upload New Passbook / Cheque Proof */}
+              <div>
+                <label className="block text-zinc-600 dark:text-zinc-400 font-semibold mb-1">New Bank Passbook / Cancelled Cheque Photo</label>
+                <input
+                  type="file"
+                  ref={bankProofInputRef}
+                  accept="image/*"
+                  onChange={handleBankProofUpload}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => bankProofInputRef.current?.click()}
+                  disabled={isUploadingBankProof}
+                  className="w-full px-3 py-2 border border-dashed border-zinc-300 dark:border-zinc-700 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800 text-center flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Upload size={14} className={isUploadingBankProof ? "animate-bounce" : ""} />
+                  <span>{newReqProofUrl ? "✅ Document Photo Attached (Click to change)" : isUploadingBankProof ? "Uploading..." : "Click to Upload New Cheque / Passbook Image"}</span>
+                </button>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-800 dark:text-amber-300">
+                🔒 <strong>Security Policy:</strong> Until verified and approved by the company administrator, your previous verified bank account will remain active.
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setShowBankChangeModal(false)}
+                  className="px-4 py-2 rounded-xl text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingBankChange}
+                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold flex items-center gap-1.5 cursor-pointer shadow-sm"
+                >
+                  <CheckCircle2 size={14} />
+                  <span>{isSubmittingBankChange ? "Submitting..." : "Submit Change Request"}</span>
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
       )}
 
       {/* ── TAB 2: COMPANY PROFILE (Super Admin Only) ───────────────────────── */}

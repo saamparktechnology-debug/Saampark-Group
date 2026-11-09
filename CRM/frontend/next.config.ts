@@ -23,6 +23,16 @@ const nextConfig: NextConfig = {
         source: '/api/v1/:path*',
         destination: `${targetUrl}/:path*`,
       },
+      // Hierarchical Company + Branch scoped routing
+      {
+        source: '/:company/:branch/feature/:path*',
+        destination: '/feature/:path*',
+      },
+      // Company scoped routing
+      {
+        source: '/:company/feature/:path*',
+        destination: '/feature/:path*',
+      },
     ];
   },
 };

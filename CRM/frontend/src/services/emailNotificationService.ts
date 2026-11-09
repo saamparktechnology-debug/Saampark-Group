@@ -347,11 +347,11 @@ export async function sendQuotationDetailsEmailNotification(
 
   const originUrl = typeof window !== "undefined" ? window.location.origin : "https://crm.saampark.com"
   const quotationId = quotation.id || quotation.number
-  const viewUrl = `${originUrl}/feature/quotations?view=${encodeURIComponent(quotationId)}`
-  const downloadUrl = `${originUrl}/feature/quotations?view=${encodeURIComponent(quotationId)}&action=download`
-  const acceptUrl = `${originUrl}/api/email/respond?type=quotation&id=${encodeURIComponent(quotationId)}&action=accept`
-  const modifyUrl = `${originUrl}/api/email/respond?type=quotation&id=${encodeURIComponent(quotationId)}&action=modify`
-  const declineUrl = `${originUrl}/api/email/respond?type=quotation&id=${encodeURIComponent(quotationId)}&action=decline`
+  const viewUrl = `${originUrl}/public/quotation?view=${encodeURIComponent(quotationId)}`
+  const downloadUrl = `${originUrl}/public/quotation?view=${encodeURIComponent(quotationId)}&action=download`
+  const acceptUrl = `${originUrl}/public/quotation?view=${encodeURIComponent(quotationId)}&action=accept`
+  const modifyUrl = `${originUrl}/public/quotation?view=${encodeURIComponent(quotationId)}&action=modify`
+  const declineUrl = `${originUrl}/public/quotation?view=${encodeURIComponent(quotationId)}&action=decline`
 
   // 1. In-App Notification
   recordInAppNotification(
@@ -406,11 +406,11 @@ export async function sendEstimateDetailsEmailNotification(
 
   const originUrl = typeof window !== "undefined" ? window.location.origin : "https://crm.saampark.com"
   const estimateId = estimate.id || estimate.number
-  const viewUrl = `${originUrl}/feature/estimates?view=${encodeURIComponent(estimateId)}`
-  const downloadUrl = `${originUrl}/feature/estimates?view=${encodeURIComponent(estimateId)}&action=download`
-  const acceptUrl = `${originUrl}/api/email/respond?type=estimate&id=${encodeURIComponent(estimateId)}&action=accept`
-  const modifyUrl = `${originUrl}/api/email/respond?type=estimate&id=${encodeURIComponent(estimateId)}&action=modify`
-  const declineUrl = `${originUrl}/api/email/respond?type=estimate&id=${encodeURIComponent(estimateId)}&action=decline`
+  const viewUrl = `${originUrl}/public/estimate?view=${encodeURIComponent(estimateId)}`
+  const downloadUrl = `${originUrl}/public/estimate?view=${encodeURIComponent(estimateId)}&action=download`
+  const acceptUrl = `${originUrl}/public/estimate?view=${encodeURIComponent(estimateId)}&action=accept`
+  const modifyUrl = `${originUrl}/public/estimate?view=${encodeURIComponent(estimateId)}&action=modify`
+  const declineUrl = `${originUrl}/public/estimate?view=${encodeURIComponent(estimateId)}&action=decline`
 
   // 1. In-App Notification
   recordInAppNotification(

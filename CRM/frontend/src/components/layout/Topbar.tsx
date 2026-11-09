@@ -9,6 +9,7 @@ import {
 } from "lucide-react"
 import { useTheme } from "next-themes"
 import Link from "next/link"
+import { useRouter, usePathname } from "next/navigation"
 
 import { Button } from "../ui/Button"
 import { useUIStore } from "@/store/useUIStore"
@@ -17,6 +18,8 @@ import { usePermissionStore } from "@/store/usePermissionStore"
 
 export function Topbar() {
   const { theme, setTheme } = useTheme()
+  const router = useRouter()
+  const pathname = usePathname()
   const { isSidebarCollapsed, toggleSidebar, openModal } = useUIStore()
   const { 
     user, 
@@ -34,6 +37,83 @@ export function Topbar() {
     fetchBranches,
     fetchSubBranches 
   } = useAuthStore()
+
+  // Real-time synchronization of company and branch from URL path
+  React.useEffect(() => {
+    if (!pathname || pathname === "/" || pathname.startsWith("/login")) return
+
+    const segments = pathname.split("/").filter(Boolean)
+    const featureIdx = segments.indexOf("feature")
+
+    if (featureIdx > 0) {
+      const urlCompSlug = segments[0]?.toLowerCase().trim()
+      let detectedCompId = ""
+      if (urlCompSlug.includes("consult")) {
+        detectedCompId = "consultancy"
+      } else if (urlCompSlug.includes("tech") || urlCompSlug.includes("research")) {
+        detectedCompId = "tech"
+      } else if (urlCompSlug === "all") {
+        detectedCompId = "all"
+      }
+
+      if (detectedCompId && detectedCompId !== activeCompanyId) {
+        switchCompany(detectedCompId)
+      }
+
+      if (featureIdx >= 2) {
+        const urlBranchSlug = segments[1]?.toLowerCase().trim()
+        const matchedBranch = branches.find(b => 
+          b.name.toLowerCase().replace(/\s+/g, "-") === urlBranchSlug ||
+          b.name.toLowerCase() === urlBranchSlug ||
+          String(b.code || "").toLowerCase() === urlBranchSlug ||
+          String(b.id).toLowerCase() === urlBranchSlug
+        )
+        if (matchedBranch && matchedBranch.id !== activeBranchId) {
+          switchBranch(matchedBranch.id)
+        }
+      }
+    }
+  }, [pathname, branches, activeCompanyId, activeBranchId, switchCompany, switchBranch])
+
+  const handleSelectCompany = (c: any) => {
+    setShowCompanyMenu(false)
+    const featurePath = pathname && pathname.includes("/feature/")
+      ? pathname.substring(pathname.indexOf("/feature/"))
+      : "/feature/dashboard"
+
+    if (!c || c === "all") {
+      switchCompany("all")
+      router.push(featurePath)
+      return
+    }
+
+    const cId = c.id || c.slug
+    switchCompany(cId)
+
+    const cSlug = String(c.slug || cId).toLowerCase().includes("consult") ? "consultancy" : "technology"
+    const matchingBranches = branches.filter(b => isMatchingCompany({ id: b.companyId || (b as any).company_id } as any, cId))
+    const targetBranch = matchingBranches[0]
+    const bSlug = targetBranch ? (targetBranch.code?.toLowerCase() || targetBranch.name.toLowerCase().replace(/\s+/g, "-")) : "main"
+
+    router.push(`/${cSlug}/${bSlug}${featurePath}`)
+  }
+
+  const handleSelectBranch = (b: any) => {
+    setShowBranchMenu(false)
+    const featurePath = pathname && pathname.includes("/feature/")
+      ? pathname.substring(pathname.indexOf("/feature/"))
+      : "/feature/dashboard"
+
+    if (!b) {
+      switchBranch(null)
+      return
+    }
+
+    switchBranch(b.id)
+    const cSlug = String(activeCompanyId || "technology").toLowerCase().includes("consult") ? "consultancy" : "technology"
+    const bSlug = b.code?.toLowerCase() || b.name.toLowerCase().replace(/\s+/g, "-")
+    router.push(`/${cSlug}/${bSlug}${featurePath}`)
+  }
 
   const [showProfileMenu, setShowProfileMenu] = React.useState(false)
   const [showNotifications, setShowNotifications] = React.useState(false)
@@ -273,7 +353,7 @@ export function Topbar() {
   // Sub-Branches this specific user has access to
   const allowedSubBranches = React.useMemo(() => {
     const validSubs = (subBranches || []).filter(sb => Boolean(sb && sb.id))
-    if (userScope.isSuperAdmin) return validSubs
+    if (userScope.isSuperAdmin || userScope.scopeLevel === 'company' || userScope.scopeLevel === 'global') return validSubs
     return validSubs.filter(sb => userScope.allowedSubBranchIds.some(id => String(id).toLowerCase().trim() === String(sb.id).toLowerCase().trim()))
   }, [userScope, subBranches])
 
@@ -305,14 +385,23 @@ export function Topbar() {
 
   // Sub-branches belonging to currently active branch / company scope
   const availableSubBranches = React.useMemo(() => {
+    const validSubs = allowedSubBranches || []
     if (activeBranchId) {
-      return allowedSubBranches.filter(sb => String(sb.parentBranchId || (sb as any).branch_id || (sb as any).branchId) === String(activeBranchId))
+      const targetNorm = String(activeBranchId).toLowerCase().trim()
+      const bId = activeBranch ? String(activeBranch.id).toLowerCase().trim() : ""
+      const bSlug = activeBranch ? String(activeBranch.slug || activeBranch.name).toLowerCase().trim() : ""
+
+      return validSubs.filter(sb => {
+        const pId = String(sb.parentBranchId || (sb as any).branch_id || (sb as any).branchId || "").toLowerCase().trim()
+        const pName = String((sb as any).branchName || (sb as any).branch_name || "").toLowerCase().trim()
+        return pId === targetNorm || pName === targetNorm || (bId && (pId === bId || pName === bId)) || (bSlug && (pId === bSlug || pName === bSlug))
+      })
     }
     if (activeCompanyId && activeCompanyId !== 'all') {
-      return allowedSubBranches.filter(sb => isMatchingCompany({ id: sb.companyId || (sb as any).company_id, slug: sb.companyId } as any, activeCompanyId))
+      return validSubs.filter(sb => isMatchingCompany({ id: sb.companyId || (sb as any).company_id, slug: sb.companyId } as any, activeCompanyId))
     }
-    return allowedSubBranches
-  }, [allowedSubBranches, activeBranchId, activeCompanyId])
+    return validSubs
+  }, [allowedSubBranches, activeBranchId, activeBranch, activeCompanyId])
 
   return (
     <>
@@ -428,8 +517,7 @@ export function Topbar() {
                         <div
                           onClick={(e) => {
                             e.stopPropagation()
-                            switchCompany('all')
-                            setShowCompanyMenu(false)
+                            handleSelectCompany('all')
                           }}
                           className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
                             isAllCompanies
@@ -461,8 +549,7 @@ export function Topbar() {
                             key={c.id || c.slug}
                             onClick={(e) => {
                               e.stopPropagation()
-                              switchCompany(c.id || c.slug)
-                              setShowCompanyMenu(false)
+                              handleSelectCompany(c)
                             }}
                             className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
                               isActive
@@ -577,8 +664,7 @@ export function Topbar() {
                         <div
                           onClick={(e) => {
                             e.stopPropagation()
-                            switchBranch(null)
-                            setShowBranchMenu(false)
+                            handleSelectBranch(null)
                           }}
                           className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer ${
                             !activeBranch
@@ -605,8 +691,7 @@ export function Topbar() {
                               key={b.id}
                               onClick={(e) => {
                                 e.stopPropagation()
-                                switchBranch(b.id)
-                                setShowBranchMenu(false)
+                                handleSelectBranch(b)
                               }}
                               className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer ${
                                 isBranchActive

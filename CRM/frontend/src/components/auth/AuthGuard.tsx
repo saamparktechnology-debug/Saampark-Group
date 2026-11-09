@@ -288,7 +288,11 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   // Authenticated user on protected page: Enforce URL Route Access Permissions
   const isSuperAdmin = user.role === "Super Admin"
-  const isPublicOrDashboard = !pathname || pathname === "/" || pathname === "/feature/dashboard"
+  const featureSubPath = pathname && pathname.includes("/feature/")
+    ? pathname.substring(pathname.indexOf("/feature/"))
+    : pathname
+
+  const isPublicOrDashboard = !pathname || pathname === "/" || featureSubPath === "/feature/dashboard"
 
   if (!isSuperAdmin && !isPublicOrDashboard) {
     const routeModuleMap: Record<string, string> = {
@@ -354,7 +358,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       "/feature/activity-logs": "Activity Logs",
     }
 
-    const matchedRoute = Object.keys(routeModuleMap).find(r => pathname === r || pathname.startsWith(r + "/"))
+    const matchedRoute = Object.keys(routeModuleMap).find(r => featureSubPath === r || featureSubPath?.startsWith(r + "/"))
     if (matchedRoute) {
       const targetModule = routeModuleMap[matchedRoute]
       let isAllowed = false

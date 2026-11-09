@@ -13,6 +13,7 @@ import { useAuthStore, getCompanyFullName, isMatchingCompany } from "@/store/use
 import { useTimerStore, WorkMode } from "@/store/useTimerStore"
 import { fetchModuleDataFromDB, saveModuleDataToDB, filterGlobalDeletedItems } from "@/lib/storageSync"
 import { getUsers, getUserAvatar } from "../../users/services/userService"
+import MonthlyAttendanceMatrix from "../../attendance/components/MonthlyAttendanceMatrix"
 
 export interface TimeCardRecord {
   id: string
@@ -56,6 +57,7 @@ export default function AttendanceTimecardsPage() {
     tick 
   } = useTimerStore()
 
+  const [viewLayout, setViewLayout] = React.useState<"daily" | "matrix">("daily")
   const [activeTab, setActiveTab] = React.useState<"all" | "clocked_in" | "today" | "late" | "breaks">("all")
   const [searchQuery, setSearchQuery] = React.useState("")
   const [selectedMemberFilter, setSelectedMemberFilter] = React.useState("all")
@@ -489,6 +491,44 @@ export default function AttendanceTimecardsPage() {
 
   return (
     <div className="space-y-6 max-w-[1550px] mx-auto p-4 sm:p-6 pb-24 font-sans">
+      {/* ── VIEW SWITCHER (Monthly Matrix vs Daily Shift Logs) ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl p-2.5 sm:px-4 shadow-xs">
+        <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-zinc-800 rounded-xl">
+          <button
+            onClick={() => setViewLayout("daily")}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              viewLayout === "daily"
+                ? "bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-xs"
+                : "text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200"
+            }`}
+          >
+            <Clock className="w-3.5 h-3.5" />
+            <span>Daily Shift Logs & Punch Clock</span>
+          </button>
+
+          <button
+            onClick={() => setViewLayout("matrix")}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              viewLayout === "matrix"
+                ? "bg-white dark:bg-zinc-900 text-indigo-600 dark:text-indigo-400 shadow-xs"
+                : "text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200"
+            }`}
+          >
+            <Calendar className="w-3.5 h-3.5" />
+            <span>Monthly Attendance Sheet (Matrix)</span>
+          </button>
+        </div>
+
+        <div className="text-[11px] text-slate-500 dark:text-zinc-400 flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span>Live Leave & Bio-Punch Sync</span>
+        </div>
+      </div>
+
+      {viewLayout === "matrix" ? (
+        <MonthlyAttendanceMatrix />
+      ) : (
+        <>
       {/* ── HEADER & DIGITAL SHIFT BANNER ── */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 bg-white dark:bg-zinc-900 p-6 rounded-3xl border border-slate-200/90 dark:border-zinc-800 shadow-sm relative overflow-hidden">
         <div className="absolute top-0 right-0 w-80 h-80 bg-blue-500/5 dark:bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -1162,6 +1202,8 @@ export default function AttendanceTimecardsPage() {
           </div>
         )}
       </AnimatePresence>
+        </>
+      )}
     </div>
   )
 }

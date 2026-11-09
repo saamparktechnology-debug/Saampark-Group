@@ -26,6 +26,7 @@ export default function ActivityLogsMain() {
   const isSuperAdmin = user?.role === "Super Admin"
   const isAdmin = user?.role === "Admin"
   const isAuthorized = isSuperAdmin || isAdmin
+  const isTeamMember = !isAuthorized
 
   // Company scope filtering
   const allowedCompanies = React.useMemo(() => {
@@ -38,7 +39,7 @@ export default function ActivityLogsMain() {
   const loadLogs = React.useCallback(async () => {
     setLoading(true)
     try {
-      // If Admin, strictly constrain company scope to their allowed companies
+      // If Admin or Team, strictly constrain company scope to their allowed companies
       let targetComp = selectedCompany
       if (!isSuperAdmin && targetComp === "all") {
         targetComp = allowedCompanies[0]?.id || user?.companyId || "tech"
@@ -51,13 +52,10 @@ export default function ActivityLogsMain() {
   }, [selectedCompany, isSuperAdmin, allowedCompanies, user])
 
   React.useEffect(() => {
-    if (isAuthorized) {
-      loadLogs()
-    }
-  }, [loadLogs, isAuthorized])
+    loadLogs()
+  }, [loadLogs])
 
   React.useEffect(() => {
-    if (!isAuthorized) return
     const handleSync = () => loadLogs()
     window.addEventListener("saampark_activity_logged", handleSync)
     window.addEventListener("storage", handleSync)
@@ -65,7 +63,7 @@ export default function ActivityLogsMain() {
       window.removeEventListener("saampark_activity_logged", handleSync)
       window.removeEventListener("storage", handleSync)
     }
-  }, [loadLogs, isAuthorized])
+  }, [loadLogs])
 
   const handleClearLogs = async () => {
     if (!isSuperAdmin) return
@@ -125,7 +123,19 @@ export default function ActivityLogsMain() {
       }
 
       let matchesActor = true
-      if (selectedActor !== "all") {
+      if (!isAuthorized) {
+        // User-specific strict audit trail for Team members & non-admins
+        const uId = String(user?.id || "").toLowerCase().trim()
+        const uEmail = String(user?.email || "").toLowerCase().trim()
+        const uName = String(user?.name || "").toLowerCase().trim()
+
+        const logActor = (log.userName || "").toLowerCase().trim()
+        const logEmail = (log.userEmail || "").toLowerCase().trim()
+        const logUserId = String(log.userId || "").toLowerCase().trim()
+
+        const isMyAction = (uId && logUserId === uId) || (uEmail && logEmail === uEmail) || (uName && logActor === uName)
+        if (!isMyAction) return false
+      } else if (selectedActor !== "all") {
         if (selectedActor === "__admins_only__") {
           const roleLower = (log.userRole || "").toLowerCase().trim()
           matchesActor = roleLower === "admin" || roleLower === "super admin"
@@ -137,7 +147,7 @@ export default function ActivityLogsMain() {
 
       return matchesSearch && matchesType && matchesActor
     })
-  }, [logs, searchQuery, typeFilter, selectedActor])
+  }, [logs, searchQuery, typeFilter, selectedActor, isAuthorized, user])
 
   // Count categories for KPI cards
   const stats = React.useMemo(() => {
@@ -284,41 +294,6 @@ export default function ActivityLogsMain() {
     }
   }
 
-  // ACCESS GUARD: Strict restriction for Super Admin and Admin only
-  if (!isAuthorized) {
-    return (
-      <div className="min-h-[70vh] flex items-center justify-center p-4 sm:p-6">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="max-w-md w-full bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-3xl p-8 shadow-2xl text-center space-y-5"
-        >
-          <div className="w-16 h-16 rounded-2xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 border border-rose-200 dark:border-rose-800 flex items-center justify-center mx-auto shadow-sm">
-            <ShieldAlert size={32} />
-          </div>
-
-          <div className="space-y-2">
-            <span className="inline-block px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
-              {user?.role || "User"} Access Restricted
-            </span>
-            <h2 className="text-xl font-black text-zinc-900 dark:text-zinc-100">
-              Admin Authorization Required
-            </h2>
-            <p className="text-xs text-zinc-500 leading-relaxed">
-              The Activity & Audit Logs are strictly restricted to Super Admin and Admin accounts to safeguard system security and sensitive organizational records.
-            </p>
-          </div>
-
-          <Link href="/feature/dashboard" className="block w-full">
-            <Button variant="outline" className="w-full text-xs font-semibold gap-2 cursor-pointer">
-              <ArrowLeft size={14} /> Back to Dashboard
-            </Button>
-          </Link>
-        </motion.div>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-6 max-w-[1500px] mx-auto p-4 sm:p-6 pb-16">
       
@@ -332,21 +307,27 @@ export default function ActivityLogsMain() {
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-foreground flex items-center gap-2.5">
             <ClipboardList className="text-primary" size={24} />
-            <span>Audit & Activity Logs</span>
+            <span>{isAuthorized ? "Audit & Activity Logs" : "My Activity History"}</span>
             {isSuperAdmin ? (
               <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300 border border-purple-200 dark:border-purple-800 flex items-center gap-1">
                 <Crown size={11} /> Super Admin Audit (All Activities)
               </span>
-            ) : (
+            ) : isAdmin ? (
               <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border border-blue-200 dark:border-blue-800 flex items-center gap-1">
                 <Shield size={11} /> Admin Activity View
+              </span>
+            ) : (
+              <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
+                <UserCheck size={11} /> Personal Audit Trail • {user?.name || "My Account"}
               </span>
             )}
           </h1>
           <p className="text-xs text-muted-foreground mt-0.5">
             {isSuperAdmin 
               ? "Comprehensive audit trail tracking every action, admin event, permission change, lead, client, and financial transaction across all companies"
-              : "Audit trail for your assigned company and operational activities"}
+              : isAdmin
+              ? "Audit trail for your assigned company and operational activities"
+              : "Your verified personal activity audit trail tracking your logins, clock-ins, assigned task completions, and lead operations."}
           </p>
         </div>
 
@@ -386,25 +367,40 @@ export default function ActivityLogsMain() {
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground font-medium">All Activities</span>
+            <span className="text-xs text-muted-foreground font-medium">{isAuthorized ? "All Activities" : "My Actions"}</span>
             <ClipboardList size={16} className="text-primary" />
           </div>
-          <p className="text-2xl font-black text-foreground mt-2">{stats.total}</p>
+          <p className="text-2xl font-black text-foreground mt-2">{filteredLogs.length}</p>
         </div>
 
-        {/* What Admins Did Card */}
-        <div 
-          onClick={() => { setSelectedActor("__admins_only__"); setTypeFilter("all") }}
-          className={`p-4 rounded-2xl border transition-all cursor-pointer ${
-            selectedActor === "__admins_only__" ? "bg-purple-500/10 border-purple-500 shadow-xs" : "bg-card border-border hover:border-purple-500/50"
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground font-medium">Admin Actions</span>
-            <Crown size={16} className="text-purple-500" />
+        {/* Admin Actions or My Operations Card */}
+        {isAuthorized ? (
+          <div 
+            onClick={() => { setSelectedActor("__admins_only__"); setTypeFilter("all") }}
+            className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+              selectedActor === "__admins_only__" ? "bg-purple-500/10 border-purple-500 shadow-xs" : "bg-card border-border hover:border-purple-500/50"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground font-medium">Admin Actions</span>
+              <Crown size={16} className="text-purple-500" />
+            </div>
+            <p className="text-2xl font-black text-foreground mt-2">{stats.adminActions}</p>
           </div>
-          <p className="text-2xl font-black text-foreground mt-2">{stats.adminActions}</p>
-        </div>
+        ) : (
+          <div 
+            onClick={() => setTypeFilter("operations")}
+            className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+              typeFilter === "operations" ? "bg-purple-500/10 border-purple-500 shadow-xs" : "bg-card border-border hover:border-purple-500/50"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground font-medium">My Projects & Tasks</span>
+              <Briefcase size={16} className="text-purple-500" />
+            </div>
+            <p className="text-2xl font-black text-foreground mt-2">{stats.operations}</p>
+          </div>
+        )}
 
         <div 
           onClick={() => { setTypeFilter("permission"); setSelectedActor("all") }}
@@ -460,41 +456,44 @@ export default function ActivityLogsMain() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Company Filter (Super Admin sees all, Admin sees assigned) */}
-          <div className="flex items-center gap-1.5 bg-background border border-border rounded-xl px-2.5 py-1.5 text-xs">
-            <Building2 size={13} className="text-muted-foreground" />
-            <select
-              value={selectedCompany}
-              onChange={(e) => setSelectedCompany(e.target.value)}
-              className="bg-transparent text-xs text-foreground font-medium focus:outline-none cursor-pointer"
-            >
-              {isSuperAdmin && <option value="all">All Companies</option>}
-              {allowedCompanies.map(c => (
-                <option key={c.id} value={c.id}>
-                  {getCompanyFullName(c)}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Company Filter & Actor Filter (Admins only) */}
+          {isAuthorized && (
+            <>
+              <div className="flex items-center gap-1.5 bg-background border border-border rounded-xl px-2.5 py-1.5 text-xs">
+                <Building2 size={13} className="text-muted-foreground" />
+                <select
+                  value={selectedCompany}
+                  onChange={(e) => setSelectedCompany(e.target.value)}
+                  className="bg-transparent text-xs text-foreground font-medium focus:outline-none cursor-pointer"
+                >
+                  {isSuperAdmin && <option value="all">All Companies</option>}
+                  {allowedCompanies.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {getCompanyFullName(c)}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-          {/* Actor / Admin Filter Dropdown */}
-          <div className="flex items-center gap-1.5 bg-background border border-border rounded-xl px-2.5 py-1.5 text-xs">
-            <UserCheck size={13} className="text-primary" />
-            <select
-              value={selectedActor}
-              onChange={(e) => setSelectedActor(e.target.value)}
-              className="bg-transparent text-xs text-foreground font-medium focus:outline-none cursor-pointer max-w-[180px] truncate"
-            >
-              <option value="all">All Actors</option>
-              <option value="__admins_only__">🛡️ All Admins Only</option>
-              {actorsList.map((a) => (
-                <option key={a.key} value={a.key}>
-                  {a.role === "Super Admin" ? "👑 " : a.role === "Admin" ? "🛡️ " : "👤 "}
-                  {a.name} ({a.role})
-                </option>
-              ))}
-            </select>
-          </div>
+              <div className="flex items-center gap-1.5 bg-background border border-border rounded-xl px-2.5 py-1.5 text-xs">
+                <UserCheck size={13} className="text-primary" />
+                <select
+                  value={selectedActor}
+                  onChange={(e) => setSelectedActor(e.target.value)}
+                  className="bg-transparent text-xs text-foreground font-medium focus:outline-none cursor-pointer max-w-[180px] truncate"
+                >
+                  <option value="all">All Actors</option>
+                  <option value="__admins_only__">🛡️ All Admins Only</option>
+                  {actorsList.map((a) => (
+                    <option key={a.key} value={a.key}>
+                      {a.role === "Super Admin" ? "👑 " : a.role === "Admin" ? "🛡️ " : "👤 "}
+                      {a.name} ({a.role})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
 
           {/* Category Type Filter Buttons */}
           <div className="flex items-center gap-1 bg-background border border-border rounded-xl p-1 overflow-x-auto text-[11px]">

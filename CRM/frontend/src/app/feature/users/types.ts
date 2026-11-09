@@ -3,17 +3,61 @@ export type UserStatus = "Active" | "Inactive" | "Pending";
 
 export type KycStatus = "Pending" | "Processing" | "Verified" | "Rejected";
 
+export interface EmergencyContactInfo {
+  name: string;
+  relation: string; // e.g. "Father", "Mother", "Spouse", "Brother", "Sister", "Son", "Daughter", "Guardian", "Friend", "Relative", "Other"
+  customRelation?: string;
+  phone: string;
+}
+
+export interface AddressInfo {
+  pincode: string;
+  state: string;
+  district: string;
+  city: string;
+  postOffice?: string;
+  streetAddress: string;
+  landmark?: string;
+  fullAddress: string;
+}
+
 export interface KycData {
   fullName: string;
-  docType: "Aadhaar Card" | "PAN Card" | "Passport" | "Voter ID" | "Driving License";
+  fatherOrGuardianName?: string;
+  dob?: string;
+  gender?: "Male" | "Female" | "Other" | string;
+  maritalStatus?: "Single" | "Married" | "Other" | string;
+  bloodGroup?: string;
+  passportPhotoUrl?: string;
+
+  // Emergency Contacts 1 & 2
+  emergencyContact1?: EmergencyContactInfo;
+  emergencyContact2?: EmergencyContactInfo;
+
+  // Addresses
+  currentAddress?: AddressInfo;
+  permanentAddress?: AddressInfo;
+  isPermanentSameAsCurrent?: boolean;
+
+  // Primary Govt ID
+  docType: "Aadhaar Card" | "PAN Card" | "Passport" | "Voter ID" | "Driving License" | string;
   docNumber: string;
   docFrontUrl?: string;
   docBackUrl?: string;
+
+  // Optional PAN card if primary ID is not PAN
+  panNumber?: string;
+  panDocUrl?: string;
+
+  // Bank & Salary Remittance
   bankName?: string;
   accountNumber?: string;
   ifscCode?: string;
   accountHolderName?: string;
+  bankBranch?: string;
   upiId?: string;
+  bankProofUrl?: string; // Bank passbook / statement / cancelled cheque
+
   submittedAt?: string;
   verifiedAt?: string;
   verifiedBy?: string;

@@ -400,6 +400,7 @@ const login = async (req, res, next) => {
     user.hasPin = hasPin;
     user.mustSetupPin = mustSetupPin;
     user.kycStatus = user.kyc_status || 'Pending';
+    user.kyc_status = user.kycStatus;
     if (user.kyc_data) {
       try {
         user.kycData = typeof user.kyc_data === 'string' ? JSON.parse(user.kyc_data) : user.kyc_data;

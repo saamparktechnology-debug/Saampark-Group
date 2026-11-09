@@ -211,6 +211,7 @@ const getUserById = async (req, res, next) => {
       if (qErr.code === 'ER_BAD_FIELD_ERROR' && (qErr.message.includes('username') || qErr.sqlMessage?.includes('username'))) {
         const [rows] = await pool.execute(
           `SELECT u.id, u.full_name, u.email, NULL as username, u.phone, u.department, u.status, u.permissions, u.company_id, u.company_ids, u.branch_id, u.sub_branch_id, u.avatar_url,
+                  u.kyc_status, u.kyc_data,
                   r.name as role_name, r.id as role_id,
                   b.name as branch_name, sb.name as sub_branch_name, c.name as company_name
            FROM users u
@@ -518,6 +519,8 @@ const updateUser = async (req, res, next) => {
           subBranchName: effSubBranchName || existingCu.subBranchName,
           avatarUrl: avatarVal || existingCu.avatarUrl,
           avatar: avatarVal || existingCu.avatar,
+          kycStatus: kycStatusVal !== undefined ? kycStatusVal : existingCu.kycStatus,
+          kycData: kycDataVal !== undefined ? (typeof kycDataVal === 'string' ? JSON.parse(kycDataVal) : kycDataVal) : existingCu.kycData,
         };
       }
 

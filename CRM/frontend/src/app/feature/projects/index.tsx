@@ -124,10 +124,10 @@ export default function ProjectsMain() {
     const normEmail = String(user.email || "").toLowerCase().trim()
     const uId = String(user.id || "").toLowerCase().trim()
 
-    // 3. Client: ONLY projects created for / assigned to this client
+    // 3. Client: Strictly all projects created for / assigned to this client across their company
     if (isClient) {
       return (Array.isArray(projects) ? projects : []).filter((p) => {
-        if (!p || !checkBranch(p)) return false
+        if (!p) return false
         return isRecordAssignedToClient(p, user)
       })
     }

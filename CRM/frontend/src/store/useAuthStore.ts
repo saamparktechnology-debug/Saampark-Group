@@ -283,6 +283,7 @@ export interface User {
   allowedModules?: string[]
   permissions?: any
   kycStatus?: "Pending" | "Processing" | "Verified" | "Rejected"
+  kyc_status?: "Pending" | "Processing" | "Verified" | "Rejected"
   kycData?: any
   status?: "Active" | "Inactive" | "Pending"
 }
