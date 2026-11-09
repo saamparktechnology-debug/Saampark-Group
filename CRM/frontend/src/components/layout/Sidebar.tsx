@@ -19,6 +19,7 @@ import {
   LayoutDashboard,
   KanbanSquare,
   CheckSquare,
+  Sparkles,
   Target,
   FileText,
   Calculator,
