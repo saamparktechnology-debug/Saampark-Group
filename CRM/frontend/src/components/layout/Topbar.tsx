@@ -77,39 +77,52 @@ export function Topbar() {
 
   const handleSelectCompany = (c: any) => {
     setShowCompanyMenu(false)
+    setShowBranchMenu(false)
+    setShowSubBranchMenu(false)
     const featurePath = pathname && pathname.includes("/feature/")
       ? pathname.substring(pathname.indexOf("/feature/"))
       : "/feature/dashboard"
 
     if (!c || c === "all") {
       switchCompany("all")
+      switchBranch(null)
+      switchSubBranch(null)
       router.push(featurePath)
       return
     }
 
     const cId = c.id || c.slug
     switchCompany(cId)
+    switchSubBranch(null)
 
     const cSlug = String(c.slug || cId).toLowerCase().includes("consult") ? "saampark-consultancy" : "saampark-technology"
     const matchingBranches = branches.filter(b => isMatchingCompany({ id: b.companyId || (b as any).company_id } as any, cId))
     const targetBranch = matchingBranches[0]
-    const bSlug = targetBranch ? (targetBranch.code?.toLowerCase() || targetBranch.name.toLowerCase().replace(/\s+/g, "-")) : "main"
-
-    router.push(`/${cSlug}/${bSlug}${featurePath}`)
+    if (targetBranch) {
+      switchBranch(targetBranch.id)
+      const bSlug = targetBranch.code?.toLowerCase() || targetBranch.name.toLowerCase().replace(/\s+/g, "-")
+      router.push(`/${cSlug}/${bSlug}${featurePath}`)
+    } else {
+      switchBranch(null)
+      router.push(`/${cSlug}/main${featurePath}`)
+    }
   }
 
   const handleSelectBranch = (b: any) => {
     setShowBranchMenu(false)
+    setShowSubBranchMenu(false)
     const featurePath = pathname && pathname.includes("/feature/")
       ? pathname.substring(pathname.indexOf("/feature/"))
       : "/feature/dashboard"
 
     if (!b) {
       switchBranch(null)
+      switchSubBranch(null)
       return
     }
 
     switchBranch(b.id)
+    switchSubBranch(null)
     const cSlug = String(activeCompanyId || "saampark-technology").toLowerCase().includes("consult") ? "saampark-consultancy" : "saampark-technology"
     const bSlug = b.code?.toLowerCase() || b.name.toLowerCase().replace(/\s+/g, "-")
     router.push(`/${cSlug}/${bSlug}${featurePath}`)
@@ -358,50 +371,86 @@ export function Topbar() {
   }, [userScope, subBranches])
 
   const isSuperAdmin = user.role === 'Super Admin'
-  const isAllCompanies = isSuperAdmin && (!activeCompanyId || activeCompanyId === 'all')
+  const isGroupLevel = !activeCompanyId || activeCompanyId === 'all' || activeCompanyId === 'group' || activeCompanyId === 'saampark-group'
+  const isAllCompanies = isGroupLevel
 
-  const activeCompany = isAllCompanies ? null : (
+  const activeCompany = isGroupLevel ? null : (
     companies.find(c => isMatchingCompany(c, activeCompanyId)) ||
     companies.find(c => isMatchingCompany(c, user.companyId)) ||
     allowedCompanies[0] ||
     companies[0]
   )
 
-  const activeCompanyName = isAllCompanies ? "SAAMPARK GROUP" : (activeCompany ? getCompanyFullName(activeCompany) : "SAAMPARK GROUP")
-  const activeCompanyLogo = isAllCompanies ? null : (activeCompany ? getCompanyLogoUrl(activeCompany) : null)
-  const activeBranch = branches.find(b => b.id === activeBranchId)
-  const activeSubBranch = subBranches.find(sb => sb.id === activeSubBranchId)
+  const activeCompanyName = isGroupLevel ? "SAAMPARK GROUP" : (activeCompany ? getCompanyFullName(activeCompany) : "SAAMPARK GROUP")
+  const activeCompanyLogo = isGroupLevel ? null : (activeCompany ? getCompanyLogoUrl(activeCompany) : null)
+  const activeBranch = isGroupLevel ? null : branches.find(b => b.id === activeBranchId)
+  const activeSubBranch = isGroupLevel ? null : subBranches.find(sb => sb.id === activeSubBranchId)
   const activeEntityLogo = activeSubBranch?.logo_url || activeBranch?.logo_url || activeCompanyLogo
 
   const canSwitchEntities = userScope.isSuperAdmin || (userScope.scopeLevel !== 'subbranch' && (allowedCompanies.length > 1 || allowedBranches.length > 1 || allowedSubBranches.length > 0))
 
-  // Branches belonging to currently active company scope
+  // Branches belonging strictly to currently active company scope
+  // If at SAAMPARK Group level, branches are strictly empty (hidden from Topbar)
   const companyBranches = React.useMemo(() => {
-    if (!activeCompanyId || activeCompanyId === 'all') {
-      return allowedBranches
+    if (isGroupLevel) {
+      return []
     }
-    return allowedBranches.filter(b => isMatchingCompany({ id: b.companyId || (b as any).company_id, slug: b.companyId } as any, activeCompanyId))
-  }, [allowedBranches, activeCompanyId])
+    return allowedBranches.filter(b => {
+      const bCompId = b.companyId || (b as any).company_id
+      return isMatchingCompany({ id: bCompId, slug: bCompId } as any, activeCompanyId)
+    })
+  }, [isGroupLevel, allowedBranches, activeCompanyId])
 
-  // Sub-branches belonging to currently active branch / company scope
+  // Sub-branches belonging strictly to currently active branch scope
+  // If at SAAMPARK Group level or no specific branch is selected, sub-branches are strictly empty (hidden from Topbar)
   const availableSubBranches = React.useMemo(() => {
+    if (isGroupLevel || !activeBranchId || activeBranchId === 'all') {
+      return []
+    }
     const validSubs = allowedSubBranches || []
-    if (activeBranchId) {
-      const targetNorm = String(activeBranchId).toLowerCase().trim()
-      const bId = activeBranch ? String(activeBranch.id).toLowerCase().trim() : ""
-      const bSlug = activeBranch ? String(activeBranch.slug || activeBranch.name).toLowerCase().trim() : ""
+    const targetNorm = String(activeBranchId).toLowerCase().trim()
+    const bId = activeBranch ? String(activeBranch.id).toLowerCase().trim() : ""
+    const bSlug = activeBranch ? String(activeBranch.slug || activeBranch.name).toLowerCase().trim() : ""
 
-      return validSubs.filter(sb => {
-        const pId = String(sb.parentBranchId || (sb as any).branch_id || (sb as any).branchId || "").toLowerCase().trim()
-        const pName = String((sb as any).branchName || (sb as any).branch_name || "").toLowerCase().trim()
-        return pId === targetNorm || pName === targetNorm || (bId && (pId === bId || pName === bId)) || (bSlug && (pId === bSlug || pName === bSlug))
-      })
+    return validSubs.filter(sb => {
+      const pId = String(sb.parentBranchId || (sb as any).branch_id || (sb as any).branchId || "").toLowerCase().trim()
+      const pName = String((sb as any).branchName || (sb as any).branch_name || "").toLowerCase().trim()
+      return pId === targetNorm || pName === targetNorm || (bId && (pId === bId || pName === bId)) || (bSlug && (pId === bSlug || pName === bSlug))
+    })
+  }, [isGroupLevel, allowedSubBranches, activeBranchId, activeBranch])
+
+  // Automatic clean state synchronization across entity hierarchy
+  React.useEffect(() => {
+    if (isGroupLevel) {
+      if (activeBranchId !== null) switchBranch(null)
+      if (activeSubBranchId !== null) switchSubBranch(null)
+    } else {
+      if (companyBranches.length === 0) {
+        if (activeBranchId !== null) switchBranch(null)
+        if (activeSubBranchId !== null) switchSubBranch(null)
+      } else if (activeBranchId) {
+        const branchMatches = companyBranches.some(b => String(b.id).toLowerCase().trim() === String(activeBranchId).toLowerCase().trim())
+        if (!branchMatches) {
+          switchBranch(companyBranches[0]?.id || null)
+          switchSubBranch(null)
+        }
+      }
     }
-    if (activeCompanyId && activeCompanyId !== 'all') {
-      return validSubs.filter(sb => isMatchingCompany({ id: sb.companyId || (sb as any).company_id, slug: sb.companyId } as any, activeCompanyId))
+  }, [isGroupLevel, activeCompanyId, companyBranches.length, activeBranchId, activeSubBranchId, switchBranch, switchSubBranch])
+
+  // Clean sub-branch state synchronization
+  React.useEffect(() => {
+    if (activeSubBranchId) {
+      if (availableSubBranches.length === 0) {
+        switchSubBranch(null)
+      } else {
+        const subMatches = availableSubBranches.some(sb => String(sb.id).toLowerCase().trim() === String(activeSubBranchId).toLowerCase().trim())
+        if (!subMatches) {
+          switchSubBranch(null)
+        }
+      }
     }
-    return validSubs
-  }, [allowedSubBranches, activeBranchId, activeBranch, activeCompanyId])
+  }, [availableSubBranches, activeSubBranchId, switchSubBranch])
 
   return (
     <>
@@ -480,7 +529,7 @@ export function Topbar() {
                         ? `${activeBranch?.name || 'Branch'} • ${activeSubBranch.name}`
                         : (activeBranch
                           ? activeBranch.name
-                          : "HQ (All Branches)"))}
+                          : (companyBranches.length > 0 ? "HQ (All Branches)" : "Corporate Headquarters")))}
                   </span>
                 </div>
                 <ChevronDown size={12} className="text-slate-400 shrink-0 ml-0.5 group-hover:text-slate-600 dark:group-hover:text-slate-200" />

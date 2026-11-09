@@ -132,12 +132,19 @@ const ALL_NAV_ITEMS: NavItem[] = [
     name: "Projects",
     href: "/feature/projects",
     icon: KanbanSquare,
-    subItems: [
-      { name: "IT & Software Projects", href: "/feature/projects", icon: KanbanSquare },
-      { name: "Digital Marketing", href: "/feature/marketing", icon: BarChart3 },
-    ]
   },
   { name: "Tasks", href: "/feature/tasks", icon: CheckSquare },
+  {
+    name: "Digital Marketing",
+    href: "/feature/marketing",
+    icon: BarChart3,
+    subItems: [
+      { name: "Client Marketing Report", href: "/feature/marketing", icon: BarChart3 },
+      { name: "Marketing Plans & Retainers", href: "/feature/marketing/plans", icon: Sparkles },
+      { name: "Posts & Deliverables", href: "/feature/marketing/posts", icon: FileText },
+      { name: "Marketing Leads & Ads", href: "/feature/marketing/leads", icon: Target },
+    ]
+  },
   {
     name: "Sales",
     href: "/feature/sales/invoices",
@@ -441,6 +448,11 @@ export function Sidebar() {
     "Proposals": "Proposals",
     "Projects": "Projects",
     "Tasks": "Tasks",
+    "Digital Marketing": "Digital Marketing",
+    "Client Marketing Report": "Digital Marketing",
+    "Marketing Plans & Retainers": "Digital Marketing",
+    "Posts & Deliverables": "Digital Marketing",
+    "Marketing Leads & Ads": "Digital Marketing",
     "Sales": "Invoices",
     "Quotations": "Quotations",
     "Estimates": "Estimates",
@@ -501,13 +513,16 @@ export function Sidebar() {
     const isGroupLevel = !activeCompanyId || activeCompanyId === "all" || activeCompanyId === "group" || activeCompanyId === "saampark-group"
 
     // When at SAAMPARK Group holding level, show only necessary executive governance modules for Super Admin.
-    // Operational business modules (Invoices, Quotations, Estimates, Leads, Clients, Projects, Tasks, etc.)
-    // belong to operating companies and will automatically appear when switching to a specific company.
+    // Operational business modules (Projects, Tasks, Marketing, Invoices, Quotations, Leads, Subscriptions, etc.)
+    // belong to operating companies and will appear when switching to that specific operating company.
     if (isGroupLevel && u.role === "Super Admin") {
       if (!GROUP_GOVERNANCE_MODULES.has(name) && !GROUP_GOVERNANCE_MODULES.has(targetModule)) {
         return false
       }
     }
+
+    // Super Admin has unrestricted access when viewing an operating company
+    if (u.role === "Super Admin") return true
 
     // Entity-level module visibility restriction (Company -> Branch -> Sub-Branch)
     const isEntityAllowed = isEntityModuleAllowed(activeCompanyId, activeBranchId, activeSubBranchId, targetModule)
@@ -565,6 +580,7 @@ export function Sidebar() {
   const [openSubmenus, setOpenSubmenus] = React.useState<Record<string, boolean>>({
     Settings: false,
     CRM: false,
+    "Digital Marketing": true,
     Sales: true,
     Subscriptions: false,
     "HR & Employees": false,
@@ -572,6 +588,9 @@ export function Sidebar() {
   })
 
   React.useEffect(() => {
+    if (pathname.startsWith('/feature/marketing')) {
+      setOpenSubmenus(prev => ({ ...prev, "Digital Marketing": true }))
+    }
     if (
       pathname.startsWith('/feature/settings') ||
       pathname.startsWith('/feature/companies') ||

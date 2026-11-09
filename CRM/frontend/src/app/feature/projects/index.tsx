@@ -224,46 +224,35 @@ export default function ProjectsMain() {
       transition={{ duration: 0.2 }}
       className="space-y-6"
     >
-      {/* ── PROJECT SUITE SELECTOR (Software vs Marketing Retainers) ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-2.5 sm:px-4 shadow-xs">
-        <div className="flex items-center gap-1.5 p-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl">
-          <button
-            onClick={() => {
-              setProjectSuite("software")
-              setViewMode("table")
-            }}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              projectSuite === "software"
-                ? "bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-xs"
-                : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
-            }`}
-          >
-            <KanbanSquare className="w-3.5 h-3.5" />
-            <span>IT & Software Projects</span>
-          </button>
-
-          <button
-            onClick={() => setProjectSuite("marketing")}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              projectSuite === "marketing"
-                ? "bg-white dark:bg-zinc-900 text-indigo-600 dark:text-indigo-400 shadow-xs"
-                : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
-            }`}
-          >
-            <BarChart3 className="w-3.5 h-3.5" />
-            <span>Digital Marketing Campaigns</span>
-          </button>
+      {/* ── DEDICATED SEPARATION NOTICE ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-900/40 rounded-2xl p-3 px-4 shadow-2xs">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 rounded-xl bg-blue-600 text-white shadow-2xs">
+            <KanbanSquare className="w-4 h-4" />
+          </div>
+          <div>
+            <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+              <span>IT & Software Projects Workspace</span>
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300">
+                Software Development & Sprints
+              </span>
+            </h4>
+            <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+              Manage custom web apps, mobile applications, milestones, and development tasks.
+            </p>
+          </div>
         </div>
 
-        <div className="text-[11px] text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span>Multi-Discipline Project & Retainer Hub</span>
-        </div>
+        <a
+          href="/feature/marketing"
+          className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-white dark:bg-zinc-800 border border-indigo-200 dark:border-indigo-800 rounded-xl hover:bg-indigo-50 dark:hover:bg-zinc-700 transition-colors shadow-2xs shrink-0"
+        >
+          <BarChart3 className="w-3.5 h-3.5 text-indigo-600" />
+          <span>Go to Digital Marketing Hub →</span>
+        </a>
       </div>
 
-      {projectSuite === "marketing" ? (
-        <ClientMarketingReport />
-      ) : viewMode === "table" ? (
+      {viewMode === "table" ? (
         <ProjectList
           projects={visibleProjects}
           onOpenAddModal={() => setIsAddModalOpen(true)}

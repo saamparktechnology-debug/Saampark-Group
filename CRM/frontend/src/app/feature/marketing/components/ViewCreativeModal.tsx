@@ -122,3 +122,4 @@ export default function ViewCreativeModal({ isOpen, onClose, post }: ViewCreativ
     </div>
   )
 }
+

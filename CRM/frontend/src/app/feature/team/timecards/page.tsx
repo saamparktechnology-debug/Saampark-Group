@@ -94,50 +94,70 @@ export default function AttendanceTimecardsPage() {
   const loadData = React.useCallback(async () => {
     setIsLoading(true)
     try {
-      // 1. Fetch real users
-      const usersList = await getUsers().catch(() => [])
-      setTeamMembers(usersList || [])
+      // 1. Fetch real users (filter out clients for staff timecards)
+      const rawUsers = await getUsers("all").catch(() => [])
+      const staffList = (rawUsers || []).filter(u => u && u.role !== "Clients" && !String(u.role || "").toLowerCase().includes("client"))
+      setTeamMembers(staffList)
 
-      // 2. Fetch timecards from DB
+      // 2. Fetch timecards from DB & purge obsolete demo seed emails
+      const DEMO_EMAILS = new Set(["hiisupriya@gmail.com", "priya@saampark.com", "rohan@saampark.com", "anand@saampark.com", "kavita@saampark.com"])
       const stored = await fetchModuleDataFromDB<TimeCardRecord[]>("timecards", [], "all").catch(() => [])
-      let cleanCards = filterGlobalDeletedItems(stored || [])
+      let cleanCards = filterGlobalDeletedItems(stored || []).filter(c => !DEMO_EMAILS.has((c.memberEmail || "").toLowerCase().trim()))
 
-      // If no stored timecards, generate realistic baseline attendance logs for registered users
-      if (!cleanCards || cleanCards.length === 0) {
+      // If no stored timecards or need baseline for real registered users:
+      if (!cleanCards || cleanCards.length === 0 || !cleanCards.some(c => c.memberEmail === "saampark.official@gmail.com")) {
         const todayStr = new Date().toISOString().split("T")[0]
         const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0]
 
-        const defaultSeedTeam = [
-          { name: "Supriya (Super Admin)", email: "hiisupriya@gmail.com", role: "Super Admin", companyId: "tech", branchName: "Kolkata HQ" },
-          { name: "Chiranjit Mahapatra", email: "saamparktechnologyresearch@gmail.com", role: "Admin", companyId: "tech", branchName: "Kolkata HQ" },
-          { name: "Rakhi Ghosh", email: "rakhighosh25899@gmail.com", role: "Teams", companyId: "tech", branchName: "New Town Branch" },
-          { name: "Priya Ghosh", email: "priya@saampark.com", role: "Teams", companyId: "digital", branchName: "Salt Lake Branch" },
-          { name: "Rohan Sengupta", email: "rohan@saampark.com", role: "Admin", companyId: "digital", branchName: "Salt Lake Branch" },
-          { name: "Anand Verma", email: "anand@saampark.com", role: "Teams", companyId: "saampark-ai-solutions", branchName: "AI Lab Branch" },
-          { name: "Kavita Roy", email: "kavita@saampark.com", role: "Teams", companyId: "saampark-ai-solutions", branchName: "AI Lab Branch" }
-        ]
+        const generatedCards: TimeCardRecord[] = []
+        staffList.forEach((m: any, idx: number) => {
+          const comp = String(m.companyId || (m.companyIds && m.companyIds[0]) || "tech")
+          // Add yesterday completed shift
+          generatedCards.push({
+            id: `tc_${m.id || idx}_yest`,
+            userId: String(m.id || idx),
+            memberName: m.name,
+            memberEmail: m.email,
+            memberRole: m.role || "Teams",
+            memberAvatar: m.avatar || m.avatarUrl || getUserAvatar(m.name, undefined, m.name),
+            companyId: comp,
+            branchName: m.branchName || "Main HQ",
+            workMode: idx % 3 === 0 ? "Office" : (idx % 3 === 1 ? "Work From Home" : "Field / Client Visit"),
+            inDate: yesterday,
+            inTime: idx === 1 ? "10:05 AM" : "09:30 AM",
+            outDate: yesterday,
+            outTime: "06:30 PM",
+            breakDurationMins: 45,
+            durationSecs: idx === 1 ? 27600 : 29700,
+            status: idx === 1 ? "Late" : "Completed",
+            isVerified: true,
+            notes: idx === 1 ? "Late arrival: traffic transit delay" : "Standard verified shift log"
+          })
 
-        cleanCards = defaultSeedTeam.map((m: any, idx: number) => ({
-          id: `tc_init_${idx + 1}`,
-          userId: String(idx + 1),
-          memberName: m.name,
-          memberEmail: m.email,
-          memberRole: m.role,
-          memberAvatar: getUserAvatar(m.name, undefined, m.name),
-          companyId: m.companyId,
-          branchName: m.branchName,
-          workMode: idx % 3 === 0 ? "Office" : (idx % 3 === 1 ? "Work From Home" : "Field / Client Visit"),
-          inDate: idx % 2 === 0 ? todayStr : yesterday,
-          inTime: idx === 2 ? "10:15 AM" : (idx % 2 === 0 ? "09:30 AM" : "09:45 AM"),
-          outDate: idx === 0 ? undefined : (idx % 2 === 0 ? todayStr : yesterday),
-          outTime: idx === 0 ? undefined : "06:30 PM",
-          breakDurationMins: 45,
-          durationSecs: idx === 0 ? 14400 : 29700,
-          status: idx === 0 ? "Active Shift" : (idx === 2 ? "Late" : "Completed"),
-          isVerified: idx !== 0,
-          notes: idx === 0 ? "Currently active on project sprint" : (idx === 2 ? "Late arrival: metro transit delay" : "Regular verified shift")
-        }))
+          // Add today shift (Active or Completed)
+          generatedCards.push({
+            id: `tc_${m.id || idx}_today`,
+            userId: String(m.id || idx),
+            memberName: m.name,
+            memberEmail: m.email,
+            memberRole: m.role || "Teams",
+            memberAvatar: m.avatar || m.avatarUrl || getUserAvatar(m.name, undefined, m.name),
+            companyId: comp,
+            branchName: m.branchName || "Main HQ",
+            workMode: "Office",
+            inDate: todayStr,
+            inTime: "09:30 AM",
+            outDate: idx === 0 ? undefined : todayStr,
+            outTime: idx === 0 ? undefined : "06:30 PM",
+            breakDurationMins: 30,
+            durationSecs: idx === 0 ? 16200 : 29700,
+            status: idx === 0 ? "Active Shift" : "Completed",
+            isVerified: idx !== 0,
+            notes: idx === 0 ? "Currently active in office workspace" : "Regular verified day punch"
+          })
+        })
 
+        cleanCards = generatedCards
         await saveModuleDataToDB("timecards", cleanCards, "all").catch(() => {})
       }
 

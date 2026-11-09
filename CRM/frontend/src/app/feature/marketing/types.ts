@@ -59,3 +59,4 @@ export interface MarketingLead {
   capturedAt: string
   status: "New" | "Contacted" | "Converted"
 }
+

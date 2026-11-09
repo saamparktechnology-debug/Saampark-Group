@@ -36,6 +36,7 @@ export default function QuotationsMain() {
   const [clients, setClients] = React.useState<any[]>([])
   const [searchQuery, setSearchQuery] = React.useState("")
   const [statusFilter, setStatusFilter] = React.useState("all")
+  const [disciplineFilter, setDisciplineFilter] = React.useState<"all" | "software" | "marketing">("all")
 
   // Modals
   const [isModalOpen, setIsModalOpen] = React.useState(false)
@@ -196,6 +197,11 @@ export default function QuotationsMain() {
         const match = qBranch === targetBranchId || (targetBranchName && qBranch === targetBranchName)
         if (!match) return false
       }
+      // Discipline separation filter (Software vs Digital Marketing Retainer)
+      const isMarketingQuote = (q as any).category === "Digital Marketing" || Boolean((q as any).marketingPackage?.enabled) || String((q as any).companyId).toLowerCase().includes("consult")
+      if (disciplineFilter === "software" && isMarketingQuote) return false
+      if (disciplineFilter === "marketing" && !isMarketingQuote) return false
+
       // Search + status filter
       if (statusFilter !== "all" && q.status !== statusFilter) return false
       const match = q.number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -203,7 +209,7 @@ export default function QuotationsMain() {
         (q.customerEmail && q.customerEmail.toLowerCase().includes(searchQuery.toLowerCase()))
       return match
     })
-  }, [quotations, activeCompanyId, activeBranchId, branches, searchQuery, statusFilter, user, isClientUser])
+  }, [quotations, activeCompanyId, activeBranchId, branches, searchQuery, statusFilter, disciplineFilter, user, isClientUser])
 
   const subtotal = items.reduce((s, i) => s + (Number(i.quantity) * Number(i.unitPrice)), 0)
   const tax = Math.round(subtotal * 0.18)
@@ -717,14 +723,88 @@ export default function QuotationsMain() {
           </button>
 
           {canAdd && (
-            <button 
-              onClick={() => { setEditingItem(null); setIsStudioOpen(true) }} 
-              className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all shadow-md active:scale-95 cursor-pointer"
-            >
-              <Plus size={15} />
-              <span>Create Quotation</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => { setEditingItem(null); setIsStudioOpen(true) }} 
+                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all shadow-md active:scale-95 cursor-pointer"
+              >
+                <Plus size={15} />
+                <span>+ Standard Quotation</span>
+              </button>
+
+              <button 
+                onClick={() => {
+                  setEditingItem({
+                    companyId: "consultancy",
+                    category: "Digital Marketing",
+                    marketingPackage: {
+                      enabled: true,
+                      planName: "Grow - 2",
+                      packageDuration: "3 Months",
+                      postersCount: 20,
+                      videosCount: 15,
+                      hasRealModelShoot: true,
+                      packagePrice: 25000,
+                      specialNote: "Complete monthly digital marketing deliverable commitments"
+                    }
+                  } as any)
+                  setIsStudioOpen(true)
+                }} 
+                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-xl transition-all shadow-md active:scale-95 cursor-pointer"
+              >
+                <Sparkles size={14} />
+                <span>+ Marketing Retainer (Form 9)</span>
+              </button>
+            </div>
           )}
+        </div>
+      </div>
+
+      {/* ── DISCIPLINE SEPARATION SWITCHER (Software vs Digital Marketing Retainer) ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-2.5 sm:px-4 shadow-2xs">
+        <div className="flex items-center gap-1.5 p-1 bg-zinc-100 dark:bg-zinc-800 rounded-xl">
+          <button
+            type="button"
+            onClick={() => setDisciplineFilter("all")}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              disciplineFilter === "all"
+                ? "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-2xs"
+                : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
+            }`}
+          >
+            All Commercial Quotations ({quotations.length})
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setDisciplineFilter("software")}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              disciplineFilter === "software"
+                ? "bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-2xs"
+                : "text-zinc-600 dark:text-zinc-400 hover:text-blue-600"
+            }`}
+          >
+            <Building2 size={13} />
+            <span>IT & Software Projects</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setDisciplineFilter("marketing")}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              disciplineFilter === "marketing"
+                ? "bg-white dark:bg-zinc-900 text-purple-600 dark:text-purple-400 shadow-2xs"
+                : "text-zinc-600 dark:text-zinc-400 hover:text-purple-600"
+            }`}
+          >
+            <Sparkles size={13} className="text-purple-500" />
+            <span>Digital Marketing Retainers</span>
+          </button>
+        </div>
+
+        <div className="text-[11px] text-zinc-500 flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
+          <span>Independent Commercial Pipelines</span>
         </div>
       </div>
 

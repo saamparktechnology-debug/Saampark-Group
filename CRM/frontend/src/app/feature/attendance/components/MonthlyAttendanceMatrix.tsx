@@ -8,7 +8,7 @@ import {
   PlaneTakeoff, Sparkles, Coffee, RefreshCw, UserCheck, 
   Building2, MapPin, Eye, FileSpreadsheet
 } from "lucide-react"
-import { useAuthStore, isMatchingCompany } from "@/store/useAuthStore"
+import { useAuthStore, isMatchingCompany, getCanonicalCompanyId } from "@/store/useAuthStore"
 import { fetchModuleDataFromDB, filterGlobalDeletedItems } from "@/lib/storageSync"
 import { LeaveService } from "@/services/hrService"
 import { getUsers, getUserAvatar } from "../../users/services/userService"
@@ -81,6 +81,39 @@ export default function MonthlyAttendanceMatrix() {
     setSelectedMonth(today.getMonth())
   }
 
+  // Helper to match employee with active company
+  const matchEmployeeToCompany = React.useCallback((emp: any, targetCompId?: string) => {
+    if (!targetCompId || targetCompId === "all" || targetCompId === "group" || targetCompId === "saampark-group") return true
+    const canonTarget = getCanonicalCompanyId(targetCompId)
+    
+    // Super Admin belongs to all companies
+    if (emp.role === "Super Admin" || emp.email?.toLowerCase().trim() === "saampark.official@gmail.com") {
+      return true
+    }
+
+    // Direct companyId
+    const empComp = getCanonicalCompanyId(emp.companyId || (emp as any).company_id)
+    if (empComp && empComp === canonTarget) return true
+
+    // Assigned companyIds list
+    const rawCompIds = emp.companyIds || (emp as any).company_ids
+    let userCompIds: string[] = []
+    if (Array.isArray(rawCompIds)) {
+      userCompIds = rawCompIds
+    } else if (typeof rawCompIds === "string") {
+      try { userCompIds = JSON.parse(rawCompIds) } catch { userCompIds = [rawCompIds] }
+    }
+    if (userCompIds.some(id => getCanonicalCompanyId(id) === canonTarget)) return true
+
+    // Company name
+    if (emp.companyName) {
+      const compNameCanon = getCanonicalCompanyId(emp.companyName)
+      if (compNameCanon && compNameCanon === canonTarget) return true
+    }
+
+    return false
+  }, [])
+
   // Load Data
   const loadAttendanceData = React.useCallback(async () => {
     setIsLoading(true)
@@ -91,8 +124,15 @@ export default function MonthlyAttendanceMatrix() {
         LeaveService.getRequests().catch(() => [])
       ])
 
-      setTeamMembers(usersList || [])
-      setTimecards(filterGlobalDeletedItems(storedCards || []))
+      // Only staff/employees (exclude Clients from attendance)
+      const staffUsers = (usersList || []).filter(u => u && u.role !== "Clients" && !String(u.role || "").toLowerCase().includes("client"))
+      setTeamMembers(staffUsers)
+
+      // Purge fake mock emails if present
+      const DEMO_EMAILS = new Set(["hiisupriya@gmail.com", "priya@saampark.com", "rohan@saampark.com", "anand@saampark.com", "kavita@saampark.com"])
+      const realCards = filterGlobalDeletedItems(storedCards || []).filter(c => !DEMO_EMAILS.has((c.memberEmail || "").toLowerCase().trim()))
+      setTimecards(realCards)
+
       // Filter only approved leaves
       const approvedOnly = (leaveRequests || []).filter(
         (l: any) => (l.status || "").toLowerCase().trim() === "approved"
@@ -142,19 +182,30 @@ export default function MonthlyAttendanceMatrix() {
   const employeeMatrix: EmployeeMonthlyAttendance[] = React.useMemo(() => {
     const effectiveCompanyId = activeCompanyId && activeCompanyId !== "all" ? activeCompanyId : undefined
 
-    // Filter employees by company
+    // Filter staff employees by company & branch
     const filteredEmployees = teamMembers.filter(emp => {
-      if (effectiveCompanyId) {
-        if (!isMatchingCompany(emp.companyId || (emp as any).company_id, effectiveCompanyId)) {
-          const comps = emp.companyIds || []
-          if (!comps.some((c: string) => isMatchingCompany(c, effectiveCompanyId))) {
-            return false
-          }
+      // 1. Exclude Clients
+      const isClient = emp.role === "Clients" || String(emp.role || "").toLowerCase().includes("client")
+      if (isClient) return false
+
+      // 2. Company check
+      if (!matchEmployeeToCompany(emp, effectiveCompanyId)) {
+        return false
+      }
+
+      // 3. Branch check
+      const effBranch = branchFilter !== "all" ? branchFilter : (activeBranchId && activeBranchId !== "all" ? activeBranchId : "all")
+      if (effBranch !== "all") {
+        const bTarget = String(effBranch).toLowerCase().trim()
+        const empBId = String(emp.branchId || emp.branch_id || "").toLowerCase().trim()
+        const empBName = String(emp.branchName || emp.branch_name || "").toLowerCase().trim()
+        const isGlobalStaff = emp.role === "Super Admin" || (!empBId && emp.role === "Admin")
+        if (!isGlobalStaff && empBId !== bTarget && empBName !== bTarget && !empBName.includes(bTarget)) {
+          return false
         }
       }
-      if (branchFilter !== "all") {
-        if (emp.branchId !== branchFilter && emp.branchName !== branchFilter) return false
-      }
+
+      // 4. Search query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim()
         const matchName = (emp.name || "").toLowerCase().includes(q)
@@ -162,10 +213,7 @@ export default function MonthlyAttendanceMatrix() {
         const matchRole = (emp.role || "").toLowerCase().includes(q)
         if (!matchName && !matchEmail && !matchRole) return false
       }
-      // If team member is viewing, show all team members or personal only
-      if (!isAdmin && user?.role === "Teams" && user?.email) {
-        // We still allow them to see the team calendar or personal
-      }
+
       return true
     })
 
