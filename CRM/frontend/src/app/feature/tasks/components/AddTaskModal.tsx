@@ -1,14 +1,14 @@
 "use client"
 
 import * as React from "react"
-import { X, Check, Paperclip, Mic, HelpCircle, Plus, Tag } from "lucide-react"
+import { X, Check, Paperclip, Mic, HelpCircle, Plus, Tag, Building, MapPin } from "lucide-react"
 import { Task, TaskStatus, TaskPriority } from "../types"
 import { taskService } from "../services/taskService"
 
 import { getUsers, getUserAvatar } from "@/app/feature/users/services/userService"
 import { UserItem } from "@/app/feature/users/types"
 
-import { useAuthStore } from "@/store/useAuthStore"
+import { useAuthStore, isMatchingCompany, getSelectableCompanies } from "@/store/useAuthStore"
 import { executeWithFeedback } from "@/store/useActionFeedbackStore"
 
 interface AddTaskModalProps {
@@ -19,7 +19,64 @@ interface AddTaskModalProps {
 }
 
 export function AddTaskModal({ isOpen, onClose, onTaskAdded, onSelectTask }: AddTaskModalProps) {
-  const { user, activeCompanyId, activeBranchId, activeSubBranchId, branches, subBranches } = useAuthStore()
+  const { user, companies, activeCompanyId, activeBranchId, activeSubBranchId, branches, subBranches } = useAuthStore()
+  const isSuperOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
+
+  const selectableCompanies = React.useMemo(() => {
+    return getSelectableCompanies(companies, activeCompanyId, user, branches, subBranches)
+  }, [companies, activeCompanyId, user, branches, subBranches])
+
+  const isBranchLocked = Boolean(user?.branchId && user?.role !== "Super Admin")
+
+  const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>(() => {
+    if (activeCompanyId && activeCompanyId !== "all") return activeCompanyId
+    return user?.companyId || "tech"
+  })
+  const [selectedBranchId, setSelectedBranchId] = React.useState<string>(
+    user?.branchId || activeBranchId || ""
+  )
+  const [selectedSubBranchId, setSelectedSubBranchId] = React.useState<string>(
+    user?.subBranchId || activeSubBranchId || ""
+  )
+
+  const availableBranches = React.useMemo(() => {
+    if (!branches || !Array.isArray(branches)) return []
+    const targetComp = selectedCompanyId || activeCompanyId || user?.companyId || "tech"
+    if (targetComp && targetComp !== "all") {
+      return branches.filter((b) =>
+        isMatchingCompany({ id: b.companyId || (b as any).company_id, slug: b.companyId } as any, targetComp)
+      )
+    }
+    return branches
+  }, [branches, selectedCompanyId, activeCompanyId, user?.companyId])
+
+  const availableSubBranchesForBranch = React.useMemo(() => {
+    if (!selectedBranchId || !subBranches || !Array.isArray(subBranches)) return []
+    const normB = String(selectedBranchId).toLowerCase().trim()
+    const targetB = availableBranches.find(b => String(b.id).toLowerCase().trim() === normB || String(b.name).toLowerCase().trim() === normB)
+    const bId = targetB ? String(targetB.id).toLowerCase().trim() : normB
+    const bName = targetB ? String(targetB.name).toLowerCase().trim() : ""
+
+    return subBranches.filter(sb => {
+      const pId = String(sb.parentBranchId || (sb as any).branch_id || (sb as any).branchId || "").toLowerCase().trim()
+      const pName = String((sb as any).branchName || (sb as any).branch_name || "").toLowerCase().trim()
+      return pId === bId || (bName && (pId === bName || pName === bName)) || pName === bId
+    })
+  }, [selectedBranchId, subBranches, availableBranches])
+
+  const handleCompanyChange = (cId: string) => {
+    setSelectedCompanyId(cId)
+    if (!isBranchLocked) {
+      setSelectedBranchId("")
+      setSelectedSubBranchId("")
+    }
+  }
+
+  const handleBranchChange = (bId: string) => {
+    setSelectedBranchId(bId)
+    setSelectedSubBranchId("")
+  }
+
   const [teamMembers, setTeamMembers] = React.useState<{ id: string; name: string; role?: string }[]>([])
   const [allUsers, setAllUsers] = React.useState<UserItem[]>([])
   const [title, setTitle] = React.useState("")
@@ -144,11 +201,12 @@ export function AddTaskModal({ isOpen, onClose, onTaskAdded, onSelectTask }: Add
       else if (priority === "Urgent") priorityIcon = "exclamation"
       else if (priority === "Low") priorityIcon = "down"
 
-      const currentBranchObj = branches.find(b => b.id === (activeBranchId || user?.branchId))
-      const finalBranchName = currentBranchObj?.name || user?.branchName || undefined
+      const targetBranchObj = availableBranches.find(b => String(b.id).toLowerCase().trim() === String(selectedBranchId).toLowerCase().trim() || String(b.name).toLowerCase().trim() === String(selectedBranchId).toLowerCase().trim())
+      const finalBranchId = targetBranchObj ? String(targetBranchObj.id) : (selectedBranchId || undefined)
+      const finalBranchName = targetBranchObj?.name || (finalBranchId ? user?.branchName : undefined)
       const finalRelatedTo = selectedRelatedTo.length > 0 ? selectedRelatedTo.join(", ") : undefined
 
-      const targetSubBranchObj = (subBranches || []).find(sb => sb.id === activeSubBranchId)
+      const targetSubBranchObj = selectedSubBranchId ? (subBranches || []).find(sb => String(sb.id).toLowerCase().trim() === String(selectedSubBranchId).toLowerCase().trim()) : undefined
       const finalSubBranchName = targetSubBranchObj?.name || undefined
 
       const created = await taskService.addTask({
@@ -168,11 +226,11 @@ export function AddTaskModal({ isOpen, onClose, onTaskAdded, onSelectTask }: Add
         dueTime: dueTime.trim() || undefined,
         source: sourceType,
         isRecurring,
-        branchId: activeBranchId || user?.branchId || undefined,
+        branchId: finalBranchId,
         branchName: finalBranchName,
-        subBranchId: activeSubBranchId || (user as any)?.subBranchId || undefined,
+        subBranchId: finalSubBranchId,
         subBranchName: finalSubBranchName,
-        companyId: activeCompanyId || user?.companyId || "tech",
+        companyId: selectedCompanyId || activeCompanyId || user?.companyId || "tech",
       })
 
       // Dispatch in-app notification to assigned user
@@ -224,6 +282,79 @@ export function AddTaskModal({ isOpen, onClose, onTaskAdded, onSelectTask }: Add
 
         {/* Form Body (Screenshot 3 Match) */}
         <div className="p-6 overflow-y-auto space-y-4 text-xs flex-1">
+          {/* Company, Branch & Sub-Branch Selector Card */}
+          {isSuperOrAdmin && (
+            <div className={`p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/80 grid grid-cols-1 ${availableSubBranchesForBranch.length > 0 ? "sm:grid-cols-3" : "sm:grid-cols-2"} gap-3 mb-2`}>
+              <div>
+                <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1 flex items-center justify-between">
+                  <span>Company Entity</span>
+                  {selectableCompanies.length <= 1 && (
+                    <span className="text-[9px] text-blue-600 font-bold bg-blue-50 dark:bg-blue-950/40 px-1 py-0.2 rounded border border-blue-200 dark:border-blue-800">
+                      🔒 Active Scope
+                    </span>
+                  )}
+                </label>
+                <select
+                  value={selectedCompanyId}
+                  onChange={(e) => handleCompanyChange(e.target.value)}
+                  disabled={selectableCompanies.length <= 1}
+                  className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-85 text-xs"
+                >
+                  {selectableCompanies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
+                  Branch Location
+                </label>
+                {isBranchLocked ? (
+                  <div className="w-full px-2.5 py-1.5 bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg text-zinc-800 dark:text-zinc-200 text-xs font-bold flex items-center justify-between">
+                    <span className="truncate">📍 {branches.find(b => b.id === user?.branchId)?.name || user?.branchId || "Assigned Branch"}</span>
+                    <span className="text-[9px] text-amber-600 font-bold">🔒 Locked</span>
+                  </div>
+                ) : (
+                  <select
+                    value={selectedBranchId}
+                    onChange={(e) => handleBranchChange(e.target.value)}
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs"
+                  >
+                    <option value="">🏢 Company HQ (All Branches)</option>
+                    {availableBranches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        📍 {b.name || (b as any).branch_name || b.code || "Branch"}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Dynamic Sub-Branch Selector */}
+              {availableSubBranchesForBranch.length > 0 && (
+                <div>
+                  <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
+                    Sub-Branch Partner
+                  </label>
+                  <select
+                    value={selectedSubBranchId}
+                    onChange={(e) => setSelectedSubBranchId(e.target.value)}
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-purple-200 dark:border-purple-800 rounded-lg text-zinc-800 dark:text-zinc-200 font-bold focus:outline-none focus:ring-1 focus:ring-purple-500 text-xs"
+                  >
+                    <option value="">-- Direct Branch Task --</option>
+                    {availableSubBranchesForBranch.map((sb) => (
+                      <option key={sb.id} value={sb.id}>
+                        🤝 {sb.name || (sb as any).sub_branch_name || sb.code}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          )}
           
           {/* Title */}
           <div className="grid grid-cols-4 items-center gap-4">

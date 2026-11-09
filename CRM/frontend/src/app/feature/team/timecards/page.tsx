@@ -99,69 +99,24 @@ export default function AttendanceTimecardsPage() {
       const staffList = (rawUsers || []).filter(u => u && u.role !== "Clients" && !String(u.role || "").toLowerCase().includes("client"))
       setTeamMembers(staffList)
 
-      // 2. Fetch timecards from DB & purge obsolete demo seed emails
+      // 2. Fetch timecards from DB & purge obsolete demo seed emails and fake auto-generated cards
       const DEMO_EMAILS = new Set(["hiisupriya@gmail.com", "priya@saampark.com", "rohan@saampark.com", "anand@saampark.com", "kavita@saampark.com"])
       const stored = await fetchModuleDataFromDB<TimeCardRecord[]>("timecards", [], "all").catch(() => [])
-      let cleanCards = filterGlobalDeletedItems(stored || []).filter(c => !DEMO_EMAILS.has((c.memberEmail || "").toLowerCase().trim()))
-
-      // If no stored timecards or need baseline for real registered users:
-      if (!cleanCards || cleanCards.length === 0 || !cleanCards.some(c => c.memberEmail === "saampark.official@gmail.com")) {
-        const todayStr = new Date().toISOString().split("T")[0]
-        const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0]
-
-        const generatedCards: TimeCardRecord[] = []
-        staffList.forEach((m: any, idx: number) => {
-          const comp = String(m.companyId || (m.companyIds && m.companyIds[0]) || "tech")
-          // Add yesterday completed shift
-          generatedCards.push({
-            id: `tc_${m.id || idx}_yest`,
-            userId: String(m.id || idx),
-            memberName: m.name,
-            memberEmail: m.email,
-            memberRole: m.role || "Teams",
-            memberAvatar: m.avatar || m.avatarUrl || getUserAvatar(m.name, undefined, m.name),
-            companyId: comp,
-            branchName: m.branchName || "Main HQ",
-            workMode: idx % 3 === 0 ? "Office" : (idx % 3 === 1 ? "Work From Home" : "Field / Client Visit"),
-            inDate: yesterday,
-            inTime: idx === 1 ? "10:05 AM" : "09:30 AM",
-            outDate: yesterday,
-            outTime: "06:30 PM",
-            breakDurationMins: 45,
-            durationSecs: idx === 1 ? 27600 : 29700,
-            status: idx === 1 ? "Late" : "Completed",
-            isVerified: true,
-            notes: idx === 1 ? "Late arrival: traffic transit delay" : "Standard verified shift log"
-          })
-
-          // Add today shift (Active or Completed)
-          generatedCards.push({
-            id: `tc_${m.id || idx}_today`,
-            userId: String(m.id || idx),
-            memberName: m.name,
-            memberEmail: m.email,
-            memberRole: m.role || "Teams",
-            memberAvatar: m.avatar || m.avatarUrl || getUserAvatar(m.name, undefined, m.name),
-            companyId: comp,
-            branchName: m.branchName || "Main HQ",
-            workMode: "Office",
-            inDate: todayStr,
-            inTime: "09:30 AM",
-            outDate: idx === 0 ? undefined : todayStr,
-            outTime: idx === 0 ? undefined : "06:30 PM",
-            breakDurationMins: 30,
-            durationSecs: idx === 0 ? 16200 : 29700,
-            status: idx === 0 ? "Active Shift" : "Completed",
-            isVerified: idx !== 0,
-            notes: idx === 0 ? "Currently active in office workspace" : "Regular verified day punch"
-          })
-        })
-
-        cleanCards = generatedCards
-        await saveModuleDataToDB("timecards", cleanCards, "all").catch(() => {})
-      }
+      let cleanCards = filterGlobalDeletedItems(stored || []).filter(c => {
+        if (!c || !c.memberEmail) return false
+        const email = c.memberEmail.toLowerCase().trim()
+        if (DEMO_EMAILS.has(email)) return false
+        // Purge previously auto-generated fake mock cards
+        if (c.id && (c.id.endsWith("_yest") || c.id.endsWith("_today"))) return false
+        if (c.notes && c.notes.includes("traffic transit delay")) return false
+        return true
+      })
 
       setTimecards(cleanCards)
+      // Save cleaned array back to DB to ensure fake cards are purged
+      if (stored && stored.length !== cleanCards.length) {
+        await saveModuleDataToDB("timecards", cleanCards, "all").catch(() => {})
+      }
     } finally {
       setIsLoading(false)
     }

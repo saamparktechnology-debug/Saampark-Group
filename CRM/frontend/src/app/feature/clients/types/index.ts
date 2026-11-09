@@ -40,6 +40,8 @@ export interface ClientItem {
   branchId?: string;
   branchName?: string;
   branchCode?: string;
+  subBranchId?: string;
+  subBranchName?: string;
   createdAt?: number | string;
   createdBy?: string;
   createdById?: string;

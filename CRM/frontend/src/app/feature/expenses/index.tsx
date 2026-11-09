@@ -49,12 +49,17 @@ export interface ExpenseItem {
   assignedMemberId?: string
   isExtraCharge?: boolean
   extraChargeCategory?: string
+  companyId?: string
+  branchId?: string
+  branchName?: string
+  subBranchId?: string
+  subBranchName?: string
 }
 
 type ExpenseTab = "all" | "project_wise"
 
 export default function ExpensesMain() {
-  const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
+  const { user, companies, activeCompanyId, activeBranchId, activeSubBranchId, branches, subBranches } = useAuthStore()
   const { canPerformAction } = usePermissionStore()
   
   const targetComp = activeCompanyId || user?.companyId || "tech"
@@ -78,6 +83,9 @@ export default function ExpensesMain() {
   const [isAddExtraChargeModalOpen, setIsAddExtraChargeModalOpen] = React.useState(false)
 
   // Form State: Add Expense
+  const [formCompanyId, setFormCompanyId] = React.useState<string>(activeCompanyId && activeCompanyId !== "all" ? activeCompanyId : (user?.companyId || "tech"))
+  const [formBranchId, setFormBranchId] = React.useState<string>(activeBranchId || user?.branchId || "")
+  const [formSubBranchId, setFormSubBranchId] = React.useState<string>(activeSubBranchId || (user as any)?.subBranchId || "")
   const [title, setTitle] = React.useState("")
   const [amount, setAmount] = React.useState("")
   const [category, setCategory] = React.useState("Cloud & Server Infrastructure")
@@ -87,6 +95,27 @@ export default function ExpensesMain() {
   const [isProjectScoped, setIsProjectScoped] = React.useState(false)
   const [formProjectId, setFormProjectId] = React.useState("")
   const [formMemberId, setFormMemberId] = React.useState("")
+
+  const availableBranchesForForm = React.useMemo(() => {
+    if (!branches || !Array.isArray(branches)) return []
+    const tComp = formCompanyId || "tech"
+    if (tComp && tComp !== "all") {
+      return branches.filter((b) => {
+        const bComp = String((b as any).companyId || (b as any).company_id || "").toLowerCase().trim()
+        return bComp === tComp.toLowerCase().trim() || (!bComp && tComp === "tech")
+      })
+    }
+    return branches
+  }, [branches, formCompanyId])
+
+  const availableSubBranchesForForm = React.useMemo(() => {
+    if (!formBranchId || !subBranches || !Array.isArray(subBranches)) return []
+    const normB = String(formBranchId).toLowerCase().trim()
+    return subBranches.filter(sb => {
+      const pId = String(sb.parentBranchId || (sb as any).branch_id || (sb as any).branchId || "").toLowerCase().trim()
+      return pId === normB
+    })
+  }, [formBranchId, subBranches])
 
   // Form State: Add Project Extra Charge
   const [extraChargeTitle, setExtraChargeTitle] = React.useState("")
@@ -156,13 +185,18 @@ export default function ExpensesMain() {
 
   // Filtered expenses for general view
   const filteredExpenses = React.useMemo(() => {
-    const { activeCompanyId: freshComp, activeBranchId: freshBranch, branches: freshBranches } = useAuthStore.getState()
+    const { activeCompanyId: freshComp, activeBranchId: freshBranch, activeSubBranchId: freshSubBranch, branches: freshBranches, subBranches: freshSubBranches } = useAuthStore.getState()
     const userComp = (freshComp || user?.companyId || "").toLowerCase().trim()
     // Strict: activeBranchId takes priority
     const targetBranch = freshBranch
-    const targetBranchObj = freshBranches.find(b => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
+    const targetBranchObj = (freshBranches || []).find(b => b.id === targetBranch || b.name.toLowerCase() === (targetBranch || "").toLowerCase())
     const targetBranchId = String(targetBranchObj?.id || targetBranch || "").toLowerCase().trim()
     const targetBranchName = targetBranchObj?.name?.toLowerCase().trim() || ""
+
+    const targetSubBranch = freshSubBranch
+    const targetSubBranchObj = (freshSubBranches || []).find(sb => sb.id === targetSubBranch || (sb as any).name?.toLowerCase() === (targetSubBranch || "").toLowerCase())
+    const targetSubBranchId = String(targetSubBranchObj?.id || targetSubBranch || "").toLowerCase().trim()
+    const targetSubBranchName = targetSubBranchObj?.name?.toLowerCase().trim() || ""
 
     return expenses.filter((e) => {
       // Company filter
@@ -181,6 +215,16 @@ export default function ExpensesMain() {
           (eBranchName && (eBranchName === targetBranchName || eBranchName === targetBranchId))
         if (!isMatch) return false
       }
+      // Sub-Branch filter (strict)
+      if (targetSubBranch && targetSubBranch !== "all") {
+        const eSubBranch = String((e as any).subBranchId || (e as any).sub_branch_id || "").toLowerCase().trim()
+        const eSubBranchName = String((e as any).subBranchName || (e as any).sub_branch_name || "").toLowerCase().trim()
+        if (!eSubBranch && !eSubBranchName) return false
+        const isMatch =
+          (eSubBranch && (eSubBranch === targetSubBranchId || (targetSubBranchName && eSubBranch === targetSubBranchName))) ||
+          (eSubBranchName && (eSubBranchName === targetSubBranchName || eSubBranchName === targetSubBranchId))
+        if (!isMatch) return false
+      }
       const matchSearch =
         e.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         e.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -191,7 +235,7 @@ export default function ExpensesMain() {
       if (selectedCategory === "all") return true
       return e.category === selectedCategory
     })
-  }, [expenses, searchQuery, selectedCategory, activeCompanyId, activeBranchId, branches, user])
+  }, [expenses, searchQuery, selectedCategory, activeCompanyId, activeBranchId, activeSubBranchId, branches, subBranches, user])
 
   // Project-specific expenses
   const projectExpenses = React.useMemo(() => {
@@ -250,6 +294,9 @@ export default function ExpensesMain() {
       ? projects.find(p => p.id === formProjectId) 
       : null
 
+    const matchedBranch = (branches || []).find(b => b.id === formBranchId)
+    const matchedSubBranch = (subBranches || []).find(sb => sb.id === formSubBranchId)
+
     const newExp: ExpenseItem = {
       id: `exp_${Date.now()}`,
       expenseNumber: `EXP #${maxNum + 1}`,
@@ -266,6 +313,11 @@ export default function ExpensesMain() {
       projectName: targetProject?.title,
       isProjectExpense: Boolean(targetProject),
       assignedMemberId: formMemberId || undefined,
+      companyId: formCompanyId || targetComp || "tech",
+      branchId: formBranchId || undefined,
+      branchName: matchedBranch?.name || undefined,
+      subBranchId: formSubBranchId || undefined,
+      subBranchName: matchedSubBranch?.name || undefined,
     }
 
     await executeWithFeedback(async () => {
@@ -1132,6 +1184,59 @@ export default function ExpensesMain() {
               </div>
 
               <form onSubmit={handleAddExpense} className="p-6 space-y-4 text-xs">
+                {/* Company, Branch & Sub-Branch Selection */}
+                <div className={`p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/80 grid grid-cols-1 ${availableSubBranchesForForm.length > 0 ? "sm:grid-cols-3" : "sm:grid-cols-2"} gap-2.5`}>
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Company *</label>
+                    <select
+                      value={formCompanyId}
+                      onChange={(e) => {
+                        setFormCompanyId(e.target.value)
+                        setFormBranchId("")
+                        setFormSubBranchId("")
+                      }}
+                      className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs font-semibold"
+                    >
+                      {companies.map(c => (
+                        <option key={c.id} value={c.id}>{c.brand_name || c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Branch Location</label>
+                    <select
+                      value={formBranchId}
+                      onChange={(e) => {
+                        setFormBranchId(e.target.value)
+                        setFormSubBranchId("")
+                      }}
+                      className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs font-semibold"
+                    >
+                      <option value="">🏢 Company HQ (All Branches)</option>
+                      {availableBranchesForForm.map(b => (
+                        <option key={b.id} value={b.id}>📍 {b.name} ({b.code})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {availableSubBranchesForForm.length > 0 && (
+                    <div>
+                      <label className="block text-[10px] font-bold text-zinc-600 dark:text-zinc-400 mb-0.5">Sub-Branch Partner</label>
+                      <select
+                        value={formSubBranchId}
+                        onChange={(e) => setFormSubBranchId(e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-purple-200 dark:border-purple-800 rounded-lg text-xs font-semibold"
+                      >
+                        <option value="">-- Direct Branch Expense --</option>
+                        {availableSubBranchesForForm.map(sb => (
+                          <option key={sb.id} value={sb.id}>🤝 {sb.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+
                 {/* Project Association Toggle */}
                 <div className="p-3 bg-blue-50/60 dark:bg-blue-950/30 rounded-xl border border-blue-200/60 dark:border-blue-800/40 space-y-2">
                   <div className="flex items-center justify-between">

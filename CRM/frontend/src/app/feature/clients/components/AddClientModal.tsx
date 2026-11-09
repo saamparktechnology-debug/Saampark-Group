@@ -2,10 +2,10 @@
 
 import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, Check, HelpCircle, User } from "lucide-react"
+import { X, Check, HelpCircle, User, Building, MapPin } from "lucide-react"
 import { ClientItem } from "../types"
 import { getUsers } from "@/app/feature/users/services/userService"
-import { useAuthStore } from "@/store/useAuthStore"
+import { useAuthStore, isMatchingCompany, getSelectableCompanies } from "@/store/useAuthStore"
 import { sendClientWelcomeEmailNotification } from "@/services/emailNotificationService"
 import { formatDisplayEmail, getClientCategories, saveClientCategory, DEFAULT_CLIENT_CATEGORIES } from "../services/clientService"
 import { lookupPincode } from "@/lib/pincodeService"
@@ -23,7 +23,63 @@ export function AddClientModal({
   onSave,
   initialData,
 }: AddClientModalProps) {
-  const { user, activeCompanyId, activeBranchId, branches } = useAuthStore()
+  const { user, companies, activeCompanyId, activeBranchId, activeSubBranchId, branches, subBranches } = useAuthStore()
+  const isSuperOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
+
+  const selectableCompanies = React.useMemo(() => {
+    return getSelectableCompanies(companies, activeCompanyId, user, branches, subBranches)
+  }, [companies, activeCompanyId, user, branches, subBranches])
+
+  const isBranchLocked = Boolean(user?.branchId && user?.role !== "Super Admin")
+
+  const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>(() => {
+    if (activeCompanyId && activeCompanyId !== "all") return activeCompanyId
+    return user?.companyId || "tech"
+  })
+  const [selectedBranchId, setSelectedBranchId] = React.useState<string>(
+    initialData?.branchId || user?.branchId || activeBranchId || ""
+  )
+  const [selectedSubBranchId, setSelectedSubBranchId] = React.useState<string>(
+    initialData?.subBranchId || user?.subBranchId || activeSubBranchId || ""
+  )
+
+  const availableBranches = React.useMemo(() => {
+    if (!branches || !Array.isArray(branches)) return []
+    const targetComp = selectedCompanyId || activeCompanyId || user?.companyId || "tech"
+    if (targetComp && targetComp !== "all") {
+      return branches.filter((b) =>
+        isMatchingCompany({ id: b.companyId || (b as any).company_id, slug: b.companyId } as any, targetComp)
+      )
+    }
+    return branches
+  }, [branches, selectedCompanyId, activeCompanyId, user?.companyId])
+
+  const availableSubBranchesForBranch = React.useMemo(() => {
+    if (!selectedBranchId || !subBranches || !Array.isArray(subBranches)) return []
+    const normB = String(selectedBranchId).toLowerCase().trim()
+    const targetB = availableBranches.find(b => String(b.id).toLowerCase().trim() === normB || String(b.name).toLowerCase().trim() === normB)
+    const bId = targetB ? String(targetB.id).toLowerCase().trim() : normB
+    const bName = targetB ? String(targetB.name).toLowerCase().trim() : ""
+
+    return subBranches.filter(sb => {
+      const pId = String(sb.parentBranchId || (sb as any).branch_id || (sb as any).branchId || "").toLowerCase().trim()
+      const pName = String((sb as any).branchName || (sb as any).branch_name || "").toLowerCase().trim()
+      return pId === bId || (bName && (pId === bName || pName === bName)) || pName === bId
+    })
+  }, [selectedBranchId, subBranches, availableBranches])
+
+  const handleCompanyChange = (cId: string) => {
+    setSelectedCompanyId(cId)
+    if (!isBranchLocked) {
+      setSelectedBranchId("")
+      setSelectedSubBranchId("")
+    }
+  }
+
+  const handleBranchChange = (bId: string) => {
+    setSelectedBranchId(bId)
+    setSelectedSubBranchId("")
+  }
 
   const [type, setType] = React.useState<"Organization" | "Person">("Organization")
   const [companyName, setCompanyName] = React.useState("")
@@ -77,6 +133,9 @@ export function AddClientModal({
       }).catch(() => {})
 
       if (initialData) {
+        setSelectedCompanyId(initialData.companyId || activeCompanyId || "tech")
+        setSelectedBranchId(initialData.branchId || "")
+        setSelectedSubBranchId(initialData.subBranchId || "")
         setCompanyName(initialData.name || "")
         setDesignation(initialData.designation || "Proprietor")
         setCustomDesignation("")
@@ -166,8 +225,13 @@ export function AddClientModal({
     e.preventDefault()
     if (!companyName.trim()) return
 
-    const currentBranchObj = branches.find(b => b.id === (activeBranchId || user?.branchId))
-    const finalBranchName = currentBranchObj?.name || user?.branchName || undefined
+    const targetBranchObj = availableBranches.find(b => String(b.id).toLowerCase().trim() === String(selectedBranchId).toLowerCase().trim() || String(b.name).toLowerCase().trim() === String(selectedBranchId).toLowerCase().trim())
+    const finalBranchId = targetBranchObj ? String(targetBranchObj.id) : (selectedBranchId || undefined)
+    const finalBranchName = targetBranchObj?.name || (finalBranchId ? user?.branchName : undefined)
+
+    const targetSubBranchObj = selectedSubBranchId ? subBranches?.find(sb => String(sb.id).toLowerCase().trim() === String(selectedSubBranchId).toLowerCase().trim()) : undefined
+    const finalSubBranchId = selectedSubBranchId || undefined
+    const finalSubBranchName = targetSubBranchObj?.name || undefined
 
     const effectiveDesignation = designation === "Other" ? (customDesignation.trim() || "Client") : designation
 
@@ -200,9 +264,11 @@ export function AddClientModal({
       disableOnlinePayment,
       website,
       createdAt: initialData?.createdAt || Date.now(),
-      branchId: initialData?.branchId || activeBranchId || user?.branchId || undefined,
-      branchName: initialData?.branchName || finalBranchName,
-      companyId: initialData?.companyId || activeCompanyId || user?.companyId || "tech",
+      branchId: finalBranchId,
+      branchName: finalBranchName,
+      subBranchId: finalSubBranchId,
+      subBranchName: finalSubBranchName,
+      companyId: selectedCompanyId || activeCompanyId || user?.companyId || "tech",
     }
 
     onSave(newClient)
@@ -239,6 +305,85 @@ export function AddClientModal({
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-3 text-xs md:text-sm">
+            {/* Company, Branch & Sub-Branch Selector */}
+            {isSuperOrAdmin && (
+              <div className={`grid grid-cols-1 ${availableSubBranchesForBranch.length > 0 ? "sm:grid-cols-3" : "sm:grid-cols-2"} gap-3 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/80`}>
+                {/* Company */}
+                <div className="space-y-1">
+                  <label className="text-slate-600 dark:text-slate-300 font-semibold flex items-center gap-1.5 text-[11px]">
+                    <Building size={13} className="text-blue-500" />
+                    <span>Company Entity *</span>
+                  </label>
+                  <select
+                    value={selectedCompanyId}
+                    onChange={(e) => handleCompanyChange(e.target.value)}
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800 dark:text-slate-200 font-bold cursor-pointer text-xs"
+                  >
+                    {selectableCompanies.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Branch */}
+                <div className="space-y-1">
+                  <label className="text-slate-600 dark:text-slate-300 font-semibold flex items-center justify-between text-[11px]">
+                    <span className="flex items-center gap-1.5">
+                      <MapPin size={13} className="text-amber-500" />
+                      <span>Branch Location</span>
+                    </span>
+                    {isBranchLocked && (
+                      <span className="text-[10px] text-amber-600 font-bold bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800">
+                        🔒 Locked
+                      </span>
+                    )}
+                  </label>
+                  {isBranchLocked ? (
+                    <div className="w-full px-2.5 py-1.5 bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg text-slate-800 dark:text-slate-200 text-xs font-bold flex items-center justify-between">
+                      <span className="truncate">📍 {branches.find(b => b.id === user?.branchId)?.name || user?.branchId || "Assigned Branch"}</span>
+                    </div>
+                  ) : (
+                    <select
+                      value={selectedBranchId}
+                      onChange={(e) => handleBranchChange(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800 dark:text-slate-200 font-bold cursor-pointer text-xs"
+                    >
+                      <option value="">🏢 Company HQ (All Branches)</option>
+                      {availableBranches.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          📍 {b.name || (b as any).branch_name || b.code || "Branch"}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                {/* Dynamic Sub-Branch Selector (Visible when selected branch has sub-branches) */}
+                {availableSubBranchesForBranch.length > 0 && (
+                  <div className="space-y-1">
+                    <label className="text-slate-600 dark:text-slate-300 font-semibold flex items-center gap-1.5 text-[11px]">
+                      <span className="text-purple-500">🤝</span>
+                      <span>Sub-Branch (Partner)</span>
+                    </label>
+                    <select
+                      value={selectedSubBranchId}
+                      onChange={(e) => setSelectedSubBranchId(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-purple-200 dark:border-purple-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 text-slate-800 dark:text-slate-200 font-bold cursor-pointer text-xs"
+                    >
+                      <option value="">-- Direct Branch Client --</option>
+                      {availableSubBranchesForBranch.map((sb) => (
+                        <option key={sb.id} value={sb.id}>
+                          🤝 {sb.name || (sb as any).sub_branch_name || sb.code}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Type */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
               <label className="text-slate-600 dark:text-slate-400 font-medium">Type</label>

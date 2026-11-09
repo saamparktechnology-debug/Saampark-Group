@@ -128,9 +128,16 @@ export default function MonthlyAttendanceMatrix() {
       const staffUsers = (usersList || []).filter(u => u && u.role !== "Clients" && !String(u.role || "").toLowerCase().includes("client"))
       setTeamMembers(staffUsers)
 
-      // Purge fake mock emails if present
+      // Purge fake mock emails and auto-generated dummy baseline cards
       const DEMO_EMAILS = new Set(["hiisupriya@gmail.com", "priya@saampark.com", "rohan@saampark.com", "anand@saampark.com", "kavita@saampark.com"])
-      const realCards = filterGlobalDeletedItems(storedCards || []).filter(c => !DEMO_EMAILS.has((c.memberEmail || "").toLowerCase().trim()))
+      const realCards = filterGlobalDeletedItems(storedCards || []).filter(c => {
+        if (!c || !c.memberEmail) return false
+        const email = c.memberEmail.toLowerCase().trim()
+        if (DEMO_EMAILS.has(email)) return false
+        if (c.id && (c.id.endsWith("_yest") || c.id.endsWith("_today"))) return false
+        if (c.notes && c.notes.includes("traffic transit delay")) return false
+        return true
+      })
       setTimecards(realCards)
 
       // Filter only approved leaves

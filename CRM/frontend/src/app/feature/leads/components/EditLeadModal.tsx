@@ -77,7 +77,7 @@ import {
 } from "./SearchableLocationSelect"
 
 export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLead }: EditLeadModalProps) {
-  const { user, companies, activeCompanyId, activeBranchId, branches } = useAuthStore()
+  const { user, companies, activeCompanyId, activeBranchId, branches, subBranches } = useAuthStore()
   const isSuperOrAdmin = user?.role === "Super Admin" || user?.role === "Admin"
 
   const selectableCompanies = React.useMemo(() => {
@@ -95,6 +95,9 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
   const [selectedBranchId, setSelectedBranchId] = React.useState<string>(
     lead?.branchId || activeBranchId || user?.branchId || ""
   )
+  const [selectedSubBranchId, setSelectedSubBranchId] = React.useState<string>(
+    (lead as any)?.subBranchId || ""
+  )
 
   const availableBranches = React.useMemo(() => {
     if (!branches || !Array.isArray(branches)) return []
@@ -107,9 +110,29 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
     return branches
   }, [branches, selectedCompanyId, lead?.companyId, activeCompanyId, user?.companyId])
 
+  const availableSubBranchesForBranch = React.useMemo(() => {
+    if (!selectedBranchId || !subBranches || !Array.isArray(subBranches)) return []
+    const bId = String(selectedBranchId).toLowerCase().trim()
+    const targetBranch = branches.find(b => String(b.id).toLowerCase().trim() === bId)
+    const bCode = targetBranch?.code ? String(targetBranch.code).toLowerCase().trim() : ""
+    const bName = targetBranch?.name ? String(targetBranch.name).toLowerCase().trim() : ""
+
+    return subBranches.filter(sb => {
+      const pId = String(sb.parentBranchId || (sb as any).branch_id || (sb as any).branchId || "").toLowerCase().trim()
+      const pName = String((sb as any).branchName || (sb as any).branch_name || "").toLowerCase().trim()
+      return pId === bId || (bCode && pId === bCode) || (bName && pName === bName)
+    })
+  }, [subBranches, selectedBranchId, branches])
+
   const handleCompanyChange = (newCompId: string) => {
     setSelectedCompanyId(newCompId)
     setSelectedBranchId("")
+    setSelectedSubBranchId("")
+  }
+
+  const handleBranchChange = (newBranchId: string) => {
+    setSelectedBranchId(newBranchId)
+    setSelectedSubBranchId("")
   }
 
   const [teamMembers, setTeamMembers] = React.useState<{ id: string; name: string; role?: string }[]>([])
@@ -328,6 +351,8 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
         relatedTo: relatedTo.trim() || undefined,
         branchId: finalBranchId,
         branchName: finalBranchName,
+        subBranchId: selectedSubBranchId || undefined,
+        subBranchName: subBranches?.find(sb => String(sb.id).toLowerCase().trim() === String(selectedSubBranchId).toLowerCase().trim())?.name || undefined,
         companyId: finalCompanyId,
         isLocked: shouldUnlock ? false : undefined,
         isExplicitlyUnlocked: shouldUnlock ? true : undefined,
@@ -480,9 +505,9 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
             </div>
           </div>
 
-          {/* Company & Branch Selector side-by-side horizontally */}
+          {/* Company, Branch & Sub-Branch Selector for Super Admin / Admin */}
           {isSuperOrAdmin && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-zinc-50/80 dark:bg-zinc-800/40 rounded-xl border border-zinc-200/80 dark:border-zinc-700/60">
+            <div className={`grid grid-cols-1 ${availableSubBranchesForBranch.length > 0 ? "sm:grid-cols-3" : "sm:grid-cols-2"} gap-3 p-3 bg-zinc-50/80 dark:bg-zinc-800/40 rounded-xl border border-zinc-200/80 dark:border-zinc-700/60`}>
               {/* Company */}
               <div className="space-y-1">
                 <label className="text-zinc-600 dark:text-zinc-300 font-semibold flex items-center gap-1.5 text-[11px]">
@@ -510,7 +535,7 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
                 </label>
                 <select
                   value={selectedBranchId}
-                  onChange={(e) => setSelectedBranchId(e.target.value)}
+                  onChange={(e) => handleBranchChange(e.target.value)}
                   className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 text-zinc-800 dark:text-zinc-200 font-semibold cursor-pointer shadow-2xs"
                 >
                   <option value="">-- No Branch (Company Wide) --</option>
@@ -521,6 +546,28 @@ export function EditLeadModal({ isOpen, lead, onClose, onLeadUpdated, onDeleteLe
                   ))}
                 </select>
               </div>
+
+              {/* Sub-Branch Selector (Visible when selected branch has sub-branches) */}
+              {availableSubBranchesForBranch.length > 0 && (
+                <div className="space-y-1">
+                  <label className="text-zinc-600 dark:text-zinc-300 font-semibold flex items-center gap-1.5 text-[11px]">
+                    <span className="text-purple-500">🤝</span>
+                    <span>Sub-Branch (Partner)</span>
+                  </label>
+                  <select
+                    value={selectedSubBranchId}
+                    onChange={(e) => setSelectedSubBranchId(e.target.value)}
+                    className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-purple-200 dark:border-purple-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 text-zinc-800 dark:text-zinc-200 font-semibold cursor-pointer shadow-2xs"
+                  >
+                    <option value="">-- No Sub-Branch (Branch HQ) --</option>
+                    {availableSubBranchesForBranch.map((sb) => (
+                      <option key={sb.id} value={sb.id}>
+                        {sb.name} {sb.partnerType ? `(${sb.partnerType})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           )}
 

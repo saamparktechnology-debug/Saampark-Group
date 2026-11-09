@@ -20,11 +20,17 @@ export default function CreateCampaignModal({
   onClose,
   onCampaignCreated
 }: CreateCampaignModalProps) {
-  const { user, activeCompanyId } = useAuthStore()
+  const { user, activeCompanyId, branches } = useAuthStore()
   const [clients, setClients] = React.useState<any[]>([])
   const [isSubmitting, setIsSubmitting] = React.useState(false)
 
+  const [isNewClient, setIsNewClient] = React.useState(false)
   const [selectedClientId, setSelectedClientId] = React.useState("")
+  const [newClientName, setNewClientName] = React.useState("")
+  const [newClientEmail, setNewClientEmail] = React.useState("")
+  const [newClientPhone, setNewClientPhone] = React.useState("")
+  const [selectedBranchName, setSelectedBranchName] = React.useState("")
+
   const [packageName, setPackageName] = React.useState("Premium Digital Growth Package")
   const [durationMonths, setDurationMonths] = React.useState(3)
   const [posterCommitment, setPosterCommitment] = React.useState(20)
@@ -37,12 +43,15 @@ export default function CreateCampaignModal({
     if (isOpen) {
       getClients(activeCompanyId || "all").then((list) => {
         setClients(list || [])
-        if (list && list.length > 0 && !selectedClientId) {
+        if (list && list.length > 0) {
           setSelectedClientId(list[0].id)
+          setIsNewClient(false)
+        } else {
+          setIsNewClient(true)
         }
       })
     }
-  }, [isOpen, activeCompanyId, selectedClientId])
+  }, [isOpen, activeCompanyId])
 
   if (!isOpen) return null
 
@@ -50,15 +59,30 @@ export default function CreateCampaignModal({
     e.preventDefault()
     setIsSubmitting(true)
     try {
-      const clientObj = clients.find(c => String(c.id) === String(selectedClientId))
-      const clientName = clientObj?.name || clientObj?.companyName || "Marketing Client"
+      let finalClientId = selectedClientId
+      let finalClientName = newClientName.trim()
+      let finalClientEmail = newClientEmail.trim()
+
+      if (!isNewClient && selectedClientId) {
+        const clientObj = clients.find(c => String(c.id) === String(selectedClientId))
+        if (clientObj) {
+          finalClientId = String(clientObj.id)
+          finalClientName = clientObj.name || clientObj.companyName || finalClientName
+          finalClientEmail = clientObj.email || finalClientEmail
+        }
+      }
+
+      if (!finalClientName) {
+        finalClientName = "Marketing Client"
+      }
 
       await MarketingService.autoProvisionFromQuotation(
         {
-          id: selectedClientId || `CLT-${Date.now().toString().slice(-4)}`,
-          name: clientName,
-          email: clientObj?.email || "",
-          branchName: clientObj?.branchName || user?.branchName || "Main HQ"
+          id: finalClientId || `CLT-${Date.now().toString().slice(-4)}`,
+          name: finalClientName,
+          email: finalClientEmail,
+          phone: newClientPhone.trim(),
+          branchName: selectedBranchName || user?.branchName || "Main HQ"
         },
         packageName,
         {
@@ -70,6 +94,11 @@ export default function CreateCampaignModal({
         },
         activeCompanyId || user?.companyId || "consultancy"
       )
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("saampark_data_synced"))
+        window.dispatchEvent(new CustomEvent("marketing_campaign_created"))
+      }
 
       onCampaignCreated()
       onClose()
@@ -108,25 +137,62 @@ export default function CreateCampaignModal({
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {/* Client Selection */}
-          <div>
-            <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 block mb-1">
-              Select Client *
-            </label>
-            <select
-              value={selectedClientId}
-              onChange={(e) => setSelectedClientId(e.target.value)}
-              className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 font-medium"
-            >
-              {clients.length === 0 ? (
-                <option value="CLT-NEW">Demo Client (Auto Provision)</option>
-              ) : (
-                clients.map((c) => (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                Client / Business *
+              </label>
+              {clients.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setIsNewClient(v => !v)}
+                  className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                >
+                  {isNewClient ? "← Choose Existing Client" : "+ New Client"}
+                </button>
+              )}
+            </div>
+
+            {!isNewClient && clients.length > 0 ? (
+              <select
+                value={selectedClientId}
+                onChange={(e) => setSelectedClientId(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 font-medium"
+              >
+                {clients.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name || c.companyName || "Unnamed Client"} ({c.email || "No email"})
                   </option>
-                ))
-              )}
-            </select>
+                ))}
+              </select>
+            ) : (
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  required
+                  value={newClientName}
+                  onChange={(e) => setNewClientName(e.target.value)}
+                  placeholder="Enter Client or Business Name *"
+                  className="w-full px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-zinc-900 dark:text-zinc-100"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="email"
+                    value={newClientEmail}
+                    onChange={(e) => setNewClientEmail(e.target.value)}
+                    placeholder="Client Email (Optional)"
+                    className="w-full px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-zinc-900 dark:text-zinc-100"
+                  />
+                  <input
+                    type="tel"
+                    value={newClientPhone}
+                    onChange={(e) => setNewClientPhone(e.target.value)}
+                    placeholder="Phone (Optional)"
+                    className="w-full px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-zinc-900 dark:text-zinc-100"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Package Name & Duration */}

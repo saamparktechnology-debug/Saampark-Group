@@ -17,7 +17,7 @@ interface AddProjectModalProps {
 }
 
 export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectModalProps) {
-  const { user, activeCompanyId, activeBranchId, branches, companies } = useAuthStore()
+  const { user, activeCompanyId, activeBranchId, activeSubBranchId, branches, subBranches, companies } = useAuthStore()
   const selectableCompanies = React.useMemo(() => {
     return getSelectableCompanies(companies, activeCompanyId, user, branches)
   }, [companies, activeCompanyId, user, branches])
@@ -34,6 +34,7 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
   }, [selectableCompanies, selectedCompanyId])
 
   const [selectedBranchId, setSelectedBranchId] = React.useState<string>(activeBranchId || user?.branchId || "")
+  const [selectedSubBranchId, setSelectedSubBranchId] = React.useState<string>(activeSubBranchId || (user as any)?.subBranchId || "")
   const isBranchLocked = Boolean(user?.branchId && user?.role !== "Super Admin")
 
   const availableBranches = React.useMemo(() => {
@@ -45,6 +46,20 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
       return bComp === selComp || (selComp === "tech" && (bComp === "1" || !bComp)) || (selComp === "consultancy" && bComp === "2")
     })
   }, [branches, selectedCompanyId])
+
+  const availableSubBranchesForBranch = React.useMemo(() => {
+    if (!selectedBranchId || !subBranches || !Array.isArray(subBranches)) return []
+    const normB = String(selectedBranchId).toLowerCase().trim()
+    const targetB = availableBranches.find(b => String(b.id).toLowerCase().trim() === normB || String(b.name).toLowerCase().trim() === normB)
+    const bId = targetB ? String(targetB.id).toLowerCase().trim() : normB
+    const bName = targetB ? String(targetB.name).toLowerCase().trim() : ""
+
+    return subBranches.filter(sb => {
+      const pId = String(sb.parentBranchId || (sb as any).branch_id || (sb as any).branchId || "").toLowerCase().trim()
+      const pName = String((sb as any).branchName || (sb as any).branch_name || "").toLowerCase().trim()
+      return pId === bId || (bName && (pId === bName || pName === bName)) || pName === bId
+    })
+  }, [selectedBranchId, subBranches, availableBranches])
 
   const [title, setTitle] = React.useState("")
   const [projectType, setProjectType] = React.useState<ProjectType>("Client Project")
@@ -241,6 +256,8 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
              String(b.name || b.branch_name || b.code || "").toLowerCase().trim() === target
     })
 
+    const targetSubBranch = selectedSubBranchId ? (subBranches || []).find(sb => sb.id === selectedSubBranchId) : null
+
     const newProjData: Omit<Project, "id"> = {
       title,
       projectType,
@@ -258,6 +275,8 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
       branchId: selectedBranchId || (isBranchLocked ? user?.branchId : activeBranchId) || undefined,
       branchName: matchedBranch?.name || undefined,
       branchCode: matchedBranch?.code ? matchedBranch.code.toUpperCase() : undefined,
+      subBranchId: selectedSubBranchId || undefined,
+      subBranchName: targetSubBranch?.name || undefined,
       baseAmount: typeof baseAmount === "number" ? baseAmount : undefined,
       setupCharge: typeof setupCharge === "number" ? setupCharge : undefined,
       discount: typeof discount === "number" ? discount : undefined,
@@ -325,8 +344,8 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
 
         {/* Modal Body Form */}
         <div className="p-6 overflow-y-auto space-y-4 text-xs">
-          {/* Company & Branch Selector Card */}
-          <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/80 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Company, Branch & Sub-Branch Selector Card */}
+          <div className={`p-3.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/80 grid grid-cols-1 ${availableSubBranchesForBranch.length > 0 ? "sm:grid-cols-3" : "sm:grid-cols-2"} gap-3`}>
             <div>
               <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1 flex items-center justify-between">
                 <span>Company Entity</span>
@@ -340,7 +359,10 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
                 value={selectedCompanyId}
                 onChange={(e) => {
                   setSelectedCompanyId(e.target.value)
-                  if (!isBranchLocked) setSelectedBranchId("")
+                  if (!isBranchLocked) {
+                    setSelectedBranchId("")
+                    setSelectedSubBranchId("")
+                  }
                 }}
                 disabled={selectableCompanies.length <= 1}
                 className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-85 disabled:cursor-not-allowed"
@@ -365,7 +387,10 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
               ) : (
                 <select
                   value={selectedBranchId}
-                  onChange={(e) => setSelectedBranchId(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedBranchId(e.target.value)
+                    setSelectedSubBranchId("")
+                  }}
                   className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 font-bold focus:outline-none focus:ring-1 focus:ring-blue-500"
                 >
                   <option value="">🏢 Company HQ / Central Office</option>
@@ -377,6 +402,27 @@ export function AddProjectModal({ isOpen, onClose, onProjectAdded }: AddProjectM
                 </select>
               )}
             </div>
+
+            {/* Dynamic Sub-Branch Selector */}
+            {availableSubBranchesForBranch.length > 0 && (
+              <div>
+                <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
+                  Sub-Branch Partner
+                </label>
+                <select
+                  value={selectedSubBranchId}
+                  onChange={(e) => setSelectedSubBranchId(e.target.value)}
+                  className="w-full px-2.5 py-1.5 bg-white dark:bg-zinc-900 border border-purple-200 dark:border-purple-800 rounded-lg text-zinc-800 dark:text-zinc-200 font-bold focus:outline-none focus:ring-1 focus:ring-purple-500"
+                >
+                  <option value="">-- Direct Branch Project --</option>
+                  {availableSubBranchesForBranch.map((sb) => (
+                    <option key={sb.id} value={sb.id}>
+                      🤝 {sb.name || (sb as any).sub_branch_name || sb.code}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           {/* Title */}

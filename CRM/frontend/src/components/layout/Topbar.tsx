@@ -71,6 +71,11 @@ export function Topbar() {
         if (matchedBranch && matchedBranch.id !== activeBranchId) {
           switchBranch(matchedBranch.id)
         }
+      } else if (featureIdx === 1) {
+        // Direct company view without branch: /saampark-technology/feature/dashboard
+        if (activeBranchId !== null) {
+          switchBranch(null)
+        }
       }
     }
   }, [pathname, branches, activeCompanyId, activeBranchId, switchCompany, switchBranch])
@@ -93,19 +98,11 @@ export function Topbar() {
 
     const cId = c.id || c.slug
     switchCompany(cId)
+    switchBranch(null)
     switchSubBranch(null)
 
     const cSlug = String(c.slug || cId).toLowerCase().includes("consult") ? "saampark-consultancy" : "saampark-technology"
-    const matchingBranches = branches.filter(b => isMatchingCompany({ id: b.companyId || (b as any).company_id } as any, cId))
-    const targetBranch = matchingBranches[0]
-    if (targetBranch) {
-      switchBranch(targetBranch.id)
-      const bSlug = targetBranch.code?.toLowerCase() || targetBranch.name.toLowerCase().replace(/\s+/g, "-")
-      router.push(`/${cSlug}/${bSlug}${featurePath}`)
-    } else {
-      switchBranch(null)
-      router.push(`/${cSlug}/main${featurePath}`)
-    }
+    router.push(`/${cSlug}${featurePath}`)
   }
 
   const handleSelectBranch = (b: any) => {
@@ -115,15 +112,17 @@ export function Topbar() {
       ? pathname.substring(pathname.indexOf("/feature/"))
       : "/feature/dashboard"
 
+    const cSlug = String(activeCompanyId || "saampark-technology").toLowerCase().includes("consult") ? "saampark-consultancy" : "saampark-technology"
+
     if (!b) {
       switchBranch(null)
       switchSubBranch(null)
+      router.push(`/${cSlug}${featurePath}`)
       return
     }
 
     switchBranch(b.id)
     switchSubBranch(null)
-    const cSlug = String(activeCompanyId || "saampark-technology").toLowerCase().includes("consult") ? "saampark-consultancy" : "saampark-technology"
     const bSlug = b.code?.toLowerCase() || b.name.toLowerCase().replace(/\s+/g, "-")
     router.push(`/${cSlug}/${bSlug}${featurePath}`)
   }
@@ -431,7 +430,7 @@ export function Topbar() {
       } else if (activeBranchId) {
         const branchMatches = companyBranches.some(b => String(b.id).toLowerCase().trim() === String(activeBranchId).toLowerCase().trim())
         if (!branchMatches) {
-          switchBranch(companyBranches[0]?.id || null)
+          switchBranch(null)
           switchSubBranch(null)
         }
       }

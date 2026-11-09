@@ -1626,12 +1626,48 @@ export function DocumentStudioModal({
                         </label>
                         <select
                           value={companyId}
-                          onChange={(e) => setCompanyId(e.target.value)}
+                          onChange={(e) => {
+                            setCompanyId(e.target.value)
+                            setBranchId("")
+                            setSubBranchId("")
+                          }}
                           disabled={selectableCompanies.length <= 1}
                           className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-bold disabled:opacity-85 disabled:cursor-not-allowed"
                         >
                           {selectableCompanies.map(c => (
                             <option key={c.id} value={c.id}>{c.brand_name || c.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Issuing Branch</label>
+                        <select
+                          value={branchId}
+                          onChange={(e) => {
+                            setBranchId(e.target.value)
+                            setSubBranchId("")
+                          }}
+                          className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-medium"
+                        >
+                          <option value="">🏢 Company HQ / Central Office</option>
+                          {companyBranches.map(b => (
+                            <option key={b.id} value={b.id}>📍 {b.name} ({b.code})</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Sub-Branch Partner</label>
+                        <select
+                          value={subBranchId}
+                          disabled={!branchId || branchSubBranches.length === 0}
+                          onChange={(e) => setSubBranchId(e.target.value)}
+                          className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-medium disabled:opacity-50"
+                        >
+                          <option value="">None (Direct Branch Quote)</option>
+                          {branchSubBranches.map(sb => (
+                            <option key={sb.id} value={sb.id}>🤝 {sb.name}</option>
                           ))}
                         </select>
                       </div>
@@ -2102,12 +2138,48 @@ export function DocumentStudioModal({
                         </label>
                         <select
                           value={companyId}
-                          onChange={(e) => setCompanyId(e.target.value)}
+                          onChange={(e) => {
+                            setCompanyId(e.target.value)
+                            setBranchId("")
+                            setSubBranchId("")
+                          }}
                           disabled={selectableCompanies.length <= 1}
                           className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-bold disabled:opacity-85 disabled:cursor-not-allowed"
                         >
                           {selectableCompanies.map(c => (
                             <option key={c.id} value={c.id}>{c.brand_name || c.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Issuing Branch</label>
+                        <select
+                          value={branchId}
+                          onChange={(e) => {
+                            setBranchId(e.target.value)
+                            setSubBranchId("")
+                          }}
+                          className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-medium"
+                        >
+                          <option value="">🏢 Company HQ / Central Office</option>
+                          {companyBranches.map(b => (
+                            <option key={b.id} value={b.id}>📍 {b.name} ({b.code})</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10.5px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">Sub-Branch Partner</label>
+                        <select
+                          value={subBranchId}
+                          disabled={!branchId || branchSubBranches.length === 0}
+                          onChange={(e) => setSubBranchId(e.target.value)}
+                          className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl font-medium disabled:opacity-50"
+                        >
+                          <option value="">None (Direct Branch Estimate)</option>
+                          {branchSubBranches.map(sb => (
+                            <option key={sb.id} value={sb.id}>🤝 {sb.name}</option>
                           ))}
                         </select>
                       </div>

@@ -86,9 +86,17 @@ export default function ClientMarketingReport() {
           Launch a digital marketing retainer contract for your clients with deliverable commitments.
         </p>
         {isAdmin && (
-          <Button onClick={() => setIsCreateCampaignOpen(true)} className="bg-indigo-600 text-white text-xs">
+          <Button onClick={() => setIsCreateCampaignOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs cursor-pointer px-4 py-2">
             + Create Marketing Retainer
           </Button>
+        )}
+
+        {isCreateCampaignOpen && (
+          <CreateCampaignModal
+            isOpen={isCreateCampaignOpen}
+            onClose={() => setIsCreateCampaignOpen(false)}
+            onCampaignCreated={loadData}
+          />
         )}
       </div>
     )

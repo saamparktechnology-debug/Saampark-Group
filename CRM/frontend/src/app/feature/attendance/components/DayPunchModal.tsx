@@ -52,11 +52,11 @@ export default function DayPunchModal({
 
   React.useEffect(() => {
     if (detail) {
-      setInTime(detail.punchIn || "09:30 AM")
-      setOutTime(detail.punchOut || "06:30 PM")
-      setBreakMins(detail.breakMins || 45)
+      setInTime(detail.punchIn || "")
+      setOutTime(detail.punchOut || "")
+      setBreakMins(detail.breakMins || 0)
       setWorkMode(detail.workMode || "Office")
-      setStatus(detail.status || "Present")
+      setStatus(detail.status || (detail.isSunday ? "Day Off" : (detail.isHoliday ? "Holiday" : "Present")))
       setNotes(detail.notes || "")
       setIsEditing(false)
     }
