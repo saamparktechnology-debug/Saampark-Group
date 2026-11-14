@@ -1,0 +1,555 @@
+const pool = require('../config/db');
+const { successResponse, errorResponse } = require('../utils/apiResponse');
+
+// Ensure required columns exist in companies table (auto-migrate if missing)
+let cachedCompanyColumns = null;
+
+async function getExistingCompanyColumns() {
+  if (cachedCompanyColumns) return cachedCompanyColumns;
+  try {
+    const [cols] = await pool.execute('SHOW COLUMNS FROM companies');
+    if (cols && cols.length > 0) {
+      cachedCompanyColumns = cols.map(c => c.Field);
+      return cachedCompanyColumns;
+    }
+  } catch (e) {}
+  return [];
+}
+
+async function ensureCompanyColumns() {
+  try {
+    const colsToEnsure = [
+      'brand_name VARCHAR(191) NULL',
+      'division_name VARCHAR(191) NULL',
+      'subtitle VARCHAR(255) NULL',
+      'trademark_symbol VARCHAR(32) NULL',
+      'iso_certification VARCHAR(191) NULL',
+      'gstin VARCHAR(64) NULL',
+      'pan VARCHAR(64) NULL',
+      'cin VARCHAR(64) NULL',
+      'msme_reg VARCHAR(64) NULL',
+      'website VARCHAR(191) NULL',
+      'signatory_name VARCHAR(191) NULL',
+      'signatory_designation VARCHAR(191) NULL',
+      'upi_id VARCHAR(191) NULL',
+      'account_holder VARCHAR(191) NULL',
+      'bank_name VARCHAR(191) NULL',
+      'account_number VARCHAR(191) NULL',
+      'ifsc_code VARCHAR(64) NULL',
+      'bank_branch VARCHAR(191) NULL',
+      'gst_bank_name VARCHAR(191) NULL',
+      'gst_account_holder VARCHAR(191) NULL',
+      'gst_account_number VARCHAR(191) NULL',
+      'gst_ifsc_code VARCHAR(64) NULL',
+      'gst_bank_branch VARCHAR(191) NULL',
+      'gst_upi_id VARCHAR(191) NULL',
+      'nongst_bank_name VARCHAR(191) NULL',
+      'nongst_account_holder VARCHAR(191) NULL',
+      'nongst_account_number VARCHAR(191) NULL',
+      'nongst_ifsc_code VARCHAR(64) NULL',
+      'nongst_bank_branch VARCHAR(191) NULL',
+      'nongst_upi_id VARCHAR(191) NULL',
+      'signature_position JSON NULL',
+      'stamp_position JSON NULL',
+      'logo_position JSON NULL',
+      'logo_scale DECIMAL(5,2) NULL',
+      'stamp_scale DECIMAL(5,2) NULL',
+      'signature_scale DECIMAL(5,2) NULL',
+      'custom_stamps JSON NULL',
+      'zoom INT NULL',
+      'preview_scale VARCHAR(32) NULL',
+      'preview_invoice_type VARCHAR(32) NULL',
+      'invoice_customization JSON NULL',
+      'bottom_footer_text TEXT NULL',
+      'quotation_notes TEXT NULL',
+      'footer_text TEXT NULL',
+      'terms_conditions LONGTEXT NULL',
+      'invoice_notes LONGTEXT NULL',
+      'gst_payment_qr_url LONGTEXT NULL',
+      'nongst_payment_qr_url LONGTEXT NULL',
+      'address LONGTEXT NULL',
+      'logo_url LONGTEXT NULL',
+      'signature_image_url LONGTEXT NULL',
+      'stamp_image_url LONGTEXT NULL',
+      'payment_qr_url LONGTEXT NULL',
+      'updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'
+    ];
+
+    for (const def of colsToEnsure) {
+      await pool.execute(`ALTER TABLE companies ADD COLUMN ${def}`).catch(async () => {
+        // If column exists, modify it to ensure proper capacity
+        await pool.execute(`ALTER TABLE companies MODIFY COLUMN ${def}`).catch(() => {});
+      });
+    }
+    cachedCompanyColumns = null;
+  } catch {}
+}
+ensureCompanyColumns();
+
+// ─── GET ALL COMPANIES ─────────────────────────────────────────────────────────
+const getAllCompanies = async (req, res, next) => {
+  try {
+    let query = `SELECT c.*, COUNT(DISTINCT u.id) as member_count
+                 FROM companies c
+                 LEFT JOIN users u ON u.company_id = c.id AND u.deleted_at IS NULL`;
+    const params = [];
+
+    // Role check: If requester is authenticated and is NOT Super Admin, filter to assigned company
+    if (req.user) {
+      const userRoleId = Number(req.user.role_id);
+      const userRole = String(req.user.role || req.user.role_name || '').toLowerCase().trim();
+      const isSuper = userRoleId === 1 || userRole === 'super admin' || userRole === 'superadmin';
+      
+      if (!isSuper) {
+        // Find assigned companies for this user
+        let assignedComp = req.user.company_id;
+        let assignedComps = [];
+        try {
+          const [uRows] = await pool.execute('SELECT company_id, company_ids FROM users WHERE id = ?', [req.user.id]);
+          if (uRows.length > 0) {
+            if (uRows[0].company_id) assignedComp = uRows[0].company_id;
+            if (uRows[0].company_ids) {
+              const parsed = typeof uRows[0].company_ids === 'string' ? JSON.parse(uRows[0].company_ids) : uRows[0].company_ids;
+              if (Array.isArray(parsed)) assignedComps = parsed;
+            }
+          }
+        } catch (e) {}
+
+        const allAllowed = Array.from(new Set([assignedComp, ...assignedComps].filter(Boolean))).map(s => String(s).trim());
+        if (allAllowed.length > 0) {
+          const placeholders = allAllowed.map(() => '(c.id = ? OR c.slug = ?)').join(' OR ');
+          query += ` WHERE (${placeholders})`;
+          for (const item of allAllowed) {
+            params.push(item, item);
+          }
+        }
+      }
+    }
+
+    query += ` GROUP BY c.id ORDER BY c.created_at DESC`;
+    const [companies] = await pool.execute(query, params);
+    return successResponse(res, 200, 'Companies fetched', companies);
+  } catch (error) { next(error); }
+};
+
+// ─── GET SINGLE COMPANY ────────────────────────────────────────────────────────
+const getCompanyById = async (req, res, next) => {
+  try {
+    const [companies] = await pool.execute('SELECT * FROM companies WHERE id = ? OR slug = ?', [req.params.id, req.params.id]);
+    if (!companies.length) return errorResponse(res, 404, 'Company not found.');
+    return successResponse(res, 200, 'Company found', companies[0]);
+  } catch (error) { next(error); }
+};
+
+// ─── CREATE COMPANY ────────────────────────────────────────────────────────────
+const createCompany = async (req, res, next) => {
+  try {
+    if (req.user.role_id !== 1 && req.user.role !== 'Super Admin') {
+      return errorResponse(res, 403, 'Access denied: Only Super Admin can create companies.');
+    }
+    const { 
+      name, slug, currency, currency_symbol, logo_url, address, industry,
+      brand_name, division_name, subtitle, gstin, pan, cin, msme_reg, website,
+      signatory_name, signatory_designation, signature_image_url, stamp_image_url,
+      terms_conditions, invoice_notes, upi_id, account_holder, bank_name, account_number, ifsc_code, bank_branch, payment_qr_url,
+      gst_bank_name, gst_account_holder, gst_account_number, gst_ifsc_code, gst_bank_branch, gst_upi_id, gst_payment_qr_url,
+      nongst_bank_name, nongst_account_holder, nongst_account_number, nongst_ifsc_code, nongst_bank_branch, nongst_upi_id, nongst_payment_qr_url
+    } = req.body;
+    if (!name) return errorResponse(res, 400, 'Company name is required.');
+
+    const companySlug = slug || name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+
+    // Check slug unique
+    const [existing] = await pool.execute('SELECT id FROM companies WHERE slug = ?', [companySlug]);
+    if (existing.length) return errorResponse(res, 400, 'A company with this name/slug already exists.');
+
+    const [result] = await pool.execute(
+      `INSERT INTO companies (
+        name, slug, currency, currency_symbol, logo_url, address, industry, created_by,
+        brand_name, division_name, subtitle, gstin, pan, cin, msme_reg, website,
+        signatory_name, signatory_designation, signature_image_url, stamp_image_url,
+        terms_conditions, invoice_notes, upi_id, account_holder, bank_name, account_number, ifsc_code, bank_branch, payment_qr_url,
+        gst_bank_name, gst_account_holder, gst_account_number, gst_ifsc_code, gst_bank_branch, gst_upi_id, gst_payment_qr_url,
+        nongst_bank_name, nongst_account_holder, nongst_account_number, nongst_ifsc_code, nongst_bank_branch, nongst_upi_id, nongst_payment_qr_url
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        name, companySlug, currency || 'INR', currency_symbol || '₹', logo_url || null, address || null, industry || null, req.user.id,
+        brand_name || null, division_name || null, subtitle || null, gstin || null, pan || null, cin || null, msme_reg || null, website || null,
+        signatory_name || null, signatory_designation || null, signature_image_url || null, stamp_image_url || null,
+        terms_conditions || null, invoice_notes || null, upi_id || null, account_holder || null, bank_name || null, account_number || null, ifsc_code || null, bank_branch || null, payment_qr_url || null,
+        gst_bank_name || null, gst_account_holder || null, gst_account_number || null, gst_ifsc_code || null, gst_bank_branch || null, gst_upi_id || null, gst_payment_qr_url || null,
+        nongst_bank_name || null, nongst_account_holder || null, nongst_account_number || null, nongst_ifsc_code || null, nongst_bank_branch || null, nongst_upi_id || null, nongst_payment_qr_url || null
+      ]
+    );
+
+    // Invalidate company scope cache immediately so new company is available right away
+    try {
+      const { invalidateCompanyCache } = require('../middlewares/companyScopeMiddleware');
+      if (typeof invalidateCompanyCache === 'function') invalidateCompanyCache();
+    } catch {}
+
+    return successResponse(res, 201, 'Company created successfully', { company_id: result.insertId, slug: companySlug });
+  } catch (error) { next(error); }
+};
+
+// ─── UPDATE COMPANY ────────────────────────────────────────────────────────────
+const updateCompany = async (req, res, next) => {
+  try {
+    const userRoleId = Number(req.user?.role_id);
+    const userRole = String(req.user?.role || req.user?.role_name || '').toLowerCase().trim();
+    const isSuper = userRoleId === 1 || userRole === 'super admin' || userRole === 'superadmin';
+    const targetParam = String(req.params.id).toLowerCase().trim();
+
+    const isNumericParam = Number.isFinite(Number(req.params.id));
+    let [targetRows] = await pool.execute(
+      isNumericParam 
+        ? 'SELECT id, slug FROM companies WHERE id = ? UNION SELECT id, slug FROM companies WHERE slug = ? LIMIT 1'
+        : 'SELECT id, slug FROM companies WHERE slug = ? UNION SELECT id, slug FROM companies WHERE id = ? LIMIT 1',
+      [req.params.id, req.params.id]
+    );
+
+    if (!targetRows.length) {
+      const insertSlug = (targetParam === '2' || targetParam === 'consultancy') ? 'consultancy' : targetParam;
+      const insertName = req.body.name || req.body.brand_name || (insertSlug === 'consultancy' ? 'SAAMPARK CONSULTANCY SERVICE' : 'SAAMPARK');
+      const insertId = isNumericParam ? Number(req.params.id) : (insertSlug === 'consultancy' ? 2 : null);
+
+      await pool.execute(
+        `INSERT INTO companies (id, slug, name, brand_name, division_name, status) 
+         VALUES (?, ?, ?, ?, ?, 'active') 
+         ON DUPLICATE KEY UPDATE name=VALUES(name)`,
+        [insertId, insertSlug, insertName, req.body.brand_name || 'SAAMPARK', req.body.division_name || (insertSlug === 'consultancy' ? 'CONSULTANCY SERVICE' : '')]
+      ).catch(() => {});
+
+      const [reRows] = await pool.execute('SELECT id, slug FROM companies WHERE id = ? OR slug = ? LIMIT 1', [insertId, insertSlug]).catch(() => [[]]);
+      if (reRows.length) targetRows = reRows;
+    }
+
+    if (!targetRows.length) return errorResponse(res, 404, 'Company not found.');
+
+    const numericId = targetRows[0].id;
+    const oldSlug = targetRows[0].slug ? String(targetRows[0].slug).toLowerCase().trim() : null;
+    const targetIdStr = String(numericId).toLowerCase();
+
+    if (!isSuper) {
+      const isAdmin = userRoleId === 2 || userRole.includes('admin') || userRole.includes('director') || req.user?.email === 'hiisupriya@gmail.com' || req.user?.email === 'saampark.official@gmail.com';
+      if (!isAdmin) {
+        return errorResponse(res, 403, 'Access denied: You do not have permission to update company details.');
+      }
+      // Non-super-admin is NOT permitted to rename company slug (prevents breaking foreign references & lockouts)
+      delete req.body.slug;
+    }
+
+    const isSlugRenamed = Boolean(req.body.slug && oldSlug && String(req.body.slug).toLowerCase().trim() !== oldSlug);
+    const newSlug = isSlugRenamed ? String(req.body.slug).toLowerCase().trim() : (oldSlug || targetParam);
+
+    // If super admin is changing the slug, ensure it does not conflict with another company
+    if (isSlugRenamed) {
+      const [conflictRows] = await pool.execute(
+        'SELECT id FROM companies WHERE (slug = ? OR id = ?) AND id != ?',
+        [newSlug, newSlug, numericId]
+      );
+      if (conflictRows.length > 0) {
+        return errorResponse(res, 409, 'A company with this slug or ID already exists.');
+      }
+    }
+    
+    const allowedFields = [
+      'name', ...(isSuper ? ['slug'] : []), 'currency', 'currency_symbol', 'logo_url', 'address', 'industry', 'phone', 'email',
+      'brand_name', 'division_name', 'subtitle', 'trademark_symbol', 'iso_certification', 'gstin', 'pan', 'cin', 'msme_reg', 'website',
+      'signatory_name', 'signatory_designation', 'signature_image_url', 'stamp_image_url',
+      'terms_conditions', 'invoice_notes', 'quotation_notes', 'bottom_footer_text', 'footer_text', 'upi_id', 'account_holder', 'bank_name', 'account_number', 'ifsc_code', 'bank_branch', 'payment_qr_url',
+      'gst_bank_name', 'gst_account_holder', 'gst_account_number', 'gst_ifsc_code', 'gst_bank_branch', 'gst_upi_id', 'gst_payment_qr_url',
+      'nongst_bank_name', 'nongst_account_holder', 'nongst_account_number', 'nongst_ifsc_code', 'nongst_bank_branch', 'nongst_upi_id', 'nongst_payment_qr_url',
+      'signature_position', 'stamp_position', 'logo_position', 'logo_scale', 'stamp_scale', 'signature_scale', 'custom_stamps', 'zoom', 'preview_scale', 'preview_invoice_type', 'invoice_customization'
+    ];
+
+    if (req.body.logo_url === undefined && req.body.logo !== undefined) {
+      req.body.logo_url = req.body.logo;
+    }
+
+    const existingCols = await getExistingCompanyColumns();
+    const fields = [];
+    const values = [];
+
+    for (const field of allowedFields) {
+      if (req.body[field] !== undefined) {
+        if (existingCols.length > 0 && !existingCols.includes(field)) {
+          // Column not in MySQL table, skip to avoid SQL error
+          continue;
+        }
+        fields.push(`${field} = ?`);
+        let val = req.body[field];
+        if (typeof val === 'object' && val !== null) {
+          val = JSON.stringify(val);
+        } else if (val === '') {
+          val = null;
+        }
+        values.push(val);
+      }
+    }
+
+    if (fields.length > 0) {
+      if (existingCols.length === 0 || existingCols.includes('updated_at')) {
+        fields.push('updated_at = NOW()');
+      }
+      values.push(numericId);
+      // Strictly update by numericId to never collide with other rows sharing slug or ID
+      const [updateResult] = await pool.execute(`UPDATE companies SET ${fields.join(', ')} WHERE id = ?`, values).catch(err => {
+        console.warn('MySQL company update column fallback:', err.message);
+        return [null];
+      });
+
+      if (!updateResult || updateResult.affectedRows === 0) {
+        const compSlug = String(req.body.slug || oldSlug || req.params.id).toLowerCase();
+        const insertCols = ['id', 'name', 'slug'];
+        const insertPlaceholders = ['?', '?', '?'];
+        const insertVals = [numericId, req.body.name || req.params.id, compSlug];
+        for (const field of allowedFields) {
+          if (field !== 'name' && field !== 'slug' && field !== 'id' && req.body[field] !== undefined) {
+            if (existingCols.length > 0 && !existingCols.includes(field)) continue;
+            insertCols.push(field);
+            insertPlaceholders.push('?');
+            let val = req.body[field];
+            if (typeof val === 'object' && val !== null) {
+              val = JSON.stringify(val);
+            } else if (val === '') {
+              val = null;
+            }
+            insertVals.push(val);
+          }
+        }
+        const updateClauses = insertCols.filter(c => c !== 'id').map(c => `${c}=VALUES(${c})`).join(', ');
+        await pool.execute(
+          `INSERT INTO companies (${insertCols.join(', ')}) VALUES (${insertPlaceholders.join(', ')})
+           ON DUPLICATE KEY UPDATE ${updateClauses || 'updated_at = NOW()'}`,
+          insertVals
+        ).catch(e => console.warn('Company insert fallback notice:', e.message));
+      }
+    }
+
+    // Always sync updated company into app_data JSON store for bulletproof persistence
+    try {
+      const [appRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "companies"').catch(() => [[]]);
+      let cList = [];
+      if (appRows && appRows.length > 0 && appRows[0].data_json) {
+        try { cList = JSON.parse(appRows[0].data_json); } catch {}
+      }
+      if (!Array.isArray(cList)) cList = [];
+      const finalCanonId = numericId === 2 ? 'consultancy' : (numericId === 1 ? 'tech' : (newSlug || String(numericId)));
+      const updatedCompanyObj = {
+        ...req.body,
+        id: finalCanonId,
+        numeric_id: numericId,
+        slug: finalCanonId,
+      };
+      const filteredComps = cList.filter(c => {
+        const cId = String(c.id || '').toLowerCase();
+        const cSlug = String(c.slug || '').toLowerCase();
+        const cNum = String(c.numeric_id || '');
+        const isTarget = (numericId === 2 && (cId === 'consultancy' || cSlug === 'consultancy' || cNum === '2' || cId === 'digital' || cSlug === 'digital')) ||
+                         (numericId === 1 && (cId === 'tech' || cSlug === 'tech' || cNum === '1')) ||
+                         cId === String(numericId) || cId === newSlug || cSlug === newSlug;
+        return !isTarget;
+      });
+      filteredComps.push(updatedCompanyObj);
+      await pool.execute(
+        `INSERT INTO app_data (module_key, data_json) VALUES ('companies', ?)
+         ON DUPLICATE KEY UPDATE data_json = VALUES(data_json), updated_at = NOW()`,
+        [JSON.stringify(filteredComps)]
+      ).catch(() => {});
+    } catch (e) {}
+
+    // When a super admin renames a slug, propagate changes to references (users, branches, sub-branches)
+    if (isSlugRenamed && oldSlug) {
+      // 1. Update users assigned to this company slug
+      await pool.execute('UPDATE users SET company_id = ? WHERE company_id = ?', [newSlug, oldSlug]).catch(() => {});
+      try {
+        const [uRows] = await pool.execute('SELECT id, company_ids FROM users WHERE company_ids LIKE ?', [`%"${oldSlug}"%`]);
+        for (const u of uRows) {
+          if (u.company_ids) {
+            let arr = typeof u.company_ids === 'string' ? JSON.parse(u.company_ids) : u.company_ids;
+            if (Array.isArray(arr) && arr.includes(oldSlug)) {
+              arr = arr.map(s => s === oldSlug ? newSlug : s);
+              await pool.execute('UPDATE users SET company_ids = ? WHERE id = ?', [JSON.stringify(arr), u.id]);
+            }
+          }
+        }
+      } catch (e) {}
+
+      // 2. Update branches referencing the old slug
+      await pool.execute('UPDATE branches SET company_id = ? WHERE company_id = ?', [numericId, oldSlug]).catch(() => {});
+
+      // 3. Migrate branches in app_data
+      try {
+        const [bRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "branches"');
+        if (bRows.length > 0 && bRows[0].data_json) {
+          let bList = JSON.parse(bRows[0].data_json);
+          if (Array.isArray(bList)) {
+            let changed = false;
+            bList = bList.map(b => {
+              const bComp = String(b.company_id || b.companyId || '').toLowerCase().trim();
+              if (bComp === oldSlug) {
+                changed = true;
+                return { ...b, company_id: numericId, companyId: newSlug };
+              }
+              return b;
+            });
+            if (changed) {
+              await pool.execute('UPDATE app_data SET data_json = ?, updated_at = NOW() WHERE module_key = "branches"', [JSON.stringify(bList)]);
+            }
+          }
+        }
+      } catch (e) {}
+
+      // 4. Migrate sub_branches in app_data
+      try {
+        const [sbRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "sub_branches"');
+        if (sbRows.length > 0 && sbRows[0].data_json) {
+          let sbList = JSON.parse(sbRows[0].data_json);
+          if (Array.isArray(sbList)) {
+            let changed = false;
+            sbList = sbList.map(sb => {
+              const sbComp = String(sb.company_id || sb.companyId || '').toLowerCase().trim();
+              if (sbComp === oldSlug) {
+                changed = true;
+                return { ...sb, company_id: numericId, companyId: newSlug };
+              }
+              return sb;
+            });
+            if (changed) {
+              await pool.execute('UPDATE app_data SET data_json = ?, updated_at = NOW() WHERE module_key = "sub_branches"', [JSON.stringify(sbList)]);
+            }
+          }
+        }
+      } catch (e) {}
+    }
+
+    // Also sync to app_data table in MySQL for guaranteed persistence
+    try {
+      const [appDataRows] = await pool.execute('SELECT data_json FROM app_data WHERE module_key = "companies"');
+      let currentList = [];
+      if (appDataRows.length > 0 && appDataRows[0].data_json) {
+        try { currentList = JSON.parse(appDataRows[0].data_json); } catch {}
+      }
+      if (!Array.isArray(currentList)) currentList = [];
+      
+      // Match on the old slug from row BEFORE update to avoid cross-tenant corruptions
+      const oldTarget = String(oldSlug || req.params.id).toLowerCase();
+      const targetSlug = String(req.body.slug || oldSlug || req.params.id).toLowerCase();
+      const matches = (c, key) => String(c.id).toLowerCase() === key || String(c.slug || '').toLowerCase() === key;
+      const existingIdx = currentList.findIndex(c => matches(c, oldTarget) || matches(c, String(numericId)));
+
+      const updatedComp = { 
+        ...(existingIdx >= 0 ? currentList[existingIdx] : {}), 
+        ...req.body, 
+        id: targetSlug, 
+        slug: targetSlug,
+        numeric_id: numericId
+      };
+      if (existingIdx >= 0) {
+        currentList[existingIdx] = updatedComp;
+      } else {
+        currentList.push(updatedComp);
+      }
+      await pool.execute(
+        `INSERT INTO app_data (module_key, data_json) VALUES ("companies", ?)
+         ON DUPLICATE KEY UPDATE data_json = VALUES(data_json), updated_at = NOW()`,
+        [JSON.stringify(currentList)]
+      );
+    } catch (appDataErr) {
+      console.warn('app_data sync notice:', appDataErr.message);
+    }
+
+    return successResponse(res, 200, 'Company updated');
+  } catch (error) { next(error); }
+};
+
+// ─── DELETE COMPANY (Super Admin Only) ────────────────────────────────────────
+const deleteCompany = async (req, res, next) => {
+  try {
+    const userRoleId = Number(req.user?.role_id);
+    const userRole = String(req.user?.role || req.user?.role_name || '').toLowerCase();
+    if (userRoleId !== 1 && !userRole.includes('super')) {
+      return errorResponse(res, 403, 'Access denied: Only Super Admin can delete companies.');
+    }
+    const { id } = req.params;
+
+    const [comp] = await pool.execute('SELECT id, slug FROM companies WHERE id = ? OR slug = ?', [id, id]);
+    if (!comp.length) return errorResponse(res, 404, 'Company not found.');
+    if (String(comp[0].id) === '1' || comp[0].slug === 'tech') {
+      return errorResponse(res, 400, 'Cannot delete the primary default company.');
+    }
+
+    const compId = comp[0].id;
+    const compSlug = comp[0].slug;
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+
+      // Track deleted company in tombstone table so all users belonging to it can be blocked
+      await conn.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "companies")', [String(compId)]).catch(() => {});
+      await conn.execute('INSERT IGNORE INTO deleted_items (item_id, module_name) VALUES (?, "companies")', [compSlug]).catch(() => {});
+
+      // Mark company users as inactive before unlinking
+      await conn.execute('UPDATE users SET status = "inactive", updated_at = NOW() WHERE company_id = ?', [compId]).catch(() => {});
+
+      // Clean up dependent child tables to prevent foreign key errors
+      await conn.execute('DELETE FROM sub_branches WHERE company_id = ?', [compId]).catch(() => {});
+      await conn.execute('DELETE FROM branches WHERE company_id = ?', [compId]).catch(() => {});
+      await conn.execute('DELETE FROM employee_attendance WHERE company_id = ?', [compId]).catch(() => {});
+      await conn.execute('DELETE FROM employee_leaves WHERE company_id = ?', [compId]).catch(() => {});
+      await conn.execute('DELETE FROM payroll WHERE company_id = ?', [compId]).catch(() => {});
+      await conn.execute('DELETE FROM invoices WHERE company_id = ?', [compId]).catch(() => {});
+      await conn.execute('DELETE FROM projects WHERE company_id = ?', [compId]).catch(() => {});
+      await conn.execute('DELETE FROM customers WHERE company_id = ?', [compId]).catch(() => {});
+      await conn.execute('DELETE FROM leads WHERE company_id = ?', [compId]).catch(() => {});
+      await conn.execute('DELETE FROM deals WHERE company_id = ?', [compId]).catch(() => {});
+      await conn.execute('DELETE FROM expenses WHERE company_id = ?', [compId]).catch(() => {});
+      await conn.execute('DELETE FROM tickets WHERE company_id = ?', [compId]).catch(() => {});
+      await conn.execute(
+        'DELETE FROM app_data WHERE module_key IN (?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          `branches_${compId}`, `branches_${compSlug}`,
+          `companies_${compId}`, `companies_${compSlug}`,
+          `invoices_${compId}`, `invoices_${compSlug}`,
+          `settings_${compId}`, `settings_${compSlug}`
+        ]
+      ).catch(() => {});
+
+      // Delete company record from database
+      await conn.execute('DELETE FROM companies WHERE id = ?', [compId]);
+
+      await conn.commit();
+    } catch (txnErr) {
+      await conn.rollback();
+      throw txnErr;
+    } finally {
+      conn.release();
+    }
+
+    // Invalidate company scope cache
+    try {
+      const { invalidateCompanyCache } = require('../middlewares/companyScopeMiddleware');
+      if (typeof invalidateCompanyCache === 'function') invalidateCompanyCache();
+    } catch {}
+
+    return successResponse(res, 200, 'Company and all associated branches, invoices, and data deleted permanently');
+  } catch (error) { next(error); }
+};
+
+// ─── GET COMPANY MEMBERS ───────────────────────────────────────────────────────
+const getCompanyMembers = async (req, res, next) => {
+  try {
+    const [members] = await pool.execute(
+      `SELECT u.id, u.full_name, u.email, u.phone, u.status, u.last_login, r.name as role_name
+       FROM users u JOIN roles r ON u.role_id = r.id
+       WHERE u.company_id = ? AND u.deleted_at IS NULL
+       ORDER BY u.role_id ASC, u.full_name ASC`,
+      [req.params.id]
+    );
+    return successResponse(res, 200, 'Company members fetched', members);
+  } catch (error) { next(error); }
+};
+
+module.exports = { getAllCompanies, getCompanyById, createCompany, updateCompany, deleteCompany, getCompanyMembers };
