@@ -94,6 +94,7 @@ export function DocumentStudioModal({
   const [selectedLinkedInvoice, setSelectedLinkedInvoice] = React.useState<string>(initialData?.invoiceId || initialData?.invoiceNumber || "")
 
   React.useEffect(() => {
+    if (!isOpen) return
     try {
       import("@/app/feature/projects/services/projectService").then(mod => {
         if (mod && mod.getProjects) {
@@ -102,7 +103,7 @@ export function DocumentStudioModal({
       }).catch(() => {})
       getInvoices().then((res: any) => setAvailableInvoices(res || [])).catch(() => {})
     } catch (_) {}
-  }, [])
+  }, [isOpen])
 
   const [companyId, setCompanyId] = React.useState<string>(() => {
     if (initialData?.companyId) return initialData.companyId

@@ -143,18 +143,30 @@ export default function QuotationsMain() {
     }
   }, [activeCompanyId])
 
+  const loadDataRef = React.useRef(loadData)
   React.useEffect(() => {
-    loadData()
-    const handleReload = () => loadData()
+    loadDataRef.current = loadData
+  }, [loadData])
+
+  React.useEffect(() => {
+    loadDataRef.current()
+    let reloadTimer: any = null
+    const handleReload = () => {
+      if (reloadTimer) clearTimeout(reloadTimer)
+      reloadTimer = setTimeout(() => {
+        loadDataRef.current()
+      }, 120)
+    }
     window.addEventListener("saampark_company_switched", handleReload)
     window.addEventListener("saampark_branch_switched", handleReload)
     window.addEventListener("saampark_data_synced", handleReload)
     return () => {
+      if (reloadTimer) clearTimeout(reloadTimer)
       window.removeEventListener("saampark_company_switched", handleReload)
       window.removeEventListener("saampark_branch_switched", handleReload)
       window.removeEventListener("saampark_data_synced", handleReload)
     }
-  }, [loadData])
+  }, [activeCompanyId])
 
   const filtered = React.useMemo(() => {
     const { activeCompanyId: freshComp, activeBranchId: freshBranch, branches: freshBranches } = useAuthStore.getState()

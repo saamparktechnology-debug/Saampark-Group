@@ -109,7 +109,7 @@ export function resetDeletedCache(): void {
 // Fetch all deleted item IDs from MySQL DB to ensure cross-browser synchronization
 export async function syncGlobalDeletedIds(moduleName?: string): Promise<string[]> {
   const now = Date.now()
-  if (deletedCache.length > 0 && now - lastDeletedSyncTime < DELETED_CACHE_TTL_MS) {
+  if (lastDeletedSyncTime > 0 && now - lastDeletedSyncTime < DELETED_CACHE_TTL_MS) {
     return deletedCache
   }
 
@@ -218,7 +218,7 @@ export function filterGlobalDeletedItems<T extends { id: string | number }>(item
 // In-memory micro-cache & in-flight promise deduplication
 const inFlightRequests = new Map<string, Promise<any>>()
 const cacheStore = new Map<string, { data: any; timestamp: number }>()
-const CACHE_TTL_MS = 800 // 800ms micro-cache to prevent duplicate concurrent queries
+const CACHE_TTL_MS = 3000 // 3-second micro-cache to eliminate redundant back-to-back queries across components
 
 export function invalidateModuleCache(moduleKey?: string) {
   if (moduleKey) {

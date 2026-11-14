@@ -658,11 +658,24 @@ function InvoicesPageContent() {
     } finally {
       setIsLoading(false)
     }
-  }, [activeCompanyId, activeBranchId])
+  }, [])
+
+  const loadInvoicesRef = React.useRef(loadInvoices)
+  React.useEffect(() => {
+    loadInvoicesRef.current = loadInvoices
+  }, [loadInvoices])
 
   React.useEffect(() => {
-    loadInvoices(true)
-    const handleReload = () => loadInvoices(false)
+    loadInvoicesRef.current(true)
+
+    let reloadTimer: any = null
+    const handleReload = () => {
+      if (reloadTimer) clearTimeout(reloadTimer)
+      reloadTimer = setTimeout(() => {
+        loadInvoicesRef.current(false)
+      }, 120)
+    }
+
     window.addEventListener("storage", handleReload)
     window.addEventListener("saampark_data_synced", handleReload)
     window.addEventListener("saampark_company_switched", handleReload)
@@ -670,13 +683,14 @@ function InvoicesPageContent() {
     window.addEventListener("saampark_invoices_updated", handleReload)
 
     return () => {
+      if (reloadTimer) clearTimeout(reloadTimer)
       window.removeEventListener("storage", handleReload)
       window.removeEventListener("saampark_data_synced", handleReload)
       window.removeEventListener("saampark_company_switched", handleReload)
       window.removeEventListener("saampark_branch_switched", handleReload)
       window.removeEventListener("saampark_invoices_updated", handleReload)
     }
-  }, [loadInvoices, activeCompanyId, activeBranchId])
+  }, [activeCompanyId, activeBranchId])
 
   const [isSendingOverdueBatch, setIsSendingOverdueBatch] = React.useState(false)
   const handleBatchOverdueReminders = async () => {

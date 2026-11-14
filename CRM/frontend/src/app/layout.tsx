@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 
 export const dynamic = 'force-dynamic'
@@ -11,11 +10,9 @@ import { GlobalModals } from "@/components/modals/GlobalModals";
 import { ActionFeedbackModal } from "@/components/ui/ActionFeedbackModal";
 import { AuthGuard } from "@/components/auth/AuthGuard";
 
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-  display: "swap",
-});
+const inter = {
+  variable: "font-sans",
+};
 
 export const metadata: Metadata = {
   title: "SAAMPARK - Enterprise Workspace",

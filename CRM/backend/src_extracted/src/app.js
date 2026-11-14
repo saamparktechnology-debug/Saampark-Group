@@ -76,6 +76,65 @@ app.get('/api/health', (req, res) => {
 });
 
 // ==========================================
+// PINCODE LOOKUP PROXY ROUTE
+// ==========================================
+app.get(['/api/v1/pincode/:pincode', '/api/pincode/:pincode'], async (req, res) => {
+  const pin = String(req.params.pincode || '').trim().replace(/\D/g, '');
+  if (pin.length !== 6) {
+    return res.status(400).json({ status: 'Error', message: 'Invalid 6-digit pincode' });
+  }
+  try {
+    const fetchRes = await fetch(`https://api.postalpincode.in/pincode/${pin}`, { signal: AbortSignal.timeout(6000) });
+    if (fetchRes.ok) {
+      const data = await fetchRes.json();
+      if (Array.isArray(data) && data[0] && data[0].Status === 'Success' && Array.isArray(data[0].PostOffice)) {
+        const postOffices = data[0].PostOffice;
+        const places = Array.from(new Set(postOffices.map(p => p.Name).filter(Boolean)));
+        const districts = Array.from(new Set(postOffices.map(p => p.District).filter(Boolean)));
+        const states = Array.from(new Set(postOffices.map(p => p.State).filter(Boolean)));
+        return res.json({
+          status: 'Success',
+          city: places[0] || districts[0] || '',
+          district: districts[0] || '',
+          state: states[0] || '',
+          places,
+          districts,
+          states,
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('[pincode proxy] primary lookup failed, trying fallback:', err.message);
+  }
+
+  // Fallback to Zippopotam
+  try {
+    const zipRes = await fetch(`https://api.zippopotam.us/in/${pin}`, { signal: AbortSignal.timeout(4000) });
+    if (zipRes.ok) {
+      const zipData = await zipRes.json();
+      if (Array.isArray(zipData.places) && zipData.places.length > 0) {
+        const primary = zipData.places[0];
+        const city = primary['place name'] || '';
+        const state = primary['state'] || '';
+        return res.json({
+          status: 'Success',
+          city,
+          district: city,
+          state,
+          places: zipData.places.map(p => p['place name']),
+          districts: [city],
+          states: [state],
+        });
+      }
+    }
+  } catch (zErr) {
+    console.warn('[pincode proxy] fallback failed:', zErr.message);
+  }
+
+  return res.status(404).json({ status: 'Error', message: 'Pincode details not found' });
+});
+
+// ==========================================
 // 3. API ROUTES (Single mount under /api/v1)
 // ==========================================
 app.use('/api/v1/auth', authLimiter); // Apply rate limit only to auth routes
